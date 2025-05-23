@@ -150,23 +150,6 @@ pub const Swapchain = struct {
     }
 
     pub fn present(self: *Swapchain, cmdbuf: vk.CommandBuffer) !PresentState {
-        // Simple method:
-        // 1) Acquire next image
-        // 2) Wait for and reset fence of the acquired image
-        // 3) Submit command buffer with fence of acquired image,
-        //    dependendent on the semaphore signalled by the first step.
-        // 4) Present current frame, dependent on semaphore signalled by previous step
-        // Problem: This way we can't reference the current image while rendering.
-        // Better method: Shuffle the steps around such that acquire next image is the last step,
-        // leaving the swapchain in a state with the current image.
-        // 1) Wait for and reset fence of current image
-        // 2) Submit command buffer, signalling fence of current image and dependent on
-        //    the semaphore signalled by step 4.
-        // 3) Present current frame, dependent on semaphore signalled by the submit
-        // 4) Acquire next image, signalling its semaphore
-        // One problem that arises is that we can't know beforehand which semaphore to signal,
-        // so we keep an extra auxilery semaphore that is swapped around
-
         // Step 1: Make sure the current frame has finished rendering
         const current = self.currentSwapImage();
         try current.waitForFence(self.gc);

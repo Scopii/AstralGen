@@ -22,7 +22,6 @@ const required_device_extensions = [_][*:0]const u8{
 ///   a wrapper struct as there is a problem with LLVM where embedding function pointers
 ///   and object pointer in the same struct leads to missed optimizations. If the wrapper
 ///   member is a pointer, LLVM will try to optimize it as any other vtable.
-/// The wrappers contain
 const BaseWrapper = vk.BaseWrapper;
 const InstanceWrapper = vk.InstanceWrapper;
 const DeviceWrapper = vk.DeviceWrapper;
