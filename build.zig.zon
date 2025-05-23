@@ -1,0 +1,40 @@
+.{
+    .name = .AstralGen,
+    .version = "0.0.0",
+    .fingerprint = 0x410593d5eb103936, // Changing this has security and trust implications.
+    .minimum_zig_version = "0.14.0",
+
+    .dependencies = .{
+        //Vulkan
+        .vulkan_zig = .{
+            .url = "https://github.com/Snektron/vulkan-zig/archive/9b4090c852760ce3210562f62ffaf301479c38ba.tar.gz",
+            .hash = "vulkan-0.0.0-r7Ytx2dUAwDhoUvuIqliqPUbyDZZi0bl_CQIwspUpHs_",
+        },
+        //GUI Package
+        .zgui = .{
+            .url = "https://github.com/zig-gamedev/zgui/archive/refs/heads/main.tar.gz",
+            .hash = "zgui-0.6.0-dev--L6sZKTBaADLHp09LtUUifdfFpsczwbnyH7r2ajfVPuJ",
+        },
+        //Multithreading
+        .zjobs = .{
+            .url = "https://github.com/zig-gamedev/zjobs/archive/refs/heads/main.tar.gz",
+            .hash = "zjobs-0.3.0-dev-59uaZmTQAABLe7t30aW2PD5P3VxjWbAoL1XXnhgs2Ymd",
+        },
+        //Pools
+        .zpool = .{
+            .url = "https://github.com/zig-gamedev/zpool/archive/refs/heads/main.tar.gz",
+            .hash = "zpool-0.11.0-dev-bG692aVDAQBCKslGROl47fqnnp7HFYV8fI-8z3wY06xx",
+        },
+        //Game related Math
+        .zmath = .{
+            .url = "https://github.com/zig-gamedev/zmath/archive/refs/heads/main.tar.gz",
+            .hash = "zmath-0.11.0-dev-wjwivTArAwDIkHSuSiU3KuBvxh7igjJjJMqYRfy3hihO",
+        },
+    },
+
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+    },
+}

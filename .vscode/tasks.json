@@ -1,0 +1,22 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Build and Run Zig",
+            "type": "shell",
+            "command": "zig build run",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "presentation": {
+                "reveal": "always", //or always
+                "panel": "shared",
+                "showReuseMessage": false,
+                "clear": true,
+                "focus": false
+            },
+            "problemMatcher": "$zig" 
+        }
+    ]
+}
