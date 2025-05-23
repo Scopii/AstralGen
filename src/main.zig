@@ -5,8 +5,8 @@ const GraphicsContext = @import("graphics_context.zig").GraphicsContext;
 const Swapchain = @import("swapchain.zig").Swapchain;
 const Allocator = std.mem.Allocator;
 
-const vert_spv align(@alignOf(u32)) = @embedFile("vertex_shader").*;
-const frag_spv align(@alignOf(u32)) = @embedFile("fragment_shader").*;
+const vert_spv align(@alignOf(u32)) = @embedFile("vert_shdr").*;
+const frag_spv align(@alignOf(u32)) = @embedFile("frag_shdr").*;
 
 const app_name = "vulkan-zig triangle example";
 

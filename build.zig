@@ -66,45 +66,29 @@ pub fn build(b: *std.Build) void {
         b.installFile("libs/GLFW/glfw3.dll", "bin/glfw3.dll");
     }
 
-    // Shader compilation and copying
-    const frag_shader = b.addSystemCommand(&[_][]const u8{
-        "glslc",
-        "src/gfx/shdr/FragShdr.frag",
-        "-o",
-        "zig-out/bin/FragShdr.frag.spv", // Copy to output directory
-    });
-
-    const vert_shader = b.addSystemCommand(&[_][]const u8{
-        "glslc",
-        "src/gfx/shdr/VertShdr.vert",
-        "-o",
-        "zig-out/bin/VertShdr.vert.spv", // Copy to output directory
-    });
-
     const vert_cmd = b.addSystemCommand(&.{
         "glslc",
-        "--target-env=vulkan1.2",
+        "--target-env=vulkan1.4",
         "-o",
+        // "zig-out/bin/VertShdr.vert.spv"
     });
     const vert_spv = vert_cmd.addOutputFileArg("vert.spv");
-    vert_cmd.addFileArg(b.path("shaders/triangle.vert"));
-    exe.root_module.addAnonymousImport("vertex_shader", .{
+    vert_cmd.addFileArg(b.path("shaders/shdr.vert"));
+    exe.root_module.addAnonymousImport("vert_shdr", .{
         .root_source_file = vert_spv,
     });
 
     const frag_cmd = b.addSystemCommand(&.{
         "glslc",
-        "--target-env=vulkan1.2",
+        "--target-env=vulkan1.4",
         "-o",
+        // "zig-out/bin/VertShdr.vert.spv"
     });
     const frag_spv = frag_cmd.addOutputFileArg("frag.spv");
-    frag_cmd.addFileArg(b.path("shaders/triangle.frag"));
-    exe.root_module.addAnonymousImport("fragment_shader", .{
+    frag_cmd.addFileArg(b.path("shaders/shdr.frag"));
+    exe.root_module.addAnonymousImport("frag_shdr", .{
         .root_source_file = frag_spv,
     });
-
-    b.getInstallStep().dependOn(&frag_shader.step);
-    b.getInstallStep().dependOn(&vert_shader.step);
 
     const run_cmd = b.addRunArtifact(exe);
     run_cmd.step.dependOn(b.getInstallStep());
