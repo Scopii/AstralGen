@@ -3,7 +3,10 @@ const vk = @import("vulkan");
 const c = @import("c.zig");
 const Allocator = std.mem.Allocator;
 
-const required_device_extensions = [_][*:0]const u8{vk.extensions.khr_swapchain.name};
+const required_device_extensions = [_][*:0]const u8{
+    vk.extensions.khr_swapchain.name,
+    vk.extensions.khr_dynamic_rendering.name, // Add this for dynamic rendering
+};
 
 /// There are 3 levels of bindings in vulkan-zig:
 /// - The Dispatch types (vk.BaseDispatch, vk.InstanceDispatch, vk.DeviceDispatch)
@@ -136,6 +139,16 @@ pub const GraphicsContext = struct {
     }
 };
 
+pub const DynamicRenderingFeatures = struct {
+    pub fn getFeatures() vk.PhysicalDeviceDynamicRenderingFeatures {
+        return vk.PhysicalDeviceDynamicRenderingFeatures{
+            .s_type = .physical_device_dynamic_rendering_features,
+            .p_next = null,
+            .dynamic_rendering = vk.TRUE,
+        };
+    }
+};
+
 pub const Queue = struct {
     handle: vk.Queue,
     family: u32,
@@ -177,7 +190,11 @@ fn initializeCandidate(instance: Instance, candidate: DeviceCandidate) !vk.Devic
     else
         2;
 
+    // Enable dynamic rendering features
+    var dynamic_rendering_features = DynamicRenderingFeatures.getFeatures();
+
     return try instance.createDevice(candidate.pdev, &.{
+        .p_next = &dynamic_rendering_features, // Add this line
         .queue_create_info_count = queue_count,
         .p_queue_create_infos = &qci,
         .enabled_extension_count = required_device_extensions.len,
