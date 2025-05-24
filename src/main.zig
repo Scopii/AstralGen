@@ -59,10 +59,11 @@ pub fn main() !void {
     }
 
     // Window dimensions
-    var window_extent = vk.Extent2D{ .width = 800, .height = 600 };
+    var window_extent = vk.Extent2D{ .width = 1280, .height = 720 };
 
     // Create window (no OpenGL context needed for Vulkan)
     c.glfwWindowHint(c.GLFW_CLIENT_API, c.GLFW_NO_API);
+
     const window = c.glfwCreateWindow(
         @intCast(window_extent.width),
         @intCast(window_extent.height),
@@ -198,6 +199,7 @@ fn createRenderCommandBuffers(
     pipeline: vk.Pipeline,
     swapchain: Swapchain,
 ) ![]vk.CommandBuffer {
+
     // Allocate one command buffer per swapchain image
     const command_buffers = try allocator.alloc(vk.CommandBuffer, swapchain.swap_images.len);
     errdefer allocator.free(command_buffers);
