@@ -1,6 +1,6 @@
 const std = @import("std");
 const vk = @import("vulkan");
-const c = @import("c.zig");
+const c = @import("../c.zig");
 const Allocator = std.mem.Allocator;
 
 const required_device_extensions = [_][*:0]const u8{

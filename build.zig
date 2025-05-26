@@ -33,12 +33,16 @@ pub fn build(b: *std.Build) void {
 
     exe.linkLibC();
 
-    // GameDev Libs (keeping your existing setup)
-    const zgui_dep = b.dependency("zgui", .{
-        .target = target,
-        .optimize = optimize,
-        .with_implot = true,
-    });
+    // GameDev Libs
+    const zgui_dep = b.dependency("zgui", .{ .target = target, .optimize = optimize, .with_implot = true, .backend = .glfw_vulkan });
+
+    // Get Vulkan SDK path and add headers
+    const vulkan_sdk = std.process.getEnvVarOwned(b.allocator, "VULKAN_SDK") catch null;
+    if (vulkan_sdk) |sdk_path| {
+        const vulkan_include = std.fs.path.join(b.allocator, &.{ sdk_path, "Include" }) catch unreachable;
+        zgui_dep.artifact("imgui").addIncludePath(.{ .cwd_relative = vulkan_include });
+    }
+
     exe.root_module.addImport("zgui", zgui_dep.module("root"));
     exe.linkLibrary(zgui_dep.artifact("imgui"));
 
