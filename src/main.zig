@@ -30,8 +30,6 @@ pub fn main() !void {
     const gc = try Context.init(allocator, "AstralGen", app.window);
     defer gc.deinit();
 
-    std.log.debug("Using GPU: {s}", .{gc.deviceName()});
-
     // Create swapchain for presenting images to the window
     var swapchain = try Swapchain.init(&gc, allocator, app.extend);
     defer swapchain.deinit();
@@ -51,10 +49,10 @@ pub fn main() !void {
     defer gc.dev.destroyPipeline(graphics_pipeline, null);
 
     // Create command pool for allocating command buffers
-    const cmd_pool = try gc.dev.createCmdPool(&.{
+    const cmd_pool = try gc.dev.createCommandPool(&.{
         .queue_family_index = gc.graphics_queue.family,
     }, null);
-    defer gc.dev.destroyCmdPool(cmd_pool, null);
+    defer gc.dev.destroyCommandPool(cmd_pool, null);
 
     // Create vertex buffer on GPU
     const vertex_buffer = try gc.dev.createBuffer(&.{

@@ -104,6 +104,8 @@ pub const Context = struct {
 
         self.mem_props = self.instance.getPhysicalDeviceMemoryProperties(self.pdev);
 
+        std.log.debug("Using GPU: {s}", .{self.deviceName()});
+
         return self;
     }
 
