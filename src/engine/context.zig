@@ -3,9 +3,9 @@ const vk = @import("vulkan");
 const c = @import("../c.zig");
 const Allocator = std.mem.Allocator;
 
-const required_device_extensions = [_][*:0]const u8{
+const req_device_extensions = [_][*:0]const u8{
     vk.extensions.khr_swapchain.name,
-    vk.extensions.khr_dynamic_rendering.name, // Add this for dynamic rendering
+    vk.extensions.khr_dynamic_rendering.name,
 };
 
 /// There are 3 levels of bindings in vulkan-zig:
@@ -29,8 +29,8 @@ const DeviceWrapper = vk.DeviceWrapper;
 const Instance = vk.InstanceProxy;
 const Device = vk.DeviceProxy;
 
-pub const GraphicsContext = struct {
-    pub const CommandBuffer = vk.CommandBufferProxy;
+pub const Context = struct {
+    pub const CmdBuffer = vk.CommandBufferProxy;
 
     allocator: Allocator,
 
@@ -46,24 +46,23 @@ pub const GraphicsContext = struct {
     graphics_queue: Queue,
     present_queue: Queue,
 
-    pub fn init(allocator: Allocator, app_name: [*:0]const u8, window: *c.GLFWwindow) !GraphicsContext {
-        var self: GraphicsContext = undefined;
+    pub fn init(allocator: Allocator, app_name: [*:0]const u8, window: *c.GLFWwindow) !Context {
+        var self: Context = undefined;
         self.allocator = allocator;
         self.vkb = BaseWrapper.load(c.glfwGetInstanceProcAddress);
 
-        var extension_names = std.ArrayList([*:0]const u8).init(allocator);
-        defer extension_names.deinit();
+        var extensions = std.ArrayList([*:0]const u8).init(allocator);
+        defer extensions.deinit();
 
-        // these extensions are to support vulkan in mac os
-        // see https://github.com/glfw/glfw/issues/2335
-        try extension_names.append("VK_KHR_portability_enumeration");
-        try extension_names.append("VK_KHR_get_physical_device_properties2");
+        // these extensions are to support vulkan in mac os (https://github.com/glfw/glfw/issues/2335)
+        try extensions.append("VK_KHR_portability_enumeration");
+        try extensions.append("VK_KHR_get_physical_device_properties2");
 
-        try extension_names.append("VK_EXT_debug_utils");
+        try extensions.append("VK_EXT_debug_utils");
 
         var glfw_exts_count: u32 = 0;
         const glfw_exts = c.glfwGetRequiredInstanceExtensions(&glfw_exts_count);
-        try extension_names.appendSlice(@ptrCast(glfw_exts[0..glfw_exts_count]));
+        try extensions.appendSlice(@ptrCast(glfw_exts[0..glfw_exts_count]));
 
         const instance = try self.vkb.createInstance(&.{
             .p_application_info = &.{
@@ -73,10 +72,9 @@ pub const GraphicsContext = struct {
                 .engine_version = @bitCast(vk.makeApiVersion(0, 0, 0, 0)),
                 .api_version = @bitCast(vk.API_VERSION_1_3),
             },
-            .enabled_extension_count = @intCast(extension_names.items.len),
-            .pp_enabled_extension_names = extension_names.items.ptr,
-            // enumerate_portability_bit_khr to support vulkan in mac os
-            // see https://github.com/glfw/glfw/issues/2335
+            .enabled_extension_count = @intCast(extensions.items.len),
+            .pp_enabled_extension_names = extensions.items.ptr,
+            // enumerate_portability_bit_khr to support vulkan in mac os (https://github.com/glfw/glfw/issues/2335)
             .flags = .{ .enumerate_portability_bit_khr = true },
         }, null);
 
@@ -93,7 +91,7 @@ pub const GraphicsContext = struct {
         self.pdev = candidate.pdev;
         self.props = candidate.props;
 
-        const dev = try initializeCandidate(self.instance, candidate);
+        const dev = try initCandidate(self.instance, candidate);
 
         const vkd = try allocator.create(DeviceWrapper);
         errdefer allocator.destroy(vkd);
@@ -109,7 +107,7 @@ pub const GraphicsContext = struct {
         return self;
     }
 
-    pub fn deinit(self: GraphicsContext) void {
+    pub fn deinit(self: Context) void {
         self.dev.destroyDevice(null);
         self.instance.destroySurfaceKHR(self.surface, null);
         self.instance.destroyInstance(null);
@@ -119,11 +117,11 @@ pub const GraphicsContext = struct {
         self.allocator.destroy(self.instance.wrapper);
     }
 
-    pub fn deviceName(self: *const GraphicsContext) []const u8 {
+    pub fn deviceName(self: *const Context) []const u8 {
         return std.mem.sliceTo(&self.props.device_name, 0);
     }
 
-    pub fn findMemoryTypeIndex(self: GraphicsContext, memory_type_bits: u32, flags: vk.MemoryPropertyFlags) !u32 {
+    pub fn findMemoryTypeIndex(self: Context, memory_type_bits: u32, flags: vk.MemoryPropertyFlags) !u32 {
         for (self.mem_props.memory_types[0..self.mem_props.memory_type_count], 0..) |mem_type, i| {
             if (memory_type_bits & (@as(u32, 1) << @truncate(i)) != 0 and mem_type.property_flags.contains(flags)) {
                 return @truncate(i);
@@ -133,7 +131,7 @@ pub const GraphicsContext = struct {
         return error.NoSuitableMemoryType;
     }
 
-    pub fn allocate(self: GraphicsContext, requirements: vk.MemoryRequirements, flags: vk.MemoryPropertyFlags) !vk.DeviceMemory {
+    pub fn allocate(self: Context, requirements: vk.MemoryRequirements, flags: vk.MemoryPropertyFlags) !vk.DeviceMemory {
         return try self.dev.allocateMemory(&.{
             .allocation_size = requirements.size,
             .memory_type_index = try self.findMemoryTypeIndex(requirements.memory_type_bits, flags),
@@ -172,7 +170,7 @@ fn createSurface(instance: Instance, window: *c.GLFWwindow) !vk.SurfaceKHR {
     return surface;
 }
 
-fn initializeCandidate(instance: Instance, candidate: DeviceCandidate) !vk.Device {
+fn initCandidate(instance: Instance, candidate: DeviceCandidate) !vk.Device {
     const priority = [_]f32{1};
     const qci = [_]vk.DeviceQueueCreateInfo{
         .{
@@ -193,14 +191,14 @@ fn initializeCandidate(instance: Instance, candidate: DeviceCandidate) !vk.Devic
         2;
 
     // Enable dynamic rendering features
-    var dynamic_rendering_features = DynamicRenderingFeatures.getFeatures();
+    var dyn_rendering_Features = DynamicRenderingFeatures.getFeatures();
 
     return try instance.createDevice(candidate.pdev, &.{
-        .p_next = &dynamic_rendering_features, // Add this line
+        .p_next = &dyn_rendering_Features, // Add this line
         .queue_create_info_count = queue_count,
         .p_queue_create_infos = &qci,
-        .enabled_extension_count = required_device_extensions.len,
-        .pp_enabled_extension_names = @ptrCast(&required_device_extensions),
+        .enabled_extension_count = req_device_extensions.len,
+        .pp_enabled_extension_names = @ptrCast(&req_device_extensions),
     }, null);
 }
 
@@ -305,7 +303,7 @@ fn checkExtensionSupport(
     const propsv = try instance.enumerateDeviceExtensionPropertiesAlloc(pdev, null, allocator);
     defer allocator.free(propsv);
 
-    for (required_device_extensions) |ext| {
+    for (req_device_extensions) |ext| {
         for (propsv) |props| {
             if (std.mem.eql(u8, std.mem.span(ext), std.mem.sliceTo(&props.extension_name, 0))) {
                 break;

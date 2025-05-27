@@ -1,6 +1,6 @@
 const std = @import("std");
 const vk = @import("vulkan");
-const GraphicsContext = @import("graphics_context.zig").GraphicsContext;
+const Context = @import("context.zig").Context;
 const Swapchain = @import("swapchain.zig").Swapchain;
 
 // Mesh Data
@@ -10,9 +10,9 @@ const triangle_vertices = @import("mesh/triangle.zig").triangle_vertices;
 const Allocator = std.mem.Allocator;
 
 /// Creates command buffers that record rendering commands using dynamic rendering
-pub fn createRenderCommandBuffers(
-    graphics_context: *const GraphicsContext,
-    command_pool: vk.CommandPool,
+pub fn createRenderCmdBuffers(
+    gc: *const Context,
+    cmd_pool: vk.CommandPool,
     allocator: Allocator,
     vertex_buffer: vk.Buffer,
     render_extent: vk.Extent2D,
@@ -21,15 +21,15 @@ pub fn createRenderCommandBuffers(
 ) ![]vk.CommandBuffer {
 
     // Allocate one command buffer per swapchain image
-    const command_buffers = try allocator.alloc(vk.CommandBuffer, swapchain.swap_images.len);
-    errdefer allocator.free(command_buffers);
+    const cmd_buffers = try allocator.alloc(vk.CommandBuffer, swapchain.swap_images.len);
+    errdefer allocator.free(cmd_buffers);
 
-    try graphics_context.dev.allocateCommandBuffers(&.{
-        .command_pool = command_pool,
+    try gc.dev.allocateCommandBuffers(&.{
+        .command_pool = cmd_pool,
         .level = .primary,
-        .command_buffer_count = @intCast(command_buffers.len),
-    }, command_buffers.ptr);
-    errdefer graphics_context.dev.freeCommandBuffers(command_pool, @intCast(command_buffers.len), command_buffers.ptr);
+        .command_buffer_count = @intCast(cmd_buffers.len),
+    }, cmd_buffers.ptr);
+    errdefer gc.dev.freeCommandBuffers(cmd_pool, @intCast(cmd_buffers.len), cmd_buffers.ptr);
 
     // Clear color (black background)
     const clear_color = vk.ClearValue{
@@ -53,12 +53,12 @@ pub fn createRenderCommandBuffers(
     };
 
     // Record rendering commands for each swapchain image
-    for (command_buffers, swapchain.swap_images) |cmd_buffer, swap_image| {
-        try graphics_context.dev.beginCommandBuffer(cmd_buffer, &.{});
+    for (cmd_buffers, swapchain.swap_images) |cmd_buffer, swap_image| {
+        try gc.dev.beginCommandBuffer(cmd_buffer, &.{});
 
         // Set dynamic state (viewport and scissor)
-        graphics_context.dev.cmdSetViewport(cmd_buffer, 0, 1, @ptrCast(&viewport));
-        graphics_context.dev.cmdSetScissor(cmd_buffer, 0, 1, @ptrCast(&scissor_rect));
+        gc.dev.cmdSetViewport(cmd_buffer, 0, 1, @ptrCast(&viewport));
+        gc.dev.cmdSetScissor(cmd_buffer, 0, 1, @ptrCast(&scissor_rect));
 
         // Configure color attachment for dynamic rendering
         const color_attachment_info = vk.RenderingAttachmentInfo{
@@ -92,23 +92,22 @@ pub fn createRenderCommandBuffers(
         };
 
         // Begin dynamic rendering
-        graphics_context.dev.cmdBeginRendering(cmd_buffer, &rendering_info);
+        gc.dev.cmdBeginRendering(cmd_buffer, &rendering_info);
 
         // Bind graphics pipeline and draw triangle
-        graphics_context.dev.cmdBindPipeline(cmd_buffer, .graphics, pipeline);
+        gc.dev.cmdBindPipeline(cmd_buffer, .graphics, pipeline);
         const vertex_buffer_offset = [_]vk.DeviceSize{0};
-        graphics_context.dev.cmdBindVertexBuffers(cmd_buffer, 0, 1, @ptrCast(&vertex_buffer), &vertex_buffer_offset);
-        graphics_context.dev.cmdDraw(cmd_buffer, triangle_vertices.len, 1, 0, 0);
+        gc.dev.cmdBindVertexBuffers(cmd_buffer, 0, 1, @ptrCast(&vertex_buffer), &vertex_buffer_offset);
+        gc.dev.cmdDraw(cmd_buffer, triangle_vertices.len, 1, 0, 0);
 
         // End dynamic rendering
-        graphics_context.dev.cmdEndRendering(cmd_buffer);
-        try graphics_context.dev.endCommandBuffer(cmd_buffer);
+        gc.dev.cmdEndRendering(cmd_buffer);
+        try gc.dev.endCommandBuffer(cmd_buffer);
     }
-
-    return command_buffers;
+    return cmd_buffers;
 }
 
-pub fn destroyCommandBuffers(graphics_context: *const GraphicsContext, command_pool: vk.CommandPool, allocator: Allocator, command_buffers: []vk.CommandBuffer) void {
-    graphics_context.dev.freeCommandBuffers(command_pool, @truncate(command_buffers.len), command_buffers.ptr);
-    allocator.free(command_buffers);
+pub fn destroyCmdBuffers(gc: *const Context, cmd_pool: vk.CommandPool, allocator: Allocator, cmd_buffers: []vk.CommandBuffer) void {
+    gc.dev.freeCommandBuffers(cmd_pool, @truncate(cmd_buffers.len), cmd_buffers.ptr);
+    allocator.free(cmd_buffers);
 }

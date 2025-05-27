@@ -1,5 +1,5 @@
 const vk = @import("vulkan");
-const GraphicsContext = @import("graphics_context.zig").GraphicsContext;
+const Context = @import("context.zig").Context;
 const Vertex = @import("resources/vertex.zig").Vertex;
 
 // Embed compiled shaders as binary data aligned for GPU usage
@@ -8,21 +8,21 @@ const frag_spv align(@alignOf(u32)) = @embedFile("frag_shdr").*;
 
 /// Creates a graphics pipeline for dynamic rendering (no render pass needed!)
 pub fn createPipeline(
-    graphics_context: *const GraphicsContext,
+    gc: *const Context,
     layout: vk.PipelineLayout,
     color_format: vk.Format, // Surface format instead of render pass
 ) !vk.Pipeline {
-    const vert = try graphics_context.dev.createShaderModule(&.{
+    const vert = try gc.dev.createShaderModule(&.{
         .code_size = vert_spv.len,
         .p_code = @ptrCast(&vert_spv),
     }, null);
-    defer graphics_context.dev.destroyShaderModule(vert, null);
+    defer gc.dev.destroyShaderModule(vert, null);
 
-    const frag = try graphics_context.dev.createShaderModule(&.{
+    const frag = try gc.dev.createShaderModule(&.{
         .code_size = frag_spv.len,
         .p_code = @ptrCast(&frag_spv),
     }, null);
-    defer graphics_context.dev.destroyShaderModule(frag, null);
+    defer gc.dev.destroyShaderModule(frag, null);
 
     const shader_stages = [_]vk.PipelineShaderStageCreateInfo{
         .{
@@ -145,7 +145,7 @@ pub fn createPipeline(
     };
 
     var pipeline: vk.Pipeline = undefined;
-    _ = try graphics_context.dev.createGraphicsPipelines(
+    _ = try gc.dev.createGraphicsPipelines(
         .null_handle,
         1,
         @ptrCast(&pipeline_create_info),

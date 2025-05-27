@@ -1,6 +1,6 @@
 const std = @import("std");
 const vk = @import("vulkan");
-const GraphicsContext = @import("graphics_context.zig").GraphicsContext;
+const Context = @import("context.zig").Context;
 
 const Allocator = std.mem.Allocator;
 
@@ -10,7 +10,7 @@ pub const Swapchain = struct {
         suboptimal,
     };
 
-    gc: *const GraphicsContext,
+    gc: *const Context,
     allocator: Allocator,
 
     surface_format: vk.SurfaceFormatKHR,
@@ -22,11 +22,11 @@ pub const Swapchain = struct {
     image_index: u32,
     next_image_acquired: vk.Semaphore,
 
-    pub fn init(gc: *const GraphicsContext, allocator: Allocator, extent: vk.Extent2D) !Swapchain {
+    pub fn init(gc: *const Context, allocator: Allocator, extent: vk.Extent2D) !Swapchain {
         return try initRecycle(gc, allocator, extent, .null_handle);
     }
 
-    pub fn initRecycle(gc: *const GraphicsContext, allocator: Allocator, extent: vk.Extent2D, old_handle: vk.SwapchainKHR) !Swapchain {
+    pub fn initRecycle(gc: *const Context, allocator: Allocator, extent: vk.Extent2D, old_handle: vk.SwapchainKHR) !Swapchain {
         const caps = try gc.instance.getPhysicalDeviceSurfaceCapabilitiesKHR(gc.pdev, gc.surface);
         const actual_extent = findActualExtent(caps, extent);
         if (actual_extent.width == 0 or actual_extent.height == 0) {
@@ -202,7 +202,7 @@ const SwapImage = struct {
     render_finished: vk.Semaphore,
     frame_fence: vk.Fence,
 
-    fn init(gc: *const GraphicsContext, image: vk.Image, format: vk.Format) !SwapImage {
+    fn init(gc: *const Context, image: vk.Image, format: vk.Format) !SwapImage {
         const view = try gc.dev.createImageView(&.{
             .image = image,
             .view_type = .@"2d",
@@ -236,7 +236,7 @@ const SwapImage = struct {
         };
     }
 
-    fn deinit(self: SwapImage, gc: *const GraphicsContext) void {
+    fn deinit(self: SwapImage, gc: *const Context) void {
         self.waitForFence(gc) catch return;
         gc.dev.destroyImageView(self.view, null);
         gc.dev.destroySemaphore(self.image_acquired, null);
@@ -244,12 +244,12 @@ const SwapImage = struct {
         gc.dev.destroyFence(self.frame_fence, null);
     }
 
-    fn waitForFence(self: SwapImage, gc: *const GraphicsContext) !void {
+    fn waitForFence(self: SwapImage, gc: *const Context) !void {
         _ = try gc.dev.waitForFences(1, @ptrCast(&self.frame_fence), vk.TRUE, std.math.maxInt(u64));
     }
 };
 
-fn initSwapchainImages(gc: *const GraphicsContext, swapchain: vk.SwapchainKHR, format: vk.Format, allocator: Allocator) ![]SwapImage {
+fn initSwapchainImages(gc: *const Context, swapchain: vk.SwapchainKHR, format: vk.Format, allocator: Allocator) ![]SwapImage {
     const images = try gc.dev.getSwapchainImagesAllocKHR(swapchain, allocator);
     defer allocator.free(images);
 
@@ -267,7 +267,7 @@ fn initSwapchainImages(gc: *const GraphicsContext, swapchain: vk.SwapchainKHR, f
     return swap_images;
 }
 
-fn findSurfaceFormat(gc: *const GraphicsContext, allocator: Allocator) !vk.SurfaceFormatKHR {
+fn findSurfaceFormat(gc: *const Context, allocator: Allocator) !vk.SurfaceFormatKHR {
     const preferred = vk.SurfaceFormatKHR{
         .format = .b8g8r8a8_srgb,
         .color_space = .srgb_nonlinear_khr,
@@ -285,7 +285,7 @@ fn findSurfaceFormat(gc: *const GraphicsContext, allocator: Allocator) !vk.Surfa
     return surface_formats[0]; // There must always be at least one supported surface format
 }
 
-fn findPresentMode(gc: *const GraphicsContext, allocator: Allocator) !vk.PresentModeKHR {
+fn findPresentMode(gc: *const Context, allocator: Allocator) !vk.PresentModeKHR {
     const present_modes = try gc.instance.getPhysicalDeviceSurfacePresentModesAllocKHR(gc.pdev, gc.surface, allocator);
     defer allocator.free(present_modes);
 

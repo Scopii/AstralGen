@@ -5,8 +5,8 @@ const c = @import("../c.zig");
 pub const App = struct {
     window: *c.GLFWwindow,
     extend: vk.Extent2D,
-    window_width: c_int = undefined,
-    window_height: c_int = undefined,
+    curr_width: c_int = undefined,
+    curr_height: c_int = undefined,
 
     pub fn init() !App {
         const extend = vk.Extent2D{ .width = 1280, .height = 720 };
@@ -48,10 +48,10 @@ pub const App = struct {
     }
 
     pub fn handle(self: *App) bool {
-        c.glfwGetFramebufferSize(self.window, &self.window_width, &self.window_height);
+        c.glfwGetFramebufferSize(self.window, &self.curr_width, &self.curr_height);
 
         // Handle window minimization
-        if (self.window_width == 0 or self.window_height == 0) {
+        if (self.curr_width == 0 or self.curr_height == 0) {
             self.pollEvents();
             return false;
         }

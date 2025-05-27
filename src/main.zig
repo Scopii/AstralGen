@@ -2,11 +2,11 @@
 const std = @import("std");
 const vk = @import("vulkan");
 const c = @import("c.zig");
-const GraphicsContext = @import("engine/graphics_context.zig").GraphicsContext;
+const Context = @import("engine/context.zig").Context;
 const Swapchain = @import("engine/swapchain.zig").Swapchain;
 const createPipeline = @import("engine/pipeline.zig").createPipeline;
-const createRenderCommandBuffers = @import("engine/command.zig").createRenderCommandBuffers;
-const destroyCommandBuffers = @import("engine/command.zig").destroyCommandBuffers;
+const createRenderCmdBuffers = @import("engine/command.zig").createRenderCmdBuffers;
+const destroyCmdBuffers = @import("engine/command.zig").destroyCmdBuffers;
 const uploadVertexData = @import("engine/buffer.zig").uploadVertexData;
 const copyBuffer = @import("engine/buffer.zig").copyBuffer;
 const App = @import("core/app.zig").App;
@@ -26,92 +26,92 @@ pub fn main() !void {
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
 
-    // Initialize Vulkan context (instance, device, queues, etc.)
-    const graphics_context = try GraphicsContext.init(allocator, "AstralGen", app.window);
-    defer graphics_context.deinit();
+    // Initialize Vulkan(Graphics) context (instance, device, queues, etc.)
+    const gc = try Context.init(allocator, "AstralGen", app.window);
+    defer gc.deinit();
 
-    std.log.debug("Using GPU: {s}", .{graphics_context.deviceName()});
+    std.log.debug("Using GPU: {s}", .{gc.deviceName()});
 
     // Create swapchain for presenting images to the window
-    var swapchain = try Swapchain.init(&graphics_context, allocator, app.extend);
+    var swapchain = try Swapchain.init(&gc, allocator, app.extend);
     defer swapchain.deinit();
 
     // Create pipeline layout (describes shader resources - none in this simple example)
-    const pipeline_layout = try graphics_context.dev.createPipelineLayout(&.{
+    const pipeline_layout = try gc.dev.createPipelineLayout(&.{
         .flags = .{},
         .set_layout_count = 0,
         .p_set_layouts = undefined,
         .push_constant_range_count = 0,
         .p_push_constant_ranges = undefined,
     }, null);
-    defer graphics_context.dev.destroyPipelineLayout(pipeline_layout, null);
+    defer gc.dev.destroyPipelineLayout(pipeline_layout, null);
 
     // Create graphics pipeline using dynamic rendering (no render pass needed!)
-    const graphics_pipeline = try createPipeline(&graphics_context, pipeline_layout, swapchain.surface_format.format);
-    defer graphics_context.dev.destroyPipeline(graphics_pipeline, null);
+    const graphics_pipeline = try createPipeline(&gc, pipeline_layout, swapchain.surface_format.format);
+    defer gc.dev.destroyPipeline(graphics_pipeline, null);
 
     // Create command pool for allocating command buffers
-    const command_pool = try graphics_context.dev.createCommandPool(&.{
-        .queue_family_index = graphics_context.graphics_queue.family,
+    const cmd_pool = try gc.dev.createCmdPool(&.{
+        .queue_family_index = gc.graphics_queue.family,
     }, null);
-    defer graphics_context.dev.destroyCommandPool(command_pool, null);
+    defer gc.dev.destroyCmdPool(cmd_pool, null);
 
     // Create vertex buffer on GPU
-    const vertex_buffer = try graphics_context.dev.createBuffer(&.{
+    const vertex_buffer = try gc.dev.createBuffer(&.{
         .size = @sizeOf(@TypeOf(triangle_vertices)),
         .usage = .{ .transfer_dst_bit = true, .vertex_buffer_bit = true },
         .sharing_mode = .exclusive,
     }, null);
-    defer graphics_context.dev.destroyBuffer(vertex_buffer, null);
+    defer gc.dev.destroyBuffer(vertex_buffer, null);
 
     // Allocate and bind memory for vertex buffer
-    const buffer_memory_requirements = graphics_context.dev.getBufferMemoryRequirements(vertex_buffer);
-    const vertex_buffer_memory = try graphics_context.allocate(buffer_memory_requirements, .{ .device_local_bit = true });
-    defer graphics_context.dev.freeMemory(vertex_buffer_memory, null);
-    try graphics_context.dev.bindBufferMemory(vertex_buffer, vertex_buffer_memory, 0);
+    const buffer_memory_requirements = gc.dev.getBufferMemoryRequirements(vertex_buffer);
+    const vertex_buffer_memory = try gc.allocate(buffer_memory_requirements, .{ .device_local_bit = true });
+    defer gc.dev.freeMemory(vertex_buffer_memory, null);
+    try gc.dev.bindBufferMemory(vertex_buffer, vertex_buffer_memory, 0);
 
     // Upload vertex data to GPU
-    try uploadVertexData(&graphics_context, command_pool, vertex_buffer);
+    try uploadVertexData(&gc, cmd_pool, vertex_buffer);
 
     // Create command buffers for rendering (one per swapchain image)
-    var command_buffers = try createRenderCommandBuffers(
-        &graphics_context,
-        command_pool,
+    var cmd_buffers = try createRenderCmdBuffers(
+        &gc,
+        cmd_pool,
         allocator,
         vertex_buffer,
         swapchain.extent,
         graphics_pipeline,
         swapchain,
     );
-    defer destroyCommandBuffers(&graphics_context, command_pool, allocator, command_buffers);
+    defer destroyCmdBuffers(&gc, cmd_pool, allocator, cmd_buffers);
 
     // Main render loop
     while (app.shouldClose()) {
         if (app.handle() == false) continue; // Resize + Skip loop when mini
 
         // Get command buffer for current swapchain image
-        const current_command_buffer = command_buffers[swapchain.image_index];
+        const curr_cmd_buffer = cmd_buffers[swapchain.image_index];
 
         // Present the rendered frame
-        const present_result = swapchain.present(current_command_buffer) catch |err| switch (err) {
+        const present_result = swapchain.present(curr_cmd_buffer) catch |err| switch (err) {
             error.OutOfDateKHR => Swapchain.PresentState.suboptimal,
             else => |narrow| return narrow,
         };
 
         // Check if swapchain needs recreation (window resize, etc.)
         if (present_result == .suboptimal or
-            app.extend.width != @as(u32, @intCast(app.window_width)) or
-            app.extend.height != @as(u32, @intCast(app.window_height)))
+            app.extend.width != @as(u32, @intCast(app.curr_width)) or
+            app.extend.height != @as(u32, @intCast(app.curr_height)))
         {
-            app.extend.width = @intCast(app.window_width);
-            app.extend.height = @intCast(app.window_height);
+            app.extend.width = @intCast(app.curr_width);
+            app.extend.height = @intCast(app.curr_height);
             try swapchain.recreate(app.extend);
 
             // Recreate command buffers for new swapchain
-            destroyCommandBuffers(&graphics_context, command_pool, allocator, command_buffers);
-            command_buffers = try createRenderCommandBuffers(
-                &graphics_context,
-                command_pool,
+            destroyCmdBuffers(&gc, cmd_pool, allocator, cmd_buffers);
+            cmd_buffers = try createRenderCmdBuffers(
+                &gc,
+                cmd_pool,
                 allocator,
                 vertex_buffer,
                 swapchain.extent,
@@ -125,5 +125,5 @@ pub fn main() !void {
 
     // Wait for all operations to complete before cleanup
     try swapchain.waitForAllFences();
-    try graphics_context.dev.deviceWaitIdle();
+    try gc.dev.deviceWaitIdle();
 }
