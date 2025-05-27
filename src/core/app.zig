@@ -4,12 +4,12 @@ const c = @import("../c.zig");
 
 pub const App = struct {
     window: *c.GLFWwindow,
-    extend: vk.Extent2D,
+    extent: vk.Extent2D,
     curr_width: c_int = undefined,
     curr_height: c_int = undefined,
 
     pub fn init() !App {
-        const extend = vk.Extent2D{ .width = 1280, .height = 720 };
+        const extent = vk.Extent2D{ .width = 1280, .height = 720 };
 
         if (c.glfwInit() != c.GLFW_TRUE) return error.GlfwInitFailed;
 
@@ -21,8 +21,8 @@ pub const App = struct {
         c.glfwWindowHint(c.GLFW_CLIENT_API, c.GLFW_NO_API);
 
         const window = c.glfwCreateWindow(
-            @intCast(extend.width),
-            @intCast(extend.height),
+            @intCast(extent.width),
+            @intCast(extent.height),
             "AstralGen",
             null,
             null,
@@ -30,7 +30,7 @@ pub const App = struct {
 
         return App{
             .window = window,
-            .extend = extend,
+            .extent = extent,
         };
     }
 

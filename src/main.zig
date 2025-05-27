@@ -31,7 +31,7 @@ pub fn main() !void {
     defer gc.deinit();
 
     // Create swapchain for presenting images to the window
-    var swapchain = try Swapchain.init(&gc, allocator, app.extend);
+    var swapchain = try Swapchain.init(&gc, allocator, app.extent);
     defer swapchain.deinit();
 
     // Create pipeline layout (describes shader resources - none in this simple example)
@@ -98,12 +98,12 @@ pub fn main() !void {
 
         // Check if swapchain needs recreation (window resize, etc.)
         if (present_result == .suboptimal or
-            app.extend.width != @as(u32, @intCast(app.curr_width)) or
-            app.extend.height != @as(u32, @intCast(app.curr_height)))
+            app.extent.width != @as(u32, @intCast(app.curr_width)) or
+            app.extent.height != @as(u32, @intCast(app.curr_height)))
         {
-            app.extend.width = @intCast(app.curr_width);
-            app.extend.height = @intCast(app.curr_height);
-            try swapchain.recreate(app.extend);
+            app.extent.width = @intCast(app.curr_width);
+            app.extent.height = @intCast(app.curr_height);
+            try swapchain.recreate(app.extent);
 
             // Recreate command buffers for new swapchain
             destroyCmdBuffers(&gc, cmd_pool, allocator, cmd_buffers);
