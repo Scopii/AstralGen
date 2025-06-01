@@ -116,5 +116,5 @@ pub fn recordCmdBuffer(cmdBuffer: c.VkCommandBuffer, extent: c.VkExtent2D, image
     };
 
     c.vkCmdPipelineBarrier(cmdBuffer, c.VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, c.VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 0, 0, null, 0, null, 1, &present_barrier);
-    _ = c.vkEndCommandBuffer(cmdBuffer);
+    try check(c.vkEndCommandBuffer(cmdBuffer), "Could not end command buffer");
 }

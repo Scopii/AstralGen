@@ -115,6 +115,8 @@ pub const Renderer = struct {
     }
 
     pub fn deinit(self: *Renderer) void {
+        _ = c.vkDeviceWaitIdle(self.gpi);
+
         c.vkDestroySemaphore(self.gpi, self.imageRdySemaphore, null);
         c.vkDestroySemaphore(self.gpi, self.renderDoneSemaphore, null);
         c.vkDestroyFence(self.gpi, self.inFlightFence, null);
