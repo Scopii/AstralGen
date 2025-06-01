@@ -1,15 +1,15 @@
 const std = @import("std");
 const c = @import("../c.zig");
-const createDevice = @import("device.zig").createDevice;
-const checkDeviceQueueFamilies = @import("device.zig").checkDeviceQueueFamilies;
+const createGPinfo = @import("device.zig").createGPinfo;
 const createSurface = @import("surface.zig").createSurface;
 const Swapchain = @import("swapchain.zig").Swapchain;
 const createPipeline = @import("pipeline.zig").createPipeline;
 const createCmdPool = @import("command.zig").createCmdPool;
 const createCmdBuffer = @import("command.zig").createCmdBuffer;
-const recordCommandBuffer = @import("command.zig").recordCommandBuffer;
+const recordCmdBuffer = @import("command.zig").recordCmdBuffer;
 const createFence = @import("sync.zig").createFence;
 const createSemaphore = @import("sync.zig").createSemaphore;
+const check = @import("error.zig").check;
 
 const Allocator = std.mem.Allocator;
 
@@ -20,9 +20,9 @@ pub const Renderer = struct {
     stop_rendering: bool = false,
 
     instance: c.VkInstance,
-    device: c.VkDevice,
-    graphics_queue: c.VkQueue,
-    present_queue: c.VkQueue,
+    gpi: c.VkDevice,
+    gQueue: c.VkQueue,
+    pQueue: c.VkQueue,
     surface: c.VkSurfaceKHR,
     swapchain: Swapchain,
     pipeline: c.VkPipeline,
@@ -35,29 +35,31 @@ pub const Renderer = struct {
     pub fn init(alloc: Allocator, window: *c.SDL_Window, extent: c.VkExtent2D) !Renderer {
         const instance = try createInstance(alloc);
         const surface = try createSurface(window, instance);
-        const device_combo = try createDevice(alloc, instance, surface);
+        const deviceInfo = try createGPinfo(alloc, instance, surface);
+        const gpi = deviceInfo.gpi;
+        const gpu = deviceInfo.gpu;
         // Get the queues
-        var graphics_queue: c.VkQueue = undefined;
-        c.vkGetDeviceQueue(device_combo.device, device_combo.queue_families.graphics, 0, &graphics_queue);
-        var present_queue: c.VkQueue = undefined;
-        c.vkGetDeviceQueue(device_combo.device, device_combo.queue_families.present, 0, &present_queue);
+        var gQueue: c.VkQueue = undefined;
+        c.vkGetDeviceQueue(gpi, deviceInfo.families.graphics, 0, &gQueue);
+        var pQueue: c.VkQueue = undefined;
+        c.vkGetDeviceQueue(gpi, deviceInfo.families.present, 0, &pQueue);
 
-        const swapchain = try Swapchain.init(alloc, device_combo.device, device_combo.phys_device, surface, extent, device_combo.queue_families);
-        const pipeline = try createPipeline(device_combo.device, swapchain.surfaceFormat.format);
-        const cmdPool = try createCmdPool(device_combo.device, device_combo.queue_families.graphics);
-        const cmdBuffer = try createCmdBuffer(device_combo.device, cmdPool);
+        const swapchain = try Swapchain.init(alloc, gpi, gpu, surface, extent, deviceInfo.families);
+        const pipeline = try createPipeline(gpi, swapchain.surfaceFormat.format);
+        const cmdPool = try createCmdPool(gpi, deviceInfo.families.graphics);
+        const cmdBuffer = try createCmdBuffer(gpi, cmdPool);
 
-        const imageRdySemaphore = try createSemaphore(device_combo.device);
-        const renderDoneSemaphore = try createSemaphore(device_combo.device);
-        const inFlightFence = try createFence(device_combo.device);
+        const imageRdySemaphore = try createSemaphore(gpi);
+        const renderDoneSemaphore = try createSemaphore(gpi);
+        const inFlightFence = try createFence(gpi);
 
         return .{
             .alloc = alloc,
             .instance = instance,
             .surface = surface,
-            .device = device_combo.device,
-            .graphics_queue = graphics_queue,
-            .present_queue = present_queue,
+            .gpi = gpi,
+            .gQueue = gQueue,
+            .pQueue = pQueue,
             .swapchain = swapchain,
             .pipeline = pipeline,
             .cmdPool = cmdPool,
@@ -69,59 +71,57 @@ pub const Renderer = struct {
     }
 
     pub fn draw(self: *Renderer) !void {
-        _ = c.vkWaitForFences(self.device, 1, &self.inFlightFence, c.VK_TRUE, std.math.maxInt(u64));
-        _ = c.vkResetFences(self.device, 1, &self.inFlightFence);
+        //try check(, );
 
-        var imageIndex: u32 = undefined;
-        _ = c.vkAcquireNextImageKHR(self.device, self.swapchain.handle, std.math.maxInt(u64), self.imageRdySemaphore, null, &imageIndex);
+        try check(c.vkWaitForFences(self.gpi, 1, &self.inFlightFence, c.VK_TRUE, std.math.maxInt(u64)), "Could not wait for inFlightFence");
+        try check(c.vkResetFences(self.gpi, 1, &self.inFlightFence), "Could not reset inFlightFence");
 
-        _ = c.vkResetCommandBuffer(self.cmdBuffer, 0);
-        try recordCommandBuffer(self.cmdBuffer, self.swapchain.extent, self.swapchain.imageViews, self.pipeline, imageIndex, self.swapchain); // Pass imageIndex
+        var imageIndex: u32 = 0;
+        try check(c.vkAcquireNextImageKHR(self.gpi, self.swapchain.handle, std.math.maxInt(u64), self.imageRdySemaphore, null, &imageIndex), "could not acquire Next Image");
+        try check(c.vkResetCommandBuffer(self.cmdBuffer, 0), "Could not reset cmdBuffer");
+        try recordCmdBuffer(self.cmdBuffer, self.swapchain.extent, self.swapchain.imageViews, self.pipeline, imageIndex, self.swapchain); // Pass imageIndex
 
-        const wait_semaphores = [_]c.VkSemaphore{self.imageRdySemaphore};
-        const wait_stages = [_]c.VkPipelineStageFlags{c.VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
-        const signal_semaphores = [_]c.VkSemaphore{self.renderDoneSemaphore};
+        const waitSemaphores = [_]c.VkSemaphore{self.imageRdySemaphore};
+        const waitStages = [_]c.VkPipelineStageFlags{c.VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
+        const signalSemaphores = [_]c.VkSemaphore{self.renderDoneSemaphore};
 
         const submit_info = c.VkSubmitInfo{
             .sType = c.VK_STRUCTURE_TYPE_SUBMIT_INFO,
-            .waitSemaphoreCount = wait_semaphores.len,
-            .pWaitSemaphores = &wait_semaphores,
-            .pWaitDstStageMask = &wait_stages,
+            .waitSemaphoreCount = waitSemaphores.len,
+            .pWaitSemaphores = &waitSemaphores,
+            .pWaitDstStageMask = &waitStages,
             .commandBufferCount = 1,
             .pCommandBuffers = &self.cmdBuffer,
-            .signalSemaphoreCount = signal_semaphores.len,
-            .pSignalSemaphores = &signal_semaphores,
+            .signalSemaphoreCount = signalSemaphores.len,
+            .pSignalSemaphores = &signalSemaphores,
         };
 
-        if (c.vkQueueSubmit(self.graphics_queue, 1, &submit_info, self.inFlightFence) != c.VK_SUCCESS) {
-            return error.FailedToSubmitDraw;
-        }
+        try check(c.vkQueueSubmit(self.gQueue, 1, &submit_info, self.inFlightFence), "Failed to submit to Queue");
 
-        // Fixed present info - use signal_semaphores not wait_semaphores
         const swapchains = [_]c.VkSwapchainKHR{self.swapchain.handle};
-        const image_indices = [_]u32{imageIndex};
+        const imageIndices = [_]u32{imageIndex};
 
         const presentInfo = c.VkPresentInfoKHR{
             .sType = c.VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
-            .waitSemaphoreCount = signal_semaphores.len, // Wait for render to complete
-            .pWaitSemaphores = &signal_semaphores, // Use signal semaphores here
-            .swapchainCount = 1, // Missing field
-            .pSwapchains = &swapchains, // Missing field
-            .pImageIndices = &image_indices, // Missing field
-            .pResults = null, // Missing field
+            .waitSemaphoreCount = signalSemaphores.len,
+            .pWaitSemaphores = &signalSemaphores,
+            .swapchainCount = 1,
+            .pSwapchains = &swapchains,
+            .pImageIndices = &imageIndices,
+            .pResults = null,
         };
 
-        _ = c.vkQueuePresentKHR(self.present_queue, &presentInfo);
+        try check(c.vkQueuePresentKHR(self.pQueue, &presentInfo), "could not present Queue");
     }
 
     pub fn deinit(self: *Renderer) void {
-        c.vkDestroySemaphore(self.device, self.imageRdySemaphore, null);
-        c.vkDestroySemaphore(self.device, self.renderDoneSemaphore, null);
-        c.vkDestroyFence(self.device, self.inFlightFence, null);
-        c.vkDestroyCommandPool(self.device, self.cmdPool, null);
-        self.swapchain.deinit(self.device);
-        c.vkDestroyPipeline(self.device, self.pipeline, null);
-        c.vkDestroyDevice(self.device, null);
+        c.vkDestroySemaphore(self.gpi, self.imageRdySemaphore, null);
+        c.vkDestroySemaphore(self.gpi, self.renderDoneSemaphore, null);
+        c.vkDestroyFence(self.gpi, self.inFlightFence, null);
+        c.vkDestroyCommandPool(self.gpi, self.cmdPool, null);
+        self.swapchain.deinit(self.gpi);
+        c.vkDestroyPipeline(self.gpi, self.pipeline, null);
+        c.vkDestroyDevice(self.gpi, null);
         c.vkDestroySurfaceKHR(self.instance, self.surface, null);
         c.vkDestroyInstance(self.instance, null);
     }
@@ -129,20 +129,21 @@ pub const Renderer = struct {
 
 pub fn createInstance(alloc: Allocator) !c.VkInstance {
     // get required extensions
-    var extension_count: u32 = 0;
-    const required_extensions = c.SDL_Vulkan_GetInstanceExtensions(&extension_count); // VK_EXT_DEBUG_REPORT_EXTENSION_NAME
+    var extCount: u32 = 0;
+    const reqExtensions = c.SDL_Vulkan_GetInstanceExtensions(&extCount); // VK_EXT_DEBUG_REPORT_EXTENSION_NAME
 
     var extensions = std.ArrayList([*c]const u8).init(alloc);
     defer extensions.deinit();
-    for (0..extension_count) |i| {
-        try extensions.append(required_extensions[i]);
+
+    for (0..extCount) |i| {
+        try extensions.append(reqExtensions[i]);
     }
 
     try extensions.append("VK_EXT_debug_utils");
     try extensions.append("VK_EXT_debug_report");
     try extensions.append("VK_KHR_portability_enumeration");
     try extensions.append("VK_KHR_get_physical_device_properties2");
-    std.debug.print("Extension Count {}\n", .{extension_count});
+    std.debug.print("Extension Count {}\n", .{extCount});
 
     const app_info = c.VkApplicationInfo{
         .sType = c.VK_STRUCTURE_TYPE_APPLICATION_INFO,
@@ -161,7 +162,7 @@ pub fn createInstance(alloc: Allocator) !c.VkInstance {
     try layers.append("VK_LAYER_KHRONOS_validation");
     try layers.append("VK_LAYER_KHRONOS_synchronization2");
 
-    const instance_info = c.VkInstanceCreateInfo{
+    const instanceInfo = c.VkInstanceCreateInfo{
         .sType = c.VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
         .pNext = null,
         .flags = 0,
@@ -173,11 +174,7 @@ pub fn createInstance(alloc: Allocator) !c.VkInstance {
     };
 
     var instance: c.VkInstance = undefined;
-    const result = c.vkCreateInstance(&instance_info, null, &instance);
-    if (result != c.VK_SUCCESS) {
-        std.log.err("Unable to create Vulkan instance ! Reason {d}\n", .{result});
-        return error.VkInstance;
-    }
+    try check(c.vkCreateInstance(&instanceInfo, null, &instance), "Unable to create Vulkan instance!");
 
     return instance;
 }
