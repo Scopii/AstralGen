@@ -19,7 +19,7 @@ pub fn createInstance(alloc: Allocator) !c.VkInstance {
     try extensions.append("VK_EXT_debug_report");
     try extensions.append("VK_KHR_portability_enumeration");
     try extensions.append("VK_KHR_get_physical_device_properties2");
-    std.debug.print("Extension Count {}\n", .{extensions.items.len});
+    std.debug.print("Instance Extensions {}\n", .{extensions.items.len});
 
     const app_info = c.VkApplicationInfo{
         .sType = c.VK_STRUCTURE_TYPE_APPLICATION_INFO,

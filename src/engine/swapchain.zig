@@ -55,7 +55,7 @@ pub const Swapchain = struct {
             .pQueueFamilyIndices = if (familyCount > 0) &familyIndices else null,
             .preTransform = details.caps.currentTransform,
             .compositeAlpha = c.VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
-            .presentMode = mode,
+            .presentMode = mode, // Doesnt work?
             .clipped = c.VK_TRUE,
         };
 

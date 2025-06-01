@@ -81,8 +81,11 @@ pub const Renderer = struct {
     pub fn draw(self: *Renderer) !void {
         const frame = &self.frames[self.currentFrame];
 
-        // Wait for this frame's fence
-        try check(c.vkWaitForFences(self.dev.gpi, 1, &frame.inFlightFence, c.VK_TRUE, std.math.maxInt(u64)), "Could not wait for inFlightFence");
+        // Only wait if fence is actually pending (avoid unnecessary stalls) ?? useless maybe
+        const fenceStatus = c.vkGetFenceStatus(self.dev.gpi, frame.inFlightFence);
+        if (fenceStatus == c.VK_NOT_READY) {
+            try check(c.vkWaitForFences(self.dev.gpi, 1, &frame.inFlightFence, c.VK_TRUE, std.math.maxInt(u64)), "Could not wait for inFlightFence");
+        }
         try check(c.vkResetFences(self.dev.gpi, 1, &frame.inFlightFence), "Could not reset inFlightFence");
 
         var imageIndex: u32 = 0;
