@@ -9,21 +9,18 @@ pub fn build(b: *std.Build) void {
         .root_source_file = b.path("src/main.zig"),
         .target = target,
         .optimize = optimize,
+        .link_libc = true,
     });
 
-    // Vulkan setup
-    const vulkan_zig_dep = b.dependency("vulkan_zig", .{
-        .registry = b.path("vk.xml"),
-        .target = target,
-        .optimize = optimize,
-    });
-    exe.root_module.addImport("vulkan", vulkan_zig_dep.module("vulkan-zig"));
-
+ 
     // GLFW setup - add include path and link libraries
     exe.addIncludePath(b.path("include"));
-    exe.addLibraryPath(b.path("libs/GLFW"));
-    exe.linkSystemLibrary("glfw3");
 
+    exe.addLibraryPath(b.path("libs/SDL3"));
+    exe.linkSystemLibrary("SDL3");
+
+
+    exe.addLibraryPath(b.path("libs/vulkan"));
     // Link Vulkan library
     if (target.result.os.tag == .windows) {
         exe.linkSystemLibrary("vulkan-1");
@@ -67,12 +64,12 @@ pub fn build(b: *std.Build) void {
 
     // Copy GLFW DLL to output directory on Windows
     if (target.result.os.tag == .windows) {
-        b.installFile("libs/GLFW/glfw3.dll", "bin/glfw3.dll");
+        b.installFile("libs/SDL3/SDL3.dll", "bin/SDL3.dll");
     }
 
     const vert_cmd = b.addSystemCommand(&.{
         "glslc",
-        "--target-env=vulkan1.4",
+        "--target-env=vulkan1.3",
         "-o",
         // "zig-out/bin/VertShdr.vert.spv"
     });
@@ -84,7 +81,7 @@ pub fn build(b: *std.Build) void {
 
     const frag_cmd = b.addSystemCommand(&.{
         "glslc",
-        "--target-env=vulkan1.4",
+        "--target-env=vulkan1.3",
         "-o",
         // "zig-out/bin/VertShdr.vert.spv"
     });

@@ -1,60 +1,58 @@
 const std = @import("std");
-const vk = @import("vulkan");
 const c = @import("../c.zig");
 
 pub const App = struct {
-    window: *c.GLFWwindow,
-    extent: vk.Extent2D,
+    window: *c.SDL_Window,
+    extent: c.VkExtent2D,
     curr_width: c_int = undefined,
     curr_height: c_int = undefined,
+    close: bool = false,
 
     pub fn init() !App {
-        const extent = vk.Extent2D{ .width = 1280, .height = 720 };
+        const extent = c.VkExtent2D{ .width = 1280, .height = 720 };
 
-        if (c.glfwInit() != c.GLFW_TRUE) return error.GlfwInitFailed;
-
-        if (c.glfwVulkanSupported() != c.GLFW_TRUE) {
-            std.log.err("GLFW could not find libvulkan", .{});
-            return error.NoVulkan;
+        // Initialize SDL3 with video subsystem
+        if (c.SDL_Init(c.SDL_INIT_VIDEO) != true) {
+            std.log.err("SDL_Init failed: {s}\n", .{c.SDL_GetError()});
+            return error.SdlInitFailed;
         }
 
-        c.glfwWindowHint(c.GLFW_CLIENT_API, c.GLFW_NO_API);
-
-        const window = c.glfwCreateWindow(
-            @intCast(extent.width),
-            @intCast(extent.height),
+        const window = c.SDL_CreateWindow(
             "AstralGen",
-            null,
-            null,
-        ) orelse return error.WindowInitFailed;
-
-        return App{
-            .window = window,
-            .extent = extent,
+            extent.width,
+            extent.height,
+            c.SDL_WINDOW_VULKAN | c.SDL_WINDOW_RESIZABLE,
+        ) orelse {
+            std.log.err("SDL_CreateWindow failed: {s}\n", .{c.SDL_GetError()});
+            return error.WindowInitFailed;
         };
+
+        //_ = c.SDL_SetWindowRelativeMouseMode(window, true);
+
+        return App{ .window = window, .extent = extent };
     }
 
-    pub fn deinit(self: *App) void {
-        c.glfwDestroyWindow(self.window);
-        c.glfwTerminate();
+    pub fn pollEvents(self: *App) void {
+        var event: c.SDL_Event = undefined;
+        while (c.SDL_PollEvent(&event) != false) {
+            switch (event.type) {
+                c.SDL_EVENT_QUIT => self.close = true,
+                else => {},
+            }
+        }
     }
 
-    pub fn pollEvents(_: *App) void {
-        c.glfwPollEvents();
-    }
-
-    pub fn shouldClose(self: *App) bool {
-        return if (c.glfwWindowShouldClose(self.window) == c.GLFW_FALSE) true else false;
-    }
-
-    pub fn handle(self: *App) bool {
-        c.glfwGetFramebufferSize(self.window, &self.curr_width, &self.curr_height);
+    pub fn handle(self: *App) void {
+        _ = c.SDL_GetWindowSize(self.window, &self.curr_width, &self.curr_height);
 
         // Handle window minimization
         if (self.curr_width == 0 or self.curr_height == 0) {
             self.pollEvents();
-            return false;
         }
-        return true;
+    }
+
+    pub fn deinit(self: *App) void {
+        c.SDL_DestroyWindow(self.window);
+        c.SDL_Quit();
     }
 };
