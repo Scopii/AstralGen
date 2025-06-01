@@ -155,16 +155,17 @@ pub fn createGPI(alloc: Allocator, gpu: c.VkPhysicalDevice, families: QueueFamil
     var features: c.VkPhysicalDeviceFeatures = undefined;
     c.vkGetPhysicalDeviceFeatures(gpu, &features);
 
-    const dynRendering = c.VkPhysicalDeviceDynamicRenderingFeatures{
-        .sType = c.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES,
+    const features13_to_enable = c.VkPhysicalDeviceVulkan13Features{
+        .sType = c.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
         .dynamicRendering = c.VK_TRUE,
+        .synchronization2 = c.VK_TRUE,
     };
     // Enable required gpu extensions
-    const gpuExtensions = [_][*c]const u8{ "VK_KHR_swapchain", "VK_KHR_synchronization2", "VK_KHR_dynamic_rendering" };
+    const gpuExtensions = [_][*c]const u8{"VK_KHR_swapchain"};
 
     const createInfo = c.VkDeviceCreateInfo{
         .sType = c.VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
-        .pNext = &dynRendering,
+        .pNext = &features13_to_enable,
         .pQueueCreateInfos = queueInfos.items.ptr,
         .queueCreateInfoCount = @intCast(queueInfos.items.len),
         .pEnabledFeatures = &features,

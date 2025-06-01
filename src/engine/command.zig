@@ -2,6 +2,7 @@ const std = @import("std");
 const c = @import("../c.zig");
 const Allocator = std.mem.Allocator;
 const Swapchain = @import("swapchain.zig").Swapchain;
+const Pipeline = @import("pipeline.zig").Pipeline;
 const check = @import("error.zig").check;
 
 // Import QueueFamilies from device.zig
@@ -32,21 +33,26 @@ pub fn createCmdBuffer(gpi: c.VkDevice, cmdPool: c.VkCommandPool) !c.VkCommandBu
     return buffer;
 }
 
-pub fn recordCmdBuffer(cmdBuffer: c.VkCommandBuffer, extent: c.VkExtent2D, imageViews: []c.VkImageView, pipeline: c.VkPipeline, imageIndex: u32, swapchain: Swapchain) !void {
+// Synchronization2 command buffer recording
+pub fn recordCmdBufferSync2(swapchain: Swapchain, pipeline: Pipeline, cmdBuffer: c.VkCommandBuffer, imageIndex: u32) !void {
     const beginInfo = c.VkCommandBufferBeginInfo{
         .sType = c.VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
         .pInheritanceInfo = null,
     };
     try check(c.vkBeginCommandBuffer(cmdBuffer, &beginInfo), "Could not record CMD Buffer");
 
-    // Add image layout transition for swapchain image
-    const barrier = c.VkImageMemoryBarrier{
-        .sType = c.VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+    // Sync2: Transition swapchain image to color attachment
+    const imageBarrier = c.VkImageMemoryBarrier2{
+        .sType = c.VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+        .srcStageMask = c.VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
+        .srcAccessMask = 0,
+        .dstStageMask = c.VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+        .dstAccessMask = c.VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
         .oldLayout = c.VK_IMAGE_LAYOUT_UNDEFINED,
         .newLayout = c.VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
         .srcQueueFamilyIndex = c.VK_QUEUE_FAMILY_IGNORED,
         .dstQueueFamilyIndex = c.VK_QUEUE_FAMILY_IGNORED,
-        .image = swapchain.images[imageIndex], // Need to pass swapchain images too
+        .image = swapchain.images[imageIndex],
         .subresourceRange = c.VkImageSubresourceRange{
             .aspectMask = c.VK_IMAGE_ASPECT_COLOR_BIT,
             .baseMipLevel = 0,
@@ -54,27 +60,33 @@ pub fn recordCmdBuffer(cmdBuffer: c.VkCommandBuffer, extent: c.VkExtent2D, image
             .baseArrayLayer = 0,
             .layerCount = 1,
         },
-        .srcAccessMask = 0,
-        .dstAccessMask = c.VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
     };
-    c.vkCmdPipelineBarrier(cmdBuffer, c.VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, c.VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, 0, 0, null, 0, null, 1, &barrier);
 
+    const depInfo = c.VkDependencyInfo{
+        .sType = c.VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+        .imageMemoryBarrierCount = 1,
+        .pImageMemoryBarriers = &imageBarrier,
+    };
+    c.vkCmdPipelineBarrier2(cmdBuffer, &depInfo);
+
+    // Set viewport and scissor
     const viewport = c.VkViewport{
         .x = 0,
         .y = 0,
-        .width = @floatFromInt(extent.width),
-        .height = @floatFromInt(extent.height),
+        .width = @floatFromInt(swapchain.extent.width),
+        .height = @floatFromInt(swapchain.extent.height),
         .minDepth = 0.0,
         .maxDepth = 1.0,
     };
     c.vkCmdSetViewport(cmdBuffer, 0, 1, &viewport);
 
-    const scissor_rect = c.VkRect2D{ .offset = .{ .x = 0, .y = 0 }, .extent = extent };
+    const scissor_rect = c.VkRect2D{ .offset = .{ .x = 0, .y = 0 }, .extent = swapchain.extent };
     c.vkCmdSetScissor(cmdBuffer, 0, 1, &scissor_rect);
 
+    // Begin rendering
     const color_attachment_info = c.VkRenderingAttachmentInfo{
         .sType = c.VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-        .imageView = imageViews[imageIndex], // Use correct image index
+        .imageView = swapchain.imageViews[imageIndex],
         .imageLayout = c.VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
         .resolveMode = c.VK_RESOLVE_MODE_NONE,
         .resolveImageView = null,
@@ -86,7 +98,7 @@ pub fn recordCmdBuffer(cmdBuffer: c.VkCommandBuffer, extent: c.VkExtent2D, image
 
     const rendering_info = c.VkRenderingInfo{
         .sType = c.VK_STRUCTURE_TYPE_RENDERING_INFO,
-        .renderArea = .{ .extent = extent, .offset = .{ .x = 0, .y = 0 } },
+        .renderArea = .{ .extent = swapchain.extent, .offset = .{ .x = 0, .y = 0 } },
         .layerCount = 1,
         .viewMask = 0,
         .colorAttachmentCount = 1,
@@ -94,14 +106,19 @@ pub fn recordCmdBuffer(cmdBuffer: c.VkCommandBuffer, extent: c.VkExtent2D, image
         .pDepthAttachment = null,
         .pStencilAttachment = null,
     };
+
     c.vkCmdBeginRendering(cmdBuffer, &rendering_info);
-    c.vkCmdBindPipeline(cmdBuffer, c.VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+    c.vkCmdBindPipeline(cmdBuffer, c.VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.handle);
     c.vkCmdDraw(cmdBuffer, 3, 1, 0, 0);
     c.vkCmdEndRendering(cmdBuffer);
 
-    // Transition back to present layout
-    const present_barrier = c.VkImageMemoryBarrier{
-        .sType = c.VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+    // Sync2: Transition back to present layout
+    const presentBarrier = c.VkImageMemoryBarrier2{
+        .sType = c.VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+        .srcStageMask = c.VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+        .srcAccessMask = c.VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+        .dstStageMask = c.VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT,
+        .dstAccessMask = 0,
         .oldLayout = c.VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
         .newLayout = c.VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
         .srcQueueFamilyIndex = c.VK_QUEUE_FAMILY_IGNORED,
@@ -114,10 +131,14 @@ pub fn recordCmdBuffer(cmdBuffer: c.VkCommandBuffer, extent: c.VkExtent2D, image
             .baseArrayLayer = 0,
             .layerCount = 1,
         },
-        .srcAccessMask = c.VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-        .dstAccessMask = 0,
     };
 
-    c.vkCmdPipelineBarrier(cmdBuffer, c.VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, c.VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 0, 0, null, 0, null, 1, &present_barrier);
+    const presentDepInfo = c.VkDependencyInfo{
+        .sType = c.VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+        .imageMemoryBarrierCount = 1,
+        .pImageMemoryBarriers = &presentBarrier,
+    };
+    c.vkCmdPipelineBarrier2(cmdBuffer, &presentDepInfo);
+
     try check(c.vkEndCommandBuffer(cmdBuffer), "Could not end command buffer");
 }

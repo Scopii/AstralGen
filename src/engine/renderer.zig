@@ -9,17 +9,27 @@ const createSurface = @import("surface.zig").createSurface;
 
 const createCmdPool = @import("command.zig").createCmdPool;
 const createCmdBuffer = @import("command.zig").createCmdBuffer;
-const recordCmdBuffer = @import("command.zig").recordCmdBuffer;
+const recordCmdBufferSync2 = @import("command.zig").recordCmdBufferSync2;
 const createFence = @import("sync.zig").createFence;
 const createSemaphore = @import("sync.zig").createSemaphore;
 const check = @import("error.zig").check;
 
 const Allocator = std.mem.Allocator;
 
+const MAX_FRAMES_IN_FLIGHT = 2;
+
+const FrameData = struct {
+    cmdBuffer: c.VkCommandBuffer,
+    imageRdySemaphore: c.VkSemaphore,
+    renderDoneSemaphore: c.VkSemaphore,
+    inFlightFence: c.VkFence,
+};
+
 pub const Renderer = struct {
     alloc: Allocator,
     initilized: bool = false,
     frameNumber: u32 = 0,
+    currentFrame: u32 = 0,
     stop_rendering: bool = false,
 
     instance: c.VkInstance,
@@ -28,10 +38,8 @@ pub const Renderer = struct {
     swapchain: Swapchain,
     pipeline: Pipeline,
     cmdPool: c.VkCommandPool,
-    cmdBuffer: c.VkCommandBuffer,
-    imageRdySemaphore: c.VkSemaphore,
-    renderDoneSemaphore: c.VkSemaphore,
-    inFlightFence: c.VkFence,
+
+    frames: [MAX_FRAMES_IN_FLIGHT]FrameData,
 
     pub fn init(alloc: Allocator, window: *c.SDL_Window, extent: c.VkExtent2D) !Renderer {
         const instance = try createInstance(alloc);
@@ -42,11 +50,14 @@ pub const Renderer = struct {
 
         const pipeline = try Pipeline.init(dev.gpi, swapchain.surfaceFormat.format);
         const cmdPool = try createCmdPool(dev.gpi, dev.families.graphics);
-        const cmdBuffer = try createCmdBuffer(dev.gpi, cmdPool);
 
-        const imageRdySemaphore = try createSemaphore(dev.gpi);
-        const renderDoneSemaphore = try createSemaphore(dev.gpi);
-        const inFlightFence = try createFence(dev.gpi);
+        var frames: [MAX_FRAMES_IN_FLIGHT]FrameData = undefined;
+        for (&frames) |*frame| {
+            frame.cmdBuffer = try createCmdBuffer(dev.gpi, cmdPool);
+            frame.imageRdySemaphore = try createSemaphore(dev.gpi);
+            frame.renderDoneSemaphore = try createSemaphore(dev.gpi);
+            frame.inFlightFence = try createFence(dev.gpi);
+        }
 
         return .{
             .alloc = alloc,
@@ -56,25 +67,27 @@ pub const Renderer = struct {
             .swapchain = swapchain,
             .pipeline = pipeline,
             .cmdPool = cmdPool,
-            .cmdBuffer = cmdBuffer,
-            .imageRdySemaphore = imageRdySemaphore,
-            .renderDoneSemaphore = renderDoneSemaphore,
-            .inFlightFence = inFlightFence,
+            .frames = frames,
         };
     }
 
     pub fn draw(self: *Renderer) !void {
-        try check(c.vkWaitForFences(self.dev.gpi, 1, &self.inFlightFence, c.VK_TRUE, std.math.maxInt(u64)), "Could not wait for inFlightFence");
-        try check(c.vkResetFences(self.dev.gpi, 1, &self.inFlightFence), "Could not reset inFlightFence");
+        const frame = &self.frames[self.currentFrame];
+
+        // Wait for this frame's fence
+        try check(c.vkWaitForFences(self.dev.gpi, 1, &frame.inFlightFence, c.VK_TRUE, std.math.maxInt(u64)), "Could not wait for inFlightFence");
+        try check(c.vkResetFences(self.dev.gpi, 1, &frame.inFlightFence), "Could not reset inFlightFence");
 
         var imageIndex: u32 = 0;
-        try check(c.vkAcquireNextImageKHR(self.dev.gpi, self.swapchain.handle, std.math.maxInt(u64), self.imageRdySemaphore, null, &imageIndex), "could not acquire Next Image");
-        try check(c.vkResetCommandBuffer(self.cmdBuffer, 0), "Could not reset cmdBuffer");
-        try recordCmdBuffer(self.cmdBuffer, self.swapchain.extent, self.swapchain.imageViews, self.pipeline.handle, imageIndex, self.swapchain); // Pass imageIndex
+        try check(c.vkAcquireNextImageKHR(self.dev.gpi, self.swapchain.handle, std.math.maxInt(u64), frame.imageRdySemaphore, null, &imageIndex), "could not acquire Next Image");
 
-        const waitSemaphores = [_]c.VkSemaphore{self.imageRdySemaphore};
+        try check(c.vkResetCommandBuffer(frame.cmdBuffer, 0), "Could not reset cmdBuffer");
+        try recordCmdBufferSync2(self.swapchain, self.pipeline, frame.cmdBuffer, imageIndex);
+
+        // Submit with this frame's semaphores
+        const waitSemaphores = [_]c.VkSemaphore{frame.imageRdySemaphore};
         const waitStages = [_]c.VkPipelineStageFlags{c.VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
-        const signalSemaphores = [_]c.VkSemaphore{self.renderDoneSemaphore};
+        const signalSemaphores = [_]c.VkSemaphore{frame.renderDoneSemaphore};
 
         const submitInfo = c.VkSubmitInfo{
             .sType = c.VK_STRUCTURE_TYPE_SUBMIT_INFO,
@@ -82,11 +95,11 @@ pub const Renderer = struct {
             .pWaitSemaphores = &waitSemaphores,
             .pWaitDstStageMask = &waitStages,
             .commandBufferCount = 1,
-            .pCommandBuffers = &self.cmdBuffer,
+            .pCommandBuffers = &frame.cmdBuffer,
             .signalSemaphoreCount = signalSemaphores.len,
             .pSignalSemaphores = &signalSemaphores,
         };
-        try check(c.vkQueueSubmit(self.dev.gQueue, 1, &submitInfo, self.inFlightFence), "Failed to submit to Queue");
+        try check(c.vkQueueSubmit(self.dev.gQueue, 1, &submitInfo, frame.inFlightFence), "Failed to submit to Queue");
 
         const swapchains = [_]c.VkSwapchainKHR{self.swapchain.handle};
         const imageIndices = [_]u32{imageIndex};
@@ -101,15 +114,22 @@ pub const Renderer = struct {
             .pResults = null,
         };
         try check(c.vkQueuePresentKHR(self.dev.pQueue, &presentInfo), "could not present Queue");
+
+        // Move to next frame
+        self.currentFrame = (self.currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
     }
 
     pub fn deinit(self: *Renderer) void {
         const gpi = self.dev.gpi;
 
         _ = c.vkDeviceWaitIdle(gpi);
-        c.vkDestroySemaphore(gpi, self.imageRdySemaphore, null);
-        c.vkDestroySemaphore(gpi, self.renderDoneSemaphore, null);
-        c.vkDestroyFence(gpi, self.inFlightFence, null);
+
+        for (&self.frames) |*frame| {
+            c.vkDestroySemaphore(gpi, frame.imageRdySemaphore, null);
+            c.vkDestroySemaphore(gpi, frame.renderDoneSemaphore, null);
+            c.vkDestroyFence(gpi, frame.inFlightFence, null);
+        }
+
         c.vkDestroyCommandPool(gpi, self.cmdPool, null);
         self.swapchain.deinit(gpi);
         c.vkDestroyPipeline(gpi, self.pipeline.handle, null);
