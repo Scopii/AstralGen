@@ -33,7 +33,10 @@ pub fn createCmdBuffer(gpi: c.VkDevice, cmdPool: c.VkCommandPool) !c.VkCommandBu
 }
 
 pub fn recordCmdBuffer(cmdBuffer: c.VkCommandBuffer, extent: c.VkExtent2D, imageViews: []c.VkImageView, pipeline: c.VkPipeline, imageIndex: u32, swapchain: Swapchain) !void {
-    const beginInfo = c.VkCommandBufferBeginInfo{ .sType = c.VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
+    const beginInfo = c.VkCommandBufferBeginInfo{
+        .sType = c.VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+        .pInheritanceInfo = null,
+    };
     try check(c.vkBeginCommandBuffer(cmdBuffer, &beginInfo), "Could not record CMD Buffer");
 
     // Add image layout transition for swapchain image

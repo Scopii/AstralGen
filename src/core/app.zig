@@ -9,7 +9,7 @@ pub const App = struct {
     close: bool = false,
 
     pub fn init() !App {
-        const extent = c.VkExtent2D{ .width = 1280, .height = 720 };
+        const extent = c.VkExtent2D{ .width = 1920, .height = 1080 };
 
         // Initialize SDL3 with video subsystem
         if (c.SDL_Init(c.SDL_INIT_VIDEO) != true) {
@@ -28,6 +28,7 @@ pub const App = struct {
         };
 
         //_ = c.SDL_SetWindowRelativeMouseMode(window, true);
+        _ = c.SDL_SetWindowFullscreen(window, true);
 
         return App{ .window = window, .extent = extent };
     }

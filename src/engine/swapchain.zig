@@ -43,8 +43,6 @@ pub const Swapchain = struct {
 
         const swapchainInfo = c.VkSwapchainCreateInfoKHR{
             .sType = c.VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
-            .pNext = null,
-            .flags = 0,
             .surface = surface,
             .minImageCount = image_count,
             .imageFormat = surfaceFormat.format,
@@ -59,7 +57,6 @@ pub const Swapchain = struct {
             .compositeAlpha = c.VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
             .presentMode = mode,
             .clipped = c.VK_TRUE,
-            .oldSwapchain = null,
         };
 
         var handle: c.VkSwapchainKHR = undefined;
