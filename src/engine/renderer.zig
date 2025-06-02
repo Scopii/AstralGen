@@ -26,11 +26,7 @@ const FrameData = struct {
 
 pub const Renderer = struct {
     alloc: Allocator,
-    initilized: bool = false,
-    frameNumber: u32 = 0,
     currentFrame: u32 = 0,
-    stop_rendering: bool = false,
-
     instance: c.VkInstance,
     surface: c.VkSurfaceKHR,
     dev: Device,
@@ -41,13 +37,11 @@ pub const Renderer = struct {
     frames: [MAX_FRAMES_IN_FLIGHT]FrameData,
     renderFinishedSemaphores: []c.VkSemaphore,
 
-    pub fn init(alloc: Allocator, window: *c.SDL_Window, extent: c.VkExtent2D) !Renderer {
-        const instance = try createInstance(alloc);
+    pub fn init(alloc: Allocator, window: *c.SDL_Window, extent: c.VkExtent2D, validation: bool) !Renderer {
+        const instance = try createInstance(alloc, validation);
         const surface = try createSurface(window, instance);
-
         const dev = try Device.init(alloc, instance, surface);
         const swapchain = try Swapchain.init(alloc, dev.gpi, dev.gpu, surface, extent, dev.families);
-
         const pipeline = try Pipeline.init(dev.gpi, swapchain.surfaceFormat.format);
         const cmdPool = try createCmdPool(dev.gpi, dev.families.graphics);
 
@@ -81,11 +75,7 @@ pub const Renderer = struct {
     pub fn draw(self: *Renderer) !void {
         const frame = &self.frames[self.currentFrame];
 
-        // Only wait if fence is actually pending (avoid unnecessary stalls) ?? useless maybe
-        const fenceStatus = c.vkGetFenceStatus(self.dev.gpi, frame.inFlightFence);
-        if (fenceStatus == c.VK_NOT_READY) {
-            try check(c.vkWaitForFences(self.dev.gpi, 1, &frame.inFlightFence, c.VK_TRUE, std.math.maxInt(u64)), "Could not wait for inFlightFence");
-        }
+        try check(c.vkWaitForFences(self.dev.gpi, 1, &frame.inFlightFence, c.VK_TRUE, std.math.maxInt(u64)), "Could not wait for inFlightFence");
         try check(c.vkResetFences(self.dev.gpi, 1, &frame.inFlightFence), "Could not reset inFlightFence");
 
         var imageIndex: u32 = 0;
@@ -122,7 +112,6 @@ pub const Renderer = struct {
             .swapchainCount = 1,
             .pSwapchains = &swapchains,
             .pImageIndices = &imageIndices,
-            .pResults = null,
         };
         try check(c.vkQueuePresentKHR(self.dev.pQueue, &presentInfo), "could not present Queue");
 
@@ -132,14 +121,12 @@ pub const Renderer = struct {
 
     pub fn deinit(self: *Renderer) void {
         const gpi = self.dev.gpi;
-
         _ = c.vkDeviceWaitIdle(gpi);
 
         for (&self.frames) |*frame| {
             c.vkDestroyFence(gpi, frame.inFlightFence, null);
             c.vkDestroySemaphore(gpi, frame.imageAvailableSemaphore, null); // Clean up per-frame semaphore
         }
-
         // Clean up per-image render finished semaphores
         for (0..self.swapchain.imageCount) |i| {
             c.vkDestroySemaphore(gpi, self.renderFinishedSemaphores[i], null);
