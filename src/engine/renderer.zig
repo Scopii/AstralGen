@@ -36,7 +36,6 @@ pub const Renderer = struct {
     cmdPool: c.VkCommandPool,
 
     frames: [MAX_IN_FLIGHT]FrameData,
-    renderFinishedSemaphores: []c.VkSemaphore,
 
     pub fn init(alloc: Allocator, window: *c.SDL_Window, extent: *const c.VkExtent2D) !Renderer {
         const instance = try createInstance(alloc, DEBUG_TOGGLE);
@@ -53,13 +52,6 @@ pub const Renderer = struct {
             frame.imageAvailableSemaphore = try createSemaphore(device.gpi); // Per-frame acquisition
         }
 
-        // Create only per-image render finished semaphores
-        const renderFinishedSemaphores = try alloc.alloc(c.VkSemaphore, swapchain.imageCount);
-
-        for (0..swapchain.imageCount) |i| {
-            renderFinishedSemaphores[i] = try createSemaphore(device.gpi);
-        }
-
         return .{
             .alloc = alloc,
             .instance = instance,
@@ -69,7 +61,6 @@ pub const Renderer = struct {
             .pipeline = pipeline,
             .cmdPool = cmdPool,
             .frames = frames,
-            .renderFinishedSemaphores = renderFinishedSemaphores,
         };
     }
 
@@ -89,7 +80,7 @@ pub const Renderer = struct {
         // Submit with per-frame acquisition + per-image render finished
         const waitSemaphores = [_]c.VkSemaphore{frame.imageAvailableSemaphore};
         const waitStages = [_]c.VkPipelineStageFlags{c.VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
-        const signalSemaphores = [_]c.VkSemaphore{self.renderFinishedSemaphores[imageIndex]};
+        const signalSemaphores = [_]c.VkSemaphore{self.swapchain.imageBucket.renderFinishedSemaphores[imageIndex]};
 
         const submitInfo = c.VkSubmitInfo{
             .sType = c.VK_STRUCTURE_TYPE_SUBMIT_INFO,
@@ -128,11 +119,6 @@ pub const Renderer = struct {
             c.vkDestroyFence(gpi, frame.inFlightFence, null);
             c.vkDestroySemaphore(gpi, frame.imageAvailableSemaphore, null); // Clean up per-frame semaphore
         }
-        // Clean up per-image render finished semaphores
-        for (0..self.swapchain.imageCount) |i| {
-            c.vkDestroySemaphore(gpi, self.renderFinishedSemaphores[i], null);
-        }
-        self.alloc.free(self.renderFinishedSemaphores);
 
         c.vkDestroyCommandPool(gpi, self.cmdPool, null);
         self.swapchain.deinit(gpi);

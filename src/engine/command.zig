@@ -54,7 +54,7 @@ pub fn recordCmdBufferSync2(swapchain: Swapchain, pipeline: Pipeline, cmdBuffer:
         .newLayout = c.VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
         .srcQueueFamilyIndex = c.VK_QUEUE_FAMILY_IGNORED,
         .dstQueueFamilyIndex = c.VK_QUEUE_FAMILY_IGNORED,
-        .image = swapchain.images[imageIndex],
+        .image = swapchain.imageBucket.images[imageIndex],
         .subresourceRange = c.VkImageSubresourceRange{
             .aspectMask = c.VK_IMAGE_ASPECT_COLOR_BIT,
             .baseMipLevel = 0,
@@ -88,7 +88,7 @@ pub fn recordCmdBufferSync2(swapchain: Swapchain, pipeline: Pipeline, cmdBuffer:
     // Begin rendering
     const color_attachment_info = c.VkRenderingAttachmentInfo{
         .sType = c.VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-        .imageView = swapchain.imageViews[imageIndex],
+        .imageView = swapchain.imageBucket.imageViews[imageIndex],
         .imageLayout = c.VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
         .resolveMode = c.VK_RESOLVE_MODE_NONE,
         .resolveImageView = null,
@@ -125,7 +125,7 @@ pub fn recordCmdBufferSync2(swapchain: Swapchain, pipeline: Pipeline, cmdBuffer:
         .newLayout = c.VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
         .srcQueueFamilyIndex = c.VK_QUEUE_FAMILY_IGNORED,
         .dstQueueFamilyIndex = c.VK_QUEUE_FAMILY_IGNORED,
-        .image = swapchain.images[imageIndex],
+        .image = swapchain.imageBucket.images[imageIndex],
         .subresourceRange = c.VkImageSubresourceRange{
             .aspectMask = c.VK_IMAGE_ASPECT_COLOR_BIT,
             .baseMipLevel = 0,

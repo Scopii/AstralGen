@@ -3,6 +3,7 @@ const c = @import("../c.zig");
 const Allocator = std.mem.Allocator;
 const check = @import("error.zig").check;
 const Device = @import("device.zig").Device;
+const ImageBucket = @import("image.zig").ImageBucket;
 
 // Import QueueFamilies from device.zig
 const QueueFamilies = @import("device.zig").QueueFamilies;
@@ -13,10 +14,8 @@ pub const Swapchain = struct {
     surfaceFormat: c.VkSurfaceFormatKHR,
     mode: c.VkPresentModeKHR,
     extent: c.VkExtent2D,
-    images: []c.VkImage = undefined,
-    imageViews: []c.VkImageView = undefined,
     imageCount: u32 = undefined,
-    
+    imageBucket: ImageBucket = undefined,
 
     pub fn init(alloc: Allocator, device: *const Device, surface: c.VkSurfaceKHR, currExtent: *const c.VkExtent2D) !Swapchain {
         const gpi = device.gpi;
@@ -31,9 +30,9 @@ pub const Swapchain = struct {
         const extent = pickExtent(details.caps, currExtent);
 
         // Create swapchain
-        var image_count = details.caps.minImageCount + 1;
-        if (details.caps.maxImageCount > 0 and image_count > details.caps.maxImageCount) {
-            image_count = details.caps.maxImageCount; // Clamp to max if exists
+        var desiredImageCount = details.caps.minImageCount + 1;
+        if (details.caps.maxImageCount > 0 and desiredImageCount > details.caps.maxImageCount) {
+            desiredImageCount = details.caps.maxImageCount; // Clamp to max if exists
         }
 
         var sharingMode: c.VkSharingMode = c.VK_SHARING_MODE_EXCLUSIVE;
@@ -50,7 +49,7 @@ pub const Swapchain = struct {
         const swapchainInfo = c.VkSwapchainCreateInfoKHR{
             .sType = c.VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
             .surface = surface,
-            .minImageCount = image_count,
+            .minImageCount = desiredImageCount,
             .imageFormat = surfaceFormat.format,
             .imageColorSpace = surfaceFormat.colorSpace,
             .imageExtent = extent,
@@ -67,10 +66,11 @@ pub const Swapchain = struct {
 
         var handle: c.VkSwapchainKHR = undefined;
         try check(c.vkCreateSwapchainKHR(gpi, &swapchainInfo, null, &handle), "Could not Create Swapchain");
-        var imageCount: u32 = 0;
-        try check(c.vkGetSwapchainImagesKHR(gpi, handle, &imageCount, null), "Could not get Swapchain Images");
-        const images: []c.VkImage = try createImages(alloc, gpi, handle, &imageCount);
-        const imageViews: []c.VkImageView = try createImageViews(alloc, gpi, images, surfaceFormat.format);
+
+        var actualImageCount: u32 = 0;
+        try check(c.vkGetSwapchainImagesKHR(gpi, handle, &actualImageCount, null), "Could not get Swapchain Images");
+
+        const imageBucket = try ImageBucket.init(alloc, actualImageCount, gpi, handle, surfaceFormat.format);
 
         return .{
             .alloc = alloc,
@@ -78,68 +78,16 @@ pub const Swapchain = struct {
             .surfaceFormat = surfaceFormat,
             .mode = mode,
             .extent = extent,
-            .imageCount = imageCount,
-            .images = images,
-            .imageViews = imageViews,
+            .imageCount = actualImageCount,
+            .imageBucket = imageBucket,
         };
-    }
-
-    pub fn createImages(alloc: Allocator, gpi: c.VkDevice, swapchain: c.VkSwapchainKHR, imageCount: *u32) ![]c.VkImage {
-        // First get the actual count if not provided
-        if (imageCount.* == 0) try check(c.vkGetSwapchainImagesKHR(gpi, swapchain, imageCount, null), "Could not get Swapchain Images");
-
-        const images = try alloc.alloc(c.VkImage, imageCount.*);
-        const result = c.vkGetSwapchainImagesKHR(gpi, swapchain, imageCount, images.ptr);
-
-        if (result != c.VK_SUCCESS) {
-            alloc.free(images);
-            return error.FailedToCreateSwapchainImages; // Use proper error instead of panic
-        }
-        return images;
     }
 
     pub fn deinit(self: *Swapchain, gpi: c.VkDevice) void {
-        // Destroy image views first
-        for (self.imageViews) |view| {
-            c.vkDestroyImageView(gpi, view, null);
-        }
-
-        self.alloc.free(self.images);
-        self.alloc.free(self.imageViews);
+        self.imageBucket.deinit(self.alloc, gpi);
         c.vkDestroySwapchainKHR(gpi, self.handle, null);
     }
 };
-
-pub fn createImageViews(alloc: Allocator, gpi: c.VkDevice, images: []c.VkImage, format: c.VkFormat) ![]c.VkImageView {
-    const imageViews = try alloc.alloc(c.VkImageView, images.len);
-    errdefer alloc.free(imageViews);
-
-    for (images, 0..) |image, i| {
-        const imageViewInfo = c.VkImageViewCreateInfo{
-            .sType = c.VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-            .image = image,
-            .viewType = c.VK_IMAGE_VIEW_TYPE_2D,
-            .format = format,
-            .subresourceRange = c.VkImageSubresourceRange{
-                .aspectMask = c.VK_IMAGE_ASPECT_COLOR_BIT,
-                .baseMipLevel = 0,
-                .levelCount = 1,
-                .baseArrayLayer = 0,
-                .layerCount = 1,
-            },
-        };
-
-        const success = c.vkCreateImageView(gpi, &imageViewInfo, null, &imageViews[i]);
-        if (success != c.VK_SUCCESS) {
-            // Clean up any image views created so far
-            for (0..i) |j| {
-                c.vkDestroyImageView(gpi, imageViews[j], null);
-            }
-            return error.ImageViewCreationFailed;
-        }
-    }
-    return imageViews;
-}
 
 pub const SwapchainDetails = struct {
     arena: std.heap.ArenaAllocator,
