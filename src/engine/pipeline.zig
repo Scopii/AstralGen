@@ -2,6 +2,7 @@ const std = @import("std");
 const c = @import("../c.zig");
 const Allocator = std.mem.Allocator;
 const check = @import("error.zig").check;
+const Swapchain = @import("swapchain.zig").Swapchain;
 
 // Embed compiled shaders as binary data aligned for GPU usage
 const verSpv align(@alignOf(u32)) = @embedFile("vert_shdr").*;
@@ -23,7 +24,9 @@ pub const Pipeline = struct {
     handle: c.VkPipeline,
     layout: c.VkPipelineLayout,
 
-    pub fn init(gpi: c.VkDevice, format: c.VkFormat) !Pipeline {
+    pub fn init(gpi: c.VkDevice, swapchain: *const Swapchain) !Pipeline {
+        const format = swapchain.surfaceFormat.format;
+
         const vertShdr = try createShaderModule(verSpv.len, @ptrCast(@alignCast(&verSpv)), gpi);
         defer c.vkDestroyShaderModule(gpi, vertShdr, null);
 

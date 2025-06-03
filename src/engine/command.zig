@@ -8,6 +8,8 @@ const check = @import("error.zig").check;
 // Import QueueFamilies from device.zig
 const QueueFamilies = @import("device.zig").QueueFamilies;
 
+pub const CmdManager = struct {};
+
 pub fn createCmdPool(gpi: c.VkDevice, familyIndex: u32) !c.VkCommandPool {
     const poolInfo = c.VkCommandPoolCreateInfo{
         .sType = c.VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,

@@ -13,7 +13,7 @@ pub fn main() !void {
     defer std.log.debug("Memory check : {any}\n", .{gpa.deinit()});
     const alloc = gpa.allocator();
 
-    var renderer = try Renderer.init(alloc, app.window, app.extent, true);
+    var renderer = try Renderer.init(alloc, app.window, &app.extent);
     defer renderer.deinit();
 
     // main loop

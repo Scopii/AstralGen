@@ -3,7 +3,7 @@ const c = @import("../c.zig");
 const Allocator = std.mem.Allocator;
 const check = @import("error.zig").check;
 
-pub fn createInstance(alloc: Allocator, validation: bool) !c.VkInstance {
+pub fn createInstance(alloc: Allocator, debugToggle: bool) !c.VkInstance {
     // Create Arrays
     var extensions = std.ArrayList([*c]const u8).init(alloc);
     defer extensions.deinit();
@@ -17,13 +17,13 @@ pub fn createInstance(alloc: Allocator, validation: bool) !c.VkInstance {
         try extensions.append(reqExtensions[i]);
     }
 
-    if (validation) {
+    if (debugToggle) {
         try extensions.append("VK_EXT_debug_utils");
         try extensions.append("VK_EXT_debug_report");
         try layers.append("VK_LAYER_KHRONOS_validation");
         try layers.append("VK_LAYER_KHRONOS_synchronization2");
     }
-    
+
     try extensions.append("VK_KHR_portability_enumeration");
     try extensions.append("VK_KHR_get_physical_device_properties2");
     std.debug.print("Instance Extensions {}\n", .{extensions.items.len});

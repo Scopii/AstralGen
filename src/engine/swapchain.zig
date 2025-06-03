@@ -2,6 +2,7 @@ const std = @import("std");
 const c = @import("../c.zig");
 const Allocator = std.mem.Allocator;
 const check = @import("error.zig").check;
+const Device = @import("device.zig").Device;
 
 // Import QueueFamilies from device.zig
 const QueueFamilies = @import("device.zig").QueueFamilies;
@@ -15,8 +16,13 @@ pub const Swapchain = struct {
     images: []c.VkImage = undefined,
     imageViews: []c.VkImageView = undefined,
     imageCount: u32 = undefined,
+    
 
-    pub fn init(alloc: Allocator, gpi: c.VkDevice, gpu: c.VkPhysicalDevice, surface: c.VkSurfaceKHR, currExtent: c.VkExtent2D, families: QueueFamilies) !Swapchain {
+    pub fn init(alloc: Allocator, device: *const Device, surface: c.VkSurfaceKHR, currExtent: *const c.VkExtent2D) !Swapchain {
+        const gpi = device.gpi;
+        const gpu = device.gpu;
+        const families = device.families;
+
         var details = try checkSwapchainSupport(alloc, gpu, surface); // Get swapchain support details
         defer details.deinit(); // Clean up details after use
 
@@ -216,7 +222,7 @@ fn pickPresentMode(details: SwapchainDetails) c.VkPresentModeKHR {
     return best;
 }
 
-fn pickExtent(caps: c.VkSurfaceCapabilitiesKHR, currExtent: c.VkExtent2D) c.VkExtent2D {
+fn pickExtent(caps: c.VkSurfaceCapabilitiesKHR, currExtent: *const c.VkExtent2D) c.VkExtent2D {
     if (caps.currentExtent.width != std.math.maxInt(u32)) return caps.currentExtent;
 
     const actualExtent = c.VkExtent2D{
