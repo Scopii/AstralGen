@@ -5,42 +5,42 @@ const check = @import("error.zig").check;
 const Device = @import("device.zig").Device;
 const ImageBucket = @import("image.zig").ImageBucket;
 
-// Import QueueFamilies from device.zig
-const QueueFamilies = @import("device.zig").QueueFamilies;
-
 pub const Swapchain = struct {
     alloc: Allocator,
     handle: c.VkSwapchainKHR,
     surfaceFormat: c.VkSurfaceFormatKHR,
     mode: c.VkPresentModeKHR,
     extent: c.VkExtent2D,
-    imageCount: u32 = undefined,
-    imageBucket: ImageBucket = undefined,
+    imageCount: u32,
+    imageBucket: ImageBucket,
 
     pub fn init(alloc: Allocator, device: *const Device, surface: c.VkSurfaceKHR, currExtent: *const c.VkExtent2D) !Swapchain {
         const gpi = device.gpi;
         const gpu = device.gpu;
         const families = device.families;
 
-        var details = try checkSwapchainSupport(alloc, gpu, surface); // Get swapchain support details
-        defer details.deinit(); // Clean up details after use
+        // Get surface capabilities
+        var caps: c.VkSurfaceCapabilitiesKHR = undefined;
+        try check(c.vkGetPhysicalDeviceSurfaceCapabilitiesKHR(gpu, surface, &caps), "Failed to get surface capabilities");
 
-        const surfaceFormat = try pickSurfaceFormat(details);
-        const mode = pickPresentMode(details);
-        const extent = pickExtent(details.caps, currExtent);
+        // Pick surface format directly
+        const surfaceFormat = try pickSurfaceFormat(alloc, gpu, surface);
+        const mode = try pickPresentMode(alloc, gpu, surface);
+        const extent = pickExtent(caps, currExtent);
 
-        // Create swapchain
-        var desiredImageCount = details.caps.minImageCount + 1;
-        if (details.caps.maxImageCount > 0 and desiredImageCount > details.caps.maxImageCount) {
-            desiredImageCount = details.caps.maxImageCount; // Clamp to max if exists
+        // Calculate image count
+        var desiredImageCount = caps.minImageCount + 1;
+        if (caps.maxImageCount > 0 and desiredImageCount > caps.maxImageCount) {
+            desiredImageCount = caps.maxImageCount;
         }
 
+        // Set up sharing mode
         var sharingMode: c.VkSharingMode = c.VK_SHARING_MODE_EXCLUSIVE;
         var familyIndices: [2]u32 = undefined;
         var familyCount: u32 = 0;
 
         if (families.graphics != families.present) {
-            sharingMode = c.VK_SHARING_MODE_CONCURRENT; // Need concurrent access
+            sharingMode = c.VK_SHARING_MODE_CONCURRENT;
             familyIndices[0] = families.graphics;
             familyIndices[1] = families.present;
             familyCount = 2;
@@ -58,17 +58,17 @@ pub const Swapchain = struct {
             .imageSharingMode = sharingMode,
             .queueFamilyIndexCount = familyCount,
             .pQueueFamilyIndices = if (familyCount > 0) &familyIndices else null,
-            .preTransform = details.caps.currentTransform,
+            .preTransform = caps.currentTransform,
             .compositeAlpha = c.VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
-            .presentMode = mode, // Doesnt work?
+            .presentMode = mode,
             .clipped = c.VK_TRUE,
         };
 
         var handle: c.VkSwapchainKHR = undefined;
-        try check(c.vkCreateSwapchainKHR(gpi, &swapchainInfo, null, &handle), "Could not Create Swapchain");
+        try check(c.vkCreateSwapchainKHR(gpi, &swapchainInfo, null, &handle), "Could not create swapchain");
 
         var actualImageCount: u32 = 0;
-        try check(c.vkGetSwapchainImagesKHR(gpi, handle, &actualImageCount, null), "Could not get Swapchain Images");
+        try check(c.vkGetSwapchainImagesKHR(gpi, handle, &actualImageCount, null), "Could not get swapchain images");
 
         const imageBucket = try ImageBucket.init(alloc, actualImageCount, gpi, handle, surfaceFormat.format);
 
@@ -89,93 +89,57 @@ pub const Swapchain = struct {
     }
 };
 
-pub const SwapchainDetails = struct {
-    arena: std.heap.ArenaAllocator,
-    caps: c.VkSurfaceCapabilitiesKHR = undefined,
-    formats: []c.VkSurfaceFormatKHR = undefined,
-    modes: []c.VkPresentModeKHR = undefined,
-
-    pub fn init(alloc: Allocator) SwapchainDetails {
-        return SwapchainDetails{ .arena = std.heap.ArenaAllocator.init(alloc) };
-    }
-
-    pub fn deinit(self: *SwapchainDetails) void {
-        self.arena.deinit();
-    }
-
-    pub fn resizeFormats(self: *SwapchainDetails, count: u32) !void {
-        self.formats = try self.arena.allocator().alloc(c.VkSurfaceFormatKHR, count);
-    }
-
-    pub fn resizePresentModes(self: *SwapchainDetails, count: u32) !void {
-        self.modes = try self.arena.allocator().alloc(c.VkPresentModeKHR, count);
-    }
-};
-
-pub fn checkSwapchainSupport(alloc: Allocator, gpu: c.VkPhysicalDevice, surface: c.VkSurfaceKHR) !SwapchainDetails {
-    var details = SwapchainDetails.init(alloc);
-    errdefer details.deinit();
-
-    try check(c.vkGetPhysicalDeviceSurfaceCapabilitiesKHR(gpu, surface, &details.caps), "Swapchain Support Test failed");
-
+// Simplified helper functions that query what they need directly
+fn pickSurfaceFormat(alloc: Allocator, gpu: c.VkPhysicalDevice, surface: c.VkSurfaceKHR) !c.VkSurfaceFormatKHR {
     var formatCount: u32 = 0;
-    try check(c.vkGetPhysicalDeviceSurfaceFormatsKHR(gpu, surface, &formatCount, null), "Swapchain Support no Format");
-    if (formatCount != 0) {
-        try details.resizeFormats(formatCount);
-        try check(c.vkGetPhysicalDeviceSurfaceFormatsKHR(gpu, surface, &formatCount, details.formats.ptr), "Swapchain Support no Format");
+    try check(c.vkGetPhysicalDeviceSurfaceFormatsKHR(gpu, surface, &formatCount, null), "Failed to get format count");
+    
+    if (formatCount == 0) return error.NoSurfaceFormats;
+    
+    const formats = try alloc.alloc(c.VkSurfaceFormatKHR, formatCount);
+    defer alloc.free(formats);
+    
+    try check(c.vkGetPhysicalDeviceSurfaceFormatsKHR(gpu, surface, &formatCount, formats.ptr), "Failed to get surface formats");
+
+    // Return preferred format if available, otherwise first one
+    if (formats.len == 1 and formats[0].format == c.VK_FORMAT_UNDEFINED) {
+        return c.VkSurfaceFormatKHR{ .format = c.VK_FORMAT_B8G8R8A8_UNORM, .colorSpace = c.VK_COLOR_SPACE_SRGB_NONLINEAR_KHR };
     }
-
-    var modeCount: u32 = 0;
-    try check(c.vkGetPhysicalDeviceSurfacePresentModesKHR(gpu, surface, &modeCount, null), "Swapchain Support no Modes");
-
-    if (modeCount != 0) {
-        try details.resizePresentModes(modeCount); // Add try keyword
-        try check(c.vkGetPhysicalDeviceSurfacePresentModesKHR(gpu, surface, &modeCount, details.modes.ptr), "Swapchain Support no Modes");
-    }
-
-    return details;
-}
-
-fn pickSurfaceFormat(details: SwapchainDetails) !c.VkSurfaceFormatKHR {
-    if (details.formats.len == 1 and details.formats[0].format == c.VK_FORMAT_UNDEFINED) {
-        return c.VkSurfaceFormatKHR{
-            .format = c.VK_FORMAT_B8G8R8A8_UNORM, //c.VK_FORMAT_B8G8R8A8_SRGB for gamma correction
-            .colorSpace = c.VK_COLOR_SPACE_SRGB_NONLINEAR_KHR,
-        };
-    }
-
-    for (details.formats) |format| {
+    
+    for (formats) |format| {
         if (format.format == c.VK_FORMAT_B8G8R8A8_UNORM and format.colorSpace == c.VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
             return format;
         }
     }
-
-    return details.formats[0];
+    return formats[0];
 }
 
-fn pickPresentMode(details: SwapchainDetails) c.VkPresentModeKHR {
-    var best: c.VkPresentModeKHR = c.VK_PRESENT_MODE_FIFO_KHR;
-    //VK_PRESENT_MODE_IMMEDIATE_KHR     direct
-    //VK_PRESENT_MODE_FIFO_KHR          v-sync?
-    //VK_PRESENT_MODE_FIFO_RELAXED_KHR  v-sync light?
-    //VK_PRESENT_MODE_MAILBOX_KHR       triple buffering (less latency)
+fn pickPresentMode(alloc: Allocator, gpu: c.VkPhysicalDevice, surface: c.VkSurfaceKHR) !c.VkPresentModeKHR {
+    var modeCount: u32 = 0;
+    try check(c.vkGetPhysicalDeviceSurfacePresentModesKHR(gpu, surface, &modeCount, null), "Failed to get present mode count");
+    
+    if (modeCount == 0) return c.VK_PRESENT_MODE_FIFO_KHR; // FIFO is always supported
+    
+    const modes = try alloc.alloc(c.VkPresentModeKHR, modeCount);
+    defer alloc.free(modes);
+    
+    try check(c.vkGetPhysicalDeviceSurfacePresentModesKHR(gpu, surface, &modeCount, modes.ptr), "Failed to get present modes");
 
-    for (details.modes) |mode| {
-        if (mode == c.VK_PRESENT_MODE_MAILBOX_KHR) {
-            return mode;
-        } else if (mode == c.VK_PRESENT_MODE_IMMEDIATE_KHR) {
-            best = mode;
-        }
+    // Prefer mailbox (triple buffering), then immediate, fallback to FIFO
+    for (modes) |mode| {
+        if (mode == c.VK_PRESENT_MODE_MAILBOX_KHR) return mode;
     }
-    return best;
+    for (modes) |mode| {
+        if (mode == c.VK_PRESENT_MODE_IMMEDIATE_KHR) return mode;
+    }
+    return c.VK_PRESENT_MODE_FIFO_KHR;
 }
 
 fn pickExtent(caps: c.VkSurfaceCapabilitiesKHR, currExtent: *const c.VkExtent2D) c.VkExtent2D {
     if (caps.currentExtent.width != std.math.maxInt(u32)) return caps.currentExtent;
 
-    const actualExtent = c.VkExtent2D{
+    return c.VkExtent2D{
         .width = std.math.clamp(currExtent.width, caps.minImageExtent.width, caps.maxImageExtent.width),
         .height = std.math.clamp(currExtent.height, caps.minImageExtent.height, caps.maxImageExtent.height),
     };
-    return actualExtent;
 }

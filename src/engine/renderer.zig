@@ -80,7 +80,7 @@ pub const Renderer = struct {
         // Submit with per-frame acquisition + per-image render finished
         const waitSemaphores = [_]c.VkSemaphore{frame.imageAvailableSemaphore};
         const waitStages = [_]c.VkPipelineStageFlags{c.VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
-        const signalSemaphores = [_]c.VkSemaphore{self.swapchain.imageBucket.renderFinishedSemaphores[imageIndex]};
+        const signalSemaphores = [_]c.VkSemaphore{self.swapchain.imageBucket.renderSemaphores[imageIndex]};
 
         const submitInfo = c.VkSubmitInfo{
             .sType = c.VK_STRUCTURE_TYPE_SUBMIT_INFO,

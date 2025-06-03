@@ -7,22 +7,22 @@ const createSemaphore = @import("sync.zig").createSemaphore;
 pub const ImageBucket = struct {
     images: []c.VkImage = undefined,
     imageViews: []c.VkImageView = undefined,
-    renderFinishedSemaphores: []c.VkSemaphore,
+    renderSemaphores: []c.VkSemaphore,
 
     pub fn init(alloc: Allocator, imageCount: u32, gpi: c.VkDevice, swapchain: c.VkSwapchainKHR, format: c.VkFormat) !ImageBucket {
         var count = imageCount;
         const images: []c.VkImage = try createImages(alloc, gpi, swapchain, &count);
         const imageViews: []c.VkImageView = try createImageViews(alloc, gpi, images, format);
-        const renderFinishedSemaphores = try alloc.alloc(c.VkSemaphore, count);
+        const renderSemaphores = try alloc.alloc(c.VkSemaphore, count);
 
         for (0..count) |i| {
-            renderFinishedSemaphores[i] = try createSemaphore(gpi);
+            renderSemaphores[i] = try createSemaphore(gpi);
         }
 
         return .{
             .images = images,
             .imageViews = imageViews,
-            .renderFinishedSemaphores = renderFinishedSemaphores,
+            .renderSemaphores = renderSemaphores,
         };
     }
 
@@ -30,11 +30,11 @@ pub const ImageBucket = struct {
         for (self.imageViews) |view| {
             c.vkDestroyImageView(gpi, view, null);
         }
-        for (self.renderFinishedSemaphores) |sem| {
+        for (self.renderSemaphores) |sem| {
             c.vkDestroySemaphore(gpi, sem, null);
         }
 
-        alloc.free(self.renderFinishedSemaphores);
+        alloc.free(self.renderSemaphores);
         alloc.free(self.images);
         alloc.free(self.imageViews);
     }
