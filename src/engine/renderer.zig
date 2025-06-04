@@ -13,6 +13,7 @@ const createFence = @import("sync.zig").createFence;
 const createSemaphore = @import("sync.zig").createSemaphore;
 const createTimelineSemaphore = @import("sync.zig").createTimelineSemaphore;
 const waitTimelineSemaphore = @import("sync.zig").waitTimelineSemaphore;
+const getTimelineSemaphoreValue = @import("sync.zig").getTimelineSemaphoreValue;
 const check = @import("error.zig").check;
 
 const Allocator = std.mem.Allocator;
@@ -75,14 +76,24 @@ pub const Renderer = struct {
     pub fn draw(self: *Renderer) !void {
         const frame = &self.frames[self.currentFrame];
 
-        // Wait for previous frame using timeline semaphore
+        // 1. Non-blocking check instead of waiting - more performant
         if (frame.timelineValue > 0) {
-            try waitTimelineSemaphore(self.device.gpi, self.timelineSemaphore, frame.timelineValue, std.math.maxInt(u64));
+            const currentValue = try getTimelineSemaphoreValue(self.device.gpi, self.timelineSemaphore);
+            if (currentValue < frame.timelineValue) {
+                // Frame still in flight, could return early or wait with timeout
+                try waitTimelineSemaphore(self.device.gpi, self.timelineSemaphore, frame.timelineValue, 1_000_000_000); // 1 second timeout
+            }
         }
 
         // Acquire next image with this frame's acquisition semaphore
         var imageIndex: u32 = 0;
-        try check(c.vkAcquireNextImageKHR(self.device.gpi, self.swapchain.handle, std.math.maxInt(u64), frame.acquisitionSemaphore, null, &imageIndex), "could not acquire next image");
+        const acquireResult = c.vkAcquireNextImageKHR(self.device.gpi, self.swapchain.handle, 1_000_000_000, frame.acquisitionSemaphore, null, &imageIndex);
+        // Handle suboptimal/out-of-date swapchain
+        if (acquireResult == c.VK_ERROR_OUT_OF_DATE_KHR or acquireResult == c.VK_SUBOPTIMAL_KHR) {
+            // Should trigger swapchain recreation
+            return error.SwapchainOutOfDate;
+        }
+        try check(acquireResult, "could not acquire next image");
 
         // Reset and record command buffer
         try check(c.vkResetCommandBuffer(frame.cmdBuffer, 0), "Could not reset cmdBuffer");
