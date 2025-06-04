@@ -5,24 +5,17 @@ const check = @import("error.zig").check;
 const createSemaphore = @import("sync.zig").createSemaphore;
 
 pub const ImageBucket = struct {
-    images: []c.VkImage = undefined,
-    imageViews: []c.VkImageView = undefined,
-    renderSemaphores: []c.VkSemaphore,
+    images: []c.VkImage,
+    imageViews: []c.VkImageView,
 
     pub fn init(alloc: Allocator, imageCount: u32, gpi: c.VkDevice, swapchain: c.VkSwapchainKHR, format: c.VkFormat) !ImageBucket {
         var count = imageCount;
         const images: []c.VkImage = try createImages(alloc, gpi, swapchain, &count);
         const imageViews: []c.VkImageView = try createImageViews(alloc, gpi, images, format);
-        const renderSemaphores = try alloc.alloc(c.VkSemaphore, count);
-
-        for (0..count) |i| {
-            renderSemaphores[i] = try createSemaphore(gpi);
-        }
 
         return .{
             .images = images,
             .imageViews = imageViews,
-            .renderSemaphores = renderSemaphores,
         };
     }
 
@@ -30,11 +23,6 @@ pub const ImageBucket = struct {
         for (self.imageViews) |view| {
             c.vkDestroyImageView(gpi, view, null);
         }
-        for (self.renderSemaphores) |sem| {
-            c.vkDestroySemaphore(gpi, sem, null);
-        }
-
-        alloc.free(self.renderSemaphores);
         alloc.free(self.images);
         alloc.free(self.imageViews);
     }

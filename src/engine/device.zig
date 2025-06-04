@@ -155,13 +155,23 @@ pub fn createGPI(alloc: Allocator, gpu: c.VkPhysicalDevice, families: QueueFamil
     var features: c.VkPhysicalDeviceFeatures = undefined;
     c.vkGetPhysicalDeviceFeatures(gpu, &features);
 
+    const features_vulkan12 = c.VkPhysicalDeviceVulkan12Features{
+        .sType = c.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
+        //.bufferDeviceAddress = c.VK_TRUE,
+        //.descriptorIndexing = c.VK_TRUE,
+        .timelineSemaphore = c.VK_TRUE,
+    };
+
     const features13_to_enable = c.VkPhysicalDeviceVulkan13Features{
         .sType = c.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
         .dynamicRendering = c.VK_TRUE,
         .synchronization2 = c.VK_TRUE,
+        .pNext = @constCast(@ptrCast(&features_vulkan12)),
     };
     // Enable required gpu extensions
-    const gpuExtensions = [_][*c]const u8{"VK_KHR_swapchain"};
+    const gpuExtensions = [_][*c]const u8{
+        "VK_KHR_swapchain",
+    };
 
     const createInfo = c.VkDeviceCreateInfo{
         .sType = c.VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,

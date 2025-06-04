@@ -6,28 +6,30 @@ const Swapchain = @import("swapchain.zig").Swapchain;
 const Pipeline = @import("pipeline.zig").Pipeline;
 const createInstance = @import("instance.zig").createInstance;
 const createSurface = @import("surface.zig").createSurface;
-
 const createCmdPool = @import("command.zig").createCmdPool;
 const createCmdBuffer = @import("command.zig").createCmdBuffer;
 const recordCmdBufferSync2 = @import("command.zig").recordCmdBufferSync2;
 const createFence = @import("sync.zig").createFence;
 const createSemaphore = @import("sync.zig").createSemaphore;
+const createTimelineSemaphore = @import("sync.zig").createTimelineSemaphore;
+const waitTimelineSemaphore = @import("sync.zig").waitTimelineSemaphore;
 const check = @import("error.zig").check;
 
 const Allocator = std.mem.Allocator;
 
 const MAX_IN_FLIGHT = 2;
-const DEBUG_TOGGLE = true;
+const DEBUG_TOGGLE = false;
 
 const FrameData = struct {
     cmdBuffer: c.VkCommandBuffer,
-    inFlightFence: c.VkFence,
-    imageAvailableSemaphore: c.VkSemaphore, // Per-frame acquisition semaphore
+    timelineValue: u64 = 0,
+    acquisitionSemaphore: c.VkSemaphore,
 };
 
 pub const Renderer = struct {
     alloc: Allocator,
     currentFrame: u32 = 0,
+    frameCounter: u64 = 1, // Global frame counter for timeline values
     instance: c.VkInstance,
     surface: c.VkSurfaceKHR,
     device: Device,
@@ -35,6 +37,8 @@ pub const Renderer = struct {
     pipeline: Pipeline,
     cmdPool: c.VkCommandPool,
 
+    // Timeline semaphore for frame completion
+    timelineSemaphore: c.VkSemaphore,
     frames: [MAX_IN_FLIGHT]FrameData,
 
     pub fn init(alloc: Allocator, window: *c.SDL_Window, extent: *const c.VkExtent2D) !Renderer {
@@ -45,11 +49,14 @@ pub const Renderer = struct {
         const pipeline = try Pipeline.init(device.gpi, &swapchain);
         const cmdPool = try createCmdPool(device.gpi, device.families.graphics);
 
+        // Create timeline semaphore for frame sync
+        const timelineSemaphore = try createTimelineSemaphore(device.gpi);
+
         var frames: [MAX_IN_FLIGHT]FrameData = undefined;
         for (&frames) |*frame| {
             frame.cmdBuffer = try createCmdBuffer(device.gpi, cmdPool);
-            frame.inFlightFence = try createFence(device.gpi);
-            frame.imageAvailableSemaphore = try createSemaphore(device.gpi); // Per-frame acquisition
+            frame.timelineValue = 0;
+            frame.acquisitionSemaphore = try createSemaphore(device.gpi); // Per-frame acquisition
         }
 
         return .{
@@ -60,6 +67,7 @@ pub const Renderer = struct {
             .swapchain = swapchain,
             .pipeline = pipeline,
             .cmdPool = cmdPool,
+            .timelineSemaphore = timelineSemaphore,
             .frames = frames,
         };
     }
@@ -67,47 +75,73 @@ pub const Renderer = struct {
     pub fn draw(self: *Renderer) !void {
         const frame = &self.frames[self.currentFrame];
 
-        try check(c.vkWaitForFences(self.device.gpi, 1, &frame.inFlightFence, c.VK_TRUE, std.math.maxInt(u64)), "Could not wait for inFlightFence");
-        try check(c.vkResetFences(self.device.gpi, 1, &frame.inFlightFence), "Could not reset inFlightFence");
+        // Wait for previous frame using timeline semaphore
+        if (frame.timelineValue > 0) {
+            try waitTimelineSemaphore(self.device.gpi, self.timelineSemaphore, frame.timelineValue, std.math.maxInt(u64));
+        }
 
+        // Acquire next image with this frame's acquisition semaphore
         var imageIndex: u32 = 0;
-        // Use per-frame semaphore for image acquisition
-        try check(c.vkAcquireNextImageKHR(self.device.gpi, self.swapchain.handle, std.math.maxInt(u64), frame.imageAvailableSemaphore, null, &imageIndex), "could not acquire Next Image");
+        try check(c.vkAcquireNextImageKHR(self.device.gpi, self.swapchain.handle, std.math.maxInt(u64), frame.acquisitionSemaphore, null, &imageIndex), "could not acquire next image");
 
+        // Reset and record command buffer
         try check(c.vkResetCommandBuffer(frame.cmdBuffer, 0), "Could not reset cmdBuffer");
         try recordCmdBufferSync2(self.swapchain, self.pipeline, frame.cmdBuffer, imageIndex);
 
-        // Submit with per-frame acquisition + per-image render finished
-        const waitSemaphores = [_]c.VkSemaphore{frame.imageAvailableSemaphore};
-        const waitStages = [_]c.VkPipelineStageFlags{c.VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
-        const signalSemaphores = [_]c.VkSemaphore{self.swapchain.imageBucket.renderSemaphores[imageIndex]};
+        // Update frame's timeline value
+        frame.timelineValue = self.frameCounter;
 
-        const submitInfo = c.VkSubmitInfo{
-            .sType = c.VK_STRUCTURE_TYPE_SUBMIT_INFO,
-            .waitSemaphoreCount = waitSemaphores.len,
-            .pWaitSemaphores = &waitSemaphores,
-            .pWaitDstStageMask = &waitStages,
-            .commandBufferCount = 1,
-            .pCommandBuffers = &frame.cmdBuffer,
-            .signalSemaphoreCount = signalSemaphores.len,
-            .pSignalSemaphores = &signalSemaphores,
+        // Submit using vkQueueSubmit2 with both semaphores
+        const cmdBufferSubmitInfo = c.VkCommandBufferSubmitInfo{
+            .sType = c.VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
+            .commandBuffer = frame.cmdBuffer,
+            .deviceMask = 0,
         };
-        try check(c.vkQueueSubmit(self.device.gQueue, 1, &submitInfo, frame.inFlightFence), "Failed to submit to Queue");
 
+        // Wait for this frame's acquisition
+        const acquisitionWaitInfo = c.VkSemaphoreSubmitInfo{
+            .sType = c.VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+            .semaphore = frame.acquisitionSemaphore,
+            .value = 0, // Binary semaphore, value ignored
+            .stageMask = c.VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+            .deviceIndex = 0,
+        };
+
+        // Signal frame completion
+        const timelineSignalInfo = c.VkSemaphoreSubmitInfo{
+            .sType = c.VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+            .semaphore = self.timelineSemaphore,
+            .value = self.frameCounter,
+            .stageMask = c.VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT,
+            .deviceIndex = 0,
+        };
+
+        const submitInfo2 = c.VkSubmitInfo2{
+            .sType = c.VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
+            .waitSemaphoreInfoCount = 1,
+            .pWaitSemaphoreInfos = &acquisitionWaitInfo,
+            .commandBufferInfoCount = 1,
+            .pCommandBufferInfos = &cmdBufferSubmitInfo,
+            .signalSemaphoreInfoCount = 1,
+            .pSignalSemaphoreInfos = &timelineSignalInfo,
+        };
+
+        try check(c.vkQueueSubmit2(self.device.gQueue, 1, &submitInfo2, null), "Failed to submit to queue");
+
+        // Present (simplified - timeline handles synchronization)
         const swapchains = [_]c.VkSwapchainKHR{self.swapchain.handle};
         const imageIndices = [_]u32{imageIndex};
 
         const presentInfo = c.VkPresentInfoKHR{
             .sType = c.VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
-            .waitSemaphoreCount = signalSemaphores.len,
-            .pWaitSemaphores = &signalSemaphores,
             .swapchainCount = 1,
             .pSwapchains = &swapchains,
             .pImageIndices = &imageIndices,
         };
-        try check(c.vkQueuePresentKHR(self.device.pQueue, &presentInfo), "could not present Queue");
+        try check(c.vkQueuePresentKHR(self.device.pQueue, &presentInfo), "could not present queue");
 
-        // Move to next frame
+        // Advance counters
+        self.frameCounter += 1;
         self.currentFrame = (self.currentFrame + 1) % MAX_IN_FLIGHT;
     }
 
@@ -116,10 +150,10 @@ pub const Renderer = struct {
         _ = c.vkDeviceWaitIdle(gpi);
 
         for (&self.frames) |*frame| {
-            c.vkDestroyFence(gpi, frame.inFlightFence, null);
-            c.vkDestroySemaphore(gpi, frame.imageAvailableSemaphore, null); // Clean up per-frame semaphore
+            c.vkDestroySemaphore(gpi, frame.acquisitionSemaphore, null); // Clean up per-frame semaphores
         }
 
+        c.vkDestroySemaphore(gpi, self.timelineSemaphore, null);
         c.vkDestroyCommandPool(gpi, self.cmdPool, null);
         self.swapchain.deinit(gpi);
         c.vkDestroyPipeline(gpi, self.pipeline.handle, null);
