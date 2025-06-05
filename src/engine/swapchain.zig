@@ -26,7 +26,7 @@ pub const Swapchain = struct {
         // Pick surface format directly
         const surfaceFormat = try pickSurfaceFormat(alloc, gpu, surface);
         const mode = try pickPresentMode(alloc, gpu, surface);
-        const extent = pickExtent(caps, currExtent);
+        const extent = pickExtent(&caps, currExtent);
 
         // Calculate image count
         var desiredImageCount = caps.minImageCount + 1;
@@ -135,7 +135,7 @@ fn pickPresentMode(alloc: Allocator, gpu: c.VkPhysicalDevice, surface: c.VkSurfa
     return c.VK_PRESENT_MODE_FIFO_KHR;
 }
 
-fn pickExtent(caps: c.VkSurfaceCapabilitiesKHR, currExtent: *const c.VkExtent2D) c.VkExtent2D {
+fn pickExtent(caps: *const c.VkSurfaceCapabilitiesKHR, currExtent: *const c.VkExtent2D) c.VkExtent2D {
     if (caps.currentExtent.width != std.math.maxInt(u32)) return caps.currentExtent;
 
     return c.VkExtent2D{

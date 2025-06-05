@@ -19,7 +19,7 @@ const check = @import("error.zig").check;
 
 const Allocator = std.mem.Allocator;
 
-const MAX_IN_FLIGHT = 2;
+const MAX_IN_FLIGHT = 1;
 const DEBUG_TOGGLE = false;
 
 pub const FrameData = struct {
@@ -39,6 +39,7 @@ pub const Renderer = struct {
     pipeline: Pipeline,
     cmdPool: c.VkCommandPool,
     syncMan: SyncManager,
+    imageIndices: [MAX_IN_FLIGHT]u32 = undefined,
 
     // Timeline semaphore for frame completion
     frames: [MAX_IN_FLIGHT]FrameData,
@@ -56,7 +57,7 @@ pub const Renderer = struct {
         for (&frames) |*frame| {
             frame.cmdBuffer = try createCmdBuffer(device.gpi, cmdPool);
             frame.timelineVal = 0;
-            frame.acquiredSemaphore = try createSemaphore(device.gpi); // Per-frame acquisition
+            frame.acquiredSemaphore = try createSemaphore(device.gpi);
         }
 
         return .{
@@ -78,8 +79,15 @@ pub const Renderer = struct {
         try self.syncMan.waitForFrame(self.device.gpi, frame.timelineVal, 1_000_000_000);
 
         // Acquire next image
-        var imageIndex: u32 = 0;
-        const acquireResult = c.vkAcquireNextImageKHR(self.device.gpi, self.swapchain.handle, 1_000_000_000, frame.acquiredSemaphore, null, &imageIndex);
+        const acquireResult = c.vkAcquireNextImageKHR(
+            self.device.gpi,
+            self.swapchain.handle,
+            1_000_000_000,
+            frame.acquiredSemaphore,
+            null,
+            &self.imageIndices[self.currFrame],
+        );
+
         if (acquireResult == c.VK_ERROR_OUT_OF_DATE_KHR or acquireResult == c.VK_SUBOPTIMAL_KHR) {
             // Should trigger swapchain recreation
             return error.SwapchainOutOfDate;
@@ -88,21 +96,18 @@ pub const Renderer = struct {
 
         // Reset and record command buffer
         try check(c.vkResetCommandBuffer(frame.cmdBuffer, 0), "Could not reset cmdBuffer");
-        try recordCmdBufferSync2(self.swapchain, self.pipeline, frame.cmdBuffer, imageIndex);
+        try recordCmdBufferSync2(self.swapchain, self.pipeline, frame.cmdBuffer, self.imageIndices[self.currFrame]);
 
         // Update frame's timeline value
         frame.timelineVal = self.totalFrames;
 
         try self.syncMan.queueSubmit(frame, self.device.gQueue, self.currFrame, self.totalFrames);
 
-        const swapchains = [_]c.VkSwapchainKHR{self.swapchain.handle};
-        const imageIndices = [_]u32{imageIndex};
-
         const presentInfo = c.VkPresentInfoKHR{
             .sType = c.VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
             .swapchainCount = 1,
-            .pSwapchains = &swapchains,
-            .pImageIndices = &imageIndices,
+            .pSwapchains = &self.swapchain.handle,
+            .pImageIndices = &self.imageIndices[self.currFrame],
         };
         try check(c.vkQueuePresentKHR(self.device.pQueue, &presentInfo), "could not present queue");
 
@@ -111,12 +116,24 @@ pub const Renderer = struct {
         self.currFrame = (self.currFrame + 1) % MAX_IN_FLIGHT;
     }
 
+    pub fn recreateSwapchain(self: *Renderer, newExtent: *const c.VkExtent2D) !void {
+        _ = c.vkDeviceWaitIdle(self.device.gpi);
+
+        self.swapchain.deinit(self.device.gpi);
+        self.swapchain = try Swapchain.init(self.alloc, &self.device, self.surface, newExtent);
+
+        // Recreate pipeline if needed
+        c.vkDestroyPipeline(self.device.gpi, self.pipeline.handle, null);
+        c.vkDestroyPipelineLayout(self.device.gpi, self.pipeline.layout, null);
+        self.pipeline = try Pipeline.init(self.device.gpi, &self.swapchain);
+    }
+
     pub fn deinit(self: *Renderer) void {
         const gpi = self.device.gpi;
         _ = c.vkDeviceWaitIdle(gpi);
 
         for (&self.frames) |*frame| {
-            c.vkDestroySemaphore(gpi, frame.acquiredSemaphore, null); // Clean up per-frame semaphores
+            c.vkDestroySemaphore(gpi, frame.acquiredSemaphore, null);
         }
 
         self.syncMan.deinit(gpi);

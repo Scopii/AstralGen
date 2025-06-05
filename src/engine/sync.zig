@@ -12,16 +12,13 @@ pub const SyncManager = struct {
     submitInfos: []c.VkSubmitInfo2,
 
     timeline: c.VkSemaphore,
-    currFrame: u64,
 
     pub fn init(alloc: Allocator, gpi: c.VkDevice, maxInFlight: u8) !SyncManager {
-        // Pre-allocate submit info structures
         var cmdInfos = try alloc.alloc(c.VkCommandBufferSubmitInfo, maxInFlight);
         var waitInfos = try alloc.alloc(c.VkSemaphoreSubmitInfo, maxInFlight);
         var signalInfos = try alloc.alloc(c.VkSemaphoreSubmitInfo, maxInFlight);
         var submitInfos = try alloc.alloc(c.VkSubmitInfo2, maxInFlight);
 
-        // Initialize each element in the arrays
         for (0..maxInFlight) |i| {
             cmdInfos[i] = c.VkCommandBufferSubmitInfo{
                 .sType = c.VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
@@ -51,7 +48,7 @@ pub const SyncManager = struct {
                 .pWaitSemaphoreInfos = &waitInfos[i],
                 .commandBufferInfoCount = 1,
                 .pCommandBufferInfos = &cmdInfos[i],
-                .signalSemaphoreInfoCount = 1,
+                .signalSemaphoreInfoCount = 1, // Only timeline semaphore
                 .pSignalSemaphoreInfos = &signalInfos[i],
             };
         }
@@ -65,7 +62,6 @@ pub const SyncManager = struct {
             .signalInfos = signalInfos,
             .submitInfos = submitInfos,
             .timeline = timeline,
-            .currFrame = 1,
         };
     }
 
@@ -82,15 +78,19 @@ pub const SyncManager = struct {
 
         const currVal = try getTimelineSemaphoreValue(gpi, self.timeline);
         if (currVal < frameVal) {
-            try waitTimelineSemaphore(gpi, self.timeline, frameVal, timeout); // 1 second timeout
+            try waitTimelineSemaphore(gpi, self.timeline, frameVal, timeout);
         }
     }
 
-    pub fn queueSubmit(self: *SyncManager, frameData: *FrameData, queue: c.VkQueue, currFrame: u32, totalFrames: u64) !void {
+    pub fn queueSubmit(self: *SyncManager, frameData: *const FrameData, queue: c.VkQueue, currFrame: u32, totalFrames: u64) !void {
+        // Set command buffer
         self.cmdInfos[currFrame].commandBuffer = frameData.cmdBuffer;
+        // Set wait semaphore (acquisition)
         self.waitInfos[currFrame].semaphore = frameData.acquiredSemaphore;
+        // Set signal semaphore (timeline only)
         self.signalInfos[currFrame].semaphore = self.timeline;
         self.signalInfos[currFrame].value = totalFrames;
+
         try check(c.vkQueueSubmit2(queue, 1, &self.submitInfos[currFrame], null), "Failed to submit to queue");
     }
 };
