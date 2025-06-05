@@ -2,6 +2,98 @@ const std = @import("std");
 const c = @import("../c.zig");
 const Allocator = std.mem.Allocator;
 const check = @import("error.zig").check;
+const FrameData = @import("renderer.zig").FrameData;
+
+pub const SyncManager = struct {
+    alloc: Allocator,
+    cmdInfos: []c.VkCommandBufferSubmitInfo,
+    waitInfos: []c.VkSemaphoreSubmitInfo,
+    signalInfos: []c.VkSemaphoreSubmitInfo,
+    submitInfos: []c.VkSubmitInfo2,
+
+    timeline: c.VkSemaphore,
+    currFrame: u64,
+
+    pub fn init(alloc: Allocator, gpi: c.VkDevice, maxInFlight: u8) !SyncManager {
+        // Pre-allocate submit info structures
+        var cmdInfos = try alloc.alloc(c.VkCommandBufferSubmitInfo, maxInFlight);
+        var waitInfos = try alloc.alloc(c.VkSemaphoreSubmitInfo, maxInFlight);
+        var signalInfos = try alloc.alloc(c.VkSemaphoreSubmitInfo, maxInFlight);
+        var submitInfos = try alloc.alloc(c.VkSubmitInfo2, maxInFlight);
+
+        // Initialize each element in the arrays
+        for (0..maxInFlight) |i| {
+            cmdInfos[i] = c.VkCommandBufferSubmitInfo{
+                .sType = c.VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
+                .commandBuffer = null, //PLACEHOLDER frame.cmdBuffer
+                .deviceMask = 0,
+            };
+
+            waitInfos[i] = c.VkSemaphoreSubmitInfo{
+                .sType = c.VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+                .semaphore = null, //PLACEHOLDER frame.acquiredSemaphore
+                .value = 0,
+                .stageMask = c.VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                .deviceIndex = 0,
+            };
+
+            signalInfos[i] = c.VkSemaphoreSubmitInfo{
+                .sType = c.VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+                .semaphore = null, //PLACEHOLDER self.timeline
+                .value = 0, //PLACEHOLDER totalFrames
+                .stageMask = c.VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT,
+                .deviceIndex = 0,
+            };
+
+            submitInfos[i] = c.VkSubmitInfo2{
+                .sType = c.VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
+                .waitSemaphoreInfoCount = 1,
+                .pWaitSemaphoreInfos = &waitInfos[i],
+                .commandBufferInfoCount = 1,
+                .pCommandBufferInfos = &cmdInfos[i],
+                .signalSemaphoreInfoCount = 1,
+                .pSignalSemaphoreInfos = &signalInfos[i],
+            };
+        }
+
+        const timeline = try createTimelineSemaphore(gpi);
+
+        return .{
+            .alloc = alloc,
+            .cmdInfos = cmdInfos,
+            .waitInfos = waitInfos,
+            .signalInfos = signalInfos,
+            .submitInfos = submitInfos,
+            .timeline = timeline,
+            .currFrame = 1,
+        };
+    }
+
+    pub fn deinit(self: *SyncManager, gpi: c.VkDevice) void {
+        c.vkDestroySemaphore(gpi, self.timeline, null);
+        self.alloc.free(self.cmdInfos);
+        self.alloc.free(self.waitInfos);
+        self.alloc.free(self.signalInfos);
+        self.alloc.free(self.submitInfos);
+    }
+
+    pub fn waitForFrame(self: *SyncManager, gpi: c.VkDevice, frameVal: u64, timeout: u64) !void {
+        if (frameVal == 0) return;
+
+        const currVal = try getTimelineSemaphoreValue(gpi, self.timeline);
+        if (currVal < frameVal) {
+            try waitTimelineSemaphore(gpi, self.timeline, frameVal, timeout); // 1 second timeout
+        }
+    }
+
+    pub fn queueSubmit(self: *SyncManager, frameData: *FrameData, queue: c.VkQueue, currFrame: u32, totalFrames: u64) !void {
+        self.cmdInfos[currFrame].commandBuffer = frameData.cmdBuffer;
+        self.waitInfos[currFrame].semaphore = frameData.acquiredSemaphore;
+        self.signalInfos[currFrame].semaphore = self.timeline;
+        self.signalInfos[currFrame].value = totalFrames;
+        try check(c.vkQueueSubmit2(queue, 1, &self.submitInfos[currFrame], null), "Failed to submit to queue");
+    }
+};
 
 pub fn createSemaphore(device: c.VkDevice) !c.VkSemaphore {
     const semaphoreInfo = c.VkSemaphoreCreateInfo{
