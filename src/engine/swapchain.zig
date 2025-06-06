@@ -4,6 +4,7 @@ const Allocator = std.mem.Allocator;
 const check = @import("error.zig").check;
 const Device = @import("device.zig").Device;
 const ImageBucket = @import("image.zig").ImageBucket;
+const Frame = @import("renderer.zig").Frame;
 
 pub const Swapchain = struct {
     alloc: Allocator,
@@ -87,25 +88,49 @@ pub const Swapchain = struct {
         self.imageBucket.deinit(self.alloc, gpi);
         c.vkDestroySwapchainKHR(gpi, self.handle, null);
     }
+
+    pub fn acquireImage(self: *Swapchain, gpi: c.VkDevice, frame: *Frame) !void {
+        const acquireResult = c.vkAcquireNextImageKHR(gpi, self.handle, 1_000_000_000, frame.acquiredSemaphore, null, &frame.index);
+
+        if (acquireResult == c.VK_ERROR_OUT_OF_DATE_KHR or acquireResult == c.VK_SUBOPTIMAL_KHR) {
+            // Should trigger swapchain recreation
+            //return error.SwapchainOutOfDate;
+        }
+        try check(acquireResult, "could not acquire next image");
+    }
+
+    pub fn present(self: *Swapchain, pQueue: c.VkQueue, frame: *Frame) !void {
+        const presentInfo = c.VkPresentInfoKHR{
+            .sType = c.VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
+            .swapchainCount = 1,
+            .pSwapchains = &self.handle,
+            .pImageIndices = &frame.index,
+        };
+        try check(c.vkQueuePresentKHR(pQueue, &presentInfo), "could not present queue");
+    }
+
+    pub fn recreate(_: *Swapchain, gpi: c.VkDevice) !Swapchain {
+        _ = c.vkDeviceWaitIdle(gpi);
+    }
 };
 
 // Simplified helper functions that query what they need directly
 fn pickSurfaceFormat(alloc: Allocator, gpu: c.VkPhysicalDevice, surface: c.VkSurfaceKHR) !c.VkSurfaceFormatKHR {
     var formatCount: u32 = 0;
     try check(c.vkGetPhysicalDeviceSurfaceFormatsKHR(gpu, surface, &formatCount, null), "Failed to get format count");
-    
+
     if (formatCount == 0) return error.NoSurfaceFormats;
-    
+
     const formats = try alloc.alloc(c.VkSurfaceFormatKHR, formatCount);
     defer alloc.free(formats);
-    
+
     try check(c.vkGetPhysicalDeviceSurfaceFormatsKHR(gpu, surface, &formatCount, formats.ptr), "Failed to get surface formats");
 
     // Return preferred format if available, otherwise first one
     if (formats.len == 1 and formats[0].format == c.VK_FORMAT_UNDEFINED) {
         return c.VkSurfaceFormatKHR{ .format = c.VK_FORMAT_B8G8R8A8_UNORM, .colorSpace = c.VK_COLOR_SPACE_SRGB_NONLINEAR_KHR };
     }
-    
+
     for (formats) |format| {
         if (format.format == c.VK_FORMAT_B8G8R8A8_UNORM and format.colorSpace == c.VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
             return format;
@@ -117,12 +142,12 @@ fn pickSurfaceFormat(alloc: Allocator, gpu: c.VkPhysicalDevice, surface: c.VkSur
 fn pickPresentMode(alloc: Allocator, gpu: c.VkPhysicalDevice, surface: c.VkSurfaceKHR) !c.VkPresentModeKHR {
     var modeCount: u32 = 0;
     try check(c.vkGetPhysicalDeviceSurfacePresentModesKHR(gpu, surface, &modeCount, null), "Failed to get present mode count");
-    
+
     if (modeCount == 0) return c.VK_PRESENT_MODE_FIFO_KHR; // FIFO is always supported
-    
+
     const modes = try alloc.alloc(c.VkPresentModeKHR, modeCount);
     defer alloc.free(modes);
-    
+
     try check(c.vkGetPhysicalDeviceSurfacePresentModesKHR(gpu, surface, &modeCount, modes.ptr), "Failed to get present modes");
 
     // Prefer mailbox (triple buffering), then immediate, fallback to FIFO

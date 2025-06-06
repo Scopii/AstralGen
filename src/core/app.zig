@@ -4,8 +4,6 @@ const c = @import("../c.zig");
 pub const App = struct {
     window: *c.SDL_Window,
     extent: c.VkExtent2D,
-    currWidth: c_int = undefined,
-    currHeight: c_int = undefined,
     close: bool = false,
 
     pub fn init() !App {
@@ -44,12 +42,9 @@ pub const App = struct {
     }
 
     pub fn handle(self: *App) void {
-        _ = c.SDL_GetWindowSize(self.window, &self.currWidth, &self.currHeight);
-
+        _ = c.SDL_GetWindowSize(self.window, @ptrCast(&self.extent.width), @ptrCast(&self.extent.height));
         // Handle window minimization
-        if (self.currWidth == 0 or self.currHeight == 0) {
-            self.pollEvents();
-        }
+        if (self.extent.width == 0 or self.extent.height == 0) {}
     }
 
     pub fn deinit(self: *App) void {

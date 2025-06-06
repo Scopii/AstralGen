@@ -24,9 +24,7 @@ pub const Pipeline = struct {
     handle: c.VkPipeline,
     layout: c.VkPipelineLayout,
 
-    pub fn init(gpi: c.VkDevice, swapchain: *const Swapchain) !Pipeline {
-        const format = swapchain.surfaceFormat.format;
-
+    pub fn init(gpi: c.VkDevice, format: c.VkFormat) !Pipeline {
         const vertShdr = try createShaderModule(verSpv.len, @ptrCast(@alignCast(&verSpv)), gpi);
         defer c.vkDestroyShaderModule(gpi, vertShdr, null);
 
@@ -173,5 +171,10 @@ pub const Pipeline = struct {
             .handle = pipeline,
             .layout = layout,
         };
+    }
+
+    pub fn deinit(self: *Pipeline, gpi: c.VkDevice) void {
+        c.vkDestroyPipeline(gpi, self.handle, null);
+        c.vkDestroyPipelineLayout(gpi, self.layout, null);
     }
 };

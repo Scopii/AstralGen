@@ -2,18 +2,21 @@ const std = @import("std");
 const c = @import("../c.zig");
 const Allocator = std.mem.Allocator;
 const check = @import("error.zig").check;
-const FrameData = @import("renderer.zig").FrameData;
+const Frame = @import("renderer.zig").Frame;
 
-pub const SyncManager = struct {
+pub const FramePacer = struct {
     alloc: Allocator,
     cmdInfos: []c.VkCommandBufferSubmitInfo,
     waitInfos: []c.VkSemaphoreSubmitInfo,
     signalInfos: []c.VkSemaphoreSubmitInfo,
     submitInfos: []c.VkSubmitInfo2,
-
     timeline: c.VkSemaphore,
 
-    pub fn init(alloc: Allocator, gpi: c.VkDevice, maxInFlight: u8) !SyncManager {
+    maxInFlight: u8 = undefined,
+    currFrame: u32 = 0,
+    totalFrames: u64 = 1,
+
+    pub fn init(alloc: Allocator, gpi: c.VkDevice, maxInFlight: u8) !FramePacer {
         var cmdInfos = try alloc.alloc(c.VkCommandBufferSubmitInfo, maxInFlight);
         var waitInfos = try alloc.alloc(c.VkSemaphoreSubmitInfo, maxInFlight);
         var signalInfos = try alloc.alloc(c.VkSemaphoreSubmitInfo, maxInFlight);
@@ -62,10 +65,11 @@ pub const SyncManager = struct {
             .signalInfos = signalInfos,
             .submitInfos = submitInfos,
             .timeline = timeline,
+            .maxInFlight = maxInFlight,
         };
     }
 
-    pub fn deinit(self: *SyncManager, gpi: c.VkDevice) void {
+    pub fn deinit(self: *FramePacer, gpi: c.VkDevice) void {
         c.vkDestroySemaphore(gpi, self.timeline, null);
         self.alloc.free(self.cmdInfos);
         self.alloc.free(self.waitInfos);
@@ -73,7 +77,7 @@ pub const SyncManager = struct {
         self.alloc.free(self.submitInfos);
     }
 
-    pub fn waitForFrame(self: *SyncManager, gpi: c.VkDevice, frameVal: u64, timeout: u64) !void {
+    pub fn waitForFrame(self: *FramePacer, gpi: c.VkDevice, frameVal: u64, timeout: u64) !void {
         if (frameVal == 0) return;
 
         const currVal = try getTimelineSemaphoreValue(gpi, self.timeline);
@@ -82,16 +86,26 @@ pub const SyncManager = struct {
         }
     }
 
-    pub fn queueSubmit(self: *SyncManager, frameData: *const FrameData, queue: c.VkQueue, currFrame: u32, totalFrames: u64) !void {
-        // Set command buffer
-        self.cmdInfos[currFrame].commandBuffer = frameData.cmdBuffer;
-        // Set wait semaphore (acquisition)
-        self.waitInfos[currFrame].semaphore = frameData.acquiredSemaphore;
-        // Set signal semaphore (timeline only)
-        self.signalInfos[currFrame].semaphore = self.timeline;
-        self.signalInfos[currFrame].value = totalFrames;
+    pub fn beginFrame(self: *FramePacer, frame: *Frame, gpi: c.VkDevice) !void {
+        try self.waitForFrame(gpi, frame.timelineVal, 1_000_000_000);
+    }
 
-        try check(c.vkQueueSubmit2(queue, 1, &self.submitInfos[currFrame], null), "Failed to submit to queue");
+    pub fn endFrame(self: *FramePacer) void {
+        self.totalFrames += 1;
+        self.currFrame = (self.currFrame + 1) % self.maxInFlight;
+    }
+
+    pub fn queueSubmit(self: *FramePacer, frame: *Frame, queue: c.VkQueue) !void {
+        frame.timelineVal = self.totalFrames;
+        // Set command buffer
+        self.cmdInfos[self.currFrame].commandBuffer = frame.cmdBuffer;
+        // Set wait semaphore (acquisition)
+        self.waitInfos[self.currFrame].semaphore = frame.acquiredSemaphore;
+        // Set signal semaphore (timeline only)
+        self.signalInfos[self.currFrame].semaphore = self.timeline;
+        self.signalInfos[self.currFrame].value = self.totalFrames;
+
+        try check(c.vkQueueSubmit2(queue, 1, &self.submitInfos[self.currFrame], null), "Failed to submit to queue");
     }
 };
 

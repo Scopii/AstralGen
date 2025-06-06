@@ -18,6 +18,7 @@ pub fn main() !void {
 
     // main loop
     while (app.close == false) {
+        app.handle();
         app.pollEvents();
         try renderer.draw();
     }
