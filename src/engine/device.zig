@@ -157,8 +157,8 @@ pub fn createGPI(alloc: Allocator, gpu: c.VkPhysicalDevice, families: QueueFamil
 
     const features_vulkan12 = c.VkPhysicalDeviceVulkan12Features{
         .sType = c.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
-        //.bufferDeviceAddress = c.VK_TRUE,
-        //.descriptorIndexing = c.VK_TRUE,
+        .bufferDeviceAddress = c.VK_TRUE,
+        .descriptorIndexing = c.VK_TRUE,
         .timelineSemaphore = c.VK_TRUE,
     };
 

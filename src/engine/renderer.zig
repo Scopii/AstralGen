@@ -9,18 +9,14 @@ const createSurface = @import("surface.zig").createSurface;
 const createCmdPool = @import("command.zig").createCmdPool;
 const createCmdBuffer = @import("command.zig").createCmdBuffer;
 const recordCmdBufferSync2 = @import("command.zig").recordCmdBufferSync2;
-const createFence = @import("sync.zig").createFence;
 const createSemaphore = @import("sync.zig").createSemaphore;
 const SyncManager = @import("sync.zig").SyncManager;
-const createTimelineSemaphore = @import("sync.zig").createTimelineSemaphore;
-const waitTimelineSemaphore = @import("sync.zig").waitTimelineSemaphore;
-const getTimelineSemaphoreValue = @import("sync.zig").getTimelineSemaphoreValue;
 const check = @import("error.zig").check;
 
 const Allocator = std.mem.Allocator;
 
 const MAX_IN_FLIGHT = 1;
-const DEBUG_TOGGLE = false;
+const DEBUG_TOGGLE = true;
 
 pub const FrameData = struct {
     cmdBuffer: c.VkCommandBuffer,
@@ -41,8 +37,7 @@ pub const Renderer = struct {
     syncMan: SyncManager,
     imageIndices: [MAX_IN_FLIGHT]u32 = undefined,
 
-    // Timeline semaphore for frame completion
-    frames: [MAX_IN_FLIGHT]FrameData,
+    frameData: [MAX_IN_FLIGHT]FrameData,
 
     pub fn init(alloc: Allocator, window: *c.SDL_Window, extent: *const c.VkExtent2D) !Renderer {
         const instance = try createInstance(alloc, DEBUG_TOGGLE);
@@ -53,8 +48,8 @@ pub const Renderer = struct {
         const cmdPool = try createCmdPool(device.gpi, device.families.graphics);
         const syncMan = try SyncManager.init(alloc, device.gpi, MAX_IN_FLIGHT);
 
-        var frames: [MAX_IN_FLIGHT]FrameData = undefined;
-        for (&frames) |*frame| {
+        var frameData: [MAX_IN_FLIGHT]FrameData = undefined;
+        for (&frameData) |*frame| {
             frame.cmdBuffer = try createCmdBuffer(device.gpi, cmdPool);
             frame.timelineVal = 0;
             frame.acquiredSemaphore = try createSemaphore(device.gpi);
@@ -68,13 +63,13 @@ pub const Renderer = struct {
             .swapchain = swapchain,
             .pipeline = pipeline,
             .cmdPool = cmdPool,
-            .frames = frames,
+            .frameData = frameData,
             .syncMan = syncMan,
         };
     }
 
     pub fn draw(self: *Renderer) !void {
-        const frame = &self.frames[self.currFrame];
+        const frame = &self.frameData[self.currFrame];
 
         try self.syncMan.waitForFrame(self.device.gpi, frame.timelineVal, 1_000_000_000);
 
@@ -132,7 +127,7 @@ pub const Renderer = struct {
         const gpi = self.device.gpi;
         _ = c.vkDeviceWaitIdle(gpi);
 
-        for (&self.frames) |*frame| {
+        for (&self.frameData) |*frame| {
             c.vkDestroySemaphore(gpi, frame.acquiredSemaphore, null);
         }
 

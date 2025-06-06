@@ -2,7 +2,6 @@ const std = @import("std");
 const c = @import("../c.zig");
 const Allocator = std.mem.Allocator;
 const check = @import("error.zig").check;
-const createSemaphore = @import("sync.zig").createSemaphore;
 
 pub const ImageBucket = struct {
     images: []c.VkImage,
