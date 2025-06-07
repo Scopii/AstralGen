@@ -37,8 +37,10 @@ pub fn createCmdBuffer(gpi: c.VkDevice, cmdPool: c.VkCommandPool) !c.VkCommandBu
 
 // Synchronization2 command buffer recording
 pub fn recordCmdBufferSync2(swapchain: Swapchain, pipeline: Pipeline, cmdBuffer: c.VkCommandBuffer, imageIndex: u32) !void {
+    // Use VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT for better driver optimization
     const beginInfo = c.VkCommandBufferBeginInfo{
         .sType = c.VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+        .flags = c.VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT, // Hint to driver
         .pInheritanceInfo = null,
     };
     try check(c.vkBeginCommandBuffer(cmdBuffer, &beginInfo), "Could not record CMD Buffer");

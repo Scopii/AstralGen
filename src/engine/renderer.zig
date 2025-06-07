@@ -15,21 +15,19 @@ const check = @import("error.zig").check;
 
 const Allocator = std.mem.Allocator;
 
-const MAX_IN_FLIGHT = 1;
+const MAX_IN_FLIGHT = 2;
 const DEBUG_TOGGLE = true;
 
 pub const Frame = struct {
     cmdBuffer: c.VkCommandBuffer,
-    timelineVal: u64 = 0,
     acquiredSemaphore: c.VkSemaphore,
-    index: u32 = undefined,
+    imageIndex: u32 = undefined,
 
     pub fn init(gpi: c.VkDevice, cmdPool: c.VkCommandPool) !Frame {
-        var frame: Frame = undefined;
-        frame.cmdBuffer = try createCmdBuffer(gpi, cmdPool);
-        frame.timelineVal = 0;
-        frame.acquiredSemaphore = try createSemaphore(gpi);
-        return frame;
+        return Frame{
+            .cmdBuffer = try createCmdBuffer(gpi, cmdPool),
+            .acquiredSemaphore = try createSemaphore(gpi),
+        };
     }
 
     pub fn deinit(self: *Frame, gpi: c.VkDevice) void {
@@ -57,7 +55,7 @@ pub const Renderer = struct {
         const swapchain = try Swapchain.init(alloc, &device, surface, extent);
         const pipeline = try Pipeline.init(device.gpi, swapchain.surfaceFormat.format);
         const cmdPool = try createCmdPool(device.gpi, device.families.graphics);
-        const pacer = try FramePacer.init(alloc, device.gpi, MAX_IN_FLIGHT);
+        const pacer = try FramePacer.init(device.gpi, MAX_IN_FLIGHT);
 
         var frames: [MAX_IN_FLIGHT]Frame = undefined;
         for (0..MAX_IN_FLIGHT) |i| {
@@ -79,20 +77,20 @@ pub const Renderer = struct {
     }
 
     pub fn draw(self: *Renderer) !void {
-        const frame = &self.frames[self.pacer.currFrame];
+        const frame = &self.frames[self.pacer.currentFrame];
 
-        try self.pacer.beginFrame(frame, self.device.gpi);
+        try self.pacer.waitForGPU(self.device.gpi);
 
         try self.swapchain.acquireImage(self.device.gpi, frame);
 
-        // Reset and record command buffer
         try check(c.vkResetCommandBuffer(frame.cmdBuffer, 0), "Could not reset cmdBuffer");
-        try recordCmdBufferSync2(self.swapchain, self.pipeline, frame.cmdBuffer, frame.index);
+        try recordCmdBufferSync2(self.swapchain, self.pipeline, frame.cmdBuffer, frame.imageIndex);
 
-        try self.pacer.queueSubmit(frame, self.device.gQueue);
+        try self.pacer.submitFrame(self.device.gQueue, frame);
+
         try self.swapchain.present(self.device.pQueue, frame);
 
-        self.pacer.endFrame();
+        self.pacer.nextFrame();
     }
 
     pub fn recreateSwapchain(self: *Renderer, newExtent: *const c.VkExtent2D) !void {

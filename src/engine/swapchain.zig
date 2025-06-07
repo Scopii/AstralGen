@@ -90,7 +90,7 @@ pub const Swapchain = struct {
     }
 
     pub fn acquireImage(self: *Swapchain, gpi: c.VkDevice, frame: *Frame) !void {
-        const acquireResult = c.vkAcquireNextImageKHR(gpi, self.handle, 1_000_000_000, frame.acquiredSemaphore, null, &frame.index);
+        const acquireResult = c.vkAcquireNextImageKHR(gpi, self.handle, 1_000_000_000, frame.acquiredSemaphore, null, &frame.imageIndex);
 
         if (acquireResult == c.VK_ERROR_OUT_OF_DATE_KHR or acquireResult == c.VK_SUBOPTIMAL_KHR) {
             // Should trigger swapchain recreation
@@ -104,7 +104,7 @@ pub const Swapchain = struct {
             .sType = c.VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
             .swapchainCount = 1,
             .pSwapchains = &self.handle,
-            .pImageIndices = &frame.index,
+            .pImageIndices = &frame.imageIndex,
         };
         try check(c.vkQueuePresentKHR(pQueue, &presentInfo), "could not present queue");
     }
