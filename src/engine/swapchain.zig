@@ -98,7 +98,7 @@ pub const Swapchain = struct {
         return true;
     }
 
-    pub fn present(self: *Swapchain, pQueue: c.VkQueue, frame: *Frame) !void {
+    pub fn present(self: *Swapchain, pQueue: c.VkQueue, frame: *Frame) !bool {
         const presentInfo = c.VkPresentInfoKHR{
             .sType = c.VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
             .waitSemaphoreCount = 1,
@@ -107,7 +107,17 @@ pub const Swapchain = struct {
             .pSwapchains = &self.handle,
             .pImageIndices = &frame.index,
         };
-        try check(c.vkQueuePresentKHR(pQueue, &presentInfo), "could not present queue");
+
+        const result = c.vkQueuePresentKHR(pQueue, &presentInfo);
+
+        // Return true if swapchain needs recreation
+        if (result == c.VK_ERROR_OUT_OF_DATE_KHR or result == c.VK_SUBOPTIMAL_KHR) {
+            return true;
+        }
+
+        // Check for other errors
+        try check(result, "could not present queue");
+        return false; // No recreation needed
     }
 };
 

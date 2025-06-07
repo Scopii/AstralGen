@@ -17,7 +17,7 @@ const waitForTimeline = @import("sync.zig").waitForTimeline;
 
 const Allocator = std.mem.Allocator;
 
-const MAX_IN_FLIGHT = 10;
+const MAX_IN_FLIGHT = 1;
 const DEBUG_TOGGLE = true;
 
 pub const Renderer = struct {
@@ -62,13 +62,11 @@ pub const Renderer = struct {
     }
 
     pub fn draw(self: *Renderer) !void {
-        // Throttle CPU to prevent getting too far ahead of GPU
         try self.pacer.waitForGPU(self.dev.gpi);
 
         const frame = &self.frames[self.pacer.curFrame];
 
-        const recreate = try self.swapchain.acquireImage(self.dev.gpi, frame);
-        if (recreate == false) {
+        if (try self.swapchain.acquireImage(self.dev.gpi, frame) == false) {
             try self.recreateSwapchain();
             return;
         }
@@ -77,9 +75,12 @@ pub const Renderer = struct {
         try recCmdBuffer(self.swapchain, self.pipe, frame.cmdBuff, frame.index);
 
         // Get the render semaphore for this specific swapchain image
-        const renderSem = self.swapchain.imgBucket.getRenderSemaphore(frame.index);
-        try self.pacer.submitFrame(self.dev.graphicsQ, frame, renderSem);
-        try self.swapchain.present(self.dev.presentQ, frame);
+        try self.pacer.submitFrame(self.dev.graphicsQ, frame, self.swapchain.imgBucket.getRenderSemaphore(frame.index));
+
+        if (try self.swapchain.present(self.dev.presentQ, frame)) {
+            try self.recreateSwapchain();
+            return;
+        }
 
         self.pacer.nextFrame();
     }
