@@ -15,8 +15,8 @@ const check = @import("error.zig").check;
 
 const Allocator = std.mem.Allocator;
 
-const MAX_IN_FLIGHT = 2;
-const DEBUG_TOGGLE = true;
+const MAX_IN_FLIGHT = 3;
+const DEBUG_TOGGLE = false;
 
 pub const Frame = struct {
     cmdBuffer: c.VkCommandBuffer,
@@ -80,22 +80,20 @@ pub const Renderer = struct {
         const frame = &self.frames[self.pacer.currentFrame];
 
         try self.pacer.waitForGPU(self.device.gpi);
-
+        //try self.recreateSwapchain(self.extentPtr);
         try self.swapchain.acquireImage(self.device.gpi, frame);
-
         try check(c.vkResetCommandBuffer(frame.cmdBuffer, 0), "Could not reset cmdBuffer");
         try recordCmdBufferSync2(self.swapchain, self.pipeline, frame.cmdBuffer, frame.imageIndex);
-
         try self.pacer.submitFrame(self.device.gQueue, frame);
-
         try self.swapchain.present(self.device.pQueue, frame);
-
         self.pacer.nextFrame();
     }
 
     pub fn recreateSwapchain(self: *Renderer, newExtent: *const c.VkExtent2D) !void {
         _ = c.vkDeviceWaitIdle(self.device.gpi);
+        self.pipeline.deinit(self.device.gpi);
         self.swapchain.deinit(self.device.gpi);
+        self.pipeline = try Pipeline.init(self.device.gpi, self.swapchain.surfaceFormat.format);
         self.swapchain = try Swapchain.init(self.alloc, &self.device, self.surface, newExtent);
     }
 

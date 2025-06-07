@@ -7,14 +7,45 @@ const Frame = @import("renderer.zig").Frame;
 // Simplified FramePacer - focus on CPU-GPU sync only
 pub const FramePacer = struct {
     timeline: c.VkSemaphore,
-    currentFrame: u32 = 0,
+    currentFrame: u8 = 0,
     frameCounter: u64 = 0,
-    maxFramesInFlight: u32,
+    maxFramesInFlight: u8,
 
-    pub fn init(gpi: c.VkDevice, maxFramesInFlight: u32) !FramePacer {
+    // Cache for reduced allocations
+    cached_submit_info: c.VkSubmitInfo2,
+    cached_wait_info: c.VkSemaphoreSubmitInfo,
+    cached_signal_info: c.VkSemaphoreSubmitInfo,
+    cached_cmd_info: c.VkCommandBufferSubmitInfo,
+
+    pub fn init(gpi: c.VkDevice, maxFramesInFlight: u8) !FramePacer {
         return FramePacer{
             .timeline = try createTimelineSemaphore(gpi),
             .maxFramesInFlight = maxFramesInFlight,
+            // Pre-initialize cached structures to reduce runtime overhead
+            .cached_wait_info = c.VkSemaphoreSubmitInfo{
+                .sType = c.VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+                .semaphore = null,
+                .value = 0,
+                .stageMask = c.VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                .deviceIndex = 0,
+            },
+            .cached_signal_info = c.VkSemaphoreSubmitInfo{
+                .sType = c.VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+                .semaphore = null,
+                .value = 0,
+                .stageMask = c.VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT,
+                .deviceIndex = 0,
+            },
+            .cached_cmd_info = c.VkCommandBufferSubmitInfo{
+                .sType = c.VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
+                .deviceMask = 0,
+            },
+            .cached_submit_info = c.VkSubmitInfo2{
+                .sType = c.VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
+                .waitSemaphoreInfoCount = 1,
+                .commandBufferInfoCount = 1,
+                .signalSemaphoreInfoCount = 1,
+            },
         };
     }
 
@@ -22,52 +53,34 @@ pub const FramePacer = struct {
         c.vkDestroySemaphore(gpi, self.timeline, null);
     }
 
-    // Wait for GPU to finish frame that would conflict
     pub fn waitForGPU(self: *FramePacer, gpi: c.VkDevice) !void {
-        if (self.frameCounter >= self.maxFramesInFlight) {
-            const waitValue = self.frameCounter - self.maxFramesInFlight + 1;
-            try waitTimelineSemaphore(gpi, self.timeline, waitValue, 1_000_000_000);
-        }
+        if (self.frameCounter < self.maxFramesInFlight) return; // Early exit
+
+        const waitValue = self.frameCounter - self.maxFramesInFlight + 1;
+
+        // Check if already signaled before blocking wait
+        const currentValue = try getTimelineSemaphoreValue(gpi, self.timeline);
+        if (currentValue >= waitValue) return;
+
+        // Only wait if necessary - reduces CPU blocking
+        try waitTimelineSemaphore(gpi, self.timeline, waitValue, 1_000_000_000);
     }
 
     // Submit work with proper timeline tracking
     pub fn submitFrame(self: *FramePacer, queue: c.VkQueue, frame: *Frame) !void {
         self.frameCounter += 1;
 
-        // Build submit info on-demand (cleaner than pre-allocated arrays)
-        const cmdInfo = c.VkCommandBufferSubmitInfo{
-            .sType = c.VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
-            .commandBuffer = frame.cmdBuffer,
-            .deviceMask = 0,
-        };
+        // Reuse pre-allocated structures - avoids stack allocations in hot path
+        self.cached_cmd_info.commandBuffer = frame.cmdBuffer;
+        self.cached_wait_info.semaphore = frame.acquiredSemaphore;
+        self.cached_signal_info.semaphore = self.timeline;
+        self.cached_signal_info.value = self.frameCounter;
 
-        const waitInfo = c.VkSemaphoreSubmitInfo{
-            .sType = c.VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
-            .semaphore = frame.acquiredSemaphore,
-            .value = 0, // Binary semaphore
-            .stageMask = c.VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-            .deviceIndex = 0,
-        };
+        self.cached_submit_info.pWaitSemaphoreInfos = &self.cached_wait_info;
+        self.cached_submit_info.pCommandBufferInfos = &self.cached_cmd_info;
+        self.cached_submit_info.pSignalSemaphoreInfos = &self.cached_signal_info;
 
-        const signalInfo = c.VkSemaphoreSubmitInfo{
-            .sType = c.VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
-            .semaphore = self.timeline,
-            .value = self.frameCounter, // Timeline tracks completion
-            .stageMask = c.VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT,
-            .deviceIndex = 0,
-        };
-
-        const submitInfo = c.VkSubmitInfo2{
-            .sType = c.VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
-            .waitSemaphoreInfoCount = 1,
-            .pWaitSemaphoreInfos = &waitInfo,
-            .commandBufferInfoCount = 1,
-            .pCommandBufferInfos = &cmdInfo,
-            .signalSemaphoreInfoCount = 1,
-            .pSignalSemaphoreInfos = &signalInfo,
-        };
-
-        try check(c.vkQueueSubmit2(queue, 1, &submitInfo, null), "Failed to submit frame");
+        try check(c.vkQueueSubmit2(queue, 1, &self.cached_submit_info, null), "Failed to submit frame");
     }
 
     pub fn nextFrame(self: *FramePacer) void {

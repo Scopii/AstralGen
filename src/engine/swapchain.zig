@@ -26,7 +26,7 @@ pub const Swapchain = struct {
 
         // Pick surface format directly
         const surfaceFormat = try pickSurfaceFormat(alloc, gpu, surface);
-        const mode = try pickPresentMode(alloc, gpu, surface);
+        const mode = c.VK_PRESENT_MODE_MAILBOX_KHR; //try pickPresentMode(alloc, gpu, surface);
         const extent = pickExtent(&caps, currExtent);
 
         // Calculate image count
@@ -107,10 +107,6 @@ pub const Swapchain = struct {
             .pImageIndices = &frame.imageIndex,
         };
         try check(c.vkQueuePresentKHR(pQueue, &presentInfo), "could not present queue");
-    }
-
-    pub fn recreate(_: *Swapchain, gpi: c.VkDevice) !Swapchain {
-        _ = c.vkDeviceWaitIdle(gpi);
     }
 };
 

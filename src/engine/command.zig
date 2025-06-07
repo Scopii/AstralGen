@@ -40,7 +40,7 @@ pub fn recordCmdBufferSync2(swapchain: Swapchain, pipeline: Pipeline, cmdBuffer:
     // Use VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT for better driver optimization
     const beginInfo = c.VkCommandBufferBeginInfo{
         .sType = c.VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-        .flags = c.VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT, // Hint to driver
+        //.flags = c.VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT, // Hint to driver
         .pInheritanceInfo = null,
     };
     try check(c.vkBeginCommandBuffer(cmdBuffer, &beginInfo), "Could not record CMD Buffer");
@@ -95,7 +95,7 @@ pub fn recordCmdBufferSync2(swapchain: Swapchain, pipeline: Pipeline, cmdBuffer:
         .resolveMode = c.VK_RESOLVE_MODE_NONE,
         .resolveImageView = null,
         .resolveImageLayout = c.VK_IMAGE_LAYOUT_UNDEFINED,
-        .loadOp = c.VK_ATTACHMENT_LOAD_OP_CLEAR,
+        .loadOp = c.VK_ATTACHMENT_LOAD_OP_CLEAR, //
         .storeOp = c.VK_ATTACHMENT_STORE_OP_STORE,
         .clearValue = .{ .color = .{ .float32 = .{ 0.0, 0.0, 0.1, 1.0 } } },
     };
