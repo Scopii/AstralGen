@@ -2,26 +2,49 @@ const std = @import("std");
 const c = @import("../c.zig");
 const Allocator = std.mem.Allocator;
 const check = @import("error.zig").check;
+const createSemaphore = @import("sync.zig").createSemaphore;
 
 pub const ImageBucket = struct {
     images: []c.VkImage,
     imgViews: []c.VkImageView,
+    rendSems: []c.VkSemaphore,
 
     pub fn init(alloc: Allocator, imgCount: u32, gpi: c.VkDevice, swapchain: c.VkSwapchainKHR, format: c.VkFormat) !ImageBucket {
         var count = imgCount;
         const images: []c.VkImage = try createImages(alloc, gpi, swapchain, &count);
         const imgViews: []c.VkImageView = try createImageViews(alloc, gpi, images, format);
 
+        const rendSems = try alloc.alloc(c.VkSemaphore, imgCount);
+        errdefer alloc.free(rendSems);
+
+        for (0..imgCount) |i| {
+            rendSems[i] = createSemaphore(gpi) catch |err| {
+                // Cleanup on error
+                for (0..i) |j| {
+                    c.vkDestroySemaphore(gpi, rendSems[j], null);
+                }
+                return err;
+            };
+        }
+
         return .{
             .images = images,
             .imgViews = imgViews,
+            .rendSems = rendSems,
         };
+    }
+    pub fn getRenderSemaphore(self: *ImageBucket, imgIndex: u32) c.VkSemaphore {
+        return self.rendSems[imgIndex];
     }
 
     pub fn deinit(self: *ImageBucket, alloc: Allocator, gpi: c.VkDevice) void {
         for (self.imgViews) |view| {
             c.vkDestroyImageView(gpi, view, null);
         }
+        for (self.rendSems) |sem| {
+            c.vkDestroySemaphore(gpi, sem, null);
+        }
+        alloc.free(self.rendSems);
         alloc.free(self.images);
         alloc.free(self.imgViews);
     }

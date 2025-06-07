@@ -17,7 +17,7 @@ const waitForTimeline = @import("sync.zig").waitForTimeline;
 
 const Allocator = std.mem.Allocator;
 
-const MAX_IN_FLIGHT = 3;
+const MAX_IN_FLIGHT = 10;
 const DEBUG_TOGGLE = true;
 
 pub const Renderer = struct {
@@ -32,7 +32,6 @@ pub const Renderer = struct {
     pacer: FramePacer,
 
     frames: [MAX_IN_FLIGHT]Frame,
-    timelineValues: [MAX_IN_FLIGHT]u64 = .{0} ** MAX_IN_FLIGHT,
 
     pub fn init(alloc: Allocator, window: *c.SDL_Window, extent: *c.VkExtent2D) !Renderer {
         const instance = try createInstance(alloc, DEBUG_TOGGLE);
@@ -63,8 +62,8 @@ pub const Renderer = struct {
     }
 
     pub fn draw(self: *Renderer) !void {
-        const lastVal = self.timelineValues[self.pacer.curFrame];
-        if (lastVal > 0) try waitForTimeline(self.dev.gpi, self.pacer.timeline, lastVal, 1_000_000_000);
+        // Throttle CPU to prevent getting too far ahead of GPU
+        try self.pacer.waitForGPU(self.dev.gpi);
 
         const frame = &self.frames[self.pacer.curFrame];
 
@@ -77,10 +76,9 @@ pub const Renderer = struct {
         try check(c.vkResetCommandBuffer(frame.cmdBuff, 0), "Could not reset cmdBuffer");
         try recCmdBuffer(self.swapchain, self.pipe, frame.cmdBuff, frame.index);
 
-        try self.pacer.submitFrame(self.dev.graphicsQ, frame);
-
-        self.timelineValues[self.pacer.curFrame] = self.pacer.frameCount;
-
+        // Get the render semaphore for this specific swapchain image
+        const renderSem = self.swapchain.imgBucket.getRenderSemaphore(frame.index);
+        try self.pacer.submitFrame(self.dev.graphicsQ, frame, renderSem);
         try self.swapchain.present(self.dev.presentQ, frame);
 
         self.pacer.nextFrame();
