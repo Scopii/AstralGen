@@ -2,49 +2,58 @@ const std = @import("std");
 const c = @import("../c.zig");
 const Allocator = std.mem.Allocator;
 const check = @import("error.zig").check;
-const Frame = @import("renderer.zig").Frame;
+const Frame = @import("frame.zig").Frame;
 
 // Simplified FramePacer - focus on CPU-GPU sync only
 pub const FramePacer = struct {
     timeline: c.VkSemaphore,
-    currentFrame: u8 = 0,
-    frameCounter: u64 = 0,
-    maxFramesInFlight: u8,
+    curFrame: u8 = 0,
+    frameCount: u64 = 0,
+    maxInFlight: u8,
 
     // Cache for reduced allocations
-    cached_submit_info: c.VkSubmitInfo2,
-    cached_wait_info: c.VkSemaphoreSubmitInfo,
-    cached_signal_info: c.VkSemaphoreSubmitInfo,
-    cached_cmd_info: c.VkCommandBufferSubmitInfo,
+    submitInf: c.VkSubmitInfo2,
+    waitInf: c.VkSemaphoreSubmitInfo,
+    signalInf: [2]c.VkSemaphoreSubmitInfo,
+    cmdInf: c.VkCommandBufferSubmitInfo,
 
-    pub fn init(gpi: c.VkDevice, maxFramesInFlight: u8) !FramePacer {
+    pub fn init(gpi: c.VkDevice, maxInFlight: u8) !FramePacer {
         return FramePacer{
-            .timeline = try createTimelineSemaphore(gpi),
-            .maxFramesInFlight = maxFramesInFlight,
+            .timeline = try createTimeline(gpi),
+            .maxInFlight = maxInFlight,
             // Pre-initialize cached structures to reduce runtime overhead
-            .cached_wait_info = c.VkSemaphoreSubmitInfo{
+            .waitInf = c.VkSemaphoreSubmitInfo{
                 .sType = c.VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
                 .semaphore = null,
                 .value = 0,
                 .stageMask = c.VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
                 .deviceIndex = 0,
             },
-            .cached_signal_info = c.VkSemaphoreSubmitInfo{
-                .sType = c.VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
-                .semaphore = null,
-                .value = 0,
-                .stageMask = c.VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT,
-                .deviceIndex = 0,
+            .signalInf = .{
+                c.VkSemaphoreSubmitInfo{
+                    .sType = c.VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+                    .semaphore = null, // Will be the renderFinishedSemaphore
+                    .value = 0, // Not a timeline semaphore
+                    .stageMask = c.VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT,
+                    .deviceIndex = 0,
+                },
+                c.VkSemaphoreSubmitInfo{
+                    .sType = c.VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+                    .semaphore = null, // Will be the timeline semaphore
+                    .value = 0,
+                    .stageMask = c.VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT,
+                    .deviceIndex = 0,
+                },
             },
-            .cached_cmd_info = c.VkCommandBufferSubmitInfo{
+            .cmdInf = c.VkCommandBufferSubmitInfo{
                 .sType = c.VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
                 .deviceMask = 0,
             },
-            .cached_submit_info = c.VkSubmitInfo2{
+            .submitInf = c.VkSubmitInfo2{
                 .sType = c.VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
                 .waitSemaphoreInfoCount = 1,
                 .commandBufferInfoCount = 1,
-                .signalSemaphoreInfoCount = 1,
+                .signalSemaphoreInfoCount = 2,
             },
         };
     }
@@ -54,86 +63,83 @@ pub const FramePacer = struct {
     }
 
     pub fn waitForGPU(self: *FramePacer, gpi: c.VkDevice) !void {
-        if (self.frameCounter < self.maxFramesInFlight) return; // Early exit
+        if (self.frameCount < self.maxInFlight) return; // Early exit
 
-        const waitValue = self.frameCounter - self.maxFramesInFlight + 1;
+        const waitVal = self.frameCount - self.maxInFlight + 1;
+        const curVal = try getTimelineVal(gpi, self.timeline);
+        if (curVal >= waitVal) return;
 
-        // Check if already signaled before blocking wait
-        const currentValue = try getTimelineSemaphoreValue(gpi, self.timeline);
-        if (currentValue >= waitValue) return;
-
-        // Only wait if necessary - reduces CPU blocking
-        try waitTimelineSemaphore(gpi, self.timeline, waitValue, 1_000_000_000);
+        try waitForTimeline(gpi, self.timeline, waitVal, 1_000_000_000);
     }
 
-    // Submit work with proper timeline tracking
     pub fn submitFrame(self: *FramePacer, queue: c.VkQueue, frame: *Frame) !void {
-        self.frameCounter += 1;
+        self.frameCount += 1;
 
-        // Reuse pre-allocated structures - avoids stack allocations in hot path
-        self.cached_cmd_info.commandBuffer = frame.cmdBuffer;
-        self.cached_wait_info.semaphore = frame.acquiredSemaphore;
-        self.cached_signal_info.semaphore = self.timeline;
-        self.cached_signal_info.value = self.frameCounter;
+        self.cmdInf.commandBuffer = frame.cmdBuff;
+        self.waitInf.semaphore = frame.acqSem;
 
-        self.cached_submit_info.pWaitSemaphoreInfos = &self.cached_wait_info;
-        self.cached_submit_info.pCommandBufferInfos = &self.cached_cmd_info;
-        self.cached_submit_info.pSignalSemaphoreInfos = &self.cached_signal_info;
+        self.signalInf[0].semaphore = frame.rendSem;
+        self.signalInf[1].semaphore = self.timeline;
+        self.signalInf[1].value = self.frameCount;
 
-        try check(c.vkQueueSubmit2(queue, 1, &self.cached_submit_info, null), "Failed to submit frame");
+        self.submitInf.pWaitSemaphoreInfos = &self.waitInf;
+        self.submitInf.pCommandBufferInfos = &self.cmdInf;
+        self.submitInf.pSignalSemaphoreInfos = &self.signalInf;
+
+        try check(c.vkQueueSubmit2(queue, 1, &self.submitInf, null), "Failed to submit frame");
     }
 
     pub fn nextFrame(self: *FramePacer) void {
-        self.currentFrame = (self.currentFrame + 1) % self.maxFramesInFlight;
+        self.curFrame = (self.curFrame + 1) % self.maxInFlight;
     }
 };
 
-pub fn createSemaphore(device: c.VkDevice) !c.VkSemaphore {
-    const semaphoreInfo = c.VkSemaphoreCreateInfo{
+pub fn createSemaphore(gpi: c.VkDevice) !c.VkSemaphore {
+    const seamphoreInf = c.VkSemaphoreCreateInfo{
         .sType = c.VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
     };
     var semaphore: c.VkSemaphore = undefined;
-    try check(c.vkCreateSemaphore(device, &semaphoreInfo, null, &semaphore), "Could not create Semaphore");
+    try check(c.vkCreateSemaphore(gpi, &seamphoreInf, null, &semaphore), "Could not create Semaphore");
     return semaphore;
 }
 
-pub fn createFence(device: c.VkDevice) !c.VkFence {
-    const fenceInfo = c.VkFenceCreateInfo{
+pub fn createFence(gpi: c.VkDevice) !c.VkFence {
+    const fenceInf = c.VkFenceCreateInfo{
         .sType = c.VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
-        .flags = c.VK_FENCE_CREATE_SIGNALED_BIT,
+        .flags = c.VK_FENCE_CREATE_SIGNALED_BIT, // PRE-Signaled
     };
     var fence: c.VkFence = undefined;
-    try check(c.vkCreateFence(device, &fenceInfo, null, &fence), "Could not create Fence");
+    try check(c.vkCreateFence(gpi, &fenceInf, null, &fence), "Could not create Fence");
     return fence;
 }
 
-pub fn createTimelineSemaphore(device: c.VkDevice) !c.VkSemaphore {
-    var semaphoreTypeCreateInfo: c.VkSemaphoreTypeCreateInfo = .{
+pub fn createTimeline(gpi: c.VkDevice) !c.VkSemaphore {
+    var semaphoreTypeInf: c.VkSemaphoreTypeCreateInfo = .{
         .sType = c.VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO,
         .semaphoreType = c.VK_SEMAPHORE_TYPE_TIMELINE,
         .initialValue = 0,
     };
-    const semaphoreInfo = c.VkSemaphoreCreateInfo{
+    const semaphoreInf = c.VkSemaphoreCreateInfo{
         .sType = c.VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
-        .pNext = &semaphoreTypeCreateInfo,
+        .pNext = &semaphoreTypeInf,
     };
     var semaphore: c.VkSemaphore = undefined;
-    try check(c.vkCreateSemaphore(device, &semaphoreInfo, null, &semaphore), "Could not create  Timeline Semaphore");
+    try check(c.vkCreateSemaphore(gpi, &semaphoreInf, null, &semaphore), "Could not create  Timeline Semaphore");
     return semaphore;
 }
 
-pub fn waitTimelineSemaphore(device: c.VkDevice, semaphore: c.VkSemaphore, value: u64, timeout: u64) !void {
-    const waitInfo = c.VkSemaphoreWaitInfo{
+pub fn waitForTimeline(gpi: c.VkDevice, semaphore: c.VkSemaphore, val: u64, timeout: u64) !void {
+    const waitInf = c.VkSemaphoreWaitInfo{
         .sType = c.VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,
         .semaphoreCount = 1,
         .pSemaphores = &semaphore,
-        .pValues = &value,
+        .pValues = &val,
     };
-    try check(c.vkWaitSemaphores(device, &waitInfo, timeout), "Failed to wait for timeline semaphore");
+    try check(c.vkWaitSemaphores(gpi, &waitInf, timeout), "Failed to wait for timeline semaphore");
 }
 
-pub fn getTimelineSemaphoreValue(device: c.VkDevice, semaphore: c.VkSemaphore) !u64 {
-    var value: u64 = 0;
-    try check(c.vkGetSemaphoreCounterValue(device, semaphore, &value), "Failed to get timeline semaphore value");
-    return value;
+pub fn getTimelineVal(gpi: c.VkDevice, semaphore: c.VkSemaphore) !u64 {
+    var val: u64 = 0;
+    try check(c.vkGetSemaphoreCounterValue(gpi, semaphore, &val), "Failed to get timeline semaphore value");
+    return val;
 }

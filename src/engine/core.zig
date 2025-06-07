@@ -3,6 +3,15 @@ const c = @import("../c.zig");
 const Allocator = std.mem.Allocator;
 const check = @import("error.zig").check;
 
+pub fn createSurface(window: *c.SDL_Window, instance: c.VkInstance) !c.VkSurfaceKHR {
+    var surface: c.VkSurfaceKHR = undefined;
+    if (c.SDL_Vulkan_CreateSurface(window, @ptrCast(instance), null, @ptrCast(&surface)) == false) {
+        std.log.err("Unable to create Vulkan surface: {s}\n", .{c.SDL_GetError()});
+        return error.VkSurface;
+    }
+    return surface;
+}
+
 pub fn createInstance(alloc: Allocator, debugToggle: bool) !c.VkInstance {
     // Create Arrays
     var extensions = std.ArrayList([*c]const u8).init(alloc);
@@ -24,11 +33,11 @@ pub fn createInstance(alloc: Allocator, debugToggle: bool) !c.VkInstance {
         try layers.append("VK_LAYER_KHRONOS_synchronization2");
     }
 
-    try extensions.append("VK_KHR_portability_enumeration");
+    //try extensions.append("VK_KHR_portability_enumeration");
     try extensions.append("VK_KHR_get_physical_device_properties2");
     std.debug.print("Instance Extensions {}\n", .{extensions.items.len});
 
-    const app_info = c.VkApplicationInfo{
+    const appInf = c.VkApplicationInfo{
         .sType = c.VK_STRUCTURE_TYPE_APPLICATION_INFO,
         .pNext = null,
         .pApplicationName = "AstralGen",
@@ -38,11 +47,11 @@ pub fn createInstance(alloc: Allocator, debugToggle: bool) !c.VkInstance {
         .apiVersion = c.VK_API_VERSION_1_3,
     };
 
-    const instanceInfo = c.VkInstanceCreateInfo{
+    const instanceInf = c.VkInstanceCreateInfo{
         .sType = c.VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
         .pNext = null,
         .flags = 0,
-        .pApplicationInfo = &app_info,
+        .pApplicationInfo = &appInf,
         .enabledLayerCount = @intCast(layers.items.len),
         .ppEnabledLayerNames = layers.items.ptr,
         .enabledExtensionCount = @intCast(extensions.items.len),
@@ -50,7 +59,7 @@ pub fn createInstance(alloc: Allocator, debugToggle: bool) !c.VkInstance {
     };
 
     var instance: c.VkInstance = undefined;
-    try check(c.vkCreateInstance(&instanceInfo, null, &instance), "Unable to create Vulkan instance!");
+    try check(c.vkCreateInstance(&instanceInf, null, &instance), "Unable to create Vulkan instance!");
 
     return instance;
 }

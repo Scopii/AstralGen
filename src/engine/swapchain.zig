@@ -4,7 +4,7 @@ const Allocator = std.mem.Allocator;
 const check = @import("error.zig").check;
 const Device = @import("device.zig").Device;
 const ImageBucket = @import("image.zig").ImageBucket;
-const Frame = @import("renderer.zig").Frame;
+const Frame = @import("frame.zig").Frame;
 
 pub const Swapchain = struct {
     alloc: Allocator,
@@ -12,13 +12,13 @@ pub const Swapchain = struct {
     surfaceFormat: c.VkSurfaceFormatKHR,
     mode: c.VkPresentModeKHR,
     extent: c.VkExtent2D,
-    imageCount: u32,
-    imageBucket: ImageBucket,
+    imgCount: u32,
+    imgBucket: ImageBucket,
 
-    pub fn init(alloc: Allocator, device: *const Device, surface: c.VkSurfaceKHR, currExtent: *const c.VkExtent2D) !Swapchain {
-        const gpi = device.gpi;
-        const gpu = device.gpu;
-        const families = device.families;
+    pub fn init(alloc: Allocator, dev: *const Device, surface: c.VkSurfaceKHR, curExtent: *const c.VkExtent2D) !Swapchain {
+        const gpi = dev.gpi;
+        const gpu = dev.gpu;
+        const families = dev.families;
 
         // Get surface capabilities
         var caps: c.VkSurfaceCapabilitiesKHR = undefined;
@@ -27,12 +27,12 @@ pub const Swapchain = struct {
         // Pick surface format directly
         const surfaceFormat = try pickSurfaceFormat(alloc, gpu, surface);
         const mode = c.VK_PRESENT_MODE_MAILBOX_KHR; //try pickPresentMode(alloc, gpu, surface);
-        const extent = pickExtent(&caps, currExtent);
+        const extent = pickExtent(&caps, curExtent);
 
         // Calculate image count
-        var desiredImageCount = caps.minImageCount + 1;
-        if (caps.maxImageCount > 0 and desiredImageCount > caps.maxImageCount) {
-            desiredImageCount = caps.maxImageCount;
+        var desiredImgCount = caps.minImageCount + 1;
+        if (caps.maxImageCount > 0 and desiredImgCount > caps.maxImageCount) {
+            desiredImgCount = caps.maxImageCount;
         }
 
         // Set up sharing mode
@@ -47,10 +47,10 @@ pub const Swapchain = struct {
             familyCount = 2;
         }
 
-        const swapchainInfo = c.VkSwapchainCreateInfoKHR{
+        const swapchainInf = c.VkSwapchainCreateInfoKHR{
             .sType = c.VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
             .surface = surface,
-            .minImageCount = desiredImageCount,
+            .minImageCount = desiredImgCount,
             .imageFormat = surfaceFormat.format,
             .imageColorSpace = surfaceFormat.colorSpace,
             .imageExtent = extent,
@@ -66,12 +66,12 @@ pub const Swapchain = struct {
         };
 
         var handle: c.VkSwapchainKHR = undefined;
-        try check(c.vkCreateSwapchainKHR(gpi, &swapchainInfo, null, &handle), "Could not create swapchain");
+        try check(c.vkCreateSwapchainKHR(gpi, &swapchainInf, null, &handle), "Could not create swapchain");
 
-        var actualImageCount: u32 = 0;
-        try check(c.vkGetSwapchainImagesKHR(gpi, handle, &actualImageCount, null), "Could not get swapchain images");
+        var realImgCount: u32 = 0;
+        try check(c.vkGetSwapchainImagesKHR(gpi, handle, &realImgCount, null), "Could not get swapchain images");
 
-        const imageBucket = try ImageBucket.init(alloc, actualImageCount, gpi, handle, surfaceFormat.format);
+        const imgBucket = try ImageBucket.init(alloc, realImgCount, gpi, handle, surfaceFormat.format);
 
         return .{
             .alloc = alloc,
@@ -79,32 +79,33 @@ pub const Swapchain = struct {
             .surfaceFormat = surfaceFormat,
             .mode = mode,
             .extent = extent,
-            .imageCount = actualImageCount,
-            .imageBucket = imageBucket,
+            .imgCount = realImgCount,
+            .imgBucket = imgBucket,
         };
     }
 
     pub fn deinit(self: *Swapchain, gpi: c.VkDevice) void {
-        self.imageBucket.deinit(self.alloc, gpi);
+        self.imgBucket.deinit(self.alloc, gpi);
         c.vkDestroySwapchainKHR(gpi, self.handle, null);
     }
 
-    pub fn acquireImage(self: *Swapchain, gpi: c.VkDevice, frame: *Frame) !void {
-        const acquireResult = c.vkAcquireNextImageKHR(gpi, self.handle, 1_000_000_000, frame.acquiredSemaphore, null, &frame.imageIndex);
-
+    pub fn acquireImage(self: *Swapchain, gpi: c.VkDevice, frame: *Frame) !bool {
+        const acquireResult = c.vkAcquireNextImageKHR(gpi, self.handle, 1_000_000_000, frame.acqSem, null, &frame.index);
         if (acquireResult == c.VK_ERROR_OUT_OF_DATE_KHR or acquireResult == c.VK_SUBOPTIMAL_KHR) {
-            // Should trigger swapchain recreation
-            //return error.SwapchainOutOfDate;
+            return false;
         }
         try check(acquireResult, "could not acquire next image");
+        return true;
     }
 
     pub fn present(self: *Swapchain, pQueue: c.VkQueue, frame: *Frame) !void {
         const presentInfo = c.VkPresentInfoKHR{
             .sType = c.VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
+            .waitSemaphoreCount = 1,
+            .pWaitSemaphores = &frame.rendSem,
             .swapchainCount = 1,
             .pSwapchains = &self.handle,
-            .pImageIndices = &frame.imageIndex,
+            .pImageIndices = &frame.index,
         };
         try check(c.vkQueuePresentKHR(pQueue, &presentInfo), "could not present queue");
     }

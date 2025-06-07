@@ -2,33 +2,38 @@ const std = @import("std");
 const c = @import("../c.zig");
 const Allocator = std.mem.Allocator;
 const check = @import("error.zig").check;
+const getVkVal = @import("error.zig").getVkVal;
+
+pub const QueueFamilies = struct {
+    graphics: u32,
+    present: u32,
+};
 
 pub const Device = struct {
     gpu: c.VkPhysicalDevice,
     gpi: c.VkDevice,
-    gQueue: c.VkQueue,
-    pQueue: c.VkQueue,
+    graphicsQ: c.VkQueue,
+    presentQ: c.VkQueue,
     families: QueueFamilies,
 
     pub fn init(alloc: Allocator, instance: c.VkInstance, surface: c.VkSurfaceKHR) !Device {
         const gpu = try pickGPU(alloc, instance);
-        const families = try checkGPUfamilies(alloc, surface, gpu); // Only call once
+        const families = try checkGPUfamilies(alloc, surface, gpu);
         const gpi = try createGPI(alloc, gpu, families);
 
-        var gQueue: c.VkQueue = undefined;
-        c.vkGetDeviceQueue(gpi, families.graphics, 0, &gQueue);
-        var pQueue: c.VkQueue = undefined;
-        c.vkGetDeviceQueue(gpi, families.present, 0, &pQueue);
+        var graphicsQ: c.VkQueue = undefined;
+        c.vkGetDeviceQueue(gpi, families.graphics, 0, &graphicsQ);
+        var presentQ: c.VkQueue = undefined;
+        c.vkGetDeviceQueue(gpi, families.present, 0, &presentQ);
 
         return .{
             .gpu = gpu,
             .gpi = gpi,
-            .gQueue = gQueue,
-            .pQueue = pQueue,
+            .graphicsQ = graphicsQ,
+            .presentQ = presentQ,
             .families = families,
         };
     }
-
     pub fn deinit(self: *Device) void {
         c.vkDestroyDevice(self.gpi, null);
     }
@@ -75,31 +80,26 @@ pub fn checkGPUfeatures(alloc: Allocator, gpu: c.VkPhysicalDevice) !bool {
     var extensions: u32 = 0;
     try check(c.vkEnumerateDeviceExtensionProperties(gpu, null, &extensions, null), "Failed to enumerate device extensions");
 
-    const supportedExt = try alloc.alloc(c.VkExtensionProperties, extensions);
-    defer alloc.free(supportedExt);
-    try check(c.vkEnumerateDeviceExtensionProperties(gpu, null, &extensions, supportedExt.ptr), "Failed to get device extensions");
+    const supported = try alloc.alloc(c.VkExtensionProperties, extensions);
+    defer alloc.free(supported);
+    try check(c.vkEnumerateDeviceExtensionProperties(gpu, null, &extensions, supported.ptr), "Failed to get device extensions");
 
-    const reqExtensions = [_][]const u8{ "VK_KHR_swapchain", "VK_KHR_synchronization2", "VK_KHR_dynamic_rendering" };
-    var matchExtensions: u32 = 0;
+    const required = [_][]const u8{ "VK_KHR_swapchain", "VK_KHR_synchronization2", "VK_KHR_dynamic_rendering" };
+    var matched: u32 = 0;
 
-    for (supportedExt) |extension| {
-        for (reqExtensions) |reqExtension| {
+    for (supported) |extension| {
+        for (required) |reqExtension| {
             const ext_name: [*c]const u8 = @ptrCast(extension.extensionName[0..]);
 
             const match = std.mem.eql(u8, reqExtension, std.mem.span(ext_name));
             if (match) {
-                matchExtensions += 1;
+                matched += 1;
                 break;
             }
         }
     }
-    return matchExtensions == reqExtensions.len;
+    return matched == required.len;
 }
-
-pub const QueueFamilies = struct {
-    graphics: u32,
-    present: u32,
-};
 
 pub fn checkGPUfamilies(alloc: Allocator, surface: c.VkSurfaceKHR, gpu: c.VkPhysicalDevice) !QueueFamilies {
     var familyCount: u32 = 0;
@@ -121,7 +121,6 @@ pub fn checkGPUfamilies(alloc: Allocator, surface: c.VkSurfaceKHR, gpu: c.VkPhys
         if (family.queueCount > 0 and presentSupport == c.VK_TRUE) presentFamily = index;
         if (graphicsFamily != null and presentFamily != null) break;
     }
-
     const familyIndices = QueueFamilies{
         .graphics = @intCast(graphicsFamily.?),
         .present = @intCast(presentFamily.?),
@@ -134,22 +133,22 @@ pub fn createGPI(alloc: Allocator, gpu: c.VkPhysicalDevice, families: QueueFamil
     var queueInfos = std.ArrayList(c.VkDeviceQueueCreateInfo).init(alloc);
     defer queueInfos.deinit();
 
-    const graphicsInfo = c.VkDeviceQueueCreateInfo{
+    const graphicsInf = c.VkDeviceQueueCreateInfo{
         .sType = c.VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
         .queueFamilyIndex = families.graphics,
         .queueCount = 1,
         .pQueuePriorities = &priority,
     };
-    try queueInfos.append(graphicsInfo);
+    try queueInfos.append(graphicsInf);
 
     if (families.graphics != families.present) {
-        const presentInfo = c.VkDeviceQueueCreateInfo{
+        const presentInf = c.VkDeviceQueueCreateInfo{
             .sType = c.VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
             .queueFamilyIndex = families.present,
             .queueCount = 1,
             .pQueuePriorities = &priority,
         };
-        try queueInfos.append(presentInfo);
+        try queueInfos.append(presentInf);
     }
 
     var features: c.VkPhysicalDeviceFeatures = undefined;
@@ -187,6 +186,5 @@ pub fn createGPI(alloc: Allocator, gpu: c.VkPhysicalDevice, families: QueueFamil
 
     var gpi: c.VkDevice = undefined;
     try check(c.vkCreateDevice(gpu, &createInfo, null, &gpi), "Unable to create Vulkan device!");
-
     return gpi;
 }
