@@ -8,6 +8,7 @@ pub const FramePacer = struct {
     timeline: c.VkSemaphore,
     curFrame: u8 = 0,
     frameCount: u64 = 0,
+    lastChecked: u64 = 0,
     maxInFlight: u8,
 
     // Cache for reduced allocations
@@ -66,9 +67,15 @@ pub const FramePacer = struct {
 
         const waitVal = self.frameCount - self.maxInFlight + 1;
 
+        // Skip check if we just waited recently (cache last check)
+        if (self.lastChecked == waitVal) return;
+
         // Quick check - avoid syscall if already complete
         const curVal = try getTimelineVal(gpi, self.timeline);
-        if (curVal >= waitVal) return;
+        if (curVal >= waitVal) {
+            self.lastChecked = waitVal;
+            return;
+        }
 
         // Only wait if GPU is actually behind
         try waitForTimeline(gpi, self.timeline, waitVal, 1_000_000_000);

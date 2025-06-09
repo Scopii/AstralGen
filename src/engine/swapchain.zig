@@ -26,11 +26,11 @@ pub const Swapchain = struct {
 
         // Pick surface format directly
         const surfaceFormat = try pickSurfaceFormat(alloc, gpu, surface);
-        const mode = c.VK_PRESENT_MODE_MAILBOX_KHR; //try pickPresentMode(alloc, gpu, surface);
+        const mode = c.VK_PRESENT_MODE_IMMEDIATE_KHR; //try pickPresentMode(alloc, gpu, surface);
         const extent = pickExtent(&caps, curExtent);
 
         // Calculate image count
-        var desiredImgCount = caps.minImageCount + 1;
+        var desiredImgCount: u32 = caps.minImageCount + 1;
         if (caps.maxImageCount > 0 and desiredImgCount > caps.maxImageCount) {
             desiredImgCount = caps.maxImageCount;
         }
@@ -70,6 +70,7 @@ pub const Swapchain = struct {
 
         var realImgCount: u32 = 0;
         try check(c.vkGetSwapchainImagesKHR(gpi, handle, &realImgCount, null), "Could not get swapchain images");
+        std.debug.print("Swapchain Images: {}\n", .{realImgCount});
 
         const imgBucket = try ImageBucket.init(alloc, realImgCount, gpi, handle, surfaceFormat.format);
 

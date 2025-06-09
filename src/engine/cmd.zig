@@ -9,7 +9,8 @@ pub const CmdManager = struct {};
 pub fn createCmdPool(gpi: c.VkDevice, familyIndex: u32) !c.VkCommandPool {
     const poolInf = c.VkCommandPoolCreateInfo{
         .sType = c.VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
-        .flags = c.VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
+        .flags = c.VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT |
+            c.VK_COMMAND_POOL_CREATE_TRANSIENT_BIT, // Add transient flag for frequent reuse
         .queueFamilyIndex = familyIndex,
     };
     var pool: c.VkCommandPool = undefined;
@@ -29,10 +30,11 @@ pub fn createCmdBuffer(gpi: c.VkDevice, cmdPool: c.VkCommandPool) !c.VkCommandBu
     return buff;
 }
 
-pub fn recCmdBuffer(swapchain: Swapchain, pipeline: Pipeline, cmdBuff: c.VkCommandBuffer, imageIndex: u32) !void {
+pub fn recCmdBuffer(swapchain: *Swapchain, pipeline: *Pipeline, cmdBuff: c.VkCommandBuffer, imageIndex: u32) !void {
     const beginInf = c.VkCommandBufferBeginInfo{
         .sType = c.VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-        //.flags = c.VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT, // Hint to driver
+        .flags = c.VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT, // Hint to driver
+        //.flags = c.VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT, // Allow re-use
         .pInheritanceInfo = null,
     };
     try check(c.vkBeginCommandBuffer(cmdBuff, &beginInf), "Could not record CMD Buffer");
@@ -87,7 +89,7 @@ pub fn recCmdBuffer(swapchain: Swapchain, pipeline: Pipeline, cmdBuff: c.VkComma
         .resolveMode = c.VK_RESOLVE_MODE_NONE,
         .resolveImageView = null,
         .resolveImageLayout = c.VK_IMAGE_LAYOUT_UNDEFINED,
-        .loadOp = c.VK_ATTACHMENT_LOAD_OP_CLEAR, //
+        .loadOp = c.VK_ATTACHMENT_LOAD_OP_DONT_CARE, //
         .storeOp = c.VK_ATTACHMENT_STORE_OP_STORE,
         .clearValue = .{ .color = .{ .float32 = .{ 0.0, 0.0, 0.1, 1.0 } } },
     };

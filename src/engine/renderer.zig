@@ -1,5 +1,6 @@
 const std = @import("std");
 const c = @import("../c.zig");
+const ztracy = @import("ztracy");
 
 const createInstance = @import("core.zig").createInstance;
 const createSurface = @import("core.zig").createSurface;
@@ -18,7 +19,7 @@ const waitForTimeline = @import("sync.zig").waitForTimeline;
 const Allocator = std.mem.Allocator;
 
 const MAX_IN_FLIGHT = 1;
-const DEBUG_TOGGLE = true;
+const DEBUG_TOGGLE = false;
 
 pub const Renderer = struct {
     alloc: Allocator,
@@ -46,6 +47,7 @@ pub const Renderer = struct {
         for (0..MAX_IN_FLIGHT) |i| {
             frames[i] = try Frame.init(dev.gpi, cmdPool);
         }
+        std.debug.print("Frames In Flight: {}\n", .{frames.len});
 
         return .{
             .alloc = alloc,
@@ -62,35 +64,46 @@ pub const Renderer = struct {
     }
 
     pub fn draw(self: *Renderer) !void {
+        const tracyZ1 = ztracy.ZoneNC(@src(), "WaitForGPU", 0x0000FFFF);
         try self.pacer.waitForGPU(self.dev.gpi);
+        tracyZ1.End();
 
         const frame = &self.frames[self.pacer.curFrame];
 
+        const tracyZ2 = ztracy.ZoneNC(@src(), "AcquireImage", 0xFF0000FF);
         if (try self.swapchain.acquireImage(self.dev.gpi, frame) == false) {
             try self.recreateSwapchain();
             return;
         }
+        tracyZ2.End();
 
-        try check(c.vkResetCommandBuffer(frame.cmdBuff, 0), "Could not reset cmdBuffer");
-        try recCmdBuffer(self.swapchain, self.pipe, frame.cmdBuff, frame.index);
+        const tracyZ3 = ztracy.ZoneNC(@src(), "recCmdBuffer", 0x00A86BFF);
+        //try check(c.vkResetCommandBuffer(frame.cmdBuff, 0), "Could not reset cmdBuffer");
+        try recCmdBuffer(&self.swapchain, &self.pipe, frame.cmdBuff, frame.index);
+        tracyZ3.End();
 
-        // Get the render semaphore for this specific swapchain image
+        const tracyZ4 = ztracy.ZoneNC(@src(), "submitFrame", 0x800080FF);
         try self.pacer.submitFrame(self.dev.graphicsQ, frame, self.swapchain.imgBucket.getRenderSemaphore(frame.index));
+        tracyZ4.End();
 
+        const tracyZ5 = ztracy.ZoneNC(@src(), "Present", 0xFFC0CBFF);
         if (try self.swapchain.present(self.dev.presentQ, frame)) {
             try self.recreateSwapchain();
             return;
         }
+        tracyZ5.End();
 
         self.pacer.nextFrame();
     }
 
     pub fn recreateSwapchain(self: *Renderer) !void {
+        std.debug.print("\nWindow Reacreation:\n", .{});
         _ = c.vkDeviceWaitIdle(self.dev.gpi);
         self.pipe.deinit(self.dev.gpi);
         self.swapchain.deinit(self.dev.gpi);
         self.swapchain = try Swapchain.init(self.alloc, &self.dev, self.surface, self.extentPtr);
         self.pipe = try Pipeline.init(self.dev.gpi, self.swapchain.surfaceFormat.format);
+        std.debug.print("\n", .{});
     }
 
     pub fn deinit(self: *Renderer) void {

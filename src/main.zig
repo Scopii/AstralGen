@@ -2,6 +2,8 @@
 const std = @import("std");
 const App = @import("core/app.zig").App;
 const Renderer = @import("engine/renderer.zig").Renderer;
+const zjobs = @import("zjobs");
+
 // Re-Formats
 const Allocator = std.mem.Allocator;
 
@@ -20,6 +22,7 @@ pub fn main() !void {
     while (app.close == false) {
         app.handle();
         app.pollEvents();
+
         try renderer.draw();
     }
 }

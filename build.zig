@@ -12,13 +12,11 @@ pub fn build(b: *std.Build) void {
         .link_libc = true,
     });
 
- 
     // GLFW setup - add include path and link libraries
     exe.addIncludePath(b.path("include"));
 
     exe.addLibraryPath(b.path("libs/SDL3"));
     exe.linkSystemLibrary("SDL3");
-
 
     exe.addLibraryPath(b.path("libs/vulkan"));
     // Link Vulkan library
@@ -30,7 +28,34 @@ pub fn build(b: *std.Build) void {
 
     exe.linkLibC();
 
-    // GameDev Libs
+    // GameDev Libs:
+
+    // Tracy
+    const options = .{
+        .enable_ztracy = b.option(
+            bool,
+            "enable_ztracy",
+            "Enable Tracy profile markers",
+        ) orelse false,
+        .enable_fibers = b.option(
+            bool,
+            "enable_fibers",
+            "Enable Tracy fiber support",
+        ) orelse false,
+        .on_demand = b.option(
+            bool,
+            "on_demand",
+            "Build tracy with TRACY_ON_DEMAND",
+        ) orelse false,
+    };
+    const ztracy = b.dependency("ztracy", .{
+        .enable_ztracy = options.enable_ztracy,
+        .enable_fibers = options.enable_fibers,
+        .on_demand = options.on_demand,
+    });
+    exe.root_module.addImport("ztracy", ztracy.module("root"));
+    exe.linkLibrary(ztracy.artifact("tracy"));
+
     const zgui_dep = b.dependency("zgui", .{ .target = target, .optimize = optimize, .with_implot = true, .backend = .glfw_vulkan });
 
     // Get Vulkan SDK path and add headers
@@ -43,21 +68,13 @@ pub fn build(b: *std.Build) void {
     exe.root_module.addImport("zgui", zgui_dep.module("root"));
     exe.linkLibrary(zgui_dep.artifact("imgui"));
 
-    const zjobs_dep = b.dependency("zjobs", .{
-        .target = target,
-        .optimize = optimize,
-    });
+    const zjobs_dep = b.dependency("zjobs", .{ .target = target, .optimize = optimize });
     exe.root_module.addImport("zjobs", zjobs_dep.module("root"));
 
-    const zmath_dep = b.dependency("zmath", .{
-        .target = target,
-    });
+    const zmath_dep = b.dependency("zmath", .{ .target = target });
     exe.root_module.addImport("zmath", zmath_dep.module("root"));
 
-    const zpool_dep = b.dependency("zpool", .{
-        .target = target,
-        .optimize = optimize,
-    });
+    const zpool_dep = b.dependency("zpool", .{ .target = target, .optimize = optimize });
     exe.root_module.addImport("zpool", zpool_dep.module("root"));
 
     b.installArtifact(exe);
@@ -75,9 +92,7 @@ pub fn build(b: *std.Build) void {
     });
     const vert_spv = vert_cmd.addOutputFileArg("vert.spv");
     vert_cmd.addFileArg(b.path("shaders/shdr.vert"));
-    exe.root_module.addAnonymousImport("vert_shdr", .{
-        .root_source_file = vert_spv,
-    });
+    exe.root_module.addAnonymousImport("vert_shdr", .{ .root_source_file = vert_spv });
 
     const frag_cmd = b.addSystemCommand(&.{
         "glslc",
@@ -87,9 +102,7 @@ pub fn build(b: *std.Build) void {
     });
     const frag_spv = frag_cmd.addOutputFileArg("frag.spv");
     frag_cmd.addFileArg(b.path("shaders/shdr.frag"));
-    exe.root_module.addAnonymousImport("frag_shdr", .{
-        .root_source_file = frag_spv,
-    });
+    exe.root_module.addAnonymousImport("frag_shdr", .{ .root_source_file = frag_spv });
 
     const run_cmd = b.addRunArtifact(exe);
     run_cmd.step.dependOn(b.getInstallStep());
