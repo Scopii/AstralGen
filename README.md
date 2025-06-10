@@ -3,3 +3,9 @@ AstralGen ...
 
 This project is mainly for educational purposes because I wanted to try something more modern after my previous OpenGL Projects and trying out Zig because of my frustration with the C++ (mostly the build System and header Files).
 I want to extend this into an Asset Editor for an actual proper Game Engine that I can use for myself.
+
+The project is using:
+- Zig 14.1
+- SDL 3 (c-imported)
+- Vulkan 1.3 (c-imported)
+- Many branches from the zig-gamedev repo
