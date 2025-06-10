@@ -26,7 +26,7 @@ pub const Swapchain = struct {
 
         // Pick surface format directly
         const surfaceFormat = try pickSurfaceFormat(alloc, gpu, surface);
-        const mode = c.VK_PRESENT_MODE_IMMEDIATE_KHR; //try pickPresentMode(alloc, gpu, surface);
+        const mode = c.VK_PRESENT_MODE_FIFO_KHR; //try pickPresentMode(alloc, gpu, surface);
         const extent = pickExtent(&caps, curExtent);
 
         // Calculate image count

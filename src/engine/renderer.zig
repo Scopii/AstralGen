@@ -34,12 +34,14 @@ pub const Renderer = struct {
 
     frames: [MAX_IN_FLIGHT]Frame,
 
+    shaderTimeStamp: i128,
+
     pub fn init(alloc: Allocator, window: *c.SDL_Window, extent: *c.VkExtent2D) !Renderer {
         const instance = try createInstance(alloc, DEBUG_TOGGLE);
         const surface = try createSurface(window, instance);
         const dev = try Device.init(alloc, instance, surface);
         const swapchain = try Swapchain.init(alloc, &dev, surface, extent);
-        const pipe = try Pipeline.init(dev.gpi, swapchain.surfaceFormat.format);
+        const pipe = try Pipeline.init(alloc, dev.gpi, swapchain.surfaceFormat.format);
         const cmdPool = try createCmdPool(dev.gpi, dev.families.graphics);
         const pacer = try FramePacer.init(dev.gpi, MAX_IN_FLIGHT);
 
@@ -48,6 +50,8 @@ pub const Renderer = struct {
             frames[i] = try Frame.init(dev.gpi, cmdPool);
         }
         std.debug.print("Frames In Flight: {}\n", .{frames.len});
+
+        const shaderTimeStamp = try getFileTimeStamp("shaders/shdr.frag");
 
         return .{
             .alloc = alloc,
@@ -60,10 +64,20 @@ pub const Renderer = struct {
             .cmdPool = cmdPool,
             .frames = frames,
             .pacer = pacer,
+            .shaderTimeStamp = shaderTimeStamp,
         };
     }
 
     pub fn draw(self: *Renderer) !void {
+        const timeStamp = try getFileTimeStamp("shaders/shdr.frag");
+
+        if (timeStamp != self.shaderTimeStamp) {
+            self.shaderTimeStamp = timeStamp;
+            try self.recreateSwapchain();
+            std.debug.print("Shader Updated ^^\n", .{});
+            return;
+        }
+
         const tracyZ1 = ztracy.ZoneNC(@src(), "WaitForGPU", 0x0000FFFF);
         try self.pacer.waitForGPU(self.dev.gpi);
         tracyZ1.End();
@@ -102,7 +116,7 @@ pub const Renderer = struct {
         self.pipe.deinit(self.dev.gpi);
         self.swapchain.deinit(self.dev.gpi);
         self.swapchain = try Swapchain.init(self.alloc, &self.dev, self.surface, self.extentPtr);
-        self.pipe = try Pipeline.init(self.dev.gpi, self.swapchain.surfaceFormat.format);
+        self.pipe = try Pipeline.init(self.alloc, self.dev.gpi, self.swapchain.surfaceFormat.format);
         std.debug.print("\n", .{});
     }
 
@@ -119,5 +133,12 @@ pub const Renderer = struct {
         self.dev.deinit();
         c.vkDestroySurfaceKHR(self.instance, self.surface, null);
         c.vkDestroyInstance(self.instance, null);
+    }
+
+    pub fn getFileTimeStamp(src: []const u8) !i128 {
+        const cwd = std.fs.cwd();
+        const stat = try cwd.statFile(src);
+        const modification_time: i128 = stat.mtime;
+        return modification_time;
     }
 };

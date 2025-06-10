@@ -83,25 +83,14 @@ pub fn build(b: *std.Build) void {
         b.installFile("libs/SDL3/SDL3.dll", "bin/SDL3.dll");
     }
 
-    const vert_cmd = b.addSystemCommand(&.{
-        "glslc",
-        "--target-env=vulkan1.3",
-        "-o",
-        // "zig-out/bin/VertShdr.vert.spv"
-    });
-    const vert_spv = vert_cmd.addOutputFileArg("vert.spv");
-    vert_cmd.addFileArg(b.path("shaders/shdr.vert"));
-    exe.root_module.addAnonymousImport("vert_shdr", .{ .root_source_file = vert_spv });
+    // Add shader compilation step
+    const compile_shaders = b.addSystemCommand(&[_][]const u8{ "glslc", "shaders/shdr.vert", "-o", "shaders/vert.spv" });
 
-    const frag_cmd = b.addSystemCommand(&.{
-        "glslc",
-        "--target-env=vulkan1.3",
-        "-o",
-        // "zig-out/bin/VertShdr.vert.spv"
-    });
-    const frag_spv = frag_cmd.addOutputFileArg("frag.spv");
-    frag_cmd.addFileArg(b.path("shaders/shdr.frag"));
-    exe.root_module.addAnonymousImport("frag_shdr", .{ .root_source_file = frag_spv });
+    const compile_frag = b.addSystemCommand(&[_][]const u8{ "glslc", "shaders/shdr.frag", "-o", "shaders/frag.spv" });
+
+    // Make exe depend on shader compilation
+    exe.step.dependOn(&compile_shaders.step);
+    exe.step.dependOn(&compile_frag.step);
 
     const run_cmd = b.addRunArtifact(exe);
     run_cmd.step.dependOn(b.getInstallStep());
