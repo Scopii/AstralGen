@@ -84,7 +84,7 @@ pub fn checkGPUfeatures(alloc: Allocator, gpu: c.VkPhysicalDevice) !bool {
     defer alloc.free(supported);
     try check(c.vkEnumerateDeviceExtensionProperties(gpu, null, &extensions, supported.ptr), "Failed to get device extensions");
 
-    const required = [_][]const u8{ "VK_KHR_swapchain", "VK_KHR_synchronization2", "VK_KHR_dynamic_rendering" };
+    const required = [_][]const u8{"VK_KHR_swapchain"};
     var matched: u32 = 0;
 
     for (supported) |extension| {

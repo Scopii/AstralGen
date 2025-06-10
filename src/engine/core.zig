@@ -28,7 +28,6 @@ pub fn createInstance(alloc: Allocator, debugToggle: bool) !c.VkInstance {
 
     if (debugToggle) {
         try extensions.append("VK_EXT_debug_utils");
-        try extensions.append("VK_EXT_debug_report");
         try layers.append("VK_LAYER_KHRONOS_validation");
         try layers.append("VK_LAYER_KHRONOS_synchronization2");
     }

@@ -79,7 +79,6 @@ pub fn build(b: *std.Build) void {
 
     b.installArtifact(exe);
 
-    // Copy GLFW DLL to output directory on Windows
     if (target.result.os.tag == .windows) {
         b.installFile("libs/SDL3/SDL3.dll", "bin/SDL3.dll");
     }
