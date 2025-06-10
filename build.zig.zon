@@ -30,7 +30,7 @@
             .url = "https://github.com/zig-gamedev/zmath/archive/refs/heads/main.tar.gz",
             .hash = "zmath-0.11.0-dev-wjwivTArAwDIkHSuSiU3KuBvxh7igjJjJMqYRfy3hihO",
         },
-        //Game related Math
+        //CPU Profiling
         .ztracy = .{
             .url = "https://github.com/zig-gamedev/ztracy/archive/refs/heads/main.tar.gz",
             .hash = "ztracy-0.14.0-dev-zHJSq1oQFwCAq2LhbqsBUmZAipMzsD8UfKL5Etc_OJMb",
