@@ -18,8 +18,8 @@ const waitForTimeline = @import("sync.zig").waitForTimeline;
 
 const Allocator = std.mem.Allocator;
 
-const MAX_IN_FLIGHT = 1;
-const DEBUG_TOGGLE = false;
+const MAX_IN_FLIGHT = 3;
+const DEBUG_TOGGLE = true;
 
 pub const Renderer = struct {
     alloc: Allocator,
