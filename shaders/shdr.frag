@@ -7,7 +7,7 @@ const float ASPECT_RATIO = 16.0 / 9.0;
 const float FOV_DEGREES = 120.0;  // Field of view in degrees
 const float FOCAL_LENGTH = 1.0 / tan(radians(FOV_DEGREES * 0.5)); //FOV degrees to focal length
 // Marching:
-const int MAX_STEPS = 1024 * 2 * 2;
+const int MAX_STEPS = 1024 * 2;
 const float MIN_DIST = 0.0001;
 const float MAX_DIST = 500.0;
 // General:

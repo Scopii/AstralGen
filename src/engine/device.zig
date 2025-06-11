@@ -56,7 +56,7 @@ pub fn pickGPU(alloc: Allocator, instance: c.VkInstance) !c.VkPhysicalDevice {
         }
     }
     if (chosen == null) {
-        std.log.err("No suitable Vulkan GPUs found\n", .{});
+        std.log.err("No suitable GPUs found\n", .{});
         return error.NoDevice;
     }
     return chosen.?;
@@ -68,9 +68,9 @@ pub fn checkGPU(gpu: c.VkPhysicalDevice) bool {
     var features: c.VkPhysicalDeviceFeatures = undefined;
     c.vkGetPhysicalDeviceFeatures(gpu, &features);
 
-    std.debug.print("Checking Device: {s}\n", .{properties.deviceName});
+    std.debug.print("Testing: {s}\n", .{properties.deviceName});
     if (properties.deviceType != c.VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) {
-        std.debug.print("Device not a discrete GPU\n", .{});
+        std.debug.print("Device not discrete GPU\n", .{});
         return false;
     }
     return true;

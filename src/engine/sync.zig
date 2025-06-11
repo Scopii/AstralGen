@@ -10,6 +10,7 @@ pub const FramePacer = struct {
     frameCount: u64 = 0,
     lastChecked: u64 = 0,
     maxInFlight: u8,
+    frames: []Frame,
 
     // Cache for reduced allocations
     submitInf: c.VkSubmitInfo2,
@@ -17,8 +18,15 @@ pub const FramePacer = struct {
     signalInf: [2]c.VkSemaphoreSubmitInfo,
     cmdInf: c.VkCommandBufferSubmitInfo,
 
-    pub fn init(gpi: c.VkDevice, maxInFlight: u8) !FramePacer {
+    pub fn init(alloc: Allocator, gpi: c.VkDevice, maxInFlight: u8, cmdPool: c.VkCommandPool) !FramePacer {
+        const frames = try alloc.alloc(Frame, maxInFlight);
+        for (0..maxInFlight) |i| {
+            frames[i] = try Frame.init(gpi, cmdPool);
+        }
+        std.debug.print("Frames In Flight: {}\n", .{frames.len});
+
         return FramePacer{
+            .frames = frames,
             .timeline = try createTimeline(gpi),
             .maxInFlight = maxInFlight,
             .waitInf = c.VkSemaphoreSubmitInfo{
@@ -57,8 +65,16 @@ pub const FramePacer = struct {
         };
     }
 
-    pub fn deinit(self: *FramePacer, gpi: c.VkDevice) void {
+    pub fn deinit(self: *FramePacer, alloc: Allocator, gpi: c.VkDevice) void {
         c.vkDestroySemaphore(gpi, self.timeline, null);
+        for (self.frames) |*frame| {
+            frame.deinit(gpi);
+        }
+        alloc.free(self.frames);
+    }
+
+    pub fn getCurrentFramePtr(self: *FramePacer) *Frame {
+        return &self.frames[self.curFrame];
     }
 
     // New: Efficient CPU-GPU throttling

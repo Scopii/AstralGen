@@ -2,6 +2,8 @@ const std = @import("std");
 const c = @import("../c.zig");
 const ztracy = @import("ztracy");
 
+const DEBUG_TOGGLE = @import("../settings.zig").DEBUG_TOGGLE;
+
 const createInstance = @import("core.zig").createInstance;
 const createSurface = @import("core.zig").createSurface;
 const check = @import("error.zig").check;
@@ -16,10 +18,9 @@ const createCmdPool = @import("cmd.zig").createCmdPool;
 const recCmdBuffer = @import("cmd.zig").recCmdBuffer;
 const waitForTimeline = @import("sync.zig").waitForTimeline;
 
-const Allocator = std.mem.Allocator;
+pub const MAX_IN_FLIGHT: u8 = 3;
 
-const MAX_IN_FLIGHT = 3;
-const DEBUG_TOGGLE = true;
+const Allocator = std.mem.Allocator;
 
 pub const Renderer = struct {
     alloc: Allocator,
@@ -32,8 +33,6 @@ pub const Renderer = struct {
     cmdPool: c.VkCommandPool,
     pacer: FramePacer,
 
-    frames: [MAX_IN_FLIGHT]Frame,
-
     shaderTimeStamp: i128,
 
     pub fn init(alloc: Allocator, window: *c.SDL_Window, extent: *c.VkExtent2D) !Renderer {
@@ -43,13 +42,7 @@ pub const Renderer = struct {
         const swapchain = try Swapchain.init(alloc, &dev, surface, extent);
         const pipe = try Pipeline.init(alloc, dev.gpi, swapchain.surfaceFormat.format);
         const cmdPool = try createCmdPool(dev.gpi, dev.families.graphics);
-        const pacer = try FramePacer.init(dev.gpi, MAX_IN_FLIGHT);
-
-        var frames: [MAX_IN_FLIGHT]Frame = undefined;
-        for (0..MAX_IN_FLIGHT) |i| {
-            frames[i] = try Frame.init(dev.gpi, cmdPool);
-        }
-        std.debug.print("Frames In Flight: {}\n", .{frames.len});
+        const pacer = try FramePacer.init(alloc, dev.gpi, MAX_IN_FLIGHT, cmdPool);
 
         const shaderTimeStamp = try getFileTimeStamp("shaders/shdr.frag");
 
@@ -62,7 +55,6 @@ pub const Renderer = struct {
             .swapchain = swapchain,
             .pipe = pipe,
             .cmdPool = cmdPool,
-            .frames = frames,
             .pacer = pacer,
             .shaderTimeStamp = shaderTimeStamp,
         };
@@ -73,7 +65,8 @@ pub const Renderer = struct {
 
         if (timeStamp != self.shaderTimeStamp) {
             self.shaderTimeStamp = timeStamp;
-            try self.recreateSwapchain();
+            try self.renewPipeline();
+            try self.renewSwapchain();
             std.debug.print("Shader Updated ^^\n", .{});
             return;
         }
@@ -82,11 +75,11 @@ pub const Renderer = struct {
         try self.pacer.waitForGPU(self.dev.gpi);
         tracyZ1.End();
 
-        const frame = &self.frames[self.pacer.curFrame];
+        const frame = self.pacer.getCurrentFramePtr();
 
         const tracyZ2 = ztracy.ZoneNC(@src(), "AcquireImage", 0xFF0000FF);
         if (try self.swapchain.acquireImage(self.dev.gpi, frame) == false) {
-            try self.recreateSwapchain();
+            try self.renewSwapchain();
             return;
         }
         tracyZ2.End();
@@ -102,7 +95,7 @@ pub const Renderer = struct {
 
         const tracyZ5 = ztracy.ZoneNC(@src(), "Present", 0xFFC0CBFF);
         if (try self.swapchain.present(self.dev.presentQ, frame)) {
-            try self.recreateSwapchain();
+            try self.renewSwapchain();
             return;
         }
         tracyZ5.End();
@@ -110,23 +103,24 @@ pub const Renderer = struct {
         self.pacer.nextFrame();
     }
 
-    pub fn recreateSwapchain(self: *Renderer) !void {
-        std.debug.print("\nWindow Reacreation:\n", .{});
+    pub fn renewSwapchain(self: *Renderer) !void {
         _ = c.vkDeviceWaitIdle(self.dev.gpi);
-        self.pipe.deinit(self.dev.gpi);
         self.swapchain.deinit(self.dev.gpi);
         self.swapchain = try Swapchain.init(self.alloc, &self.dev, self.surface, self.extentPtr);
+        std.debug.print("Swapchain recreated\n", .{});
+    }
+
+    pub fn renewPipeline(self: *Renderer) !void {
+        _ = c.vkDeviceWaitIdle(self.dev.gpi);
+        self.pipe.deinit(self.dev.gpi);
         self.pipe = try Pipeline.init(self.alloc, self.dev.gpi, self.swapchain.surfaceFormat.format);
-        std.debug.print("\n", .{});
+        std.debug.print("Pipeline recreated\n", .{});
     }
 
     pub fn deinit(self: *Renderer) void {
         _ = c.vkDeviceWaitIdle(self.dev.gpi);
 
-        for (&self.frames) |*frame| {
-            frame.deinit(self.dev.gpi);
-        }
-        self.pacer.deinit(self.dev.gpi);
+        self.pacer.deinit(self.alloc, self.dev.gpi);
         c.vkDestroyCommandPool(self.dev.gpi, self.cmdPool, null);
         self.swapchain.deinit(self.dev.gpi);
         self.pipe.deinit(self.dev.gpi);
