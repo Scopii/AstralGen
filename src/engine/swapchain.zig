@@ -4,16 +4,16 @@ const Allocator = std.mem.Allocator;
 const check = @import("error.zig").check;
 const Device = @import("device.zig").Device;
 const ImageBucket = @import("image.zig").ImageBucket;
+const createImageBuckets = @import("image.zig").createImageBuckets;
 const Frame = @import("frame.zig").Frame;
 
 pub const Swapchain = struct {
     alloc: Allocator,
     handle: c.VkSwapchainKHR,
+    imageBuckets: []ImageBucket,
     surfaceFormat: c.VkSurfaceFormatKHR,
     mode: c.VkPresentModeKHR,
     extent: c.VkExtent2D,
-    imgCount: u32,
-    imgBucket: ImageBucket,
 
     pub fn init(alloc: Allocator, dev: *const Device, surface: c.VkSurfaceKHR, curExtent: *const c.VkExtent2D) !Swapchain {
         const gpi = dev.gpi;
@@ -26,7 +26,7 @@ pub const Swapchain = struct {
 
         // Pick surface format directly
         const surfaceFormat = try pickSurfaceFormat(alloc, gpu, surface);
-        const mode = c.VK_PRESENT_MODE_MAILBOX_KHR; //try pickPresentMode(alloc, gpu, surface);
+        const mode = c.VK_PRESENT_MODE_IMMEDIATE_KHR; //try pickPresentMode(alloc, gpu, surface);
         const extent = pickExtent(&caps, curExtent);
 
         // Calculate image count
@@ -70,9 +70,7 @@ pub const Swapchain = struct {
 
         var realImgCount: u32 = 0;
         try check(c.vkGetSwapchainImagesKHR(gpi, handle, &realImgCount, null), "Could not get swapchain images");
-        std.debug.print("Swapchain Images: {}\n", .{realImgCount});
-
-        const imgBucket = try ImageBucket.init(alloc, realImgCount, gpi, handle, surfaceFormat.format);
+        const imageBuckets = try createImageBuckets(alloc, realImgCount, gpi, handle, surfaceFormat.format);
 
         return .{
             .alloc = alloc,
@@ -80,13 +78,15 @@ pub const Swapchain = struct {
             .surfaceFormat = surfaceFormat,
             .mode = mode,
             .extent = extent,
-            .imgCount = realImgCount,
-            .imgBucket = imgBucket,
+            .imageBuckets = imageBuckets,
         };
     }
 
     pub fn deinit(self: *Swapchain, gpi: c.VkDevice) void {
-        self.imgBucket.deinit(self.alloc, gpi);
+        for (0..self.imageBuckets.len) |i| {
+            self.imageBuckets[i].deinit(gpi);
+        }
+        self.alloc.free(self.imageBuckets);
         c.vkDestroySwapchainKHR(gpi, self.handle, null);
     }
 
@@ -103,7 +103,7 @@ pub const Swapchain = struct {
         const presentInfo = c.VkPresentInfoKHR{
             .sType = c.VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
             .waitSemaphoreCount = 1,
-            .pWaitSemaphores = &self.imgBucket.images[frame.index].rendSem,
+            .pWaitSemaphores = &self.imageBuckets[frame.index].rendSem,
             .swapchainCount = 1,
             .pSwapchains = &self.handle,
             .pImageIndices = &frame.index,

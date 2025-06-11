@@ -4,79 +4,42 @@ const Allocator = std.mem.Allocator;
 const check = @import("error.zig").check;
 const createSemaphore = @import("sync.zig").createSemaphore;
 
-pub const Image = struct {
-    handle: c.VkImage,
+pub const ImageBucket = struct {
+    image: c.VkImage,
     view: c.VkImageView,
     rendSem: c.VkSemaphore,
-};
 
-pub const ImageBucket = struct {
-    images: []Image,
-
-    pub fn init(alloc: Allocator, imgCount: u32, gpi: c.VkDevice, swapchain: c.VkSwapchainKHR, format: c.VkFormat) !ImageBucket {
-        var count = imgCount;
-        const handles: []c.VkImage = try createImages(alloc, gpi, swapchain, &count);
-        const imgViews: []c.VkImageView = try createImageViews(alloc, gpi, handles, format);
-
-        const rendSems = try alloc.alloc(c.VkSemaphore, count);
-        errdefer alloc.free(rendSems);
-
-        for (0..imgCount) |i| {
-            rendSems[i] = createSemaphore(gpi) catch |err| {
-                // Cleanup on error
-                for (0..i) |j| {
-                    c.vkDestroySemaphore(gpi, rendSems[j], null);
-                }
-                return err;
-            };
-        }
-
-        var images = try alloc.alloc(Image, imgCount);
-
-        for (0..imgCount) |i| {
-            images[i].handle = handles[i];
-            images[i].view = imgViews[i];
-            images[i].rendSem = rendSems[i];
-        }
-
-        alloc.free(handles); // Add this
-        alloc.free(imgViews); // Add this
-        alloc.free(rendSems); // Add this
-
-        return .{
-            .images = images,
-        };
-    }
-
-    pub fn deinit(self: *ImageBucket, alloc: Allocator, gpi: c.VkDevice) void {
-        for (0..self.images.len) |i| {
-            c.vkDestroyImageView(gpi, self.images[i].view, null);
-            c.vkDestroySemaphore(gpi, self.images[i].rendSem, null);
-        }
-        alloc.free(self.images);
+    pub fn deinit(self: *ImageBucket, gpi: c.VkDevice) void {
+        c.vkDestroyImageView(gpi, self.view, null);
+        c.vkDestroySemaphore(gpi, self.rendSem, null);
     }
 };
 
-fn createImages(alloc: Allocator, gpi: c.VkDevice, swapchain: c.VkSwapchainKHR, imgCount: *u32) ![]c.VkImage {
-    if (imgCount.* == 0) try check(c.vkGetSwapchainImagesKHR(gpi, swapchain, imgCount, null), "Could not get Swapchain Images");
-    const images = try alloc.alloc(c.VkImage, imgCount.*);
+pub fn createImageBuckets(alloc: Allocator, imgCount: u32, gpi: c.VkDevice, swapchain: c.VkSwapchainKHR, format: c.VkFormat) ![]ImageBucket {
+    var count = imgCount;
 
-    const result = c.vkGetSwapchainImagesKHR(gpi, swapchain, imgCount, images.ptr);
-    if (result != c.VK_SUCCESS) {
-        alloc.free(images);
-        return error.FailedToCreateSwapchainImages;
+    if (count == 0) try check(c.vkGetSwapchainImagesKHR(gpi, swapchain, &count, null), "Could not get Swapchain Images");
+    const images = try alloc.alloc(c.VkImage, count);
+    defer alloc.free(images);
+
+    try check(c.vkGetSwapchainImagesKHR(gpi, swapchain, &count, images.ptr), "Failed to get swapchain images");
+    const buckets = try alloc.alloc(ImageBucket, count);
+    errdefer alloc.free(buckets); // Free if anything fails below
+
+    var initCount: u32 = 0;
+    errdefer {
+        // Clean up any partially created resources
+        for (0..initCount) |i| {
+            if (buckets[i].view != null) c.vkDestroyImageView(gpi, buckets[i].view, null);
+            if (buckets[i].rendSem != null) c.vkDestroySemaphore(gpi, buckets[i].rendSem, null);
+        }
     }
-    return images;
-}
 
-fn createImageViews(alloc: Allocator, gpi: c.VkDevice, images: []c.VkImage, format: c.VkFormat) ![]c.VkImageView {
-    const imgViews = try alloc.alloc(c.VkImageView, images.len);
-    errdefer alloc.free(imgViews);
-
-    for (images, 0..) |image, i| {
+    for (0..count) |i| {
+        // Create image view
         const imgViewInf = c.VkImageViewCreateInfo{
             .sType = c.VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-            .image = image,
+            .image = images[i],
             .viewType = c.VK_IMAGE_VIEW_TYPE_2D,
             .format = format,
             .subresourceRange = c.VkImageSubresourceRange{
@@ -87,15 +50,12 @@ fn createImageViews(alloc: Allocator, gpi: c.VkDevice, images: []c.VkImage, form
                 .layerCount = 1,
             },
         };
+        try check(c.vkCreateImageView(gpi, &imgViewInf, null, &buckets[i].view), "Failed to create image view");
 
-        const success = c.vkCreateImageView(gpi, &imgViewInf, null, &imgViews[i]);
-        if (success != c.VK_SUCCESS) {
-            // Clean up
-            for (0..i) |j| {
-                c.vkDestroyImageView(gpi, imgViews[j], null);
-            }
-            return error.ImageViewCreationFailed;
-        }
+        buckets[i].rendSem = try createSemaphore(gpi);
+        buckets[i].image = images[i];
+        initCount += 1;
     }
-    return imgViews;
+    std.debug.print("Swapchain Image Buckets: {}\n", .{buckets.len});
+    return buckets;
 }

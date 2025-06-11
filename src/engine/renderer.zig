@@ -61,21 +61,10 @@ pub const Renderer = struct {
     }
 
     pub fn draw(self: *Renderer) !void {
-        const timeStamp = try getFileTimeStamp("shaders/shdr.frag");
-
-        if (timeStamp != self.shaderTimeStamp) {
-            self.shaderTimeStamp = timeStamp;
-            try self.renewPipeline();
-            try self.renewSwapchain();
-            std.debug.print("Shader Updated ^^\n", .{});
-            return;
-        }
-
-        const tracyZ1 = ztracy.ZoneNC(@src(), "WaitForGPU", 0x0000FFFF);
+        try self.checkShaderUpdate();
         try self.pacer.waitForGPU(self.dev.gpi);
-        tracyZ1.End();
 
-        const frame = self.pacer.getCurrentFramePtr();
+        const frame = &self.pacer.frames[self.pacer.curFrame];
 
         const tracyZ2 = ztracy.ZoneNC(@src(), "AcquireImage", 0xFF0000FF);
         if (try self.swapchain.acquireImage(self.dev.gpi, frame) == false) {
@@ -85,12 +74,11 @@ pub const Renderer = struct {
         tracyZ2.End();
 
         const tracyZ3 = ztracy.ZoneNC(@src(), "recCmdBuffer", 0x00A86BFF);
-        //try check(c.vkResetCommandBuffer(frame.cmdBuff, 0), "Could not reset cmdBuffer");
         try recCmdBuffer(&self.swapchain, &self.pipe, frame.cmdBuff, frame.index);
         tracyZ3.End();
 
         const tracyZ4 = ztracy.ZoneNC(@src(), "submitFrame", 0x800080FF);
-        try self.pacer.submitFrame(self.dev.graphicsQ, frame, self.swapchain.imgBucket.images[frame.index].rendSem);
+        try self.pacer.submitFrame(self.dev.graphicsQ, frame, self.swapchain.imageBuckets[frame.index].rendSem);
         tracyZ4.End();
 
         const tracyZ5 = ztracy.ZoneNC(@src(), "Present", 0xFFC0CBFF);
@@ -101,6 +89,18 @@ pub const Renderer = struct {
         tracyZ5.End();
 
         self.pacer.nextFrame();
+    }
+
+    pub fn checkShaderUpdate(self: *Renderer) !void {
+        const tracyZ1 = ztracy.ZoneNC(@src(), "checkShaderUpdate", 0x0000FFFF);
+        const timeStamp = try getFileTimeStamp("shaders/shdr.frag");
+        if (timeStamp != self.shaderTimeStamp) {
+            self.shaderTimeStamp = timeStamp;
+            try self.renewPipeline();
+            std.debug.print("Shader Updated ^^\n", .{});
+            return;
+        }
+        tracyZ1.End();
     }
 
     pub fn renewSwapchain(self: *Renderer) !void {
@@ -128,11 +128,11 @@ pub const Renderer = struct {
         c.vkDestroySurfaceKHR(self.instance, self.surface, null);
         c.vkDestroyInstance(self.instance, null);
     }
-
-    pub fn getFileTimeStamp(src: []const u8) !i128 {
-        const cwd = std.fs.cwd();
-        const stat = try cwd.statFile(src);
-        const modification_time: i128 = stat.mtime;
-        return modification_time;
-    }
 };
+
+pub fn getFileTimeStamp(src: []const u8) !i128 {
+    const cwd = std.fs.cwd();
+    const stat = try cwd.statFile(src);
+    const modification_time: i128 = stat.mtime;
+    return modification_time;
+}

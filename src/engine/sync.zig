@@ -5,12 +5,12 @@ const check = @import("error.zig").check;
 const Frame = @import("frame.zig").Frame;
 
 pub const FramePacer = struct {
-    timeline: c.VkSemaphore,
     curFrame: u8 = 0,
-    frameCount: u64 = 0,
-    lastChecked: u64 = 0,
     maxInFlight: u8,
     frames: []Frame,
+    timeline: c.VkSemaphore,
+    frameCount: u64 = 0,
+    lastChecked: u64 = 0,
 
     // Cache for reduced allocations
     submitInf: c.VkSubmitInfo2,
@@ -71,10 +71,6 @@ pub const FramePacer = struct {
             frame.deinit(gpi);
         }
         alloc.free(self.frames);
-    }
-
-    pub fn getCurrentFramePtr(self: *FramePacer) *Frame {
-        return &self.frames[self.curFrame];
     }
 
     // New: Efficient CPU-GPU throttling
