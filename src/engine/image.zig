@@ -4,17 +4,21 @@ const Allocator = std.mem.Allocator;
 const check = @import("error.zig").check;
 const createSemaphore = @import("sync.zig").createSemaphore;
 
+pub const Image = struct {
+    handle: c.VkImage,
+    view: c.VkImageView,
+    rendSem: c.VkSemaphore,
+};
+
 pub const ImageBucket = struct {
-    images: []c.VkImage,
-    imgViews: []c.VkImageView,
-    rendSems: []c.VkSemaphore,
+    images: []Image,
 
     pub fn init(alloc: Allocator, imgCount: u32, gpi: c.VkDevice, swapchain: c.VkSwapchainKHR, format: c.VkFormat) !ImageBucket {
         var count = imgCount;
-        const images: []c.VkImage = try createImages(alloc, gpi, swapchain, &count);
-        const imgViews: []c.VkImageView = try createImageViews(alloc, gpi, images, format);
+        const handles: []c.VkImage = try createImages(alloc, gpi, swapchain, &count);
+        const imgViews: []c.VkImageView = try createImageViews(alloc, gpi, handles, format);
 
-        const rendSems = try alloc.alloc(c.VkSemaphore, imgCount);
+        const rendSems = try alloc.alloc(c.VkSemaphore, count);
         errdefer alloc.free(rendSems);
 
         for (0..imgCount) |i| {
@@ -27,26 +31,29 @@ pub const ImageBucket = struct {
             };
         }
 
+        var images = try alloc.alloc(Image, imgCount);
+
+        for (0..imgCount) |i| {
+            images[i].handle = handles[i];
+            images[i].view = imgViews[i];
+            images[i].rendSem = rendSems[i];
+        }
+
+        alloc.free(handles); // Add this
+        alloc.free(imgViews); // Add this
+        alloc.free(rendSems); // Add this
+
         return .{
             .images = images,
-            .imgViews = imgViews,
-            .rendSems = rendSems,
         };
-    }
-    pub fn getRenderSemaphore(self: *ImageBucket, imgIndex: u32) c.VkSemaphore {
-        return self.rendSems[imgIndex];
     }
 
     pub fn deinit(self: *ImageBucket, alloc: Allocator, gpi: c.VkDevice) void {
-        for (self.imgViews) |view| {
-            c.vkDestroyImageView(gpi, view, null);
+        for (0..self.images.len) |i| {
+            c.vkDestroyImageView(gpi, self.images[i].view, null);
+            c.vkDestroySemaphore(gpi, self.images[i].rendSem, null);
         }
-        for (self.rendSems) |sem| {
-            c.vkDestroySemaphore(gpi, sem, null);
-        }
-        alloc.free(self.rendSems);
         alloc.free(self.images);
-        alloc.free(self.imgViews);
     }
 };
 

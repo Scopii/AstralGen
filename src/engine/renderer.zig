@@ -90,7 +90,7 @@ pub const Renderer = struct {
         tracyZ3.End();
 
         const tracyZ4 = ztracy.ZoneNC(@src(), "submitFrame", 0x800080FF);
-        try self.pacer.submitFrame(self.dev.graphicsQ, frame, self.swapchain.imgBucket.getRenderSemaphore(frame.index));
+        try self.pacer.submitFrame(self.dev.graphicsQ, frame, self.swapchain.imgBucket.images[frame.index].rendSem);
         tracyZ4.End();
 
         const tracyZ5 = ztracy.ZoneNC(@src(), "Present", 0xFFC0CBFF);
