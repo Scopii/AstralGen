@@ -12,8 +12,11 @@ pub fn build(b: *std.Build) void {
         .link_libc = true,
     });
 
-    // GLFW setup - add include path and link libraries
     exe.addIncludePath(b.path("include"));
+
+    // Compile VMA's implementation by treating its header as a C source file.
+    exe.addCSourceFile(.{ .file = b.path("src/engine/vmaLink.cpp") });
+    exe.linkLibCpp();
 
     exe.addLibraryPath(b.path("libs/SDL3"));
     exe.linkSystemLibrary("SDL3");

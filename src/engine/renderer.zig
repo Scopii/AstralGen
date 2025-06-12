@@ -13,9 +13,13 @@ const Swapchain = @import("render/swapchain.zig").Swapchain;
 const Pipeline = @import("render/pipeline.zig").Pipeline;
 const FramePacer = @import("sync/framePacer.zig").FramePacer;
 const Frame = @import("render/frame.zig").Frame;
+const VkAllocator = @import("vma.zig").VkAllocator;
 
 const createCmdPool = @import("render/cmd.zig").createCmdPool;
 const recCmdBuffer = @import("render/cmd.zig").recCmdBuffer;
+
+// For Compute Draw
+const AllocatedImage = @import("render/allocatedImage.zig").AllocatedImage;
 
 pub const MAX_IN_FLIGHT: u8 = 3;
 
@@ -27,6 +31,7 @@ pub const Renderer = struct {
     instance: c.VkInstance,
     surface: c.VkSurfaceKHR,
     dev: Device,
+    vkAlloc: VkAllocator,
     swapchain: Swapchain,
     pipe: Pipeline,
     cmdPool: c.VkCommandPool,
@@ -38,7 +43,8 @@ pub const Renderer = struct {
         const instance = try createInstance(alloc, DEBUG_TOGGLE);
         const surface = try createSurface(window, instance);
         const dev = try Device.init(alloc, instance, surface);
-        const swapchain = try Swapchain.init(alloc, &dev, surface, extent);
+        const vkAlloc = try VkAllocator.init(instance, dev.gpi, dev.gpu);
+        const swapchain = try Swapchain.init(vkAlloc, alloc, &dev, surface, extent);
         const pipe = try Pipeline.init(alloc, dev.gpi, swapchain.surfaceFormat.format);
         const cmdPool = try createCmdPool(dev.gpi, dev.families.graphics);
         const pacer = try FramePacer.init(alloc, dev.gpi, MAX_IN_FLIGHT, cmdPool);
@@ -51,6 +57,7 @@ pub const Renderer = struct {
             .instance = instance,
             .surface = surface,
             .dev = dev,
+            .vkAlloc = vkAlloc,
             .swapchain = swapchain,
             .pipe = pipe,
             .cmdPool = cmdPool,
@@ -105,7 +112,7 @@ pub const Renderer = struct {
     pub fn renewSwapchain(self: *Renderer) !void {
         _ = c.vkDeviceWaitIdle(self.dev.gpi);
         self.swapchain.deinit(self.dev.gpi);
-        self.swapchain = try Swapchain.init(self.alloc, &self.dev, self.surface, self.extentPtr);
+        self.swapchain = try Swapchain.init(self.vkAlloc, self.alloc, &self.dev, self.surface, self.extentPtr);
         std.debug.print("Swapchain recreated\n", .{});
     }
 
