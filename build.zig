@@ -83,14 +83,16 @@ pub fn build(b: *std.Build) void {
         b.installFile("libs/SDL3/SDL3.dll", "bin/SDL3.dll");
     }
 
-    // Add shader compilation step
-    const compile_shaders = b.addSystemCommand(&[_][]const u8{ "glslc", "shaders/shdr.vert", "-o", "shaders/vert.spv" });
-
-    const compile_frag = b.addSystemCommand(&[_][]const u8{ "glslc", "shaders/shdr.frag", "-o", "shaders/frag.spv" });
-
+    // Create Shader directory if needed
+    std.fs.cwd().makePath("zig-out/shader") catch |err| {
+        std.debug.print("Failed to create directory '{s}': {}\n", .{ "zig-out/shader", err });
+    };
+    // Shader Compilation (currently in Pipeline Creation)
+    //const compile_shaders = b.addSystemCommand(&[_][]const u8{ "glslc", "src/shader/shdr.vert", "-o", "zig-out/vert.spv" });
+    //const compile_frag = b.addSystemCommand(&[_][]const u8{ "glslc", "src/shader/shdr.frag", "-o", "zig-out/frag.spv" });
     // Make exe depend on shader compilation
-    exe.step.dependOn(&compile_shaders.step);
-    exe.step.dependOn(&compile_frag.step);
+    //exe.step.dependOn(&compile_shaders.step);
+    //exe.step.dependOn(&compile_frag.step);
 
     const run_cmd = b.addRunArtifact(exe);
     run_cmd.step.dependOn(b.getInstallStep());

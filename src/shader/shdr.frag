@@ -66,8 +66,8 @@ void main() {
        vec3 normal = getNormal(pos);
        vec3 lightDir = normalize(vec3(1.0, 1.0, -1.0));
        float lighting = max(dot(normal, lightDir), 0.1);
-       //vec3 surfaceColor = vec3(0.8, 0.4, 0.2);
-       vec3 surfaceColor = vec3(0.4, 0.8, 0.5);
+       vec3 surfaceColor = vec3(0.8, 0.4, 0.2);
+       //vec3 surfaceColor = vec3(0.4, 0.8, 0.5);
        finalColor = mix(vec4(surfaceColor * lighting, 1.0), vec4(0.0, 0.0, 0.0, 1.0), march / MAX_DIST);
 
    } else finalColor = vec4(0.0, 0.0, 0.0, 1.0);

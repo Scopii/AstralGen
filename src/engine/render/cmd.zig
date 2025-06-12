@@ -1,8 +1,8 @@
 const std = @import("std");
-const c = @import("../c.zig");
+const c = @import("../../c.zig");
 const Swapchain = @import("swapchain.zig").Swapchain;
 const Pipeline = @import("pipeline.zig").Pipeline;
-const check = @import("error.zig").check;
+const check = @import("../error.zig").check;
 
 pub const CmdManager = struct {};
 

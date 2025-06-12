@@ -1,8 +1,7 @@
 const std = @import("std");
-const c = @import("../c.zig");
+const c = @import("../../c.zig");
 const Allocator = std.mem.Allocator;
-const check = @import("error.zig").check;
-const getVkVal = @import("error.zig").getVkVal;
+const check = @import("../error.zig").check;
 
 pub const QueueFamilies = struct {
     graphics: u32,

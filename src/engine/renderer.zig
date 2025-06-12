@@ -4,19 +4,18 @@ const ztracy = @import("ztracy");
 
 const DEBUG_TOGGLE = @import("../settings.zig").DEBUG_TOGGLE;
 
-const createInstance = @import("core.zig").createInstance;
-const createSurface = @import("core.zig").createSurface;
+const createInstance = @import("context/instance.zig").createInstance;
+const createSurface = @import("context/surface.zig").createSurface;
 const check = @import("error.zig").check;
 
-const Device = @import("device.zig").Device;
-const Swapchain = @import("swapchain.zig").Swapchain;
-const Pipeline = @import("pipeline.zig").Pipeline;
-const FramePacer = @import("sync.zig").FramePacer;
-const Frame = @import("frame.zig").Frame;
+const Device = @import("context/device.zig").Device;
+const Swapchain = @import("render/swapchain.zig").Swapchain;
+const Pipeline = @import("render/pipeline.zig").Pipeline;
+const FramePacer = @import("sync/framePacer.zig").FramePacer;
+const Frame = @import("render/frame.zig").Frame;
 
-const createCmdPool = @import("cmd.zig").createCmdPool;
-const recCmdBuffer = @import("cmd.zig").recCmdBuffer;
-const waitForTimeline = @import("sync.zig").waitForTimeline;
+const createCmdPool = @import("render/cmd.zig").createCmdPool;
+const recCmdBuffer = @import("render/cmd.zig").recCmdBuffer;
 
 pub const MAX_IN_FLIGHT: u8 = 3;
 
@@ -44,7 +43,7 @@ pub const Renderer = struct {
         const cmdPool = try createCmdPool(dev.gpi, dev.families.graphics);
         const pacer = try FramePacer.init(alloc, dev.gpi, MAX_IN_FLIGHT, cmdPool);
 
-        const shaderTimeStamp = try getFileTimeStamp("shaders/shdr.frag");
+        const shaderTimeStamp = try getFileTimeStamp("src/shader/shdr.frag");
 
         return .{
             .alloc = alloc,
@@ -93,7 +92,7 @@ pub const Renderer = struct {
 
     pub fn checkShaderUpdate(self: *Renderer) !void {
         const tracyZ1 = ztracy.ZoneNC(@src(), "checkShaderUpdate", 0x0000FFFF);
-        const timeStamp = try getFileTimeStamp("shaders/shdr.frag");
+        const timeStamp = try getFileTimeStamp("src/shader/shdr.frag");
         if (timeStamp != self.shaderTimeStamp) {
             self.shaderTimeStamp = timeStamp;
             try self.renewPipeline();

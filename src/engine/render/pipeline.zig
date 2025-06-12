@@ -1,8 +1,8 @@
 const std = @import("std");
-const c = @import("../c.zig");
-const check = @import("error.zig").check;
+const c = @import("../../c.zig");
+const check = @import("../error.zig").check;
 const Allocator = std.mem.Allocator;
-const createShaderModule = @import("shader.zig").createShaderModule;
+const createShaderModule = @import("../../shader/shader.zig").createShaderModule;
 
 pub const Pipeline = struct {
     handle: c.VkPipeline,
@@ -10,10 +10,10 @@ pub const Pipeline = struct {
 
     pub fn init(alloc: Allocator, gpi: c.VkDevice, format: c.VkFormat) !Pipeline {
         // Load shaders from compiled .spv files
-        const vertShdr = try createShaderModule(alloc, "shaders/shdr.vert", "shaders/vert.spv", gpi);
+        const vertShdr = try createShaderModule(alloc, "src/shader/shdr.vert", "zig-out/shader/vert.spv", gpi);
         defer c.vkDestroyShaderModule(gpi, vertShdr, null);
 
-        const fragShdr = try createShaderModule(alloc, "shaders/shdr.frag", "shaders/frag.spv", gpi);
+        const fragShdr = try createShaderModule(alloc, "src/shader/shdr.frag", "zig-out/shader/frag.spv", gpi);
         defer c.vkDestroyShaderModule(gpi, fragShdr, null);
 
         //std.time.sleep(100_000_000);

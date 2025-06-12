@@ -1,10 +1,10 @@
 const std = @import("std");
 const c = @import("../c.zig");
-const check = @import("error.zig").check;
+const check = @import("../engine/error.zig").check;
 const Allocator = std.mem.Allocator;
 
 // Compile and load shader from source
-fn compileAndLoadShader(alloc: std.mem.Allocator, srcPath: []const u8, spvPath: []const u8) ![]align(@alignOf(u32)) u8 {
+fn compileAndLoadShader(alloc: Allocator, srcPath: []const u8, spvPath: []const u8) ![]align(@alignOf(u32)) u8 {
     // Compile shader using glslc
     const result = std.process.Child.run(.{
         .allocator = alloc,

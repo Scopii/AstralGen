@@ -4,11 +4,12 @@ const check = @import("error.zig").check;
 pub const VkAllocator = struct {
     handle: c.VmaAllocator,
 
-    pub fn init(instance: c.VkInstance, device: c.VkDevice, physicalDevice: c.VkPhysicalDevice) !VkAllocator {
+    pub fn init(instance: c.VkInstance, gpi: c.VkDevice, gpu: c.VkPhysicalDevice) !VkAllocator {
         const createInfo = c.VmaAllocatorCreateInfo{
-            .physicalDevice = physicalDevice,
-            .device = device,
+            .physicalDevice = gpu,
+            .device = gpi,
             .instance = instance,
+            .flags = c.VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT,
         };
 
         var allocator: c.VmaAllocator = undefined;
