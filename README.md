@@ -1,6 +1,3 @@
-You are right. My apologies. GitHub uses a specific flavor of Markdown that has its own conventions for a clean, readable `README.md` file.
-
-Here is a formatted version using standard GitHub Markdown practices, such as using H2 (`##`) for sections, inline code blocks for technical terms, and a horizontal rule for separation, while preserving your original text.
 
 ***
 
