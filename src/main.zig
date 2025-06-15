@@ -24,5 +24,6 @@ pub fn main() !void {
         app.pollEvents();
 
         try renderer.draw();
+        //try renderer.drawComputeRenderer();
     }
 }

@@ -8,38 +8,9 @@ const createImageBuckets = @import("image.zig").createImageBuckets;
 const Frame = @import("frame.zig").Frame;
 
 // COMPUTE DRAW STUFF:
-const AllocatedImage = @import("allocatedImage.zig").AllocatedImage;
+const RenderImage = @import("allocatedImage.zig").RenderImage;
 const VkAllocator = @import("../vma.zig").VkAllocator;
-
-pub fn createAllocatedImageInfo(format: c.VkFormat, usageFlags: c.VkImageUsageFlags, extent3d: c.VkExtent3D) c.VkImageCreateInfo {
-    return c.VkImageCreateInfo{
-        .sType = c.VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-        .imageType = c.VK_IMAGE_TYPE_2D,
-        .format = format,
-        .extent = extent3d,
-        .mipLevels = 1,
-        .arrayLayers = 1,
-        .samples = c.VK_SAMPLE_COUNT_1_BIT, // MSAA not used by default!
-        .tiling = c.VK_IMAGE_TILING_OPTIMAL, // Optimal GPU Format, has to be changed to LINEAR for CPU Read
-        .usage = usageFlags,
-    };
-}
-
-pub fn createAllocatedImageViewInfo(format: c.VkFormat, image: c.VkImage, aspectFlags: c.VkImageAspectFlags) c.VkImageViewCreateInfo {
-    return c.VkImageViewCreateInfo{
-        .sType = c.VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-        .viewType = c.VK_IMAGE_VIEW_TYPE_2D,
-        .image = image,
-        .format = format,
-        .subresourceRange = c.VkImageSubresourceRange{
-            .baseMipLevel = 0,
-            .levelCount = 1,
-            .baseArrayLayer = 0,
-            .layerCount = 1,
-            .aspectMask = aspectFlags,
-        },
-    };
-}
+const ResourceManager = @import("ResourceManager.zig").ResourceManager;
 
 pub const Swapchain = struct {
     alloc: Allocator,
@@ -49,7 +20,9 @@ pub const Swapchain = struct {
     mode: c.VkPresentModeKHR,
     extent: c.VkExtent2D,
 
-    pub fn init(vkAlloc: VkAllocator, alloc: Allocator, dev: *const Device, surface: c.VkSurfaceKHR, curExtent: *const c.VkExtent2D) !Swapchain {
+    renderImage: RenderImage,
+
+    pub fn init(resourceMan: *const ResourceManager, alloc: Allocator, dev: *const Device, surface: c.VkSurfaceKHR, curExtent: *const c.VkExtent2D) !Swapchain {
         const gpi = dev.gpi;
         const gpu = dev.gpu;
         const families = dev.families;
@@ -89,7 +62,7 @@ pub const Swapchain = struct {
             .imageColorSpace = surfaceFormat.colorSpace,
             .imageExtent = extent,
             .imageArrayLayers = 1,
-            .imageUsage = c.VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+            .imageUsage = c.VK_IMAGE_USAGE_STORAGE_BIT | c.VK_IMAGE_USAGE_TRANSFER_DST_BIT | c.VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
             .imageSharingMode = sharingMode,
             .queueFamilyIndexCount = familyCount,
             .pQueueFamilyIndices = if (familyCount > 0) &familyIndices else null,
@@ -107,41 +80,7 @@ pub const Swapchain = struct {
         const imageBuckets = try createImageBuckets(alloc, realImgCount, gpi, handle, surfaceFormat.format);
 
         // GPU COMPUTE DRWAING THINGS //
-
-        const drawImageExtent = c.VkExtent3D{
-            .width = extent.width,
-            .height = extent.height,
-            .depth = 1,
-        };
-
-        const drawImageUsages = c.VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
-            c.VK_IMAGE_USAGE_TRANSFER_DST_BIT |
-            c.VK_IMAGE_USAGE_STORAGE_BIT |
-            c.VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-
-        var renderImage: AllocatedImage = undefined;
-        renderImage.format = c.VK_FORMAT_R16G16B16A16_SFLOAT;
-        renderImage.extent3d = drawImageExtent;
-
-        // Allocation from GPU local memory
-        const renderImageInfo = createAllocatedImageInfo(renderImage.format, drawImageUsages, renderImage.extent3d);
-        const renderImageAllocInfo = c.VmaAllocationCreateInfo{
-            .usage = c.VMA_MEMORY_USAGE_GPU_ONLY,
-            .requiredFlags = c.VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-        };
-
-        // Allocation and creation
-        try check(c.vmaCreateImage(
-            vkAlloc.handle,
-            &renderImageInfo,
-            &renderImageAllocInfo,
-            &renderImage.image,
-            &renderImage.allocation,
-            null,
-        ), "Could not create Render Image");
-        // Build Image View for the draw Image to use for rendering
-        const renderViewInfo = createAllocatedImageViewInfo(renderImage.format, renderImage.image, c.VK_IMAGE_ASPECT_COLOR_BIT);
-        try check(c.vkCreateImageView(gpi, &renderViewInfo, null, &renderImage.view), "Could not create Render Image View");
+        const renderImage = try resourceMan.createRenderImage(extent);
 
         return .{
             .alloc = alloc,
@@ -150,10 +89,13 @@ pub const Swapchain = struct {
             .mode = mode,
             .extent = extent,
             .imageBuckets = imageBuckets,
+            .renderImage = renderImage,
         };
     }
 
-    pub fn deinit(self: *Swapchain, gpi: c.VkDevice) void {
+    pub fn deinit(self: *Swapchain, gpi: c.VkDevice, resourceMan: *const ResourceManager) void {
+        resourceMan.destroyRenderImage(self.renderImage);
+
         for (0..self.imageBuckets.len) |i| {
             self.imageBuckets[i].deinit(gpi);
         }
