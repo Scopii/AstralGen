@@ -9,11 +9,14 @@ pub const ComputePipeline = struct {
     handle: c.VkPipeline,
     layout: c.VkPipelineLayout,
     descriptorSetLayout: c.VkDescriptorSetLayout,
+    cache: c.VkPipelineCache,
 };
 
 pub const GraphicsPipeline = struct {
     handle: c.VkPipeline,
     layout: c.VkPipelineLayout,
+    format: c.VkFormat,
+    cache: c.VkPipelineCache,
 };
 
 pub const PipelineManager = struct {
@@ -22,12 +25,14 @@ pub const PipelineManager = struct {
 
     pub fn init(alloc: Allocator, context: *const Context, format: c.VkFormat) !PipelineManager {
         const gpi = context.gpi;
+
         //Compute
         const computeDescriptorSetLayout = try createComputeDescriptorSetLayout(gpi);
         const computePipelineLayout = try createPipelineLayout(gpi, computeDescriptorSetLayout, 1);
         const computeShaderModule = try createShaderModule(alloc, "src/shader/shdr.comp", "zig-out/shader/comp.spv", gpi);
         defer c.vkDestroyShaderModule(gpi, computeShaderModule, null);
-        const computePipeline = try createComputePipeline(gpi, computePipelineLayout, computeShaderModule);
+        const computeCache = try createPipelineCache(gpi);
+        const computePipeline = try createComputePipeline(gpi, computePipelineLayout, computeShaderModule, computeCache);
 
         //Graphics
         const vertShdr = try createShaderModule(alloc, "src/shader/shdr.vert", "zig-out/shader/vert.spv", gpi);
@@ -53,17 +58,21 @@ pub const PipelineManager = struct {
         };
 
         const graphicsPipelineLayout = try createPipelineLayout(gpi, null, 0);
-        const graphicsPipeline = try createGraphicsPipeline(gpi, graphicsPipelineLayout, &shaderStages, format);
+        const graphicsCache = try createPipelineCache(gpi);
+        const graphicsPipeline = try createGraphicsPipeline(gpi, graphicsPipelineLayout, &shaderStages, format, graphicsCache);
 
         return .{
             .compute = .{
                 .handle = computePipeline,
                 .layout = computePipelineLayout,
                 .descriptorSetLayout = computeDescriptorSetLayout,
+                .cache = computeCache,
             },
             .graphics = .{
                 .handle = graphicsPipeline,
                 .layout = graphicsPipelineLayout,
+                .format = format,
+                .cache = graphicsCache,
             },
         };
     }
@@ -72,11 +81,60 @@ pub const PipelineManager = struct {
         c.vkDestroyPipeline(gpi, self.compute.handle, null);
         c.vkDestroyPipelineLayout(gpi, self.compute.layout, null);
         c.vkDestroyDescriptorSetLayout(gpi, self.compute.descriptorSetLayout, null);
+        c.vkDestroyPipelineCache(gpi, self.compute.cache, null);
 
         c.vkDestroyPipeline(gpi, self.graphics.handle, null);
         c.vkDestroyPipelineLayout(gpi, self.graphics.layout, null);
+        c.vkDestroyPipelineCache(gpi, self.graphics.cache, null);
+    }
+
+    pub fn refreshComputePipeline(self: *PipelineManager, alloc: Allocator, gpi: c.VkDevice) !void {
+        c.vkDestroyPipeline(gpi, self.compute.handle, null);
+        const computeShaderModule = try createShaderModule(alloc, "src/shader/shdr.comp", "zig-out/shader/comp.spv", gpi);
+        defer c.vkDestroyShaderModule(gpi, computeShaderModule, null);
+        self.compute.handle = try createComputePipeline(gpi, self.compute.layout, computeShaderModule, self.compute.cache);
+        std.debug.print("Compute Pipeline refreshed\n", .{});
+    }
+
+    pub fn refreshGraphicsPipeline(self: *PipelineManager, alloc: Allocator, gpi: c.VkDevice) !void {
+        c.vkDestroyPipeline(gpi, self.graphics.handle, null);
+        const vertShdr = try createShaderModule(alloc, "src/shader/shdr.vert", "zig-out/shader/vert.spv", gpi);
+        defer c.vkDestroyShaderModule(gpi, vertShdr, null);
+        const fragShdr = try createShaderModule(alloc, "src/shader/shdr.frag", "zig-out/shader/frag.spv", gpi);
+        defer c.vkDestroyShaderModule(gpi, fragShdr, null);
+
+        const shaderStages = [_]c.VkPipelineShaderStageCreateInfo{
+            .{
+                .sType = c.VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+                .stage = c.VK_SHADER_STAGE_VERTEX_BIT,
+                .module = vertShdr,
+                .pName = "main",
+                .pSpecializationInfo = null, // for constants
+            },
+            .{
+                .sType = c.VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+                .stage = c.VK_SHADER_STAGE_FRAGMENT_BIT,
+                .module = fragShdr,
+                .pName = "main",
+                .pSpecializationInfo = null, // for constants
+            },
+        };
+        self.graphics.handle = try createGraphicsPipeline(gpi, self.graphics.layout, &shaderStages, self.graphics.format, self.graphics.cache);
+        std.debug.print("Graphics Pipeline refreshed\n", .{});
     }
 };
+
+fn createPipelineCache(gpi: c.VkDevice) !c.VkPipelineCache {
+    const cahceCreateInf = c.VkPipelineCacheCreateInfo{
+        .sType = c.VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO,
+        .flags = 0,
+        .initialDataSize = 0,
+        .pInitialData = null,
+    };
+    var cache: c.VkPipelineCache = undefined;
+    try check(c.vkCreatePipelineCache(gpi, &cahceCreateInf, null, &cache), "Failed to create Pipeline Cache");
+    return cache;
+}
 
 fn createComputeDescriptorSetLayout(gpi: c.VkDevice) !c.VkDescriptorSetLayout {
     const binding = c.VkDescriptorSetLayoutBinding{
@@ -87,20 +145,19 @@ fn createComputeDescriptorSetLayout(gpi: c.VkDevice) !c.VkDescriptorSetLayout {
         .pImmutableSamplers = null,
     };
 
-    const layoutInfo = c.VkDescriptorSetLayoutCreateInfo{
+    const layoutInf = c.VkDescriptorSetLayoutCreateInfo{
         .sType = c.VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
         .bindingCount = 1,
         .pBindings = &binding,
     };
 
     var descriptorSetLayout: c.VkDescriptorSetLayout = undefined;
-    try check(c.vkCreateDescriptorSetLayout(gpi, &layoutInfo, null, &descriptorSetLayout), "Failed to create descriptor set layout");
+    try check(c.vkCreateDescriptorSetLayout(gpi, &layoutInf, null, &descriptorSetLayout), "Failed to create descriptor set layout");
     return descriptorSetLayout;
 }
 
 fn createPipelineLayout(gpi: c.VkDevice, descriptorSetLayout: c.VkDescriptorSetLayout, layoutCount: u32) !c.VkPipelineLayout {
-    // Create pipeline layout
-    const pipelineLayoutInfo = c.VkPipelineLayoutCreateInfo{
+    const pipeLayoutInf = c.VkPipelineLayoutCreateInfo{
         .sType = c.VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
         .setLayoutCount = layoutCount,
         .pSetLayouts = &descriptorSetLayout,
@@ -108,13 +165,12 @@ fn createPipelineLayout(gpi: c.VkDevice, descriptorSetLayout: c.VkDescriptorSetL
     };
 
     var layout: c.VkPipelineLayout = undefined;
-    try check(c.vkCreatePipelineLayout(gpi, &pipelineLayoutInfo, null, &layout), "Failed to create pipeline layout");
+    try check(c.vkCreatePipelineLayout(gpi, &pipeLayoutInf, null, &layout), "Failed to create pipeline layout");
     return layout;
 }
 
-fn createComputePipeline(gpi: c.VkDevice, layout: c.VkPipelineLayout, shaderModule: c.VkShaderModule) !c.VkPipeline {
-    // Create compute pipeline
-    const pipelineInfo = c.VkComputePipelineCreateInfo{
+fn createComputePipeline(gpi: c.VkDevice, layout: c.VkPipelineLayout, shaderModule: c.VkShaderModule, cache: c.VkPipelineCache) !c.VkPipeline {
+    const pipeInf = c.VkComputePipelineCreateInfo{
         .sType = c.VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
         .stage = .{
             .sType = c.VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
@@ -125,17 +181,12 @@ fn createComputePipeline(gpi: c.VkDevice, layout: c.VkPipelineLayout, shaderModu
         .layout = layout,
     };
 
-    var pipeline: c.VkPipeline = undefined;
-    try check(c.vkCreateComputePipelines(gpi, null, 1, &pipelineInfo, null, &pipeline), "Failed to create pipeline");
-    return pipeline;
+    var pipe: c.VkPipeline = undefined;
+    try check(c.vkCreateComputePipelines(gpi, cache, 1, &pipeInf, null, &pipe), "Failed to create pipeline");
+    return pipe;
 }
 
-fn createGraphicsPipeline(gpi: c.VkDevice, layout: c.VkPipelineLayout, shaderStages: []const c.VkPipelineShaderStageCreateInfo, format: c.VkFormat) !c.VkPipeline {
-    // VK_PRIMITIVE_TOPOLOGY_POINT_LIST         points from vertices
-    // VK_PRIMITIVE_TOPOLOGY_LINE_LIST          line from every 2 vertices without reuse
-    // VK_PRIMITIVE_TOPOLOGY_LINE_STRIP         the end vertex of every line is used as start vertex for the next line
-    // VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST      triangle from every 3 vertices without reuse
-    // VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP     second and third vertex of every triangle are used as first two vertices of the next triangle
+fn createGraphicsPipeline(gpi: c.VkDevice, layout: c.VkPipelineLayout, shaderStages: []const c.VkPipelineShaderStageCreateInfo, format: c.VkFormat, cache: c.VkPipelineCache) !c.VkPipeline {
     const vertInputInf = c.VkPipelineVertexInputStateCreateInfo{
         .sType = c.VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
         .vertexBindingDescriptionCount = 0,
@@ -144,7 +195,11 @@ fn createGraphicsPipeline(gpi: c.VkDevice, layout: c.VkPipelineLayout, shaderSta
 
     const assemblyInf = c.VkPipelineInputAssemblyStateCreateInfo{
         .sType = c.VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
-        .topology = c.VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+        .topology = c.VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, // triangle from every 3 vertices without reuse
+        // VK_PRIMITIVE_TOPOLOGY_POINT_LIST         points from vertices
+        // VK_PRIMITIVE_TOPOLOGY_LINE_LIST          line from every 2 vertices without reuse
+        // VK_PRIMITIVE_TOPOLOGY_LINE_STRIP         end vertex of every line is used as start vertex for next line
+        // VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP     second and third vertex of every triangle are used as first two vertices of the next triangle
         .primitiveRestartEnable = c.VK_FALSE,
     };
 
@@ -238,7 +293,7 @@ fn createGraphicsPipeline(gpi: c.VkDevice, layout: c.VkPipelineLayout, shaderSta
         .subpass = 0,
         .basePipelineIndex = -1,
     };
-    var pipeline: c.VkPipeline = undefined;
-    try check(c.vkCreateGraphicsPipelines(gpi, null, 1, &pipelineInf, null, &pipeline), "Failed to create Graphics Pipeline");
-    return pipeline;
+    var pipe: c.VkPipeline = undefined;
+    try check(c.vkCreateGraphicsPipelines(gpi, cache, 1, &pipelineInf, null, &pipe), "Failed to create Graphics Pipeline");
+    return pipe;
 }

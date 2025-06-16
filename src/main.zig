@@ -23,7 +23,7 @@ pub fn main() !void {
         app.handle();
         app.pollEvents();
 
-        //try renderer.draw();
-        try renderer.drawComputeRenderer();
+        try renderer.draw();
+        //try renderer.drawComputeRenderer();
     }
 }

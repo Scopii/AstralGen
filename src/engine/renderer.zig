@@ -32,7 +32,8 @@ pub const Renderer = struct {
     swapchain: Swapchain,
     cmdMan: CmdManager,
     pacer: FramePacer,
-    shaderTimeStamp: i128,
+    fragmentTimeStemp: i128,
+    computeTimeStemp: i128,
     descriptorsUpdated: bool,
 
     pub fn init(alloc: Allocator, window: *c.SDL_Window, extent: *c.VkExtent2D) !Renderer {
@@ -43,7 +44,8 @@ pub const Renderer = struct {
         const cmdMan = try CmdManager.init(context.gpi, context.families.graphics);
         const pacer = try FramePacer.init(alloc, context.gpi, MAX_IN_FLIGHT, &cmdMan);
         const descriptorManager = try DescriptorManager.init(alloc, context.gpi, pipelineMan.compute.descriptorSetLayout, @intCast(swapchain.imageBuckets.len));
-        const shaderTimeStamp = try getFileTimeStamp("src/shader/shdr.frag");
+        const fragmentTimeStemp = try getFileTimeStamp("src/shader/shdr.frag");
+        const computeTimeStemp = try getFileTimeStamp("src/shader/shdr.comp");
 
         return .{
             .alloc = alloc,
@@ -55,7 +57,8 @@ pub const Renderer = struct {
             .swapchain = swapchain,
             .cmdMan = cmdMan,
             .pacer = pacer,
-            .shaderTimeStamp = shaderTimeStamp,
+            .fragmentTimeStemp = fragmentTimeStemp,
+            .computeTimeStemp = computeTimeStemp,
             .descriptorsUpdated = false,
         };
     }
@@ -92,7 +95,7 @@ pub const Renderer = struct {
     }
 
     pub fn drawComputeRenderer(self: *Renderer) !void {
-        try self.checkShaderUpdate();
+        try self.checkComputeShaderUpdate();
 
         // Update descriptors only once when first needed
         if (!self.descriptorsUpdated) {
@@ -101,7 +104,6 @@ pub const Renderer = struct {
         }
 
         try self.pacer.waitForGPU(self.context.gpi);
-
         const frame = &self.pacer.frames[self.pacer.curFrame];
 
         const tracyZ2 = ztracy.ZoneNC(@src(), "AcquireImage", 0xFF0000FF);
@@ -112,14 +114,13 @@ pub const Renderer = struct {
         tracyZ2.End();
 
         const tracyZ3 = ztracy.ZoneNC(@src(), "recComputeCmd", 0x00A86BFF);
-        //try recComputeCmd(&self.swapchain, &self.computePipe, frame.cmdBuff, frame.index, self.descriptorManager.sets[frame.index]);
         try recordComputeCmdBuffer(
             &self.swapchain,
             frame.cmdBuff,
             frame.index,
             self.extentPtr.*,
-            &self.pipelineMan.compute, // Pass the compute pipeline
-            self.descriptorManager.sets[frame.index], // Pass the correct descriptor set
+            &self.pipelineMan.compute,
+            self.descriptorManager.sets[frame.index],
         );
         tracyZ3.End();
 
@@ -140,9 +141,21 @@ pub const Renderer = struct {
     pub fn checkShaderUpdate(self: *Renderer) !void {
         const tracyZ1 = ztracy.ZoneNC(@src(), "checkShaderUpdate", 0x0000FFFF);
         const timeStamp = try getFileTimeStamp("src/shader/shdr.frag");
-        if (timeStamp != self.shaderTimeStamp) {
-            self.shaderTimeStamp = timeStamp;
-            try self.renewPipeline();
+        if (timeStamp != self.fragmentTimeStemp) {
+            self.fragmentTimeStemp = timeStamp;
+            try self.updateGraphics();
+            std.debug.print("Shader Updated ^^\n", .{});
+            return;
+        }
+        tracyZ1.End();
+    }
+
+    pub fn checkComputeShaderUpdate(self: *Renderer) !void {
+        const tracyZ1 = ztracy.ZoneNC(@src(), "checkShaderUpdate", 0x0000FFFF);
+        const timeStamp = try getFileTimeStamp("src/shader/shdr.comp");
+        if (timeStamp != self.computeTimeStemp) {
+            self.computeTimeStemp = timeStamp;
+            try self.updateCompute();
             std.debug.print("Shader Updated ^^\n", .{});
             return;
         }
@@ -157,11 +170,14 @@ pub const Renderer = struct {
         std.debug.print("Swapchain recreated\n", .{});
     }
 
-    pub fn renewPipeline(self: *Renderer) !void {
+    pub fn updateCompute(self: *Renderer) !void {
         _ = c.vkDeviceWaitIdle(self.context.gpi);
-        self.pipelineMan.deinit(self.context.gpi);
-        self.pipelineMan = try PipelineManager.init(self.alloc, &self.context, self.swapchain.surfaceFormat.format);
-        std.debug.print("PipelineManager recreated\n", .{});
+        try self.pipelineMan.refreshComputePipeline(self.alloc, self.context.gpi);
+    }
+
+    pub fn updateGraphics(self: *Renderer) !void {
+        _ = c.vkDeviceWaitIdle(self.context.gpi);
+        try self.pipelineMan.refreshGraphicsPipeline(self.alloc, self.context.gpi);
     }
 
     pub fn deinit(self: *Renderer) void {
