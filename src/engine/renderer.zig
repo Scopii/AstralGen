@@ -6,8 +6,7 @@ const DEBUG_TOGGLE = @import("../settings.zig").DEBUG_TOGGLE;
 
 const check = @import("error.zig").check;
 
-const Context = @import("context/Context.zig").Context;
-const Device = @import("context/device.zig").Device;
+const Context = @import("render/Context.zig").Context;
 const Swapchain = @import("render/swapchain.zig").Swapchain;
 const FramePacer = @import("sync/framePacer.zig").FramePacer;
 const Frame = @import("render/frame.zig").Frame;
@@ -33,9 +32,6 @@ pub const Renderer = struct {
     extentPtr: *c.VkExtent2D,
 
     context: Context,
-
-    dev: Device,
-
     resourceMan: ResourceManager,
     descriptorManager: DescriptorManager,
     pipelineMan: PipelineManager,
@@ -50,17 +46,15 @@ pub const Renderer = struct {
     pub fn init(alloc: Allocator, window: *c.SDL_Window, extent: *c.VkExtent2D) !Renderer {
         const context = try Context.init(alloc, window, DEBUG_TOGGLE);
 
-        const dev = try Device.init(alloc, context.instance, context.surface);
+        const resourceMan = try ResourceManager.init(&context);
+        const swapchain = try Swapchain.init(&resourceMan, alloc, &context, extent);
+        const pipelineMan = try PipelineManager.init(alloc, &context, swapchain.surfaceFormat.format);
 
-        const resourceMan = try ResourceManager.init(context.instance, dev.gpi, dev.gpu);
-        const swapchain = try Swapchain.init(&resourceMan, alloc, &dev, context.surface, extent);
-        const pipelineMan = try PipelineManager.init(alloc, dev.gpi, swapchain.surfaceFormat.format);
-
-        const cmdMan = try CmdManager.init(dev.gpi, dev.families.graphics);
-        const pacer = try FramePacer.init(alloc, dev.gpi, MAX_IN_FLIGHT, &cmdMan);
+        const cmdMan = try CmdManager.init(context.gpi, context.families.graphics);
+        const pacer = try FramePacer.init(alloc, context.gpi, MAX_IN_FLIGHT, &cmdMan);
 
         // Create descriptor manager and bind image views
-        const descriptorManager = try DescriptorManager.init(alloc, dev.gpi, pipelineMan.compute.descriptorSetLayout, @intCast(swapchain.imageBuckets.len));
+        const descriptorManager = try DescriptorManager.init(alloc, context.gpi, pipelineMan.compute.descriptorSetLayout, @intCast(swapchain.imageBuckets.len));
 
         const shaderTimeStamp = try getFileTimeStamp("src/shader/shdr.frag");
 
@@ -68,7 +62,6 @@ pub const Renderer = struct {
             .alloc = alloc,
             .extentPtr = extent,
             .context = context,
-            .dev = dev,
             .resourceMan = resourceMan,
             .descriptorManager = descriptorManager,
             .pipelineMan = pipelineMan,
@@ -82,12 +75,12 @@ pub const Renderer = struct {
 
     pub fn draw(self: *Renderer) !void {
         try self.checkShaderUpdate();
-        try self.pacer.waitForGPU(self.dev.gpi);
+        try self.pacer.waitForGPU(self.context.gpi);
 
         const frame = &self.pacer.frames[self.pacer.curFrame];
 
         const tracyZ2 = ztracy.ZoneNC(@src(), "AcquireImage", 0xFF0000FF);
-        if (try self.swapchain.acquireImage(self.dev.gpi, frame) == false) {
+        if (try self.swapchain.acquireImage(self.context.gpi, frame) == false) {
             try self.renewSwapchain();
             return;
         }
@@ -98,11 +91,11 @@ pub const Renderer = struct {
         tracyZ3.End();
 
         const tracyZ4 = ztracy.ZoneNC(@src(), "submitFrame", 0x800080FF);
-        try self.pacer.submitFrame(self.dev.graphicsQ, frame, self.swapchain.imageBuckets[frame.index].rendSem);
+        try self.pacer.submitFrame(self.context.graphicsQ, frame, self.swapchain.imageBuckets[frame.index].rendSem);
         tracyZ4.End();
 
         const tracyZ5 = ztracy.ZoneNC(@src(), "Present", 0xFFC0CBFF);
-        if (try self.swapchain.present(self.dev.presentQ, frame)) {
+        if (try self.swapchain.present(self.context.presentQ, frame)) {
             try self.renewSwapchain();
             return;
         }
@@ -116,16 +109,16 @@ pub const Renderer = struct {
 
         // Update descriptors only once when first needed
         if (!self.descriptorsUpdated) {
-            self.descriptorManager.updateAllDescriptorSets(self.dev.gpi, self.swapchain.renderImage.view);
+            self.descriptorManager.updateAllDescriptorSets(self.context.gpi, self.swapchain.renderImage.view);
             self.descriptorsUpdated = true;
         }
 
-        try self.pacer.waitForGPU(self.dev.gpi);
+        try self.pacer.waitForGPU(self.context.gpi);
 
         const frame = &self.pacer.frames[self.pacer.curFrame];
 
         const tracyZ2 = ztracy.ZoneNC(@src(), "AcquireImage", 0xFF0000FF);
-        if (try self.swapchain.acquireImage(self.dev.gpi, frame) == false) {
+        if (try self.swapchain.acquireImage(self.context.gpi, frame) == false) {
             try self.renewSwapchain();
             return;
         }
@@ -144,11 +137,11 @@ pub const Renderer = struct {
         tracyZ3.End();
 
         const tracyZ4 = ztracy.ZoneNC(@src(), "submitFrame", 0x800080FF);
-        try self.pacer.submitFrame(self.dev.graphicsQ, frame, self.swapchain.imageBuckets[frame.index].rendSem);
+        try self.pacer.submitFrame(self.context.graphicsQ, frame, self.swapchain.imageBuckets[frame.index].rendSem);
         tracyZ4.End();
 
         const tracyZ5 = ztracy.ZoneNC(@src(), "Present", 0xFFC0CBFF);
-        if (try self.swapchain.present(self.dev.presentQ, frame)) {
+        if (try self.swapchain.present(self.context.presentQ, frame)) {
             try self.renewSwapchain();
             return;
         }
@@ -170,31 +163,29 @@ pub const Renderer = struct {
     }
 
     pub fn renewSwapchain(self: *Renderer) !void {
-        _ = c.vkDeviceWaitIdle(self.dev.gpi);
-        self.swapchain.deinit(self.dev.gpi, &self.resourceMan);
-        self.swapchain = try Swapchain.init(&self.resourceMan, self.alloc, &self.dev, self.context.surface, self.extentPtr);
+        _ = c.vkDeviceWaitIdle(self.context.gpi);
+        self.swapchain.deinit(self.context.gpi, &self.resourceMan);
+        self.swapchain = try Swapchain.init(&self.resourceMan, self.alloc, &self.context, self.extentPtr);
         self.descriptorsUpdated = false; // Mark descriptors as needing update
         std.debug.print("Swapchain recreated\n", .{});
     }
 
     pub fn renewPipeline(self: *Renderer) !void {
-        _ = c.vkDeviceWaitIdle(self.dev.gpi);
-        self.pipelineMan.deinit(self.dev.gpi);
-        self.pipelineMan = try PipelineManager.init(self.alloc, self.dev.gpi, self.swapchain.surfaceFormat.format);
+        _ = c.vkDeviceWaitIdle(self.context.gpi);
+        self.pipelineMan.deinit(self.context.gpi);
+        self.pipelineMan = try PipelineManager.init(self.alloc, &self.context, self.swapchain.surfaceFormat.format);
         std.debug.print("PipelineManager recreated\n", .{});
     }
 
     pub fn deinit(self: *Renderer) void {
-        _ = c.vkDeviceWaitIdle(self.dev.gpi);
+        _ = c.vkDeviceWaitIdle(self.context.gpi);
 
-        self.pacer.deinit(self.alloc, self.dev.gpi);
-        self.cmdMan.deinit(self.dev.gpi);
-        self.swapchain.deinit(self.dev.gpi, &self.resourceMan);
+        self.pacer.deinit(self.alloc, self.context.gpi);
+        self.cmdMan.deinit(self.context.gpi);
+        self.swapchain.deinit(self.context.gpi, &self.resourceMan);
         self.resourceMan.deinit();
-        self.descriptorManager.deinit(self.alloc, self.dev.gpi); // Added
-        self.pipelineMan.deinit(self.dev.gpi);
-        self.dev.deinit();
-
+        self.descriptorManager.deinit(self.alloc, self.context.gpi); // Added
+        self.pipelineMan.deinit(self.context.gpi);
         self.context.deinit();
     }
 };

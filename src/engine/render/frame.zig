@@ -1,5 +1,4 @@
 const c = @import("../../c.zig");
-const createCmdBuffer = @import("../render/cmd.zig").createCmdBuffer;
 const createSemaphore = @import("../sync/primitives.zig").createSemaphore;
 
 pub const Frame = struct {

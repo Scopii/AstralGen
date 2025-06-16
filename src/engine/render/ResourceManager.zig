@@ -3,20 +3,19 @@ const c = @import("../../c.zig");
 const check = @import("../error.zig").check;
 //const Allocator = std.mem.Allocator;
 const VkAllocator = @import("../vma.zig").VkAllocator;
-const RenderImage = @import("allocatedImage.zig").RenderImage;
-const createAllocatedImageInfo = @import("allocatedImage.zig").createAllocatedImageInfo;
-const createAllocatedImageViewInfo = @import("allocatedImage.zig").createAllocatedImageViewInfo;
+const RenderImage = @import("RenderImage.zig").RenderImage;
+const Context = @import("Context.zig").Context;
+const createAllocatedImageInfo = @import("RenderImage.zig").createAllocatedImageInfo;
+const createAllocatedImageViewInfo = @import("RenderImage.zig").createAllocatedImageViewInfo;
 
 pub const ResourceManager = struct {
     vkAlloc: VkAllocator,
     gpi: c.VkDevice,
 
-    pub fn init(instance: c.VkInstance, gpi: c.VkDevice, gpu: c.VkPhysicalDevice) !ResourceManager {
-        const vkAlloc = try VkAllocator.init(instance, gpi, gpu);
-
+    pub fn init(context: *const Context) !ResourceManager {
         return .{
-            .vkAlloc = vkAlloc,
-            .gpi = gpi,
+            .vkAlloc = try VkAllocator.init(context.instance, context.gpi, context.gpu),
+            .gpi = context.gpi,
         };
     }
 

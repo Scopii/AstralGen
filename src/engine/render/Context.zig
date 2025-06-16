@@ -1,21 +1,26 @@
 const std = @import("std");
 const c = @import("../../c.zig");
-const Allocator = std.mem.Allocator;
 const check = @import("../error.zig").check;
+const Allocator = std.mem.Allocator;
 
 pub const QueueFamilies = struct {
     graphics: u32,
     present: u32,
 };
 
-pub const Device = struct {
+pub const Context = struct {
+    instance: c.VkInstance,
+    surface: c.VkSurfaceKHR,
     gpu: c.VkPhysicalDevice,
+    families: QueueFamilies,
     gpi: c.VkDevice,
     graphicsQ: c.VkQueue,
     presentQ: c.VkQueue,
-    families: QueueFamilies,
 
-    pub fn init(alloc: Allocator, instance: c.VkInstance, surface: c.VkSurfaceKHR) !Device {
+    pub fn init(alloc: Allocator, window: *c.SDL_Window, debugToggle: bool) !Context {
+        const instance = try createInstance(alloc, debugToggle);
+        const surface = try createSurface(window, instance);
+
         const gpu = try pickGPU(alloc, instance);
         const families = try checkGPUfamilies(alloc, surface, gpu);
         const gpi = try createGPI(alloc, gpu, families);
@@ -26,19 +31,86 @@ pub const Device = struct {
         c.vkGetDeviceQueue(gpi, families.present, 0, &presentQ);
 
         return .{
+            .instance = instance,
+            .surface = surface,
             .gpu = gpu,
+            .families = families,
             .gpi = gpi,
             .graphicsQ = graphicsQ,
             .presentQ = presentQ,
-            .families = families,
         };
     }
-    pub fn deinit(self: *Device) void {
+
+    pub fn deinit(self: *Context) void {
         c.vkDestroyDevice(self.gpi, null);
+        c.vkDestroySurfaceKHR(self.instance, self.surface, null);
+        c.vkDestroyInstance(self.instance, null);
     }
 };
 
-pub fn pickGPU(alloc: Allocator, instance: c.VkInstance) !c.VkPhysicalDevice {
+fn createSurface(window: *c.SDL_Window, instance: c.VkInstance) !c.VkSurfaceKHR {
+    var surface: c.VkSurfaceKHR = undefined;
+    if (c.SDL_Vulkan_CreateSurface(window, @ptrCast(instance), null, @ptrCast(&surface)) == false) {
+        std.log.err("Unable to create Vulkan surface: {s}\n", .{c.SDL_GetError()});
+        return error.VkSurface;
+    }
+    return surface;
+}
+
+fn createInstance(alloc: Allocator, debugToggle: bool) !c.VkInstance {
+    // Create Arrays
+    var extensions = std.ArrayList([*c]const u8).init(alloc);
+    defer extensions.deinit();
+    var layers = std.ArrayList([*c]const u8).init(alloc);
+    defer layers.deinit();
+
+    // get required extensions
+    var extCount: u32 = 0;
+    const reqExtensions = c.SDL_Vulkan_GetInstanceExtensions(&extCount); // VK_EXT_DEBUG_REPORT_EXTENSION_NAME
+    for (0..extCount) |i| {
+        try extensions.append(reqExtensions[i]);
+    }
+
+    if (debugToggle) {
+        try extensions.append("VK_EXT_debug_utils");
+        try layers.append("VK_LAYER_KHRONOS_validation");
+        try layers.append("VK_LAYER_KHRONOS_synchronization2");
+    }
+
+    //try extensions.append("VK_KHR_portability_enumeration");
+    try extensions.append("VK_KHR_get_physical_device_properties2");
+    std.debug.print("Instance Extensions {}\n", .{extensions.items.len});
+
+    const appInf = c.VkApplicationInfo{
+        .sType = c.VK_STRUCTURE_TYPE_APPLICATION_INFO,
+        .pNext = null,
+        .pApplicationName = "AstralGen",
+        .applicationVersion = c.VK_MAKE_VERSION(1, 0, 0),
+        .pEngineName = "AstralEngine",
+        .engineVersion = c.VK_MAKE_VERSION(1, 0, 0),
+        .apiVersion = c.VK_API_VERSION_1_3,
+    };
+
+    const instanceInf = c.VkInstanceCreateInfo{
+        .sType = c.VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
+        .pNext = null,
+        .flags = 0,
+        .pApplicationInfo = &appInf,
+        .enabledLayerCount = @intCast(layers.items.len),
+        .ppEnabledLayerNames = layers.items.ptr,
+        .enabledExtensionCount = @intCast(extensions.items.len),
+        .ppEnabledExtensionNames = extensions.items.ptr,
+    };
+
+    var instance: c.VkInstance = undefined;
+    try check(c.vkCreateInstance(&instanceInf, null, &instance), "Unable to create Vulkan instance!");
+
+    return instance;
+}
+
+// DEVICE //
+
+fn pickGPU(alloc: Allocator, instance: c.VkInstance) !c.VkPhysicalDevice {
     var gpuCount: u32 = 0;
     try check(c.vkEnumeratePhysicalDevices(instance, &gpuCount, null), "Failed to enumerate GPUs");
     if (gpuCount == 0) return error.NoDevice;
@@ -75,7 +147,7 @@ pub fn checkGPU(gpu: c.VkPhysicalDevice) bool {
     return true;
 }
 
-pub fn checkGPUfeatures(alloc: Allocator, gpu: c.VkPhysicalDevice) !bool {
+fn checkGPUfeatures(alloc: Allocator, gpu: c.VkPhysicalDevice) !bool {
     var extensions: u32 = 0;
     try check(c.vkEnumerateDeviceExtensionProperties(gpu, null, &extensions, null), "Failed to enumerate device extensions");
 
@@ -100,7 +172,23 @@ pub fn checkGPUfeatures(alloc: Allocator, gpu: c.VkPhysicalDevice) !bool {
     return matched == required.len;
 }
 
-pub fn checkGPUfamilies(alloc: Allocator, surface: c.VkSurfaceKHR, gpu: c.VkPhysicalDevice) !QueueFamilies {
+fn findFamily(families: []const c.VkQueueFamilyProperties) ?u32 {
+    for (families, 0..) |family, i| {
+        if (family.queueCount > 0 and (family.queueFlags & c.VK_QUEUE_GRAPHICS_BIT != 0) and (family.queueFlags & c.VK_QUEUE_COMPUTE_BIT != 0)) return @intCast(i);
+    }
+    return null;
+}
+
+fn findPresentFamily(families: []const c.VkQueueFamilyProperties, surface: c.VkSurfaceKHR, gpu: c.VkPhysicalDevice) !?u32 {
+    for (families, 0..) |family, i| {
+        var presentSupport: c.VkBool32 = c.VK_FALSE;
+        try check(c.vkGetPhysicalDeviceSurfaceSupportKHR(gpu, @intCast(i), surface, &presentSupport), "Failed to get present support");
+        if (presentSupport == c.VK_TRUE and family.queueCount != 0) return @intCast(i);
+    }
+    return null;
+}
+
+fn checkGPUfamilies(alloc: Allocator, surface: c.VkSurfaceKHR, gpu: c.VkPhysicalDevice) !QueueFamilies {
     var familyCount: u32 = 0;
     c.vkGetPhysicalDeviceQueueFamilyProperties(gpu, &familyCount, null);
 
@@ -108,26 +196,17 @@ pub fn checkGPUfamilies(alloc: Allocator, surface: c.VkSurfaceKHR, gpu: c.VkPhys
     defer alloc.free(families);
     c.vkGetPhysicalDeviceQueueFamilyProperties(gpu, &familyCount, families.ptr);
 
-    var graphicsFamily: ?usize = null;
-    var presentFamily: ?usize = null;
+    // Check family types
+    const graphics = findFamily(families) orelse return error.NoGraphicsFamily;
+    const present = try findPresentFamily(families, surface, gpu) orelse return error.NoPresentFamily;
 
-    for (families, 0..) |family, index| {
-        if (family.queueCount > 0 and family.queueFlags & c.VK_QUEUE_GRAPHICS_BIT != 0) graphicsFamily = index;
-
-        var presentSupport: c.VkBool32 = c.VK_FALSE;
-        try check(c.vkGetPhysicalDeviceSurfaceSupportKHR(gpu, @intCast(index), surface, &presentSupport), "No present support found!");
-
-        if (family.queueCount > 0 and presentSupport == c.VK_TRUE) presentFamily = index;
-        if (graphicsFamily != null and presentFamily != null) break;
-    }
-    const familyIndices = QueueFamilies{
-        .graphics = @intCast(graphicsFamily.?),
-        .present = @intCast(presentFamily.?),
+    return QueueFamilies{
+        .graphics = graphics,
+        .present = present,
     };
-    return familyIndices;
 }
 
-pub fn createGPI(alloc: Allocator, gpu: c.VkPhysicalDevice, families: QueueFamilies) !c.VkDevice {
+fn createGPI(alloc: Allocator, gpu: c.VkPhysicalDevice, families: QueueFamilies) !c.VkDevice {
     var priority: f32 = 1.0;
     var queueInfos = std.ArrayList(c.VkDeviceQueueCreateInfo).init(alloc);
     defer queueInfos.deinit();
@@ -166,10 +245,8 @@ pub fn createGPI(alloc: Allocator, gpu: c.VkPhysicalDevice, families: QueueFamil
         .synchronization2 = c.VK_TRUE,
         .pNext = @constCast(@ptrCast(&features_vulkan12)),
     };
-    // Enable required gpu extensions
-    const gpuExtensions = [_][*c]const u8{
-        "VK_KHR_swapchain",
-    };
+
+    const gpuExtensions = [_][*c]const u8{"VK_KHR_swapchain"};
 
     const createInfo = c.VkDeviceCreateInfo{
         .sType = c.VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
@@ -182,7 +259,7 @@ pub fn createGPI(alloc: Allocator, gpu: c.VkPhysicalDevice, families: QueueFamil
         .enabledLayerCount = 0,
         .ppEnabledLayerNames = null,
     };
-
+    std.debug.print("Queues: {}\n", .{queueInfos.items.len});
     var gpi: c.VkDevice = undefined;
     try check(c.vkCreateDevice(gpu, &createInfo, null, &gpi), "Unable to create Vulkan device!");
     return gpi;

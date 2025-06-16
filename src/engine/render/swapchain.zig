@@ -2,13 +2,13 @@ const std = @import("std");
 const c = @import("../../c.zig");
 const Allocator = std.mem.Allocator;
 const check = @import("../error.zig").check;
-const Device = @import("../context/device.zig").Device;
+const Context = @import("Context.zig").Context;
 const ImageBucket = @import("image.zig").ImageBucket;
 const createImageBuckets = @import("image.zig").createImageBuckets;
 const Frame = @import("frame.zig").Frame;
 
 // COMPUTE DRAW STUFF:
-const RenderImage = @import("allocatedImage.zig").RenderImage;
+const RenderImage = @import("RenderImage.zig").RenderImage;
 const VkAllocator = @import("../vma.zig").VkAllocator;
 const ResourceManager = @import("ResourceManager.zig").ResourceManager;
 
@@ -19,13 +19,13 @@ pub const Swapchain = struct {
     surfaceFormat: c.VkSurfaceFormatKHR,
     mode: c.VkPresentModeKHR,
     extent: c.VkExtent2D,
-
     renderImage: RenderImage,
 
-    pub fn init(resourceMan: *const ResourceManager, alloc: Allocator, dev: *const Device, surface: c.VkSurfaceKHR, curExtent: *const c.VkExtent2D) !Swapchain {
-        const gpi = dev.gpi;
-        const gpu = dev.gpu;
-        const families = dev.families;
+    pub fn init(resourceMan: *const ResourceManager, alloc: Allocator, context: *const Context, curExtent: *const c.VkExtent2D) !Swapchain {
+        const gpi = context.gpi;
+        const gpu = context.gpu;
+        const families = context.families;
+        const surface = context.surface;
 
         // Get surface capabilities
         var caps: c.VkSurfaceCapabilitiesKHR = undefined;

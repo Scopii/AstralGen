@@ -3,6 +3,7 @@ const c = @import("../../c.zig");
 const check = @import("../error.zig").check;
 const Allocator = std.mem.Allocator;
 const createShaderModule = @import("../../shader/shader.zig").createShaderModule;
+const Context = @import("Context.zig").Context;
 
 pub const ComputePipeline = struct {
     handle: c.VkPipeline,
@@ -19,7 +20,8 @@ pub const PipelineManager = struct {
     graphics: GraphicsPipeline,
     compute: ComputePipeline,
 
-    pub fn init(alloc: Allocator, gpi: c.VkDevice, format: c.VkFormat) !PipelineManager {
+    pub fn init(alloc: Allocator, context: *const Context, format: c.VkFormat) !PipelineManager {
+        const gpi = context.gpi;
         //Compute
         const computeDescriptorSetLayout = try createComputeDescriptorSetLayout(gpi);
         const computePipelineLayout = try createPipelineLayout(gpi, computeDescriptorSetLayout, 1);
