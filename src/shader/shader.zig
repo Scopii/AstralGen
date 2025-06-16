@@ -4,7 +4,7 @@ const check = @import("../engine/error.zig").check;
 const Allocator = std.mem.Allocator;
 
 // Compile and load shader from source
-fn compileAndLoadShader(alloc: Allocator, srcPath: []const u8, spvPath: []const u8) ![]align(@alignOf(u32)) u8 {
+fn compileShader(alloc: Allocator, srcPath: []const u8, spvPath: []const u8) !void {
     // Compile shader using glslc
     const result = std.process.Child.run(.{
         .allocator = alloc,
@@ -20,8 +20,9 @@ fn compileAndLoadShader(alloc: Allocator, srcPath: []const u8, spvPath: []const 
         std.debug.print("glslc failed:\n{s}\n", .{result.stderr});
         return error.ShaderCompilationFailed;
     }
+}
 
-    // Load compiled shader
+fn loadShader(alloc: Allocator, spvPath: []const u8) ![]align(@alignOf(u32)) u8 {
     const file = std.fs.cwd().openFile(spvPath, .{}) catch |err| {
         std.debug.print("Failed to open compiled shader: {s}\n", .{spvPath});
         return err;
@@ -35,13 +36,14 @@ fn compileAndLoadShader(alloc: Allocator, srcPath: []const u8, spvPath: []const 
 }
 
 pub fn createShaderModule(alloc: std.mem.Allocator, srcPath: []const u8, spvPath: []const u8, gpi: c.VkDevice) !c.VkShaderModule {
-    const shaderCode = try compileAndLoadShader(alloc, srcPath, spvPath);
-    defer alloc.free(shaderCode);
+    try compileShader(alloc, srcPath, spvPath);
+    const loadedShader = try loadShader(alloc, spvPath);
+    defer alloc.free(loadedShader);
 
     const createInf = c.VkShaderModuleCreateInfo{
         .sType = c.VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
-        .codeSize = shaderCode.len,
-        .pCode = @ptrCast(@alignCast(shaderCode.ptr)),
+        .codeSize = loadedShader.len,
+        .pCode = @ptrCast(@alignCast(loadedShader.ptr)),
     };
     var shdrMod: c.VkShaderModule = undefined;
     try check(c.vkCreateShaderModule(gpi, &createInf, null, &shdrMod), "Failed to create shader module");
