@@ -43,7 +43,7 @@ pub const Renderer = struct {
         const pipelineMan = try PipelineManager.init(alloc, &context, swapchain.surfaceFormat.format);
         const cmdMan = try CmdManager.init(context.gpi, context.families.graphics);
         const pacer = try FramePacer.init(alloc, context.gpi, MAX_IN_FLIGHT, &cmdMan);
-        const descriptorManager = try DescriptorManager.init(alloc, context.gpi, pipelineMan.compute.descriptorSetLayout, @intCast(swapchain.imageBuckets.len));
+        const descriptorManager = try DescriptorManager.init(alloc, context.gpi, pipelineMan.compute.descriptorSetLayout, @intCast(swapchain.swapBuckets.len));
         const fragmentTimeStemp = try getFileTimeStamp("src/shader/shdr.frag");
         const computeTimeStemp = try getFileTimeStamp("src/shader/shdr.comp");
 
@@ -81,7 +81,7 @@ pub const Renderer = struct {
         tracyZ3.End();
 
         const tracyZ4 = ztracy.ZoneNC(@src(), "submitFrame", 0x800080FF);
-        try self.pacer.submitFrame(self.context.graphicsQ, frame, self.swapchain.imageBuckets[frame.index].rendSem);
+        try self.pacer.submitFrame(self.context.graphicsQ, frame, self.swapchain.swapBuckets[frame.index].rendSem);
         tracyZ4.End();
 
         const tracyZ5 = ztracy.ZoneNC(@src(), "Present", 0xFFC0CBFF);
@@ -125,7 +125,7 @@ pub const Renderer = struct {
         tracyZ3.End();
 
         const tracyZ4 = ztracy.ZoneNC(@src(), "submitFrame", 0x800080FF);
-        try self.pacer.submitFrame(self.context.graphicsQ, frame, self.swapchain.imageBuckets[frame.index].rendSem);
+        try self.pacer.submitFrame(self.context.graphicsQ, frame, self.swapchain.swapBuckets[frame.index].rendSem);
         tracyZ4.End();
 
         const tracyZ5 = ztracy.ZoneNC(@src(), "Present", 0xFFC0CBFF);

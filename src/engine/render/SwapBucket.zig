@@ -4,18 +4,18 @@ const Allocator = std.mem.Allocator;
 const check = @import("../error.zig").check;
 const createSemaphore = @import("../sync/primitives.zig").createSemaphore;
 
-pub const ImageBucket = struct {
+pub const SwapBucket = struct {
     image: c.VkImage,
     view: c.VkImageView,
     rendSem: c.VkSemaphore,
 
-    pub fn deinit(self: *ImageBucket, gpi: c.VkDevice) void {
+    pub fn deinit(self: *SwapBucket, gpi: c.VkDevice) void {
         c.vkDestroyImageView(gpi, self.view, null);
         c.vkDestroySemaphore(gpi, self.rendSem, null);
     }
 };
 
-pub fn createImageBuckets(alloc: Allocator, imgCount: u32, gpi: c.VkDevice, swapchain: c.VkSwapchainKHR, format: c.VkFormat) ![]ImageBucket {
+pub fn createSwapBuckets(alloc: Allocator, imgCount: u32, gpi: c.VkDevice, swapchain: c.VkSwapchainKHR, format: c.VkFormat) ![]SwapBucket {
     var count = imgCount;
 
     if (count == 0) try check(c.vkGetSwapchainImagesKHR(gpi, swapchain, &count, null), "Could not get Swapchain Images");
@@ -23,7 +23,7 @@ pub fn createImageBuckets(alloc: Allocator, imgCount: u32, gpi: c.VkDevice, swap
     defer alloc.free(images);
 
     try check(c.vkGetSwapchainImagesKHR(gpi, swapchain, &count, images.ptr), "Failed to get swapchain images");
-    const buckets = try alloc.alloc(ImageBucket, count);
+    const buckets = try alloc.alloc(SwapBucket, count);
     errdefer alloc.free(buckets); // Free if anything fails below
 
     var initCount: u32 = 0;

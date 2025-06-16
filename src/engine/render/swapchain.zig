@@ -2,18 +2,18 @@ const std = @import("std");
 const c = @import("../../c.zig");
 const Allocator = std.mem.Allocator;
 const Context = @import("Context.zig").Context;
-const ImageBucket = @import("ImageBucket.zig").ImageBucket;
+const SwapBucket = @import("SwapBucket.zig").SwapBucket;
 const Frame = @import("../sync/FramePacer.zig").Frame;
 const RenderImage = @import("RenderImage.zig").RenderImage;
 const VkAllocator = @import("../vma.zig").VkAllocator;
 const ResourceManager = @import("ResourceManager.zig").ResourceManager;
-const createImageBuckets = @import("ImageBucket.zig").createImageBuckets;
+const createSwapBuckets = @import("SwapBucket.zig").createSwapBuckets;
 const check = @import("../error.zig").check;
 
 pub const Swapchain = struct {
     alloc: Allocator,
     handle: c.VkSwapchainKHR,
-    imageBuckets: []ImageBucket,
+    swapBuckets: []SwapBucket,
     surfaceFormat: c.VkSurfaceFormatKHR,
     mode: c.VkPresentModeKHR,
     extent: c.VkExtent2D,
@@ -75,7 +75,7 @@ pub const Swapchain = struct {
 
         var realImgCount: u32 = 0;
         try check(c.vkGetSwapchainImagesKHR(gpi, handle, &realImgCount, null), "Could not get swapchain images");
-        const imageBuckets = try createImageBuckets(alloc, realImgCount, gpi, handle, surfaceFormat.format);
+        const swapBuckets = try createSwapBuckets(alloc, realImgCount, gpi, handle, surfaceFormat.format);
 
         // GPU COMPUTE DRWAING THINGS //
         const renderImage = try resourceMan.createRenderImage(extent);
@@ -86,7 +86,7 @@ pub const Swapchain = struct {
             .surfaceFormat = surfaceFormat,
             .mode = mode,
             .extent = extent,
-            .imageBuckets = imageBuckets,
+            .swapBuckets = swapBuckets,
             .renderImage = renderImage,
         };
     }
@@ -94,10 +94,10 @@ pub const Swapchain = struct {
     pub fn deinit(self: *Swapchain, gpi: c.VkDevice, resourceMan: *const ResourceManager) void {
         resourceMan.destroyRenderImage(self.renderImage);
 
-        for (0..self.imageBuckets.len) |i| {
-            self.imageBuckets[i].deinit(gpi);
+        for (0..self.swapBuckets.len) |i| {
+            self.swapBuckets[i].deinit(gpi);
         }
-        self.alloc.free(self.imageBuckets);
+        self.alloc.free(self.swapBuckets);
         c.vkDestroySwapchainKHR(gpi, self.handle, null);
     }
 
@@ -114,7 +114,7 @@ pub const Swapchain = struct {
         const presentInfo = c.VkPresentInfoKHR{
             .sType = c.VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
             .waitSemaphoreCount = 1,
-            .pWaitSemaphores = &self.imageBuckets[frame.index].rendSem,
+            .pWaitSemaphores = &self.swapBuckets[frame.index].rendSem,
             .swapchainCount = 1,
             .pSwapchains = &self.handle,
             .pImageIndices = &frame.index,

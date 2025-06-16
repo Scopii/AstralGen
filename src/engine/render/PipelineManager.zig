@@ -9,30 +9,29 @@ pub const ComputePipeline = struct {
     handle: c.VkPipeline,
     layout: c.VkPipelineLayout,
     descriptorSetLayout: c.VkDescriptorSetLayout,
-    cache: c.VkPipelineCache,
 };
 
 pub const GraphicsPipeline = struct {
     handle: c.VkPipeline,
     layout: c.VkPipelineLayout,
     format: c.VkFormat,
-    cache: c.VkPipelineCache,
 };
 
 pub const PipelineManager = struct {
     graphics: GraphicsPipeline,
     compute: ComputePipeline,
+    cache: c.VkPipelineCache,
 
     pub fn init(alloc: Allocator, context: *const Context, format: c.VkFormat) !PipelineManager {
         const gpi = context.gpi;
+        const cache = try createPipelineCache(gpi);
 
         //Compute
         const computeDescriptorSetLayout = try createComputeDescriptorSetLayout(gpi);
         const computePipelineLayout = try createPipelineLayout(gpi, computeDescriptorSetLayout, 1);
         const computeShaderModule = try createShaderModule(alloc, "src/shader/shdr.comp", "zig-out/shader/comp.spv", gpi);
         defer c.vkDestroyShaderModule(gpi, computeShaderModule, null);
-        const computeCache = try createPipelineCache(gpi);
-        const computePipeline = try createComputePipeline(gpi, computePipelineLayout, computeShaderModule, computeCache);
+        const computePipeline = try createComputePipeline(gpi, computePipelineLayout, computeShaderModule, cache);
 
         //Graphics
         const vertShdr = try createShaderModule(alloc, "src/shader/shdr.vert", "zig-out/shader/vert.spv", gpi);
@@ -58,22 +57,20 @@ pub const PipelineManager = struct {
         };
 
         const graphicsPipelineLayout = try createPipelineLayout(gpi, null, 0);
-        const graphicsCache = try createPipelineCache(gpi);
-        const graphicsPipeline = try createGraphicsPipeline(gpi, graphicsPipelineLayout, &shaderStages, format, graphicsCache);
+        const graphicsPipeline = try createGraphicsPipeline(gpi, graphicsPipelineLayout, &shaderStages, format, cache);
 
         return .{
             .compute = .{
                 .handle = computePipeline,
                 .layout = computePipelineLayout,
                 .descriptorSetLayout = computeDescriptorSetLayout,
-                .cache = computeCache,
             },
             .graphics = .{
                 .handle = graphicsPipeline,
                 .layout = graphicsPipelineLayout,
                 .format = format,
-                .cache = graphicsCache,
             },
+            .cache = cache,
         };
     }
 
@@ -81,18 +78,18 @@ pub const PipelineManager = struct {
         c.vkDestroyPipeline(gpi, self.compute.handle, null);
         c.vkDestroyPipelineLayout(gpi, self.compute.layout, null);
         c.vkDestroyDescriptorSetLayout(gpi, self.compute.descriptorSetLayout, null);
-        c.vkDestroyPipelineCache(gpi, self.compute.cache, null);
 
         c.vkDestroyPipeline(gpi, self.graphics.handle, null);
         c.vkDestroyPipelineLayout(gpi, self.graphics.layout, null);
-        c.vkDestroyPipelineCache(gpi, self.graphics.cache, null);
+
+        c.vkDestroyPipelineCache(gpi, self.cache, null);
     }
 
     pub fn refreshComputePipeline(self: *PipelineManager, alloc: Allocator, gpi: c.VkDevice) !void {
         c.vkDestroyPipeline(gpi, self.compute.handle, null);
         const computeShaderModule = try createShaderModule(alloc, "src/shader/shdr.comp", "zig-out/shader/comp.spv", gpi);
         defer c.vkDestroyShaderModule(gpi, computeShaderModule, null);
-        self.compute.handle = try createComputePipeline(gpi, self.compute.layout, computeShaderModule, self.compute.cache);
+        self.compute.handle = try createComputePipeline(gpi, self.compute.layout, computeShaderModule, self.cache);
         std.debug.print("Compute Pipeline refreshed\n", .{});
     }
 
@@ -119,7 +116,7 @@ pub const PipelineManager = struct {
                 .pSpecializationInfo = null, // for constants
             },
         };
-        self.graphics.handle = try createGraphicsPipeline(gpi, self.graphics.layout, &shaderStages, self.graphics.format, self.graphics.cache);
+        self.graphics.handle = try createGraphicsPipeline(gpi, self.graphics.layout, &shaderStages, self.graphics.format, self.cache);
         std.debug.print("Graphics Pipeline refreshed\n", .{});
     }
 };
