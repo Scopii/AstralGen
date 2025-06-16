@@ -1,16 +1,14 @@
 const std = @import("std");
 const c = @import("../../c.zig");
 const Allocator = std.mem.Allocator;
-const check = @import("../error.zig").check;
 const Context = @import("Context.zig").Context;
-const ImageBucket = @import("image.zig").ImageBucket;
-const createImageBuckets = @import("image.zig").createImageBuckets;
-const Frame = @import("frame.zig").Frame;
-
-// COMPUTE DRAW STUFF:
+const ImageBucket = @import("ImageBucket.zig").ImageBucket;
+const Frame = @import("../sync/FramePacer.zig").Frame;
 const RenderImage = @import("RenderImage.zig").RenderImage;
 const VkAllocator = @import("../vma.zig").VkAllocator;
 const ResourceManager = @import("ResourceManager.zig").ResourceManager;
+const createImageBuckets = @import("ImageBucket.zig").createImageBuckets;
+const check = @import("../error.zig").check;
 
 pub const Swapchain = struct {
     alloc: Allocator,

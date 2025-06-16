@@ -1,10 +1,9 @@
 const std = @import("std");
 const c = @import("../../c.zig");
-const check = @import("../error.zig").check;
-//const Allocator = std.mem.Allocator;
 const VkAllocator = @import("../vma.zig").VkAllocator;
 const RenderImage = @import("RenderImage.zig").RenderImage;
 const Context = @import("Context.zig").Context;
+const check = @import("../error.zig").check;
 const createAllocatedImageInfo = @import("RenderImage.zig").createAllocatedImageInfo;
 const createAllocatedImageViewInfo = @import("RenderImage.zig").createAllocatedImageViewInfo;
 

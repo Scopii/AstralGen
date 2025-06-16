@@ -1,9 +1,9 @@
 const std = @import("std");
 const c = @import("../../c.zig");
-const check = @import("../error.zig").check;
 const Allocator = std.mem.Allocator;
-const createShaderModule = @import("../../shader/shader.zig").createShaderModule;
 const Context = @import("Context.zig").Context;
+const check = @import("../error.zig").check;
+const createShaderModule = @import("../../shader/shader.zig").createShaderModule;
 
 pub const ComputePipeline = struct {
     handle: c.VkPipeline,

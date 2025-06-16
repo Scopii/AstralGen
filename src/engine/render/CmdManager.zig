@@ -1,6 +1,6 @@
 const std = @import("std");
 const c = @import("../../c.zig");
-const Swapchain = @import("swapchain.zig").Swapchain;
+const Swapchain = @import("Swapchain.zig").Swapchain;
 const GraphicsPipeline = @import("PipelineManager.zig").GraphicsPipeline;
 const ComputePipeline = @import("PipelineManager.zig").ComputePipeline;
 const check = @import("../error.zig").check;

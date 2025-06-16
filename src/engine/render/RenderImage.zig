@@ -1,7 +1,7 @@
 const std = @import("std");
 const c = @import("../../c.zig");
-const check = @import("../error.zig").check;
 const VkAllocator = @import("../vma.zig").VkAllocator;
+const check = @import("../error.zig").check;
 
 pub const RenderImage = struct {
     allocation: c.VmaAllocation,

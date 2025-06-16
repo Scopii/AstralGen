@@ -1,7 +1,7 @@
 // Imports
 const std = @import("std");
-const App = @import("core/app.zig").App;
-const Renderer = @import("engine/renderer.zig").Renderer;
+const App = @import("core/App.zig").App;
+const Renderer = @import("engine/Renderer.zig").Renderer;
 const zjobs = @import("zjobs");
 
 // Re-Formats
