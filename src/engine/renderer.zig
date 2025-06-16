@@ -4,10 +4,9 @@ const ztracy = @import("ztracy");
 
 const DEBUG_TOGGLE = @import("../settings.zig").DEBUG_TOGGLE;
 
-const createInstance = @import("context/instance.zig").createInstance;
-const createSurface = @import("context/surface.zig").createSurface;
 const check = @import("error.zig").check;
 
+const Context = @import("context/Context.zig").Context;
 const Device = @import("context/device.zig").Device;
 const Swapchain = @import("render/swapchain.zig").Swapchain;
 const FramePacer = @import("sync/framePacer.zig").FramePacer;
@@ -32,8 +31,9 @@ const Allocator = std.mem.Allocator;
 pub const Renderer = struct {
     alloc: Allocator,
     extentPtr: *c.VkExtent2D,
-    instance: c.VkInstance,
-    surface: c.VkSurfaceKHR,
+
+    context: Context,
+
     dev: Device,
 
     resourceMan: ResourceManager,
@@ -48,12 +48,12 @@ pub const Renderer = struct {
     descriptorsUpdated: bool,
 
     pub fn init(alloc: Allocator, window: *c.SDL_Window, extent: *c.VkExtent2D) !Renderer {
-        const instance = try createInstance(alloc, DEBUG_TOGGLE);
-        const surface = try createSurface(window, instance);
-        const dev = try Device.init(alloc, instance, surface);
+        const context = try Context.init(alloc, window, DEBUG_TOGGLE);
 
-        const resourceMan = try ResourceManager.init(instance, dev.gpi, dev.gpu);
-        const swapchain = try Swapchain.init(&resourceMan, alloc, &dev, surface, extent);
+        const dev = try Device.init(alloc, context.instance, context.surface);
+
+        const resourceMan = try ResourceManager.init(context.instance, dev.gpi, dev.gpu);
+        const swapchain = try Swapchain.init(&resourceMan, alloc, &dev, context.surface, extent);
         const pipelineMan = try PipelineManager.init(alloc, dev.gpi, swapchain.surfaceFormat.format);
 
         const cmdMan = try CmdManager.init(dev.gpi, dev.families.graphics);
@@ -67,8 +67,7 @@ pub const Renderer = struct {
         return .{
             .alloc = alloc,
             .extentPtr = extent,
-            .instance = instance,
-            .surface = surface,
+            .context = context,
             .dev = dev,
             .resourceMan = resourceMan,
             .descriptorManager = descriptorManager,
@@ -113,7 +112,7 @@ pub const Renderer = struct {
     }
 
     pub fn drawComputeRenderer(self: *Renderer) !void {
-        //try self.checkShaderUpdate();
+        try self.checkShaderUpdate();
 
         // Update descriptors only once when first needed
         if (!self.descriptorsUpdated) {
@@ -173,16 +172,16 @@ pub const Renderer = struct {
     pub fn renewSwapchain(self: *Renderer) !void {
         _ = c.vkDeviceWaitIdle(self.dev.gpi);
         self.swapchain.deinit(self.dev.gpi, &self.resourceMan);
-        self.swapchain = try Swapchain.init(&self.resourceMan, self.alloc, &self.dev, self.surface, self.extentPtr);
+        self.swapchain = try Swapchain.init(&self.resourceMan, self.alloc, &self.dev, self.context.surface, self.extentPtr);
         self.descriptorsUpdated = false; // Mark descriptors as needing update
         std.debug.print("Swapchain recreated\n", .{});
     }
 
     pub fn renewPipeline(self: *Renderer) !void {
         _ = c.vkDeviceWaitIdle(self.dev.gpi);
-        //self.pipe.deinit(self.dev.gpi);
-        //self.pipe = try Pipeline.init(self.alloc, self.dev.gpi, self.swapchain.surfaceFormat.format);
-        std.debug.print("Pipeline recreated\n", .{});
+        self.pipelineMan.deinit(self.dev.gpi);
+        self.pipelineMan = try PipelineManager.init(self.alloc, self.dev.gpi, self.swapchain.surfaceFormat.format);
+        std.debug.print("PipelineManager recreated\n", .{});
     }
 
     pub fn deinit(self: *Renderer) void {
@@ -196,8 +195,7 @@ pub const Renderer = struct {
         self.pipelineMan.deinit(self.dev.gpi);
         self.dev.deinit();
 
-        c.vkDestroySurfaceKHR(self.instance, self.surface, null);
-        c.vkDestroyInstance(self.instance, null);
+        self.context.deinit();
     }
 };
 

@@ -1,9 +1,36 @@
 const std = @import("std");
 const c = @import("../../c.zig");
-const Allocator = std.mem.Allocator;
 const check = @import("../error.zig").check;
+const Allocator = std.mem.Allocator;
 
-pub fn createInstance(alloc: Allocator, debugToggle: bool) !c.VkInstance {
+pub const Context = struct {
+    instance: c.VkInstance,
+    surface: c.VkSurfaceKHR,
+
+    pub fn init(alloc: Allocator, window: *c.SDL_Window, debugToggle: bool) !Context {
+        const instance = try createInstance(alloc, debugToggle);
+        return .{
+            .instance = instance,
+            .surface = try createSurface(window, instance),
+        };
+    }
+
+    pub fn deinit(self: *Context) void {
+        c.vkDestroySurfaceKHR(self.instance, self.surface, null);
+        c.vkDestroyInstance(self.instance, null);
+    }
+};
+
+fn createSurface(window: *c.SDL_Window, instance: c.VkInstance) !c.VkSurfaceKHR {
+    var surface: c.VkSurfaceKHR = undefined;
+    if (c.SDL_Vulkan_CreateSurface(window, @ptrCast(instance), null, @ptrCast(&surface)) == false) {
+        std.log.err("Unable to create Vulkan surface: {s}\n", .{c.SDL_GetError()});
+        return error.VkSurface;
+    }
+    return surface;
+}
+
+fn createInstance(alloc: Allocator, debugToggle: bool) !c.VkInstance {
     // Create Arrays
     var extensions = std.ArrayList([*c]const u8).init(alloc);
     defer extensions.deinit();
