@@ -118,7 +118,6 @@ pub const Renderer = struct {
             &self.swapchain,
             frame.cmdBuff,
             frame.index,
-            self.extentPtr.*,
             &self.pipelineMan.compute,
             self.descriptorManager.sets[frame.index],
         );
@@ -166,7 +165,7 @@ pub const Renderer = struct {
         _ = c.vkDeviceWaitIdle(self.context.gpi);
         self.swapchain.deinit(self.context.gpi, &self.resourceMan);
         self.swapchain = try Swapchain.init(&self.resourceMan, self.alloc, &self.context, self.extentPtr);
-        self.descriptorsUpdated = false; // Mark descriptors as needing update
+        self.descriptorManager.updateAllDescriptorSets(self.context.gpi, self.swapchain.renderImage.view);
         std.debug.print("Swapchain recreated\n", .{});
     }
 
@@ -186,7 +185,7 @@ pub const Renderer = struct {
         self.cmdMan.deinit(self.context.gpi);
         self.swapchain.deinit(self.context.gpi, &self.resourceMan);
         self.resourceMan.deinit();
-        self.descriptorManager.deinit(self.alloc, self.context.gpi); // Added
+        self.descriptorManager.deinit(self.context.gpi);
         self.pipelineMan.deinit(self.context.gpi);
         self.context.deinit();
     }

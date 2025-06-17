@@ -34,8 +34,8 @@ pub const CmdManager = struct {
 fn createCmdPool(gpi: c.VkDevice, familyIndex: u32) !c.VkCommandPool {
     const poolInf = c.VkCommandPoolCreateInfo{
         .sType = c.VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
-        .flags = c.VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT |
-            c.VK_COMMAND_POOL_CREATE_TRANSIENT_BIT, // Add transient flag for frequent reuse
+        .flags = c.VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT | //Allow individual rerecording of cmds, without this they have to be reset together
+            c.VK_COMMAND_POOL_CREATE_TRANSIENT_BIT, // Hint that cmd buffers are rerecorded often
         .queueFamilyIndex = familyIndex,
     };
     var pool: c.VkCommandPool = undefined;
@@ -47,17 +47,13 @@ pub fn recordComputeCmdBuffer(
     swapchain: *Swapchain,
     cmd: c.VkCommandBuffer,
     imageIndex: u32,
-    extent: c.VkExtent2D,
-    computePipe: *const ComputePipeline, // Added
-    descriptorSet: c.VkDescriptorSet, // Added
+    computePipe: *const ComputePipeline,
+    descriptorSet: c.VkDescriptorSet,
 ) !void {
-    swapchain.extent.width = swapchain.renderImage.extent3d.width;
-    swapchain.extent.height = swapchain.renderImage.extent3d.height;
-
     const beginInf = c.VkCommandBufferBeginInfo{
         .sType = c.VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-        //.flags = c.VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT, // Hint to driver
-        .flags = c.VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT, // Allow re-use
+        .flags = c.VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT, // Hint to driver
+        //.flags = c.VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT, // Allow re-use
     };
     try check(c.vkBeginCommandBuffer(cmd, &beginInf), "could not Begin CmdBuffer");
 
@@ -65,9 +61,9 @@ pub fn recordComputeCmdBuffer(
     // we will overwrite it all so we dont care about what was the older layout
     const imageBarrier = c.VkImageMemoryBarrier2{
         .sType = c.VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-        .srcStageMask = c.VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
-        .srcAccessMask = c.VK_ACCESS_2_MEMORY_WRITE_BIT,
-        .dstStageMask = c.VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+        .srcStageMask = c.VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
+        .srcAccessMask = 0, // c.VK_ACCESS_2_MEMORY_WRITE_BIT,
+        .dstStageMask = c.VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
         .dstAccessMask = c.VK_ACCESS_2_MEMORY_WRITE_BIT | c.VK_ACCESS_2_MEMORY_READ_BIT,
         .oldLayout = c.VK_IMAGE_LAYOUT_UNDEFINED,
         .newLayout = c.VK_IMAGE_LAYOUT_GENERAL,
@@ -97,13 +93,13 @@ pub fn recordComputeCmdBuffer(
     const groupCountY = (swapchain.renderImage.extent3d.height + 7) / 8;
     c.vkCmdDispatch(cmd, groupCountX, groupCountY, 1);
 
-    // transition the draw image and the swapchain image into their correct transfer layouts
+    // Barrier 2 & 3: Transition renderImage to Transfer Src and swapchain image to Transfer Dst
     const imageBarrier2 = c.VkImageMemoryBarrier2{
         .sType = c.VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-        .srcStageMask = c.VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
-        .srcAccessMask = c.VK_ACCESS_2_MEMORY_WRITE_BIT,
-        .dstStageMask = c.VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
-        .dstAccessMask = c.VK_ACCESS_2_MEMORY_WRITE_BIT | c.VK_ACCESS_2_MEMORY_READ_BIT,
+        .srcStageMask = c.VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+        .srcAccessMask = c.VK_ACCESS_2_SHADER_WRITE_BIT,
+        .dstStageMask = c.VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+        .dstAccessMask = c.VK_ACCESS_2_TRANSFER_READ_BIT,
         .oldLayout = c.VK_IMAGE_LAYOUT_GENERAL,
         .newLayout = c.VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
         .srcQueueFamilyIndex = c.VK_QUEUE_FAMILY_IGNORED,
@@ -127,10 +123,10 @@ pub fn recordComputeCmdBuffer(
 
     const imageBarrier3 = c.VkImageMemoryBarrier2{
         .sType = c.VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-        .srcStageMask = c.VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
-        .srcAccessMask = c.VK_ACCESS_2_MEMORY_WRITE_BIT,
-        .dstStageMask = c.VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
-        .dstAccessMask = c.VK_ACCESS_2_MEMORY_WRITE_BIT | c.VK_ACCESS_2_MEMORY_READ_BIT,
+        .srcStageMask = c.VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
+        .srcAccessMask = 0,
+        .dstStageMask = c.VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+        .dstAccessMask = c.VK_ACCESS_2_TRANSFER_WRITE_BIT,
         .oldLayout = c.VK_IMAGE_LAYOUT_UNDEFINED,
         .newLayout = c.VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
         .srcQueueFamilyIndex = c.VK_QUEUE_FAMILY_IGNORED,
@@ -152,14 +148,14 @@ pub fn recordComputeCmdBuffer(
     };
     c.vkCmdPipelineBarrier2(cmd, &depInfo3);
 
-    copyImageToImage(cmd, swapchain.renderImage.image, swapchain.swapBuckets[imageIndex].image, extent, swapchain.extent);
+    copyImageToImage(cmd, swapchain.renderImage.image, swapchain.swapBuckets[imageIndex].image, swapchain.extent, swapchain.extent);
 
     const imageBarrier4 = c.VkImageMemoryBarrier2{
         .sType = c.VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-        .srcStageMask = c.VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
-        .srcAccessMask = c.VK_PIPELINE_STAGE_2_COPY_BIT, // VK_ACCESS_2_MEMORY_WRITE_BIT
-        .dstStageMask = c.VK_ACCESS_2_TRANSFER_WRITE_BIT, //VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT
-        .dstAccessMask = 0, //c.VK_ACCESS_2_MEMORY_WRITE_BIT | c.VK_ACCESS_2_MEMORY_READ_BIT
+        .srcStageMask = c.VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+        .srcAccessMask = c.VK_ACCESS_2_TRANSFER_WRITE_BIT,
+        .dstStageMask = c.VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT,
+        .dstAccessMask = 0,
         .oldLayout = c.VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
         .newLayout = c.VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
         .srcQueueFamilyIndex = c.VK_QUEUE_FAMILY_IGNORED,

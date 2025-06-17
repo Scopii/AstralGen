@@ -60,14 +60,14 @@ pub const FramePacer = struct {
                     .sType = c.VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
                     .semaphore = null,
                     .value = 0,
-                    .stageMask = c.VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT,
+                    .stageMask = c.VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT, // Was ALL_GRAPHICS_BIT
                     .deviceIndex = 0,
                 },
                 c.VkSemaphoreSubmitInfo{
                     .sType = c.VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
                     .semaphore = null,
                     .value = 0,
-                    .stageMask = c.VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, // Was ALL_GRAPHICS_BIT
+                    .stageMask = c.VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, // Was ALL_GRAPHICS_BIT then COLOR_ATTACHMENT_OUTPUT_BIT
                     .deviceIndex = 0,
                 },
             },

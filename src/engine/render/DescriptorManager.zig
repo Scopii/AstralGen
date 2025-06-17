@@ -3,8 +3,8 @@ const c = @import("../../c.zig");
 const check = @import("../error.zig").check;
 const Allocator = std.mem.Allocator;
 
-
 pub const DescriptorManager = struct {
+    alloc: Allocator,
     pool: c.VkDescriptorPool,
     sets: []c.VkDescriptorSet,
 
@@ -43,43 +43,43 @@ pub const DescriptorManager = struct {
         try check(c.vkAllocateDescriptorSets(gpi, &allocInfo, sets.ptr), "Failed to allocate descriptor sets");
 
         return .{
+            .alloc = alloc,
             .pool = pool,
             .sets = sets,
         };
     }
 
-    pub fn updateDescriptorSets(self: *DescriptorManager, gpi: c.VkDevice, imageViews: []c.VkImageView) void {
-        // This assumes you want to update all sets with the first view if called this way,
-        // or you can adapt it as needed. For this specific problem, the new function is better.
-        if (imageViews.len > 0) {
-            self.updateAllDescriptorSets(gpi, imageViews[0]);
-        }
-    }
-
     pub fn updateAllDescriptorSets(self: *DescriptorManager, gpi: c.VkDevice, imageView: c.VkImageView) void {
-        for (self.sets) |set| {
-            const imageInfo = c.VkDescriptorImageInfo{
+        // Batch all descriptor updates for better performance
+        const imageInfos = self.alloc.alloc(c.VkDescriptorImageInfo, self.sets.len) catch unreachable;
+        defer self.alloc.free(imageInfos);
+
+        const writeDescriptors = self.alloc.alloc(c.VkWriteDescriptorSet, self.sets.len) catch unreachable;
+        defer self.alloc.free(writeDescriptors);
+
+        for (self.sets, 0..) |set, i| {
+            imageInfos[i] = c.VkDescriptorImageInfo{
                 .sampler = null,
                 .imageView = imageView,
                 .imageLayout = c.VK_IMAGE_LAYOUT_GENERAL,
             };
 
-            const writeDescriptor = c.VkWriteDescriptorSet{
+            writeDescriptors[i] = c.VkWriteDescriptorSet{
                 .sType = c.VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
                 .dstSet = set,
                 .dstBinding = 0,
                 .dstArrayElement = 0,
                 .descriptorType = c.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
                 .descriptorCount = 1,
-                .pImageInfo = &imageInfo,
+                .pImageInfo = &imageInfos[i],
             };
-
-            c.vkUpdateDescriptorSets(gpi, 1, &writeDescriptor, 0, null);
         }
-    }
 
-    pub fn deinit(self: *DescriptorManager, alloc: Allocator, gpi: c.VkDevice) void {
+        // Single batch update instead of multiple calls
+        c.vkUpdateDescriptorSets(gpi, @intCast(writeDescriptors.len), writeDescriptors.ptr, 0, null);
+    }
+    pub fn deinit(self: *DescriptorManager, gpi: c.VkDevice) void {
         c.vkDestroyDescriptorPool(gpi, self.pool, null);
-        alloc.free(self.sets);
+        self.alloc.free(self.sets);
     }
 };
