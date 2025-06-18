@@ -26,4 +26,8 @@ pub fn main() !void {
         //try renderer.draw();
         try renderer.drawComputeRenderer();
     }
+
+    //const stdout = std.io.getStdOut().writer();
+    //_ = try stdout.write("Press Enter to exit...\n");
+    //_ = std.io.getStdIn().reader().readByte() catch {};
 }

@@ -44,8 +44,8 @@ pub const Renderer = struct {
         const cmdMan = try CmdManager.init(context.gpi, context.families.graphics);
         const pacer = try FramePacer.init(alloc, context.gpi, MAX_IN_FLIGHT, &cmdMan);
         const descriptorManager = try DescriptorManager.init(alloc, context.gpi, pipelineMan.compute.descriptorSetLayout, @intCast(swapchain.swapBuckets.len));
-        const fragmentTimeStemp = try getFileTimeStamp("src/shader/shdr.frag");
-        const computeTimeStemp = try getFileTimeStamp("src/shader/shdr.comp");
+        const fragmentTimeStemp = try getFileTimeStamp(alloc, "src/shader/shdr.frag");
+        const computeTimeStemp = try getFileTimeStamp(alloc, "src/shader/shdr.comp");
 
         return .{
             .alloc = alloc,
@@ -139,7 +139,7 @@ pub const Renderer = struct {
 
     pub fn checkShaderUpdate(self: *Renderer) !void {
         const tracyZ1 = ztracy.ZoneNC(@src(), "checkShaderUpdate", 0x0000FFFF);
-        const timeStamp = try getFileTimeStamp("src/shader/shdr.frag");
+        const timeStamp = try getFileTimeStamp(self.alloc, "src/shader/shdr.frag");
         if (timeStamp != self.fragmentTimeStemp) {
             self.fragmentTimeStemp = timeStamp;
             try self.updateGraphics();
@@ -151,7 +151,7 @@ pub const Renderer = struct {
 
     pub fn checkComputeShaderUpdate(self: *Renderer) !void {
         const tracyZ1 = ztracy.ZoneNC(@src(), "checkShaderUpdate", 0x0000FFFF);
-        const timeStamp = try getFileTimeStamp("src/shader/shdr.comp");
+        const timeStamp = try getFileTimeStamp(self.alloc, "src/shader/shdr.comp");
         if (timeStamp != self.computeTimeStemp) {
             self.computeTimeStemp = timeStamp;
             try self.updateCompute();
@@ -191,9 +191,24 @@ pub const Renderer = struct {
     }
 };
 
-pub fn getFileTimeStamp(src: []const u8) !i128 {
+pub fn getFileTimeStamp(alloc: Allocator, src: []const u8) !i128 {
+    // Use the helper to get the full, correct path
+    const abs_path = try resolveAssetPath(alloc, src);
+    defer alloc.free(abs_path);
+
     const cwd = std.fs.cwd();
-    const stat = try cwd.statFile(src);
+    const stat = try cwd.statFile(abs_path);
     const lastModified: i128 = stat.mtime;
     return lastModified;
+}
+
+pub fn resolveAssetPath(alloc: Allocator, asset_path: []const u8) ![]u8 {
+    const exe_dir = try std.fs.selfExeDirPathAlloc(alloc);
+    defer alloc.free(exe_dir);
+
+    // Project root (up two levels from zig-out/bin)
+    const project_root = try std.fs.path.resolve(alloc, &[_][]const u8{ exe_dir, "..", ".." });
+    defer alloc.free(project_root);
+
+    return std.fs.path.join(alloc, &[_][]const u8{ project_root, asset_path });
 }
