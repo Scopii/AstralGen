@@ -43,11 +43,20 @@ fn createCmdPool(gpi: c.VkDevice, familyIndex: u32) !c.VkCommandPool {
     return pool;
 }
 
-fn createPipelineBarrier2(cmd: c.VkCommandBuffer, barrierCount: u32, barrier: *const c.VkImageMemoryBarrier2) void {
+fn createPipelineBarrier2(cmd: c.VkCommandBuffer, barrier: *const c.VkImageMemoryBarrier2) void {
     const depInf = c.VkDependencyInfo{
         .sType = c.VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-        .imageMemoryBarrierCount = barrierCount,
+        .imageMemoryBarrierCount = 1,
         .pImageMemoryBarriers = barrier,
+    };
+    c.vkCmdPipelineBarrier2(cmd, &depInf);
+}
+
+fn createPipelineBarriers2(cmd: c.VkCommandBuffer, barriers: []const c.VkImageMemoryBarrier2) void {
+    const depInf = c.VkDependencyInfo{
+        .sType = c.VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+        .imageMemoryBarrierCount = @intCast(barriers.len),
+        .pImageMemoryBarriers = barriers.ptr,
     };
     c.vkCmdPipelineBarrier2(cmd, &depInf);
 }
@@ -121,7 +130,7 @@ pub fn recComputeCmd(
         swapchain.renderImage.image,
         createSubresourceRange(c.VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1),
     );
-    createPipelineBarrier2(cmd, 1, &imageBarrier);
+    createPipelineBarrier2(cmd, &imageBarrier);
 
     c.vkCmdBindPipeline(cmd, c.VK_PIPELINE_BIND_POINT_COMPUTE, computePipe.handle);
     c.vkCmdBindDescriptorSets(cmd, c.VK_PIPELINE_BIND_POINT_COMPUTE, computePipe.layout, 0, 1, &descriptorSet, 0, null);
@@ -140,7 +149,6 @@ pub fn recComputeCmd(
         swapchain.renderImage.image,
         createSubresourceRange(c.VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1),
     );
-    createPipelineBarrier2(cmd, 1, &imageBarrier2);
 
     const imageBarrier3 = createImageMemoryBarrier2(
         c.VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
@@ -152,7 +160,7 @@ pub fn recComputeCmd(
         swapchain.swapBuckets[imageIndex].image,
         createSubresourceRange(c.VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1),
     );
-    createPipelineBarrier2(cmd, 1, &imageBarrier3);
+    createPipelineBarriers2(cmd, &[_]c.VkImageMemoryBarrier2{ imageBarrier2, imageBarrier3 });
 
     copyImageToImage(cmd, swapchain.renderImage.image, swapchain.swapBuckets[imageIndex].image, swapchain.extent, swapchain.extent);
 
@@ -166,7 +174,7 @@ pub fn recComputeCmd(
         swapchain.swapBuckets[imageIndex].image,
         createSubresourceRange(c.VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1),
     );
-    createPipelineBarrier2(cmd, 1, &imageBarrier4);
+    createPipelineBarrier2(cmd, &imageBarrier4);
 
     try check(c.vkEndCommandBuffer(cmd), "Could not End Cmd Buffer");
 }
