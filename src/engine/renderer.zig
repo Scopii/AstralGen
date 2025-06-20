@@ -65,20 +65,23 @@ pub const Renderer = struct {
         try self.checkShaderUpdate();
 
         try self.pacer.waitForGPU(self.context.gpi);
-        const frame = self.pacer.getFrame();
 
-        if (try self.swapchain.acquireImage(self.context.gpi, frame.acquired) == false) {
+        const frameIndex = self.pacer.curFrame;
+        const cmd = self.cmdMan.cmds[frameIndex];
+
+        if (try self.swapchain.acquireImage(self.context.gpi, self.pacer.acqSems[frameIndex]) == false) {
             try self.renewSwapchain();
             return;
         }
 
         const swapIndex = self.swapchain.index;
+        const rendSem = self.swapchain.swapBuckets[swapIndex].rendSem;
 
-        try self.cmdMan.recCmd(&self.swapchain, &self.pipelineMan.graphics);
+        try self.cmdMan.recCmd(cmd, &self.swapchain, &self.pipelineMan.graphics);
 
-        try self.pacer.submitFrame(self.context.graphicsQ, self.cmdMan.cmds[swapIndex]);
+        try self.pacer.submitFrame(self.context.graphicsQ, cmd, rendSem);
 
-        if (try self.swapchain.present(self.context.presentQ, frame.rendered)) {
+        if (try self.swapchain.present(self.context.presentQ, rendSem)) {
             try self.renewSwapchain();
             return;
         }

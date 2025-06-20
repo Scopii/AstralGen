@@ -110,9 +110,8 @@ pub const CmdManager = struct {
         try check(c.vkEndCommandBuffer(cmd), "Could not End Cmd Buffer");
     }
 
-    pub fn recCmd(self: *CmdManager, swapchain: *Swapchain, pipeline: *GraphicsPipeline) !void {
+    pub fn recCmd(_: *CmdManager, cmd: c.VkCommandBuffer, swapchain: *Swapchain, pipeline: *GraphicsPipeline) !void {
         const index = swapchain.index;
-        const cmd = self.cmds[index];
 
         const beginInf = c.VkCommandBufferBeginInfo{
             .sType = c.VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
