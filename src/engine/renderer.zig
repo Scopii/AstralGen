@@ -15,8 +15,8 @@ const CmdManager = @import("render/CmdManager.zig").CmdManager;
 const PipelineManager = @import("render/PipelineManager.zig").PipelineManager;
 const ResourceManager = @import("render/ResourceManager.zig").ResourceManager;
 const DescriptorManager = @import("render/DescriptorManager.zig").DescriptorManager;
-const recordComputeCmdBuffer = @import("render/CmdManager.zig").recordComputeCmdBuffer;
-const recCmdBuffer = @import("render/CmdManager.zig").recCmdBuffer;
+const recComputeCmd = @import("render/CmdManager.zig").recComputeCmd;
+const recCmd = @import("render/CmdManager.zig").recCmd;
 
 pub const MAX_IN_FLIGHT: u8 = 3;
 
@@ -76,8 +76,8 @@ pub const Renderer = struct {
         }
         tracyZ2.End();
 
-        const tracyZ3 = ztracy.ZoneNC(@src(), "recCmdBuffer", 0x00A86BFF);
-        try recCmdBuffer(&self.swapchain, &self.pipelineMan.graphics, frame.cmdBuff, frame.index);
+        const tracyZ3 = ztracy.ZoneNC(@src(), "recCmd", 0x00A86BFF);
+        try recCmd(&self.swapchain, &self.pipelineMan.graphics, frame.cmdBuff, frame.index);
         tracyZ3.End();
 
         const tracyZ4 = ztracy.ZoneNC(@src(), "submitFrame", 0x800080FF);
@@ -114,7 +114,7 @@ pub const Renderer = struct {
         tracyZ2.End();
 
         const tracyZ3 = ztracy.ZoneNC(@src(), "recComputeCmd", 0x00A86BFF);
-        try recordComputeCmdBuffer(
+        try recComputeCmd(
             &self.swapchain,
             frame.cmdBuff,
             frame.index,
