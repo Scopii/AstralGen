@@ -62,6 +62,15 @@ fn createSubresourceRange(mask: u32, mipLevel: u32, levelCount: u32, arrayLayer:
     };
 }
 
+fn createSubresourceLayers(mask: u32, mipLevel: u32, arrayLayer: u32, layerCount: u32) c.VkImageSubresourceLayers {
+    return c.VkImageSubresourceLayers{
+        .aspectMask = mask,
+        .mipLevel = mipLevel,
+        .baseArrayLayer = arrayLayer,
+        .layerCount = layerCount,
+    };
+}
+
 fn createImageMemoryBarrier2(
     srcStageMask: u64,
     srcAccessMask: u64,
@@ -252,8 +261,8 @@ pub fn copyImageToImage(cmd: c.VkCommandBuffer, src: c.VkImage, dst: c.VkImage, 
     blitRegion.dstOffsets[1].y = @intCast(dstSize.height);
     blitRegion.dstOffsets[1].z = 1;
 
-    blitRegion.srcSubresource = createSubresourceRange(c.VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1);
-    blitRegion.dstSubresource = createSubresourceRange(c.VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1);
+    blitRegion.srcSubresource = createSubresourceLayers(c.VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1);
+    blitRegion.dstSubresource = createSubresourceLayers(c.VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1);
 
     var blitInfo = c.VkBlitImageInfo2{ .sType = c.VK_STRUCTURE_TYPE_BLIT_IMAGE_INFO_2 };
     blitInfo.dstImage = dst;
@@ -265,6 +274,5 @@ pub fn copyImageToImage(cmd: c.VkCommandBuffer, src: c.VkImage, dst: c.VkImage, 
     blitInfo.pRegions = &blitRegion;
 
     c.vkCmdBlitImage2(cmd, &blitInfo); // Can copy even with different Image Sizes/Formats
-    //c.vkCmdCopyImage2(cmd, &blitInfo); //Faster but more restricted, TODO: Testing later!
-    // writing new functions might be worth here
+    //c.vkCmdCopyImage2(cmd, &blitInfo); //Faster but more restricted, TODO: Testing later! (writing new functions might be worth)
 }
