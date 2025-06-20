@@ -7,11 +7,9 @@ const createSemaphore = @import("../sync/primitives.zig").createSemaphore;
 pub const SwapBucket = struct {
     image: c.VkImage,
     view: c.VkImageView,
-    rendSem: c.VkSemaphore,
 
     pub fn deinit(self: *SwapBucket, gpi: c.VkDevice) void {
         c.vkDestroyImageView(gpi, self.view, null);
-        c.vkDestroySemaphore(gpi, self.rendSem, null);
     }
 };
 
@@ -31,7 +29,6 @@ pub fn createSwapBuckets(alloc: Allocator, imgCount: u32, gpi: c.VkDevice, swapc
         // Clean up any partially created resources
         for (0..initCount) |i| {
             if (buckets[i].view != null) c.vkDestroyImageView(gpi, buckets[i].view, null);
-            if (buckets[i].rendSem != null) c.vkDestroySemaphore(gpi, buckets[i].rendSem, null);
         }
     }
 
@@ -52,7 +49,6 @@ pub fn createSwapBuckets(alloc: Allocator, imgCount: u32, gpi: c.VkDevice, swapc
         };
         try check(c.vkCreateImageView(gpi, &imgViewInf, null, &buckets[i].view), "Failed to create image view");
 
-        buckets[i].rendSem = try createSemaphore(gpi);
         buckets[i].image = images[i];
         initCount += 1;
     }

@@ -9,23 +9,16 @@ const waitForTimeline = @import("primitives.zig").waitForTimeline;
 const createSemaphore = @import("../sync/primitives.zig").createSemaphore;
 
 pub const Frame = struct {
-    cmdBuff: c.VkCommandBuffer = undefined,
-    acqSem: c.VkSemaphore,
-    index: u32 = undefined,
-
-    pub fn init(gpi: c.VkDevice) !Frame {
-        return Frame{ .acqSem = try createSemaphore(gpi) };
-    }
-
-    pub fn deinit(self: *Frame, gpi: c.VkDevice) void {
-        c.vkDestroySemaphore(gpi, self.acqSem, null);
-    }
+    acquired: c.VkSemaphore,
+    rendered: c.VkSemaphore,
 };
 
 pub const FramePacer = struct {
     curFrame: u8 = 0,
     maxInFlight: u8,
+
     frames: []Frame,
+
     timeline: c.VkSemaphore,
     frameCount: u64 = 0,
     lastChecked: u64 = 0,
@@ -36,13 +29,17 @@ pub const FramePacer = struct {
     signalInf: [2]c.VkSemaphoreSubmitInfo,
     cmdInf: c.VkCommandBufferSubmitInfo,
 
-    pub fn init(alloc: Allocator, gpi: c.VkDevice, maxInFlight: u8, cmdMan: *const CmdManager) !FramePacer {
+    pub fn init(alloc: Allocator, gpi: c.VkDevice, maxInFlight: u8) !FramePacer {
         const frames = try alloc.alloc(Frame, maxInFlight);
+        errdefer alloc.free(frames);
+
         for (0..maxInFlight) |i| {
-            frames[i] = try Frame.init(gpi);
-            frames[i].cmdBuff = try cmdMan.createCmdBuffer(gpi);
+            frames[i] = .{
+                .acquired = try createSemaphore(gpi),
+                .rendered = try createSemaphore(gpi),
+            };
         }
-        std.debug.print("Frames In Flight: {}\n", .{frames.len});
+        std.debug.print("Frames In Flight: {}\n", .{maxInFlight});
 
         return FramePacer{
             .frames = frames,
@@ -86,8 +83,9 @@ pub const FramePacer = struct {
 
     pub fn deinit(self: *FramePacer, alloc: Allocator, gpi: c.VkDevice) void {
         c.vkDestroySemaphore(gpi, self.timeline, null);
-        for (self.frames) |*frame| {
-            frame.deinit(gpi);
+        for (self.frames) |s| {
+            c.vkDestroySemaphore(gpi, s.acquired, null);
+            c.vkDestroySemaphore(gpi, s.rendered, null);
         }
         alloc.free(self.frames);
     }
@@ -112,13 +110,13 @@ pub const FramePacer = struct {
         try waitForTimeline(gpi, self.timeline, waitVal, 1_000_000_000);
     }
 
-    pub fn submitFrame(self: *FramePacer, queue: c.VkQueue, frame: *Frame, renderSem: c.VkSemaphore) !void {
+    pub fn submitFrame(self: *FramePacer, queue: c.VkQueue, cmd: c.VkCommandBuffer) !void {
         self.frameCount += 1;
 
-        self.cmdInf.commandBuffer = frame.cmdBuff;
-        self.waitInf.semaphore = frame.acqSem;
+        self.cmdInf.commandBuffer = cmd;
+        self.waitInf.semaphore = self.frames[self.curFrame].acquired;
 
-        self.signalInf[0].semaphore = renderSem;
+        self.signalInf[0].semaphore = self.frames[self.curFrame].rendered;
         self.signalInf[1].semaphore = self.timeline;
         self.signalInf[1].value = self.frameCount; // Timeline tracks frame completion
 
@@ -136,6 +134,10 @@ pub const FramePacer = struct {
     // New: Get completion status without blocking
     pub fn getCompletedFrames(self: *FramePacer, gpi: c.VkDevice) !u64 {
         return getTimelineVal(gpi, self.timeline);
+    }
+
+    pub fn getFrame(self: *const FramePacer) Frame {
+        return self.frames[self.curFrame];
     }
 
     // New: Non-blocking check if specific frame is done

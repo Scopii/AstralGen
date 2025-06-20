@@ -3,7 +3,6 @@ const c = @import("../../c.zig");
 const Allocator = std.mem.Allocator;
 const Context = @import("Context.zig").Context;
 const SwapBucket = @import("SwapBucket.zig").SwapBucket;
-const Frame = @import("../sync/FramePacer.zig").Frame;
 const RenderImage = @import("ResourceManager.zig").RenderImage;
 const VkAllocator = @import("../vma.zig").VkAllocator;
 const ResourceManager = @import("ResourceManager.zig").ResourceManager;
@@ -14,6 +13,7 @@ pub const Swapchain = struct {
     alloc: Allocator,
     handle: c.VkSwapchainKHR,
     swapBuckets: []SwapBucket,
+    index: u32,
     surfaceFormat: c.VkSurfaceFormatKHR,
     mode: c.VkPresentModeKHR,
     extent: c.VkExtent2D,
@@ -83,6 +83,7 @@ pub const Swapchain = struct {
         return .{
             .alloc = alloc,
             .handle = handle,
+            .index = undefined,
             .surfaceFormat = surfaceFormat,
             .mode = mode,
             .extent = extent,
@@ -101,8 +102,8 @@ pub const Swapchain = struct {
         c.vkDestroySwapchainKHR(gpi, self.handle, null);
     }
 
-    pub fn acquireImage(self: *Swapchain, gpi: c.VkDevice, frame: *Frame) !bool {
-        const acquireResult = c.vkAcquireNextImageKHR(gpi, self.handle, 1_000_000_000, frame.acqSem, null, &frame.index);
+    pub fn acquireImage(self: *Swapchain, gpi: c.VkDevice, acqSem: c.VkSemaphore) !bool {
+        const acquireResult = c.vkAcquireNextImageKHR(gpi, self.handle, 1_000_000_000, acqSem, null, &self.index);
         if (acquireResult == c.VK_ERROR_OUT_OF_DATE_KHR or acquireResult == c.VK_SUBOPTIMAL_KHR) {
             return false;
         }
@@ -110,14 +111,14 @@ pub const Swapchain = struct {
         return true;
     }
 
-    pub fn present(self: *Swapchain, pQueue: c.VkQueue, frame: *Frame) !bool {
+    pub fn present(self: *Swapchain, pQueue: c.VkQueue, renderSemaphore: c.VkSemaphore) !bool {
         const presentInfo = c.VkPresentInfoKHR{
             .sType = c.VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
             .waitSemaphoreCount = 1,
-            .pWaitSemaphores = &self.swapBuckets[frame.index].rendSem,
+            .pWaitSemaphores = &renderSemaphore,
             .swapchainCount = 1,
             .pSwapchains = &self.handle,
-            .pImageIndices = &frame.index,
+            .pImageIndices = &self.index,
         };
 
         const result = c.vkQueuePresentKHR(pQueue, &presentInfo);

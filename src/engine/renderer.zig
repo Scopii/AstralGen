@@ -9,13 +9,11 @@ const check = @import("error.zig").check;
 const Context = @import("render/Context.zig").Context;
 const Swapchain = @import("render/Swapchain.zig").Swapchain;
 const FramePacer = @import("sync/FramePacer.zig").FramePacer;
-const Frame = @import("sync/FramePacer.zig").Frame;
 const VkAllocator = @import("vma.zig").VkAllocator;
 const CmdManager = @import("render/CmdManager.zig").CmdManager;
 const PipelineManager = @import("render/PipelineManager.zig").PipelineManager;
 const ResourceManager = @import("render/ResourceManager.zig").ResourceManager;
 const DescriptorManager = @import("render/DescriptorManager.zig").DescriptorManager;
-const recComputeCmd = @import("render/CmdManager.zig").recComputeCmd;
 const recCmd = @import("render/CmdManager.zig").recCmd;
 
 pub const MAX_IN_FLIGHT: u8 = 3;
@@ -41,8 +39,8 @@ pub const Renderer = struct {
         const resourceMan = try ResourceManager.init(&context);
         const swapchain = try Swapchain.init(&resourceMan, alloc, &context, extent);
         const pipelineMan = try PipelineManager.init(alloc, &context, swapchain.surfaceFormat.format);
-        const cmdMan = try CmdManager.init(context.gpi, context.families.graphics);
-        const pacer = try FramePacer.init(alloc, context.gpi, MAX_IN_FLIGHT, &cmdMan);
+        const cmdMan = try CmdManager.init(alloc, context.gpi, context.families.graphics, MAX_IN_FLIGHT);
+        const pacer = try FramePacer.init(alloc, context.gpi, MAX_IN_FLIGHT);
         const descriptorManager = try DescriptorManager.init(alloc, context.gpi, pipelineMan.compute.descriptorSetLayout, @intCast(swapchain.swapBuckets.len));
         const fragmentTimeStemp = try getFileTimeStamp(alloc, "src/shader/shdr.frag");
         const computeTimeStemp = try getFileTimeStamp(alloc, "src/shader/shdr.comp");
@@ -65,38 +63,31 @@ pub const Renderer = struct {
 
     pub fn draw(self: *Renderer) !void {
         try self.checkShaderUpdate();
+
         try self.pacer.waitForGPU(self.context.gpi);
+        const frame = self.pacer.getFrame();
 
-        const frame = &self.pacer.frames[self.pacer.curFrame];
-
-        const tracyZ2 = ztracy.ZoneNC(@src(), "AcquireImage", 0xFF0000FF);
-        if (try self.swapchain.acquireImage(self.context.gpi, frame) == false) {
+        if (try self.swapchain.acquireImage(self.context.gpi, frame.acquired) == false) {
             try self.renewSwapchain();
             return;
         }
-        tracyZ2.End();
 
-        const tracyZ3 = ztracy.ZoneNC(@src(), "recCmd", 0x00A86BFF);
-        try recCmd(&self.swapchain, &self.pipelineMan.graphics, frame.cmdBuff, frame.index);
-        tracyZ3.End();
+        const swapIndex = self.swapchain.index;
 
-        const tracyZ4 = ztracy.ZoneNC(@src(), "submitFrame", 0x800080FF);
-        try self.pacer.submitFrame(self.context.graphicsQ, frame, self.swapchain.swapBuckets[frame.index].rendSem);
-        tracyZ4.End();
+        try self.cmdMan.recCmd(&self.swapchain, &self.pipelineMan.graphics);
 
-        const tracyZ5 = ztracy.ZoneNC(@src(), "Present", 0xFFC0CBFF);
-        if (try self.swapchain.present(self.context.presentQ, frame)) {
+        try self.pacer.submitFrame(self.context.graphicsQ, self.cmdMan.cmds[swapIndex]);
+
+        if (try self.swapchain.present(self.context.presentQ, frame.rendered)) {
             try self.renewSwapchain();
             return;
         }
-        tracyZ5.End();
 
         self.pacer.nextFrame();
     }
 
     pub fn drawComputeRenderer(self: *Renderer) !void {
         try self.checkComputeShaderUpdate();
-
         // Update descriptors only once when first needed
         if (!self.descriptorsUpdated) {
             self.descriptorManager.updateAllDescriptorSets(self.context.gpi, self.swapchain.renderImage.view);
@@ -104,35 +95,23 @@ pub const Renderer = struct {
         }
 
         try self.pacer.waitForGPU(self.context.gpi);
-        const frame = &self.pacer.frames[self.pacer.curFrame];
+        const frame = self.pacer.getFrame();
 
-        const tracyZ2 = ztracy.ZoneNC(@src(), "AcquireImage", 0xFF0000FF);
-        if (try self.swapchain.acquireImage(self.context.gpi, frame) == false) {
+        if (try self.swapchain.acquireImage(self.context.gpi, frame.acquired) == false) {
             try self.renewSwapchain();
             return;
         }
-        tracyZ2.End();
 
-        const tracyZ3 = ztracy.ZoneNC(@src(), "recComputeCmd", 0x00A86BFF);
-        try recComputeCmd(
-            &self.swapchain,
-            frame.cmdBuff,
-            frame.index,
-            &self.pipelineMan.compute,
-            self.descriptorManager.sets[frame.index],
-        );
-        tracyZ3.End();
+        const swapIndex = self.swapchain.index;
 
-        const tracyZ4 = ztracy.ZoneNC(@src(), "submitFrame", 0x800080FF);
-        try self.pacer.submitFrame(self.context.graphicsQ, frame, self.swapchain.swapBuckets[frame.index].rendSem);
-        tracyZ4.End();
+        try self.cmdMan.recComputeCmd(&self.swapchain, &self.pipelineMan.compute, self.descriptorManager.sets[swapIndex]);
 
-        const tracyZ5 = ztracy.ZoneNC(@src(), "Present", 0xFFC0CBFF);
-        if (try self.swapchain.present(self.context.presentQ, frame)) {
+        try self.pacer.submitFrame(self.context.graphicsQ, self.cmdMan.cmds[swapIndex]);
+
+        if (try self.swapchain.present(self.context.presentQ, frame.rendered)) {
             try self.renewSwapchain();
             return;
         }
-        tracyZ5.End();
 
         self.pacer.nextFrame();
     }
