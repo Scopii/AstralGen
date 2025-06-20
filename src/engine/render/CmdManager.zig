@@ -30,14 +30,18 @@ pub const CmdManager = struct {
         c.vkDestroyCommandPool(gpi, self.pool, null);
     }
 
+    pub fn getCmdBuffer(self: *const CmdManager, cpu_frame_slot: u32) c.VkCommandBuffer {
+        return self.cmds[cpu_frame_slot];
+    }
+
     pub fn recComputeCmd(
-        self: *CmdManager,
+        _: *CmdManager,
+        cmd: c.VkCommandBuffer,
         swapchain: *Swapchain,
         computePipe: *const ComputePipeline,
         descriptorSet: c.VkDescriptorSet,
     ) !void {
         const index = swapchain.index;
-        const cmd = self.cmds[index];
 
         const beginInf = c.VkCommandBufferBeginInfo{
             .sType = c.VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,

@@ -88,27 +88,29 @@ pub const Renderer = struct {
 
     pub fn drawComputeRenderer(self: *Renderer) !void {
         try self.checkComputeShaderUpdate();
+        try self.pacer.waitForGPU(self.context.gpi);
+
+        const frameIndex = self.pacer.curFrame;
+        const cmd = self.cmdMan.cmds[frameIndex];
+
+        if (try self.swapchain.acquireImage(self.context.gpi, self.pacer.acqSems[frameIndex]) == false) {
+            try self.renewSwapchain();
+            return;
+        }
+
         // Update descriptors only once when first needed
         if (!self.descriptorsUpdated) {
             self.descriptorManager.updateAllDescriptorSets(self.context.gpi, self.swapchain.renderImage.view);
             self.descriptorsUpdated = true;
         }
 
-        try self.pacer.waitForGPU(self.context.gpi);
-        const frame = self.pacer.getFrame();
-
-        if (try self.swapchain.acquireImage(self.context.gpi, frame.acquired) == false) {
-            try self.renewSwapchain();
-            return;
-        }
-
         const swapIndex = self.swapchain.index;
+        const rendSem = self.swapchain.swapBuckets[swapIndex].rendSem;
 
-        try self.cmdMan.recComputeCmd(&self.swapchain, &self.pipelineMan.compute, self.descriptorManager.sets[swapIndex]);
+        try self.cmdMan.recComputeCmd(cmd, &self.swapchain, &self.pipelineMan.compute, self.descriptorManager.sets[swapIndex]);
+        try self.pacer.submitFrame(self.context.graphicsQ, cmd, rendSem);
 
-        try self.pacer.submitFrame(self.context.graphicsQ, self.cmdMan.cmds[swapIndex]);
-
-        if (try self.swapchain.present(self.context.presentQ, frame.rendered)) {
+        if (try self.swapchain.present(self.context.presentQ, rendSem)) {
             try self.renewSwapchain();
             return;
         }
