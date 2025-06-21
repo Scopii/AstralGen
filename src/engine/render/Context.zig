@@ -232,21 +232,29 @@ fn createGPI(alloc: Allocator, gpu: c.VkPhysicalDevice, families: QueueFamilies)
     var features: c.VkPhysicalDeviceFeatures = undefined;
     c.vkGetPhysicalDeviceFeatures(gpu, &features);
 
+    var mesh_shader_features = c.VkPhysicalDeviceMeshShaderFeaturesEXT{
+        .sType = c.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_EXT,
+        .taskShader = c.VK_TRUE,
+        .meshShader = c.VK_TRUE,
+    };
+
     const features_vulkan12 = c.VkPhysicalDeviceVulkan12Features{
         .sType = c.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
         .bufferDeviceAddress = c.VK_TRUE,
         .descriptorIndexing = c.VK_TRUE,
         .timelineSemaphore = c.VK_TRUE,
+        .pNext = &mesh_shader_features,
     };
 
     const features13_to_enable = c.VkPhysicalDeviceVulkan13Features{
         .sType = c.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
         .dynamicRendering = c.VK_TRUE,
         .synchronization2 = c.VK_TRUE,
+        .maintenance4 = c.VK_TRUE,
         .pNext = @constCast(@ptrCast(&features_vulkan12)),
     };
 
-    const gpuExtensions = [_][*c]const u8{"VK_KHR_swapchain"};
+    const gpuExtensions = [_][*c]const u8{ "VK_KHR_swapchain", "VK_EXT_mesh_shader" };
 
     const createInfo = c.VkDeviceCreateInfo{
         .sType = c.VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
@@ -262,5 +270,18 @@ fn createGPI(alloc: Allocator, gpu: c.VkPhysicalDevice, families: QueueFamilies)
     std.debug.print("Queues: {}\n", .{queueInfos.items.len});
     var gpi: c.VkDevice = undefined;
     try check(c.vkCreateDevice(gpu, &createInfo, null, &gpi), "Unable to create Vulkan device!");
+
+    // Import Mesh Shader Draw Function
+    const generic_fn_ptr = c.vkGetDeviceProcAddr(gpi, "vkCmdDrawMeshTasksEXT");
+
+    if (generic_fn_ptr) |p| {
+        c.pfn_vkCmdDrawMeshTasksEXT = @ptrCast(p);
+    } else {
+        c.pfn_vkCmdDrawMeshTasksEXT = null;
+    }
+    if (c.pfn_vkCmdDrawMeshTasksEXT == null) {
+        std.log.err("FATAL: Could not load the vkCmdDrawMeshTasksEXT function pointer!\n", .{});
+        return error.MissingVulkanFunction;
+    }
     return gpi;
 }

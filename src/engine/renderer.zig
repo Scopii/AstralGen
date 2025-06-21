@@ -61,7 +61,7 @@ pub const Renderer = struct {
         };
     }
 
-    pub fn draw(self: *Renderer) !void {
+    pub fn drawGraphicsPipeline(self: *Renderer) !void {
         try self.checkShaderUpdate();
 
         try self.pacer.waitForGPU(self.context.gpi);
@@ -89,7 +89,34 @@ pub const Renderer = struct {
         self.pacer.nextFrame();
     }
 
-    pub fn drawComputeRenderer(self: *Renderer) !void {
+    // Add this method to your Renderer struct
+    pub fn drawMesh(self: *Renderer) !void {
+        try self.pacer.waitForGPU(self.context.gpi);
+
+        const frameIndex = self.pacer.curFrame;
+        const cmd = self.cmdMan.cmds[frameIndex];
+
+        if (try self.swapchain.acquireImage(self.context.gpi, self.pacer.acqSems[frameIndex]) == false) {
+            try self.renewSwapchain();
+            return;
+        }
+
+        const swapIndex = self.swapchain.index;
+        const rendSem = self.swapchain.swapBuckets[swapIndex].rendSem;
+
+        try self.cmdMan.recMeshCmd(cmd, &self.swapchain, &self.pipelineMan.mesh);
+
+        try self.pacer.submitFrame(self.context.graphicsQ, cmd, rendSem);
+
+        if (try self.swapchain.present(self.context.presentQ, rendSem)) {
+            try self.renewSwapchain();
+            return;
+        }
+
+        self.pacer.nextFrame();
+    }
+
+    pub fn drawComputePipeline(self: *Renderer) !void {
         try self.checkComputeShaderUpdate();
         try self.pacer.waitForGPU(self.context.gpi);
 
@@ -111,6 +138,35 @@ pub const Renderer = struct {
         const rendSem = self.swapchain.swapBuckets[swapIndex].rendSem;
 
         try self.cmdMan.recComputeCmd(cmd, &self.swapchain, &self.pipelineMan.compute, self.descriptorManager.sets[swapIndex]);
+        try self.pacer.submitFrame(self.context.graphicsQ, cmd, rendSem);
+
+        if (try self.swapchain.present(self.context.presentQ, rendSem)) {
+            try self.renewSwapchain();
+            return;
+        }
+
+        self.pacer.nextFrame();
+    }
+
+    pub fn drawMeshPipeline(self: *Renderer) !void {
+        // try self.checkShaderUpdate(); // Optional: add shader hot-reloading for mesh shaders
+
+        try self.pacer.waitForGPU(self.context.gpi);
+
+        const frameIndex = self.pacer.curFrame;
+        const cmd = self.cmdMan.cmds[frameIndex];
+
+        if (try self.swapchain.acquireImage(self.context.gpi, self.pacer.acqSems[frameIndex]) == false) {
+            try self.renewSwapchain();
+            return;
+        }
+
+        const swapIndex = self.swapchain.index;
+        const rendSem = self.swapchain.swapBuckets[swapIndex].rendSem;
+
+        // Call the new command recording function
+        try self.pipelineMan.recMeshCmd(cmd, &self.swapchain, &self.pipelineMan.mesh);
+
         try self.pacer.submitFrame(self.context.graphicsQ, cmd, rendSem);
 
         if (try self.swapchain.present(self.context.presentQ, rendSem)) {

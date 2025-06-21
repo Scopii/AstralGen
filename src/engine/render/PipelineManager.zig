@@ -17,9 +17,15 @@ pub const GraphicsPipeline = struct {
     format: c.VkFormat,
 };
 
+pub const MeshPipeline = struct {
+    handle: c.VkPipeline,
+    layout: c.VkPipelineLayout,
+};
+
 pub const PipelineManager = struct {
     graphics: GraphicsPipeline,
     compute: ComputePipeline,
+    mesh: MeshPipeline,
     cache: c.VkPipelineCache,
 
     pub fn init(alloc: Allocator, context: *const Context, format: c.VkFormat) !PipelineManager {
@@ -59,6 +65,30 @@ pub const PipelineManager = struct {
         const graphicsPipelineLayout = try createPipelineLayout(gpi, null, 0);
         const graphicsPipeline = try createGraphicsPipeline(gpi, graphicsPipelineLayout, &shaderStages, format, cache);
 
+        //Mesh
+        const meshShdr = try createShaderModule(alloc, "src/shader/shdr.mesh", "zig-out/shader/mesh.spv", gpi);
+        defer c.vkDestroyShaderModule(gpi, meshShdr, null);
+        const meshFragShdr = try createShaderModule(alloc, "src/shader/mesh.frag", "zig-out/shader/mesh_frag.spv", gpi);
+        defer c.vkDestroyShaderModule(gpi, meshFragShdr, null);
+
+        const meshShaderStages = [_]c.VkPipelineShaderStageCreateInfo{
+            .{
+                .sType = c.VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+                .stage = c.VK_SHADER_STAGE_MESH_BIT_EXT,
+                .module = meshShdr,
+                .pName = "main",
+            },
+            .{
+                .sType = c.VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+                .stage = c.VK_SHADER_STAGE_FRAGMENT_BIT,
+                .module = meshFragShdr,
+                .pName = "main",
+            },
+        };
+
+        const meshPipelineLayout = try createPipelineLayout(gpi, null, 0); // Simple layout with no descriptors
+        const meshPipeline = try createMeshPipeline(gpi, meshPipelineLayout, &meshShaderStages, format, cache);
+
         return .{
             .compute = .{
                 .handle = computePipeline,
@@ -69,6 +99,10 @@ pub const PipelineManager = struct {
                 .handle = graphicsPipeline,
                 .layout = graphicsPipelineLayout,
                 .format = format,
+            },
+            .mesh = .{
+                .handle = meshPipeline,
+                .layout = meshPipelineLayout,
             },
             .cache = cache,
         };
@@ -81,6 +115,9 @@ pub const PipelineManager = struct {
 
         c.vkDestroyPipeline(gpi, self.graphics.handle, null);
         c.vkDestroyPipelineLayout(gpi, self.graphics.layout, null);
+
+        c.vkDestroyPipeline(gpi, self.mesh.handle, null);
+        c.vkDestroyPipelineLayout(gpi, self.mesh.layout, null);
 
         c.vkDestroyPipelineCache(gpi, self.cache, null);
     }
@@ -180,6 +217,95 @@ fn createComputePipeline(gpi: c.VkDevice, layout: c.VkPipelineLayout, shaderModu
 
     var pipe: c.VkPipeline = undefined;
     try check(c.vkCreateComputePipelines(gpi, cache, 1, &pipeInf, null, &pipe), "Failed to create pipeline");
+    return pipe;
+}
+
+fn createMeshPipeline(
+    gpi: c.VkDevice,
+    layout: c.VkPipelineLayout,
+    shaderStages: []const c.VkPipelineShaderStageCreateInfo,
+    format: c.VkFormat,
+    cache: c.VkPipelineCache,
+) !c.VkPipeline {
+    // Viewport and Scissor will be dynamic
+    const viewInf = c.VkPipelineViewportStateCreateInfo{
+        .sType = c.VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
+        .viewportCount = 1,
+        .scissorCount = 1,
+    };
+
+    // Standard rasterization state
+    const rasterInf = c.VkPipelineRasterizationStateCreateInfo{
+        .sType = c.VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
+        .depthClampEnable = c.VK_FALSE,
+        .rasterizerDiscardEnable = c.VK_FALSE,
+        .polygonMode = c.VK_POLYGON_MODE_FILL,
+        .cullMode = c.VK_CULL_MODE_NONE,
+        .frontFace = c.VK_FRONT_FACE_CLOCKWISE,
+        .depthBiasEnable = c.VK_FALSE,
+        .lineWidth = 1.0,
+    };
+
+    // Standard multisampling state
+    const msaaInf = c.VkPipelineMultisampleStateCreateInfo{
+        .sType = c.VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
+        .rasterizationSamples = c.VK_SAMPLE_COUNT_1_BIT,
+        .sampleShadingEnable = c.VK_FALSE,
+    };
+
+    // Standard color blend state
+    const colBlendAttach = c.VkPipelineColorBlendAttachmentState{
+        .blendEnable = c.VK_FALSE,
+        .colorWriteMask = c.VK_COLOR_COMPONENT_R_BIT | c.VK_COLOR_COMPONENT_G_BIT |
+            c.VK_COLOR_COMPONENT_B_BIT | c.VK_COLOR_COMPONENT_A_BIT,
+    };
+
+    const colBlendInf = c.VkPipelineColorBlendStateCreateInfo{
+        .sType = c.VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
+        .attachmentCount = 1,
+        .pAttachments = &colBlendAttach,
+    };
+
+    // Dynamic states
+    const dynStates = [_]c.VkDynamicState{
+        c.VK_DYNAMIC_STATE_VIEWPORT,
+        c.VK_DYNAMIC_STATE_SCISSOR,
+    };
+
+    const dynStateInf = c.VkPipelineDynamicStateCreateInfo{
+        .sType = c.VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
+        .dynamicStateCount = dynStates.len,
+        .pDynamicStates = &dynStates,
+    };
+
+    // Rendering format info
+    const colFormats = [_]c.VkFormat{format};
+    var pipeline_rendering_info = c.VkPipelineRenderingCreateInfo{
+        .sType = c.VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
+        .colorAttachmentCount = 1,
+        .pColorAttachmentFormats = &colFormats,
+    };
+
+    const pipelineInf = c.VkGraphicsPipelineCreateInfo{
+        .sType = c.VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+        .pNext = &pipeline_rendering_info,
+        .stageCount = @intCast(shaderStages.len),
+        .pStages = shaderStages.ptr,
+        // Mesh shaders don't use Vertex Input or Input Assembly states.
+        .pVertexInputState = null,
+        .pInputAssemblyState = null,
+        .pViewportState = &viewInf,
+        .pRasterizationState = &rasterInf,
+        .pMultisampleState = &msaaInf,
+        .pDepthStencilState = null,
+        .pColorBlendState = &colBlendInf,
+        .pDynamicState = &dynStateInf,
+        .layout = layout,
+        .subpass = 0,
+        .basePipelineIndex = -1,
+    };
+    var pipe: c.VkPipeline = undefined;
+    try check(c.vkCreateGraphicsPipelines(gpi, cache, 1, &pipelineInf, null, &pipe), "Failed to create Mesh Pipeline");
     return pipe;
 }
 

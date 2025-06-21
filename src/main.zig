@@ -23,8 +23,9 @@ pub fn main() !void {
         app.handle();
         app.pollEvents();
 
-        try renderer.draw();
-        //try renderer.drawComputeRenderer();
+        //try renderer.drawGraphicsPipeline();
+        //try renderer.drawComputePipeline();
+        try renderer.drawMesh();
     }
 
     //const stdout = std.io.getStdOut().writer();

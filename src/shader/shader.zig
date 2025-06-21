@@ -8,7 +8,7 @@ fn compileShader(alloc: Allocator, srcPath: []const u8, spvPath: []const u8) !vo
     // Compile shader using glslc
     const result = std.process.Child.run(.{
         .allocator = alloc,
-        .argv = &[_][]const u8{ "glslc", srcPath, "-o", spvPath },
+        .argv = &[_][]const u8{ "glslc", "--target-spv=spv1.6", srcPath, "-o", spvPath },
     }) catch |err| {
         std.debug.print("Failed to run glslc: {}\n", .{err});
         return err;
