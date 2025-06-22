@@ -2,6 +2,7 @@ const std = @import("std");
 const c = @import("../../c.zig");
 const Allocator = std.mem.Allocator;
 const CmdManager = @import("../render/CmdManager.zig").CmdManager;
+const Context = @import("../render/Context.zig").Context;
 const check = @import("../error.zig").check;
 const createTimeline = @import("primitives.zig").createTimeline;
 const getTimelineVal = @import("primitives.zig").getTimelineVal;
@@ -24,7 +25,9 @@ pub const FramePacer = struct {
     signalInf: [2]c.VkSemaphoreSubmitInfo,
     cmdInf: c.VkCommandBufferSubmitInfo,
 
-    pub fn init(alloc: Allocator, gpi: c.VkDevice, maxInFlight: u8) !FramePacer {
+    pub fn init(alloc: Allocator, context: *const Context, maxInFlight: u8) !FramePacer {
+        const gpi = context.gpi;
+
         const acqSems = try alloc.alloc(c.VkSemaphore, maxInFlight);
         errdefer alloc.free(acqSems);
 

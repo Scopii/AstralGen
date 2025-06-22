@@ -19,7 +19,7 @@ pub const Swapchain = struct {
     extent: c.VkExtent2D,
     renderImage: RenderImage,
 
-    pub fn init(resourceMan: *const ResourceManager, alloc: Allocator, context: *const Context, curExtent: *const c.VkExtent2D) !Swapchain {
+    pub fn init(alloc: Allocator, resourceMan: *const ResourceManager, context: *const Context, curExtent: *const c.VkExtent2D) !Swapchain {
         const gpi = context.gpi;
         const gpu = context.gpu;
         const families = context.families;

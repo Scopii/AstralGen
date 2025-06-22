@@ -1,30 +1,37 @@
 const std = @import("std");
 const c = @import("../../c.zig");
 const Allocator = std.mem.Allocator;
-const Context = @import("Context.zig").Context;
 const check = @import("../error.zig").check;
 const createShaderModule = @import("../../shader/shader.zig").createShaderModule;
+const ztracy = @import("ztracy");
+const Context = @import("Context.zig").Context;
 
 pub const ComputePipeline = struct {
     handle: c.VkPipeline,
     layout: c.VkPipelineLayout,
     descriptorSetLayout: c.VkDescriptorSetLayout,
+    timeStamp: i128,
 };
 
 pub const GraphicsPipeline = struct {
     handle: c.VkPipeline,
     layout: c.VkPipelineLayout,
     format: c.VkFormat,
+    timeStamp: i128,
 };
 
 pub const MeshPipeline = struct {
     handle: c.VkPipeline,
     layout: c.VkPipelineLayout,
+    format: c.VkFormat,
+    timeStamp: i128,
 };
 
 pub const Pipeline = enum { compute, graphics, mesh };
 
 pub const PipelineManager = struct {
+    alloc: Allocator,
+    gpi: c.VkDevice,
     graphics: GraphicsPipeline,
     compute: ComputePipeline,
     mesh: MeshPipeline,
@@ -32,36 +39,26 @@ pub const PipelineManager = struct {
 
     pub fn init(alloc: Allocator, context: *const Context, format: c.VkFormat) !PipelineManager {
         const gpi = context.gpi;
-        const cache = try createPipelineCache(gpi);
 
+        const cache = try createPipelineCache(gpi);
         //Compute
         const computeDescriptorSetLayout = try createComputeDescriptorSetLayout(gpi);
         const computePipelineLayout = try createPipelineLayout(gpi, computeDescriptorSetLayout, 1);
         const computeShaderModule = try createShaderModule(alloc, "src/shader/shdr.comp", "zig-out/shader/comp.spv", gpi);
         defer c.vkDestroyShaderModule(gpi, computeShaderModule, null);
         const computePipeline = try createComputePipeline(gpi, computePipelineLayout, computeShaderModule, cache);
+        const computeTimeStamp = try getFileTimeStamp(alloc, "src/shader/shdr.comp");
 
         //Graphics
         const vertShdr = try createShaderModule(alloc, "src/shader/shdr.vert", "zig-out/shader/vert.spv", gpi);
         defer c.vkDestroyShaderModule(gpi, vertShdr, null);
         const fragShdr = try createShaderModule(alloc, "src/shader/shdr.frag", "zig-out/shader/frag.spv", gpi);
         defer c.vkDestroyShaderModule(gpi, fragShdr, null);
+        const graphicsTimeStamp = try getFileTimeStamp(alloc, "src/shader/shdr.frag");
 
         const shaderStages = [_]c.VkPipelineShaderStageCreateInfo{
-            .{
-                .sType = c.VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-                .stage = c.VK_SHADER_STAGE_VERTEX_BIT,
-                .module = vertShdr,
-                .pName = "main",
-                .pSpecializationInfo = null, // for constants
-            },
-            .{
-                .sType = c.VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-                .stage = c.VK_SHADER_STAGE_FRAGMENT_BIT,
-                .module = fragShdr,
-                .pName = "main",
-                .pSpecializationInfo = null, // for constants
-            },
+            createShaderStage(c.VK_SHADER_STAGE_VERTEX_BIT, vertShdr, "main"),
+            createShaderStage(c.VK_SHADER_STAGE_FRAGMENT_BIT, fragShdr, "main"),
         };
 
         const graphicsPipelineLayout = try createPipelineLayout(gpi, null, 0);
@@ -72,45 +69,40 @@ pub const PipelineManager = struct {
         defer c.vkDestroyShaderModule(gpi, meshShdr, null);
         const meshFragShdr = try createShaderModule(alloc, "src/shader/mesh.frag", "zig-out/shader/mesh_frag.spv", gpi);
         defer c.vkDestroyShaderModule(gpi, meshFragShdr, null);
+        const meshTimeStamp = try getFileTimeStamp(alloc, "src/shader/mesh.frag");
 
-        const meshShaderStages = [_]c.VkPipelineShaderStageCreateInfo{
-            .{
-                .sType = c.VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-                .stage = c.VK_SHADER_STAGE_MESH_BIT_EXT,
-                .module = meshShdr,
-                .pName = "main",
-            },
-            .{
-                .sType = c.VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-                .stage = c.VK_SHADER_STAGE_FRAGMENT_BIT,
-                .module = meshFragShdr,
-                .pName = "main",
-            },
-        };
+        const meshShaderStages = [_]c.VkPipelineShaderStageCreateInfo{ createShaderStage(c.VK_SHADER_STAGE_MESH_BIT_EXT, meshShdr, "main"), createShaderStage(c.VK_SHADER_STAGE_FRAGMENT_BIT, meshFragShdr, "main") };
 
         const meshPipelineLayout = try createPipelineLayout(gpi, null, 0); // Simple layout with no descriptors
         const meshPipeline = try createMeshPipeline(gpi, meshPipelineLayout, &meshShaderStages, format, cache);
 
         return .{
+            .alloc = alloc,
+            .gpi = gpi,
             .compute = .{
                 .handle = computePipeline,
                 .layout = computePipelineLayout,
                 .descriptorSetLayout = computeDescriptorSetLayout,
+                .timeStamp = computeTimeStamp,
             },
             .graphics = .{
                 .handle = graphicsPipeline,
                 .layout = graphicsPipelineLayout,
                 .format = format,
+                .timeStamp = graphicsTimeStamp,
             },
             .mesh = .{
                 .handle = meshPipeline,
                 .layout = meshPipelineLayout,
+                .format = format,
+                .timeStamp = meshTimeStamp,
             },
             .cache = cache,
         };
     }
 
-    pub fn deinit(self: *PipelineManager, gpi: c.VkDevice) void {
+    pub fn deinit(self: *PipelineManager) void {
+        const gpi = self.gpi;
         c.vkDestroyPipeline(gpi, self.compute.handle, null);
         c.vkDestroyPipelineLayout(gpi, self.compute.layout, null);
         c.vkDestroyDescriptorSetLayout(gpi, self.compute.descriptorSetLayout, null);
@@ -124,7 +116,55 @@ pub const PipelineManager = struct {
         c.vkDestroyPipelineCache(gpi, self.cache, null);
     }
 
-    pub fn updateComputePipeline(self: *PipelineManager, alloc: Allocator, gpi: c.VkDevice) !void {
+    pub fn checkShaderUpdate(self: *PipelineManager, pipeline: Pipeline) !void {
+        const tracyZ1 = ztracy.ZoneNC(@src(), "checkShaderUpdate", 0x0000FFFF);
+        defer tracyZ1.End();
+
+        var timeStamp: i128 = undefined;
+
+        switch (pipeline) {
+            .graphics => {
+                timeStamp = try getFileTimeStamp(self.alloc, "src/shader/shdr.frag");
+                if (timeStamp == self.graphics.timeStamp) return;
+                self.graphics.timeStamp = timeStamp;
+            },
+            .compute => {
+                timeStamp = try getFileTimeStamp(self.alloc, "src/shader/shdr.comp");
+                if (timeStamp == self.compute.timeStamp) return;
+                self.compute.timeStamp = timeStamp;
+            },
+            .mesh => {
+                timeStamp = try getFileTimeStamp(self.alloc, "src/shader/mesh.frag");
+                if (timeStamp == self.mesh.timeStamp) return;
+                self.mesh.timeStamp = timeStamp;
+            },
+        }
+        try self.updatePipeline(pipeline);
+        std.debug.print("Shader Updated ^^\n", .{});
+    }
+
+    pub fn createShaderStage(stage: u32, module: c.VkShaderModule, name: [*]const u8) c.VkPipelineShaderStageCreateInfo {
+        return c.VkPipelineShaderStageCreateInfo{
+            .sType = c.VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+            .stage = stage, //
+            .module = module,
+            .pName = name,
+            .pSpecializationInfo = null, // for constants
+        };
+    }
+
+    pub fn updatePipeline(self: *PipelineManager, pipeline: Pipeline) !void {
+        _ = c.vkDeviceWaitIdle(self.gpi);
+        switch (pipeline) {
+            .graphics => try self.updateGraphicsPipeline(),
+            .compute => try self.updateComputePipeline(),
+            .mesh => try self.updateMeshPipeline(),
+        }
+    }
+
+    pub fn updateComputePipeline(self: *PipelineManager) !void {
+        const gpi = self.gpi;
+        const alloc = self.alloc;
         c.vkDestroyPipeline(gpi, self.compute.handle, null);
         const computeShaderModule = try createShaderModule(alloc, "src/shader/shdr.comp", "zig-out/shader/comp.spv", gpi);
         defer c.vkDestroyShaderModule(gpi, computeShaderModule, null);
@@ -132,7 +172,9 @@ pub const PipelineManager = struct {
         std.debug.print("Compute Pipeline updated\n", .{});
     }
 
-    pub fn updateGraphicsPipeline(self: *PipelineManager, alloc: Allocator, gpi: c.VkDevice) !void {
+    pub fn updateGraphicsPipeline(self: *PipelineManager) !void {
+        const gpi = self.gpi;
+        const alloc = self.alloc;
         c.vkDestroyPipeline(gpi, self.graphics.handle, null);
         const vertShdr = try createShaderModule(alloc, "src/shader/shdr.vert", "zig-out/shader/vert.spv", gpi);
         defer c.vkDestroyShaderModule(gpi, vertShdr, null);
@@ -140,35 +182,40 @@ pub const PipelineManager = struct {
         defer c.vkDestroyShaderModule(gpi, fragShdr, null);
 
         const shaderStages = [_]c.VkPipelineShaderStageCreateInfo{
-            .{
-                .sType = c.VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-                .stage = c.VK_SHADER_STAGE_VERTEX_BIT,
-                .module = vertShdr,
-                .pName = "main",
-                .pSpecializationInfo = null, // for constants
-            },
-            .{
-                .sType = c.VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-                .stage = c.VK_SHADER_STAGE_FRAGMENT_BIT,
-                .module = fragShdr,
-                .pName = "main",
-                .pSpecializationInfo = null, // for constants
-            },
+            createShaderStage(c.VK_SHADER_STAGE_VERTEX_BIT, vertShdr, "main"),
+            createShaderStage(c.VK_SHADER_STAGE_FRAGMENT_BIT, fragShdr, "main"),
         };
         self.graphics.handle = try createGraphicsPipeline(gpi, self.graphics.layout, &shaderStages, self.graphics.format, self.cache);
         std.debug.print("Graphics Pipeline updated\n", .{});
     }
+
+    pub fn updateMeshPipeline(self: *PipelineManager) !void {
+        const gpi = self.gpi;
+        const alloc = self.alloc;
+        c.vkDestroyPipeline(gpi, self.mesh.handle, null);
+        const meshShdr = try createShaderModule(alloc, "src/shader/shdr.mesh", "zig-out/shader/mesh.spv", gpi);
+        defer c.vkDestroyShaderModule(gpi, meshShdr, null);
+        const meshFragShdr = try createShaderModule(alloc, "src/shader/mesh.frag", "zig-out/shader/mesh_frag.spv", gpi);
+        defer c.vkDestroyShaderModule(gpi, meshFragShdr, null);
+
+        const meshShaderStages = [_]c.VkPipelineShaderStageCreateInfo{
+            createShaderStage(c.VK_SHADER_STAGE_MESH_BIT_EXT, meshShdr, "main"),
+            createShaderStage(c.VK_SHADER_STAGE_FRAGMENT_BIT, meshFragShdr, "main"),
+        };
+        self.mesh.handle = try createMeshPipeline(gpi, self.mesh.layout, &meshShaderStages, self.mesh.format, self.cache);
+        std.debug.print("Mesh Pipeline updated\n", .{});
+    }
 };
 
 fn createPipelineCache(gpi: c.VkDevice) !c.VkPipelineCache {
-    const cahceCreateInf = c.VkPipelineCacheCreateInfo{
+    const cacheCreateInf = c.VkPipelineCacheCreateInfo{
         .sType = c.VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO,
         .flags = 0,
         .initialDataSize = 0,
         .pInitialData = null,
     };
     var cache: c.VkPipelineCache = undefined;
-    try check(c.vkCreatePipelineCache(gpi, &cahceCreateInf, null, &cache), "Failed to create Pipeline Cache");
+    try check(c.vkCreatePipelineCache(gpi, &cacheCreateInf, null, &cache), "Failed to create Pipeline Cache");
     return cache;
 }
 
@@ -421,4 +468,26 @@ fn createGraphicsPipeline(gpi: c.VkDevice, layout: c.VkPipelineLayout, shaderSta
     var pipe: c.VkPipeline = undefined;
     try check(c.vkCreateGraphicsPipelines(gpi, cache, 1, &pipelineInf, null, &pipe), "Failed to create Graphics Pipeline");
     return pipe;
+}
+
+pub fn getFileTimeStamp(alloc: Allocator, src: []const u8) !i128 {
+    // Using helper to get the full path
+    const abs_path = try resolveAssetPath(alloc, src);
+    defer alloc.free(abs_path);
+
+    const cwd = std.fs.cwd();
+    const stat = try cwd.statFile(abs_path);
+    const lastModified: i128 = stat.mtime;
+    return lastModified;
+}
+
+pub fn resolveAssetPath(alloc: Allocator, asset_path: []const u8) ![]u8 {
+    const exe_dir = try std.fs.selfExeDirPathAlloc(alloc);
+    defer alloc.free(exe_dir);
+
+    // Project root (up two levels from zig-out/bin)
+    const project_root = try std.fs.path.resolve(alloc, &[_][]const u8{ exe_dir, "..", ".." });
+    defer alloc.free(project_root);
+
+    return std.fs.path.join(alloc, &[_][]const u8{ project_root, asset_path });
 }

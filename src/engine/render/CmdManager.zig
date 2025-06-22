@@ -5,14 +5,19 @@ const Swapchain = @import("Swapchain.zig").Swapchain;
 const GraphicsPipeline = @import("PipelineManager.zig").GraphicsPipeline;
 const ComputePipeline = @import("PipelineManager.zig").ComputePipeline;
 const MeshPipeline = @import("PipelineManager.zig").MeshPipeline;
+const Context = @import("Context.zig").Context;
 const check = @import("../error.zig").check;
 
 pub const CmdManager = struct {
     alloc: Allocator,
+    gpi: c.VkDevice,
     pool: c.VkCommandPool,
     cmds: []c.VkCommandBuffer,
 
-    pub fn init(alloc: Allocator, gpi: c.VkDevice, family: u32, maxInFlight: u32) !CmdManager {
+    pub fn init(alloc: Allocator, context: *const Context, maxInFlight: u32) !CmdManager {
+        const gpi = context.gpi;
+        const family = context.families.graphics;
+        
         const pool = try createCmdPool(gpi, family);
         const cmds = try alloc.alloc(c.VkCommandBuffer, maxInFlight);
         for (0..maxInFlight) |i| {
@@ -21,6 +26,7 @@ pub const CmdManager = struct {
 
         return .{
             .alloc = alloc,
+            .gpi = gpi,
             .pool = pool,
             .cmds = cmds,
         };

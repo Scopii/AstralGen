@@ -1,6 +1,7 @@
 const std = @import("std");
 const c = @import("../../c.zig");
 const check = @import("../error.zig").check;
+const Context = @import("Context.zig").Context;
 const Allocator = std.mem.Allocator;
 
 pub const DescriptorManager = struct {
@@ -8,7 +9,8 @@ pub const DescriptorManager = struct {
     pool: c.VkDescriptorPool,
     sets: []c.VkDescriptorSet,
 
-    pub fn init(alloc: Allocator, gpi: c.VkDevice, layout: c.VkDescriptorSetLayout, imageCount: u32) !DescriptorManager {
+    pub fn init(alloc: Allocator, context: *const Context, layout: c.VkDescriptorSetLayout, imageCount: u32) !DescriptorManager {
+        const gpi = context.gpi;
         // Create descriptor pool
         const poolSize = c.VkDescriptorPoolSize{
             .type = c.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
