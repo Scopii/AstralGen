@@ -207,7 +207,7 @@ pub const PipelineManager = struct {
         const gpi = self.gpi;
         const alloc = self.alloc;
         c.vkDestroyPipeline(gpi, self.mesh.handle, null);
-        const meshShdr = try createShaderModule(alloc, meshInputPath, meshFragOutputPath, gpi);
+        const meshShdr = try createShaderModule(alloc, meshInputPath, meshOutputPath, gpi);
         defer c.vkDestroyShaderModule(gpi, meshShdr, null);
         const meshFragShdr = try createShaderModule(alloc, meshFragInputPath, meshFragOutputPath, gpi);
         defer c.vkDestroyShaderModule(gpi, meshFragShdr, null);
