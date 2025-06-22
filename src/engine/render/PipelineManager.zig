@@ -6,6 +6,19 @@ const createShaderModule = @import("../../shader/shader.zig").createShaderModule
 const ztracy = @import("ztracy");
 const Context = @import("Context.zig").Context;
 
+const computeInputPath = "src/shader/shdr.comp";
+const computeOutputPath = "zig-out/shader/comp.spv";
+
+const graphicsVertexInputPath = "src/shader/shdr.vert";
+const graphicsVertexOutputPath = "zig-out/shader/vert.spv";
+const graphicsFragInputPath = "src/shader/shdr.frag";
+const graphicsFragOutputPath = "zig-out/shader/frag.spv";
+
+const meshInputPath = "src/shader/shdr.mesh";
+const meshOutputPath = "zig-out/shader/mesh.spv";
+const meshFragInputPath = "src/shader/mesh.frag";
+const meshFragOutputPath = "zig-out/shader/mesh_frag.spv";
+
 pub const ComputePipeline = struct {
     handle: c.VkPipeline,
     layout: c.VkPipelineLayout,
@@ -27,7 +40,7 @@ pub const MeshPipeline = struct {
     timeStamp: i128,
 };
 
-pub const Pipeline = enum { compute, graphics, mesh };
+pub const PipelineEnum = enum { compute, graphics, mesh };
 
 pub const PipelineManager = struct {
     alloc: Allocator,
@@ -44,17 +57,17 @@ pub const PipelineManager = struct {
         //Compute
         const computeDescriptorSetLayout = try createComputeDescriptorSetLayout(gpi);
         const computePipelineLayout = try createPipelineLayout(gpi, computeDescriptorSetLayout, 1);
-        const computeShaderModule = try createShaderModule(alloc, "src/shader/shdr.comp", "zig-out/shader/comp.spv", gpi);
+        const computeShaderModule = try createShaderModule(alloc, computeInputPath, computeOutputPath, gpi);
         defer c.vkDestroyShaderModule(gpi, computeShaderModule, null);
         const computePipeline = try createComputePipeline(gpi, computePipelineLayout, computeShaderModule, cache);
-        const computeTimeStamp = try getFileTimeStamp(alloc, "src/shader/shdr.comp");
+        const computeTimeStamp = try getFileTimeStamp(alloc, computeInputPath);
 
         //Graphics
-        const vertShdr = try createShaderModule(alloc, "src/shader/shdr.vert", "zig-out/shader/vert.spv", gpi);
+        const vertShdr = try createShaderModule(alloc, graphicsVertexInputPath, graphicsVertexOutputPath, gpi);
         defer c.vkDestroyShaderModule(gpi, vertShdr, null);
-        const fragShdr = try createShaderModule(alloc, "src/shader/shdr.frag", "zig-out/shader/frag.spv", gpi);
+        const fragShdr = try createShaderModule(alloc, graphicsFragInputPath, graphicsFragOutputPath, gpi);
         defer c.vkDestroyShaderModule(gpi, fragShdr, null);
-        const graphicsTimeStamp = try getFileTimeStamp(alloc, "src/shader/shdr.frag");
+        const graphicsTimeStamp = try getFileTimeStamp(alloc, graphicsFragInputPath);
 
         const shaderStages = [_]c.VkPipelineShaderStageCreateInfo{
             createShaderStage(c.VK_SHADER_STAGE_VERTEX_BIT, vertShdr, "main"),
@@ -65,11 +78,12 @@ pub const PipelineManager = struct {
         const graphicsPipeline = try createGraphicsPipeline(gpi, graphicsPipelineLayout, &shaderStages, format, cache);
 
         //Mesh
-        const meshShdr = try createShaderModule(alloc, "src/shader/shdr.mesh", "zig-out/shader/mesh.spv", gpi);
+        const meshShdr = try createShaderModule(alloc, meshInputPath, meshOutputPath, gpi);
         defer c.vkDestroyShaderModule(gpi, meshShdr, null);
-        const meshFragShdr = try createShaderModule(alloc, "src/shader/mesh.frag", "zig-out/shader/mesh_frag.spv", gpi);
+
+        const meshFragShdr = try createShaderModule(alloc, meshFragInputPath, meshFragOutputPath, gpi);
         defer c.vkDestroyShaderModule(gpi, meshFragShdr, null);
-        const meshTimeStamp = try getFileTimeStamp(alloc, "src/shader/mesh.frag");
+        const meshTimeStamp = try getFileTimeStamp(alloc, meshFragInputPath);
 
         const meshShaderStages = [_]c.VkPipelineShaderStageCreateInfo{ createShaderStage(c.VK_SHADER_STAGE_MESH_BIT_EXT, meshShdr, "main"), createShaderStage(c.VK_SHADER_STAGE_FRAGMENT_BIT, meshFragShdr, "main") };
 
@@ -116,7 +130,7 @@ pub const PipelineManager = struct {
         c.vkDestroyPipelineCache(gpi, self.cache, null);
     }
 
-    pub fn checkShaderUpdate(self: *PipelineManager, pipeline: Pipeline) !void {
+    pub fn checkShaderUpdate(self: *PipelineManager, pipeline: PipelineEnum) !void {
         const tracyZ1 = ztracy.ZoneNC(@src(), "checkShaderUpdate", 0x0000FFFF);
         defer tracyZ1.End();
 
@@ -124,17 +138,17 @@ pub const PipelineManager = struct {
 
         switch (pipeline) {
             .graphics => {
-                timeStamp = try getFileTimeStamp(self.alloc, "src/shader/shdr.frag");
+                timeStamp = try getFileTimeStamp(self.alloc, graphicsFragInputPath);
                 if (timeStamp == self.graphics.timeStamp) return;
                 self.graphics.timeStamp = timeStamp;
             },
             .compute => {
-                timeStamp = try getFileTimeStamp(self.alloc, "src/shader/shdr.comp");
+                timeStamp = try getFileTimeStamp(self.alloc, computeInputPath);
                 if (timeStamp == self.compute.timeStamp) return;
                 self.compute.timeStamp = timeStamp;
             },
             .mesh => {
-                timeStamp = try getFileTimeStamp(self.alloc, "src/shader/mesh.frag");
+                timeStamp = try getFileTimeStamp(self.alloc, meshFragInputPath);
                 if (timeStamp == self.mesh.timeStamp) return;
                 self.mesh.timeStamp = timeStamp;
             },
@@ -153,7 +167,7 @@ pub const PipelineManager = struct {
         };
     }
 
-    pub fn updatePipeline(self: *PipelineManager, pipeline: Pipeline) !void {
+    pub fn updatePipeline(self: *PipelineManager, pipeline: PipelineEnum) !void {
         _ = c.vkDeviceWaitIdle(self.gpi);
         switch (pipeline) {
             .graphics => try self.updateGraphicsPipeline(),
@@ -166,7 +180,7 @@ pub const PipelineManager = struct {
         const gpi = self.gpi;
         const alloc = self.alloc;
         c.vkDestroyPipeline(gpi, self.compute.handle, null);
-        const computeShaderModule = try createShaderModule(alloc, "src/shader/shdr.comp", "zig-out/shader/comp.spv", gpi);
+        const computeShaderModule = try createShaderModule(alloc, computeInputPath, computeOutputPath, gpi);
         defer c.vkDestroyShaderModule(gpi, computeShaderModule, null);
         self.compute.handle = try createComputePipeline(gpi, self.compute.layout, computeShaderModule, self.cache);
         std.debug.print("Compute Pipeline updated\n", .{});
@@ -176,9 +190,9 @@ pub const PipelineManager = struct {
         const gpi = self.gpi;
         const alloc = self.alloc;
         c.vkDestroyPipeline(gpi, self.graphics.handle, null);
-        const vertShdr = try createShaderModule(alloc, "src/shader/shdr.vert", "zig-out/shader/vert.spv", gpi);
+        const vertShdr = try createShaderModule(alloc, graphicsVertexInputPath, graphicsVertexOutputPath, gpi);
         defer c.vkDestroyShaderModule(gpi, vertShdr, null);
-        const fragShdr = try createShaderModule(alloc, "src/shader/shdr.frag", "zig-out/shader/frag.spv", gpi);
+        const fragShdr = try createShaderModule(alloc, graphicsFragInputPath, graphicsFragOutputPath, gpi);
         defer c.vkDestroyShaderModule(gpi, fragShdr, null);
 
         const shaderStages = [_]c.VkPipelineShaderStageCreateInfo{
@@ -193,9 +207,9 @@ pub const PipelineManager = struct {
         const gpi = self.gpi;
         const alloc = self.alloc;
         c.vkDestroyPipeline(gpi, self.mesh.handle, null);
-        const meshShdr = try createShaderModule(alloc, "src/shader/shdr.mesh", "zig-out/shader/mesh.spv", gpi);
+        const meshShdr = try createShaderModule(alloc, meshInputPath, meshFragOutputPath, gpi);
         defer c.vkDestroyShaderModule(gpi, meshShdr, null);
-        const meshFragShdr = try createShaderModule(alloc, "src/shader/mesh.frag", "zig-out/shader/mesh_frag.spv", gpi);
+        const meshFragShdr = try createShaderModule(alloc, meshFragInputPath, meshFragOutputPath, gpi);
         defer c.vkDestroyShaderModule(gpi, meshFragShdr, null);
 
         const meshShaderStages = [_]c.VkPipelineShaderStageCreateInfo{

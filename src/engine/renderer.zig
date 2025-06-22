@@ -12,7 +12,7 @@ const FramePacer = @import("sync/FramePacer.zig").FramePacer;
 const VkAllocator = @import("vma.zig").VkAllocator;
 const CmdManager = @import("render/CmdManager.zig").CmdManager;
 const PipelineManager = @import("render/PipelineManager.zig").PipelineManager;
-const Pipeline = @import("render/PipelineManager.zig").Pipeline;
+const Pipeline = @import("render/PipelineManager.zig").PipelineEnum;
 const ResourceManager = @import("render/ResourceManager.zig").ResourceManager;
 const DescriptorManager = @import("render/DescriptorManager.zig").DescriptorManager;
 
