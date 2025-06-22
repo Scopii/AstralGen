@@ -4,14 +4,15 @@ const Allocator = std.mem.Allocator;
 const check = @import("../error.zig").check;
 const createShaderModule = @import("../../shader/shader.zig").createShaderModule;
 const ztracy = @import("ztracy");
+const DescriptorManager = @import("DescriptorManager.zig").DescriptorManager;
 const Context = @import("Context.zig").Context;
 
 const computeInputPath = "src/shader/shdr.comp";
 const computeOutputPath = "zig-out/shader/comp.spv";
 
-const graphicsVertexInputPath = "src/shader/shdr.vert";
-const graphicsVertexOutputPath = "zig-out/shader/vert.spv";
-const graphicsFragInputPath = "src/shader/shdr.frag";
+const graphicsVertPath = "src/shader/shdr.vert";
+const graphicsVertOutputPath = "zig-out/shader/vert.spv";
+const graphicsFragPath = "src/shader/shdr.frag";
 const graphicsFragOutputPath = "zig-out/shader/frag.spv";
 
 const meshInputPath = "src/shader/shdr.mesh";
@@ -22,7 +23,6 @@ const meshFragOutputPath = "zig-out/shader/mesh_frag.spv";
 pub const ComputePipeline = struct {
     handle: c.VkPipeline,
     layout: c.VkPipelineLayout,
-    descriptorSetLayout: c.VkDescriptorSetLayout,
     timeStamp: i128,
 };
 
@@ -50,32 +50,34 @@ pub const PipelineManager = struct {
     mesh: MeshPipeline,
     cache: c.VkPipelineCache,
 
-    pub fn init(alloc: Allocator, context: *const Context, format: c.VkFormat) !PipelineManager {
+    pub fn init(alloc: Allocator, context: *const Context, descriptorManager: *const DescriptorManager, format: c.VkFormat) !PipelineManager {
         const gpi = context.gpi;
 
         const cache = try createPipelineCache(gpi);
         //Compute
-        const computeDescriptorSetLayout = try createComputeDescriptorSetLayout(gpi);
-        const computePipelineLayout = try createPipelineLayout(gpi, computeDescriptorSetLayout, 1);
+        const computePipelineLayout = try createPipelineLayout(gpi, descriptorManager.computeLayout, 1);
         const computeShaderModule = try createShaderModule(alloc, computeInputPath, computeOutputPath, gpi);
         defer c.vkDestroyShaderModule(gpi, computeShaderModule, null);
-        const computePipeline = try createComputePipeline(gpi, computePipelineLayout, computeShaderModule, cache);
+        const computeStage = [_]c.VkPipelineShaderStageCreateInfo{
+            createShaderStage(c.VK_SHADER_STAGE_COMPUTE_BIT, computeShaderModule, "main"),
+        };
+        const computePipeline = try createPipeline(gpi, computePipelineLayout, &computeStage, cache, .compute, null);
         const computeTimeStamp = try getFileTimeStamp(alloc, computeInputPath);
 
         //Graphics
-        const vertShdr = try createShaderModule(alloc, graphicsVertexInputPath, graphicsVertexOutputPath, gpi);
+        const vertShdr = try createShaderModule(alloc, graphicsVertPath, graphicsVertOutputPath, gpi);
         defer c.vkDestroyShaderModule(gpi, vertShdr, null);
-        const fragShdr = try createShaderModule(alloc, graphicsFragInputPath, graphicsFragOutputPath, gpi);
+        const fragShdr = try createShaderModule(alloc, graphicsFragPath, graphicsFragOutputPath, gpi);
         defer c.vkDestroyShaderModule(gpi, fragShdr, null);
-        const graphicsTimeStamp = try getFileTimeStamp(alloc, graphicsFragInputPath);
+        const graphicsTimeStamp = try getFileTimeStamp(alloc, graphicsFragPath);
 
-        const shaderStages = [_]c.VkPipelineShaderStageCreateInfo{
+        const graphicsStages = [_]c.VkPipelineShaderStageCreateInfo{
             createShaderStage(c.VK_SHADER_STAGE_VERTEX_BIT, vertShdr, "main"),
             createShaderStage(c.VK_SHADER_STAGE_FRAGMENT_BIT, fragShdr, "main"),
         };
 
         const graphicsPipelineLayout = try createPipelineLayout(gpi, null, 0);
-        const graphicsPipeline = try createGraphicsPipeline(gpi, graphicsPipelineLayout, &shaderStages, format, cache);
+        const graphicsPipeline = try createPipeline(gpi, graphicsPipelineLayout, &graphicsStages, cache, .graphics, format);
 
         //Mesh
         const meshShdr = try createShaderModule(alloc, meshInputPath, meshOutputPath, gpi);
@@ -85,10 +87,13 @@ pub const PipelineManager = struct {
         defer c.vkDestroyShaderModule(gpi, meshFragShdr, null);
         const meshTimeStamp = try getFileTimeStamp(alloc, meshFragInputPath);
 
-        const meshShaderStages = [_]c.VkPipelineShaderStageCreateInfo{ createShaderStage(c.VK_SHADER_STAGE_MESH_BIT_EXT, meshShdr, "main"), createShaderStage(c.VK_SHADER_STAGE_FRAGMENT_BIT, meshFragShdr, "main") };
+        const meshStages = [_]c.VkPipelineShaderStageCreateInfo{
+            createShaderStage(c.VK_SHADER_STAGE_MESH_BIT_EXT, meshShdr, "main"),
+            createShaderStage(c.VK_SHADER_STAGE_FRAGMENT_BIT, meshFragShdr, "main"),
+        };
 
         const meshPipelineLayout = try createPipelineLayout(gpi, null, 0); // Simple layout with no descriptors
-        const meshPipeline = try createMeshPipeline(gpi, meshPipelineLayout, &meshShaderStages, format, cache);
+        const meshPipeline = try createPipeline(gpi, meshPipelineLayout, &meshStages, cache, .mesh, format);
 
         return .{
             .alloc = alloc,
@@ -96,7 +101,6 @@ pub const PipelineManager = struct {
             .compute = .{
                 .handle = computePipeline,
                 .layout = computePipelineLayout,
-                .descriptorSetLayout = computeDescriptorSetLayout,
                 .timeStamp = computeTimeStamp,
             },
             .graphics = .{
@@ -119,7 +123,6 @@ pub const PipelineManager = struct {
         const gpi = self.gpi;
         c.vkDestroyPipeline(gpi, self.compute.handle, null);
         c.vkDestroyPipelineLayout(gpi, self.compute.layout, null);
-        c.vkDestroyDescriptorSetLayout(gpi, self.compute.descriptorSetLayout, null);
 
         c.vkDestroyPipeline(gpi, self.graphics.handle, null);
         c.vkDestroyPipelineLayout(gpi, self.graphics.layout, null);
@@ -138,7 +141,7 @@ pub const PipelineManager = struct {
 
         switch (pipeline) {
             .graphics => {
-                timeStamp = try getFileTimeStamp(self.alloc, graphicsFragInputPath);
+                timeStamp = try getFileTimeStamp(self.alloc, graphicsFragPath);
                 if (timeStamp == self.graphics.timeStamp) return;
                 self.graphics.timeStamp = timeStamp;
             },
@@ -169,55 +172,47 @@ pub const PipelineManager = struct {
 
     pub fn updatePipeline(self: *PipelineManager, pipeline: PipelineEnum) !void {
         _ = c.vkDeviceWaitIdle(self.gpi);
+        const gpi = self.gpi;
+        const alloc = self.alloc;
+
         switch (pipeline) {
-            .graphics => try self.updateGraphicsPipeline(),
-            .compute => try self.updateComputePipeline(),
-            .mesh => try self.updateMeshPipeline(),
+            .compute => {
+                c.vkDestroyPipeline(gpi, self.compute.handle, null);
+                const computeShaderModule = try createShaderModule(alloc, computeInputPath, computeOutputPath, gpi);
+                defer c.vkDestroyShaderModule(gpi, computeShaderModule, null);
+                const computeStage = [_]c.VkPipelineShaderStageCreateInfo{
+                    createShaderStage(c.VK_SHADER_STAGE_COMPUTE_BIT, computeShaderModule, "main"),
+                };
+                self.compute.handle = try createPipeline(gpi, self.compute.layout, &computeStage, self.cache, pipeline, null);
+            },
+            .graphics => {
+                c.vkDestroyPipeline(gpi, self.graphics.handle, null);
+                const vertShdr = try createShaderModule(alloc, graphicsVertPath, graphicsVertOutputPath, gpi);
+                defer c.vkDestroyShaderModule(gpi, vertShdr, null);
+                const fragShdr = try createShaderModule(alloc, graphicsFragPath, graphicsFragOutputPath, gpi);
+                defer c.vkDestroyShaderModule(gpi, fragShdr, null);
+
+                const shaderStages = [_]c.VkPipelineShaderStageCreateInfo{
+                    createShaderStage(c.VK_SHADER_STAGE_VERTEX_BIT, vertShdr, "main"),
+                    createShaderStage(c.VK_SHADER_STAGE_FRAGMENT_BIT, fragShdr, "main"),
+                };
+                self.graphics.handle = try createPipeline(gpi, self.graphics.layout, &shaderStages, self.cache, pipeline, self.graphics.format);
+            },
+            .mesh => {
+                c.vkDestroyPipeline(gpi, self.mesh.handle, null);
+                const meshShdr = try createShaderModule(alloc, meshInputPath, meshOutputPath, gpi);
+                defer c.vkDestroyShaderModule(gpi, meshShdr, null);
+                const meshFragShdr = try createShaderModule(alloc, meshFragInputPath, meshFragOutputPath, gpi);
+                defer c.vkDestroyShaderModule(gpi, meshFragShdr, null);
+
+                const meshShaderStages = [_]c.VkPipelineShaderStageCreateInfo{
+                    createShaderStage(c.VK_SHADER_STAGE_MESH_BIT_EXT, meshShdr, "main"),
+                    createShaderStage(c.VK_SHADER_STAGE_FRAGMENT_BIT, meshFragShdr, "main"),
+                };
+                self.mesh.handle = try createPipeline(gpi, self.mesh.layout, &meshShaderStages, self.cache, pipeline, self.mesh.format);
+            },
         }
-    }
-
-    pub fn updateComputePipeline(self: *PipelineManager) !void {
-        const gpi = self.gpi;
-        const alloc = self.alloc;
-        c.vkDestroyPipeline(gpi, self.compute.handle, null);
-        const computeShaderModule = try createShaderModule(alloc, computeInputPath, computeOutputPath, gpi);
-        defer c.vkDestroyShaderModule(gpi, computeShaderModule, null);
-        self.compute.handle = try createComputePipeline(gpi, self.compute.layout, computeShaderModule, self.cache);
-        std.debug.print("Compute Pipeline updated\n", .{});
-    }
-
-    pub fn updateGraphicsPipeline(self: *PipelineManager) !void {
-        const gpi = self.gpi;
-        const alloc = self.alloc;
-        c.vkDestroyPipeline(gpi, self.graphics.handle, null);
-        const vertShdr = try createShaderModule(alloc, graphicsVertexInputPath, graphicsVertexOutputPath, gpi);
-        defer c.vkDestroyShaderModule(gpi, vertShdr, null);
-        const fragShdr = try createShaderModule(alloc, graphicsFragInputPath, graphicsFragOutputPath, gpi);
-        defer c.vkDestroyShaderModule(gpi, fragShdr, null);
-
-        const shaderStages = [_]c.VkPipelineShaderStageCreateInfo{
-            createShaderStage(c.VK_SHADER_STAGE_VERTEX_BIT, vertShdr, "main"),
-            createShaderStage(c.VK_SHADER_STAGE_FRAGMENT_BIT, fragShdr, "main"),
-        };
-        self.graphics.handle = try createGraphicsPipeline(gpi, self.graphics.layout, &shaderStages, self.graphics.format, self.cache);
-        std.debug.print("Graphics Pipeline updated\n", .{});
-    }
-
-    pub fn updateMeshPipeline(self: *PipelineManager) !void {
-        const gpi = self.gpi;
-        const alloc = self.alloc;
-        c.vkDestroyPipeline(gpi, self.mesh.handle, null);
-        const meshShdr = try createShaderModule(alloc, meshInputPath, meshOutputPath, gpi);
-        defer c.vkDestroyShaderModule(gpi, meshShdr, null);
-        const meshFragShdr = try createShaderModule(alloc, meshFragInputPath, meshFragOutputPath, gpi);
-        defer c.vkDestroyShaderModule(gpi, meshFragShdr, null);
-
-        const meshShaderStages = [_]c.VkPipelineShaderStageCreateInfo{
-            createShaderStage(c.VK_SHADER_STAGE_MESH_BIT_EXT, meshShdr, "main"),
-            createShaderStage(c.VK_SHADER_STAGE_FRAGMENT_BIT, meshFragShdr, "main"),
-        };
-        self.mesh.handle = try createMeshPipeline(gpi, self.mesh.layout, &meshShaderStages, self.mesh.format, self.cache);
-        std.debug.print("Mesh Pipeline updated\n", .{});
+        std.debug.print("{s} Pipeline updated\n", .{@tagName(pipeline)});
     }
 };
 
@@ -231,26 +226,6 @@ fn createPipelineCache(gpi: c.VkDevice) !c.VkPipelineCache {
     var cache: c.VkPipelineCache = undefined;
     try check(c.vkCreatePipelineCache(gpi, &cacheCreateInf, null, &cache), "Failed to create Pipeline Cache");
     return cache;
-}
-
-fn createComputeDescriptorSetLayout(gpi: c.VkDevice) !c.VkDescriptorSetLayout {
-    const binding = c.VkDescriptorSetLayoutBinding{
-        .binding = 0,
-        .descriptorType = c.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-        .descriptorCount = 1,
-        .stageFlags = c.VK_SHADER_STAGE_COMPUTE_BIT,
-        .pImmutableSamplers = null,
-    };
-
-    const layoutInf = c.VkDescriptorSetLayoutCreateInfo{
-        .sType = c.VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-        .bindingCount = 1,
-        .pBindings = &binding,
-    };
-
-    var descriptorSetLayout: c.VkDescriptorSetLayout = undefined;
-    try check(c.vkCreateDescriptorSetLayout(gpi, &layoutInf, null, &descriptorSetLayout), "Failed to create descriptor set layout");
-    return descriptorSetLayout;
 }
 
 fn createPipelineLayout(gpi: c.VkDevice, descriptorSetLayout: c.VkDescriptorSetLayout, layoutCount: u32) !c.VkPipelineLayout {
@@ -283,205 +258,167 @@ fn createComputePipeline(gpi: c.VkDevice, layout: c.VkPipelineLayout, shaderModu
     return pipe;
 }
 
-fn createMeshPipeline(
+fn createPipeline(
     gpi: c.VkDevice,
     layout: c.VkPipelineLayout,
     shaderStages: []const c.VkPipelineShaderStageCreateInfo,
-    format: c.VkFormat,
     cache: c.VkPipelineCache,
+    pipelineType: PipelineEnum,
+    format: ?c.VkFormat,
 ) !c.VkPipeline {
-    // Viewport and Scissor will be dynamic
-    const viewInf = c.VkPipelineViewportStateCreateInfo{
-        .sType = c.VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
-        .viewportCount = 1,
-        .scissorCount = 1,
-    };
+    switch (pipelineType) {
+        .compute => {
+            if (shaderStages.len > 1) return error.ComputeCantHaveMultipleStages;
 
-    // Standard rasterization state
-    const rasterInf = c.VkPipelineRasterizationStateCreateInfo{
-        .sType = c.VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
-        .depthClampEnable = c.VK_FALSE,
-        .rasterizerDiscardEnable = c.VK_FALSE,
-        .polygonMode = c.VK_POLYGON_MODE_FILL,
-        .cullMode = c.VK_CULL_MODE_NONE,
-        .frontFace = c.VK_FRONT_FACE_CLOCKWISE,
-        .depthBiasEnable = c.VK_FALSE,
-        .lineWidth = 1.0,
-    };
+            const pipeInf = c.VkComputePipelineCreateInfo{
+                .sType = c.VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
+                .stage = shaderStages[0],
+                .layout = layout,
+            };
 
-    // Standard multisampling state
-    const msaaInf = c.VkPipelineMultisampleStateCreateInfo{
-        .sType = c.VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
-        .rasterizationSamples = c.VK_SAMPLE_COUNT_1_BIT,
-        .sampleShadingEnable = c.VK_FALSE,
-    };
+            var pipe: c.VkPipeline = undefined;
+            try check(c.vkCreateComputePipelines(gpi, cache, 1, &pipeInf, null, &pipe), "Failed to create pipeline");
+            return pipe;
+        },
+        .graphics, .mesh => {
+            const viewInf = c.VkPipelineViewportStateCreateInfo{
+                .sType = c.VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
+                .viewportCount = 1,
+                .scissorCount = 1,
+            };
 
-    // Standard color blend state
-    const colBlendAttach = c.VkPipelineColorBlendAttachmentState{
-        .blendEnable = c.VK_FALSE,
-        .colorWriteMask = c.VK_COLOR_COMPONENT_R_BIT | c.VK_COLOR_COMPONENT_G_BIT |
-            c.VK_COLOR_COMPONENT_B_BIT | c.VK_COLOR_COMPONENT_A_BIT,
-    };
+            const rasterInf = c.VkPipelineRasterizationStateCreateInfo{
+                .sType = c.VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
+                .depthClampEnable = c.VK_FALSE,
+                .rasterizerDiscardEnable = c.VK_FALSE,
+                .polygonMode = c.VK_POLYGON_MODE_FILL,
+                .cullMode = c.VK_CULL_MODE_NONE, // VK_CULL_MODE_BACK_BIT
+                .frontFace = c.VK_FRONT_FACE_CLOCKWISE,
+                .depthBiasEnable = c.VK_FALSE,
+                .depthBiasConstantFactor = 0.0,
+                .depthBiasClamp = 0.0,
+                .depthBiasSlopeFactor = 0.0,
+                .lineWidth = 1.0,
+            };
 
-    const colBlendInf = c.VkPipelineColorBlendStateCreateInfo{
-        .sType = c.VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
-        .attachmentCount = 1,
-        .pAttachments = &colBlendAttach,
-    };
+            const msaaInf = c.VkPipelineMultisampleStateCreateInfo{
+                .sType = c.VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
+                .flags = 0,
+                .rasterizationSamples = c.VK_SAMPLE_COUNT_1_BIT,
+                .sampleShadingEnable = c.VK_FALSE,
+                .minSampleShading = 1.0,
+                .pSampleMask = null,
+                .alphaToCoverageEnable = c.VK_FALSE,
+                .alphaToOneEnable = c.VK_FALSE,
+            };
 
-    // Dynamic states
-    const dynStates = [_]c.VkDynamicState{
-        c.VK_DYNAMIC_STATE_VIEWPORT,
-        c.VK_DYNAMIC_STATE_SCISSOR,
-    };
+            const colBlendAttach = c.VkPipelineColorBlendAttachmentState{
+                .blendEnable = c.VK_FALSE,
+                .srcColorBlendFactor = c.VK_BLEND_FACTOR_ONE,
+                .dstColorBlendFactor = c.VK_BLEND_FACTOR_ZERO,
+                .colorBlendOp = c.VK_BLEND_OP_ADD,
+                .srcAlphaBlendFactor = c.VK_BLEND_FACTOR_ONE,
+                .dstAlphaBlendFactor = c.VK_BLEND_FACTOR_ZERO,
+                .alphaBlendOp = c.VK_BLEND_OP_ADD,
+                .colorWriteMask = c.VK_COLOR_COMPONENT_R_BIT | c.VK_COLOR_COMPONENT_G_BIT |
+                    c.VK_COLOR_COMPONENT_B_BIT | c.VK_COLOR_COMPONENT_A_BIT,
+            };
 
-    const dynStateInf = c.VkPipelineDynamicStateCreateInfo{
-        .sType = c.VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
-        .dynamicStateCount = dynStates.len,
-        .pDynamicStates = &dynStates,
-    };
+            const colBlendInf = c.VkPipelineColorBlendStateCreateInfo{
+                .sType = c.VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
+                .logicOpEnable = c.VK_FALSE,
+                .logicOp = c.VK_LOGIC_OP_COPY,
+                .attachmentCount = 1,
+                .pAttachments = &colBlendAttach,
+                .blendConstants = [4]f32{ 0.0, 0.0, 0.0, 0.0 },
+            };
 
-    // Rendering format info
-    const colFormats = [_]c.VkFormat{format};
-    var pipeline_rendering_info = c.VkPipelineRenderingCreateInfo{
-        .sType = c.VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
-        .colorAttachmentCount = 1,
-        .pColorAttachmentFormats = &colFormats,
-    };
+            const dynStates = [_]c.VkDynamicState{
+                c.VK_DYNAMIC_STATE_VIEWPORT,
+                c.VK_DYNAMIC_STATE_SCISSOR,
+            };
 
-    const pipelineInf = c.VkGraphicsPipelineCreateInfo{
-        .sType = c.VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
-        .pNext = &pipeline_rendering_info,
-        .stageCount = @intCast(shaderStages.len),
-        .pStages = shaderStages.ptr,
-        // Mesh shaders don't use Vertex Input or Input Assembly states.
-        .pVertexInputState = null,
-        .pInputAssemblyState = null,
-        .pViewportState = &viewInf,
-        .pRasterizationState = &rasterInf,
-        .pMultisampleState = &msaaInf,
-        .pDepthStencilState = null,
-        .pColorBlendState = &colBlendInf,
-        .pDynamicState = &dynStateInf,
-        .layout = layout,
-        .subpass = 0,
-        .basePipelineIndex = -1,
-    };
-    var pipe: c.VkPipeline = undefined;
-    try check(c.vkCreateGraphicsPipelines(gpi, cache, 1, &pipelineInf, null, &pipe), "Failed to create Mesh Pipeline");
-    return pipe;
-}
+            const dynStateInf = c.VkPipelineDynamicStateCreateInfo{
+                .sType = c.VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
+                .dynamicStateCount = dynStates.len,
+                .pDynamicStates = &dynStates,
+            };
 
-fn createGraphicsPipeline(gpi: c.VkDevice, layout: c.VkPipelineLayout, shaderStages: []const c.VkPipelineShaderStageCreateInfo, format: c.VkFormat, cache: c.VkPipelineCache) !c.VkPipeline {
-    const vertInputInf = c.VkPipelineVertexInputStateCreateInfo{
-        .sType = c.VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-        .vertexBindingDescriptionCount = 0,
-        .vertexAttributeDescriptionCount = 0,
-    };
+            if (format == null) return error.PipelineNeedsFormat;
+            const checkedFormat = format.?; // Unwrap the optional to get the value.
 
-    const assemblyInf = c.VkPipelineInputAssemblyStateCreateInfo{
-        .sType = c.VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
-        .topology = c.VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, // triangle from every 3 vertices without reuse
-        // VK_PRIMITIVE_TOPOLOGY_POINT_LIST         points from vertices
-        // VK_PRIMITIVE_TOPOLOGY_LINE_LIST          line from every 2 vertices without reuse
-        // VK_PRIMITIVE_TOPOLOGY_LINE_STRIP         end vertex of every line is used as start vertex for next line
-        // VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP     second and third vertex of every triangle are used as first two vertices of the next triangle
-        .primitiveRestartEnable = c.VK_FALSE,
-    };
+            const colFormats = [_]c.VkFormat{checkedFormat};
+            var pipeline_rendering_info = c.VkPipelineRenderingCreateInfo{
+                .sType = c.VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
+                .viewMask = 0,
+                .colorAttachmentCount = 1,
+                .pColorAttachmentFormats = &colFormats,
+                .depthAttachmentFormat = c.VK_FORMAT_UNDEFINED,
+                .stencilAttachmentFormat = c.VK_FORMAT_UNDEFINED,
+            };
 
-    const viewInf = c.VkPipelineViewportStateCreateInfo{
-        .sType = c.VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
-        .viewportCount = 1,
-        .scissorCount = 1,
-    };
+            if (pipelineType == .mesh) {
+                const pipelineInf = c.VkGraphicsPipelineCreateInfo{
+                    .sType = c.VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+                    .pNext = &pipeline_rendering_info,
+                    .stageCount = @intCast(shaderStages.len),
+                    .pStages = shaderStages.ptr,
+                    // Mesh shaders don't use Vertex Input or Input Assembly states.
+                    .pVertexInputState = null,
+                    .pInputAssemblyState = null,
+                    .pViewportState = &viewInf,
+                    .pRasterizationState = &rasterInf,
+                    .pMultisampleState = &msaaInf,
+                    .pDepthStencilState = null,
+                    .pColorBlendState = &colBlendInf,
+                    .pDynamicState = &dynStateInf,
+                    .layout = layout,
+                    .subpass = 0,
+                    .basePipelineIndex = -1,
+                };
+                var pipe: c.VkPipeline = undefined;
+                try check(c.vkCreateGraphicsPipelines(gpi, cache, 1, &pipelineInf, null, &pipe), "Failed to create Mesh Pipeline");
+                return pipe;
+            } else {
+                const vertInputInf = c.VkPipelineVertexInputStateCreateInfo{
+                    .sType = c.VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+                    .vertexBindingDescriptionCount = 0,
+                    .vertexAttributeDescriptionCount = 0,
+                };
 
-    const rasterInf = c.VkPipelineRasterizationStateCreateInfo{
-        .sType = c.VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
-        .depthClampEnable = c.VK_FALSE,
-        .rasterizerDiscardEnable = c.VK_FALSE,
-        .polygonMode = c.VK_POLYGON_MODE_FILL,
-        .cullMode = c.VK_CULL_MODE_NONE, // VK_CULL_MODE_BACK_BIT
-        .frontFace = c.VK_FRONT_FACE_CLOCKWISE,
-        .depthBiasEnable = c.VK_FALSE,
-        .depthBiasConstantFactor = 0.0,
-        .depthBiasClamp = 0.0,
-        .depthBiasSlopeFactor = 0.0,
-        .lineWidth = 1.0,
-    };
+                const assemblyInf = c.VkPipelineInputAssemblyStateCreateInfo{
+                    .sType = c.VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
+                    .topology = c.VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, // triangle from every 3 vertices without reuse
+                    // VK_PRIMITIVE_TOPOLOGY_POINT_LIST         points from vertices
+                    // VK_PRIMITIVE_TOPOLOGY_LINE_LIST          line from every 2 vertices without reuse
+                    // VK_PRIMITIVE_TOPOLOGY_LINE_STRIP         end vertex of every line is used as start vertex for next line
+                    // VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP     second and third vertex of every triangle are used as first two vertices of the next triangle
+                    .primitiveRestartEnable = c.VK_FALSE,
+                };
 
-    const msaaInf = c.VkPipelineMultisampleStateCreateInfo{
-        .sType = c.VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
-        .flags = 0,
-        .rasterizationSamples = c.VK_SAMPLE_COUNT_1_BIT,
-        .sampleShadingEnable = c.VK_FALSE,
-        .minSampleShading = 1.0,
-        .pSampleMask = null,
-        .alphaToCoverageEnable = c.VK_FALSE,
-        .alphaToOneEnable = c.VK_FALSE,
-    };
-
-    const colBlendAttach = c.VkPipelineColorBlendAttachmentState{
-        .blendEnable = c.VK_FALSE,
-        .srcColorBlendFactor = c.VK_BLEND_FACTOR_ONE,
-        .dstColorBlendFactor = c.VK_BLEND_FACTOR_ZERO,
-        .colorBlendOp = c.VK_BLEND_OP_ADD,
-        .srcAlphaBlendFactor = c.VK_BLEND_FACTOR_ONE,
-        .dstAlphaBlendFactor = c.VK_BLEND_FACTOR_ZERO,
-        .alphaBlendOp = c.VK_BLEND_OP_ADD,
-        .colorWriteMask = c.VK_COLOR_COMPONENT_R_BIT | c.VK_COLOR_COMPONENT_G_BIT |
-            c.VK_COLOR_COMPONENT_B_BIT | c.VK_COLOR_COMPONENT_A_BIT,
-    };
-
-    const colBlendInf = c.VkPipelineColorBlendStateCreateInfo{
-        .sType = c.VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
-        .logicOpEnable = c.VK_FALSE,
-        .logicOp = c.VK_LOGIC_OP_COPY,
-        .attachmentCount = 1,
-        .pAttachments = &colBlendAttach,
-        .blendConstants = [4]f32{ 0.0, 0.0, 0.0, 0.0 },
-    };
-
-    const dynStates = [_]c.VkDynamicState{
-        c.VK_DYNAMIC_STATE_VIEWPORT,
-        c.VK_DYNAMIC_STATE_SCISSOR,
-    };
-
-    const dynStateInf = c.VkPipelineDynamicStateCreateInfo{
-        .sType = c.VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
-        .dynamicStateCount = dynStates.len,
-        .pDynamicStates = &dynStates,
-    };
-
-    const colFormats = [_]c.VkFormat{format};
-    var pipeline_rendering_info = c.VkPipelineRenderingCreateInfo{
-        .sType = c.VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
-        .viewMask = 0,
-        .colorAttachmentCount = 1,
-        .pColorAttachmentFormats = &colFormats,
-        .depthAttachmentFormat = c.VK_FORMAT_UNDEFINED,
-        .stencilAttachmentFormat = c.VK_FORMAT_UNDEFINED,
-    };
-
-    const pipelineInf = c.VkGraphicsPipelineCreateInfo{
-        .sType = c.VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
-        .pNext = &pipeline_rendering_info,
-        .stageCount = @intCast(shaderStages.len),
-        .pStages = shaderStages.ptr,
-        .pVertexInputState = &vertInputInf,
-        .pInputAssemblyState = &assemblyInf,
-        .pViewportState = &viewInf,
-        .pRasterizationState = &rasterInf,
-        .pMultisampleState = &msaaInf,
-        .pDepthStencilState = null,
-        .pColorBlendState = &colBlendInf,
-        .pDynamicState = &dynStateInf,
-        .layout = layout,
-        .subpass = 0,
-        .basePipelineIndex = -1,
-    };
-    var pipe: c.VkPipeline = undefined;
-    try check(c.vkCreateGraphicsPipelines(gpi, cache, 1, &pipelineInf, null, &pipe), "Failed to create Graphics Pipeline");
-    return pipe;
+                const pipelineInf = c.VkGraphicsPipelineCreateInfo{
+                    .sType = c.VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+                    .pNext = &pipeline_rendering_info,
+                    .stageCount = @intCast(shaderStages.len),
+                    .pStages = shaderStages.ptr,
+                    .pVertexInputState = &vertInputInf,
+                    .pInputAssemblyState = &assemblyInf,
+                    .pViewportState = &viewInf,
+                    .pRasterizationState = &rasterInf,
+                    .pMultisampleState = &msaaInf,
+                    .pDepthStencilState = null,
+                    .pColorBlendState = &colBlendInf,
+                    .pDynamicState = &dynStateInf,
+                    .layout = layout,
+                    .subpass = 0,
+                    .basePipelineIndex = -1,
+                };
+                var pipe: c.VkPipeline = undefined;
+                try check(c.vkCreateGraphicsPipelines(gpi, cache, 1, &pipelineInf, null, &pipe), "Failed to create Graphics Pipeline");
+                return pipe;
+            }
+        },
+    }
 }
 
 pub fn getFileTimeStamp(alloc: Allocator, src: []const u8) !i128 {

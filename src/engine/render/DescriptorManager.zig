@@ -8,9 +8,11 @@ pub const DescriptorManager = struct {
     alloc: Allocator,
     pool: c.VkDescriptorPool,
     sets: []c.VkDescriptorSet,
+    computeLayout: c.VkDescriptorSetLayout,
 
-    pub fn init(alloc: Allocator, context: *const Context, layout: c.VkDescriptorSetLayout, imageCount: u32) !DescriptorManager {
+    pub fn init(alloc: Allocator, context: *const Context, imageCount: u32) !DescriptorManager {
         const gpi = context.gpi;
+
         // Create descriptor pool
         const poolSize = c.VkDescriptorPoolSize{
             .type = c.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
@@ -27,11 +29,14 @@ pub const DescriptorManager = struct {
         var pool: c.VkDescriptorPool = undefined;
         try check(c.vkCreateDescriptorPool(gpi, &poolInfo, null, &pool), "Failed to create descriptor pool");
 
+        const computeLayout = try createComputeDescriptorSetLayout(gpi);
+        errdefer c.vkDestroyDescriptorSetLayout(gpi, computeLayout, null);
+
         // Allocate descriptor sets
         const layouts = try alloc.alloc(c.VkDescriptorSetLayout, imageCount);
         defer alloc.free(layouts);
         for (layouts) |*layoutPtr| {
-            layoutPtr.* = layout;
+            layoutPtr.* = computeLayout;
         }
 
         const allocInfo = c.VkDescriptorSetAllocateInfo{
@@ -48,7 +53,28 @@ pub const DescriptorManager = struct {
             .alloc = alloc,
             .pool = pool,
             .sets = sets,
+            .computeLayout = computeLayout,
         };
+    }
+
+    fn createComputeDescriptorSetLayout(gpi: c.VkDevice) !c.VkDescriptorSetLayout {
+        const binding = c.VkDescriptorSetLayoutBinding{
+            .binding = 0,
+            .descriptorType = c.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+            .descriptorCount = 1,
+            .stageFlags = c.VK_SHADER_STAGE_COMPUTE_BIT,
+            .pImmutableSamplers = null,
+        };
+
+        const layoutInf = c.VkDescriptorSetLayoutCreateInfo{
+            .sType = c.VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+            .bindingCount = 1,
+            .pBindings = &binding,
+        };
+
+        var descriptorSetLayout: c.VkDescriptorSetLayout = undefined;
+        try check(c.vkCreateDescriptorSetLayout(gpi, &layoutInf, null, &descriptorSetLayout), "Failed to create descriptor set layout");
+        return descriptorSetLayout;
     }
 
     pub fn updateAllDescriptorSets(self: *DescriptorManager, gpi: c.VkDevice, imageView: c.VkImageView) void {
@@ -81,6 +107,8 @@ pub const DescriptorManager = struct {
         c.vkUpdateDescriptorSets(gpi, @intCast(writeDescriptors.len), writeDescriptors.ptr, 0, null);
     }
     pub fn deinit(self: *DescriptorManager, gpi: c.VkDevice) void {
+        c.vkDestroyDescriptorSetLayout(gpi, self.computeLayout, null);
+
         c.vkDestroyDescriptorPool(gpi, self.pool, null);
         self.alloc.free(self.sets);
     }

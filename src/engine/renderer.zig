@@ -36,10 +36,10 @@ pub const Renderer = struct {
         const context = try Context.init(alloc, window, DEBUG_TOGGLE);
         const resourceMan = try ResourceManager.init(&context);
         const swapchain = try Swapchain.init(alloc, &resourceMan, &context, extent);
-        const pipelineMan = try PipelineManager.init(alloc, &context, swapchain.surfaceFormat.format);
+        const descriptorManager = try DescriptorManager.init(alloc, &context, @intCast(swapchain.swapBuckets.len));
+        const pipelineMan = try PipelineManager.init(alloc, &context, &descriptorManager, swapchain.surfaceFormat.format);
         const cmdMan = try CmdManager.init(alloc, &context, MAX_IN_FLIGHT);
         const pacer = try FramePacer.init(alloc, &context, MAX_IN_FLIGHT);
-        const descriptorManager = try DescriptorManager.init(alloc, &context, pipelineMan.compute.descriptorSetLayout, @intCast(swapchain.swapBuckets.len));
 
         return .{
             .alloc = alloc,

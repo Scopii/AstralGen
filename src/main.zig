@@ -23,7 +23,7 @@ pub fn main() !void {
         app.handle();
         app.pollEvents();
 
-        try renderer.draw(.mesh);
+        try renderer.draw(.compute);
     }
 
     //const stdout = std.io.getStdOut().writer();
