@@ -12,9 +12,9 @@ const FramePacer = @import("sync/FramePacer.zig").FramePacer;
 const VkAllocator = @import("vma.zig").VkAllocator;
 const CmdManager = @import("render/CmdManager.zig").CmdManager;
 const PipelineManager = @import("render/PipelineManager.zig").PipelineManager;
+const Pipeline = @import("render/PipelineManager.zig").Pipeline;
 const ResourceManager = @import("render/ResourceManager.zig").ResourceManager;
 const DescriptorManager = @import("render/DescriptorManager.zig").DescriptorManager;
-const recCmd = @import("render/CmdManager.zig").recCmd;
 
 pub const MAX_IN_FLIGHT: u8 = 3;
 
@@ -30,8 +30,9 @@ pub const Renderer = struct {
     swapchain: Swapchain,
     cmdMan: CmdManager,
     pacer: FramePacer,
-    fragmentTimeStemp: i128,
-    computeTimeStemp: i128,
+    graphicsTimeStamp: i128,
+    computeTimeStamp: i128,
+    meshTimeStamp: i128,
     descriptorsUpdated: bool,
 
     pub fn init(alloc: Allocator, window: *c.SDL_Window, extent: *c.VkExtent2D) !Renderer {
@@ -42,8 +43,6 @@ pub const Renderer = struct {
         const cmdMan = try CmdManager.init(alloc, context.gpi, context.families.graphics, MAX_IN_FLIGHT);
         const pacer = try FramePacer.init(alloc, context.gpi, MAX_IN_FLIGHT);
         const descriptorManager = try DescriptorManager.init(alloc, context.gpi, pipelineMan.compute.descriptorSetLayout, @intCast(swapchain.swapBuckets.len));
-        const fragmentTimeStemp = try getFileTimeStamp(alloc, "src/shader/shdr.frag");
-        const computeTimeStemp = try getFileTimeStamp(alloc, "src/shader/shdr.comp");
 
         return .{
             .alloc = alloc,
@@ -55,17 +54,21 @@ pub const Renderer = struct {
             .swapchain = swapchain,
             .cmdMan = cmdMan,
             .pacer = pacer,
-            .fragmentTimeStemp = fragmentTimeStemp,
-            .computeTimeStemp = computeTimeStemp,
+            .graphicsTimeStamp = try getFileTimeStamp(alloc, "src/shader/shdr.frag"),
+            .computeTimeStamp = try getFileTimeStamp(alloc, "src/shader/shdr.comp"),
+            .meshTimeStamp = try getFileTimeStamp(alloc, "src/shader/mesh.frag"),
             .descriptorsUpdated = false,
         };
     }
 
-    pub fn drawGraphicsPipeline(self: *Renderer) !void {
-        try self.checkShaderUpdate();
+    pub fn draw(self: *Renderer, pipeline: Pipeline) !void {
+        switch (pipeline) {
+            .graphics => try self.checkShaderUpdate(pipeline),
+            .compute => try self.checkShaderUpdate(pipeline),
+            .mesh => {},
+        }
 
         try self.pacer.waitForGPU(self.context.gpi);
-
         const frameIndex = self.pacer.curFrame;
         const cmd = self.cmdMan.cmds[frameIndex];
 
@@ -74,10 +77,22 @@ pub const Renderer = struct {
             return;
         }
 
+        if (pipeline == .compute) {
+            // Update descriptors only once when first needed
+            if (!self.descriptorsUpdated) {
+                self.descriptorManager.updateAllDescriptorSets(self.context.gpi, self.swapchain.renderImage.view);
+                self.descriptorsUpdated = true;
+            }
+        }
+
         const swapIndex = self.swapchain.index;
         const rendSem = self.swapchain.swapBuckets[swapIndex].rendSem;
 
-        try self.cmdMan.recCmd(cmd, &self.swapchain, &self.pipelineMan.graphics);
+        switch (pipeline) {
+            .graphics => try self.cmdMan.recCmd(cmd, &self.swapchain, &self.pipelineMan.graphics),
+            .compute => try self.cmdMan.recComputeCmd(cmd, &self.swapchain, &self.pipelineMan.compute, self.descriptorManager.sets[swapIndex]),
+            .mesh => try self.cmdMan.recMeshCmd(cmd, &self.swapchain, &self.pipelineMan.mesh),
+        }
 
         try self.pacer.submitFrame(self.context.graphicsQ, cmd, rendSem);
 
@@ -89,116 +104,40 @@ pub const Renderer = struct {
         self.pacer.nextFrame();
     }
 
-    // Add this method to your Renderer struct
-    pub fn drawMesh(self: *Renderer) !void {
-        try self.pacer.waitForGPU(self.context.gpi);
-
-        const frameIndex = self.pacer.curFrame;
-        const cmd = self.cmdMan.cmds[frameIndex];
-
-        if (try self.swapchain.acquireImage(self.context.gpi, self.pacer.acqSems[frameIndex]) == false) {
-            try self.renewSwapchain();
-            return;
-        }
-
-        const swapIndex = self.swapchain.index;
-        const rendSem = self.swapchain.swapBuckets[swapIndex].rendSem;
-
-        try self.cmdMan.recMeshCmd(cmd, &self.swapchain, &self.pipelineMan.mesh);
-
-        try self.pacer.submitFrame(self.context.graphicsQ, cmd, rendSem);
-
-        if (try self.swapchain.present(self.context.presentQ, rendSem)) {
-            try self.renewSwapchain();
-            return;
-        }
-
-        self.pacer.nextFrame();
-    }
-
-    pub fn drawComputePipeline(self: *Renderer) !void {
-        try self.checkComputeShaderUpdate();
-        try self.pacer.waitForGPU(self.context.gpi);
-
-        const frameIndex = self.pacer.curFrame;
-        const cmd = self.cmdMan.cmds[frameIndex];
-
-        if (try self.swapchain.acquireImage(self.context.gpi, self.pacer.acqSems[frameIndex]) == false) {
-            try self.renewSwapchain();
-            return;
-        }
-
-        // Update descriptors only once when first needed
-        if (!self.descriptorsUpdated) {
-            self.descriptorManager.updateAllDescriptorSets(self.context.gpi, self.swapchain.renderImage.view);
-            self.descriptorsUpdated = true;
-        }
-
-        const swapIndex = self.swapchain.index;
-        const rendSem = self.swapchain.swapBuckets[swapIndex].rendSem;
-
-        try self.cmdMan.recComputeCmd(cmd, &self.swapchain, &self.pipelineMan.compute, self.descriptorManager.sets[swapIndex]);
-        try self.pacer.submitFrame(self.context.graphicsQ, cmd, rendSem);
-
-        if (try self.swapchain.present(self.context.presentQ, rendSem)) {
-            try self.renewSwapchain();
-            return;
-        }
-
-        self.pacer.nextFrame();
-    }
-
-    pub fn drawMeshPipeline(self: *Renderer) !void {
-        // try self.checkShaderUpdate(); // Optional: add shader hot-reloading for mesh shaders
-
-        try self.pacer.waitForGPU(self.context.gpi);
-
-        const frameIndex = self.pacer.curFrame;
-        const cmd = self.cmdMan.cmds[frameIndex];
-
-        if (try self.swapchain.acquireImage(self.context.gpi, self.pacer.acqSems[frameIndex]) == false) {
-            try self.renewSwapchain();
-            return;
-        }
-
-        const swapIndex = self.swapchain.index;
-        const rendSem = self.swapchain.swapBuckets[swapIndex].rendSem;
-
-        // Call the new command recording function
-        try self.pipelineMan.recMeshCmd(cmd, &self.swapchain, &self.pipelineMan.mesh);
-
-        try self.pacer.submitFrame(self.context.graphicsQ, cmd, rendSem);
-
-        if (try self.swapchain.present(self.context.presentQ, rendSem)) {
-            try self.renewSwapchain();
-            return;
-        }
-
-        self.pacer.nextFrame();
-    }
-
-    pub fn checkShaderUpdate(self: *Renderer) !void {
+    pub fn checkShaderUpdate(self: *Renderer, pipeline: Pipeline) !void {
         const tracyZ1 = ztracy.ZoneNC(@src(), "checkShaderUpdate", 0x0000FFFF);
-        const timeStamp = try getFileTimeStamp(self.alloc, "src/shader/shdr.frag");
-        if (timeStamp != self.fragmentTimeStemp) {
-            self.fragmentTimeStemp = timeStamp;
-            try self.updateGraphics();
-            std.debug.print("Shader Updated ^^\n", .{});
-            return;
+        defer tracyZ1.End();
+
+        var timeStamp: i128 = undefined;
+
+        switch (pipeline) {
+            .graphics => {
+                timeStamp = try getFileTimeStamp(self.alloc, "src/shader/shdr.frag");
+                if (timeStamp == self.graphicsTimeStamp) return;
+                self.graphicsTimeStamp = timeStamp;
+            },
+            .compute => {
+                timeStamp = try getFileTimeStamp(self.alloc, "src/shader/shdr.comp");
+                if (timeStamp == self.computeTimeStamp) return;
+                self.computeTimeStamp = timeStamp;
+            },
+            .mesh => {
+                timeStamp = try getFileTimeStamp(self.alloc, "src/shader/mesh.frag");
+                if (timeStamp == self.meshTimeStamp) return;
+                self.meshTimeStamp = timeStamp;
+            },
         }
-        tracyZ1.End();
+        try self.updatePipeline(pipeline);
+        std.debug.print("Shader Updated ^^\n", .{});
     }
 
-    pub fn checkComputeShaderUpdate(self: *Renderer) !void {
-        const tracyZ1 = ztracy.ZoneNC(@src(), "checkShaderUpdate", 0x0000FFFF);
-        const timeStamp = try getFileTimeStamp(self.alloc, "src/shader/shdr.comp");
-        if (timeStamp != self.computeTimeStemp) {
-            self.computeTimeStemp = timeStamp;
-            try self.updateCompute();
-            std.debug.print("Shader Updated ^^\n", .{});
-            return;
+    pub fn updatePipeline(self: *Renderer, pipeline: Pipeline) !void {
+        _ = c.vkDeviceWaitIdle(self.context.gpi);
+        switch (pipeline) {
+            .graphics => try self.pipelineMan.updateGraphicsPipeline(self.alloc, self.context.gpi),
+            .compute => try self.pipelineMan.updateComputePipeline(self.alloc, self.context.gpi),
+            .mesh => {},
         }
-        tracyZ1.End();
     }
 
     pub fn renewSwapchain(self: *Renderer) !void {
@@ -207,16 +146,6 @@ pub const Renderer = struct {
         self.swapchain = try Swapchain.init(&self.resourceMan, self.alloc, &self.context, self.extentPtr);
         self.descriptorManager.updateAllDescriptorSets(self.context.gpi, self.swapchain.renderImage.view);
         std.debug.print("Swapchain recreated\n", .{});
-    }
-
-    pub fn updateCompute(self: *Renderer) !void {
-        _ = c.vkDeviceWaitIdle(self.context.gpi);
-        try self.pipelineMan.refreshComputePipeline(self.alloc, self.context.gpi);
-    }
-
-    pub fn updateGraphics(self: *Renderer) !void {
-        _ = c.vkDeviceWaitIdle(self.context.gpi);
-        try self.pipelineMan.refreshGraphicsPipeline(self.alloc, self.context.gpi);
     }
 
     pub fn deinit(self: *Renderer) void {
@@ -232,7 +161,7 @@ pub const Renderer = struct {
 };
 
 pub fn getFileTimeStamp(alloc: Allocator, src: []const u8) !i128 {
-    // Use the helper to get the full, correct path
+    // Using helper to get the full path
     const abs_path = try resolveAssetPath(alloc, src);
     defer alloc.free(abs_path);
 

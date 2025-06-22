@@ -22,6 +22,8 @@ pub const MeshPipeline = struct {
     layout: c.VkPipelineLayout,
 };
 
+pub const Pipeline = enum { compute, graphics, mesh };
+
 pub const PipelineManager = struct {
     graphics: GraphicsPipeline,
     compute: ComputePipeline,
@@ -122,15 +124,15 @@ pub const PipelineManager = struct {
         c.vkDestroyPipelineCache(gpi, self.cache, null);
     }
 
-    pub fn refreshComputePipeline(self: *PipelineManager, alloc: Allocator, gpi: c.VkDevice) !void {
+    pub fn updateComputePipeline(self: *PipelineManager, alloc: Allocator, gpi: c.VkDevice) !void {
         c.vkDestroyPipeline(gpi, self.compute.handle, null);
         const computeShaderModule = try createShaderModule(alloc, "src/shader/shdr.comp", "zig-out/shader/comp.spv", gpi);
         defer c.vkDestroyShaderModule(gpi, computeShaderModule, null);
         self.compute.handle = try createComputePipeline(gpi, self.compute.layout, computeShaderModule, self.cache);
-        std.debug.print("Compute Pipeline refreshed\n", .{});
+        std.debug.print("Compute Pipeline updated\n", .{});
     }
 
-    pub fn refreshGraphicsPipeline(self: *PipelineManager, alloc: Allocator, gpi: c.VkDevice) !void {
+    pub fn updateGraphicsPipeline(self: *PipelineManager, alloc: Allocator, gpi: c.VkDevice) !void {
         c.vkDestroyPipeline(gpi, self.graphics.handle, null);
         const vertShdr = try createShaderModule(alloc, "src/shader/shdr.vert", "zig-out/shader/vert.spv", gpi);
         defer c.vkDestroyShaderModule(gpi, vertShdr, null);
@@ -154,7 +156,7 @@ pub const PipelineManager = struct {
             },
         };
         self.graphics.handle = try createGraphicsPipeline(gpi, self.graphics.layout, &shaderStages, self.graphics.format, self.cache);
-        std.debug.print("Graphics Pipeline refreshed\n", .{});
+        std.debug.print("Graphics Pipeline updated\n", .{});
     }
 };
 
