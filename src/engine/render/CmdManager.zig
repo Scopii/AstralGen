@@ -2,9 +2,7 @@ const std = @import("std");
 const c = @import("../../c.zig");
 const Allocator = std.mem.Allocator;
 const Swapchain = @import("Swapchain.zig").Swapchain;
-const GraphicsPipeline = @import("PipelineManager.zig").GraphicsPipeline;
-const ComputePipeline = @import("PipelineManager.zig").ComputePipeline;
-const MeshPipeline = @import("PipelineManager.zig").MeshPipeline;
+const Pipeline = @import("PipelineManager.zig").Pipeline;
 const Context = @import("Context.zig").Context;
 const check = @import("../error.zig").check;
 
@@ -17,7 +15,7 @@ pub const CmdManager = struct {
     pub fn init(alloc: Allocator, context: *const Context, maxInFlight: u32) !CmdManager {
         const gpi = context.gpi;
         const family = context.families.graphics;
-        
+
         const pool = try createCmdPool(gpi, family);
         const cmds = try alloc.alloc(c.VkCommandBuffer, maxInFlight);
         for (0..maxInFlight) |i| {
@@ -45,7 +43,7 @@ pub const CmdManager = struct {
         _: *CmdManager,
         cmd: c.VkCommandBuffer,
         swapchain: *Swapchain,
-        computePipe: *const ComputePipeline,
+        computePipe: *const Pipeline,
         descriptorSet: c.VkDescriptorSet,
     ) !void {
         const index = swapchain.index;
@@ -121,7 +119,7 @@ pub const CmdManager = struct {
         _: *CmdManager,
         cmd: c.VkCommandBuffer,
         swapchain: *Swapchain,
-        pipeline: *const MeshPipeline, // Use the new MeshPipeline struct
+        pipeline: *const Pipeline, // Use the new MeshPipeline struct
     ) !void {
         const index = swapchain.index;
 
@@ -200,7 +198,7 @@ pub const CmdManager = struct {
         try check(c.vkEndCommandBuffer(cmd), "Could not end command buffer");
     }
 
-    pub fn recCmd(_: *CmdManager, cmd: c.VkCommandBuffer, swapchain: *Swapchain, pipeline: *GraphicsPipeline) !void {
+    pub fn recCmd(_: *CmdManager, cmd: c.VkCommandBuffer, swapchain: *Swapchain, pipeline: *Pipeline) !void {
         const index = swapchain.index;
 
         const beginInf = c.VkCommandBufferBeginInfo{
