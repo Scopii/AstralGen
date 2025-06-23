@@ -12,7 +12,7 @@ const FramePacer = @import("sync/FramePacer.zig").FramePacer;
 const VkAllocator = @import("vma.zig").VkAllocator;
 const CmdManager = @import("render/CmdManager.zig").CmdManager;
 const PipelineManager = @import("render/PipelineManager.zig").PipelineManager;
-const Pipeline = @import("render/PipelineManager.zig").PipelineEnum;
+const PipelineType = @import("render/PipelineBucket.zig").PipelineType;
 const ResourceManager = @import("render/ResourceManager.zig").ResourceManager;
 const DescriptorManager = @import("render/DescriptorManager.zig").DescriptorManager;
 
@@ -55,7 +55,7 @@ pub const Renderer = struct {
         };
     }
 
-    pub fn draw(self: *Renderer, pipeline: Pipeline) !void {
+    pub fn draw(self: *Renderer, pipeline: PipelineType) !void {
         try self.pipelineMan.checkShaderUpdate(pipeline);
 
         try self.pacer.waitForGPU(self.context.gpi);

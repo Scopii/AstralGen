@@ -2,7 +2,7 @@ const std = @import("std");
 const c = @import("../../c.zig");
 const Allocator = std.mem.Allocator;
 const Swapchain = @import("Swapchain.zig").Swapchain;
-const Pipeline = @import("PipelineManager.zig").Pipeline;
+const PipelineBucket = @import("PipelineBucket.zig").PipelineBucket;
 const Context = @import("Context.zig").Context;
 const check = @import("../error.zig").check;
 
@@ -43,7 +43,7 @@ pub const CmdManager = struct {
         _: *CmdManager,
         cmd: c.VkCommandBuffer,
         swapchain: *Swapchain,
-        computePipe: *const Pipeline,
+        computePipe: *const PipelineBucket,
         descriptorSet: c.VkDescriptorSet,
     ) !void {
         const index = swapchain.index;
@@ -119,7 +119,7 @@ pub const CmdManager = struct {
         _: *CmdManager,
         cmd: c.VkCommandBuffer,
         swapchain: *Swapchain,
-        pipeline: *const Pipeline, // Use the new MeshPipeline struct
+        pipeline: *const PipelineBucket, // Use the new MeshPipeline struct
     ) !void {
         const index = swapchain.index;
 
@@ -198,7 +198,7 @@ pub const CmdManager = struct {
         try check(c.vkEndCommandBuffer(cmd), "Could not end command buffer");
     }
 
-    pub fn recCmd(_: *CmdManager, cmd: c.VkCommandBuffer, swapchain: *Swapchain, pipeline: *Pipeline) !void {
+    pub fn recCmd(_: *CmdManager, cmd: c.VkCommandBuffer, swapchain: *Swapchain, pipeline: *PipelineBucket) !void {
         const index = swapchain.index;
 
         const beginInf = c.VkCommandBufferBeginInfo{
@@ -243,7 +243,7 @@ pub const CmdManager = struct {
             .resolveMode = c.VK_RESOLVE_MODE_NONE,
             .resolveImageView = null,
             .resolveImageLayout = c.VK_IMAGE_LAYOUT_UNDEFINED,
-            .loadOp = c.VK_ATTACHMENT_LOAD_OP_DONT_CARE, //
+            .loadOp = c.VK_ATTACHMENT_LOAD_OP_CLEAR,
             .storeOp = c.VK_ATTACHMENT_STORE_OP_STORE,
             .clearValue = .{ .color = .{ .float32 = .{ 0.0, 0.0, 0.1, 1.0 } } },
         };
