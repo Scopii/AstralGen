@@ -17,7 +17,7 @@ pub const PipelineBucket = struct {
     handle: c.VkPipeline,
     layout: c.VkPipelineLayout,
     format: ?c.VkFormat,
-    timeStamp: i128,
+    timeStamp: u64,
     pipelineType: PipelineType,
     shaderInfos: []const ShaderInfo,
 
@@ -41,7 +41,7 @@ pub const PipelineBucket = struct {
         const stages = try createShaderStages(alloc, modules, shaderInfos);
         defer alloc.free(stages);
 
-        var timeStamp: i128 = 0;
+        var timeStamp: u64 = 0;
         for (0..shaderInfos.len) |i| {
             const tempTimeStamp = try getFileTimeStamp(alloc, shaderInfos[i].inputPath);
             if (tempTimeStamp > timeStamp) timeStamp = tempTimeStamp;
@@ -68,7 +68,7 @@ pub const PipelineBucket = struct {
 
     pub fn checkUpdate(self: *PipelineBucket, gpi: c.VkDevice, cache: c.VkPipelineCache) !void {
         const alloc = self.alloc;
-        var timeStamp: i128 = 0;
+        var timeStamp: u64 = 0;
         var pathIndex: u64 = 0;
         for (0..self.shaderInfos.len) |i| {
             const tempTimeStamp = try getFileTimeStamp(alloc, self.shaderInfos[i].inputPath);
@@ -300,15 +300,14 @@ fn createPipeline(
     }
 }
 
-pub fn getFileTimeStamp(alloc: Allocator, src: []const u8) !i128 {
-    // Using helper to get the full path
+pub fn getFileTimeStamp(alloc: Allocator, src: []const u8) !u64 {
     const abs_path = try resolveAssetPath(alloc, src);
     defer alloc.free(abs_path);
 
     const cwd = std.fs.cwd();
     const stat = try cwd.statFile(abs_path);
-    const lastModified: i128 = stat.mtime;
-    return lastModified;
+    const ns: u64 = @intCast(stat.mtime); // cast before division
+    return ns / 1_000_000; // convert nanoseconds to milliseconds
 }
 
 pub fn resolveAssetPath(alloc: Allocator, asset_path: []const u8) ![]u8 {
