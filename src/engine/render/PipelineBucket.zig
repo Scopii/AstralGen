@@ -32,12 +32,8 @@ pub const PipelineBucket = struct {
         layoutCount: u32,
     ) !PipelineBucket {
         const modules = try createShaderModules(alloc, gpi, shaderInfos);
-        defer {
-            for (0..modules.len) |i| {
-                c.vkDestroyShaderModule(gpi, modules[i], null);
-            }
-            alloc.free(modules);
-        }
+        defer destroyShaderModules(gpi, modules);
+        defer alloc.free(modules);
         const stages = try createShaderStages(alloc, modules, shaderInfos);
         defer alloc.free(stages);
 
@@ -78,24 +74,27 @@ pub const PipelineBucket = struct {
             }
         }
         if (timeStamp == self.timeStamp) return;
-
         self.timeStamp = timeStamp;
         _ = c.vkDeviceWaitIdle(gpi);
 
         c.vkDestroyPipeline(gpi, self.handle, null);
+
         const modules = try createShaderModules(alloc, gpi, self.shaderInfos);
-        defer {
-            for (0..modules.len) |i| {
-                c.vkDestroyShaderModule(gpi, modules[i], null);
-            }
-            alloc.free(modules);
-        }
+        defer destroyShaderModules(gpi, modules);
+        defer alloc.free(modules);
         const stages = try createShaderStages(alloc, modules, self.shaderInfos);
         defer alloc.free(stages);
+
         self.handle = try createPipeline(gpi, self.layout, stages, cache, self.pipelineType, self.format);
         std.debug.print("{s} at {s} updated\n", .{ @tagName(self.pipelineType), self.shaderInfos[pathIndex].inputPath });
     }
 };
+
+fn destroyShaderModules(gpi: c.VkDevice, modules: []c.VkShaderModule) void {
+    for (0..modules.len) |i| {
+        c.vkDestroyShaderModule(gpi, modules[i], null);
+    }
+}
 
 fn createShaderStage(stage: u32, module: c.VkShaderModule, name: [*]const u8) c.VkPipelineShaderStageCreateInfo {
     return c.VkPipelineShaderStageCreateInfo{
@@ -313,7 +312,6 @@ pub fn getFileTimeStamp(alloc: Allocator, src: []const u8) !u64 {
 pub fn resolveAssetPath(alloc: Allocator, asset_path: []const u8) ![]u8 {
     const exe_dir = try std.fs.selfExeDirPathAlloc(alloc);
     defer alloc.free(exe_dir);
-
     // Project root (up two levels from zig-out/bin)
     const project_root = try std.fs.path.resolve(alloc, &[_][]const u8{ exe_dir, "..", ".." });
     defer alloc.free(project_root);
