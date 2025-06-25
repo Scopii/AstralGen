@@ -19,7 +19,7 @@ pub const CmdManager = struct {
         const pool = try createCmdPool(gpi, family);
         const cmds = try alloc.alloc(c.VkCommandBuffer, maxInFlight);
         for (0..maxInFlight) |i| {
-            cmds[i] = try createCmdBuffer(gpi, pool);
+            cmds[i] = try createCmd(gpi, pool);
         }
 
         return .{
@@ -35,8 +35,8 @@ pub const CmdManager = struct {
         c.vkDestroyCommandPool(gpi, self.pool, null);
     }
 
-    pub fn getCmdBuffer(self: *const CmdManager, cpu_frame_slot: u32) c.VkCommandBuffer {
-        return self.cmds[cpu_frame_slot];
+    pub fn getCmdBuffer(self: *const CmdManager, cpuFrame: u32) c.VkCommandBuffer {
+        return self.cmds[cpuFrame];
     }
 
     pub fn recComputeCmd(
@@ -47,13 +47,7 @@ pub const CmdManager = struct {
         descriptorSet: c.VkDescriptorSet,
     ) !void {
         const index = swapchain.index;
-
-        const beginInf = c.VkCommandBufferBeginInfo{
-            .sType = c.VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-            .flags = c.VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT, // Driver Hint
-            //.flags = c.VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT, // Allow re-use
-        };
-        try check(c.vkBeginCommandBuffer(cmd, &beginInf), "could not Begin CmdBuffer");
+        try beginCmd(cmd, c.VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT); //c.VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT
 
         // Transition Image into general layout so we can write into it, Overwrites all so we dont care about the older layout
         const imageBarrier = createImageMemoryBarrier2(
@@ -66,8 +60,7 @@ pub const CmdManager = struct {
             swapchain.renderImage.image,
             createSubresourceRange(c.VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1),
         );
-        createPipelineBarrier2(cmd, &imageBarrier);
-
+        createPipelineBarriers2(cmd, &.{imageBarrier});
         c.vkCmdBindPipeline(cmd, c.VK_PIPELINE_BIND_POINT_COMPUTE, computePipe.handle);
         c.vkCmdBindDescriptorSets(cmd, c.VK_PIPELINE_BIND_POINT_COMPUTE, computePipe.layout, 0, 1, &descriptorSet, 0, null);
         const groupCountX = (swapchain.renderImage.extent3d.width + 7) / 8;
@@ -96,7 +89,7 @@ pub const CmdManager = struct {
             swapchain.swapBuckets[index].image,
             createSubresourceRange(c.VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1),
         );
-        createPipelineBarriers2(cmd, &[_]c.VkImageMemoryBarrier2{ imageBarrier2, imageBarrier3 });
+        createPipelineBarriers2(cmd, &.{ imageBarrier2, imageBarrier3 });
 
         copyImageToImage(cmd, swapchain.renderImage.image, swapchain.swapBuckets[index].image, swapchain.extent, swapchain.extent);
 
@@ -110,7 +103,7 @@ pub const CmdManager = struct {
             swapchain.swapBuckets[index].image,
             createSubresourceRange(c.VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1),
         );
-        createPipelineBarrier2(cmd, &imageBarrier4);
+        createPipelineBarriers2(cmd, &.{imageBarrier4});
 
         try check(c.vkEndCommandBuffer(cmd), "Could not End Cmd Buffer");
     }
@@ -122,12 +115,7 @@ pub const CmdManager = struct {
         pipeline: *const PipelineBucket, // Use the new MeshPipeline struct
     ) !void {
         const index = swapchain.index;
-
-        const beginInf = c.VkCommandBufferBeginInfo{
-            .sType = c.VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-            .flags = c.VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
-        };
-        try check(c.vkBeginCommandBuffer(cmd, &beginInf), "Could not begin command buffer");
+        try beginCmd(cmd, c.VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
 
         // Transition image layout to be a color attachment
         const imageBarrier = createImageMemoryBarrier2(
@@ -140,7 +128,7 @@ pub const CmdManager = struct {
             swapchain.swapBuckets[index].image,
             createSubresourceRange(c.VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1),
         );
-        createPipelineBarrier2(cmd, &imageBarrier);
+        createPipelineBarriers2(cmd, &.{imageBarrier});
 
         // Set dynamic viewport and scissor
         const viewport = c.VkViewport{
@@ -193,21 +181,14 @@ pub const CmdManager = struct {
             swapchain.swapBuckets[index].image,
             createSubresourceRange(c.VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1),
         );
-        createPipelineBarrier2(cmd, &presentBarrier);
+        createPipelineBarriers2(cmd, &.{presentBarrier});
 
         try check(c.vkEndCommandBuffer(cmd), "Could not end command buffer");
     }
 
     pub fn recCmd(_: *CmdManager, cmd: c.VkCommandBuffer, swapchain: *Swapchain, pipeline: *PipelineBucket) !void {
         const index = swapchain.index;
-
-        const beginInf = c.VkCommandBufferBeginInfo{
-            .sType = c.VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-            .flags = c.VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT, // Hint to driver
-            //.flags = c.VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT, // Allow re-use
-            .pInheritanceInfo = null,
-        };
-        try check(c.vkBeginCommandBuffer(cmd, &beginInf), "Could not record CMD Buffer");
+        try beginCmd(cmd, c.VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT); // c.VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT allow re-use
 
         const imageBarrier = createImageMemoryBarrier2(
             c.VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
@@ -219,7 +200,7 @@ pub const CmdManager = struct {
             swapchain.swapBuckets[index].image,
             createSubresourceRange(c.VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1),
         );
-        createPipelineBarrier2(cmd, &imageBarrier);
+        createPipelineBarriers2(cmd, &.{imageBarrier});
 
         // Set viewport and scissor
         const viewport = c.VkViewport{
@@ -275,13 +256,22 @@ pub const CmdManager = struct {
             swapchain.swapBuckets[index].image,
             createSubresourceRange(c.VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1),
         );
-        createPipelineBarrier2(cmd, &presentBarrier);
+        createPipelineBarriers2(cmd, &.{presentBarrier});
 
         try check(c.vkEndCommandBuffer(cmd), "Could not end command buffer");
     }
 };
 
-fn createCmdBuffer(gpi: c.VkDevice, pool: c.VkCommandPool) !c.VkCommandBuffer {
+pub fn beginCmd(cmd: c.VkCommandBuffer, flags: c.VkCommandBufferUsageFlags) !void {
+    const beginInf = c.VkCommandBufferBeginInfo{
+        .sType = c.VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+        .flags = flags,
+        .pInheritanceInfo = null,
+    };
+    try check(c.vkBeginCommandBuffer(cmd, &beginInf), "could not Begin CmdBuffer");
+}
+
+fn createCmd(gpi: c.VkDevice, pool: c.VkCommandPool) !c.VkCommandBuffer {
     const allocInf = c.VkCommandBufferAllocateInfo{
         .sType = c.VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
         .commandPool = pool,
@@ -303,15 +293,6 @@ fn createCmdPool(gpi: c.VkDevice, familyIndex: u32) !c.VkCommandPool {
     var pool: c.VkCommandPool = undefined;
     try check(c.vkCreateCommandPool(gpi, &poolInf, null, &pool), "Could not create Cmd Pool");
     return pool;
-}
-
-fn createPipelineBarrier2(cmd: c.VkCommandBuffer, barrier: *const c.VkImageMemoryBarrier2) void {
-    const depInf = c.VkDependencyInfo{
-        .sType = c.VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-        .imageMemoryBarrierCount = 1,
-        .pImageMemoryBarriers = barrier,
-    };
-    c.vkCmdPipelineBarrier2(cmd, &depInf);
 }
 
 fn createPipelineBarriers2(cmd: c.VkCommandBuffer, barriers: []const c.VkImageMemoryBarrier2) void {
@@ -368,27 +349,30 @@ fn createImageMemoryBarrier2(
 }
 
 pub fn copyImageToImage(cmd: c.VkCommandBuffer, src: c.VkImage, dst: c.VkImage, srcSize: c.VkExtent2D, dstSize: c.VkExtent2D) void {
-    var blitRegion = c.VkImageBlit2{ .sType = c.VK_STRUCTURE_TYPE_IMAGE_BLIT_2 };
-    blitRegion.srcOffsets[1].x = @intCast(srcSize.width);
-    blitRegion.srcOffsets[1].y = @intCast(srcSize.height);
-    blitRegion.srcOffsets[1].z = 1;
+    const blitRegion = c.VkImageBlit2{
+        .sType = c.VK_STRUCTURE_TYPE_IMAGE_BLIT_2,
+        .srcSubresource = createSubresourceLayers(c.VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1),
+        .srcOffsets = .{
+            .{ .x = 0, .y = 0, .z = 0 }, // Offset top-left-front corner
+            .{ .x = @intCast(srcSize.width), .y = @intCast(srcSize.height), .z = 1 }, // Offset bottom-right-back corner
+        },
+        .dstSubresource = createSubresourceLayers(c.VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1),
+        .dstOffsets = .{
+            .{ .x = 0, .y = 0, .z = 0 }, // Offset top-left-front corner
+            .{ .x = @intCast(dstSize.width), .y = @intCast(dstSize.height), .z = 1 }, // Offset bottom-right-back corner
+        },
+    };
 
-    blitRegion.dstOffsets[1].x = @intCast(dstSize.width);
-    blitRegion.dstOffsets[1].y = @intCast(dstSize.height);
-    blitRegion.dstOffsets[1].z = 1;
+    const blitInfo = c.VkBlitImageInfo2{
+        .sType = c.VK_STRUCTURE_TYPE_BLIT_IMAGE_INFO_2,
+        .dstImage = dst,
+        .dstImageLayout = c.VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        .srcImage = src,
+        .srcImageLayout = c.VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+        .filter = c.VK_FILTER_LINEAR,
+        .regionCount = 1,
+        .pRegions = &blitRegion,
+    };
 
-    blitRegion.srcSubresource = createSubresourceLayers(c.VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1);
-    blitRegion.dstSubresource = createSubresourceLayers(c.VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1);
-
-    var blitInfo = c.VkBlitImageInfo2{ .sType = c.VK_STRUCTURE_TYPE_BLIT_IMAGE_INFO_2 };
-    blitInfo.dstImage = dst;
-    blitInfo.dstImageLayout = c.VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-    blitInfo.srcImage = src;
-    blitInfo.srcImageLayout = c.VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-    blitInfo.filter = c.VK_FILTER_LINEAR;
-    blitInfo.regionCount = 1;
-    blitInfo.pRegions = &blitRegion;
-
-    c.vkCmdBlitImage2(cmd, &blitInfo); // Can copy even with different Image Sizes/Formats
-    //c.vkCmdCopyImage2(cmd, &blitInfo); //Faster but more restricted, TODO: Testing later! (writing new functions might be worth)
+    c.vkCmdBlitImage2(cmd, &blitInfo);
 }
