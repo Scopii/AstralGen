@@ -102,21 +102,18 @@ fn destroyShaderModules(gpi: c.VkDevice, modules: []c.VkShaderModule) void {
     }
 }
 
-fn createShaderStage(stage: u32, module: c.VkShaderModule, name: [*]const u8) c.VkPipelineShaderStageCreateInfo {
-    return c.VkPipelineShaderStageCreateInfo{
-        .sType = c.VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-        .stage = stage, //
-        .module = module,
-        .pName = name,
-        .pSpecializationInfo = null, // for constants
-    };
-}
-
 fn createShaderStages(alloc: Allocator, modules: []c.VkShaderModule, shaderInf: []const ShaderInfo) ![]c.VkPipelineShaderStageCreateInfo {
     var stages = try alloc.alloc(c.VkPipelineShaderStageCreateInfo, shaderInf.len);
     errdefer alloc.free(stages);
+
     for (0..shaderInf.len) |i| {
-        stages[i] = createShaderStage(shaderInf[i].stage, modules[i], "main");
+        stages[i] = c.VkPipelineShaderStageCreateInfo{
+            .sType = c.VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+            .stage = shaderInf[i].stage, //
+            .module = modules[i],
+            .pName = "main",
+            .pSpecializationInfo = null, // for constants
+        };
     }
     return stages;
 }
