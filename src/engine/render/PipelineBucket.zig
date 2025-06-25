@@ -32,10 +32,13 @@ pub const PipelineBucket = struct {
         layoutCount: u32,
     ) !PipelineBucket {
         const modules = try createShaderModules(alloc, gpi, shaderInfos);
-        defer destroyShaderModules(gpi, modules);
-        defer alloc.free(modules);
         const stages = try createShaderStages(alloc, modules, shaderInfos);
-        defer alloc.free(stages);
+
+        defer {
+            destroyShaderModules(gpi, modules);
+            alloc.free(modules);
+            alloc.free(stages);
+        }
 
         var timeStamp: u64 = 0;
         for (0..shaderInfos.len) |i| {
