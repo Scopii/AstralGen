@@ -22,7 +22,6 @@ const Allocator = std.mem.Allocator;
 
 pub const Renderer = struct {
     alloc: Allocator,
-    extentPtr: *c.VkExtent2D,
     context: Context,
     resourceMan: ResourceManager,
     descriptorManager: DescriptorManager,
@@ -32,10 +31,10 @@ pub const Renderer = struct {
     pacer: FramePacer,
     descriptorsUpdated: bool,
 
-    pub fn init(alloc: Allocator, window: *c.SDL_Window, extent: *c.VkExtent2D) !Renderer {
+    pub fn init(alloc: Allocator, window: *c.SDL_Window, extent: c.VkExtent2D) !Renderer {
         const context = try Context.init(alloc, window, DEBUG_TOGGLE);
         const resourceMan = try ResourceManager.init(&context);
-        const swapchain = try Swapchain.init(alloc, &resourceMan, &context, extent);
+        const swapchain = try Swapchain.init(alloc, &resourceMan, &context, extent, try context.getSurfaceCaps());
         const descriptorManager = try DescriptorManager.init(alloc, &context, @intCast(swapchain.swapBuckets.len));
         const pipelineMan = try PipelineManager.init(alloc, &context, &descriptorManager, swapchain.surfaceFormat.format);
         const cmdMan = try CmdManager.init(alloc, &context, MAX_IN_FLIGHT);
@@ -43,7 +42,6 @@ pub const Renderer = struct {
 
         return .{
             .alloc = alloc,
-            .extentPtr = extent,
             .context = context,
             .resourceMan = resourceMan,
             .descriptorManager = descriptorManager,
@@ -59,11 +57,13 @@ pub const Renderer = struct {
         try self.pipelineMan.checkShaderUpdate(pipeline);
 
         try self.pacer.waitForGPU(self.context.gpi);
+
         const frameIndex = self.pacer.curFrame;
         const cmd = self.cmdMan.cmds[frameIndex];
 
         if (try self.swapchain.acquireImage(self.context.gpi, self.pacer.acqSems[frameIndex]) == false) {
             try self.renewSwapchain();
+            self.pacer.nextFrame();
             return;
         }
 
@@ -85,19 +85,24 @@ pub const Renderer = struct {
         }
 
         try self.pacer.submitFrame(self.context.graphicsQ, cmd, rendSem);
-
         if (try self.swapchain.present(self.context.presentQ, rendSem)) {
             try self.renewSwapchain();
-            return;
         }
-
         self.pacer.nextFrame();
     }
 
     pub fn renewSwapchain(self: *Renderer) !void {
         _ = c.vkDeviceWaitIdle(self.context.gpi);
+        const caps = try self.context.getSurfaceCaps();
+        const newExtent = caps.currentExtent;
+        //std.debug.print("Caps Extent {}\n", .{caps.maxImageExtent});
+        if (newExtent.width == 0 or newExtent.height == 0) {
+            var event: c.SDL_Event = undefined;
+            _ = c.SDL_WaitEvent(&event);
+            return;
+        }
         self.swapchain.deinit(self.context.gpi, &self.resourceMan);
-        self.swapchain = try Swapchain.init(self.alloc, &self.resourceMan, &self.context, self.extentPtr);
+        self.swapchain = try Swapchain.init(self.alloc, &self.resourceMan, &self.context, newExtent, caps);
         self.descriptorManager.updateAllDescriptorSets(self.context.gpi, self.swapchain.renderImage.view);
         std.debug.print("Swapchain recreated\n", .{});
     }

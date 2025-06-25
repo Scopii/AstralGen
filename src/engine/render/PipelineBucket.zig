@@ -83,10 +83,13 @@ pub const PipelineBucket = struct {
         c.vkDestroyPipeline(gpi, self.handle, null);
 
         const modules = try createShaderModules(alloc, gpi, self.shaderInfos);
-        defer destroyShaderModules(gpi, modules);
-        defer alloc.free(modules);
         const stages = try createShaderStages(alloc, modules, self.shaderInfos);
-        defer alloc.free(stages);
+
+        defer {
+            destroyShaderModules(gpi, modules);
+            alloc.free(modules);
+            alloc.free(stages);
+        }
 
         self.handle = try createPipeline(gpi, self.layout, stages, cache, self.pipelineType, self.format);
         std.debug.print("{s} at {s} updated\n", .{ @tagName(self.pipelineType), self.shaderInfos[pathIndex].inputPath });

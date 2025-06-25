@@ -6,8 +6,7 @@ pub const App = struct {
     extent: c.VkExtent2D,
     close: bool = false,
 
-    pub fn init() !App {
-        const extent = c.VkExtent2D{ .width = 1920, .height = 1080 };
+    pub fn init(desiredWidth: c_int, desiredHeight: c_int) !App {
 
         // Initialize SDL3 with video subsystem
         if (c.SDL_Init(c.SDL_INIT_VIDEO) != true) {
@@ -17,8 +16,8 @@ pub const App = struct {
 
         const window = c.SDL_CreateWindow(
             "AstralGen",
-            extent.width,
-            extent.height,
+            desiredWidth,
+            desiredHeight,
             c.SDL_WINDOW_VULKAN | c.SDL_WINDOW_RESIZABLE,
         ) orelse {
             std.log.err("SDL_CreateWindow failed: {s}\n", .{c.SDL_GetError()});
@@ -28,7 +27,7 @@ pub const App = struct {
         //_ = c.SDL_SetWindowRelativeMouseMode(window, true);
         _ = c.SDL_SetWindowFullscreen(window, false);
 
-        return App{ .window = window, .extent = extent };
+        return App{ .window = window, .extent = c.VkExtent2D{ .width = 1600, .height = 900 } };
     }
 
     pub fn pollEvents(self: *App) void {
@@ -45,6 +44,10 @@ pub const App = struct {
         _ = c.SDL_GetWindowSize(self.window, @ptrCast(&self.extent.width), @ptrCast(&self.extent.height));
         // Handle window minimization
         if (self.extent.width == 0 or self.extent.height == 0) {}
+    }
+
+    pub fn resize(self: *App, newSize: c.VkExtent2D) void {
+        _ = c.SDL_SetWindowSize(self.window, @intCast(newSize.width), @intCast(newSize.height));
     }
 
     pub fn deinit(self: *App) void {

@@ -19,20 +19,17 @@ pub const Swapchain = struct {
     extent: c.VkExtent2D,
     renderImage: RenderImage,
 
-    pub fn init(alloc: Allocator, resourceMan: *const ResourceManager, context: *const Context, curExtent: *const c.VkExtent2D) !Swapchain {
+    pub fn init(alloc: Allocator, resourceMan: *const ResourceManager, context: *const Context, initExtent: c.VkExtent2D, caps: c.VkSurfaceCapabilitiesKHR) !Swapchain {
         const gpi = context.gpi;
         const gpu = context.gpu;
         const families = context.families;
         const surface = context.surface;
-
-        // Get surface capabilities
-        var caps: c.VkSurfaceCapabilitiesKHR = undefined;
-        try check(c.vkGetPhysicalDeviceSurfaceCapabilitiesKHR(gpu, surface, &caps), "Failed to get surface capabilities");
+        std.debug.print("Caps Extent {}x{}\n", .{ caps.maxImageExtent.width, caps.maxImageExtent.height });
 
         // Pick surface format directly
         const surfaceFormat = try pickSurfaceFormat(alloc, gpu, surface);
         const mode = c.VK_PRESENT_MODE_IMMEDIATE_KHR; //try pickPresentMode(alloc, gpu, surface);
-        const extent = pickExtent(&caps, curExtent);
+        const extent = pickExtent(&caps, initExtent);
 
         // Calculate image count
         var desiredImgCount: u32 = caps.minImageCount + 1;
@@ -180,11 +177,11 @@ fn pickPresentMode(alloc: Allocator, gpu: c.VkPhysicalDevice, surface: c.VkSurfa
     return c.VK_PRESENT_MODE_FIFO_KHR;
 }
 
-fn pickExtent(caps: *const c.VkSurfaceCapabilitiesKHR, currExtent: *const c.VkExtent2D) c.VkExtent2D {
+fn pickExtent(caps: *const c.VkSurfaceCapabilitiesKHR, curExtent: c.VkExtent2D) c.VkExtent2D {
     if (caps.currentExtent.width != std.math.maxInt(u32)) return caps.currentExtent;
 
     return c.VkExtent2D{
-        .width = std.math.clamp(currExtent.width, caps.minImageExtent.width, caps.maxImageExtent.width),
-        .height = std.math.clamp(currExtent.height, caps.minImageExtent.height, caps.maxImageExtent.height),
+        .width = std.math.clamp(curExtent.width, caps.minImageExtent.width, caps.maxImageExtent.width),
+        .height = std.math.clamp(curExtent.height, caps.minImageExtent.height, caps.maxImageExtent.height),
     };
 }

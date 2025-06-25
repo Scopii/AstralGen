@@ -46,6 +46,12 @@ pub const Context = struct {
         c.vkDestroySurfaceKHR(self.instance, self.surface, null);
         c.vkDestroyInstance(self.instance, null);
     }
+
+    pub fn getSurfaceCaps(self: *const Context) !c.VkSurfaceCapabilitiesKHR {
+        var caps: c.VkSurfaceCapabilitiesKHR = undefined;
+        try check(c.vkGetPhysicalDeviceSurfaceCapabilitiesKHR(self.gpu, self.surface, &caps), "Failed to get surface capabilities");
+        return caps;
+    }
 };
 
 fn createSurface(window: *c.SDL_Window, instance: c.VkInstance) !c.VkSurfaceKHR {
