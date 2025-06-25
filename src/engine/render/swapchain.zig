@@ -21,14 +21,13 @@ pub const Swapchain = struct {
 
     pub fn init(alloc: Allocator, resourceMan: *const ResourceManager, context: *const Context, initExtent: c.VkExtent2D, caps: c.VkSurfaceCapabilitiesKHR) !Swapchain {
         const gpi = context.gpi;
-        const gpu = context.gpu;
         const families = context.families;
         const surface = context.surface;
         std.debug.print("Caps Extent {}x{}\n", .{ caps.maxImageExtent.width, caps.maxImageExtent.height });
 
         // Pick surface format directly
-        const surfaceFormat = try pickSurfaceFormat(alloc, gpu, surface);
-        const mode = c.VK_PRESENT_MODE_IMMEDIATE_KHR; //try pickPresentMode(alloc, gpu, surface);
+        const surfaceFormat = try context.pickSurfaceFormat();
+        const mode = c.VK_PRESENT_MODE_IMMEDIATE_KHR; //try context.pickPresentMode();
         const extent = pickExtent(&caps, initExtent);
 
         // Calculate image count
@@ -99,17 +98,14 @@ pub const Swapchain = struct {
         c.vkDestroySwapchainKHR(gpi, self.handle, null);
     }
 
-    pub fn acquireImage(self: *Swapchain, gpi: c.VkDevice, acqSem: c.VkSemaphore) !bool {
+    pub fn acquireImage(self: *Swapchain, gpi: c.VkDevice, acqSem: c.VkSemaphore) !void {
         const acquireResult = c.vkAcquireNextImageKHR(gpi, self.handle, 1_000_000_000, acqSem, null, &self.index);
-        if (acquireResult == c.VK_ERROR_OUT_OF_DATE_KHR or acquireResult == c.VK_SUBOPTIMAL_KHR) {
-            return false;
-        }
+        if (acquireResult == c.VK_ERROR_OUT_OF_DATE_KHR or acquireResult == c.VK_SUBOPTIMAL_KHR) return error.NeedNewSwapchain;
         try check(acquireResult, "could not acquire next image");
-        return true;
     }
 
-    pub fn present(self: *Swapchain, pQueue: c.VkQueue, renderSemaphore: c.VkSemaphore) !bool {
-        const presentInfo = c.VkPresentInfoKHR{
+    pub fn present(self: *Swapchain, pQueue: c.VkQueue, renderSemaphore: c.VkSemaphore) !void {
+        const presentInf = c.VkPresentInfoKHR{
             .sType = c.VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
             .waitSemaphoreCount = 1,
             .pWaitSemaphores = &renderSemaphore,
@@ -117,69 +113,14 @@ pub const Swapchain = struct {
             .pSwapchains = &self.handle,
             .pImageIndices = &self.index,
         };
-
-        const result = c.vkQueuePresentKHR(pQueue, &presentInfo);
-
-        // Return true if swapchain needs recreation
-        if (result == c.VK_ERROR_OUT_OF_DATE_KHR or result == c.VK_SUBOPTIMAL_KHR) {
-            return true;
-        }
-
-        // Check for other errors
+        const result = c.vkQueuePresentKHR(pQueue, &presentInf);
+        if (result == c.VK_ERROR_OUT_OF_DATE_KHR or result == c.VK_SUBOPTIMAL_KHR) return error.NeedNewSwapchain;
         try check(result, "could not present queue");
-        return false; // No recreation needed
     }
 };
 
-// Simplified helper functions that query what they need directly
-fn pickSurfaceFormat(alloc: Allocator, gpu: c.VkPhysicalDevice, surface: c.VkSurfaceKHR) !c.VkSurfaceFormatKHR {
-    var formatCount: u32 = 0;
-    try check(c.vkGetPhysicalDeviceSurfaceFormatsKHR(gpu, surface, &formatCount, null), "Failed to get format count");
-
-    if (formatCount == 0) return error.NoSurfaceFormats;
-
-    const formats = try alloc.alloc(c.VkSurfaceFormatKHR, formatCount);
-    defer alloc.free(formats);
-
-    try check(c.vkGetPhysicalDeviceSurfaceFormatsKHR(gpu, surface, &formatCount, formats.ptr), "Failed to get surface formats");
-
-    // Return preferred format if available, otherwise first one
-    if (formats.len == 1 and formats[0].format == c.VK_FORMAT_UNDEFINED) {
-        return c.VkSurfaceFormatKHR{ .format = c.VK_FORMAT_B8G8R8A8_UNORM, .colorSpace = c.VK_COLOR_SPACE_SRGB_NONLINEAR_KHR };
-    }
-
-    for (formats) |format| {
-        if (format.format == c.VK_FORMAT_B8G8R8A8_UNORM and format.colorSpace == c.VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
-            return format;
-        }
-    }
-    return formats[0];
-}
-
-fn pickPresentMode(alloc: Allocator, gpu: c.VkPhysicalDevice, surface: c.VkSurfaceKHR) !c.VkPresentModeKHR {
-    var modeCount: u32 = 0;
-    try check(c.vkGetPhysicalDeviceSurfacePresentModesKHR(gpu, surface, &modeCount, null), "Failed to get present mode count");
-
-    if (modeCount == 0) return c.VK_PRESENT_MODE_FIFO_KHR; // FIFO is always supported
-
-    const modes = try alloc.alloc(c.VkPresentModeKHR, modeCount);
-    defer alloc.free(modes);
-
-    try check(c.vkGetPhysicalDeviceSurfacePresentModesKHR(gpu, surface, &modeCount, modes.ptr), "Failed to get present modes");
-
-    // Prefer mailbox (triple buffering), then immediate, fallback to FIFO
-    for (modes) |mode| {
-        if (mode == c.VK_PRESENT_MODE_MAILBOX_KHR) return mode;
-    }
-    for (modes) |mode| {
-        if (mode == c.VK_PRESENT_MODE_IMMEDIATE_KHR) return mode;
-    }
-    return c.VK_PRESENT_MODE_FIFO_KHR;
-}
-
 fn pickExtent(caps: *const c.VkSurfaceCapabilitiesKHR, curExtent: c.VkExtent2D) c.VkExtent2D {
     if (caps.currentExtent.width != std.math.maxInt(u32)) return caps.currentExtent;
-
     return c.VkExtent2D{
         .width = std.math.clamp(curExtent.width, caps.minImageExtent.width, caps.maxImageExtent.width),
         .height = std.math.clamp(curExtent.height, caps.minImageExtent.height, caps.maxImageExtent.height),

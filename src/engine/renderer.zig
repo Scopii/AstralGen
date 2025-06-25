@@ -55,21 +55,18 @@ pub const Renderer = struct {
 
     pub fn draw(self: *Renderer, pipeType: PipelineType) !void {
         try self.pipelineMan.checkShaderUpdate(pipeType);
-
         try self.pacer.waitForGPU(self.context.gpi);
-
         const frameIndex = self.pacer.curFrame;
         const cmd = self.cmdMan.cmds[frameIndex];
 
-        if (try self.swapchain.acquireImage(self.context.gpi, self.pacer.acqSems[frameIndex]) == false) {
+        if (self.swapchain.acquireImage(self.context.gpi, self.pacer.acqSems[frameIndex]) == error.NeedNewSwapchain) {
             try self.renewSwapchain();
             self.pacer.nextFrame();
             return;
         }
 
         if (pipeType == .compute) {
-            // Update descriptors only once when first needed
-            if (!self.descriptorsUpdated) {
+            if (!self.descriptorsUpdated) { // Update descriptors only once when first needed
                 self.descriptorManager.updateAllDescriptorSets(self.context.gpi, self.swapchain.renderImage.view);
                 self.descriptorsUpdated = true;
             }
@@ -85,9 +82,7 @@ pub const Renderer = struct {
         }
 
         try self.pacer.submitFrame(self.context.graphicsQ, cmd, rendSem);
-        if (try self.swapchain.present(self.context.presentQ, rendSem)) {
-            try self.renewSwapchain();
-        }
+        if (self.swapchain.present(self.context.presentQ, rendSem) == error.NeedNewSwapchain) try self.renewSwapchain();
         self.pacer.nextFrame();
     }
 

@@ -9,6 +9,7 @@ pub const QueueFamilies = struct {
 };
 
 pub const Context = struct {
+    alloc: Allocator,
     instance: c.VkInstance,
     surface: c.VkSurfaceKHR,
     gpu: c.VkPhysicalDevice,
@@ -31,6 +32,7 @@ pub const Context = struct {
         c.vkGetDeviceQueue(gpi, families.present, 0, &presentQ);
 
         return .{
+            .alloc = alloc,
             .instance = instance,
             .surface = surface,
             .gpu = gpu,
@@ -41,10 +43,60 @@ pub const Context = struct {
         };
     }
 
-    pub fn deinit(self: *Context) void {
+    pub fn deinit(self: *const Context) void {
         c.vkDestroyDevice(self.gpi, null);
         c.vkDestroySurfaceKHR(self.instance, self.surface, null);
         c.vkDestroyInstance(self.instance, null);
+    }
+
+    // Simplified helper functions that query what they need directly
+    pub fn pickSurfaceFormat(self: *const Context) !c.VkSurfaceFormatKHR {
+        const gpu = self.gpu;
+        const surface = self.surface;
+        var formatCount: u32 = 0;
+        try check(c.vkGetPhysicalDeviceSurfaceFormatsKHR(gpu, surface, &formatCount, null), "Failed to get format count");
+
+        if (formatCount == 0) return error.NoSurfaceFormats;
+
+        const formats = try self.alloc.alloc(c.VkSurfaceFormatKHR, formatCount);
+        defer self.alloc.free(formats);
+
+        try check(c.vkGetPhysicalDeviceSurfaceFormatsKHR(gpu, surface, &formatCount, formats.ptr), "Failed to get surface formats");
+
+        // Return preferred format if available, otherwise first one
+        if (formats.len == 1 and formats[0].format == c.VK_FORMAT_UNDEFINED) {
+            return c.VkSurfaceFormatKHR{ .format = c.VK_FORMAT_B8G8R8A8_UNORM, .colorSpace = c.VK_COLOR_SPACE_SRGB_NONLINEAR_KHR };
+        }
+
+        for (formats) |format| {
+            if (format.format == c.VK_FORMAT_B8G8R8A8_UNORM and format.colorSpace == c.VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
+                return format;
+            }
+        }
+        return formats[0];
+    }
+
+    fn pickPresentMode(self: *const Context) !c.VkPresentModeKHR {
+        const gpu = self.gpu;
+        const surface = self.surface;
+        var modeCount: u32 = 0;
+        try check(c.vkGetPhysicalDeviceSurfacePresentModesKHR(gpu, surface, &modeCount, null), "Failed to get present mode count");
+
+        if (modeCount == 0) return c.VK_PRESENT_MODE_FIFO_KHR; // FIFO is always supported
+
+        const modes = try self.alloc.alloc(c.VkPresentModeKHR, modeCount);
+        defer self.alloc.free(modes);
+
+        try check(c.vkGetPhysicalDeviceSurfacePresentModesKHR(gpu, surface, &modeCount, modes.ptr), "Failed to get present modes");
+
+        // Prefer mailbox (triple buffering), then immediate, fallback to FIFO
+        for (modes) |mode| {
+            if (mode == c.VK_PRESENT_MODE_MAILBOX_KHR) return mode;
+        }
+        for (modes) |mode| {
+            if (mode == c.VK_PRESENT_MODE_IMMEDIATE_KHR) return mode;
+        }
+        return c.VK_PRESENT_MODE_FIFO_KHR;
     }
 
     pub fn getSurfaceCaps(self: *const Context) !c.VkSurfaceCapabilitiesKHR {
