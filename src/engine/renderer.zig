@@ -53,8 +53,8 @@ pub const Renderer = struct {
         };
     }
 
-    pub fn draw(self: *Renderer, pipeline: PipelineType) !void {
-        try self.pipelineMan.checkShaderUpdate(pipeline);
+    pub fn draw(self: *Renderer, pipeType: PipelineType) !void {
+        try self.pipelineMan.checkShaderUpdate(pipeType);
 
         try self.pacer.waitForGPU(self.context.gpi);
 
@@ -67,7 +67,7 @@ pub const Renderer = struct {
             return;
         }
 
-        if (pipeline == .compute) {
+        if (pipeType == .compute) {
             // Update descriptors only once when first needed
             if (!self.descriptorsUpdated) {
                 self.descriptorManager.updateAllDescriptorSets(self.context.gpi, self.swapchain.renderImage.view);
@@ -78,10 +78,10 @@ pub const Renderer = struct {
         const swapIndex = self.swapchain.index;
         const rendSem = self.swapchain.swapBuckets[swapIndex].rendSem;
 
-        switch (pipeline) {
-            .graphics => try self.cmdMan.recCmd(cmd, &self.swapchain, &self.pipelineMan.graphics),
-            .compute => try self.cmdMan.recComputeCmd(cmd, &self.swapchain, &self.pipelineMan.compute, self.descriptorManager.sets[swapIndex]),
-            .mesh => try self.cmdMan.recMeshCmd(cmd, &self.swapchain, &self.pipelineMan.mesh),
+        if (pipeType == .compute) {
+            try self.cmdMan.recComputeCmd(cmd, &self.swapchain, &self.pipelineMan.compute, self.descriptorManager.sets[swapIndex]);
+        } else {
+            try self.cmdMan.recRenderingCmd(cmd, &self.swapchain, &self.pipelineMan.mesh, pipeType);
         }
 
         try self.pacer.submitFrame(self.context.graphicsQ, cmd, rendSem);

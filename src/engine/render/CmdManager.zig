@@ -3,6 +3,7 @@ const c = @import("../../c.zig");
 const Allocator = std.mem.Allocator;
 const Swapchain = @import("Swapchain.zig").Swapchain;
 const PipelineBucket = @import("PipelineBucket.zig").PipelineBucket;
+const PipelineType = @import("PipelineBucket.zig").PipelineType;
 const Context = @import("Context.zig").Context;
 const check = @import("../error.zig").check;
 
@@ -35,7 +36,7 @@ pub const CmdManager = struct {
         c.vkDestroyCommandPool(gpi, self.pool, null);
     }
 
-    pub fn getCmdBuffer(self: *const CmdManager, cpuFrame: u32) c.VkCommandBuffer {
+    pub fn getCmd(self: *const CmdManager, cpuFrame: u32) c.VkCommandBuffer {
         return self.cmds[cpuFrame];
     }
 
@@ -108,85 +109,7 @@ pub const CmdManager = struct {
         try check(c.vkEndCommandBuffer(cmd), "Could not End Cmd Buffer");
     }
 
-    pub fn recMeshCmd(
-        _: *CmdManager,
-        cmd: c.VkCommandBuffer,
-        swapchain: *Swapchain,
-        pipeline: *const PipelineBucket, // Use the new MeshPipeline struct
-    ) !void {
-        const index = swapchain.index;
-        try beginCmd(cmd, c.VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
-
-        // Transition image layout to be a color attachment
-        const imageBarrier = createImageMemoryBarrier2(
-            c.VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
-            0,
-            c.VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-            c.VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
-            c.VK_IMAGE_LAYOUT_UNDEFINED,
-            c.VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-            swapchain.swapBuckets[index].image,
-            createSubresourceRange(c.VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1),
-        );
-        createPipelineBarriers2(cmd, &.{imageBarrier});
-
-        // Set dynamic viewport and scissor
-        const viewport = c.VkViewport{
-            .x = 0,
-            .y = 0,
-            .width = @floatFromInt(swapchain.extent.width),
-            .height = @floatFromInt(swapchain.extent.height),
-            .minDepth = 0.0,
-            .maxDepth = 1.0,
-        };
-        c.vkCmdSetViewport(cmd, 0, 1, &viewport);
-
-        const scissor_rect = c.VkRect2D{ .offset = .{ .x = 0, .y = 0 }, .extent = swapchain.extent };
-        c.vkCmdSetScissor(cmd, 0, 1, &scissor_rect);
-
-        // Begin rendering
-        const colorAttachInf = c.VkRenderingAttachmentInfo{
-            .sType = c.VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-            .imageView = swapchain.swapBuckets[index].view,
-            .imageLayout = c.VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-            .loadOp = c.VK_ATTACHMENT_LOAD_OP_CLEAR,
-            .storeOp = c.VK_ATTACHMENT_STORE_OP_STORE,
-            .clearValue = .{ .color = .{ .float32 = .{ 0.0, 0.0, 0.1, 1.0 } } },
-        };
-
-        const renderInf = c.VkRenderingInfo{
-            .sType = c.VK_STRUCTURE_TYPE_RENDERING_INFO,
-            .renderArea = .{ .extent = swapchain.extent, .offset = .{ .x = 0, .y = 0 } },
-            .layerCount = 1,
-            .colorAttachmentCount = 1,
-            .pColorAttachments = &colorAttachInf,
-        };
-
-        c.vkCmdBeginRendering(cmd, &renderInf);
-        // Bind the MESH pipeline
-        c.vkCmdBindPipeline(cmd, c.VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.handle);
-        // Dispatch the mesh shader! This replaces vkCmdDraw.
-        // We launch 1 workgroup in X, Y, and Z.
-        c.pfn_vkCmdDrawMeshTasksEXT.?(cmd, 1, 1, 1);
-        c.vkCmdEndRendering(cmd);
-
-        // Transition image layout for presentation
-        const presentBarrier = createImageMemoryBarrier2(
-            c.VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-            c.VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
-            c.VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT,
-            0,
-            c.VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-            c.VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-            swapchain.swapBuckets[index].image,
-            createSubresourceRange(c.VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1),
-        );
-        createPipelineBarriers2(cmd, &.{presentBarrier});
-
-        try check(c.vkEndCommandBuffer(cmd), "Could not end command buffer");
-    }
-
-    pub fn recCmd(_: *CmdManager, cmd: c.VkCommandBuffer, swapchain: *Swapchain, pipeline: *PipelineBucket) !void {
+    pub fn recRenderingCmd(_: *CmdManager, cmd: c.VkCommandBuffer, swapchain: *Swapchain, pipeline: *PipelineBucket, pipeType: PipelineType) !void {
         const index = swapchain.index;
         try beginCmd(cmd, c.VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT); // c.VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT allow re-use
 
@@ -242,7 +165,13 @@ pub const CmdManager = struct {
 
         c.vkCmdBeginRendering(cmd, &renderInf);
         c.vkCmdBindPipeline(cmd, c.VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.handle);
-        c.vkCmdDraw(cmd, 3, 1, 0, 0);
+
+        if (pipeType == .mesh) {
+            c.pfn_vkCmdDrawMeshTasksEXT.?(cmd, 1, 1, 1); //replaces vkCmdDraw.
+        } else {
+            c.vkCmdDraw(cmd, 3, 1, 0, 0);
+        }
+
         c.vkCmdEndRendering(cmd);
 
         // Transition back to present layout
@@ -258,7 +187,7 @@ pub const CmdManager = struct {
         );
         createPipelineBarriers2(cmd, &.{presentBarrier});
 
-        try check(c.vkEndCommandBuffer(cmd), "Could not end command buffer");
+        try check(c.vkEndCommandBuffer(cmd), "Could not End Cmd Recording");
     }
 };
 
