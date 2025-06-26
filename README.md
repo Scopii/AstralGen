@@ -1,9 +1,7 @@
 
 # AstralGen
 
-A Ray March based rendering Engine using Zig and Vulkan 1.3.
-
----
+**A Ray March based rendering Engine using Zig and Vulkan 1.3.**
 
 This project is mainly for educational purposes because I wanted to try something more modern after my previous OpenGL Projects and trying out Zig because I wanted to see how bad C++ really is compared to other Languages. 
 This is also the next logical step for my personal growth towards becomming a proper graphics engineer. 
