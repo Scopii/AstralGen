@@ -98,17 +98,21 @@ pub const Swapchain = struct {
         c.vkDestroySwapchainKHR(gpi, self.handle, null);
     }
 
+    pub fn getCurrentRenderSemaphore(self: *Swapchain) c.VkSemaphore {
+        return self.swapBuckets[self.index].rendSem;
+    }
+
     pub fn acquireImage(self: *Swapchain, gpi: c.VkDevice, acqSem: c.VkSemaphore) !void {
         const acquireResult = c.vkAcquireNextImageKHR(gpi, self.handle, 1_000_000_000, acqSem, null, &self.index);
         if (acquireResult == c.VK_ERROR_OUT_OF_DATE_KHR or acquireResult == c.VK_SUBOPTIMAL_KHR) return error.NeedNewSwapchain;
         try check(acquireResult, "could not acquire next image");
     }
 
-    pub fn present(self: *Swapchain, pQueue: c.VkQueue, renderSemaphore: c.VkSemaphore) !void {
+    pub fn present(self: *Swapchain, pQueue: c.VkQueue) !void {
         const presentInf = c.VkPresentInfoKHR{
             .sType = c.VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
             .waitSemaphoreCount = 1,
-            .pWaitSemaphores = &renderSemaphore,
+            .pWaitSemaphores = &self.swapBuckets[self.index].rendSem,
             .swapchainCount = 1,
             .pSwapchains = &self.handle,
             .pImageIndices = &self.index,

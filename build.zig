@@ -90,6 +90,7 @@ pub fn build(b: *std.Build) void {
     std.fs.cwd().makePath("zig-out/shader") catch |err| {
         std.debug.print("Failed to create directory '{s}': {}\n", .{ "zig-out/shader", err });
     };
+
     // Shader Compilation (currently in Pipeline Creation)
     //const compile_shaders = b.addSystemCommand(&[_][]const u8{ "glslc", "src/shader/shdr.vert", "-o", "zig-out/vert.spv" });
     //const compile_frag = b.addSystemCommand(&[_][]const u8{ "glslc", "src/shader/shdr.frag", "-o", "zig-out/frag.spv" });

@@ -29,7 +29,7 @@ pub const Renderer = struct {
     swapchain: Swapchain,
     cmdMan: CmdManager,
     pacer: FramePacer,
-    descriptorsUpdated: bool,
+    descriptorsUpToDate: bool,
 
     pub fn init(alloc: Allocator, window: *c.SDL_Window, extent: c.VkExtent2D) !Renderer {
         const context = try Context.init(alloc, window, DEBUG_TOGGLE);
@@ -49,44 +49,37 @@ pub const Renderer = struct {
             .swapchain = swapchain,
             .cmdMan = cmdMan,
             .pacer = pacer,
-            .descriptorsUpdated = false,
+            .descriptorsUpToDate = false,
         };
     }
 
     pub fn draw(self: *Renderer, pipeType: PipelineType) !void {
         try self.pipelineMan.checkShaderUpdate(pipeType);
         try self.pacer.waitForGPU(self.context.gpi);
-        const frameIndex = self.pacer.curFrame;
-        const cmd = self.cmdMan.cmds[frameIndex];
 
-        if (self.swapchain.acquireImage(self.context.gpi, self.pacer.acqSems[frameIndex]) == error.NeedNewSwapchain) {
+        if (self.swapchain.acquireImage(self.context.gpi, self.pacer.getAcquisitionSemaphore()) == error.NeedNewSwapchain) {
             try self.renewSwapchain();
             self.pacer.nextFrame();
             return;
         }
+        const frameIndex = self.pacer.curFrame;
 
         if (pipeType == .compute) {
-            if (!self.descriptorsUpdated) { // Update descriptors only once when first needed
-                self.descriptorManager.updateAllDescriptorSets(self.context.gpi, self.swapchain.renderImage.view);
-                self.descriptorsUpdated = true;
-            }
-        }
+            if (!self.descriptorsUpToDate) self.updateDescriptors();
+            try self.cmdMan.recComputeCmd(frameIndex, &self.swapchain, &self.pipelineMan.compute, self.descriptorManager.sets[self.swapchain.index]);
+        } else try self.cmdMan.recRenderingCmd(frameIndex, &self.swapchain, &self.pipelineMan.mesh, pipeType);
 
-        const swapIndex = self.swapchain.index;
-        const rendSem = self.swapchain.swapBuckets[swapIndex].rendSem;
-
-        if (pipeType == .compute) {
-            try self.cmdMan.recComputeCmd(cmd, &self.swapchain, &self.pipelineMan.compute, self.descriptorManager.sets[swapIndex]);
-        } else {
-            try self.cmdMan.recRenderingCmd(cmd, &self.swapchain, &self.pipelineMan.mesh, pipeType);
-        }
-
-        try self.pacer.submitFrame(self.context.graphicsQ, cmd, rendSem);
-        if (self.swapchain.present(self.context.presentQ, rendSem) == error.NeedNewSwapchain) try self.renewSwapchain();
+        try self.pacer.submitFrame(self.context.graphicsQ, self.cmdMan.getCmd(frameIndex), self.swapchain.getCurrentRenderSemaphore());
+        if (self.swapchain.present(self.context.presentQ) == error.NeedNewSwapchain) try self.renewSwapchain();
         self.pacer.nextFrame();
     }
 
-    pub fn renewSwapchain(self: *Renderer) !void {
+    fn updateDescriptors(self: *Renderer) void {
+        self.descriptorManager.updateAllDescriptorSets(self.context.gpi, self.swapchain.renderImage.view);
+        self.descriptorsUpToDate = true;
+    }
+
+    fn renewSwapchain(self: *Renderer) !void {
         _ = c.vkDeviceWaitIdle(self.context.gpi);
         const caps = try self.context.getSurfaceCaps();
         const newExtent = caps.currentExtent;

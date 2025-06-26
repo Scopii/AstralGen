@@ -104,6 +104,14 @@ pub const FramePacer = struct {
         try waitForTimeline(gpi, self.timeline, waitVal, 1_000_000_000);
     }
 
+    pub fn getAcquisitionSemaphore(self: *FramePacer) c.VkSemaphore {
+        return self.acqSems[self.curFrame];
+    }
+
+    pub fn waitForFrame(self: *FramePacer, gpi: c.VkDevice, frameIndex: u64) !void {
+        try waitForTimeline(gpi, self.timeline, frameIndex, std.math.maxInt(u64));
+    }
+
     pub fn submitFrame(self: *FramePacer, queue: c.VkQueue, cmd: c.VkCommandBuffer, renderSem: c.VkSemaphore) !void {
         self.frameCount += 1;
 

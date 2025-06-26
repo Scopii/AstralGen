@@ -40,14 +40,9 @@ pub const CmdManager = struct {
         return self.cmds[cpuFrame];
     }
 
-    pub fn recComputeCmd(
-        _: *CmdManager,
-        cmd: c.VkCommandBuffer,
-        swapchain: *Swapchain,
-        computePipe: *const PipelineBucket,
-        descriptorSet: c.VkDescriptorSet,
-    ) !void {
+    pub fn recComputeCmd(self: *CmdManager, frameIndex: u8, swapchain: *Swapchain, computePipe: *const PipelineBucket, descriptorSet: c.VkDescriptorSet) !void {
         const index = swapchain.index;
+        const cmd = self.cmds[frameIndex];
         try beginCmd(cmd, c.VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT); //c.VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT
 
         // Transition Image into general layout so we can write into it, Overwrites all so we dont care about the older layout
@@ -109,7 +104,8 @@ pub const CmdManager = struct {
         try check(c.vkEndCommandBuffer(cmd), "Could not End Cmd Buffer");
     }
 
-    pub fn recRenderingCmd(_: *CmdManager, cmd: c.VkCommandBuffer, swapchain: *Swapchain, pipeline: *PipelineBucket, pipeType: PipelineType) !void {
+    pub fn recRenderingCmd(self: *CmdManager, frameIndex: u8, swapchain: *Swapchain, pipeline: *PipelineBucket, pipeType: PipelineType) !void {
+        const cmd = self.cmds[frameIndex];
         const index = swapchain.index;
         try beginCmd(cmd, c.VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT); // c.VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT allow re-use
 
