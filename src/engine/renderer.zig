@@ -67,7 +67,9 @@ pub const Renderer = struct {
         if (pipeType == .compute) {
             if (!self.descriptorsUpToDate) self.updateDescriptors();
             try self.cmdMan.recComputeCmd(frameIndex, &self.swapchain, &self.pipelineMan.compute, self.descriptorManager.sets[self.swapchain.index]);
-        } else try self.cmdMan.recRenderingCmd(frameIndex, &self.swapchain, &self.pipelineMan.mesh, pipeType);
+        } else {
+            try self.cmdMan.recRenderingCmd(frameIndex, &self.swapchain, if (pipeType == .mesh) &self.pipelineMan.mesh else &self.pipelineMan.graphics, pipeType);
+        }
 
         try self.pacer.submitFrame(self.context.graphicsQ, self.cmdMan.getCmd(frameIndex), self.swapchain.getCurrentRenderSemaphore());
         if (self.swapchain.present(self.context.presentQ) == error.NeedNewSwapchain) try self.renewSwapchain();
