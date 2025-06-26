@@ -29,7 +29,8 @@ pub const Renderer = struct {
     swapchain: Swapchain,
     cmdMan: CmdManager,
     pacer: FramePacer,
-    descriptorsUpToDate: bool,
+    descriptorsUpToDate: bool = false,
+    usableFramesInFlight: u8 = 0,
 
     pub fn init(alloc: Allocator, window: *c.SDL_Window, extent: c.VkExtent2D) !Renderer {
         const context = try Context.init(alloc, window, DEBUG_TOGGLE);
@@ -49,31 +50,38 @@ pub const Renderer = struct {
             .swapchain = swapchain,
             .cmdMan = cmdMan,
             .pacer = pacer,
-            .descriptorsUpToDate = false,
         };
     }
 
     pub fn draw(self: *Renderer, pipeType: PipelineType) !void {
         try self.pipelineMan.checkShaderUpdate(pipeType);
-        try self.pacer.waitForGPU(self.context.gpi);
+        try self.pacer.waitForGPU(self.context.gpi); // Waits if Frames in Flight limit is reached
 
         if (self.swapchain.acquireImage(self.context.gpi, self.pacer.getAcquisitionSemaphore()) == error.NeedNewSwapchain) {
             try self.renewSwapchain();
             self.pacer.nextFrame();
             return;
         }
-        const frameIndex = self.pacer.curFrame;
+
+        try self.pacer.submitFrame(self.context.graphicsQ, try self.decideCmd(pipeType), self.swapchain.getCurrentRenderSemaphore());
+        if (self.swapchain.present(self.context.presentQ) == error.NeedNewSwapchain) try self.renewSwapchain();
+        self.pacer.nextFrame();
+    }
+
+    fn decideCmd(self: *Renderer, pipeType: PipelineType) !c.VkCommandBuffer {
+        if (self.usableFramesInFlight == MAX_IN_FLIGHT) return self.cmdMan.getCmd(self.pacer.curFrame);
+
+        try self.cmdMan.beginRecording(self.pacer.curFrame);
 
         if (pipeType == .compute) {
             if (!self.descriptorsUpToDate) self.updateDescriptors();
-            try self.cmdMan.recComputeCmd(frameIndex, &self.swapchain, &self.pipelineMan.compute, self.descriptorManager.sets[self.swapchain.index]);
+            try self.cmdMan.recComputeCmd(&self.swapchain, &self.pipelineMan.compute, self.descriptorManager.sets[self.swapchain.index]);
         } else {
-            try self.cmdMan.recRenderingCmd(frameIndex, &self.swapchain, if (pipeType == .mesh) &self.pipelineMan.mesh else &self.pipelineMan.graphics, pipeType);
+            try self.cmdMan.recRenderingCmd(&self.swapchain, if (pipeType == .mesh) &self.pipelineMan.mesh else &self.pipelineMan.graphics, pipeType);
         }
 
-        try self.pacer.submitFrame(self.context.graphicsQ, self.cmdMan.getCmd(frameIndex), self.swapchain.getCurrentRenderSemaphore());
-        if (self.swapchain.present(self.context.presentQ) == error.NeedNewSwapchain) try self.renewSwapchain();
-        self.pacer.nextFrame();
+        self.usableFramesInFlight += 1;
+        return try self.cmdMan.endRecording();
     }
 
     fn updateDescriptors(self: *Renderer) void {
@@ -94,6 +102,7 @@ pub const Renderer = struct {
         self.swapchain.deinit(self.context.gpi, &self.resourceMan);
         self.swapchain = try Swapchain.init(self.alloc, &self.resourceMan, &self.context, newExtent, caps);
         self.descriptorManager.updateAllDescriptorSets(self.context.gpi, self.swapchain.renderImage.view);
+        self.usableFramesInFlight = 0;
         std.debug.print("Swapchain recreated\n", .{});
     }
 

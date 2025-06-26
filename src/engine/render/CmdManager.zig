@@ -12,6 +12,7 @@ pub const CmdManager = struct {
     gpi: c.VkDevice,
     pool: c.VkCommandPool,
     cmds: []c.VkCommandBuffer,
+    activeCmd: ?c.VkCommandBuffer = null,
 
     pub fn init(alloc: Allocator, context: *const Context, maxInFlight: u32) !CmdManager {
         const gpi = context.gpi;
@@ -36,14 +37,27 @@ pub const CmdManager = struct {
         c.vkDestroyCommandPool(gpi, self.pool, null);
     }
 
-    pub fn getCmd(self: *const CmdManager, cpuFrame: u32) c.VkCommandBuffer {
-        return self.cmds[cpuFrame];
+    pub fn beginRecording(self: *CmdManager, frameIndex: u8) !void {
+        if (self.activeCmd != null) return error.RecordingInProgress;
+        const cmd = self.cmds[frameIndex];
+        try beginCmd(cmd, 0); //c.VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT / VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT
+        self.activeCmd = cmd;
     }
 
-    pub fn recComputeCmd(self: *CmdManager, frameIndex: u8, swapchain: *Swapchain, computePipe: *const PipelineBucket, descriptorSet: c.VkDescriptorSet) !void {
+    pub fn endRecording(self: *CmdManager) !c.VkCommandBuffer {
+        const cmd = self.activeCmd orelse return error.NoActiveRecording;
+        try check(c.vkEndCommandBuffer(cmd), "Could not End Cmd Buffer");
+        self.activeCmd = null;
+        return cmd;
+    }
+
+    pub fn getCmd(self: *const CmdManager, frameIndex: u32) c.VkCommandBuffer {
+        return self.cmds[frameIndex];
+    }
+
+    pub fn recComputeCmd(self: *CmdManager, swapchain: *Swapchain, computePipe: *const PipelineBucket, descriptorSet: c.VkDescriptorSet) !void {
         const index = swapchain.index;
-        const cmd = self.cmds[frameIndex];
-        try beginCmd(cmd, c.VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT); //c.VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT
+        const cmd = self.activeCmd orelse return error.NoActiveRecording;
 
         // Transition Image into general layout so we can write into it, Overwrites all so we dont care about the older layout
         const imageBarrier = createImageMemoryBarrier2(
@@ -100,14 +114,11 @@ pub const CmdManager = struct {
             createSubresourceRange(c.VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1),
         );
         createPipelineBarriers2(cmd, &.{imageBarrier4});
-
-        try check(c.vkEndCommandBuffer(cmd), "Could not End Cmd Buffer");
     }
 
-    pub fn recRenderingCmd(self: *CmdManager, frameIndex: u8, swapchain: *Swapchain, pipeline: *PipelineBucket, pipeType: PipelineType) !void {
-        const cmd = self.cmds[frameIndex];
+    pub fn recRenderingCmd(self: *CmdManager, swapchain: *Swapchain, pipeline: *PipelineBucket, pipeType: PipelineType) !void {
+        const cmd = self.activeCmd orelse return error.NoActiveRecording;
         const index = swapchain.index;
-        try beginCmd(cmd, c.VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT); // c.VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT allow re-use
 
         const imageBarrier = createImageMemoryBarrier2(
             c.VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
@@ -182,8 +193,6 @@ pub const CmdManager = struct {
             createSubresourceRange(c.VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1),
         );
         createPipelineBarriers2(cmd, &.{presentBarrier});
-
-        try check(c.vkEndCommandBuffer(cmd), "Could not End Cmd Recording");
     }
 };
 
