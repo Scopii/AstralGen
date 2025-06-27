@@ -4,7 +4,7 @@ const WindowManager = @import("core/WindowManager.zig").WindowManager;
 const Renderer = @import("engine/Renderer.zig").Renderer;
 const zjobs = @import("zjobs");
 
-const DEBUG_TOGGLE = @import("settings.zig").DEBUG_TOGGLE;
+const DEBUG_CLOSE = @import("settings.zig").DEBUG_CLOSE;
 
 // Re-Formats
 const Allocator = std.mem.Allocator;
@@ -31,9 +31,9 @@ pub fn main() !void {
         }
     }
 
-    if (DEBUG_TOGGLE == true) {
-        //const stdout = std.io.getStdOut().writer();
-        //_ = try stdout.write("Press Enter to exit...\n");
-        //_ = std.io.getStdIn().reader().readByte() catch {};
+    if (DEBUG_CLOSE == true) {
+        const stdout = std.io.getStdOut().writer();
+        _ = try stdout.write("Press Enter to exit...\n");
+        _ = std.io.getStdIn().reader().readByte() catch {};
     }
 }

@@ -58,12 +58,12 @@ pub const WindowManager = struct {
             if (c.SDL_WaitEvent(&event)) {
                 try self.processEvent(&event, renderer);
             }
-            // After processing the waited event, drain any remaining events
+            // drain remaining events
             while (c.SDL_PollEvent(&event)) {
                 try self.processEvent(&event, renderer);
             }
         } else {
-            // When active, process all events in the queue
+            // When active process all events in the queue
             while (c.SDL_PollEvent(&event)) {
                 try self.processEvent(&event, renderer);
             }
