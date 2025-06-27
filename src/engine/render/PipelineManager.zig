@@ -11,15 +11,15 @@ const ShaderInfo = @import("PipelineBucket.zig").ShaderInfo;
 const Context = @import("Context.zig").Context;
 
 const computeInfo = [_]ShaderInfo{
-    .{ .stage = c.VK_SHADER_STAGE_COMPUTE_BIT, .inputPath = "src/shader/shdr.comp", .outputPath = "zig-out/shader/comp.spv" },
+    .{ .stage = c.VK_SHADER_STAGE_COMPUTE_BIT, .inputPath = "src/shader/Compute.comp", .outputPath = "zig-out/shader/Compute.spv" },
 };
 const graphicsInfo = [_]ShaderInfo{
-    .{ .stage = c.VK_SHADER_STAGE_FRAGMENT_BIT, .inputPath = "src/shader/shdr.frag", .outputPath = "zig-out/shader/frag.spv" },
-    .{ .stage = c.VK_SHADER_STAGE_VERTEX_BIT, .inputPath = "src/shader/shdr.vert", .outputPath = "zig-out/shader/vert.spv" },
+    .{ .stage = c.VK_SHADER_STAGE_FRAGMENT_BIT, .inputPath = "src/shader/Graphics.frag", .outputPath = "zig-out/shader/Graphics.spv" },
+    .{ .stage = c.VK_SHADER_STAGE_VERTEX_BIT, .inputPath = "src/shader/Graphics.vert", .outputPath = "zig-out/shader/Graphics.spv" },
 };
 const meshShaderPaths = [_]ShaderInfo{
-    .{ .stage = c.VK_SHADER_STAGE_FRAGMENT_BIT, .inputPath = "src/shader/mesh.frag", .outputPath = "zig-out/shader/mesh_frag.spv" },
-    .{ .stage = c.VK_SHADER_STAGE_MESH_BIT_EXT, .inputPath = "src/shader/shdr.mesh", .outputPath = "zig-out/shader/mesh.spv" },
+    .{ .stage = c.VK_SHADER_STAGE_FRAGMENT_BIT, .inputPath = "src/shader/Mesh.frag", .outputPath = "zig-out/shader/Mesh.spv" },
+    .{ .stage = c.VK_SHADER_STAGE_MESH_BIT_EXT, .inputPath = "src/shader/Mesh.mesh", .outputPath = "zig-out/shader/Mesh.spv" },
 };
 
 pub const PipelineManager = struct {

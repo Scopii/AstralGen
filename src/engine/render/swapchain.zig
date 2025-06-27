@@ -19,10 +19,11 @@ pub const Swapchain = struct {
     extent: c.VkExtent2D,
     renderImage: RenderImage,
 
-    pub fn init(alloc: Allocator, resourceMan: *const ResourceManager, context: *const Context, initExtent: c.VkExtent2D, caps: c.VkSurfaceCapabilitiesKHR) !Swapchain {
+    pub fn init(alloc: Allocator, resourceMan: *const ResourceManager, context: *const Context, initExtent: c.VkExtent2D) !Swapchain {
         const gpi = context.gpi;
         const families = context.families;
         const surface = context.surface;
+        const caps = try context.getSurfaceCaps();
         std.debug.print("Caps Extent {}x{}\n", .{ caps.maxImageExtent.width, caps.maxImageExtent.height });
 
         // Pick surface format directly

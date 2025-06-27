@@ -35,7 +35,7 @@ pub const Renderer = struct {
     pub fn init(alloc: Allocator, window: *c.SDL_Window, extent: c.VkExtent2D) !Renderer {
         const context = try Context.init(alloc, window, DEBUG_TOGGLE);
         const resourceMan = try ResourceManager.init(&context);
-        const swapchain = try Swapchain.init(alloc, &resourceMan, &context, extent, try context.getSurfaceCaps());
+        const swapchain = try Swapchain.init(alloc, &resourceMan, &context, extent);
         const descriptorManager = try DescriptorManager.init(alloc, &context, @intCast(swapchain.swapBuckets.len));
         const pipelineMan = try PipelineManager.init(alloc, &context, &descriptorManager, swapchain.surfaceFormat.format);
         const cmdMan = try CmdManager.init(alloc, &context, MAX_IN_FLIGHT);
@@ -58,13 +58,19 @@ pub const Renderer = struct {
         try self.pacer.waitForGPU(self.context.gpi); // Waits if Frames in Flight limit is reached
 
         if (self.swapchain.acquireImage(self.context.gpi, self.pacer.getAcquisitionSemaphore()) == error.NeedNewSwapchain) {
-            try self.renewSwapchain();
+            std.debug.print("Acquire Image failed\n", .{});
+            const caps = try self.context.getSurfaceCaps();
+            try self.renewSwapchain(caps.currentExtent);
             self.pacer.nextFrame();
             return;
         }
 
         try self.pacer.submitFrame(self.context.graphicsQ, try self.decideCmd(pipeType), self.swapchain.getCurrentRenderSemaphore());
-        if (self.swapchain.present(self.context.presentQ) == error.NeedNewSwapchain) try self.renewSwapchain();
+        if (self.swapchain.present(self.context.presentQ) == error.NeedNewSwapchain) {
+            std.debug.print("Presentation failed\n", .{});
+            const caps = try self.context.getSurfaceCaps();
+            try self.renewSwapchain(caps.currentExtent);
+        }
         self.pacer.nextFrame();
     }
 
@@ -89,21 +95,17 @@ pub const Renderer = struct {
         self.descriptorsUpToDate = true;
     }
 
-    fn renewSwapchain(self: *Renderer) !void {
+    pub fn renewSwapchain(self: *Renderer, extent: c.VkExtent2D) !void {
         _ = c.vkDeviceWaitIdle(self.context.gpi);
-        const caps = try self.context.getSurfaceCaps();
-        const newExtent = caps.currentExtent;
-        //std.debug.print("Caps Extent {}\n", .{caps.maxImageExtent});
-        if (newExtent.width == 0 or newExtent.height == 0) {
-            var event: c.SDL_Event = undefined;
-            _ = c.SDL_WaitEvent(&event);
-            return;
-        }
         self.swapchain.deinit(self.context.gpi, &self.resourceMan);
-        self.swapchain = try Swapchain.init(self.alloc, &self.resourceMan, &self.context, newExtent, caps);
+        self.swapchain = try Swapchain.init(self.alloc, &self.resourceMan, &self.context, extent);
         self.descriptorManager.updateAllDescriptorSets(self.context.gpi, self.swapchain.renderImage.view);
-        self.usableFramesInFlight = 0;
+        self.invalidateFrames();
         std.debug.print("Swapchain recreated\n", .{});
+    }
+
+    pub fn invalidateFrames(self: *Renderer) void {
+        self.usableFramesInFlight = 0;
     }
 
     pub fn deinit(self: *Renderer) void {
