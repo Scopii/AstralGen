@@ -16,6 +16,7 @@ pub fn main() !void {
 
     var windowMan = try WindowManager.init(alloc);
     defer windowMan.deinit();
+    try windowMan.createWindow("AstralGen", 1600, 700);
     try windowMan.createWindow("AstralGen", 1600, 900);
 
     const window = try windowMan.getWindow(4);
@@ -23,8 +24,9 @@ pub fn main() !void {
     defer renderer.deinit();
 
     // main loop
-    while (windowMan.close == false) {
+    while (true) {
         try windowMan.pollEvents(&renderer);
+        if (windowMan.close == true) return;
 
         if (windowMan.paused == false) {
             try renderer.draw(.mesh);

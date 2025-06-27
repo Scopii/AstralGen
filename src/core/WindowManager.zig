@@ -73,23 +73,31 @@ pub const WindowManager = struct {
     fn processEvent(self: *WindowManager, event: *c.SDL_Event, renderer: *Renderer) !void {
         switch (event.type) {
             c.SDL_EVENT_QUIT => self.close = true,
+            c.SDL_EVENT_WINDOW_CLOSE_REQUESTED => {
+                const id = event.window.windowID;
+                if (self.windows.getPtr(id)) |window| {
+                    std.debug.print("Window {} CLOSE_REQUESTED.\n", .{window.id});
+                    window.deinit();
+                    _ = self.windows.remove(id);
+                }
+            },
             c.SDL_EVENT_WINDOW_MINIMIZED => {
-                const window_id = event.window.windowID;
-                if (self.windows.getPtr(window_id)) |window| {
+                const id = event.window.windowID;
+                if (self.windows.getPtr(id)) |window| {
                     std.debug.print("Window {} MINIMIZED.\n", .{window.id});
                     self.paused = true;
                 }
             },
             c.SDL_EVENT_WINDOW_RESTORED => {
-                const window_id = event.window.windowID;
-                if (self.windows.getPtr(window_id)) |window| {
+                const id = event.window.windowID;
+                if (self.windows.getPtr(id)) |window| {
                     std.debug.print("Window {} RESTORED.\n", .{window.id});
                     self.paused = false; // Resume normal operation
                 }
             },
             c.SDL_EVENT_WINDOW_RESIZED => {
-                const window_id = event.window.windowID;
-                if (self.windows.getPtr(window_id)) |window| {
+                const id = event.window.windowID;
+                if (self.windows.getPtr(id)) |window| {
                     std.debug.print("Resize Called\n", .{});
                     var newExtent: c.VkExtent2D = undefined;
                     _ = c.SDL_GetWindowSize(window.handle, @ptrCast(&newExtent.width), @ptrCast(&newExtent.height));
