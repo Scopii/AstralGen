@@ -10,20 +10,20 @@ pub const DescriptorManager = struct {
     sets: []c.VkDescriptorSet,
     computeLayout: c.VkDescriptorSetLayout,
 
-    pub fn init(alloc: Allocator, context: *const Context, imageCount: u32) !DescriptorManager {
+    pub fn init(alloc: Allocator, context: *const Context, maxInFlight: u32) !DescriptorManager {
         const gpi = context.gpi;
 
         // Create descriptor pool
         const poolSize = c.VkDescriptorPoolSize{
             .type = c.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-            .descriptorCount = imageCount,
+            .descriptorCount = maxInFlight,
         };
 
         const poolInfo = c.VkDescriptorPoolCreateInfo{
             .sType = c.VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
             .poolSizeCount = 1,
             .pPoolSizes = &poolSize,
-            .maxSets = imageCount,
+            .maxSets = maxInFlight,
         };
 
         var pool: c.VkDescriptorPool = undefined;
@@ -33,7 +33,7 @@ pub const DescriptorManager = struct {
         errdefer c.vkDestroyDescriptorSetLayout(gpi, computeLayout, null);
 
         // Allocate descriptor sets
-        const layouts = try alloc.alloc(c.VkDescriptorSetLayout, imageCount);
+        const layouts = try alloc.alloc(c.VkDescriptorSetLayout, maxInFlight);
         defer alloc.free(layouts);
         for (layouts) |*layoutPtr| {
             layoutPtr.* = computeLayout;
@@ -42,11 +42,11 @@ pub const DescriptorManager = struct {
         const allocInfo = c.VkDescriptorSetAllocateInfo{
             .sType = c.VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
             .descriptorPool = pool,
-            .descriptorSetCount = imageCount,
+            .descriptorSetCount = maxInFlight,
             .pSetLayouts = layouts.ptr,
         };
 
-        const sets = try alloc.alloc(c.VkDescriptorSet, imageCount);
+        const sets = try alloc.alloc(c.VkDescriptorSet, maxInFlight);
         try check(c.vkAllocateDescriptorSets(gpi, &allocInfo, sets.ptr), "Failed to allocate descriptor sets");
 
         return .{

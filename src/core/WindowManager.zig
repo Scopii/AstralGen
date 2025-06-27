@@ -1,12 +1,12 @@
 const std = @import("std");
 const c = @import("../c.zig");
 const Allocator = std.mem.Allocator;
-const Window = @import("Window.zig").Window;
+const VulkanWindow = @import("VulkanWindow.zig").VulkanWindow;
 const Renderer = @import("../engine/Renderer.zig").Renderer;
 
 pub const WindowManager = struct {
     alloc: Allocator,
-    windows: std.AutoHashMap(u32, Window),
+    windows: std.AutoHashMap(u32, VulkanWindow),
     paused: bool = false,
     close: bool = false,
 
@@ -18,7 +18,7 @@ pub const WindowManager = struct {
         }
         return .{
             .alloc = alloc,
-            .windows = std.AutoHashMap(u32, Window).init(alloc),
+            .windows = std.AutoHashMap(u32, VulkanWindow).init(alloc),
         };
     }
 
@@ -37,17 +37,18 @@ pub const WindowManager = struct {
             return error.WindowInitFailed;
         };
         const id = c.SDL_GetWindowID(sdlWindow);
-        std.debug.print("Window created (ID {})\n", .{id});
+        std.debug.print("vkWindow created (ID {})\n", .{id});
         //_ = c.SDL_SetWindowRelativeMouseMode(window, true);
         _ = c.SDL_SetWindowFullscreen(sdlWindow, false);
 
-        const window = Window{
-            .handle = sdlWindow,
-            .extent = c.VkExtent2D{ .width = 1600, .height = 900 },
-            .id = id,
-        };
+        const vkWindow = try VulkanWindow.init(
+            width,
+            height,
+            id,
+            sdlWindow,
+        );
 
-        try self.windows.put(id, window);
+        try self.windows.put(id, vkWindow);
     }
 
     pub fn pollEvents(self: *WindowManager, renderer: *Renderer) !void {
@@ -108,7 +109,7 @@ pub const WindowManager = struct {
         }
     }
 
-    pub fn getWindow(self: *WindowManager, id: u32) !Window {
+    pub fn getWindow(self: *WindowManager, id: u32) !VulkanWindow {
         return self.windows.get(id) orelse error.WindowNotFound;
     }
 

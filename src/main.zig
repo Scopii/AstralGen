@@ -16,8 +16,8 @@ pub fn main() !void {
 
     var windowMan = try WindowManager.init(alloc);
     defer windowMan.deinit();
-    try windowMan.createWindow("AstralGen", 1600, 700);
     try windowMan.createWindow("AstralGen", 1600, 900);
+    try windowMan.createWindow("AstralGen", 1280, 720);
 
     const window = try windowMan.getWindow(4);
     var renderer = try Renderer.init(alloc, window.handle, window.extent);
@@ -29,9 +29,11 @@ pub fn main() !void {
         if (windowMan.close == true) return;
 
         if (windowMan.paused == false) {
-            try renderer.draw(.mesh);
+            try renderer.draw(.compute);
         }
     }
+
+    std.debug.print("App Closed", .{});
 
     if (DEBUG_CLOSE == true) {
         const stdout = std.io.getStdOut().writer();

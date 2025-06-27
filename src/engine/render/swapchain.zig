@@ -14,7 +14,6 @@ pub const Swapchain = struct {
     handle: c.VkSwapchainKHR,
     swapBuckets: []SwapBucket,
     index: u32,
-    surfaceFormat: c.VkSurfaceFormatKHR,
     mode: c.VkPresentModeKHR,
     extent: c.VkExtent2D,
     renderImage: RenderImage,
@@ -23,11 +22,10 @@ pub const Swapchain = struct {
         const gpi = context.gpi;
         const families = context.families;
         const surface = context.surface;
+        const surfaceFormat = context.surfaceFormat;
         const caps = try context.getSurfaceCaps();
         std.debug.print("Caps Extent {}x{}\n", .{ caps.maxImageExtent.width, caps.maxImageExtent.height });
 
-        // Pick surface format directly
-        const surfaceFormat = try context.pickSurfaceFormat();
         const mode = c.VK_PRESENT_MODE_IMMEDIATE_KHR; //try context.pickPresentMode();
         const extent = pickExtent(&caps, initExtent);
 
@@ -81,7 +79,6 @@ pub const Swapchain = struct {
             .alloc = alloc,
             .handle = handle,
             .index = undefined,
-            .surfaceFormat = surfaceFormat,
             .mode = mode,
             .extent = extent,
             .swapBuckets = swapBuckets,

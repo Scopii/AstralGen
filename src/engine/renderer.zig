@@ -35,11 +35,12 @@ pub const Renderer = struct {
     pub fn init(alloc: Allocator, window: *c.SDL_Window, extent: c.VkExtent2D) !Renderer {
         const context = try Context.init(alloc, window, DEBUG_TOGGLE);
         const resourceMan = try ResourceManager.init(&context);
-        const swapchain = try Swapchain.init(alloc, &resourceMan, &context, extent);
-        const descriptorManager = try DescriptorManager.init(alloc, &context, @intCast(swapchain.swapBuckets.len));
-        const pipelineMan = try PipelineManager.init(alloc, &context, &descriptorManager, swapchain.surfaceFormat.format);
         const cmdMan = try CmdManager.init(alloc, &context, MAX_IN_FLIGHT);
         const pacer = try FramePacer.init(alloc, &context, MAX_IN_FLIGHT);
+        const descriptorManager = try DescriptorManager.init(alloc, &context, MAX_IN_FLIGHT);
+        const pipelineMan = try PipelineManager.init(alloc, &context, &descriptorManager);
+
+        const swapchain = try Swapchain.init(alloc, &resourceMan, &context, extent);
 
         return .{
             .alloc = alloc,
@@ -81,7 +82,7 @@ pub const Renderer = struct {
 
         if (pipeType == .compute) {
             if (!self.descriptorsUpToDate) self.updateDescriptors();
-            try self.cmdMan.recComputeCmd(&self.swapchain, &self.pipelineMan.compute, self.descriptorManager.sets[self.swapchain.index]);
+            try self.cmdMan.recComputeCmd(&self.swapchain, &self.pipelineMan.compute, self.descriptorManager.sets[self.pacer.curFrame]);
         } else {
             try self.cmdMan.recRenderingCmd(&self.swapchain, if (pipeType == .mesh) &self.pipelineMan.mesh else &self.pipelineMan.graphics, pipeType);
         }

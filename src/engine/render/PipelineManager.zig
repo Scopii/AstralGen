@@ -30,9 +30,10 @@ pub const PipelineManager = struct {
     mesh: PipelineBucket,
     cache: c.VkPipelineCache,
 
-    pub fn init(alloc: Allocator, context: *const Context, descriptorManager: *const DescriptorManager, format: c.VkFormat) !PipelineManager {
+    pub fn init(alloc: Allocator, context: *const Context, descriptorManager: *const DescriptorManager) !PipelineManager {
         const gpi = context.gpi;
         const cache = try createPipelineCache(gpi);
+        const format = c.VK_FORMAT_R16G16B16A16_SFLOAT;
 
         const computePipeline = try PipelineBucket.init(alloc, gpi, cache, format, &computeInfo, .compute, descriptorManager.computeLayout, 1);
         const graphicsPipeline = try PipelineBucket.init(alloc, gpi, cache, format, &graphicsInfo, .graphics, null, 0);

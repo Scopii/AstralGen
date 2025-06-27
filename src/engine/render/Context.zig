@@ -12,6 +12,7 @@ pub const Context = struct {
     alloc: Allocator,
     instance: c.VkInstance,
     surface: c.VkSurfaceKHR,
+    surfaceFormat: c.VkSurfaceFormatKHR,
     gpu: c.VkPhysicalDevice,
     families: QueueFamilies,
     gpi: c.VkDevice,
@@ -20,9 +21,9 @@ pub const Context = struct {
 
     pub fn init(alloc: Allocator, window: *c.SDL_Window, debugToggle: bool) !Context {
         const instance = try createInstance(alloc, debugToggle);
-        const surface = try createSurface(window, instance);
-
         const gpu = try pickGPU(alloc, instance);
+        const surface = try createSurface(window, instance);
+        const surfaceFormat = try pickSurfaceFormat(alloc, gpu, surface);
         const families = try checkGPUfamilies(alloc, surface, gpu);
         const gpi = try createGPI(alloc, gpu, families);
 
@@ -35,6 +36,7 @@ pub const Context = struct {
             .alloc = alloc,
             .instance = instance,
             .surface = surface,
+            .surfaceFormat = surfaceFormat,
             .gpu = gpu,
             .families = families,
             .gpi = gpi,
@@ -47,33 +49,6 @@ pub const Context = struct {
         c.vkDestroyDevice(self.gpi, null);
         c.vkDestroySurfaceKHR(self.instance, self.surface, null);
         c.vkDestroyInstance(self.instance, null);
-    }
-
-    // Simplified helper functions that query what they need directly
-    pub fn pickSurfaceFormat(self: *const Context) !c.VkSurfaceFormatKHR {
-        const gpu = self.gpu;
-        const surface = self.surface;
-        var formatCount: u32 = 0;
-        try check(c.vkGetPhysicalDeviceSurfaceFormatsKHR(gpu, surface, &formatCount, null), "Failed to get format count");
-
-        if (formatCount == 0) return error.NoSurfaceFormats;
-
-        const formats = try self.alloc.alloc(c.VkSurfaceFormatKHR, formatCount);
-        defer self.alloc.free(formats);
-
-        try check(c.vkGetPhysicalDeviceSurfaceFormatsKHR(gpu, surface, &formatCount, formats.ptr), "Failed to get surface formats");
-
-        // Return preferred format if available, otherwise first one
-        if (formats.len == 1 and formats[0].format == c.VK_FORMAT_UNDEFINED) {
-            return c.VkSurfaceFormatKHR{ .format = c.VK_FORMAT_B8G8R8A8_UNORM, .colorSpace = c.VK_COLOR_SPACE_SRGB_NONLINEAR_KHR };
-        }
-
-        for (formats) |format| {
-            if (format.format == c.VK_FORMAT_B8G8R8A8_UNORM and format.colorSpace == c.VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
-                return format;
-            }
-        }
-        return formats[0];
     }
 
     fn pickPresentMode(self: *const Context) !c.VkPresentModeKHR {
@@ -113,6 +88,30 @@ fn createSurface(window: *c.SDL_Window, instance: c.VkInstance) !c.VkSurfaceKHR 
         return error.VkSurface;
     }
     return surface;
+}
+
+fn pickSurfaceFormat(alloc: Allocator, gpu: c.VkPhysicalDevice, surface: c.VkSurfaceKHR) !c.VkSurfaceFormatKHR {
+    var formatCount: u32 = 0;
+    try check(c.vkGetPhysicalDeviceSurfaceFormatsKHR(gpu, surface, &formatCount, null), "Failed to get format count");
+
+    if (formatCount == 0) return error.NoSurfaceFormats;
+
+    const formats = try alloc.alloc(c.VkSurfaceFormatKHR, formatCount);
+    defer alloc.free(formats);
+
+    try check(c.vkGetPhysicalDeviceSurfaceFormatsKHR(gpu, surface, &formatCount, formats.ptr), "Failed to get surface formats");
+
+    // Return preferred format if available, otherwise first one
+    if (formats.len == 1 and formats[0].format == c.VK_FORMAT_UNDEFINED) {
+        return c.VkSurfaceFormatKHR{ .format = c.VK_FORMAT_B8G8R8A8_UNORM, .colorSpace = c.VK_COLOR_SPACE_SRGB_NONLINEAR_KHR };
+    }
+
+    for (formats) |format| {
+        if (format.format == c.VK_FORMAT_B8G8R8A8_UNORM and format.colorSpace == c.VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
+            return format;
+        }
+    }
+    return formats[0];
 }
 
 fn createInstance(alloc: Allocator, debugToggle: bool) !c.VkInstance {
