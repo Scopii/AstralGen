@@ -29,7 +29,7 @@ pub fn main() !void {
         if (windowMan.close == true) return;
 
         if (windowMan.paused == false) {
-            try renderer.draw(.compute);
+            try renderer.draw(.graphics);
         }
     }
 

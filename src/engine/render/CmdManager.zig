@@ -2,6 +2,7 @@ const std = @import("std");
 const c = @import("../../c.zig");
 const Allocator = std.mem.Allocator;
 const Swapchain = @import("Swapchain.zig").Swapchain;
+const RenderImage = @import("ResourceManager.zig").RenderImage;
 const PipelineBucket = @import("PipelineBucket.zig").PipelineBucket;
 const PipelineType = @import("PipelineBucket.zig").PipelineType;
 const Context = @import("Context.zig").Context;
@@ -55,7 +56,7 @@ pub const CmdManager = struct {
         return self.cmds[frameIndex];
     }
 
-    pub fn recComputeCmd(self: *CmdManager, swapchain: *Swapchain, computePipe: *const PipelineBucket, descriptorSet: c.VkDescriptorSet) !void {
+    pub fn recComputeCmd(self: *CmdManager, swapchain: *Swapchain, renderImage: *RenderImage, computePipe: *const PipelineBucket, descriptorSet: c.VkDescriptorSet) !void {
         const index = swapchain.index;
         const cmd = self.activeCmd orelse return error.NoActiveRecording;
 
@@ -67,14 +68,14 @@ pub const CmdManager = struct {
             c.VK_ACCESS_2_MEMORY_WRITE_BIT | c.VK_ACCESS_2_MEMORY_READ_BIT,
             c.VK_IMAGE_LAYOUT_UNDEFINED,
             c.VK_IMAGE_LAYOUT_GENERAL,
-            swapchain.renderImage.image,
+            renderImage.image,
             createSubresourceRange(c.VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1),
         );
         createPipelineBarriers2(cmd, &.{imageBarrier});
         c.vkCmdBindPipeline(cmd, c.VK_PIPELINE_BIND_POINT_COMPUTE, computePipe.handle);
         c.vkCmdBindDescriptorSets(cmd, c.VK_PIPELINE_BIND_POINT_COMPUTE, computePipe.layout, 0, 1, &descriptorSet, 0, null);
-        const groupCountX = (swapchain.renderImage.extent3d.width + 7) / 8;
-        const groupCountY = (swapchain.renderImage.extent3d.height + 7) / 8;
+        const groupCountX = (renderImage.extent3d.width + 7) / 8;
+        const groupCountY = (renderImage.extent3d.height + 7) / 8;
         c.vkCmdDispatch(cmd, groupCountX, groupCountY, 1);
 
         // Barrier 2 & 3: Transition renderImage to Transfer Src and swapchain image to Transfer Dst
@@ -85,7 +86,7 @@ pub const CmdManager = struct {
             c.VK_ACCESS_2_TRANSFER_READ_BIT,
             c.VK_IMAGE_LAYOUT_GENERAL,
             c.VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-            swapchain.renderImage.image,
+            renderImage.image,
             createSubresourceRange(c.VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1),
         );
 
@@ -101,7 +102,7 @@ pub const CmdManager = struct {
         );
         createPipelineBarriers2(cmd, &.{ imageBarrier2, imageBarrier3 });
 
-        copyImageToImage(cmd, swapchain.renderImage.image, swapchain.swapBuckets[index].image, swapchain.extent, swapchain.extent);
+        copyImageToImage(cmd, renderImage.image, swapchain.swapBuckets[index].image, swapchain.extent, swapchain.extent);
 
         const imageBarrier4 = createImageMemoryBarrier2(
             c.VK_PIPELINE_STAGE_2_TRANSFER_BIT,
@@ -116,40 +117,40 @@ pub const CmdManager = struct {
         createPipelineBarriers2(cmd, &.{imageBarrier4});
     }
 
-    pub fn recRenderingCmd(self: *CmdManager, swapchain: *Swapchain, pipeline: *PipelineBucket, pipeType: PipelineType) !void {
+    pub fn recRenderingCmd(self: *CmdManager, swapchain: *Swapchain, renderImage: *RenderImage, pipeline: *PipelineBucket, pipeType: PipelineType) !void {
         const cmd = self.activeCmd orelse return error.NoActiveRecording;
         const index = swapchain.index;
 
-        const imageBarrier = createImageMemoryBarrier2(
+        const renderTargetBarrier = createImageMemoryBarrier2(
             c.VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
             0,
             c.VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
             c.VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
             c.VK_IMAGE_LAYOUT_UNDEFINED,
             c.VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-            swapchain.swapBuckets[index].image,
+            renderImage.image, //swapchain.swapBuckets[index].image
             createSubresourceRange(c.VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1),
         );
-        createPipelineBarriers2(cmd, &.{imageBarrier});
+        createPipelineBarriers2(cmd, &.{renderTargetBarrier});
 
         // Set viewport and scissor
         const viewport = c.VkViewport{
             .x = 0,
             .y = 0,
-            .width = @floatFromInt(swapchain.extent.width),
-            .height = @floatFromInt(swapchain.extent.height),
+            .width = @floatFromInt(renderImage.extent3d.width),
+            .height = @floatFromInt(renderImage.extent3d.height),
             .minDepth = 0.0,
             .maxDepth = 1.0,
         };
         c.vkCmdSetViewport(cmd, 0, 1, &viewport);
 
-        const scissor_rect = c.VkRect2D{ .offset = .{ .x = 0, .y = 0 }, .extent = swapchain.extent };
+        const scissor_rect = c.VkRect2D{ .offset = .{ .x = 0, .y = 0 }, .extent = .{ .width = renderImage.extent3d.width, .height = renderImage.extent3d.height } };
         c.vkCmdSetScissor(cmd, 0, 1, &scissor_rect);
 
         // Begin rendering
         const colorAttachInf = c.VkRenderingAttachmentInfo{
             .sType = c.VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-            .imageView = swapchain.swapBuckets[index].view,
+            .imageView = renderImage.view, //swapchain.swapBuckets[index].view
             .imageLayout = c.VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
             .resolveMode = c.VK_RESOLVE_MODE_NONE,
             .resolveImageView = null,
@@ -161,7 +162,7 @@ pub const CmdManager = struct {
 
         const renderInf = c.VkRenderingInfo{
             .sType = c.VK_STRUCTURE_TYPE_RENDERING_INFO,
-            .renderArea = .{ .extent = swapchain.extent, .offset = .{ .x = 0, .y = 0 } },
+            .renderArea = scissor_rect,
             .layerCount = 1,
             .viewMask = 0,
             .colorAttachmentCount = 1,
@@ -181,18 +182,46 @@ pub const CmdManager = struct {
 
         c.vkCmdEndRendering(cmd);
 
-        // Transition back to present layout
-        const presentBarrier = createImageMemoryBarrier2(
+        const swapchainImage = swapchain.swapBuckets[index].image;
+
+        //Transition off-screen image so it can be copied FROM.
+        const copySrcBarrier = createImageMemoryBarrier2(
             c.VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
             c.VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
-            c.VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT,
-            0,
+            c.VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+            c.VK_ACCESS_2_TRANSFER_READ_BIT,
             c.VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-            c.VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-            swapchain.swapBuckets[index].image,
+            c.VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            renderImage.image,
             createSubresourceRange(c.VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1),
         );
-        createPipelineBarriers2(cmd, &.{presentBarrier});
+
+        const copyDstBarrier = createImageMemoryBarrier2(
+            c.VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
+            0,
+            c.VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+            c.VK_ACCESS_2_TRANSFER_WRITE_BIT,
+            c.VK_IMAGE_LAYOUT_UNDEFINED,
+            c.VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            swapchainImage,
+            createSubresourceRange(c.VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1),
+        );
+        createPipelineBarriers2(cmd, &.{ copySrcBarrier, copyDstBarrier });
+
+        const extent2d = c.VkExtent2D{ .width = renderImage.extent3d.width, .height = renderImage.extent3d.height };
+        copyImageToImage(cmd, renderImage.image, swapchainImage, extent2d, swapchain.extent);
+
+        const presentReadyBarrier = createImageMemoryBarrier2(
+            c.VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+            c.VK_ACCESS_2_TRANSFER_WRITE_BIT,
+            c.VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT,
+            0,
+            c.VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            c.VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+            swapchainImage,
+            createSubresourceRange(c.VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1),
+        );
+        createPipelineBarriers2(cmd, &.{presentReadyBarrier});
     }
 };
 

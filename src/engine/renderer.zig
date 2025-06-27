@@ -15,6 +15,7 @@ const PipelineManager = @import("render/PipelineManager.zig").PipelineManager;
 const PipelineType = @import("render/PipelineBucket.zig").PipelineType;
 const ResourceManager = @import("render/ResourceManager.zig").ResourceManager;
 const DescriptorManager = @import("render/DescriptorManager.zig").DescriptorManager;
+const RenderImage = @import("render/ResourceManager.zig").RenderImage;
 
 pub const MAX_IN_FLIGHT: u8 = 3;
 
@@ -31,6 +32,7 @@ pub const Renderer = struct {
     pacer: FramePacer,
     descriptorsUpToDate: bool = false,
     usableFramesInFlight: u8 = 0,
+    renderImage: RenderImage,
 
     pub fn init(alloc: Allocator, window: *c.SDL_Window, extent: c.VkExtent2D) !Renderer {
         const context = try Context.init(alloc, window, DEBUG_TOGGLE);
@@ -40,7 +42,8 @@ pub const Renderer = struct {
         const descriptorManager = try DescriptorManager.init(alloc, &context, MAX_IN_FLIGHT);
         const pipelineMan = try PipelineManager.init(alloc, &context, &descriptorManager);
 
-        const swapchain = try Swapchain.init(alloc, &resourceMan, &context, extent);
+        const swapchain = try Swapchain.init(alloc, &context, extent);
+        const renderImage = try resourceMan.createRenderImage(extent);
 
         return .{
             .alloc = alloc,
@@ -51,6 +54,7 @@ pub const Renderer = struct {
             .swapchain = swapchain,
             .cmdMan = cmdMan,
             .pacer = pacer,
+            .renderImage = renderImage,
         };
     }
 
@@ -82,9 +86,9 @@ pub const Renderer = struct {
 
         if (pipeType == .compute) {
             if (!self.descriptorsUpToDate) self.updateDescriptors();
-            try self.cmdMan.recComputeCmd(&self.swapchain, &self.pipelineMan.compute, self.descriptorManager.sets[self.pacer.curFrame]);
+            try self.cmdMan.recComputeCmd(&self.swapchain, &self.renderImage, &self.pipelineMan.compute, self.descriptorManager.sets[self.pacer.curFrame]);
         } else {
-            try self.cmdMan.recRenderingCmd(&self.swapchain, if (pipeType == .mesh) &self.pipelineMan.mesh else &self.pipelineMan.graphics, pipeType);
+            try self.cmdMan.recRenderingCmd(&self.swapchain, &self.renderImage, if (pipeType == .mesh) &self.pipelineMan.mesh else &self.pipelineMan.graphics, pipeType);
         }
 
         self.usableFramesInFlight += 1;
@@ -92,15 +96,15 @@ pub const Renderer = struct {
     }
 
     fn updateDescriptors(self: *Renderer) void {
-        self.descriptorManager.updateAllDescriptorSets(self.context.gpi, self.swapchain.renderImage.view);
+        self.descriptorManager.updateAllDescriptorSets(self.context.gpi, self.renderImage.view);
         self.descriptorsUpToDate = true;
     }
 
     pub fn renewSwapchain(self: *Renderer, extent: c.VkExtent2D) !void {
         _ = c.vkDeviceWaitIdle(self.context.gpi);
-        self.swapchain.deinit(self.context.gpi, &self.resourceMan);
-        self.swapchain = try Swapchain.init(self.alloc, &self.resourceMan, &self.context, extent);
-        self.descriptorManager.updateAllDescriptorSets(self.context.gpi, self.swapchain.renderImage.view);
+        self.swapchain.deinit(self.context.gpi);
+        self.swapchain = try Swapchain.init(self.alloc, &self.context, extent);
+        self.descriptorManager.updateAllDescriptorSets(self.context.gpi, self.renderImage.view);
         self.invalidateFrames();
         std.debug.print("Swapchain recreated\n", .{});
     }
@@ -111,9 +115,12 @@ pub const Renderer = struct {
 
     pub fn deinit(self: *Renderer) void {
         _ = c.vkDeviceWaitIdle(self.context.gpi);
+
+        self.resourceMan.destroyRenderImage(self.renderImage);
+
         self.pacer.deinit(self.alloc, self.context.gpi);
         self.cmdMan.deinit(self.context.gpi);
-        self.swapchain.deinit(self.context.gpi, &self.resourceMan);
+        self.swapchain.deinit(self.context.gpi);
         self.resourceMan.deinit();
         self.descriptorManager.deinit(self.context.gpi);
         self.pipelineMan.deinit();

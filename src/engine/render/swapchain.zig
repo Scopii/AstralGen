@@ -5,7 +5,6 @@ const Context = @import("Context.zig").Context;
 const SwapBucket = @import("SwapBucket.zig").SwapBucket;
 const RenderImage = @import("ResourceManager.zig").RenderImage;
 const VkAllocator = @import("../vma.zig").VkAllocator;
-const ResourceManager = @import("ResourceManager.zig").ResourceManager;
 const createSwapBuckets = @import("SwapBucket.zig").createSwapBuckets;
 const check = @import("../error.zig").check;
 
@@ -16,9 +15,8 @@ pub const Swapchain = struct {
     index: u32,
     mode: c.VkPresentModeKHR,
     extent: c.VkExtent2D,
-    renderImage: RenderImage,
 
-    pub fn init(alloc: Allocator, resourceMan: *const ResourceManager, context: *const Context, initExtent: c.VkExtent2D) !Swapchain {
+    pub fn init(alloc: Allocator, context: *const Context, initExtent: c.VkExtent2D) !Swapchain {
         const gpi = context.gpi;
         const families = context.families;
         const surface = context.surface;
@@ -72,9 +70,6 @@ pub const Swapchain = struct {
         try check(c.vkGetSwapchainImagesKHR(gpi, handle, &realImgCount, null), "Could not get swapchain images");
         const swapBuckets = try createSwapBuckets(alloc, realImgCount, gpi, handle, surfaceFormat.format);
 
-        // GPU COMPUTE DRWAING THINGS //
-        const renderImage = try resourceMan.createRenderImage(extent);
-
         return .{
             .alloc = alloc,
             .handle = handle,
@@ -82,13 +77,10 @@ pub const Swapchain = struct {
             .mode = mode,
             .extent = extent,
             .swapBuckets = swapBuckets,
-            .renderImage = renderImage,
         };
     }
 
-    pub fn deinit(self: *Swapchain, gpi: c.VkDevice, resourceMan: *const ResourceManager) void {
-        resourceMan.destroyRenderImage(self.renderImage);
-
+    pub fn deinit(self: *Swapchain, gpi: c.VkDevice) void {
         for (0..self.swapBuckets.len) |i| {
             self.swapBuckets[i].deinit(gpi);
         }
