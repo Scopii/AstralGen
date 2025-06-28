@@ -56,7 +56,7 @@ pub const CmdManager = struct {
         return self.cmds[frameIndex];
     }
 
-    pub fn recComputeCmd(self: *CmdManager, swapchain: *Swapchain, renderImage: *RenderImage, computePipe: *const PipelineBucket, descriptorSet: c.VkDescriptorSet) !void {
+    pub fn recComputeCmd(self: *CmdManager, swapchain: *const Swapchain, renderImage: *RenderImage, computePipe: *const PipelineBucket, descriptorSet: c.VkDescriptorSet) !void {
         const index = swapchain.index;
         const cmd = self.activeCmd orelse return error.NoActiveRecording;
 
@@ -117,7 +117,7 @@ pub const CmdManager = struct {
         createPipelineBarriers2(cmd, &.{imageBarrier4});
     }
 
-    pub fn recRenderingCmd(self: *CmdManager, swapchain: *Swapchain, renderImage: *RenderImage, pipeline: *PipelineBucket, pipeType: PipelineType) !void {
+    pub fn recRenderingCmd(self: *CmdManager, swapchain: *const Swapchain, renderImage: *RenderImage, pipeline: *PipelineBucket, pipeType: PipelineType) !void {
         const cmd = self.activeCmd orelse return error.NoActiveRecording;
         const index = swapchain.index;
 

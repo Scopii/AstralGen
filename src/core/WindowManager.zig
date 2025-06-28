@@ -74,6 +74,7 @@ pub const WindowManager = struct {
                 const id = event.window.windowID;
                 if (self.windows.getPtr(id)) |window| {
                     std.debug.print("Window {} CLOSE_REQUESTED.\n", .{window.id});
+                    try renderer.destroyWindow(id);
                     window.deinit();
                     _ = self.windows.remove(id);
                 }
@@ -98,7 +99,7 @@ pub const WindowManager = struct {
                     std.debug.print("Resize Called\n", .{});
                     var newExtent: c.VkExtent2D = undefined;
                     _ = c.SDL_GetWindowSize(window.handle, @ptrCast(&newExtent.width), @ptrCast(&newExtent.height));
-                    try renderer.renewSwapchain(newExtent);
+                    try renderer.renewSwapchain(newExtent, id);
                 }
             },
             else => {},
