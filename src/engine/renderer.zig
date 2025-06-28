@@ -7,6 +7,9 @@ const DEBUG_TOGGLE = @import("../settings.zig").DEBUG_TOGGLE;
 const check = @import("error.zig").check;
 
 const Context = @import("render/Context.zig").Context;
+const createInstance = @import("render/Context.zig").createInstance;
+const createSurface = @import("render/Context.zig").createSurface;
+const getSurfaceCaps = @import("render/Context.zig").getSurfaceCaps;
 const Swapchain = @import("render/Swapchain.zig").Swapchain;
 const FramePacer = @import("sync/FramePacer.zig").FramePacer;
 const VkAllocator = @import("vma.zig").VkAllocator;
@@ -23,6 +26,7 @@ const Allocator = std.mem.Allocator;
 
 pub const Renderer = struct {
     alloc: Allocator,
+    surface: c.VkSurfaceKHR,
     context: Context,
     resourceMan: ResourceManager,
     descriptorManager: DescriptorManager,
@@ -34,19 +38,23 @@ pub const Renderer = struct {
     usableFramesInFlight: u8 = 0,
     renderImage: RenderImage,
 
-    pub fn init(alloc: Allocator, window: *c.SDL_Window, extent: c.VkExtent2D) !Renderer {
-        const context = try Context.init(alloc, window, DEBUG_TOGGLE);
+    pub fn init(alloc: Allocator, sdlWindow: *c.SDL_Window, extent: c.VkExtent2D) !Renderer {
+        const instance = try createInstance(alloc, DEBUG_TOGGLE); // stored in context
+        const surface = try createSurface(sdlWindow, instance);
+        const context = try Context.init(alloc, instance, surface);
+
         const resourceMan = try ResourceManager.init(&context);
         const cmdMan = try CmdManager.init(alloc, &context, MAX_IN_FLIGHT);
         const pacer = try FramePacer.init(alloc, &context, MAX_IN_FLIGHT);
         const descriptorManager = try DescriptorManager.init(alloc, &context, MAX_IN_FLIGHT);
         const pipelineMan = try PipelineManager.init(alloc, &context, &descriptorManager);
 
-        const swapchain = try Swapchain.init(alloc, &context, extent);
+        const swapchain = try Swapchain.init(alloc, &context, surface, extent);
         const renderImage = try resourceMan.createRenderImage(extent);
 
         return .{
             .alloc = alloc,
+            .surface = surface,
             .context = context,
             .resourceMan = resourceMan,
             .descriptorManager = descriptorManager,
@@ -64,7 +72,7 @@ pub const Renderer = struct {
 
         if (self.swapchain.acquireImage(self.context.gpi, self.pacer.getAcquisitionSemaphore()) == error.NeedNewSwapchain) {
             std.debug.print("Acquire Image failed\n", .{});
-            const caps = try self.context.getSurfaceCaps();
+            const caps = try getSurfaceCaps(self.context.gpu, self.surface);
             try self.renewSwapchain(caps.currentExtent);
             self.pacer.nextFrame();
             return;
@@ -73,7 +81,7 @@ pub const Renderer = struct {
         try self.pacer.submitFrame(self.context.graphicsQ, try self.decideCmd(pipeType), self.swapchain.getCurrentRenderSemaphore());
         if (self.swapchain.present(self.context.presentQ) == error.NeedNewSwapchain) {
             std.debug.print("Presentation failed\n", .{});
-            const caps = try self.context.getSurfaceCaps();
+            const caps = try getSurfaceCaps(self.context.gpu, self.surface);
             try self.renewSwapchain(caps.currentExtent);
         }
         self.pacer.nextFrame();
@@ -103,7 +111,7 @@ pub const Renderer = struct {
     pub fn renewSwapchain(self: *Renderer, extent: c.VkExtent2D) !void {
         _ = c.vkDeviceWaitIdle(self.context.gpi);
         self.swapchain.deinit(self.context.gpi);
-        self.swapchain = try Swapchain.init(self.alloc, &self.context, extent);
+        self.swapchain = try Swapchain.init(self.alloc, &self.context, self.surface, extent);
         self.descriptorManager.updateAllDescriptorSets(self.context.gpi, self.renderImage.view);
         self.invalidateFrames();
         std.debug.print("Swapchain recreated\n", .{});
@@ -124,6 +132,7 @@ pub const Renderer = struct {
         self.resourceMan.deinit();
         self.descriptorManager.deinit(self.context.gpi);
         self.pipelineMan.deinit();
+        c.vkDestroySurfaceKHR(self.context.instance, self.surface, null);
         self.context.deinit();
     }
 };

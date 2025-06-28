@@ -6,6 +6,7 @@ const SwapBucket = @import("SwapBucket.zig").SwapBucket;
 const RenderImage = @import("ResourceManager.zig").RenderImage;
 const VkAllocator = @import("../vma.zig").VkAllocator;
 const createSwapBuckets = @import("SwapBucket.zig").createSwapBuckets;
+const getSurfaceCaps = @import("Context.zig").getSurfaceCaps;
 const check = @import("../error.zig").check;
 
 pub const Swapchain = struct {
@@ -16,12 +17,11 @@ pub const Swapchain = struct {
     mode: c.VkPresentModeKHR,
     extent: c.VkExtent2D,
 
-    pub fn init(alloc: Allocator, context: *const Context, initExtent: c.VkExtent2D) !Swapchain {
+    pub fn init(alloc: Allocator, context: *const Context, surface: c.VkSurfaceKHR, initExtent: c.VkExtent2D) !Swapchain {
         const gpi = context.gpi;
         const families = context.families;
-        const surface = context.surface;
         const surfaceFormat = context.surfaceFormat;
-        const caps = try context.getSurfaceCaps();
+        const caps = try getSurfaceCaps(context.gpu, surface);
         std.debug.print("Caps Extent {}x{}\n", .{ caps.maxImageExtent.width, caps.maxImageExtent.height });
 
         const mode = c.VK_PRESENT_MODE_IMMEDIATE_KHR; //try context.pickPresentMode();

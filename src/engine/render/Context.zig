@@ -11,7 +11,6 @@ pub const QueueFamilies = struct {
 pub const Context = struct {
     alloc: Allocator,
     instance: c.VkInstance,
-    surface: c.VkSurfaceKHR,
     surfaceFormat: c.VkSurfaceFormatKHR,
     gpu: c.VkPhysicalDevice,
     families: QueueFamilies,
@@ -19,10 +18,8 @@ pub const Context = struct {
     graphicsQ: c.VkQueue,
     presentQ: c.VkQueue,
 
-    pub fn init(alloc: Allocator, window: *c.SDL_Window, debugToggle: bool) !Context {
-        const instance = try createInstance(alloc, debugToggle);
+    pub fn init(alloc: Allocator, instance: c.VkInstance, surface: c.VkSurfaceKHR) !Context {
         const gpu = try pickGPU(alloc, instance);
-        const surface = try createSurface(window, instance);
         const surfaceFormat = try pickSurfaceFormat(alloc, gpu, surface);
         const families = try checkGPUfamilies(alloc, surface, gpu);
         const gpi = try createGPI(alloc, gpu, families);
@@ -35,7 +32,6 @@ pub const Context = struct {
         return .{
             .alloc = alloc,
             .instance = instance,
-            .surface = surface,
             .surfaceFormat = surfaceFormat,
             .gpu = gpu,
             .families = families,
@@ -47,7 +43,6 @@ pub const Context = struct {
 
     pub fn deinit(self: *const Context) void {
         c.vkDestroyDevice(self.gpi, null);
-        c.vkDestroySurfaceKHR(self.instance, self.surface, null);
         c.vkDestroyInstance(self.instance, null);
     }
 
@@ -73,15 +68,15 @@ pub const Context = struct {
         }
         return c.VK_PRESENT_MODE_FIFO_KHR;
     }
-
-    pub fn getSurfaceCaps(self: *const Context) !c.VkSurfaceCapabilitiesKHR {
-        var caps: c.VkSurfaceCapabilitiesKHR = undefined;
-        try check(c.vkGetPhysicalDeviceSurfaceCapabilitiesKHR(self.gpu, self.surface, &caps), "Failed to get surface capabilities");
-        return caps;
-    }
 };
 
-fn createSurface(window: *c.SDL_Window, instance: c.VkInstance) !c.VkSurfaceKHR {
+pub fn getSurfaceCaps(gpu: c.VkPhysicalDevice, surface: c.VkSurfaceKHR) !c.VkSurfaceCapabilitiesKHR {
+    var caps: c.VkSurfaceCapabilitiesKHR = undefined;
+    try check(c.vkGetPhysicalDeviceSurfaceCapabilitiesKHR(gpu, surface, &caps), "Failed to get surface capabilities");
+    return caps;
+}
+
+pub fn createSurface(window: *c.SDL_Window, instance: c.VkInstance) !c.VkSurfaceKHR {
     var surface: c.VkSurfaceKHR = undefined;
     if (c.SDL_Vulkan_CreateSurface(window, @ptrCast(instance), null, @ptrCast(&surface)) == false) {
         std.log.err("Unable to create Vulkan surface: {s}\n", .{c.SDL_GetError()});
@@ -90,7 +85,7 @@ fn createSurface(window: *c.SDL_Window, instance: c.VkInstance) !c.VkSurfaceKHR 
     return surface;
 }
 
-fn pickSurfaceFormat(alloc: Allocator, gpu: c.VkPhysicalDevice, surface: c.VkSurfaceKHR) !c.VkSurfaceFormatKHR {
+pub fn pickSurfaceFormat(alloc: Allocator, gpu: c.VkPhysicalDevice, surface: c.VkSurfaceKHR) !c.VkSurfaceFormatKHR {
     var formatCount: u32 = 0;
     try check(c.vkGetPhysicalDeviceSurfaceFormatsKHR(gpu, surface, &formatCount, null), "Failed to get format count");
 
@@ -114,7 +109,7 @@ fn pickSurfaceFormat(alloc: Allocator, gpu: c.VkPhysicalDevice, surface: c.VkSur
     return formats[0];
 }
 
-fn createInstance(alloc: Allocator, debugToggle: bool) !c.VkInstance {
+pub fn createInstance(alloc: Allocator, debugToggle: bool) !c.VkInstance {
     // Create Arrays
     var extensions = std.ArrayList([*c]const u8).init(alloc);
     defer extensions.deinit();
