@@ -16,11 +16,12 @@ pub fn main() !void {
 
     var windowMan = try WindowManager.init(alloc);
     defer windowMan.deinit();
-    try windowMan.createWindow("AstralGen", 1600, 900);
-    try windowMan.createWindow("AstralGen", 1280, 720);
+    try windowMan.createWindow("AstralGen", 1600, 900, .graphics);
+    try windowMan.createWindow("AstralGen", 1280, 720, .compute);
+    try windowMan.createWindow("AstralGen", 800, 800, .mesh);
 
     const window = try windowMan.getWindow(4);
-    var renderer = try Renderer.init(alloc, window.handle, window.extent);
+    var renderer = try Renderer.init(alloc, window, window.extent);
     defer renderer.deinit();
 
     // main loop
@@ -29,7 +30,7 @@ pub fn main() !void {
         if (windowMan.close == true) return;
 
         if (windowMan.paused == false) {
-            try renderer.draw(.graphics);
+            try renderer.draw();
         }
     }
 

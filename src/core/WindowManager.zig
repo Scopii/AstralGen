@@ -2,6 +2,7 @@ const std = @import("std");
 const c = @import("../c.zig");
 const Allocator = std.mem.Allocator;
 const VulkanWindow = @import("VulkanWindow.zig").VulkanWindow;
+const PipelineType = @import("../engine/render/PipelineBucket.zig").PipelineType;
 const Renderer = @import("../engine/Renderer.zig").Renderer;
 
 pub const WindowManager = struct {
@@ -31,7 +32,7 @@ pub const WindowManager = struct {
         c.SDL_Quit();
     }
 
-    pub fn createWindow(self: *WindowManager, title: [*c]const u8, width: c_int, height: c_int) !void {
+    pub fn createWindow(self: *WindowManager, title: [*c]const u8, width: c_int, height: c_int, pipeType: PipelineType) !void {
         const sdlWindow = c.SDL_CreateWindow(title, width, height, c.SDL_WINDOW_VULKAN | c.SDL_WINDOW_RESIZABLE) orelse {
             std.log.err("SDL_CreateWindow failed: {s}\n", .{c.SDL_GetError()});
             return error.WindowInitFailed;
@@ -41,12 +42,7 @@ pub const WindowManager = struct {
         //_ = c.SDL_SetWindowRelativeMouseMode(window, true);
         _ = c.SDL_SetWindowFullscreen(sdlWindow, false);
 
-        const vkWindow = try VulkanWindow.init(
-            width,
-            height,
-            id,
-            sdlWindow,
-        );
+        const vkWindow = try VulkanWindow.init(width, height, id, sdlWindow, pipeType);
 
         try self.windows.put(id, vkWindow);
     }

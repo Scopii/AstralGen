@@ -19,6 +19,7 @@ const PipelineType = @import("render/PipelineBucket.zig").PipelineType;
 const ResourceManager = @import("render/ResourceManager.zig").ResourceManager;
 const DescriptorManager = @import("render/DescriptorManager.zig").DescriptorManager;
 const RenderImage = @import("render/ResourceManager.zig").RenderImage;
+const VulkanWindow = @import("../core/VulkanWindow.zig").VulkanWindow;
 
 pub const MAX_IN_FLIGHT: u8 = 3;
 
@@ -38,9 +39,11 @@ pub const Renderer = struct {
     usableFramesInFlight: u8 = 0,
     renderImage: RenderImage,
 
-    pub fn init(alloc: Allocator, sdlWindow: *c.SDL_Window, extent: c.VkExtent2D) !Renderer {
+    window: VulkanWindow,
+
+    pub fn init(alloc: Allocator, window: VulkanWindow, extent: c.VkExtent2D) !Renderer {
         const instance = try createInstance(alloc, DEBUG_TOGGLE); // stored in context
-        const surface = try createSurface(sdlWindow, instance);
+        const surface = try createSurface(window.handle, instance);
         const context = try Context.init(alloc, instance, surface);
 
         const resourceMan = try ResourceManager.init(&context);
@@ -63,11 +66,12 @@ pub const Renderer = struct {
             .cmdMan = cmdMan,
             .pacer = pacer,
             .renderImage = renderImage,
+            .window = window,
         };
     }
 
-    pub fn draw(self: *Renderer, pipeType: PipelineType) !void {
-        try self.pipelineMan.checkShaderUpdate(pipeType);
+    pub fn draw(self: *Renderer) !void {
+        try self.pipelineMan.checkShaderUpdate(self.window.pipeType);
         try self.pacer.waitForGPU(self.context.gpi); // Waits if Frames in Flight limit is reached
 
         if (self.swapchain.acquireImage(self.context.gpi, self.pacer.getAcquisitionSemaphore()) == error.NeedNewSwapchain) {
@@ -78,7 +82,7 @@ pub const Renderer = struct {
             return;
         }
 
-        try self.pacer.submitFrame(self.context.graphicsQ, try self.decideCmd(pipeType), self.swapchain.getCurrentRenderSemaphore());
+        try self.pacer.submitFrame(self.context.graphicsQ, try self.decideCmd(self.window.pipeType), self.swapchain.getCurrentRenderSemaphore());
         if (self.swapchain.present(self.context.presentQ) == error.NeedNewSwapchain) {
             std.debug.print("Presentation failed\n", .{});
             const caps = try getSurfaceCaps(self.context.gpu, self.surface);
