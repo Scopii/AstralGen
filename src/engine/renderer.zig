@@ -94,14 +94,14 @@ pub const Renderer = struct {
 
     pub fn addWindow(self: *Renderer, window: *VulkanWindow) !void {
         _ = c.vkDeviceWaitIdle(self.context.gpi);
-        try self.adjustRenderImage(window.extent);
+        try self.checkRenderImageIncrease(window.extent);
         const surface = try createSurface(window.handle, self.context.instance);
         const swapchain = try Swapchain.init(self.alloc, &self.context, surface, window.extent);
         const windowBucket = WindowBucket.init(window, surface, swapchain);
         try self.windowBuckets.put(window.id, windowBucket);
     }
 
-    pub fn adjustRenderImage(self: *Renderer, extent: c.VkExtent2D) !void {
+    pub fn checkRenderImageIncrease(self: *Renderer, extent: c.VkExtent2D) !void {
         const height = if (extent.height >= self.renderImage.extent3d.height) extent.height else self.renderImage.extent3d.height;
         const width = if (extent.width >= self.renderImage.extent3d.width) extent.width else self.renderImage.extent3d.width;
 
@@ -111,6 +111,7 @@ pub const Renderer = struct {
 
     pub fn draw(self: *Renderer) !void {
         self.invalidateFrames();
+
         var iter = self.windowBuckets.valueIterator();
         while (iter.next()) |bucket| {
             try self.pipelineMan.checkShaderUpdate(bucket.window.pipeType);
@@ -159,14 +160,14 @@ pub const Renderer = struct {
 
     pub fn renewSwapchain(self: *Renderer, extent: c.VkExtent2D, id: u32) !void {
         _ = c.vkDeviceWaitIdle(self.context.gpi);
-        try self.adjustRenderImage(extent);
+        try self.checkRenderImageIncrease(extent);
         const bucket = self.windowBuckets.getPtr(id) orelse {
             std.log.err("renewSwapchain failed: Could not find window with ID {}\n", .{id});
             return error.WindowNotFound;
         };
         bucket.swapchain.deinit(self.context.gpi);
         bucket.swapchain = try Swapchain.init(self.alloc, &self.context, bucket.surface, extent);
-        self.descriptorManager.updateAllDescriptorSets(self.context.gpi, self.renderImage.view);
+        self.updateDescriptors();
         self.invalidateFrames();
         std.debug.print("Swapchain recreated\n", .{});
     }
@@ -176,8 +177,27 @@ pub const Renderer = struct {
             std.log.err("renewSwapchain failed: Could not find window with ID {}\n", .{id});
             return error.WindowNotFound;
         };
+        const extent = bucket.window.extent;
         bucket.deinit(&self.context);
         _ = self.windowBuckets.remove(id);
+
+        var width: u32 = 0;
+        var height: u32 = 0;
+
+        if (extent.height == self.renderImage.extent3d.height or extent.width == self.renderImage.extent3d.width) {
+            if (self.windowBuckets.count() < 1) return;
+            var iter = self.windowBuckets.valueIterator();
+            while (iter.next()) |testBucket| {
+                if (testBucket.window.extent.height > height) height = testBucket.window.extent.height;
+                if (testBucket.window.extent.width > width) width = testBucket.window.extent.width;
+            }
+        } else {
+            return;
+        }
+
+        self.resourceMan.destroyRenderImage(self.renderImage);
+        self.renderImage = try self.resourceMan.createRenderImage(c.VkExtent2D{ .width = width, .height = height });
+        self.updateDescriptors();
     }
 
     pub fn invalidateFrames(self: *Renderer) void {

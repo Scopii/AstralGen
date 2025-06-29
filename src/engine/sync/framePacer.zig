@@ -114,7 +114,6 @@ pub const FramePacer = struct {
 
     pub fn submitFrame(self: *FramePacer, queue: c.VkQueue, cmd: c.VkCommandBuffer, renderSem: c.VkSemaphore) !void {
         self.frameCount += 1;
-
         self.cmdInf.commandBuffer = cmd;
         self.waitInf.semaphore = self.acqSems[self.curFrame];
 

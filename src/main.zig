@@ -19,7 +19,9 @@ pub fn main() !void {
 
     try windowMan.createWindow("AstralGen", 1600, 900, .compute);
     var window1 = try windowMan.getWindow(4);
+
     var renderer = try Renderer.init(alloc, &window1);
+    defer renderer.deinit();
 
     try windowMan.createWindow("AstralGen1", 1280, 720, .graphics);
     var window2 = try windowMan.getWindow(5);
@@ -27,8 +29,6 @@ pub fn main() !void {
     try windowMan.createWindow("AstralGen2", 800, 800, .mesh);
     var window3 = try windowMan.getWindow(6);
     try renderer.addWindow(&window3);
-
-    defer renderer.deinit();
 
     // main loop
     while (true) {
