@@ -16,6 +16,7 @@ pub const Swapchain = struct {
     index: u32,
     mode: c.VkPresentModeKHR,
     extent: c.VkExtent2D,
+    gpi: c.VkDevice,
 
     pub fn init(alloc: Allocator, context: *const Context, surface: c.VkSurfaceKHR, initExtent: c.VkExtent2D) !Swapchain {
         const gpi = context.gpi;
@@ -77,23 +78,24 @@ pub const Swapchain = struct {
             .mode = mode,
             .extent = extent,
             .swapBuckets = swapBuckets,
+            .gpi = gpi,
         };
     }
 
-    pub fn deinit(self: *Swapchain, gpi: c.VkDevice) void {
+    pub fn deinit(self: *Swapchain) void {
         for (0..self.swapBuckets.len) |i| {
-            self.swapBuckets[i].deinit(gpi);
+            self.swapBuckets[i].deinit(self.gpi);
         }
         self.alloc.free(self.swapBuckets);
-        c.vkDestroySwapchainKHR(gpi, self.handle, null);
+        c.vkDestroySwapchainKHR(self.gpi, self.handle, null);
     }
 
     pub fn getCurrentRenderSemaphore(self: *Swapchain) c.VkSemaphore {
         return self.swapBuckets[self.index].rendSem;
     }
 
-    pub fn acquireImage(self: *Swapchain, gpi: c.VkDevice, acqSem: c.VkSemaphore) !void {
-        const acquireResult = c.vkAcquireNextImageKHR(gpi, self.handle, 1_000_000_000, acqSem, null, &self.index);
+    pub fn acquireImage(self: *Swapchain, acqSem: c.VkSemaphore) !void {
+        const acquireResult = c.vkAcquireNextImageKHR(self.gpi, self.handle, 1_000_000_000, acqSem, null, &self.index);
         if (acquireResult == c.VK_ERROR_OUT_OF_DATE_KHR or acquireResult == c.VK_SUBOPTIMAL_KHR) return error.NeedNewSwapchain;
         try check(acquireResult, "could not acquire next image");
     }

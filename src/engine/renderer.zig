@@ -38,7 +38,7 @@ pub const WindowBucket = struct {
 
     pub fn deinit(self: *WindowBucket, context: *Context) void {
         _ = c.vkDeviceWaitIdle(context.gpi);
-        self.swapchain.deinit(context.gpi);
+        self.swapchain.deinit();
         c.vkDestroySurfaceKHR(context.instance, self.surface, null);
     }
 };
@@ -117,7 +117,7 @@ pub const Renderer = struct {
             try self.pipelineMan.checkShaderUpdate(bucket.window.pipeType);
             try self.pacer.waitForGPU(self.context.gpi); // Waits if Frames in Flight limit is reached
 
-            if (bucket.swapchain.acquireImage(self.context.gpi, self.pacer.getAcquisitionSemaphore()) == error.NeedNewSwapchain) {
+            if (bucket.swapchain.acquireImage(self.pacer.getAcquisitionSemaphore()) == error.NeedNewSwapchain) {
                 std.debug.print("Acquire Image failed\n", .{});
                 const caps = try getSurfaceCaps(self.context.gpu, bucket.surface);
                 try self.renewSwapchain(caps.currentExtent, bucket.window.id);
@@ -165,7 +165,7 @@ pub const Renderer = struct {
             std.log.err("renewSwapchain failed: Could not find window with ID {}\n", .{id});
             return error.WindowNotFound;
         };
-        bucket.swapchain.deinit(self.context.gpi);
+        bucket.swapchain.deinit();
         bucket.swapchain = try Swapchain.init(self.alloc, &self.context, bucket.surface, extent);
         self.updateDescriptors();
         self.invalidateFrames();
