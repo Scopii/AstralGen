@@ -1,7 +1,7 @@
 const std = @import("std");
 const c = @import("../../c.zig");
 const Allocator = std.mem.Allocator;
-const Swapchain = @import("Swapchain.zig").Swapchain;
+const Swapchain = @import("SwapchainManager.zig").SwapchainManager.Swapchain;
 const RenderImage = @import("ResourceManager.zig").RenderImage;
 const PipelineBucket = @import("PipelineBucket.zig").PipelineBucket;
 const PipelineType = @import("PipelineBucket.zig").PipelineType;
@@ -33,9 +33,9 @@ pub const CmdManager = struct {
         };
     }
 
-    pub fn deinit(self: *CmdManager, gpi: c.VkDevice) void {
+    pub fn deinit(self: *CmdManager) void {
         self.alloc.free(self.cmds);
-        c.vkDestroyCommandPool(gpi, self.pool, null);
+        c.vkDestroyCommandPool(self.gpi, self.pool, null);
     }
 
     pub fn beginRecording(self: *CmdManager, frameIndex: u8) !void {
@@ -56,8 +56,14 @@ pub const CmdManager = struct {
         return self.cmds[frameIndex];
     }
 
-    pub fn recComputeCmd(self: *CmdManager, swapchain: *const Swapchain, renderImage: *RenderImage, computePipe: *const PipelineBucket, descriptorSet: c.VkDescriptorSet) !void {
-        const index = swapchain.index;
+    pub fn recComputeCmd(
+        self: *CmdManager,
+        swapchain: *const Swapchain,
+        imageIndex: u32,
+        renderImage: *RenderImage,
+        computePipe: *const PipelineBucket,
+        descriptorSet: c.VkDescriptorSet,
+    ) !void {
         const cmd = self.activeCmd orelse return error.NoActiveRecording;
 
         // Transition Image into general layout so we can write into it, Overwrites all so we dont care about the older layout
@@ -97,12 +103,13 @@ pub const CmdManager = struct {
             c.VK_ACCESS_2_TRANSFER_WRITE_BIT,
             c.VK_IMAGE_LAYOUT_UNDEFINED,
             c.VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-            swapchain.swapBuckets[index].image,
+            swapchain.images[imageIndex],
             createSubresourceRange(c.VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1),
         );
         createPipelineBarriers2(cmd, &.{ imageBarrier2, imageBarrier3 });
 
-        copyImageToImage(cmd, renderImage.image, swapchain.swapBuckets[index].image, swapchain.extent, swapchain.extent);
+        const extent2d = c.VkExtent2D{ .width = renderImage.extent3d.width, .height = renderImage.extent3d.height };
+        copyImageToImage(cmd, renderImage.image, swapchain.images[imageIndex], extent2d, swapchain.extent);
 
         const imageBarrier4 = createImageMemoryBarrier2(
             c.VK_PIPELINE_STAGE_2_TRANSFER_BIT,
@@ -111,15 +118,21 @@ pub const CmdManager = struct {
             0,
             c.VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
             c.VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-            swapchain.swapBuckets[index].image,
+            swapchain.images[imageIndex],
             createSubresourceRange(c.VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1),
         );
         createPipelineBarriers2(cmd, &.{imageBarrier4});
     }
 
-    pub fn recRenderingCmd(self: *CmdManager, swapchain: *const Swapchain, renderImage: *RenderImage, pipeline: *PipelineBucket, pipeType: PipelineType) !void {
+    pub fn recRenderingCmd(
+        self: *CmdManager,
+        swapchain: *const Swapchain,
+        imageIndex: u32,
+        renderImage: *RenderImage,
+        pipeline: *PipelineBucket,
+        pipeType: PipelineType,
+    ) !void {
         const cmd = self.activeCmd orelse return error.NoActiveRecording;
-        const index = swapchain.index;
 
         const renderTargetBarrier = createImageMemoryBarrier2(
             c.VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
@@ -128,7 +141,7 @@ pub const CmdManager = struct {
             c.VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
             c.VK_IMAGE_LAYOUT_UNDEFINED,
             c.VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-            renderImage.image, //swapchain.swapBuckets[index].image
+            renderImage.image,
             createSubresourceRange(c.VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1),
         );
         createPipelineBarriers2(cmd, &.{renderTargetBarrier});
@@ -144,13 +157,16 @@ pub const CmdManager = struct {
         };
         c.vkCmdSetViewport(cmd, 0, 1, &viewport);
 
-        const scissor_rect = c.VkRect2D{ .offset = .{ .x = 0, .y = 0 }, .extent = .{ .width = renderImage.extent3d.width, .height = renderImage.extent3d.height } };
+        const scissor_rect = c.VkRect2D{ .offset = .{ .x = 0, .y = 0 }, .extent = .{
+            .width = renderImage.extent3d.width,
+            .height = renderImage.extent3d.height,
+        } };
         c.vkCmdSetScissor(cmd, 0, 1, &scissor_rect);
 
         // Begin rendering
         const colorAttachInf = c.VkRenderingAttachmentInfo{
             .sType = c.VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-            .imageView = renderImage.view, //swapchain.swapBuckets[index].view
+            .imageView = renderImage.view,
             .imageLayout = c.VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
             .resolveMode = c.VK_RESOLVE_MODE_NONE,
             .resolveImageView = null,
@@ -182,7 +198,7 @@ pub const CmdManager = struct {
 
         c.vkCmdEndRendering(cmd);
 
-        const swapchainImage = swapchain.swapBuckets[index].image;
+        const swapchainImage = swapchain.images[imageIndex];
 
         //Transition off-screen image so it can be copied FROM.
         const copySrcBarrier = createImageMemoryBarrier2(
@@ -311,7 +327,7 @@ fn createImageMemoryBarrier2(
     };
 }
 
-pub fn copyImageToImage(cmd: c.VkCommandBuffer, src: c.VkImage, dst: c.VkImage, srcSize: c.VkExtent2D, dstSize: c.VkExtent2D) void {
+pub fn copyImageToImage(cmd: c.VkCommandBuffer, srcImage: c.VkImage, dstImage: c.VkImage, srcSize: c.VkExtent2D, dstSize: c.VkExtent2D) void {
     const blitRegion = c.VkImageBlit2{
         .sType = c.VK_STRUCTURE_TYPE_IMAGE_BLIT_2,
         .srcSubresource = createSubresourceLayers(c.VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1),
@@ -325,12 +341,11 @@ pub fn copyImageToImage(cmd: c.VkCommandBuffer, src: c.VkImage, dst: c.VkImage, 
             .{ .x = @intCast(dstSize.width), .y = @intCast(dstSize.height), .z = 1 }, // Offset bottom-right-back corner
         },
     };
-
     const blitInfo = c.VkBlitImageInfo2{
         .sType = c.VK_STRUCTURE_TYPE_BLIT_IMAGE_INFO_2,
-        .dstImage = dst,
+        .dstImage = dstImage,
         .dstImageLayout = c.VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-        .srcImage = src,
+        .srcImage = srcImage,
         .srcImageLayout = c.VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
         .filter = c.VK_FILTER_LINEAR,
         .regionCount = 1,

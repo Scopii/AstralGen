@@ -10,8 +10,8 @@ const Context = @import("render/Context.zig").Context;
 const createInstance = @import("render/Context.zig").createInstance;
 const createSurface = @import("render/Context.zig").createSurface;
 const getSurfaceCaps = @import("render/Context.zig").getSurfaceCaps;
-const Swapchain = @import("render/Swapchain.zig").Swapchain;
-const FramePacer = @import("sync/FramePacer.zig").FramePacer;
+const SwapchainManager = @import("render/SwapchainManager.zig").SwapchainManager;
+const Scheduler = @import("render/Scheduler.zig").Scheduler;
 const VkAllocator = @import("vma.zig").VkAllocator;
 const CmdManager = @import("render/CmdManager.zig").CmdManager;
 const PipelineManager = @import("render/PipelineManager.zig").PipelineManager;
@@ -21,44 +21,27 @@ const DescriptorManager = @import("render/DescriptorManager.zig").DescriptorMana
 const RenderImage = @import("render/ResourceManager.zig").RenderImage;
 const VulkanWindow = @import("../core/VulkanWindow.zig").VulkanWindow;
 
-pub const MAX_IN_FLIGHT: u8 = 3;
-
-pub const WindowBucket = struct {
-    window: *VulkanWindow,
-    surface: c.VkSurfaceKHR,
-    swapchain: Swapchain,
-
-    pub fn init(window: *VulkanWindow, surface: c.VkSurfaceKHR, swapchain: Swapchain) WindowBucket {
-        return .{
-            .window = window,
-            .surface = surface,
-            .swapchain = swapchain,
-        };
-    }
-
-    pub fn deinit(self: *WindowBucket, context: *Context) void {
-        _ = c.vkDeviceWaitIdle(context.gpi);
-        self.swapchain.deinit();
-        c.vkDestroySurfaceKHR(context.instance, self.surface, null);
-    }
+const AcquiredImageInfo = struct {
+    swapchain_index: u32,
+    image_index: u32,
 };
+
+pub const MAX_IN_FLIGHT: u8 = 3;
 
 const Allocator = std.mem.Allocator;
 
 pub const Renderer = struct {
     alloc: Allocator,
-    surface: c.VkSurfaceKHR,
     context: Context,
     resourceMan: ResourceManager,
-    descriptorManager: DescriptorManager,
+    descriptorMan: DescriptorManager,
     pipelineMan: PipelineManager,
+    swapchainMan: SwapchainManager,
     cmdMan: CmdManager,
-    pacer: FramePacer,
+    scheduler: Scheduler,
     descriptorsUpToDate: bool = false,
     usableFramesInFlight: u8 = 0,
     renderImage: RenderImage,
-
-    windowBuckets: std.AutoHashMap(u32, WindowBucket),
 
     pub fn init(alloc: Allocator, window: *VulkanWindow) !Renderer {
         const instance = try createInstance(alloc, DEBUG_TOGGLE); // stored in context
@@ -67,134 +50,192 @@ pub const Renderer = struct {
 
         const resourceMan = try ResourceManager.init(&context);
         const cmdMan = try CmdManager.init(alloc, &context, MAX_IN_FLIGHT);
-        const pacer = try FramePacer.init(alloc, &context, MAX_IN_FLIGHT);
-        const descriptorManager = try DescriptorManager.init(alloc, &context, MAX_IN_FLIGHT);
-        const pipelineMan = try PipelineManager.init(alloc, &context, &descriptorManager);
+        const scheduler = try Scheduler.init(&context, MAX_IN_FLIGHT);
+        const descriptorMan = try DescriptorManager.init(alloc, &context, MAX_IN_FLIGHT);
+        const pipelineMan = try PipelineManager.init(alloc, &context, &descriptorMan);
         const renderImage = try resourceMan.createRenderImage(window.extent);
 
-        const swapchain = try Swapchain.init(alloc, &context, surface, window.extent);
-
-        var windowBuckets = std.AutoHashMap(u32, WindowBucket).init(alloc);
-        const windowBucket = WindowBucket.init(window, surface, swapchain);
-        try windowBuckets.put(window.id, windowBucket);
+        var swapchainMan = try SwapchainManager.init(alloc, &context, MAX_IN_FLIGHT);
+        try swapchainMan.addSwapchain(&context, surface, window.extent, window.id, window.pipeType);
 
         return .{
             .alloc = alloc,
-            .surface = surface,
             .context = context,
             .resourceMan = resourceMan,
-            .descriptorManager = descriptorManager,
+            .descriptorMan = descriptorMan,
             .pipelineMan = pipelineMan,
             .cmdMan = cmdMan,
-            .pacer = pacer,
+            .scheduler = scheduler,
             .renderImage = renderImage,
-            .windowBuckets = windowBuckets,
+            .swapchainMan = swapchainMan,
         };
     }
 
     pub fn addWindow(self: *Renderer, window: *VulkanWindow) !void {
         _ = c.vkDeviceWaitIdle(self.context.gpi);
         try self.checkRenderImageIncrease(window.extent);
-        const surface = try createSurface(window.handle, self.context.instance);
-        const swapchain = try Swapchain.init(self.alloc, &self.context, surface, window.extent);
-        const windowBucket = WindowBucket.init(window, surface, swapchain);
-        try self.windowBuckets.put(window.id, windowBucket);
+        const surface = try createSurface(window.handle, self.context.instance); // Destroyed in Swapchain Manager
+        try self.swapchainMan.addSwapchain(&self.context, surface, window.extent, window.id, window.pipeType);
     }
 
     pub fn checkRenderImageIncrease(self: *Renderer, extent: c.VkExtent2D) !void {
         const height = if (extent.height >= self.renderImage.extent3d.height) extent.height else self.renderImage.extent3d.height;
         const width = if (extent.width >= self.renderImage.extent3d.width) extent.width else self.renderImage.extent3d.width;
-
         self.resourceMan.destroyRenderImage(self.renderImage);
         self.renderImage = try self.resourceMan.createRenderImage(c.VkExtent2D{ .width = width, .height = height });
     }
 
     pub fn draw(self: *Renderer) !void {
-        self.invalidateFrames();
+        var acquiredImages = std.ArrayList(u32).init(self.alloc);
+        defer acquiredImages.deinit();
+        var waitSems = std.ArrayList(c.VkSemaphore).init(self.alloc);
+        defer waitSems.deinit();
+        var renderSems = std.ArrayList(c.VkSemaphore).init(self.alloc);
+        defer renderSems.deinit();
 
-        var iter = self.windowBuckets.valueIterator();
-        while (iter.next()) |bucket| {
-            try self.pipelineMan.checkShaderUpdate(bucket.window.pipeType);
-            try self.pacer.waitForGPU(self.context.gpi); // Waits if Frames in Flight limit is reached
+        try self.scheduler.waitForGPU();
+        const frameInFlight = self.scheduler.frameInFlight;
+        try self.cmdMan.beginRecording(frameInFlight);
 
-            if (bucket.swapchain.acquireImage(self.pacer.getAcquisitionSemaphore()) == error.NeedNewSwapchain) {
-                std.debug.print("Acquire Image failed\n", .{});
-                const caps = try getSurfaceCaps(self.context.gpu, bucket.surface);
-                try self.renewSwapchain(caps.currentExtent, bucket.window.id);
-                self.pacer.nextFrame();
-                return;
+        for (self.swapchainMan.swapchains.items) |*swapchain| {
+            // Acquire the image for this window
+            const imageRdySem = swapchain.imageRdySemaphore[frameInFlight];
+            var imageIndex: u32 = 0;
+            const acquireResult = c.vkAcquireNextImageKHR(self.context.gpi, swapchain.handle, 1_000_000_000, imageRdySem, null, &imageIndex);
+
+            if (acquireResult == c.VK_ERROR_OUT_OF_DATE_KHR or acquireResult == c.VK_SUBOPTIMAL_KHR) {
+                // Handle resize here. For now, just skip.
+                continue;
+            }
+            try check(acquireResult, "Could not acquire swapchain image");
+
+            try waitSems.append(imageRdySem);
+
+            // Record commands for this window INTO ACTIVE BUFFER.
+            if (swapchain.pipeType == .compute) {
+                if (!self.descriptorsUpToDate) self.updateDescriptors();
+                try self.cmdMan.recComputeCmd(swapchain, imageIndex, &self.renderImage, &self.pipelineMan.compute, self.descriptorMan.sets[frameInFlight]);
+            } else {
+                // NOTE: Your recRenderingCmd still renders to renderImage and blits.
+                try self.cmdMan.recRenderingCmd(swapchain, imageIndex, &self.renderImage, if (swapchain.pipeType == .mesh) &self.pipelineMan.mesh else &self.pipelineMan.graphics, swapchain.pipeType);
             }
 
-            try self.pacer.submitFrame(self.context.graphicsQ, try self.decideCmd(bucket), bucket.swapchain.getCurrentRenderSemaphore());
-            if (bucket.swapchain.present(self.context.presentQ) == error.NeedNewSwapchain) {
-                std.debug.print("Presentation failed\n", .{});
-                const caps = try getSurfaceCaps(self.context.gpu, bucket.surface);
-                try self.renewSwapchain(caps.currentExtent, bucket.window.id);
+            try renderSems.append(swapchain.renderDoneSemaphore[frameInFlight]);
+            try acquiredImages.append(imageIndex);
+        }
+
+        const cmd = try self.cmdMan.endRecording();
+
+        // Submit the command buffer. It waits for ALL images to be available. It signals ALL render done semaphores, PLUS the scheduler timeline.
+        const waitStages = try self.alloc.alloc(c.VkPipelineStageFlags, waitSems.items.len);
+        defer self.alloc.free(waitStages);
+        for (waitStages) |*s| {
+            s.* = c.VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
+        }
+
+        // Add the scheduler's timeline to the signal list
+        try renderSems.append(self.scheduler.cpuSyncTimeline);
+
+        var waitInfList = std.ArrayList(c.VkSemaphoreSubmitInfo).init(self.alloc);
+        defer waitInfList.deinit();
+        for (waitSems.items) |sem| {
+            try waitInfList.append(.{
+                .sType = c.VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+                .semaphore = sem,
+                .stageMask = c.VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+            });
+        }
+
+        var signalInfList = std.ArrayList(c.VkSemaphoreSubmitInfo).init(self.alloc);
+        defer signalInfList.deinit();
+        for (renderSems.items, 0..) |sem, i| {
+            if (i == renderSems.items.len - 1) { // This is the timeline semaphore
+                try signalInfList.append(.{
+                    .sType = c.VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+                    .semaphore = sem,
+                    .value = self.scheduler.frameCount + 1,
+                    .stageMask = c.VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+                });
+            } else {
+                try signalInfList.append(.{
+                    .sType = c.VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+                    .semaphore = sem,
+                    .value = 0,
+                    .stageMask = c.VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+                });
             }
-            self.pacer.nextFrame();
-        }
-    }
-
-    fn decideCmd(self: *Renderer, windowBucket: *const WindowBucket) !c.VkCommandBuffer {
-        if (self.usableFramesInFlight == MAX_IN_FLIGHT) return self.cmdMan.getCmd(self.pacer.curFrame);
-
-        try self.cmdMan.beginRecording(self.pacer.curFrame);
-
-        const pipeType = windowBucket.window.pipeType;
-
-        if (pipeType == .compute) {
-            if (!self.descriptorsUpToDate) self.updateDescriptors();
-            try self.cmdMan.recComputeCmd(&windowBucket.swapchain, &self.renderImage, &self.pipelineMan.compute, self.descriptorManager.sets[self.pacer.curFrame]);
-        } else {
-            try self.cmdMan.recRenderingCmd(&windowBucket.swapchain, &self.renderImage, if (pipeType == .mesh) &self.pipelineMan.mesh else &self.pipelineMan.graphics, pipeType);
         }
 
-        self.usableFramesInFlight += 1;
-        return try self.cmdMan.endRecording();
+        const submitInf = c.VkSubmitInfo2{
+            .sType = c.VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
+            .waitSemaphoreInfoCount = @intCast(waitInfList.items.len),
+            .pWaitSemaphoreInfos = waitInfList.items.ptr,
+            .commandBufferInfoCount = 1,
+            .pCommandBufferInfos = &c.VkCommandBufferSubmitInfo{
+                .sType = c.VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
+                .commandBuffer = cmd,
+                .deviceMask = 0,
+            },
+            .signalSemaphoreInfoCount = @intCast(signalInfList.items.len),
+            .pSignalSemaphoreInfos = signalInfList.items.ptr,
+        };
+        try check(c.vkQueueSubmit2(self.context.graphicsQ, 1, &submitInf, null), "Failed main submission");
+        self.scheduler.frameCount += 1;
+
+        // PRESENTATION LOOP:
+        for (self.swapchainMan.swapchains.items, 0..) |*swapchain, i| {
+            const imageIndex = acquiredImages.items[i];
+            const presentInf = c.VkPresentInfoKHR{
+                .sType = c.VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
+                .waitSemaphoreCount = 1,
+                .pWaitSemaphores = &swapchain.renderDoneSemaphore[frameInFlight],
+                .swapchainCount = 1,
+                .pSwapchains = &swapchain.handle,
+                .pImageIndices = &imageIndex,
+            };
+            _ = c.vkQueuePresentKHR(self.context.presentQ, &presentInf);
+        }
+
+        self.scheduler.nextFrame();
     }
 
     fn updateDescriptors(self: *Renderer) void {
-        self.descriptorManager.updateAllDescriptorSets(self.context.gpi, self.renderImage.view);
+        self.descriptorMan.updateAllDescriptorSets(self.renderImage.view);
         self.descriptorsUpToDate = true;
     }
 
-    pub fn renewSwapchain(self: *Renderer, extent: c.VkExtent2D, id: u32) !void {
+    pub fn renewSwapchain(self: *Renderer, window: *VulkanWindow) !void {
         _ = c.vkDeviceWaitIdle(self.context.gpi);
-        try self.checkRenderImageIncrease(extent);
-        const bucket = self.windowBuckets.getPtr(id) orelse {
-            std.log.err("renewSwapchain failed: Could not find window with ID {}\n", .{id});
-            return error.WindowNotFound;
-        };
-        bucket.swapchain.deinit();
-        bucket.swapchain = try Swapchain.init(self.alloc, &self.context, bucket.surface, extent);
+        try self.checkRenderImageIncrease(window.extent);
+
+        try self.swapchainMan.destroySwapchain(window.id);
+        const surface = try createSurface(window.handle, self.context.instance); // Destroyed in Swapchain Manager
+        try self.swapchainMan.addSwapchain(&self.context, surface, window.extent, window.id, window.pipeType);
+
         self.updateDescriptors();
         self.invalidateFrames();
         std.debug.print("Swapchain recreated\n", .{});
     }
 
-    pub fn destroyWindow(self: *Renderer, id: u32) !void {
-        const bucket = self.windowBuckets.getPtr(id) orelse {
-            std.log.err("renewSwapchain failed: Could not find window with ID {}\n", .{id});
-            return error.WindowNotFound;
-        };
-        const extent = bucket.window.extent;
-        bucket.deinit(&self.context);
-        _ = self.windowBuckets.remove(id);
+    pub fn destroyWindow(self: *Renderer, windowId: u32) !void {
+        _ = c.vkDeviceWaitIdle(self.context.gpi);
+        const extent = try self.swapchainMan.getSwapchainExtent(windowId);
+        try self.swapchainMan.destroySwapchain(windowId);
+        const swapchainCount = self.swapchainMan.getSwapchainsCount();
 
         var width: u32 = 0;
         var height: u32 = 0;
 
         if (extent.height == self.renderImage.extent3d.height or extent.width == self.renderImage.extent3d.width) {
-            if (self.windowBuckets.count() < 1) return;
-            var iter = self.windowBuckets.valueIterator();
-            while (iter.next()) |testBucket| {
-                if (testBucket.window.extent.height > height) height = testBucket.window.extent.height;
-                if (testBucket.window.extent.width > width) width = testBucket.window.extent.width;
+            if (swapchainCount < 1) return;
+            for (self.swapchainMan.swapchains.items) |swapchain| {
+                if (swapchain.extent.height > height) height = swapchain.extent.height;
+                if (swapchain.extent.width > width) width = swapchain.extent.width;
             }
         } else {
             return;
         }
-
+        std.debug.print("New Render Image {}x{}\n", .{ width, height });
         self.resourceMan.destroyRenderImage(self.renderImage);
         self.renderImage = try self.resourceMan.createRenderImage(c.VkExtent2D{ .width = width, .height = height });
         self.updateDescriptors();
@@ -206,20 +247,12 @@ pub const Renderer = struct {
 
     pub fn deinit(self: *Renderer) void {
         _ = c.vkDeviceWaitIdle(self.context.gpi);
-
         self.resourceMan.destroyRenderImage(self.renderImage);
-
-        self.pacer.deinit(self.alloc, self.context.gpi);
-        self.cmdMan.deinit(self.context.gpi);
-
-        var iter = self.windowBuckets.valueIterator();
-        while (iter.next()) |bucket| {
-            bucket.deinit(&self.context);
-        }
-        self.windowBuckets.deinit();
-
+        self.scheduler.deinit();
+        self.cmdMan.deinit();
+        self.swapchainMan.deinit();
         self.resourceMan.deinit();
-        self.descriptorManager.deinit(self.context.gpi);
+        self.descriptorMan.deinit();
         self.pipelineMan.deinit();
         self.context.deinit();
     }

@@ -8,30 +8,40 @@ const createTimeline = @import("../sync/primitives.zig").createTimeline;
 const getTimelineVal = @import("../sync/primitives.zig").getTimelineVal;
 const waitForTimeline = @import("../sync/primitives.zig").waitForTimeline;
 const createSemaphore = @import("../sync/primitives.zig").createSemaphore;
+const MAX_IN_FLIGHT = @import("../renderer.zig").MAX_IN_FLIGHT;
 
 pub const Scheduler = struct {
-    curFrame: u8 = 0,
+    gpi: c.VkDevice,
+    frameInFlight: u8 = 0,
     maxInFlight: u8,
-    acqSems: []c.VkSemaphore,
     cpuSyncTimeline: c.VkSemaphore,
     frameCount: u64 = 0,
     lastChecked: u64 = 0,
+    passFinishedSemaphores: [MAX_IN_FLIGHT]c.VkSemaphore,
 
     pub fn init(context: *const Context, maxInFlight: u8) !Scheduler {
         std.debug.print("Scheduler: In Flight {}\n", .{maxInFlight});
+
+        var passFinishedSemaphores: [MAX_IN_FLIGHT]c.VkSemaphore = undefined;
+        for (0..maxInFlight) |i| {
+            passFinishedSemaphores[i] = try createSemaphore(context.gpi);
+        }
 
         return Scheduler{
             .gpi = context.gpi,
             .cpuSyncTimeline = try createTimeline(context.gpi),
             .maxInFlight = maxInFlight,
+            .passFinishedSemaphores = passFinishedSemaphores,
         };
     }
 
     pub fn deinit(self: *Scheduler) void {
         c.vkDestroySemaphore(self.gpi, self.cpuSyncTimeline, null);
+        for (self.passFinishedSemaphores) |sem| {
+            c.vkDestroySemaphore(self.gpi, sem, null);
+        }
     }
 
-    // New: Efficient CPU-GPU throttling
     pub fn waitForGPU(self: *Scheduler) !void {
         const gpi = self.gpi;
         if (self.frameCount < self.maxInFlight) return; // Early frames don't need waiting
@@ -57,6 +67,6 @@ pub const Scheduler = struct {
     }
 
     pub fn nextFrame(self: *Scheduler) void {
-        self.curFrame = (self.curFrame + 1) % self.maxInFlight;
+        self.frameInFlight = (self.frameInFlight + 1) % self.maxInFlight;
     }
 };

@@ -2,46 +2,52 @@ const std = @import("std");
 const c = @import("../../c.zig");
 const Allocator = std.mem.Allocator;
 const Context = @import("Context.zig").Context;
-const SwapBucket = @import("SwapBucket.zig").SwapBucket;
 const RenderImage = @import("ResourceManager.zig").RenderImage;
 const VkAllocator = @import("../vma.zig").VkAllocator;
-const createSwapBuckets = @import("SwapBucket.zig").createSwapBuckets;
 const getSurfaceCaps = @import("Context.zig").getSurfaceCaps;
 const check = @import("../error.zig").check;
 const createSemaphore = @import("../sync/primitives.zig").createSemaphore;
-
-pub const Swapchain = struct {
-    windowId: u32,
-    surface: c.VkSurfaceKHR,
-    handle: c.VkSwapchainKHR,
-    extent: c.VkExtent2D,
-    images: []c.VkImage,
-    views: []c.VkImageView,
-    imageRdySemaphore: []c.VkSemaphore,
-    //imageFormat: c.VkFormat,
-};
+const PipelineType = @import("../render/PipelineBucket.zig").PipelineType;
 
 pub const SwapchainManager = struct {
+    pub const Swapchain = struct {
+        windowId: u32,
+        surface: c.VkSurfaceKHR,
+        handle: c.VkSwapchainKHR,
+        extent: c.VkExtent2D,
+        pipeType: PipelineType,
+        images: []c.VkImage,
+        views: []c.VkImageView,
+        imageRdySemaphore: []c.VkSemaphore,
+        renderDoneSemaphore: []c.VkSemaphore,
+        //imageFormat: c.VkFormat, later!
+    };
     alloc: Allocator,
     gpi: c.VkDevice,
+    instance: c.VkInstance,
+    maxInFlight: u8,
     swapchains: std.ArrayList(Swapchain),
 
-    pub fn init(alloc: Allocator, gpi: c.VkDevice) !SwapchainManager {
+    pub fn init(alloc: Allocator, context: *const Context, maxInFlight: u8) !SwapchainManager {
         return .{
             .alloc = alloc,
             .swapchains = std.ArrayList(Swapchain).init(alloc),
-            .gpi = gpi,
+            .gpi = context.gpi,
+            .maxInFlight = maxInFlight,
+            .instance = context.instance,
         };
     }
 
     pub fn deinit(self: *SwapchainManager) void {
-        for (0..self.swapchains.items.len) |i| {
-            destroySwapchain(i);
+        var i = self.swapchains.items.len;
+        while (i > 0) {
+            i -= 1;
+            self.destroySwapchain(self.swapchains.items[i].windowId) catch {};
         }
         self.swapchains.deinit();
     }
 
-    pub fn addSwapchain(self: *SwapchainManager, context: *const Context, surface: c.VkSurfaceKHR, extent: c.VkExtent2D, windowId: u32) !void {
+    pub fn addSwapchain(self: *SwapchainManager, context: *const Context, surface: c.VkSurfaceKHR, extent: c.VkExtent2D, windowId: u32, pipeType: PipelineType) !void {
         const alloc = self.alloc;
         const gpi = self.gpi;
 
@@ -77,7 +83,7 @@ pub const SwapchainManager = struct {
             .minImageCount = desiredImgCount,
             .imageFormat = surfaceFormat.format,
             .imageColorSpace = surfaceFormat.colorSpace,
-            .imageExtent = extent,
+            .imageExtent = actualExtent,
             .imageArrayLayers = 1,
             .imageUsage = c.VK_IMAGE_USAGE_TRANSFER_DST_BIT | c.VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
             .imageSharingMode = sharingMode,
@@ -96,20 +102,14 @@ pub const SwapchainManager = struct {
         try check(c.vkGetSwapchainImagesKHR(gpi, handle, &realImgCount, null), "Could not get Swapchain Image Count");
 
         const images = try alloc.alloc(c.VkImage, realImgCount);
-        defer alloc.free(images); // Managed by Swapchain
         try check(c.vkGetSwapchainImagesKHR(gpi, handle, &realImgCount, images.ptr), "Could not get Swapchain Images");
 
         const views = try alloc.alloc(c.VkImageView, realImgCount);
-        errdefer alloc.free(views); // Free if anything fails below
-
-        const imageRdySemaphores = try alloc.alloc(c.VkSemaphore, realImgCount);
-        errdefer alloc.free(imageRdySemaphores); // Free if anything fails below
 
         var initCount: u32 = 0;
         errdefer { // Clean up partially created resources
             for (0..initCount) |i| {
                 if (views[i] != null) c.vkDestroyImageView(gpi, views[i], null);
-                if (imageRdySemaphores[i] != null) c.vkDestroySemaphore(gpi, imageRdySemaphores[i], null);
             }
         }
 
@@ -129,11 +129,20 @@ pub const SwapchainManager = struct {
                 },
             };
             try check(c.vkCreateImageView(gpi, &imgViewInf, null, &views[i]), "Failed to create image view");
-
-            imageRdySemaphores[i] = try createSemaphore(gpi);
             initCount += 1;
         }
         std.debug.print("Swapchain {} Members {}\n", .{ self.swapchains.items.len, realImgCount });
+
+        const imageRdySemaphores = try alloc.alloc(c.VkSemaphore, realImgCount);
+        errdefer alloc.free(imageRdySemaphores);
+
+        const renderDoneSemaphore = try alloc.alloc(c.VkSemaphore, realImgCount);
+        errdefer alloc.free(renderDoneSemaphore);
+
+        for (0..realImgCount) |i| {
+            imageRdySemaphores[i] = try createSemaphore(gpi);
+            renderDoneSemaphore[i] = try createSemaphore(gpi);
+        }
 
         const newSwapchain = Swapchain{
             .windowId = windowId,
@@ -143,14 +152,17 @@ pub const SwapchainManager = struct {
             .images = images,
             .views = views,
             .imageRdySemaphore = imageRdySemaphores,
+            .renderDoneSemaphore = renderDoneSemaphore,
+            .pipeType = pipeType,
         };
 
-        self.swapchains.append(newSwapchain);
+        try self.swapchains.append(newSwapchain);
     }
 
-    pub fn destroySwapchain(self: *SwapchainManager, number: u32) void {
+    pub fn destroySwapchain(self: *SwapchainManager, windowId: u32) !void {
         const gpi = self.gpi;
-        const swapchain = &self.swapchains.items[number];
+        const arrayId = try self.findSwapchainId(windowId);
+        const swapchain = &self.swapchains.items[arrayId];
 
         for (swapchain.views) |view| {
             c.vkDestroyImageView(gpi, view, null);
@@ -158,7 +170,34 @@ pub const SwapchainManager = struct {
         for (swapchain.imageRdySemaphore) |semaphore| {
             c.vkDestroySemaphore(gpi, semaphore, null);
         }
-        c.vkDestroySwapchainKHR(gpi, swapchain.swapchains.items, null);
+        for (swapchain.renderDoneSemaphore) |semaphore| {
+            c.vkDestroySemaphore(gpi, semaphore, null);
+        }
+        c.vkDestroySwapchainKHR(gpi, swapchain.handle, null);
+        c.vkDestroySurfaceKHR(self.instance, swapchain.surface, null);
+
+        self.alloc.free(swapchain.images);
+        self.alloc.free(swapchain.views);
+        self.alloc.free(swapchain.imageRdySemaphore);
+        self.alloc.free(swapchain.renderDoneSemaphore);
+        _ = self.swapchains.swapRemove(arrayId);
+    }
+
+    pub fn getSwapchainExtent(self: *SwapchainManager, windowId: u32) !c.VkExtent2D {
+        const arrayId = try self.findSwapchainId(windowId);
+        const swapchain = &self.swapchains.items[arrayId];
+        return swapchain.extent;
+    }
+
+    pub fn getSwapchainsCount(self: *SwapchainManager) u32 {
+        return @intCast(self.swapchains.items.len);
+    }
+
+    pub fn findSwapchainId(self: *SwapchainManager, windowId: u32) !u32 {
+        for (0..self.swapchains.items.len) |i| {
+            if (self.swapchains.items[i].windowId == windowId) return @intCast(i);
+        }
+        return error.SwapchainDoesNotExist;
     }
 };
 

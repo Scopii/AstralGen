@@ -6,6 +6,7 @@ const Allocator = std.mem.Allocator;
 
 pub const DescriptorManager = struct {
     alloc: Allocator,
+    gpi: c.VkDevice,
     pool: c.VkDescriptorPool,
     sets: []c.VkDescriptorSet,
     computeLayout: c.VkDescriptorSetLayout,
@@ -51,6 +52,7 @@ pub const DescriptorManager = struct {
 
         return .{
             .alloc = alloc,
+            .gpi = gpi,
             .pool = pool,
             .sets = sets,
             .computeLayout = computeLayout,
@@ -77,7 +79,7 @@ pub const DescriptorManager = struct {
         return descriptorSetLayout;
     }
 
-    pub fn updateAllDescriptorSets(self: *DescriptorManager, gpi: c.VkDevice, imageView: c.VkImageView) void {
+    pub fn updateAllDescriptorSets(self: *DescriptorManager, imageView: c.VkImageView) void {
         // Batch all descriptor updates for better performance
         const imageInfos = self.alloc.alloc(c.VkDescriptorImageInfo, self.sets.len) catch unreachable;
         defer self.alloc.free(imageInfos);
@@ -104,12 +106,13 @@ pub const DescriptorManager = struct {
         }
 
         // Single batch update instead of multiple calls
-        c.vkUpdateDescriptorSets(gpi, @intCast(writeDescriptors.len), writeDescriptors.ptr, 0, null);
+        c.vkUpdateDescriptorSets(self.gpi, @intCast(writeDescriptors.len), writeDescriptors.ptr, 0, null);
     }
-    pub fn deinit(self: *DescriptorManager, gpi: c.VkDevice) void {
-        c.vkDestroyDescriptorSetLayout(gpi, self.computeLayout, null);
 
-        c.vkDestroyDescriptorPool(gpi, self.pool, null);
+    pub fn deinit(self: *DescriptorManager) void {
+        c.vkDestroyDescriptorSetLayout(self.gpi, self.computeLayout, null);
+
+        c.vkDestroyDescriptorPool(self.gpi, self.pool, null);
         self.alloc.free(self.sets);
     }
 };

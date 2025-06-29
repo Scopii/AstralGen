@@ -99,7 +99,8 @@ pub const WindowManager = struct {
                     std.debug.print("Resize Called\n", .{});
                     var newExtent: c.VkExtent2D = undefined;
                     _ = c.SDL_GetWindowSize(window.handle, @ptrCast(&newExtent.width), @ptrCast(&newExtent.height));
-                    try renderer.renewSwapchain(newExtent, id);
+                    window.extent = newExtent;
+                    try renderer.renewSwapchain(window);
                 }
             },
             else => {},
