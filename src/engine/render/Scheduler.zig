@@ -15,7 +15,7 @@ pub const Scheduler = struct {
     frameInFlight: u8 = 0,
     maxInFlight: u8,
     cpuSyncTimeline: c.VkSemaphore,
-    frameCount: u64 = 0,
+    totalFrames: u64 = 0,
     lastChecked: u64 = 0,
     passFinishedSemaphores: [MAX_IN_FLIGHT]c.VkSemaphore,
 
@@ -44,9 +44,9 @@ pub const Scheduler = struct {
 
     pub fn waitForGPU(self: *Scheduler) !void {
         const gpi = self.gpi;
-        if (self.frameCount < self.maxInFlight) return; // Early frames don't need waiting
+        if (self.totalFrames < self.maxInFlight) return; // Early frames don't need waiting
 
-        const waitVal = self.frameCount - self.maxInFlight + 1;
+        const waitVal = self.totalFrames - self.maxInFlight + 1;
 
         // Skip check if we just waited recently (cache last check)
         if (self.lastChecked == waitVal) return;
@@ -68,5 +68,6 @@ pub const Scheduler = struct {
 
     pub fn nextFrame(self: *Scheduler) void {
         self.frameInFlight = (self.frameInFlight + 1) % self.maxInFlight;
+        self.totalFrames += 1;
     }
 };

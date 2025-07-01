@@ -145,21 +145,45 @@ pub const Renderer = struct {
         var waitInfos = try self.alloc.alloc(c.VkSemaphoreSubmitInfo, waitSems.items.len);
         defer self.alloc.free(waitInfos);
         for (waitSems.items, 0..) |s, i| {
-            waitInfos[i] = .{ .sType = c.VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO, .semaphore = s, .stageMask = c.VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT };
+            waitInfos[i] = .{
+                .sType = c.VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+                .semaphore = s,
+                .stageMask = c.VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+            };
         }
 
         var signalInfos = try self.alloc.alloc(c.VkSemaphoreSubmitInfo, signalSems.items.len);
         defer self.alloc.free(signalInfos);
         for (signalSems.items, 0..) |s, i| {
             if (s == self.scheduler.cpuSyncTimeline) {
-                signalInfos[i] = .{ .sType = c.VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO, .semaphore = s, .value = self.scheduler.frameCount + 1, .stageMask = c.VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT };
+                signalInfos[i] = .{
+                    .sType = c.VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+                    .semaphore = s,
+                    .value = self.scheduler.totalFrames + 1,
+                    .stageMask = c.VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+                };
             } else {
-                signalInfos[i] = .{ .sType = c.VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO, .semaphore = s, .stageMask = c.VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT };
+                signalInfos[i] = .{
+                    .sType = c.VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+                    .semaphore = s,
+                    .stageMask = c.VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+                };
             }
         }
 
-        const cmdInfo = c.VkCommandBufferSubmitInfo{ .sType = c.VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO, .commandBuffer = cmd };
-        const submitInfo = c.VkSubmitInfo2{ .sType = c.VK_STRUCTURE_TYPE_SUBMIT_INFO_2, .waitSemaphoreInfoCount = @intCast(waitInfos.len), .pWaitSemaphoreInfos = waitInfos.ptr, .commandBufferInfoCount = 1, .pCommandBufferInfos = &cmdInfo, .signalSemaphoreInfoCount = @intCast(signalInfos.len), .pSignalSemaphoreInfos = signalInfos.ptr };
+        const cmdInfo = c.VkCommandBufferSubmitInfo{
+            .sType = c.VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
+            .commandBuffer = cmd,
+        };
+        const submitInfo = c.VkSubmitInfo2{
+            .sType = c.VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
+            .waitSemaphoreInfoCount = @intCast(waitInfos.len),
+            .pWaitSemaphoreInfos = waitInfos.ptr,
+            .commandBufferInfoCount = 1,
+            .pCommandBufferInfos = &cmdInfo,
+            .signalSemaphoreInfoCount = @intCast(signalInfos.len),
+            .pSignalSemaphoreInfos = signalInfos.ptr,
+        };
         try check(c.vkQueueSubmit2(self.context.graphicsQ, 1, &submitInfo, null), "Failed main submission");
 
         var swapchainHandles = try self.alloc.alloc(c.VkSwapchainKHR, presentTargets.items.len);
@@ -181,7 +205,6 @@ pub const Renderer = struct {
             try check(result, "Failed to present swapchain image");
         }
 
-        self.scheduler.frameCount += 1;
         self.scheduler.nextFrame();
     }
 
@@ -223,7 +246,7 @@ pub const Renderer = struct {
 
         // If the optimal size is different from the current size, resize.
         if (maxWidth != self.renderImage.extent3d.width or maxHeight != self.renderImage.extent3d.height) {
-            std.debug.print("Updating renderImage size to {}x{}\n", .{ maxWidth, maxHeight });
+            std.debug.print("renderImage now {}x{}\n", .{ maxWidth, maxHeight });
             _ = c.vkDeviceWaitIdle(self.context.gpi);
             self.resourceMan.destroyRenderImage(self.renderImage);
             self.renderImage = try self.resourceMan.createRenderImage(.{ .width = maxWidth, .height = maxHeight });

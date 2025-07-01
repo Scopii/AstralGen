@@ -161,9 +161,7 @@ pub const CmdManager = struct {
             renderImage.image,
             createSubresourceRange(c.VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1),
         );
-        std.debug.print("renderImage layout {}\n", .{renderImage.curLayout});
         renderImage.curLayout = c.VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-        std.debug.print("renderImage layout {}\n", .{renderImage.curLayout});
 
         for (targets, 1..) |t, i| {
             barriers[i] = createImageMemoryBarrier2(
