@@ -27,7 +27,7 @@ const PresentData = struct {
     renderDoneSemaphore: c.VkSemaphore,
 };
 
-pub const MAX_IN_FLIGHT: u8 = 1;
+pub const MAX_IN_FLIGHT: u8 = 3;
 const Allocator = std.mem.Allocator;
 
 pub const Renderer = struct {

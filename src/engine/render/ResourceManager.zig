@@ -10,6 +10,7 @@ pub const RenderImage = struct {
     view: c.VkImageView,
     extent3d: c.VkExtent3D,
     format: c.VkFormat,
+    curLayout: u32 = c.VK_IMAGE_LAYOUT_UNDEFINED,
 };
 
 pub const ResourceManager = struct {
