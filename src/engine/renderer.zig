@@ -119,9 +119,12 @@ pub const Renderer = struct {
         }
 
         if (!self.descriptorsUpToDate) self.updateDescriptors();
-        try self.cmdMan.recordComputePassAndBlit(&self.renderImage, &self.pipelineMan.compute, self.descriptorMan.sets[frameIndex], computeTargets.items);
-        try self.cmdMan.recordGraphicsPassAndBlit(&self.renderImage, &self.pipelineMan.graphics, .graphics, graphicsTargets.items);
-        try self.cmdMan.recordGraphicsPassAndBlit(&self.renderImage, &self.pipelineMan.mesh, .mesh, meshTargets.items);
+        try self.cmdMan.recordComputePassAndBlit(&self.renderImage, &self.pipelineMan.compute, self.descriptorMan.sets[frameIndex]);
+        try self.cmdMan.blitToTargets(&self.renderImage, computeTargets.items);
+        try self.cmdMan.recordGraphicsPassAndBlit(&self.renderImage, &self.pipelineMan.graphics, .graphics);
+        try self.cmdMan.blitToTargets(&self.renderImage, graphicsTargets.items);
+        try self.cmdMan.recordGraphicsPassAndBlit(&self.renderImage, &self.pipelineMan.mesh, .mesh);
+        try self.cmdMan.blitToTargets(&self.renderImage, meshTargets.items);
 
         const cmd = try self.cmdMan.endRecording();
 

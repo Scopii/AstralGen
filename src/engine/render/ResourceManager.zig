@@ -36,30 +36,39 @@ pub const ResourceManager = struct {
             c.VK_IMAGE_USAGE_STORAGE_BIT |
             c.VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 
-        var renderImage: RenderImage = undefined;
-        renderImage.format = c.VK_FORMAT_R16G16B16A16_SFLOAT; // Make configurable
-        renderImage.extent3d = drawImageExtent;
+        const format = c.VK_FORMAT_R16G16B16A16_SFLOAT;
 
         // Allocation from GPU local memory
-        const renderImageInfo = createAllocatedImageInfo(renderImage.format, drawImageUsages, renderImage.extent3d);
+        const renderImageInfo = createAllocatedImageInfo(format, drawImageUsages, drawImageExtent);
         const renderImageAllocInfo = c.VmaAllocationCreateInfo{
             .usage = c.VMA_MEMORY_USAGE_GPU_ONLY,
             .requiredFlags = c.VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
         };
+
+        var image: c.VkImage = undefined;
+        var allocation: c.VmaAllocation = undefined;
+        var view: c.VkImageView = undefined;
 
         // Allocation and creation
         try check(c.vmaCreateImage(
             self.vkAlloc.handle,
             &renderImageInfo,
             &renderImageAllocInfo,
-            &renderImage.image,
-            &renderImage.allocation,
+            &image,
+            &allocation,
             null,
         ), "Could not create Render Image");
         // Build Image View for the draw Image to use for rendering
-        const renderViewInfo = createAllocatedImageViewInfo(renderImage.format, renderImage.image, c.VK_IMAGE_ASPECT_COLOR_BIT);
-        try check(c.vkCreateImageView(self.gpi, &renderViewInfo, null, &renderImage.view), "Could not create Render Image View");
-        return renderImage;
+        const renderViewInfo = createAllocatedImageViewInfo(format, image, c.VK_IMAGE_ASPECT_COLOR_BIT);
+        try check(c.vkCreateImageView(self.gpi, &renderViewInfo, null, &view), "Could not create Render Image View");
+
+        return .{
+            .allocation = allocation,
+            .image = image,
+            .view = view,
+            .extent3d = drawImageExtent,
+            .format = format,
+        };
     }
 
     pub fn destroyRenderImage(self: *const ResourceManager, image: RenderImage) void {

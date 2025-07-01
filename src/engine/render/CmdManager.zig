@@ -61,25 +61,25 @@ pub const CmdManager = struct {
         renderImage: *RenderImage,
         pipe: *const PipelineBucket,
         set: c.VkDescriptorSet,
-        targets: []const AcquiredImage,
     ) !void {
-        if (targets.len == 0) return;
         const activeCmd = self.activeCmd orelse return;
+
         const barrier = createImageMemoryBarrier2(
             c.VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
             0,
             c.VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
             c.VK_ACCESS_2_SHADER_WRITE_BIT,
-            c.VK_IMAGE_LAYOUT_UNDEFINED,
+            renderImage.curLayout,
             c.VK_IMAGE_LAYOUT_GENERAL,
             renderImage.image,
             createSubresourceRange(c.VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1),
         );
         createPipelineBarriers2(activeCmd, &.{barrier});
+        renderImage.curLayout = c.VK_IMAGE_LAYOUT_GENERAL;
+
         c.vkCmdBindPipeline(activeCmd, c.VK_PIPELINE_BIND_POINT_COMPUTE, pipe.handle);
         c.vkCmdBindDescriptorSets(activeCmd, c.VK_PIPELINE_BIND_POINT_COMPUTE, pipe.layout, 0, 1, &set, 0, null);
         c.vkCmdDispatch(activeCmd, (renderImage.extent3d.width + 7) / 8, (renderImage.extent3d.height + 7) / 8, 1);
-        try blitToTargets(activeCmd, self.alloc, renderImage, targets);
     }
 
     pub fn recordGraphicsPassAndBlit(
@@ -87,9 +87,7 @@ pub const CmdManager = struct {
         renderImage: *RenderImage,
         pipe: *const PipelineBucket,
         pipeType: PipelineType,
-        targets: []const AcquiredImage,
     ) !void {
-        if (targets.len == 0) return;
         const cmd = self.activeCmd orelse return;
 
         const barrier = createImageMemoryBarrier2(
@@ -97,12 +95,13 @@ pub const CmdManager = struct {
             0,
             c.VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
             c.VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
-            c.VK_IMAGE_LAYOUT_UNDEFINED,
+            renderImage.curLayout,
             c.VK_IMAGE_LAYOUT_GENERAL,
             renderImage.image,
             createSubresourceRange(c.VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1),
         );
         createPipelineBarriers2(cmd, &.{barrier});
+        renderImage.curLayout = c.VK_IMAGE_LAYOUT_GENERAL;
 
         // Setting Dynamic Render-States
         const viewport = c.VkViewport{
@@ -144,11 +143,12 @@ pub const CmdManager = struct {
         c.vkCmdBindPipeline(cmd, c.VK_PIPELINE_BIND_POINT_GRAPHICS, pipe.handle);
         if (pipeType == .mesh) c.pfn_vkCmdDrawMeshTasksEXT.?(cmd, 1, 1, 1) else c.vkCmdDraw(cmd, 3, 1, 0, 0);
         c.vkCmdEndRendering(cmd);
-        try blitToTargets(cmd, self.alloc, renderImage, targets);
     }
 
-    pub fn blitToTargets(cmd: c.VkCommandBuffer, alloc: Allocator, renderImage: *const RenderImage, targets: []const AcquiredImage) !void {
+    pub fn blitToTargets(self: *CmdManager, renderImage: *RenderImage, targets: []const AcquiredImage) !void {
         if (targets.len == 0) return;
+        const alloc = self.alloc;
+        const cmd = self.activeCmd orelse return;
         var barriers = try alloc.alloc(c.VkImageMemoryBarrier2, targets.len + 1);
         defer alloc.free(barriers);
 
@@ -157,11 +157,14 @@ pub const CmdManager = struct {
             c.VK_ACCESS_2_MEMORY_WRITE_BIT,
             c.VK_PIPELINE_STAGE_2_TRANSFER_BIT,
             c.VK_ACCESS_2_TRANSFER_READ_BIT,
-            c.VK_IMAGE_LAYOUT_GENERAL,
+            renderImage.curLayout,
             c.VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
             renderImage.image,
             createSubresourceRange(c.VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1),
         );
+        std.debug.print("renderImage layout {}\n", .{renderImage.curLayout});
+        renderImage.curLayout = c.VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+        std.debug.print("renderImage layout {}\n", .{renderImage.curLayout});
 
         for (targets, 1..) |t, i| {
             barriers[i] = createImageMemoryBarrier2(
