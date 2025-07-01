@@ -146,7 +146,6 @@ pub const CmdManager = struct {
     }
 
     pub fn blitToTargets(self: *CmdManager, renderImage: *RenderImage, targets: []const AcquiredImage) !void {
-        if (targets.len == 0) return;
         const alloc = self.alloc;
         const cmd = self.activeCmd orelse return;
         var barriers = try alloc.alloc(c.VkImageMemoryBarrier2, targets.len + 1);
