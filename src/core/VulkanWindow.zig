@@ -17,10 +17,6 @@ pub const VulkanWindow = struct {
         };
     }
 
-    pub fn resize(self: *VulkanWindow, width: u32, height: u32) void {
-        _ = c.SDL_SetWindowSize(self.handle, width, height);
-    }
-
     pub fn deinit(self: *VulkanWindow) void {
         c.SDL_DestroyWindow(self.handle);
     }

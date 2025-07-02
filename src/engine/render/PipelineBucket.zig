@@ -12,7 +12,7 @@ pub const ShaderInfo = struct {
 
 pub const PipelineType = enum { compute, graphics, mesh };
 
-pub const PipelineBucket = struct {
+pub const Pipeline = struct {
     alloc: Allocator,
     handle: c.VkPipeline,
     layout: c.VkPipelineLayout,
@@ -30,7 +30,7 @@ pub const PipelineBucket = struct {
         pipelineType: PipelineType,
         descriptorLayout: c.VkDescriptorSetLayout,
         layoutCount: u32,
-    ) !PipelineBucket {
+    ) !Pipeline {
         const modules = try createShaderModules(alloc, gpi, shaderInfos);
         const stages = try createShaderStages(alloc, modules, shaderInfos);
 
@@ -60,12 +60,12 @@ pub const PipelineBucket = struct {
         };
     }
 
-    pub fn deinit(self: *PipelineBucket, gpi: c.VkDevice) void {
+    pub fn deinit(self: *Pipeline, gpi: c.VkDevice) void {
         c.vkDestroyPipeline(gpi, self.handle, null);
         c.vkDestroyPipelineLayout(gpi, self.layout, null);
     }
 
-    pub fn checkUpdate(self: *PipelineBucket, gpi: c.VkDevice, cache: c.VkPipelineCache) !void {
+    pub fn checkUpdate(self: *Pipeline, gpi: c.VkDevice, cache: c.VkPipelineCache) !void {
         const alloc = self.alloc;
         var timeStamp: u64 = 0;
         var pathIndex: u64 = 0;
