@@ -8,7 +8,7 @@ const Renderer = @import("../engine/Renderer.zig").Renderer;
 pub const WindowManager = struct {
     alloc: Allocator,
     windows: std.AutoHashMap(u32, VulkanWindow),
-    paused: bool = false,
+    openWindows: u32 = 0,
     close: bool = false,
 
     pub fn init(alloc: Allocator) !WindowManager {
@@ -41,16 +41,28 @@ pub const WindowManager = struct {
         std.debug.print("vkWindow created (ID {})\n", .{id});
         //_ = c.SDL_SetWindowRelativeMouseMode(window, true);
         _ = c.SDL_SetWindowFullscreen(sdlWindow, false);
+        //_ = c.SDL_SetWindowOpacity(sdlWindow, 0.5);
 
         const vkWindow = try VulkanWindow.init(width, height, id, sdlWindow, pipeType);
-
+        self.openWindows += 1;
         try self.windows.put(id, vkWindow);
+    }
+
+    pub fn getWindow(self: *WindowManager, id: u32) !VulkanWindow {
+        return self.windows.get(id) orelse error.WindowNotFound;
+    }
+
+    pub fn destroyWindow(self: *WindowManager, id: u32) void {
+        if (self.windows.remove(id)) |removedWindow| {
+            c.SDL_DestroyWindow(removedWindow.handle);
+        }
+        self.openWindows -= 1;
     }
 
     pub fn pollEvents(self: *WindowManager, renderer: *Renderer) !void {
         var event: c.SDL_Event = undefined;
 
-        if (self.paused) {
+        if (self.openWindows == 0) {
             // When paused, wait for an event and process it
             if (c.SDL_WaitEvent(&event)) {
                 try self.processEvent(&event, renderer);
@@ -83,37 +95,27 @@ pub const WindowManager = struct {
                 const id = event.window.windowID;
                 if (self.windows.getPtr(id)) |window| {
                     std.debug.print("Window {} MINIMIZED.\n", .{window.id});
-                    self.paused = true;
+                    self.openWindows -= 1;
                 }
             },
             c.SDL_EVENT_WINDOW_RESTORED => {
                 const id = event.window.windowID;
                 if (self.windows.getPtr(id)) |window| {
                     std.debug.print("Window {} RESTORED.\n", .{window.id});
-                    self.paused = false; // Resume normal operation
+                    self.openWindows += 1;
                 }
             },
             c.SDL_EVENT_WINDOW_RESIZED => {
                 const id = event.window.windowID;
                 if (self.windows.getPtr(id)) |window| {
-                    std.debug.print("Resize Called\n", .{});
                     var newExtent: c.VkExtent2D = undefined;
                     _ = c.SDL_GetWindowSize(window.handle, @ptrCast(&newExtent.width), @ptrCast(&newExtent.height));
+                    std.debug.print("Resize Called for {}x{}\n", .{ newExtent.width, newExtent.height });
                     window.extent = newExtent;
                     try renderer.renewSwapchain(window);
                 }
             },
             else => {},
-        }
-    }
-
-    pub fn getWindow(self: *WindowManager, id: u32) !VulkanWindow {
-        return self.windows.get(id) orelse error.WindowNotFound;
-    }
-
-    pub fn destroyWindow(self: *WindowManager, id: u32) void {
-        if (self.windows.remove(id)) |removed_window| {
-            c.SDL_DestroyWindow(removed_window.handle);
         }
     }
 };

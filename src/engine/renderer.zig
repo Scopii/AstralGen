@@ -253,8 +253,8 @@ pub const Renderer = struct {
 
     pub fn addWindow(self: *Renderer, window: *VulkanWindow) !void {
         _ = c.vkDeviceWaitIdle(self.context.gpi);
-        try self.updateRenderImageSize();
         try self.swapchainMan.addSwapchain(&self.context, window);
+        try self.updateRenderImageSize();
     }
 
     pub fn renewSwapchain(self: *Renderer, window: *VulkanWindow) !void {
