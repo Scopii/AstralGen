@@ -2,11 +2,11 @@ const std = @import("std");
 const c = @import("../../c.zig");
 const Allocator = std.mem.Allocator;
 const Context = @import("Context.zig").Context;
-const getSurfaceCaps = @import("Context.zig").getSurfaceCaps;
 const check = @import("../error.zig").check;
 const createSemaphore = @import("../sync/primitives.zig").createSemaphore;
 const PipelineType = @import("../render/PipelineBucket.zig").PipelineType;
 const MAX_IN_FLIGHT = @import("../Renderer.zig").MAX_IN_FLIGHT;
+const VulkanWindow = @import("../../core/VulkanWindow.zig").VulkanWindow;
 
 pub const SwapchainManager = struct {
     pub const Swapchain = struct {
@@ -19,7 +19,7 @@ pub const SwapchainManager = struct {
         views: []c.VkImageView,
         imageRdySemaphores: []c.VkSemaphore, // indexed by frame-in-flight.
         renderDoneSemaphores: []c.VkSemaphore, // indexed by swapchain image index
-        //imageFormat: c.VkFormat later?
+        surfaceFormat: c.VkSurfaceFormatKHR,
     };
     alloc: Allocator,
     gpi: c.VkDevice,
@@ -42,19 +42,19 @@ pub const SwapchainManager = struct {
         self.swapchains.deinit();
     }
 
-    pub fn addSwapchain(
-        self: *SwapchainManager,
-        context: *const Context,
-        surface: c.VkSurfaceKHR,
-        extent: c.VkExtent2D,
-        windowId: u32,
-        pipeType: PipelineType,
-    ) !void {
+    pub fn addSwapchain(self: *SwapchainManager, context: *const Context, vulkanWindow: *const VulkanWindow) !void {
         const alloc = self.alloc;
         const gpi = self.gpi;
         const families = context.families;
-        const surfaceFormat = context.surfaceFormat;
-        const caps = try getSurfaceCaps(context.gpu, surface);
+        const gpu = context.gpu;
+        const instance = context.instance;
+        const extent = vulkanWindow.extent;
+        const windowId = vulkanWindow.id;
+        const pipeType = vulkanWindow.pipeType;
+
+        const surface = try createSurface(vulkanWindow.handle, instance);
+        const surfaceFormat = try pickSurfaceFormat(alloc, gpu, surface);
+        const caps = try getSurfaceCaps(gpu, surface);
 
         const mode = c.VK_PRESENT_MODE_IMMEDIATE_KHR; //try context.pickPresentMode();
 
@@ -78,7 +78,7 @@ pub const SwapchainManager = struct {
             .minImageCount = desiredImgCount,
             .imageFormat = surfaceFormat.format,
             .imageColorSpace = surfaceFormat.colorSpace,
-            .imageExtent = pickExtent(&caps, extent),
+            .imageExtent = pickExtent(&caps, vulkanWindow.extent),
             .imageArrayLayers = 1,
             .imageUsage = c.VK_IMAGE_USAGE_TRANSFER_DST_BIT | c.VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
             .imageSharingMode = sharingMode,
@@ -133,6 +133,7 @@ pub const SwapchainManager = struct {
         const newSwapchain = Swapchain{
             .windowId = windowId,
             .surface = surface,
+            .surfaceFormat = surfaceFormat,
             .handle = handle,
             .extent = extent,
             .images = images,
@@ -142,6 +143,30 @@ pub const SwapchainManager = struct {
             .renderDoneSemaphores = renderDoneSems,
         };
         try self.swapchains.append(newSwapchain);
+    }
+
+    pub fn pickSurfaceFormat(alloc: Allocator, gpu: c.VkPhysicalDevice, surface: c.VkSurfaceKHR) !c.VkSurfaceFormatKHR {
+        var formatCount: u32 = 0;
+        try check(c.vkGetPhysicalDeviceSurfaceFormatsKHR(gpu, surface, &formatCount, null), "Failed to get format count");
+
+        if (formatCount == 0) return error.NoSurfaceFormats;
+
+        const formats = try alloc.alloc(c.VkSurfaceFormatKHR, formatCount);
+        defer alloc.free(formats);
+
+        try check(c.vkGetPhysicalDeviceSurfaceFormatsKHR(gpu, surface, &formatCount, formats.ptr), "Failed to get surface formats");
+
+        // Return preferred format if available, otherwise first one
+        if (formats.len == 1 and formats[0].format == c.VK_FORMAT_UNDEFINED) {
+            return c.VkSurfaceFormatKHR{ .format = c.VK_FORMAT_B8G8R8A8_UNORM, .colorSpace = c.VK_COLOR_SPACE_SRGB_NONLINEAR_KHR };
+        }
+
+        for (formats) |format| {
+            if (format.format == c.VK_FORMAT_B8G8R8A8_UNORM and format.colorSpace == c.VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
+                return format;
+            }
+        }
+        return formats[0];
     }
 
     pub fn destroySwapchain(self: *SwapchainManager, windowId: u32) !void {
@@ -180,6 +205,21 @@ pub const SwapchainManager = struct {
         return @intCast(self.swapchains.items.len);
     }
 };
+
+fn getSurfaceCaps(gpu: c.VkPhysicalDevice, surface: c.VkSurfaceKHR) !c.VkSurfaceCapabilitiesKHR {
+    var caps: c.VkSurfaceCapabilitiesKHR = undefined;
+    try check(c.vkGetPhysicalDeviceSurfaceCapabilitiesKHR(gpu, surface, &caps), "Failed to get surface capabilities");
+    return caps;
+}
+
+fn createSurface(window: *c.SDL_Window, instance: c.VkInstance) !c.VkSurfaceKHR {
+    var surface: c.VkSurfaceKHR = undefined;
+    if (c.SDL_Vulkan_CreateSurface(window, @ptrCast(instance), null, @ptrCast(&surface)) == false) {
+        std.log.err("Unable to create Vulkan surface: {s}\n", .{c.SDL_GetError()});
+        return error.VkSurface;
+    }
+    return surface;
+}
 
 fn pickExtent(caps: *const c.VkSurfaceCapabilitiesKHR, curExtent: c.VkExtent2D) c.VkExtent2D {
     if (caps.currentExtent.width != std.math.maxInt(u32)) return caps.currentExtent;

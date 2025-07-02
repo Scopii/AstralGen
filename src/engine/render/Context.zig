@@ -11,17 +11,15 @@ pub const QueueFamilies = struct {
 pub const Context = struct {
     alloc: Allocator,
     instance: c.VkInstance,
-    surfaceFormat: c.VkSurfaceFormatKHR,
     gpu: c.VkPhysicalDevice,
     families: QueueFamilies,
     gpi: c.VkDevice,
     graphicsQ: c.VkQueue,
     presentQ: c.VkQueue,
 
-    pub fn init(alloc: Allocator, instance: c.VkInstance, surface: c.VkSurfaceKHR) !Context {
+    pub fn init(alloc: Allocator, instance: c.VkInstance) !Context {
         const gpu = try pickGPU(alloc, instance);
-        const surfaceFormat = try pickSurfaceFormat(alloc, gpu, surface);
-        const families = try checkGPUfamilies(alloc, surface, gpu);
+        const families = try checkGPUfamilies(alloc, gpu);
         const gpi = try createGPI(alloc, gpu, families);
 
         var graphicsQ: c.VkQueue = undefined;
@@ -32,7 +30,6 @@ pub const Context = struct {
         return .{
             .alloc = alloc,
             .instance = instance,
-            .surfaceFormat = surfaceFormat,
             .gpu = gpu,
             .families = families,
             .gpi = gpi,
@@ -69,45 +66,6 @@ pub const Context = struct {
         return c.VK_PRESENT_MODE_FIFO_KHR;
     }
 };
-
-pub fn getSurfaceCaps(gpu: c.VkPhysicalDevice, surface: c.VkSurfaceKHR) !c.VkSurfaceCapabilitiesKHR {
-    var caps: c.VkSurfaceCapabilitiesKHR = undefined;
-    try check(c.vkGetPhysicalDeviceSurfaceCapabilitiesKHR(gpu, surface, &caps), "Failed to get surface capabilities");
-    return caps;
-}
-
-pub fn createSurface(window: *c.SDL_Window, instance: c.VkInstance) !c.VkSurfaceKHR {
-    var surface: c.VkSurfaceKHR = undefined;
-    if (c.SDL_Vulkan_CreateSurface(window, @ptrCast(instance), null, @ptrCast(&surface)) == false) {
-        std.log.err("Unable to create Vulkan surface: {s}\n", .{c.SDL_GetError()});
-        return error.VkSurface;
-    }
-    return surface;
-}
-
-pub fn pickSurfaceFormat(alloc: Allocator, gpu: c.VkPhysicalDevice, surface: c.VkSurfaceKHR) !c.VkSurfaceFormatKHR {
-    var formatCount: u32 = 0;
-    try check(c.vkGetPhysicalDeviceSurfaceFormatsKHR(gpu, surface, &formatCount, null), "Failed to get format count");
-
-    if (formatCount == 0) return error.NoSurfaceFormats;
-
-    const formats = try alloc.alloc(c.VkSurfaceFormatKHR, formatCount);
-    defer alloc.free(formats);
-
-    try check(c.vkGetPhysicalDeviceSurfaceFormatsKHR(gpu, surface, &formatCount, formats.ptr), "Failed to get surface formats");
-
-    // Return preferred format if available, otherwise first one
-    if (formats.len == 1 and formats[0].format == c.VK_FORMAT_UNDEFINED) {
-        return c.VkSurfaceFormatKHR{ .format = c.VK_FORMAT_B8G8R8A8_UNORM, .colorSpace = c.VK_COLOR_SPACE_SRGB_NONLINEAR_KHR };
-    }
-
-    for (formats) |format| {
-        if (format.format == c.VK_FORMAT_B8G8R8A8_UNORM and format.colorSpace == c.VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
-            return format;
-        }
-    }
-    return formats[0];
-}
 
 pub fn createInstance(alloc: Allocator, debugToggle: bool) !c.VkInstance {
     // Create Arrays
@@ -231,16 +189,17 @@ fn findFamily(families: []const c.VkQueueFamilyProperties) ?u32 {
     return null;
 }
 
-fn findPresentFamily(families: []const c.VkQueueFamilyProperties, surface: c.VkSurfaceKHR, gpu: c.VkPhysicalDevice) !?u32 {
+// Not in use because using the same Family because most Graphics Queues support Presentation and this avoids creating a Surface for setup
+fn findPresentFamily(families: []const c.VkQueueFamilyProperties, gpu: c.VkPhysicalDevice) !?u32 {
     for (families, 0..) |family, i| {
         var presentSupport: c.VkBool32 = c.VK_FALSE;
-        try check(c.vkGetPhysicalDeviceSurfaceSupportKHR(gpu, @intCast(i), surface, &presentSupport), "Failed to get present support");
+        try check(c.vkGetPhysicalDeviceSurfaceSupportKHR(gpu, @intCast(i), null, &presentSupport), "Failed to get present support");
         if (presentSupport == c.VK_TRUE and family.queueCount != 0) return @intCast(i);
     }
     return null;
 }
 
-fn checkGPUfamilies(alloc: Allocator, surface: c.VkSurfaceKHR, gpu: c.VkPhysicalDevice) !QueueFamilies {
+fn checkGPUfamilies(alloc: Allocator, gpu: c.VkPhysicalDevice) !QueueFamilies {
     var familyCount: u32 = 0;
     c.vkGetPhysicalDeviceQueueFamilyProperties(gpu, &familyCount, null);
 
@@ -248,9 +207,9 @@ fn checkGPUfamilies(alloc: Allocator, surface: c.VkSurfaceKHR, gpu: c.VkPhysical
     defer alloc.free(families);
     c.vkGetPhysicalDeviceQueueFamilyProperties(gpu, &familyCount, families.ptr);
 
-    // Check family types
     const graphics = findFamily(families) orelse return error.NoGraphicsFamily;
-    const present = try findPresentFamily(families, surface, gpu) orelse return error.NoPresentFamily;
+    // Currently using the same Family because most Graphics Queues support Presentation and this avoids creating a Surface for setup
+    const present = graphics; // try findPresentFamily(families, surface, gpu) orelse return error.NoPresentFamily;
 
     return QueueFamilies{
         .graphics = graphics,

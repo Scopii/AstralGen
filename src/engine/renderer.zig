@@ -4,7 +4,6 @@ const DEBUG_TOGGLE = @import("../settings.zig").DEBUG_TOGGLE;
 const check = @import("error.zig").check;
 const Context = @import("render/Context.zig").Context;
 const createInstance = @import("render/Context.zig").createInstance;
-const createSurface = @import("render/Context.zig").createSurface;
 const SwapchainManager = @import("render/SwapchainManager.zig").SwapchainManager;
 const Swapchain = @import("render/SwapchainManager.zig").SwapchainManager.Swapchain;
 const Scheduler = @import("render/Scheduler.zig").Scheduler;
@@ -42,18 +41,16 @@ pub const Renderer = struct {
     renderImage: RenderImage,
     descriptorsUpToDate: bool = false,
 
-    pub fn init(alloc: Allocator, window: *VulkanWindow) !Renderer {
+    pub fn init(alloc: Allocator) !Renderer {
         const instance = try createInstance(alloc, DEBUG_TOGGLE);
-        const surface = try createSurface(window.handle, instance);
-        const context = try Context.init(alloc, instance, surface);
+        const context = try Context.init(alloc, instance);
         const resourceMan = try ResourceManager.init(&context);
         const cmdMan = try CmdManager.init(alloc, &context, MAX_IN_FLIGHT);
         const scheduler = try Scheduler.init(&context, MAX_IN_FLIGHT);
         const descriptorMan = try DescriptorManager.init(alloc, &context, MAX_IN_FLIGHT);
         const pipelineMan = try PipelineManager.init(alloc, &context, &descriptorMan);
-        const renderImage = try resourceMan.createRenderImage(window.extent);
-        var swapchainMan = try SwapchainManager.init(alloc, &context);
-        try swapchainMan.addSwapchain(&context, surface, window.extent, window.id, window.pipeType);
+        const renderImage = try resourceMan.createRenderImage(c.VkExtent2D{ .width = 1920, .height = 1080 });
+        const swapchainMan = try SwapchainManager.init(alloc, &context);
 
         return .{
             .alloc = alloc,
@@ -80,7 +77,94 @@ pub const Renderer = struct {
         self.context.deinit();
     }
 
-    pub fn queueSubmit(self: *Renderer, cmd: c.VkCommandBuffer, waitSems: []const c.VkSemaphore, presentTargets: []const PresentData) !void {
+    pub fn draw(self: *Renderer) !void {
+        try self.scheduler.waitForGPU();
+        const frameInFlight = self.scheduler.frameInFlight;
+
+        // Getting correct Swapchain Images and adding wait Semaphores
+        var presentTargets = std.ArrayList(PresentData).init(self.alloc);
+        defer presentTargets.deinit();
+
+        var waitSems = std.ArrayList(c.VkSemaphore).init(self.alloc);
+        defer waitSems.deinit();
+
+        for (self.swapchainMan.swapchains.items) |*swapchain| {
+            var imageIndex: u32 = 0;
+            const imageReadySem = swapchain.imageRdySemaphores[frameInFlight];
+            const acquireResult = c.vkAcquireNextImageKHR(self.context.gpi, swapchain.handle, std.math.maxInt(u64), imageReadySem, null, &imageIndex);
+
+            if (acquireResult == c.VK_SUCCESS) {
+                try waitSems.append(imageReadySem);
+                try presentTargets.append(.{ .swapchain = swapchain, .imageIndex = imageIndex, .renderDoneSemaphore = swapchain.renderDoneSemaphores[imageIndex] });
+            } else if (acquireResult == c.VK_ERROR_OUT_OF_DATE_KHR or acquireResult == c.VK_SUBOPTIMAL_KHR) {
+                self.scheduler.nextFrame();
+                return;
+            } else try check(acquireResult, "Could not acquire swapchain image");
+        }
+
+        if (presentTargets.items.len == 0) {
+            self.scheduler.nextFrame();
+            return;
+        }
+
+        // Command Recording //
+        const cmd = try self.recordCommands(presentTargets.items, frameInFlight);
+
+        // Queue Submit //
+        try self.queueSubmit(cmd, waitSems.items, presentTargets.items);
+
+        // Presentation //
+        try self.present(presentTargets.items);
+
+        self.scheduler.nextFrame();
+    }
+
+    fn acquireImages() !void {}
+
+    fn recordCommands(self: *Renderer, presentTargets: []const PresentData, frameInFlight: u8) !c.VkCommandBuffer {
+        var computeTargets = std.ArrayList(AcquiredImage).init(self.alloc);
+        defer computeTargets.deinit();
+        var graphicsTargets = std.ArrayList(AcquiredImage).init(self.alloc);
+        defer graphicsTargets.deinit();
+        var meshTargets = std.ArrayList(AcquiredImage).init(self.alloc);
+        defer meshTargets.deinit();
+
+        for (presentTargets) |target| {
+            const acqImg = AcquiredImage{
+                .swapchain = target.swapchain,
+                .imageIndex = target.imageIndex,
+            };
+            switch (target.swapchain.pipeType) {
+                .compute => try computeTargets.append(acqImg),
+                .graphics => try graphicsTargets.append(acqImg),
+                .mesh => try meshTargets.append(acqImg),
+            }
+        }
+
+        // Command Recording //
+        try self.cmdMan.beginRecording(frameInFlight);
+
+        if (!self.descriptorsUpToDate) self.updateDescriptors();
+
+        if (computeTargets.items.len > 0) {
+            try self.cmdMan.recordComputePass(&self.renderImage, &self.pipelineMan.compute, self.descriptorMan.sets[frameInFlight]);
+            try self.cmdMan.blitToTargets(&self.renderImage, computeTargets.items);
+        }
+
+        if (graphicsTargets.items.len > 0) {
+            try self.cmdMan.recordGraphicsPass(&self.renderImage, &self.pipelineMan.graphics, .graphics);
+            try self.cmdMan.blitToTargets(&self.renderImage, graphicsTargets.items);
+        }
+
+        if (meshTargets.items.len > 0) {
+            try self.cmdMan.recordGraphicsPass(&self.renderImage, &self.pipelineMan.mesh, .mesh);
+            try self.cmdMan.blitToTargets(&self.renderImage, meshTargets.items);
+        }
+
+        return try self.cmdMan.endRecording();
+    }
+
+    fn queueSubmit(self: *Renderer, cmd: c.VkCommandBuffer, waitSems: []const c.VkSemaphore, presentTargets: []const PresentData) !void {
         var signalSems = std.ArrayList(c.VkSemaphore).init(self.alloc);
         defer signalSems.deinit();
 
@@ -134,89 +218,15 @@ pub const Renderer = struct {
         try check(c.vkQueueSubmit2(self.context.graphicsQ, 1, &submitInfo, null), "Failed main submission");
     }
 
-    pub fn draw(self: *Renderer) !void {
-        try self.scheduler.waitForGPU();
-        const frameInFlight = self.scheduler.frameInFlight;
-
-        // Getting correct Swapchain Images and adding wait Semaphores
-        var presentTargets = std.ArrayList(PresentData).init(self.alloc);
-        defer presentTargets.deinit();
-
-        var waitSems = std.ArrayList(c.VkSemaphore).init(self.alloc);
-        defer waitSems.deinit();
-
-        for (self.swapchainMan.swapchains.items) |*swapchain| {
-            var imageIndex: u32 = 0;
-            const imageReadySem = swapchain.imageRdySemaphores[frameInFlight];
-            const acquireResult = c.vkAcquireNextImageKHR(self.context.gpi, swapchain.handle, std.math.maxInt(u64), imageReadySem, null, &imageIndex);
-
-            if (acquireResult == c.VK_SUCCESS) {
-                try waitSems.append(imageReadySem);
-                try presentTargets.append(.{ .swapchain = swapchain, .imageIndex = imageIndex, .renderDoneSemaphore = swapchain.renderDoneSemaphores[imageIndex] });
-            } else if (acquireResult == c.VK_ERROR_OUT_OF_DATE_KHR or acquireResult == c.VK_SUBOPTIMAL_KHR) {
-                self.scheduler.nextFrame();
-                return;
-            } else try check(acquireResult, "Could not acquire swapchain image");
-        }
-
-        if (presentTargets.items.len == 0) {
-            self.scheduler.nextFrame();
-            return;
-        }
-
-        var computeTargets = std.ArrayList(AcquiredImage).init(self.alloc);
-        defer computeTargets.deinit();
-        var graphicsTargets = std.ArrayList(AcquiredImage).init(self.alloc);
-        defer graphicsTargets.deinit();
-        var meshTargets = std.ArrayList(AcquiredImage).init(self.alloc);
-        defer meshTargets.deinit();
-
-        for (presentTargets.items) |target| {
-            const acqImg = AcquiredImage{
-                .swapchain = target.swapchain,
-                .imageIndex = target.imageIndex,
-            };
-            switch (target.swapchain.pipeType) {
-                .compute => try computeTargets.append(acqImg),
-                .graphics => try graphicsTargets.append(acqImg),
-                .mesh => try meshTargets.append(acqImg),
-            }
-        }
-
-        // Command Recording //
-        try self.cmdMan.beginRecording(frameInFlight);
-
-        if (!self.descriptorsUpToDate) self.updateDescriptors();
-
-        if (computeTargets.items.len > 0) {
-            try self.cmdMan.recordComputePass(&self.renderImage, &self.pipelineMan.compute, self.descriptorMan.sets[frameInFlight]);
-            try self.cmdMan.blitToTargets(&self.renderImage, computeTargets.items);
-        }
-
-        if (graphicsTargets.items.len > 0) {
-            try self.cmdMan.recordGraphicsPass(&self.renderImage, &self.pipelineMan.graphics, .graphics);
-            try self.cmdMan.blitToTargets(&self.renderImage, graphicsTargets.items);
-        }
-
-        if (meshTargets.items.len > 0) {
-            try self.cmdMan.recordGraphicsPass(&self.renderImage, &self.pipelineMan.mesh, .mesh);
-            try self.cmdMan.blitToTargets(&self.renderImage, meshTargets.items);
-        }
-
-        const cmd = try self.cmdMan.endRecording();
-
-        // Queue Submit //
-        try self.queueSubmit(cmd, waitSems.items, presentTargets.items);
-
-        // Presentation //
-        var swapchainHandles = try self.alloc.alloc(c.VkSwapchainKHR, presentTargets.items.len);
+    fn present(self: *Renderer, presentTargets: []const PresentData) !void {
+        var swapchainHandles = try self.alloc.alloc(c.VkSwapchainKHR, presentTargets.len);
         defer self.alloc.free(swapchainHandles);
-        var imageIndices = try self.alloc.alloc(u32, presentTargets.items.len);
+        var imageIndices = try self.alloc.alloc(u32, presentTargets.len);
         defer self.alloc.free(imageIndices);
-        var presentWaitSems = try self.alloc.alloc(c.VkSemaphore, presentTargets.items.len);
+        var presentWaitSems = try self.alloc.alloc(c.VkSemaphore, presentTargets.len);
         defer self.alloc.free(presentWaitSems);
 
-        for (presentTargets.items, 0..) |target, i| {
+        for (presentTargets, 0..) |target, i| {
             swapchainHandles[i] = target.swapchain.handle;
             imageIndices[i] = target.imageIndex;
             presentWaitSems[i] = target.renderDoneSemaphore;
@@ -234,8 +244,6 @@ pub const Renderer = struct {
         if (result != c.VK_SUCCESS and result != c.VK_ERROR_OUT_OF_DATE_KHR and result != c.VK_SUBOPTIMAL_KHR) {
             try check(result, "Failed to present swapchain image");
         }
-
-        self.scheduler.nextFrame();
     }
 
     fn updateDescriptors(self: *Renderer) void {
@@ -246,15 +254,13 @@ pub const Renderer = struct {
     pub fn addWindow(self: *Renderer, window: *VulkanWindow) !void {
         _ = c.vkDeviceWaitIdle(self.context.gpi);
         try self.updateRenderImageSize();
-        const surface = try createSurface(window.handle, self.context.instance);
-        try self.swapchainMan.addSwapchain(&self.context, surface, window.extent, window.id, window.pipeType);
+        try self.swapchainMan.addSwapchain(&self.context, window);
     }
 
     pub fn renewSwapchain(self: *Renderer, window: *VulkanWindow) !void {
         _ = c.vkDeviceWaitIdle(self.context.gpi);
         try self.swapchainMan.destroySwapchain(window.id);
-        const surface = try createSurface(window.handle, self.context.instance);
-        try self.swapchainMan.addSwapchain(&self.context, surface, window.extent, window.id, window.pipeType);
+        try self.swapchainMan.addSwapchain(&self.context, window);
         try self.updateRenderImageSize();
         std.debug.print("Swapchain for window {} recreated\n", .{window.id});
     }

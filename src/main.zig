@@ -17,12 +17,12 @@ pub fn main() !void {
     var windowMan = try WindowManager.init(alloc);
     defer windowMan.deinit();
 
-    try windowMan.createWindow("AstralGen", 1600, 900, .compute);
-    var window1 = try windowMan.getWindow(4);
-
-    var renderer = try Renderer.init(alloc, &window1);
+    var renderer = try Renderer.init(alloc);
     defer renderer.deinit();
 
+    try windowMan.createWindow("AstralGen", 1600, 900, .compute);
+    var window1 = try windowMan.getWindow(4);
+    try renderer.addWindow(&window1);
     try windowMan.createWindow("AstralGen1", 1280, 720, .graphics);
     var window2 = try windowMan.getWindow(5);
     try renderer.addWindow(&window2);
