@@ -56,7 +56,7 @@ pub const CmdManager = struct {
         return self.cmds[frameInFlight];
     }
 
-    pub fn recordComputePassAndBlit(
+    pub fn recordComputePass(
         self: *CmdManager,
         renderImage: *RenderImage,
         pipe: *const PipelineBucket,
@@ -82,7 +82,7 @@ pub const CmdManager = struct {
         c.vkCmdDispatch(activeCmd, (renderImage.extent3d.width + 7) / 8, (renderImage.extent3d.height + 7) / 8, 1);
     }
 
-    pub fn recordGraphicsPassAndBlit(
+    pub fn recordGraphicsPass(
         self: *CmdManager,
         renderImage: *RenderImage,
         pipe: *const PipelineBucket,
@@ -163,7 +163,7 @@ pub const CmdManager = struct {
         );
         renderImage.curLayout = c.VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
 
-        for (targets, 1..) |t, i| {
+        for (targets, 1..) |target, i| {
             barriers[i] = createImageMemoryBarrier2(
                 c.VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
                 0,
@@ -171,26 +171,26 @@ pub const CmdManager = struct {
                 c.VK_ACCESS_2_TRANSFER_WRITE_BIT,
                 c.VK_IMAGE_LAYOUT_UNDEFINED,
                 c.VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                t.swapchain.images[t.imageIndex],
+                target.swapchain.images[target.imageIndex],
                 createSubresourceRange(c.VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1),
             );
         }
         createPipelineBarriers2(cmd, barriers);
 
-        for (targets) |t| {
+        for (targets) |target| {
             copyImageToImage(
                 cmd,
                 renderImage.image,
-                t.swapchain.images[t.imageIndex],
+                target.swapchain.images[target.imageIndex],
                 .{ .width = renderImage.extent3d.width, .height = renderImage.extent3d.height },
-                t.swapchain.extent,
+                target.swapchain.extent,
             );
         }
 
         var presentBarriers = try alloc.alloc(c.VkImageMemoryBarrier2, targets.len);
         defer alloc.free(presentBarriers);
 
-        for (targets, 0..) |t, i| {
+        for (targets, 0..) |target, i| {
             presentBarriers[i] = createImageMemoryBarrier2(
                 c.VK_PIPELINE_STAGE_2_TRANSFER_BIT,
                 c.VK_ACCESS_2_TRANSFER_WRITE_BIT,
@@ -198,7 +198,7 @@ pub const CmdManager = struct {
                 0,
                 c.VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                 c.VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-                t.swapchain.images[t.imageIndex],
+                target.swapchain.images[target.imageIndex],
                 createSubresourceRange(c.VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1),
             );
         }
