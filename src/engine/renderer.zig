@@ -89,6 +89,7 @@ pub const Renderer = struct {
         defer waitSems.deinit();
 
         for (self.swapchainMan.swapchains.items) |*swapchain| {
+            //if (swapchain.)
             var imageIndex: u32 = 0;
             const imageReadySem = swapchain.imageRdySemaphores[frameInFlight];
             const acquireResult = c.vkAcquireNextImageKHR(self.context.gpi, swapchain.handle, std.math.maxInt(u64), imageReadySem, null, &imageIndex);
@@ -107,19 +108,84 @@ pub const Renderer = struct {
             return;
         }
 
-        // Command Recording //
-        const cmd = try self.recordCommands(presentTargets.items, frameInFlight);
+        try self.cmdMan.beginRecording(frameInFlight);
 
-        // Queue Submit //
+        try self.recordComputeCommands(presentTargets.items, frameInFlight);
+        try self.recordGraphicsCommands(presentTargets.items);
+        try self.recordMeshCommands(presentTargets.items);
+
+        const cmd = try self.cmdMan.endRecording();
+        //const cmd = try self.recordCommands(presentTargets.items, frameInFlight);
+
         try self.queueSubmit(cmd, waitSems.items, presentTargets.items);
-
-        // Presentation //
         try self.present(presentTargets.items);
 
         self.scheduler.nextFrame();
     }
 
     fn acquireImages() !void {}
+
+    fn recordMeshCommands(self: *Renderer, presentTargets: []const PresentData) !void {
+        var meshTargets = std.ArrayList(AcquiredImage).init(self.alloc);
+        defer meshTargets.deinit();
+
+        for (presentTargets) |target| {
+            const acqImg = AcquiredImage{
+                .swapchain = target.swapchain,
+                .imageIndex = target.imageIndex,
+            };
+            if (target.swapchain.pipeType == .mesh) {
+                try meshTargets.append(acqImg);
+            }
+        }
+
+        if (meshTargets.items.len > 0) {
+            try self.cmdMan.recordGraphicsPass(&self.renderImage, &self.pipelineMan.mesh, .mesh);
+            try self.cmdMan.blitToTargets(&self.renderImage, meshTargets.items);
+        }
+    }
+
+    fn recordComputeCommands(self: *Renderer, presentTargets: []const PresentData, frameInFlight: u8) !void {
+        var computeTargets = std.ArrayList(AcquiredImage).init(self.alloc);
+        defer computeTargets.deinit();
+
+        for (presentTargets) |target| {
+            const acqImg = AcquiredImage{
+                .swapchain = target.swapchain,
+                .imageIndex = target.imageIndex,
+            };
+            if (target.swapchain.pipeType == .compute) {
+                try computeTargets.append(acqImg);
+            }
+        }
+
+        if (!self.descriptorsUpToDate) self.updateDescriptors();
+
+        if (computeTargets.items.len > 0) {
+            try self.cmdMan.recordComputePass(&self.renderImage, &self.pipelineMan.compute, self.descriptorMan.sets[frameInFlight]);
+            try self.cmdMan.blitToTargets(&self.renderImage, computeTargets.items);
+        }
+    }
+
+    fn recordGraphicsCommands(self: *Renderer, presentTargets: []const PresentData) !void {
+        var graphicsTargets = std.ArrayList(AcquiredImage).init(self.alloc);
+        defer graphicsTargets.deinit();
+
+        for (presentTargets) |target| {
+            const acqImg = AcquiredImage{
+                .swapchain = target.swapchain,
+                .imageIndex = target.imageIndex,
+            };
+            if (target.swapchain.pipeType == .graphics) {
+                try graphicsTargets.append(acqImg);
+            }
+        }
+
+        if (graphicsTargets.items.len > 0) {
+            try self.cmdMan.recordGraphicsPass(&self.renderImage, &self.pipelineMan.graphics, .graphics);
+            try self.cmdMan.blitToTargets(&self.renderImage, graphicsTargets.items);
+        }
+    }
 
     fn recordCommands(self: *Renderer, presentTargets: []const PresentData, frameInFlight: u8) !c.VkCommandBuffer {
         var computeTargets = std.ArrayList(AcquiredImage).init(self.alloc);

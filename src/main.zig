@@ -24,13 +24,13 @@ pub fn main() !void {
     var window1 = try windowMan.getWindow(4);
     try renderer.addWindow(&window1);
 
-    // try windowMan.createWindow("AstralGen1", 1280, 720, .graphics);
-    // var window2 = try windowMan.getWindow(5);
-    // try renderer.addWindow(&window2);
+    try windowMan.createWindow("AstralGen1", 1280, 720, .graphics);
+    var window2 = try windowMan.getWindow(5);
+    try renderer.addWindow(&window2);
 
-    // try windowMan.createWindow("AstralGen2", 800, 800, .mesh);
-    // var window3 = try windowMan.getWindow(6);
-    // try renderer.addWindow(&window3);
+    try windowMan.createWindow("AstralGen2", 800, 800, .mesh);
+    var window3 = try windowMan.getWindow(6);
+    try renderer.addWindow(&window3);
 
     // main loop
     while (true) {
