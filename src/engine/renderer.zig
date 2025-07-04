@@ -24,6 +24,7 @@ const PresentData = struct {
     swapchain: *const Swapchain,
     imageIndex: u32,
     renderDoneSemaphore: c.VkSemaphore,
+    imageRdySemaphore: c.VkSemaphore,
 };
 
 pub const MAX_IN_FLIGHT: u8 = 1;
@@ -79,14 +80,13 @@ pub const Renderer = struct {
 
     pub fn draw(self: *Renderer) !void {
         try self.scheduler.waitForGPU();
+        defer self.scheduler.nextFrame();
+
         const frameInFlight = self.scheduler.frameInFlight;
 
         // Getting correct Swapchain Images and adding wait Semaphores
         var presentTargets = std.ArrayList(PresentData).init(self.alloc);
         defer presentTargets.deinit();
-
-        var waitSems = std.ArrayList(c.VkSemaphore).init(self.alloc);
-        defer waitSems.deinit();
 
         for (self.swapchainMan.swapchains.items) |*swapchain| {
             var imageIndex: u32 = 0;
@@ -94,23 +94,19 @@ pub const Renderer = struct {
             const acquireResult = c.vkAcquireNextImageKHR(self.context.gpi, swapchain.handle, std.math.maxInt(u64), imageReadySem, null, &imageIndex);
 
             if (acquireResult == c.VK_SUCCESS) {
-                try waitSems.append(imageReadySem);
                 const target = PresentData{
                     .swapchain = swapchain,
                     .imageIndex = imageIndex,
                     .renderDoneSemaphore = swapchain.renderDoneSemaphores[imageIndex],
+                    .imageRdySemaphore = imageReadySem,
                 };
                 try presentTargets.append(target);
             } else if (acquireResult == c.VK_ERROR_OUT_OF_DATE_KHR or acquireResult == c.VK_SUBOPTIMAL_KHR) {
-                self.scheduler.nextFrame();
                 return;
             } else try check(acquireResult, "Could not acquire swapchain image");
         }
 
-        if (presentTargets.items.len == 0) {
-            self.scheduler.nextFrame();
-            return;
-        }
+        if (presentTargets.items.len == 0) return;
 
         try self.cmdMan.beginRecording(frameInFlight);
 
@@ -120,10 +116,8 @@ pub const Renderer = struct {
 
         const cmd = try self.cmdMan.endRecording(); //const cmd = try self.recordCommands(presentTargets.items, frameInFlight);
 
-        try self.queueSubmit(cmd, waitSems.items, presentTargets.items);
+        try self.queueSubmit(cmd, presentTargets.items);
         try self.present(presentTargets.items);
-
-        self.scheduler.nextFrame();
     }
 
     fn acquireImages() !void {}
@@ -133,13 +127,8 @@ pub const Renderer = struct {
         defer meshTargets.deinit();
 
         for (presentTargets) |target| {
-            const acqImg = AcquiredImage{
-                .swapchain = target.swapchain,
-                .imageIndex = target.imageIndex,
-            };
-            if (target.swapchain.window.pipeType == .mesh) {
-                try meshTargets.append(acqImg);
-            }
+            const acqImg = AcquiredImage{ .swapchain = target.swapchain, .imageIndex = target.imageIndex };
+            if (target.swapchain.window.pipeType == .mesh) try meshTargets.append(acqImg);
         }
 
         if (meshTargets.items.len > 0) {
@@ -153,13 +142,8 @@ pub const Renderer = struct {
         defer computeTargets.deinit();
 
         for (presentTargets) |target| {
-            const acqImg = AcquiredImage{
-                .swapchain = target.swapchain,
-                .imageIndex = target.imageIndex,
-            };
-            if (target.swapchain.window.pipeType == .compute) {
-                try computeTargets.append(acqImg);
-            }
+            const acqImg = AcquiredImage{ .swapchain = target.swapchain, .imageIndex = target.imageIndex };
+            if (target.swapchain.window.pipeType == .compute) try computeTargets.append(acqImg);
         }
 
         if (!self.descriptorsUpToDate) self.updateDescriptors();
@@ -175,13 +159,8 @@ pub const Renderer = struct {
         defer graphicsTargets.deinit();
 
         for (presentTargets) |target| {
-            const acqImg = AcquiredImage{
-                .swapchain = target.swapchain,
-                .imageIndex = target.imageIndex,
-            };
-            if (target.swapchain.window.pipeType == .graphics) {
-                try graphicsTargets.append(acqImg);
-            }
+            const acqImg = AcquiredImage{ .swapchain = target.swapchain, .imageIndex = target.imageIndex };
+            if (target.swapchain.window.pipeType == .graphics) try graphicsTargets.append(acqImg);
         }
 
         if (graphicsTargets.items.len > 0) {
@@ -233,43 +212,36 @@ pub const Renderer = struct {
         return try self.cmdMan.endRecording();
     }
 
-    fn queueSubmit(self: *Renderer, cmd: c.VkCommandBuffer, waitSems: []const c.VkSemaphore, presentTargets: []const PresentData) !void {
-        var signalSems = std.ArrayList(c.VkSemaphore).init(self.alloc);
-        defer signalSems.deinit();
-
-        for (presentTargets) |target| try signalSems.append(target.renderDoneSemaphore);
-        try signalSems.append(self.scheduler.cpuSyncTimeline);
-
-        var waitInfos = try self.alloc.alloc(c.VkSemaphoreSubmitInfo, waitSems.len);
+    fn queueSubmit(self: *Renderer, cmd: c.VkCommandBuffer, presentTargets: []const PresentData) !void {
+        var waitInfos = try self.alloc.alloc(c.VkSemaphoreSubmitInfo, presentTargets.len);
         defer self.alloc.free(waitInfos);
 
-        for (waitSems, 0..) |semaphore, i| {
+        for (presentTargets, 0..) |target, i| {
             waitInfos[i] = .{
                 .sType = c.VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
-                .semaphore = semaphore,
+                .semaphore = target.imageRdySemaphore,
                 .stageMask = c.VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
             };
         }
 
-        var signalInfos = try self.alloc.alloc(c.VkSemaphoreSubmitInfo, signalSems.items.len);
+        var signalInfos = try self.alloc.alloc(c.VkSemaphoreSubmitInfo, presentTargets.len + 1); // (+1 is Timeline Semaphore)
         defer self.alloc.free(signalInfos);
 
-        for (signalSems.items, 0..) |semaphore, i| {
-            if (semaphore == self.scheduler.cpuSyncTimeline) {
-                signalInfos[i] = .{
-                    .sType = c.VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
-                    .semaphore = semaphore,
-                    .value = self.scheduler.totalFrames + 1,
-                    .stageMask = c.VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
-                };
-            } else {
-                signalInfos[i] = .{
-                    .sType = c.VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
-                    .semaphore = semaphore,
-                    .stageMask = c.VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
-                };
-            }
+        for (presentTargets, 0..) |target, i| {
+            signalInfos[i] = .{
+                .sType = c.VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+                .semaphore = target.renderDoneSemaphore,
+                .stageMask = c.VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+            };
         }
+
+        // Adding the timeline
+        signalInfos[presentTargets.len] = .{
+            .sType = c.VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+            .semaphore = self.scheduler.cpuSyncTimeline,
+            .value = self.scheduler.totalFrames + 1,
+            .stageMask = c.VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+        };
 
         const cmdInfo = c.VkCommandBufferSubmitInfo{
             .sType = c.VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
