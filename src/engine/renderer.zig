@@ -89,14 +89,18 @@ pub const Renderer = struct {
         defer waitSems.deinit();
 
         for (self.swapchainMan.swapchains.items) |*swapchain| {
-            //if (swapchain.)
             var imageIndex: u32 = 0;
             const imageReadySem = swapchain.imageRdySemaphores[frameInFlight];
             const acquireResult = c.vkAcquireNextImageKHR(self.context.gpi, swapchain.handle, std.math.maxInt(u64), imageReadySem, null, &imageIndex);
 
             if (acquireResult == c.VK_SUCCESS) {
                 try waitSems.append(imageReadySem);
-                try presentTargets.append(.{ .swapchain = swapchain, .imageIndex = imageIndex, .renderDoneSemaphore = swapchain.renderDoneSemaphores[imageIndex] });
+                const target = PresentData{
+                    .swapchain = swapchain,
+                    .imageIndex = imageIndex,
+                    .renderDoneSemaphore = swapchain.renderDoneSemaphores[imageIndex],
+                };
+                try presentTargets.append(target);
             } else if (acquireResult == c.VK_ERROR_OUT_OF_DATE_KHR or acquireResult == c.VK_SUBOPTIMAL_KHR) {
                 self.scheduler.nextFrame();
                 return;
@@ -114,8 +118,7 @@ pub const Renderer = struct {
         try self.recordGraphicsCommands(presentTargets.items);
         try self.recordMeshCommands(presentTargets.items);
 
-        const cmd = try self.cmdMan.endRecording();
-        //const cmd = try self.recordCommands(presentTargets.items, frameInFlight);
+        const cmd = try self.cmdMan.endRecording(); //const cmd = try self.recordCommands(presentTargets.items, frameInFlight);
 
         try self.queueSubmit(cmd, waitSems.items, presentTargets.items);
         try self.present(presentTargets.items);
@@ -134,7 +137,7 @@ pub const Renderer = struct {
                 .swapchain = target.swapchain,
                 .imageIndex = target.imageIndex,
             };
-            if (target.swapchain.pipeType == .mesh) {
+            if (target.swapchain.window.pipeType == .mesh) {
                 try meshTargets.append(acqImg);
             }
         }
@@ -154,7 +157,7 @@ pub const Renderer = struct {
                 .swapchain = target.swapchain,
                 .imageIndex = target.imageIndex,
             };
-            if (target.swapchain.pipeType == .compute) {
+            if (target.swapchain.window.pipeType == .compute) {
                 try computeTargets.append(acqImg);
             }
         }
@@ -176,7 +179,7 @@ pub const Renderer = struct {
                 .swapchain = target.swapchain,
                 .imageIndex = target.imageIndex,
             };
-            if (target.swapchain.pipeType == .graphics) {
+            if (target.swapchain.window.pipeType == .graphics) {
                 try graphicsTargets.append(acqImg);
             }
         }
@@ -335,9 +338,9 @@ pub const Renderer = struct {
         var maxWidth: u32 = 0;
         var maxHeight: u32 = 0;
         // Find the maximum dimensions required by any current window.
-        for (self.swapchainMan.swapchains.items) |sc| {
-            maxWidth = @max(maxWidth, sc.extent.width);
-            maxHeight = @max(maxHeight, sc.extent.height);
+        for (self.swapchainMan.swapchains.items) |swapchain| {
+            maxWidth = @max(maxWidth, swapchain.window.extent.width);
+            maxHeight = @max(maxHeight, swapchain.window.extent.height);
         }
 
         // If no windows exist, default to a small size.

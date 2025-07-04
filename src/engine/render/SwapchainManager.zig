@@ -10,11 +10,9 @@ const VulkanWindow = @import("../../core/VulkanWindow.zig").VulkanWindow;
 
 pub const SwapchainManager = struct {
     pub const Swapchain = struct {
-        windowId: u32,
+        window: *const VulkanWindow,
         surface: c.VkSurfaceKHR,
         handle: c.VkSwapchainKHR,
-        extent: c.VkExtent2D,
-        pipeType: PipelineType,
         images: []c.VkImage,
         views: []c.VkImageView,
         imageRdySemaphores: []c.VkSemaphore, // indexed by frame-in-flight.
@@ -36,7 +34,7 @@ pub const SwapchainManager = struct {
     }
 
     pub fn deinit(self: *SwapchainManager) void {
-        for (self.swapchains.items.len..0) |i| self.destroySwapchain(self.swapchains.items[i].windowId) catch {
+        for (self.swapchains.items.len..0) |i| self.destroySwapchain(self.swapchains.items[i].window.id) catch {
             std.debug.print("Could not destroy all Swapchains", .{});
         };
         self.swapchains.deinit();
@@ -48,9 +46,6 @@ pub const SwapchainManager = struct {
         const families = context.families;
         const gpu = context.gpu;
         const instance = context.instance;
-        const extent = vulkanWindow.extent;
-        const windowId = vulkanWindow.id;
-        const pipeType = vulkanWindow.pipeType;
 
         const surface = try createSurface(vulkanWindow.handle, instance);
         const surfaceFormat = try pickSurfaceFormat(alloc, gpu, surface);
@@ -128,17 +123,15 @@ pub const SwapchainManager = struct {
         errdefer alloc.free(renderDoneSems);
         for (0..realImgCount) |i| renderDoneSems[i] = try createSemaphore(gpi);
 
-        std.debug.print("Swapchain {} Window {} ({} Images)\n", .{ self.swapchains.items.len, windowId, realImgCount });
+        std.debug.print("Swapchain {} Window {} ({} Images)\n", .{ self.swapchains.items.len, vulkanWindow.id, realImgCount });
 
         const newSwapchain = Swapchain{
-            .windowId = windowId,
+            .window = vulkanWindow,
             .surface = surface,
             .surfaceFormat = surfaceFormat,
             .handle = handle,
-            .extent = extent,
             .images = images,
             .views = views,
-            .pipeType = pipeType,
             .imageRdySemaphores = imageRdySems,
             .renderDoneSemaphores = renderDoneSems,
         };
@@ -190,7 +183,7 @@ pub const SwapchainManager = struct {
 
     pub fn findSwapchainId(self: *SwapchainManager, windowId: u32) !u32 {
         for (0..self.swapchains.items.len) |i| {
-            if (self.swapchains.items[i].windowId == windowId) return @intCast(i);
+            if (self.swapchains.items[i].window.id == windowId) return @intCast(i);
         }
         return error.SwapchainDoesNotExist;
     }
