@@ -84,9 +84,10 @@ pub const Renderer = struct {
         try self.scheduler.waitForGPU();
         defer self.scheduler.nextFrame();
 
+        const alloc = self.alloc;
         const frameInFlight = self.scheduler.frameInFlight;
 
-        var presentTargets = std.ArrayList(PresentData).init(self.alloc);
+        var presentTargets = std.ArrayList(PresentData).init(alloc);
         defer presentTargets.deinit();
 
         for (self.swapchainMan.swapchains.items) |*swapchain| {
@@ -111,7 +112,7 @@ pub const Renderer = struct {
 
         const enumLength = @typeInfo(PipelineType).@"enum".fields.len;
         var groupedTargets: [enumLength]std.ArrayList(AcquiredImage) = undefined;
-        for (0..enumLength) |i| groupedTargets[i] = std.ArrayList(AcquiredImage).init(self.alloc);
+        for (0..enumLength) |i| groupedTargets[i] = std.ArrayList(AcquiredImage).init(alloc);
         defer for (0..enumLength) |i| groupedTargets[i].deinit();
 
         for (presentTargets.items) |target| {
