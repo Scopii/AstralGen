@@ -25,7 +25,12 @@ pub const CmdManager = struct {
         for (0..maxInFlight) |i| {
             cmds[i] = try createCmd(gpi, pool);
         }
-        return .{ .alloc = alloc, .gpi = gpi, .pool = pool, .cmds = cmds };
+        return .{
+            .alloc = alloc,
+            .gpi = gpi,
+            .pool = pool,
+            .cmds = cmds,
+        };
     }
 
     pub fn deinit(self: *CmdManager) void {
@@ -56,12 +61,7 @@ pub const CmdManager = struct {
         return self.cmds[frameInFlight];
     }
 
-    pub fn recordComputePass(
-        self: *CmdManager,
-        renderImage: *RenderImage,
-        pipe: *const PipelineBucket,
-        set: c.VkDescriptorSet,
-    ) !void {
+    pub fn recordComputePass(self: *CmdManager, renderImage: *RenderImage, pipe: *const PipelineBucket, set: c.VkDescriptorSet) !void {
         const activeCmd = self.activeCmd orelse return;
 
         const barrier = createImageMemoryBarrier2(
@@ -82,12 +82,7 @@ pub const CmdManager = struct {
         c.vkCmdDispatch(activeCmd, (renderImage.extent3d.width + 7) / 8, (renderImage.extent3d.height + 7) / 8, 1);
     }
 
-    pub fn recordGraphicsPass(
-        self: *CmdManager,
-        renderImage: *RenderImage,
-        pipe: *const PipelineBucket,
-        pipeType: PipelineType,
-    ) !void {
+    pub fn recordGraphicsPass(self: *CmdManager, renderImage: *RenderImage, pipe: *const PipelineBucket, pipeType: PipelineType) !void {
         const cmd = self.activeCmd orelse return;
 
         const barrier = createImageMemoryBarrier2(

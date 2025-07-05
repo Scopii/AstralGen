@@ -78,6 +78,8 @@ pub const Renderer = struct {
         self.context.deinit();
     }
 
+    fn acquireImages() !void {}
+
     pub fn draw(self: *Renderer) !void {
         try self.scheduler.waitForGPU();
         defer self.scheduler.nextFrame();
@@ -93,123 +95,53 @@ pub const Renderer = struct {
             const imageReadySem = swapchain.imageRdySemaphores[frameInFlight];
             const acquireResult = c.vkAcquireNextImageKHR(self.context.gpi, swapchain.handle, std.math.maxInt(u64), imageReadySem, null, &imageIndex);
 
-            if (acquireResult == c.VK_SUCCESS) {
-                const target = PresentData{
-                    .swapchain = swapchain,
-                    .imageIndex = imageIndex,
-                    .renderDoneSemaphore = swapchain.renderDoneSemaphores[imageIndex],
-                    .imageRdySemaphore = imageReadySem,
-                };
-                try presentTargets.append(target);
-            } else if (acquireResult == c.VK_ERROR_OUT_OF_DATE_KHR or acquireResult == c.VK_SUBOPTIMAL_KHR) {
-                return;
-            } else try check(acquireResult, "Could not acquire swapchain image");
+            switch (acquireResult) {
+                c.VK_SUCCESS => {
+                    const target = PresentData{
+                        .swapchain = swapchain,
+                        .imageIndex = imageIndex,
+                        .renderDoneSemaphore = swapchain.renderDoneSemaphores[imageIndex],
+                        .imageRdySemaphore = imageReadySem,
+                    };
+                    try presentTargets.append(target);
+                },
+                c.VK_ERROR_OUT_OF_DATE_KHR, c.VK_SUBOPTIMAL_KHR => return,
+                else => try check(acquireResult, "Could not acquire swapchain image"),
+            }
         }
 
         if (presentTargets.items.len == 0) return;
 
         try self.cmdMan.beginRecording(frameInFlight);
-
-        try self.recordComputeCommands(presentTargets.items, frameInFlight);
-        try self.recordGraphicsCommands(presentTargets.items);
-        try self.recordMeshCommands(presentTargets.items);
-
-        const cmd = try self.cmdMan.endRecording(); //const cmd = try self.recordCommands(presentTargets.items, frameInFlight);
+        try self.recordCommands(presentTargets.items, .compute, frameInFlight);
+        try self.recordCommands(presentTargets.items, .graphics, frameInFlight);
+        try self.recordCommands(presentTargets.items, .mesh, frameInFlight);
+        const cmd = try self.cmdMan.endRecording();
 
         try self.queueSubmit(cmd, presentTargets.items);
         try self.present(presentTargets.items);
     }
 
-    fn acquireImages() !void {}
-
-    fn recordMeshCommands(self: *Renderer, presentTargets: []const PresentData) !void {
-        var meshTargets = std.ArrayList(AcquiredImage).init(self.alloc);
-        defer meshTargets.deinit();
+    fn recordCommands(self: *Renderer, presentTargets: []const PresentData, pipeType: PipelineType, frameInFlight: u8) !void {
+        var targets = std.ArrayList(AcquiredImage).init(self.alloc);
+        defer targets.deinit();
 
         for (presentTargets) |target| {
             const acqImg = AcquiredImage{ .swapchain = target.swapchain, .imageIndex = target.imageIndex };
-            if (target.swapchain.window.pipeType == .mesh) try meshTargets.append(acqImg);
+            if (target.swapchain.window.pipeType == pipeType) try targets.append(acqImg);
         }
 
-        if (meshTargets.items.len > 0) {
-            try self.cmdMan.recordGraphicsPass(&self.renderImage, &self.pipelineMan.mesh, .mesh);
-            try self.cmdMan.blitToTargets(&self.renderImage, meshTargets.items);
-        }
-    }
-
-    fn recordComputeCommands(self: *Renderer, presentTargets: []const PresentData, frameInFlight: u8) !void {
-        var computeTargets = std.ArrayList(AcquiredImage).init(self.alloc);
-        defer computeTargets.deinit();
-
-        for (presentTargets) |target| {
-            const acqImg = AcquiredImage{ .swapchain = target.swapchain, .imageIndex = target.imageIndex };
-            if (target.swapchain.window.pipeType == .compute) try computeTargets.append(acqImg);
-        }
-
-        if (!self.descriptorsUpToDate) self.updateDescriptors();
-
-        if (computeTargets.items.len > 0) {
-            try self.cmdMan.recordComputePass(&self.renderImage, &self.pipelineMan.compute, self.descriptorMan.sets[frameInFlight]);
-            try self.cmdMan.blitToTargets(&self.renderImage, computeTargets.items);
-        }
-    }
-
-    fn recordGraphicsCommands(self: *Renderer, presentTargets: []const PresentData) !void {
-        var graphicsTargets = std.ArrayList(AcquiredImage).init(self.alloc);
-        defer graphicsTargets.deinit();
-
-        for (presentTargets) |target| {
-            const acqImg = AcquiredImage{ .swapchain = target.swapchain, .imageIndex = target.imageIndex };
-            if (target.swapchain.window.pipeType == .graphics) try graphicsTargets.append(acqImg);
-        }
-
-        if (graphicsTargets.items.len > 0) {
-            try self.cmdMan.recordGraphicsPass(&self.renderImage, &self.pipelineMan.graphics, .graphics);
-            try self.cmdMan.blitToTargets(&self.renderImage, graphicsTargets.items);
-        }
-    }
-
-    fn recordCommands(self: *Renderer, presentTargets: []const PresentData, frameInFlight: u8) !c.VkCommandBuffer {
-        var computeTargets = std.ArrayList(AcquiredImage).init(self.alloc);
-        defer computeTargets.deinit();
-        var graphicsTargets = std.ArrayList(AcquiredImage).init(self.alloc);
-        defer graphicsTargets.deinit();
-        var meshTargets = std.ArrayList(AcquiredImage).init(self.alloc);
-        defer meshTargets.deinit();
-
-        for (presentTargets) |target| {
-            const acqImg = AcquiredImage{
-                .swapchain = target.swapchain,
-                .imageIndex = target.imageIndex,
-            };
-            switch (target.swapchain.pipeType) {
-                .compute => try computeTargets.append(acqImg),
-                .graphics => try graphicsTargets.append(acqImg),
-                .mesh => try meshTargets.append(acqImg),
+        if (targets.items.len > 0) {
+            switch (pipeType) {
+                .compute => {
+                    if (!self.descriptorsUpToDate) self.updateDescriptors();
+                    try self.cmdMan.recordComputePass(&self.renderImage, &self.pipelineMan.compute, self.descriptorMan.sets[frameInFlight]);
+                },
+                .graphics => try self.cmdMan.recordGraphicsPass(&self.renderImage, &self.pipelineMan.graphics, .graphics),
+                .mesh => try self.cmdMan.recordGraphicsPass(&self.renderImage, &self.pipelineMan.mesh, .mesh),
             }
         }
-
-        // Command Recording //
-        try self.cmdMan.beginRecording(frameInFlight);
-
-        if (!self.descriptorsUpToDate) self.updateDescriptors();
-
-        if (computeTargets.items.len > 0) {
-            try self.cmdMan.recordComputePass(&self.renderImage, &self.pipelineMan.compute, self.descriptorMan.sets[frameInFlight]);
-            try self.cmdMan.blitToTargets(&self.renderImage, computeTargets.items);
-        }
-
-        if (graphicsTargets.items.len > 0) {
-            try self.cmdMan.recordGraphicsPass(&self.renderImage, &self.pipelineMan.graphics, .graphics);
-            try self.cmdMan.blitToTargets(&self.renderImage, graphicsTargets.items);
-        }
-
-        if (meshTargets.items.len > 0) {
-            try self.cmdMan.recordGraphicsPass(&self.renderImage, &self.pipelineMan.mesh, .mesh);
-            try self.cmdMan.blitToTargets(&self.renderImage, meshTargets.items);
-        }
-
-        return try self.cmdMan.endRecording();
+        try self.cmdMan.blitToTargets(&self.renderImage, targets.items);
     }
 
     fn queueSubmit(self: *Renderer, cmd: c.VkCommandBuffer, presentTargets: []const PresentData) !void {
@@ -323,11 +255,11 @@ pub const Renderer = struct {
 
         // If the optimal size is different from the current size, resize.
         if (maxWidth != self.renderImage.extent3d.width or maxHeight != self.renderImage.extent3d.height) {
-            std.debug.print("renderImage now {}x{}\n", .{ maxWidth, maxHeight });
             _ = c.vkDeviceWaitIdle(self.context.gpi);
             self.resourceMan.destroyRenderImage(self.renderImage);
             self.renderImage = try self.resourceMan.createRenderImage(.{ .width = maxWidth, .height = maxHeight });
             self.descriptorsUpToDate = false; // Descriptors are now stale.
+            std.debug.print("renderImage now {}x{}\n", .{ maxWidth, maxHeight });
         }
     }
 
