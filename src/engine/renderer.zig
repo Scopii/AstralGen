@@ -86,7 +86,6 @@ pub const Renderer = struct {
 
         const frameInFlight = self.scheduler.frameInFlight;
 
-        // Getting correct Swapchain Images and adding wait Semaphores
         var presentTargets = std.ArrayList(PresentData).init(self.alloc);
         defer presentTargets.deinit();
 
@@ -97,51 +96,51 @@ pub const Renderer = struct {
 
             switch (acquireResult) {
                 c.VK_SUCCESS => {
-                    const target = PresentData{
+                    try presentTargets.append(PresentData{
                         .swapchain = swapchain,
                         .imageIndex = imageIndex,
                         .renderDoneSemaphore = swapchain.renderDoneSemaphores[imageIndex],
                         .imageRdySemaphore = imageReadySem,
-                    };
-                    try presentTargets.append(target);
+                    });
                 },
                 c.VK_ERROR_OUT_OF_DATE_KHR, c.VK_SUBOPTIMAL_KHR => return,
                 else => try check(acquireResult, "Could not acquire swapchain image"),
             }
         }
-
         if (presentTargets.items.len == 0) return;
 
+        const enumLength = @typeInfo(PipelineType).@"enum".fields.len;
+        var groupedTargets: [enumLength]std.ArrayList(AcquiredImage) = undefined;
+        for (0..enumLength) |i| groupedTargets[i] = std.ArrayList(AcquiredImage).init(self.alloc);
+        defer for (0..enumLength) |i| groupedTargets[i].deinit();
+
+        for (presentTargets.items) |target| {
+            const acqImg = AcquiredImage{ .swapchain = target.swapchain, .imageIndex = target.imageIndex };
+            try groupedTargets[@intFromEnum(target.swapchain.window.pipeType)].append(acqImg);
+        }
+
         try self.cmdMan.beginRecording(frameInFlight);
-        try self.recordCommands(presentTargets.items, .compute, frameInFlight);
-        try self.recordCommands(presentTargets.items, .graphics, frameInFlight);
-        try self.recordCommands(presentTargets.items, .mesh, frameInFlight);
+
+        for (0..groupedTargets.len) |i| {
+            if (groupedTargets[i].items.len != 0) try self.recordCommands(groupedTargets[i].items, @enumFromInt(i), frameInFlight);
+        }
+
         const cmd = try self.cmdMan.endRecording();
 
         try self.queueSubmit(cmd, presentTargets.items);
         try self.present(presentTargets.items);
     }
 
-    fn recordCommands(self: *Renderer, presentTargets: []const PresentData, pipeType: PipelineType, frameInFlight: u8) !void {
-        var targets = std.ArrayList(AcquiredImage).init(self.alloc);
-        defer targets.deinit();
-
-        for (presentTargets) |target| {
-            const acqImg = AcquiredImage{ .swapchain = target.swapchain, .imageIndex = target.imageIndex };
-            if (target.swapchain.window.pipeType == pipeType) try targets.append(acqImg);
+    fn recordCommands(self: *Renderer, targets: []const AcquiredImage, pipeType: PipelineType, frameInFlight: u8) !void {
+        switch (pipeType) {
+            .compute => {
+                if (!self.descriptorsUpToDate) self.updateDescriptors();
+                try self.cmdMan.recordComputePass(&self.renderImage, &self.pipelineMan.compute, self.descriptorMan.sets[frameInFlight]);
+            },
+            .graphics => try self.cmdMan.recordGraphicsPass(&self.renderImage, &self.pipelineMan.graphics, .graphics),
+            .mesh => try self.cmdMan.recordGraphicsPass(&self.renderImage, &self.pipelineMan.mesh, .mesh),
         }
-
-        if (targets.items.len > 0) {
-            switch (pipeType) {
-                .compute => {
-                    if (!self.descriptorsUpToDate) self.updateDescriptors();
-                    try self.cmdMan.recordComputePass(&self.renderImage, &self.pipelineMan.compute, self.descriptorMan.sets[frameInFlight]);
-                },
-                .graphics => try self.cmdMan.recordGraphicsPass(&self.renderImage, &self.pipelineMan.graphics, .graphics),
-                .mesh => try self.cmdMan.recordGraphicsPass(&self.renderImage, &self.pipelineMan.mesh, .mesh),
-            }
-        }
-        try self.cmdMan.blitToTargets(&self.renderImage, targets.items);
+        try self.cmdMan.blitToTargets(&self.renderImage, targets);
     }
 
     fn queueSubmit(self: *Renderer, cmd: c.VkCommandBuffer, presentTargets: []const PresentData) !void {
