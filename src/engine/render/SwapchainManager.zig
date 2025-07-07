@@ -34,14 +34,14 @@ pub const SwapchainManager = struct {
 
     pub fn deinit(_: *SwapchainManager) void {}
 
-    pub fn addSwapchain(self: *SwapchainManager, context: *const Context, window: *VulkanWindow, oldHandle: c.VkSwapchainKHR) !void {
+    pub fn addSwapchain(self: *SwapchainManager, context: *const Context, window: *VulkanWindow, oldHandle: ?c.VkSwapchainKHR) !void {
         const alloc = self.alloc;
         const gpi = self.gpi;
         const families = context.families;
         const gpu = context.gpu;
         const instance = context.instance;
 
-        const surface = try createSurface(window.handle, instance);
+        const surface = if (oldHandle != null) window.swapchain.?.surface else try createSurface(window.handle, instance);
         const surfaceFormat = try pickSurfaceFormat(alloc, gpu, surface);
         const caps = try getSurfaceCaps(gpu, surface);
 
@@ -77,7 +77,7 @@ pub const SwapchainManager = struct {
             .compositeAlpha = c.VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
             .presentMode = mode,
             .clipped = c.VK_TRUE,
-            .oldSwapchain = if (oldHandle != null) oldHandle else null,
+            .oldSwapchain = oldHandle orelse null,
         };
 
         var handle: c.VkSwapchainKHR = undefined;
@@ -118,10 +118,8 @@ pub const SwapchainManager = struct {
         errdefer alloc.free(renderDoneSems);
         for (0..realImgCount) |i| renderDoneSems[i] = try createSemaphore(gpi);
 
-        std.debug.print("Swapchain added to Window {}\n", .{window.id});
-
         if (oldHandle != null) {
-            self.destroySwapchain(window);
+            self.destroySwapchainNotSurface(window);
         }
 
         const newSwapchain = Swapchain{
@@ -136,6 +134,7 @@ pub const SwapchainManager = struct {
         };
         window.swapchain = newSwapchain;
         window.status = .active;
+        std.debug.print("Swapchain added to Window {}\n", .{window.id});
     }
 
     pub fn pickSurfaceFormat(alloc: Allocator, gpu: c.VkPhysicalDevice, surface: c.VkSurfaceKHR) !c.VkSurfaceFormatKHR {
@@ -171,6 +170,26 @@ pub const SwapchainManager = struct {
             for (sc.renderDoneSemaphores) |sem| c.vkDestroySemaphore(gpi, sem, null);
             c.vkDestroySwapchainKHR(gpi, sc.handle, null);
             c.vkDestroySurfaceKHR(self.instance, sc.surface, null);
+
+            self.alloc.free(sc.images);
+            self.alloc.free(sc.views);
+            self.alloc.free(sc.imageRdySemaphores);
+            self.alloc.free(sc.renderDoneSemaphores);
+
+            window.swapchain = null;
+
+            std.debug.print("Swapchain destroyed\n", .{});
+        } else std.debug.print("Cant Swapchain to destroy missing.\n", .{});
+    }
+
+    pub fn destroySwapchainNotSurface(self: *SwapchainManager, window: *VulkanWindow) void {
+        const gpi = self.gpi;
+
+        if (window.swapchain) |*sc| {
+            for (sc.views) |view| c.vkDestroyImageView(gpi, view, null);
+            for (sc.imageRdySemaphores) |sem| c.vkDestroySemaphore(gpi, sem, null);
+            for (sc.renderDoneSemaphores) |sem| c.vkDestroySemaphore(gpi, sem, null);
+            c.vkDestroySwapchainKHR(gpi, sc.handle, null);
 
             self.alloc.free(sc.images);
             self.alloc.free(sc.views);

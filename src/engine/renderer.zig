@@ -235,6 +235,7 @@ pub const Renderer = struct {
 
     pub fn addWindow(self: *Renderer, window: *VulkanWindow) !void {
         _ = c.vkDeviceWaitIdle(self.context.gpi);
+        //std.debug.print("Empty handle {?}", .{window.swapchain.?.handle});
         try self.swapchainMan.addSwapchain(&self.context, window, null);
     }
 
