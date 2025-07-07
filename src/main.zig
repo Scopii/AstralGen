@@ -2,6 +2,7 @@
 const std = @import("std");
 const WindowManager = @import("core/WindowManager.zig").WindowManager;
 const Renderer = @import("engine/Renderer.zig").Renderer;
+const VulkanWindow = @import("core/VulkanWindow.zig").VulkanWindow;
 const zjobs = @import("zjobs");
 
 const DEBUG_CLOSE = @import("settings.zig").DEBUG_CLOSE;
@@ -21,28 +22,28 @@ pub fn main() !void {
     defer renderer.deinit();
 
     try windowMan.createWindow("AstralGen", 1600, 900, .compute);
-    var window1 = try windowMan.getWindow(4);
-    try renderer.addWindow(&window1);
-
     try windowMan.createWindow("AstralGen1", 1280, 720, .graphics);
-    var window2 = try windowMan.getWindow(5);
-    try renderer.addWindow(&window2);
-
     try windowMan.createWindow("AstralGen2", 800, 800, .mesh);
-    var window3 = try windowMan.getWindow(6);
-    try renderer.addWindow(&window3);
+
+    try renderer.addWindow(windowMan.getWindowPtr(4).?);
+    try renderer.addWindow(windowMan.getWindowPtr(5).?);
+    try renderer.addWindow(windowMan.getWindowPtr(6).?);
+
+    var windowsToDraw = std.ArrayList(*VulkanWindow).init(alloc);
+    defer windowsToDraw.deinit();
 
     // main loop
-    while (true) {
+    while (windowMan.close != true) {
         try windowMan.pollEvents(&renderer);
-        if (windowMan.close == true) return;
 
         if (windowMan.openWindows != 0) {
-            try renderer.draw();
+            try windowMan.fillWindowList(&windowsToDraw);
+            try renderer.updateRenderImageSize(windowsToDraw.items);
+            try renderer.draw(windowsToDraw.items);
         }
     }
 
-    std.debug.print("App Closed", .{});
+    std.debug.print("App Closed\n", .{});
 
     if (DEBUG_CLOSE == true) {
         const stdout = std.io.getStdOut().writer();

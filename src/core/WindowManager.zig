@@ -48,8 +48,17 @@ pub const WindowManager = struct {
         try self.windows.put(id, vkWindow);
     }
 
-    pub fn getWindow(self: *WindowManager, id: u32) !VulkanWindow {
-        return self.windows.get(id) orelse error.WindowNotFound;
+    pub fn getWindowPtr(self: *WindowManager, id: u32) ?*VulkanWindow {
+        return self.windows.getPtr(id);
+    }
+
+    pub fn fillWindowList(self: *const WindowManager, list: *std.ArrayList(*VulkanWindow)) !void {
+        list.clearRetainingCapacity();
+
+        var iter = self.windows.valueIterator();
+        while (iter.next()) |windowPtr| {
+            try if (windowPtr.status == .active) list.append(windowPtr);
+        }
     }
 
     pub fn destroyWindow(self: *WindowManager, id: u32) void {
@@ -85,33 +94,36 @@ pub const WindowManager = struct {
             c.SDL_EVENT_WINDOW_CLOSE_REQUESTED => {
                 const id = event.window.windowID;
                 if (self.windows.getPtr(id)) |window| {
-                    std.debug.print("Window {} CLOSE_REQUESTED.\n", .{window.id});
-                    try renderer.destroyWindow(id);
+                    try renderer.destroyWindow(window);
                     window.deinit();
                     _ = self.windows.remove(id);
+                    std.debug.print("Window {} CLOSED.\n", .{window.id});
                 }
             },
             c.SDL_EVENT_WINDOW_MINIMIZED => {
                 const id = event.window.windowID;
                 if (self.windows.getPtr(id)) |window| {
-                    std.debug.print("Window {} MINIMIZED.\n", .{window.id});
                     self.openWindows -= 1;
+                    window.status = .inactive;
+                    std.debug.print("Window {} MINIMIZED.\n", .{window.id});
                 }
             },
             c.SDL_EVENT_WINDOW_RESTORED => {
                 const id = event.window.windowID;
                 if (self.windows.getPtr(id)) |window| {
-                    std.debug.print("Window {} RESTORED.\n", .{window.id});
                     self.openWindows += 1;
+                    window.status = .active;
+                    std.debug.print("Window {} RESTORED.\n", .{window.id});
                 }
             },
             c.SDL_EVENT_WINDOW_RESIZED => {
                 const id = event.window.windowID;
                 if (self.windows.getPtr(id)) |window| {
+                    //c.SDL_ClearSurface(&window.swapchain.?.surface, 0.0, 0.0, 0.0, 0.0);
                     var newExtent: c.VkExtent2D = undefined;
                     _ = c.SDL_GetWindowSize(window.handle, @ptrCast(&newExtent.width), @ptrCast(&newExtent.height));
-                    std.debug.print("Resize Called for {}x{}\n", .{ newExtent.width, newExtent.height });
                     window.extent = newExtent;
+                    std.debug.print("Resize Called for {}x{}\n", .{ newExtent.width, newExtent.height });
                     try renderer.renewSwapchain(window);
                 }
             },

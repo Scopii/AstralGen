@@ -178,7 +178,7 @@ pub const CmdManager = struct {
                 renderImage.image,
                 target.swapchain.images[target.imageIndex],
                 .{ .width = renderImage.extent3d.width, .height = renderImage.extent3d.height },
-                target.swapchain.window.extent,
+                target.swapchain.extent,
             );
         }
 
