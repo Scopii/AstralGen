@@ -6,7 +6,7 @@ const check = @import("../error.zig").check;
 const createSemaphore = @import("../sync/primitives.zig").createSemaphore;
 const PipelineType = @import("../render/PipelineBucket.zig").PipelineType;
 const MAX_IN_FLIGHT = @import("../Renderer.zig").MAX_IN_FLIGHT;
-const VulkanWindow = @import("../../core/VulkanWindow.zig").VulkanWindow;
+const Window = @import("../../core/Window.zig").Window;
 
 pub const Swapchain = struct {
     surface: c.VkSurfaceKHR,
@@ -17,6 +17,7 @@ pub const Swapchain = struct {
     imageRdySemaphores: []c.VkSemaphore, // indexed by frame-in-flight.
     renderDoneSemaphores: []c.VkSemaphore, // indexed by swapchain images
     surfaceFormat: c.VkSurfaceFormatKHR,
+    pipeType: PipelineType,
 };
 
 pub const SwapchainManager = struct {
@@ -34,7 +35,7 @@ pub const SwapchainManager = struct {
 
     pub fn deinit(_: *SwapchainManager) void {}
 
-    pub fn addSwapchain(self: *SwapchainManager, context: *const Context, window: *VulkanWindow, oldHandle: ?c.VkSwapchainKHR) !void {
+    pub fn addSwapchain(self: *SwapchainManager, context: *const Context, window: *Window, oldHandle: ?c.VkSwapchainKHR, pipeType: PipelineType) !void {
         const alloc = self.alloc;
         const gpi = self.gpi;
         const families = context.families;
@@ -131,6 +132,7 @@ pub const SwapchainManager = struct {
             .views = views,
             .imageRdySemaphores = imageRdySems,
             .renderDoneSemaphores = renderDoneSems,
+            .pipeType = pipeType,
         };
         window.swapchain = newSwapchain;
         window.status = .active;
@@ -161,7 +163,7 @@ pub const SwapchainManager = struct {
         return formats[0];
     }
 
-    pub fn destroySwapchain(self: *SwapchainManager, window: *VulkanWindow) void {
+    pub fn destroySwapchain(self: *SwapchainManager, window: *Window) void {
         const gpi = self.gpi;
 
         if (window.swapchain) |*sc| {
@@ -182,7 +184,7 @@ pub const SwapchainManager = struct {
         } else std.debug.print("Cant Swapchain to destroy missing.\n", .{});
     }
 
-    pub fn destroySwapchainNotSurface(self: *SwapchainManager, window: *VulkanWindow) void {
+    pub fn destroySwapchainNotSurface(self: *SwapchainManager, window: *Window) void {
         const gpi = self.gpi;
 
         if (window.swapchain) |*sc| {

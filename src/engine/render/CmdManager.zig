@@ -1,7 +1,6 @@
 const std = @import("std");
 const c = @import("../../c.zig");
 const Allocator = std.mem.Allocator;
-const Swapchain = @import("SwapchainManager.zig").SwapchainManager.Swapchain;
 const RenderImage = @import("ResourceManager.zig").RenderImage;
 const PipelineBucket = @import("PipelineBucket.zig").Pipeline;
 const PipelineType = @import("PipelineBucket.zig").PipelineType;

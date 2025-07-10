@@ -13,7 +13,7 @@ const PipelineType = @import("render/PipelineBucket.zig").PipelineType;
 const ResourceManager = @import("render/ResourceManager.zig").ResourceManager;
 const DescriptorManager = @import("render/DescriptorManager.zig").DescriptorManager;
 const RenderImage = @import("render/ResourceManager.zig").RenderImage;
-const VulkanWindow = @import("../core/VulkanWindow.zig").VulkanWindow;
+const Window = @import("../core/Window.zig").Window;
 
 pub const AcquiredImage = struct {
     swapchain: *const Swapchain,
@@ -81,7 +81,7 @@ pub const Renderer = struct {
 
     fn acquireImages() !void {}
 
-    pub fn draw(self: *Renderer, windows: []*VulkanWindow) !void {
+    pub fn draw(self: *Renderer, windows: []*Window) !void {
         try self.scheduler.waitForGPU();
         defer self.scheduler.nextFrame();
 
@@ -93,29 +93,25 @@ pub const Renderer = struct {
 
         // In Renderer.draw
         for (windows) |window| {
-            // This is the fix. `swapchain_ptr` is now a stable pointer to the
-            // swapchain that lives inside the `window` struct.
-            if (window.swapchain) |*swapchain_ptr| {
+            if (window.swapchain) |*swapchainPtr| {
                 var imageIndex: u32 = 0;
-                const imageReadySem = swapchain_ptr.imageRdySemaphores[frameInFlight];
-                const acquireResult = c.vkAcquireNextImageKHR(self.context.gpi, swapchain_ptr.handle, std.math.maxInt(u64), imageReadySem, null, &imageIndex);
+                const imageReadySem = swapchainPtr.imageRdySemaphores[frameInFlight];
+                const acquireResult = c.vkAcquireNextImageKHR(self.context.gpi, swapchainPtr.handle, std.math.maxInt(u64), imageReadySem, null, &imageIndex);
 
                 switch (acquireResult) {
                     c.VK_SUCCESS => {
                         try presentTargets.append(PresentData{
-                            .pipeType = window.pipeType,
-                            .swapchain = swapchain_ptr,
-                            .imageIndex = imageIndex,
-                            .renderDoneSemaphore = swapchain_ptr.renderDoneSemaphores[imageIndex],
+                            .pipeType = swapchainPtr.pipeType,
+                            .swapchain = swapchainPtr,
+                            .renderDoneSemaphore = swapchainPtr.renderDoneSemaphores[imageIndex],
                             .imageRdySemaphore = imageReadySem,
+                            .imageIndex = imageIndex,
                         });
                     },
                     c.VK_ERROR_OUT_OF_DATE_KHR, c.VK_SUBOPTIMAL_KHR => return,
                     else => try check(acquireResult, "Could not acquire swapchain image"),
                 }
-            } else {
-                return error.NoSwapchainToDrawTo;
-            }
+            } else return error.NoSwapchainToDrawTo;
         }
         if (presentTargets.items.len == 0) return;
 
@@ -130,11 +126,9 @@ pub const Renderer = struct {
         }
 
         try self.cmdMan.beginRecording(frameInFlight);
-
         for (0..groupedTargets.len) |i| {
             if (groupedTargets[i].items.len != 0) try self.recordCommands(groupedTargets[i].items, @enumFromInt(i), frameInFlight);
         }
-
         const cmd = try self.cmdMan.endRecording();
 
         try self.queueSubmit(cmd, presentTargets.items);
@@ -233,19 +227,18 @@ pub const Renderer = struct {
         self.descriptorsUpToDate = true;
     }
 
-    pub fn addWindow(self: *Renderer, window: *VulkanWindow) !void {
+    pub fn giveSwapchain(self: *Renderer, window: *Window, pipeType: PipelineType) !void {
         _ = c.vkDeviceWaitIdle(self.context.gpi);
-        //std.debug.print("Empty handle {?}", .{window.swapchain.?.handle});
-        try self.swapchainMan.addSwapchain(&self.context, window, null);
+        try self.swapchainMan.addSwapchain(&self.context, window, null, pipeType);
     }
 
-    pub fn renewSwapchain(self: *Renderer, window: *VulkanWindow) !void {
+    pub fn renewSwapchain(self: *Renderer, window: *Window) !void {
         _ = c.vkDeviceWaitIdle(self.context.gpi);
-        try self.swapchainMan.addSwapchain(&self.context, window, window.swapchain.?.handle);
+        try self.swapchainMan.addSwapchain(&self.context, window, window.swapchain.?.handle, window.swapchain.?.pipeType);
         std.debug.print("Swapchain for window {} recreated\n", .{window.id});
     }
 
-    pub fn updateRenderImageSize(self: *Renderer, windows: []const *VulkanWindow) !void {
+    pub fn updateRenderImageSize(self: *Renderer, windows: []const *Window) !void {
         var maxWidth: u32 = 0;
         var maxHeight: u32 = 0;
         // Find the maximum dimensions required by any current window.
@@ -270,7 +263,7 @@ pub const Renderer = struct {
         }
     }
 
-    pub fn destroyWindow(self: *Renderer, window: *VulkanWindow) !void {
+    pub fn destroyWindow(self: *Renderer, window: *Window) !void {
         _ = c.vkDeviceWaitIdle(self.context.gpi);
         self.swapchainMan.destroySwapchain(window);
         self.updateDescriptors();
