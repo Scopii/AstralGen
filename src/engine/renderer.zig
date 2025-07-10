@@ -81,7 +81,7 @@ pub const Renderer = struct {
 
     fn acquireImages() !void {}
 
-    pub fn draw(self: *Renderer, swapchains: []*Swapchain) !void {
+    pub fn draw(self: *Renderer, swapchainPtrs: []*Swapchain) !void {
         try self.scheduler.waitForGPU();
         defer self.scheduler.nextFrame();
 
@@ -92,7 +92,7 @@ pub const Renderer = struct {
         defer presentTargets.deinit();
 
         // In Renderer.draw
-        for (swapchains) |swapchainPtr| {
+        for (swapchainPtrs) |swapchainPtr| {
             var imageIndex: u32 = 0;
             const imageReadySem = swapchainPtr.imageRdySemaphores[frameInFlight];
             const acquireResult = c.vkAcquireNextImageKHR(self.context.gpi, swapchainPtr.handle, std.math.maxInt(u64), imageReadySem, null, &imageIndex);

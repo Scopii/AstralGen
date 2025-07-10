@@ -70,7 +70,6 @@ pub const WindowManager = struct {
 
     pub fn destroyWindow(self: *WindowManager, id: u32) void {
         if (self.windows.remove(id)) |removedWindow| c.SDL_DestroyWindow(removedWindow.handle);
-        self.openWindows -= 1;
     }
 
     pub fn pollEvents(self: *WindowManager, renderer: *Renderer) !void {
@@ -98,6 +97,7 @@ pub const WindowManager = struct {
                     switch (event.type) {
                         c.SDL_EVENT_WINDOW_CLOSE_REQUESTED => {
                             try renderer.destroyWindow(window);
+                            if (window.status == .active) self.openWindows -= 1;
                             window.deinit();
                             _ = self.windows.remove(id);
                             std.debug.print("Window {} CLOSED.\n", .{id});
