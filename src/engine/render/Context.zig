@@ -46,29 +46,23 @@ pub const Context = struct {
     fn pickPresentMode(self: *const Context) !c.VkPresentModeKHR {
         const gpu = self.gpu;
         const surface = self.surface;
+
         var modeCount: u32 = 0;
         try check(c.vkGetPhysicalDeviceSurfacePresentModesKHR(gpu, surface, &modeCount, null), "Failed to get present mode count");
-
         if (modeCount == 0) return c.VK_PRESENT_MODE_FIFO_KHR; // FIFO is always supported
 
         const modes = try self.alloc.alloc(c.VkPresentModeKHR, modeCount);
         defer self.alloc.free(modes);
 
         try check(c.vkGetPhysicalDeviceSurfacePresentModesKHR(gpu, surface, &modeCount, modes.ptr), "Failed to get present modes");
-
         // Prefer mailbox (triple buffering), then immediate, fallback to FIFO
-        for (modes) |mode| {
-            if (mode == c.VK_PRESENT_MODE_MAILBOX_KHR) return mode;
-        }
-        for (modes) |mode| {
-            if (mode == c.VK_PRESENT_MODE_IMMEDIATE_KHR) return mode;
-        }
+        for (modes) |mode| if (mode == c.VK_PRESENT_MODE_MAILBOX_KHR) return mode;
+        for (modes) |mode| if (mode == c.VK_PRESENT_MODE_IMMEDIATE_KHR) return mode;
         return c.VK_PRESENT_MODE_FIFO_KHR;
     }
 };
 
 pub fn createInstance(alloc: Allocator, debugToggle: bool) !c.VkInstance {
-    // Create Arrays
     var extensions = std.ArrayList([*c]const u8).init(alloc);
     defer extensions.deinit();
     var layers = std.ArrayList([*c]const u8).init(alloc);
@@ -76,10 +70,8 @@ pub fn createInstance(alloc: Allocator, debugToggle: bool) !c.VkInstance {
 
     // get required extensions
     var extCount: u32 = 0;
-    const reqExtensions = c.SDL_Vulkan_GetInstanceExtensions(&extCount); // VK_EXT_DEBUG_REPORT_EXTENSION_NAME
-    for (0..extCount) |i| {
-        try extensions.append(reqExtensions[i]);
-    }
+    const reqExtensions = c.SDL_Vulkan_GetInstanceExtensions(&extCount);
+    for (0..extCount) |i| try extensions.append(reqExtensions[i]);
 
     if (debugToggle) {
         try extensions.append("VK_EXT_debug_utils");
@@ -114,7 +106,6 @@ pub fn createInstance(alloc: Allocator, debugToggle: bool) !c.VkInstance {
 
     var instance: c.VkInstance = undefined;
     try check(c.vkCreateInstance(&instanceInf, null, &instance), "Unable to create Vulkan instance!");
-
     return instance;
 }
 
@@ -211,10 +202,7 @@ fn checkGPUfamilies(alloc: Allocator, gpu: c.VkPhysicalDevice) !QueueFamilies {
     // Currently using the same Family because most Graphics Queues support Presentation and this avoids creating a Surface for setup
     const present = graphics; // try findPresentFamily(families, surface, gpu) orelse return error.NoPresentFamily;
 
-    return QueueFamilies{
-        .graphics = graphics,
-        .present = present,
-    };
+    return QueueFamilies{ .graphics = graphics, .present = present };
 }
 
 fn createGPI(alloc: Allocator, gpu: c.VkPhysicalDevice, families: QueueFamilies) !c.VkDevice {
@@ -285,11 +273,7 @@ fn createGPI(alloc: Allocator, gpu: c.VkPhysicalDevice, families: QueueFamilies)
     // Import Mesh Shader Draw Function
     const generic_fn_ptr = c.vkGetDeviceProcAddr(gpi, "vkCmdDrawMeshTasksEXT");
 
-    if (generic_fn_ptr) |p| {
-        c.pfn_vkCmdDrawMeshTasksEXT = @ptrCast(p);
-    } else {
-        c.pfn_vkCmdDrawMeshTasksEXT = null;
-    }
+    if (generic_fn_ptr) |p| c.pfn_vkCmdDrawMeshTasksEXT = @ptrCast(p) else c.pfn_vkCmdDrawMeshTasksEXT = null;
     if (c.pfn_vkCmdDrawMeshTasksEXT == null) {
         std.log.err("FATAL: Could not load the vkCmdDrawMeshTasksEXT function pointer!\n", .{});
         return error.MissingVulkanFunction;

@@ -49,7 +49,6 @@ pub const ResourceManager = struct {
         var allocation: c.VmaAllocation = undefined;
         var view: c.VkImageView = undefined;
 
-        // Allocation and creation
         try check(c.vmaCreateImage(
             self.vkAlloc.handle,
             &renderImageInfo,
@@ -58,7 +57,7 @@ pub const ResourceManager = struct {
             &allocation,
             null,
         ), "Could not create Render Image");
-        // Build Image View for the draw Image to use for rendering
+
         const renderViewInfo = createAllocatedImageViewInfo(format, image, c.VK_IMAGE_ASPECT_COLOR_BIT);
         try check(c.vkCreateImageView(self.gpi, &renderViewInfo, null, &view), "Could not create Render Image View");
 
@@ -90,7 +89,7 @@ pub fn createAllocatedImageInfo(format: c.VkFormat, usageFlags: c.VkImageUsageFl
         .mipLevels = 1,
         .arrayLayers = 1,
         .samples = c.VK_SAMPLE_COUNT_1_BIT, // MSAA not used by default!
-        .tiling = c.VK_IMAGE_TILING_OPTIMAL, // Optimal GPU Format, has to be changed to LINEAR for CPU Read
+        .tiling = c.VK_IMAGE_TILING_OPTIMAL, // Optimal GPU Format has to be changed to LINEAR for CPU Read
         .usage = usageFlags,
     };
 }

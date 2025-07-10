@@ -14,7 +14,7 @@ pub const Swapchain = struct {
     extent: c.VkExtent2D,
     images: []c.VkImage,
     views: []c.VkImageView,
-    imageRdySemaphores: []c.VkSemaphore, // indexed by frame-in-flight.
+    imageRdySemaphores: []c.VkSemaphore, // indexed by max-in-flight.
     renderDoneSemaphores: []c.VkSemaphore, // indexed by swapchain images
     surfaceFormat: c.VkSurfaceFormatKHR,
     pipeType: PipelineType,
@@ -44,7 +44,6 @@ pub const SwapchainManager = struct {
         const surface = if (oldHandle != null) window.swapchain.?.surface else try createSurface(window.handle, self.instance);
         const surfaceFormat = try pickSurfaceFormat(alloc, gpu, surface);
         const caps = try getSurfaceCaps(gpu, surface);
-
         const mode = c.VK_PRESENT_MODE_IMMEDIATE_KHR; //try context.pickPresentMode();
 
         var desiredImgCount: u32 = caps.minImageCount + 1;
@@ -120,9 +119,7 @@ pub const SwapchainManager = struct {
         errdefer alloc.free(renderDoneSems);
         for (0..realImgCount) |i| renderDoneSems[i] = try createSemaphore(gpi);
 
-        if (oldHandle != null) {
-            self.destroySwapchainNotSurface(window);
-        }
+        if (oldHandle != null) self.destroySwapchainNotSurface(window);
 
         const newSwapchain = Swapchain{
             .surface = surface,
@@ -143,7 +140,6 @@ pub const SwapchainManager = struct {
     pub fn pickSurfaceFormat(alloc: Allocator, gpu: c.VkPhysicalDevice, surface: c.VkSurfaceKHR) !c.VkSurfaceFormatKHR {
         var formatCount: u32 = 0;
         try check(c.vkGetPhysicalDeviceSurfaceFormatsKHR(gpu, surface, &formatCount, null), "Failed to get format count");
-
         if (formatCount == 0) return error.NoSurfaceFormats;
 
         const formats = try alloc.alloc(c.VkSurfaceFormatKHR, formatCount);
@@ -151,15 +147,13 @@ pub const SwapchainManager = struct {
 
         try check(c.vkGetPhysicalDeviceSurfaceFormatsKHR(gpu, surface, &formatCount, formats.ptr), "Failed to get surface formats");
 
-        // Return preferred format if available, otherwise first one
+        // Return preferred format if available otherwise first one
         if (formats.len == 1 and formats[0].format == c.VK_FORMAT_UNDEFINED) {
             return c.VkSurfaceFormatKHR{ .format = c.VK_FORMAT_B8G8R8A8_UNORM, .colorSpace = c.VK_COLOR_SPACE_SRGB_NONLINEAR_KHR };
         }
 
         for (formats) |format| {
-            if (format.format == c.VK_FORMAT_B8G8R8A8_UNORM and format.colorSpace == c.VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
-                return format;
-            }
+            if (format.format == c.VK_FORMAT_B8G8R8A8_UNORM and format.colorSpace == c.VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) return format;
         }
         return formats[0];
     }
@@ -180,7 +174,6 @@ pub const SwapchainManager = struct {
             self.alloc.free(sc.renderDoneSemaphores);
 
             window.swapchain = null;
-
             std.debug.print("Swapchain destroyed\n", .{});
         } else std.debug.print("Cant Swapchain to destroy missing.\n", .{});
     }
@@ -200,7 +193,6 @@ pub const SwapchainManager = struct {
             self.alloc.free(sc.renderDoneSemaphores);
 
             window.swapchain = null;
-
             std.debug.print("Swapchain destroyed\n", .{});
         } else std.debug.print("Cant Swapchain to destroy missing.\n", .{});
     }

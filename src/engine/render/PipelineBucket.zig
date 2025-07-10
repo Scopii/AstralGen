@@ -76,10 +76,10 @@ pub const Pipeline = struct {
                 pathIndex = i;
             }
         }
+
         if (timeStamp == self.timeStamp) return;
         self.timeStamp = timeStamp;
         _ = c.vkDeviceWaitIdle(gpi);
-
         c.vkDestroyPipeline(gpi, self.handle, null);
 
         const modules = try createShaderModules(alloc, gpi, self.shaderInfos);
@@ -97,9 +97,7 @@ pub const Pipeline = struct {
 };
 
 fn destroyShaderModules(gpi: c.VkDevice, modules: []c.VkShaderModule) void {
-    for (0..modules.len) |i| {
-        c.vkDestroyShaderModule(gpi, modules[i], null);
-    }
+    for (0..modules.len) |i| c.vkDestroyShaderModule(gpi, modules[i], null);
 }
 
 fn createShaderStages(alloc: Allocator, modules: []c.VkShaderModule, shaderInf: []const ShaderInfo) ![]c.VkPipelineShaderStageCreateInfo {
@@ -121,9 +119,7 @@ fn createShaderStages(alloc: Allocator, modules: []c.VkShaderModule, shaderInf: 
 fn createShaderModules(alloc: Allocator, gpi: c.VkDevice, shaderInf: []const ShaderInfo) ![]c.VkShaderModule {
     var modules = try alloc.alloc(c.VkShaderModule, shaderInf.len);
     errdefer alloc.free(modules);
-    for (0..shaderInf.len) |i| {
-        modules[i] = try createShaderModule(alloc, shaderInf[i].inputPath, shaderInf[i].outputPath, gpi);
-    }
+    for (0..shaderInf.len) |i| modules[i] = try createShaderModule(alloc, shaderInf[i].inputPath, shaderInf[i].outputPath, gpi);
     return modules;
 }
 
@@ -308,8 +304,8 @@ pub fn getFileTimeStamp(alloc: Allocator, src: []const u8) !u64 {
 
     const cwd = std.fs.cwd();
     const stat = try cwd.statFile(abs_path);
-    const ns: u64 = @intCast(stat.mtime); // cast before division
-    return ns / 1_000_000; // convert nanoseconds to milliseconds
+    const ns: u64 = @intCast(stat.mtime);
+    return ns / 1_000_000; // nanoseconds -> milliseconds
 }
 
 pub fn resolveAssetPath(alloc: Allocator, asset_path: []const u8) ![]u8 {

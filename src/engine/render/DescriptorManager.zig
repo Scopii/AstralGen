@@ -14,7 +14,6 @@ pub const DescriptorManager = struct {
     pub fn init(alloc: Allocator, context: *const Context, maxInFlight: u32) !DescriptorManager {
         const gpi = context.gpi;
 
-        // Create descriptor pool
         const poolSize = c.VkDescriptorPoolSize{
             .type = c.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
             .descriptorCount = maxInFlight,
@@ -104,14 +103,11 @@ pub const DescriptorManager = struct {
                 .pImageInfo = &imageInfos[i],
             };
         }
-
-        // Single batch update instead of multiple calls
         c.vkUpdateDescriptorSets(self.gpi, @intCast(writeDescriptors.len), writeDescriptors.ptr, 0, null);
     }
 
     pub fn deinit(self: *DescriptorManager) void {
         c.vkDestroyDescriptorSetLayout(self.gpi, self.computeLayout, null);
-
         c.vkDestroyDescriptorPool(self.gpi, self.pool, null);
         self.alloc.free(self.sets);
     }

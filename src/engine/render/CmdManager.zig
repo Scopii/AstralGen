@@ -61,7 +61,7 @@ pub const CmdManager = struct {
     }
 
     pub fn recordComputePass(self: *CmdManager, renderImage: *RenderImage, pipe: *const PipelineBucket, set: c.VkDescriptorSet) !void {
-        const activeCmd = self.activeCmd orelse return;
+        const activeCmd = self.activeCmd orelse return error.ActiveCmdBlocked;
 
         const barrier = createImageMemoryBarrier2(
             c.VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
@@ -82,7 +82,7 @@ pub const CmdManager = struct {
     }
 
     pub fn recordGraphicsPass(self: *CmdManager, renderImage: *RenderImage, pipe: *const PipelineBucket, pipeType: PipelineType) !void {
-        const cmd = self.activeCmd orelse return;
+        const cmd = self.activeCmd orelse return error.ActiveCmdBlocked;
 
         const barrier = createImageMemoryBarrier2(
             c.VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,

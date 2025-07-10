@@ -79,7 +79,7 @@ pub const Renderer = struct {
         self.context.deinit();
     }
 
-    fn acquireImages() !void {}
+    fn acquirePresentData() !void {}
 
     pub fn draw(self: *Renderer, swapchainPtrs: []*Swapchain) !void {
         try self.scheduler.waitForGPU();
@@ -128,7 +128,6 @@ pub const Renderer = struct {
             if (groupedTargets[i].items.len != 0) try self.recordCommands(groupedTargets[i].items, @enumFromInt(i), frameInFlight);
         }
         const cmd = try self.cmdMan.endRecording();
-
         try self.queueSubmit(cmd, presentTargets.items);
         try self.present(presentTargets.items);
     }

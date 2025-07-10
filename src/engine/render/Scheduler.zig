@@ -23,9 +23,7 @@ pub const Scheduler = struct {
         std.debug.print("Scheduler: In Flight {}\n", .{maxInFlight});
 
         var passFinishedSemaphores: [MAX_IN_FLIGHT]c.VkSemaphore = undefined;
-        for (0..maxInFlight) |i| {
-            passFinishedSemaphores[i] = try createSemaphore(context.gpi);
-        }
+        for (0..maxInFlight) |i| passFinishedSemaphores[i] = try createSemaphore(context.gpi);
 
         return Scheduler{
             .gpi = context.gpi,
@@ -37,29 +35,22 @@ pub const Scheduler = struct {
 
     pub fn deinit(self: *Scheduler) void {
         c.vkDestroySemaphore(self.gpi, self.cpuSyncTimeline, null);
-        for (self.passFinishedSemaphores) |sem| {
-            c.vkDestroySemaphore(self.gpi, sem, null);
-        }
+        for (self.passFinishedSemaphores) |sem| c.vkDestroySemaphore(self.gpi, sem, null);
     }
 
     pub fn waitForGPU(self: *Scheduler) !void {
         const gpi = self.gpi;
-        if (self.totalFrames < self.maxInFlight) return; // Early frames don't need waiting
-
+        if (self.totalFrames < self.maxInFlight) return;
         const waitVal = self.totalFrames - self.maxInFlight + 1;
 
-        // Skip check if we just waited recently (cache last check)
         if (self.lastChecked == waitVal) return;
 
-        // Quick check - avoid syscall if already complete
         const curVal = try getTimelineVal(gpi, self.cpuSyncTimeline);
         if (curVal >= waitVal) {
             self.lastChecked = waitVal;
             return;
         }
-
-        // Only wait if GPU is actually behind
-        try waitForTimeline(gpi, self.cpuSyncTimeline, waitVal, 1_000_000_000);
+        try waitForTimeline(gpi, self.cpuSyncTimeline, waitVal, 1_000_000_000); // Only wait if GPU is behind
     }
 
     pub fn waitForFrame(self: *Scheduler, gpi: c.VkDevice, frameIndex: u64) !void {

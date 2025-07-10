@@ -2,9 +2,7 @@ const c = @import("../../c.zig");
 const check = @import("../error.zig").check;
 
 pub fn createSemaphore(gpi: c.VkDevice) !c.VkSemaphore {
-    const seamphoreInf = c.VkSemaphoreCreateInfo{
-        .sType = c.VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
-    };
+    const seamphoreInf = c.VkSemaphoreCreateInfo{ .sType = c.VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO };
     var semaphore: c.VkSemaphore = undefined;
     try check(c.vkCreateSemaphore(gpi, &seamphoreInf, null, &semaphore), "Could not create Semaphore");
     return semaphore;

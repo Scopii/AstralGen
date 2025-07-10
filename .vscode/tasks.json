@@ -4,7 +4,25 @@
         {
             "label": "Build and Run Zig",
             "type": "shell",
-            "command": "zig build run",
+            "command": "zig build run --prominent-compile-errors",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "presentation": {
+                "reveal": "always", //or always
+                "panel": "shared",
+                "showReuseMessage": false,
+                "clear": true,
+                "focus": false
+            },
+            "problemMatcher": "$zig" 
+        },
+
+        {
+            "label": "Compile Errors only",
+            "type": "shell",
+            "command": "zig build --watch -fincremental --prominent-compile-errors",
             "group": {
                 "kind": "build",
                 "isDefault": true
