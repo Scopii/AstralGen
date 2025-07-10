@@ -91,7 +91,6 @@ pub const Renderer = struct {
         var presentTargets = std.ArrayList(PresentData).init(alloc);
         defer presentTargets.deinit();
 
-        // In Renderer.draw
         for (swapchainPtrs) |swapchainPtr| {
             var imageIndex: u32 = 0;
             const imageReadySem = swapchainPtr.imageRdySemaphores[frameInFlight];
@@ -237,27 +236,20 @@ pub const Renderer = struct {
         std.debug.print("Swapchain for window {} recreated\n", .{window.id});
     }
 
-    pub fn updateRenderImageSize(self: *Renderer, swapchains: []const *Swapchain) !void {
+    pub fn updateRenderImage(self: *Renderer, swapchains: []const *Swapchain) !void {
         var maxWidth: u32 = 0;
         var maxHeight: u32 = 0;
-        // Find the maximum dimensions required by any current window.
+
         for (swapchains) |swapchain| {
             maxWidth = @max(maxWidth, swapchain.extent.width);
             maxHeight = @max(maxHeight, swapchain.extent.height);
         }
 
-        // If no windows exist, default to a small size.
-        if (maxWidth == 0 or maxHeight == 0) {
-            maxWidth = 1;
-            maxHeight = 1;
-        }
-
-        // If the optimal size is different from the current size, resize.
         if (maxWidth != self.renderImage.extent3d.width or maxHeight != self.renderImage.extent3d.height) {
             _ = c.vkDeviceWaitIdle(self.context.gpi);
             self.resourceMan.destroyRenderImage(self.renderImage);
             self.renderImage = try self.resourceMan.createRenderImage(.{ .width = maxWidth, .height = maxHeight });
-            self.descriptorsUpToDate = false; // Descriptors are now stale.
+            self.descriptorsUpToDate = false;
             std.debug.print("renderImage now {}x{}\n", .{ maxWidth, maxHeight });
         }
     }

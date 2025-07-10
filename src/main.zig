@@ -32,7 +32,7 @@ pub fn main() !void {
         if (windowMan.openWindows == 0) continue;
 
         const swapchainsToDraw = try windowMan.getSwapchainsToDraw();
-        try renderer.updateRenderImageSize(swapchainsToDraw);
+        try renderer.updateRenderImage(swapchainsToDraw);
         try renderer.draw(swapchainsToDraw);
     }
 

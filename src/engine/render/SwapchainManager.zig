@@ -40,9 +40,8 @@ pub const SwapchainManager = struct {
         const gpi = self.gpi;
         const families = context.families;
         const gpu = context.gpu;
-        const instance = context.instance;
 
-        const surface = if (oldHandle != null) window.swapchain.?.surface else try createSurface(window.handle, instance);
+        const surface = if (oldHandle != null) window.swapchain.?.surface else try createSurface(window.handle, self.instance);
         const surfaceFormat = try pickSurfaceFormat(alloc, gpu, surface);
         const caps = try getSurfaceCaps(gpu, surface);
 

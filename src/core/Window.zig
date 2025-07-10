@@ -4,14 +4,13 @@ const PipelineType = @import("../engine/render/PipelineBucket.zig").PipelineType
 const Swapchain = @import("../engine/render/SwapchainManager.zig").Swapchain;
 
 pub const windowStatus = enum {
-    empty,
     active,
     inactive,
 };
 
 pub const Window = struct {
     handle: *c.SDL_Window,
-    status: windowStatus,
+    status: windowStatus = .inactive,
     id: u32,
     swapchain: ?Swapchain = null,
 
@@ -19,7 +18,6 @@ pub const Window = struct {
         return Window{
             .handle = sdlWindow,
             .id = id,
-            .status = .empty,
         };
     }
 

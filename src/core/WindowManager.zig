@@ -14,7 +14,6 @@ pub const WindowManager = struct {
     close: bool = false,
 
     pub fn init(alloc: Allocator) !WindowManager {
-        // Initialize SDL3 with video subsystem
         if (c.SDL_Init(c.SDL_INIT_VIDEO) != true) {
             std.log.err("SDL_Init failed: {s}\n", .{c.SDL_GetError()});
             return error.SdlInitFailed;
@@ -42,12 +41,13 @@ pub const WindowManager = struct {
         };
         const id = c.SDL_GetWindowID(sdlHandle);
         std.debug.print("Window ID {} created\n", .{id});
+
         _ = c.SDL_SetWindowFullscreen(sdlHandle, false);
         //_ = c.SDL_SetWindowRelativeMouseMode(window, true);
         //_ = c.SDL_SetWindowOpacity(sdlWindow, 0.5);
+
         var window = try Window.init(id, sdlHandle);
-        const wantedExtent = c.VkExtent2D{ .width = @intCast(width), .height = @intCast(height) };
-        try renderer.giveSwapchain(&window, pipeType, wantedExtent);
+        try renderer.giveSwapchain(&window, pipeType, .{ .width = @intCast(width), .height = @intCast(height) });
         try self.windows.put(id, window);
         self.openWindows += 1;
     }
@@ -61,9 +61,7 @@ pub const WindowManager = struct {
 
         var iter = self.windows.valueIterator();
         while (iter.next()) |windowPtr| {
-            if (windowPtr.status == .active) {
-                try self.swapchainsToDraw.append(&windowPtr.swapchain.?);
-            }
+            if (windowPtr.status == .active) try self.swapchainsToDraw.append(&windowPtr.swapchain.?);
         }
         return self.swapchainsToDraw.items;
     }
