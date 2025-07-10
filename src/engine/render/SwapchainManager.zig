@@ -35,7 +35,7 @@ pub const SwapchainManager = struct {
 
     pub fn deinit(_: *SwapchainManager) void {}
 
-    pub fn addSwapchain(self: *SwapchainManager, context: *const Context, window: *Window, oldHandle: ?c.VkSwapchainKHR, pipeType: PipelineType) !void {
+    pub fn addSwapchain(self: *SwapchainManager, context: *const Context, window: *Window, oldHandle: ?c.VkSwapchainKHR, pipeType: PipelineType, extent: c.VkExtent2D) !void {
         const alloc = self.alloc;
         const gpi = self.gpi;
         const families = context.families;
@@ -62,13 +62,15 @@ pub const SwapchainManager = struct {
             familyCount = 2;
         }
 
+        const actualExtent = pickExtent(&caps, extent);
+
         const swapchainInf = c.VkSwapchainCreateInfoKHR{
             .sType = c.VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
             .surface = surface,
             .minImageCount = desiredImgCount,
             .imageFormat = surfaceFormat.format,
             .imageColorSpace = surfaceFormat.colorSpace,
-            .imageExtent = pickExtent(&caps, window.extent),
+            .imageExtent = actualExtent,
             .imageArrayLayers = 1,
             .imageUsage = c.VK_IMAGE_USAGE_TRANSFER_DST_BIT | c.VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
             .imageSharingMode = sharingMode,
@@ -126,7 +128,7 @@ pub const SwapchainManager = struct {
         const newSwapchain = Swapchain{
             .surface = surface,
             .surfaceFormat = surfaceFormat,
-            .extent = window.extent,
+            .extent = actualExtent,
             .handle = handle,
             .images = images,
             .views = views,

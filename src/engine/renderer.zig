@@ -81,7 +81,7 @@ pub const Renderer = struct {
 
     fn acquireImages() !void {}
 
-    pub fn draw(self: *Renderer, windows: []*Window) !void {
+    pub fn draw(self: *Renderer, swapchains: []*Swapchain) !void {
         try self.scheduler.waitForGPU();
         defer self.scheduler.nextFrame();
 
@@ -92,31 +92,30 @@ pub const Renderer = struct {
         defer presentTargets.deinit();
 
         // In Renderer.draw
-        for (windows) |window| {
-            if (window.swapchain) |*swapchainPtr| {
-                var imageIndex: u32 = 0;
-                const imageReadySem = swapchainPtr.imageRdySemaphores[frameInFlight];
-                const acquireResult = c.vkAcquireNextImageKHR(self.context.gpi, swapchainPtr.handle, std.math.maxInt(u64), imageReadySem, null, &imageIndex);
+        for (swapchains) |swapchainPtr| {
+            var imageIndex: u32 = 0;
+            const imageReadySem = swapchainPtr.imageRdySemaphores[frameInFlight];
+            const acquireResult = c.vkAcquireNextImageKHR(self.context.gpi, swapchainPtr.handle, std.math.maxInt(u64), imageReadySem, null, &imageIndex);
 
-                switch (acquireResult) {
-                    c.VK_SUCCESS => {
-                        try presentTargets.append(PresentData{
-                            .pipeType = swapchainPtr.pipeType,
-                            .swapchain = swapchainPtr,
-                            .renderDoneSemaphore = swapchainPtr.renderDoneSemaphores[imageIndex],
-                            .imageRdySemaphore = imageReadySem,
-                            .imageIndex = imageIndex,
-                        });
-                    },
-                    c.VK_ERROR_OUT_OF_DATE_KHR, c.VK_SUBOPTIMAL_KHR => return,
-                    else => try check(acquireResult, "Could not acquire swapchain image"),
-                }
-            } else return error.NoSwapchainToDrawTo;
+            switch (acquireResult) {
+                c.VK_SUCCESS => {
+                    try presentTargets.append(PresentData{
+                        .pipeType = swapchainPtr.pipeType,
+                        .swapchain = swapchainPtr,
+                        .renderDoneSemaphore = swapchainPtr.renderDoneSemaphores[imageIndex],
+                        .imageRdySemaphore = imageReadySem,
+                        .imageIndex = imageIndex,
+                    });
+                },
+                c.VK_ERROR_OUT_OF_DATE_KHR, c.VK_SUBOPTIMAL_KHR => return,
+                else => try check(acquireResult, "Could not acquire swapchain image"),
+            }
         }
         if (presentTargets.items.len == 0) return;
 
         const enumLength = @typeInfo(PipelineType).@"enum".fields.len;
         var groupedTargets: [enumLength]std.ArrayList(AcquiredImage) = undefined;
+
         for (0..enumLength) |i| groupedTargets[i] = std.ArrayList(AcquiredImage).init(alloc);
         defer for (0..enumLength) |i| groupedTargets[i].deinit();
 
@@ -227,24 +226,24 @@ pub const Renderer = struct {
         self.descriptorsUpToDate = true;
     }
 
-    pub fn giveSwapchain(self: *Renderer, window: *Window, pipeType: PipelineType) !void {
+    pub fn giveSwapchain(self: *Renderer, window: *Window, pipeType: PipelineType, wantedExtent: c.VkExtent2D) !void {
         _ = c.vkDeviceWaitIdle(self.context.gpi);
-        try self.swapchainMan.addSwapchain(&self.context, window, null, pipeType);
+        try self.swapchainMan.addSwapchain(&self.context, window, null, pipeType, wantedExtent);
     }
 
-    pub fn renewSwapchain(self: *Renderer, window: *Window) !void {
+    pub fn renewSwapchain(self: *Renderer, window: *Window, wantedExtent: c.VkExtent2D) !void {
         _ = c.vkDeviceWaitIdle(self.context.gpi);
-        try self.swapchainMan.addSwapchain(&self.context, window, window.swapchain.?.handle, window.swapchain.?.pipeType);
+        try self.swapchainMan.addSwapchain(&self.context, window, window.swapchain.?.handle, window.swapchain.?.pipeType, wantedExtent);
         std.debug.print("Swapchain for window {} recreated\n", .{window.id});
     }
 
-    pub fn updateRenderImageSize(self: *Renderer, windows: []const *Window) !void {
+    pub fn updateRenderImageSize(self: *Renderer, swapchains: []const *Swapchain) !void {
         var maxWidth: u32 = 0;
         var maxHeight: u32 = 0;
         // Find the maximum dimensions required by any current window.
-        for (windows) |window| {
-            maxWidth = @max(maxWidth, window.extent.width);
-            maxHeight = @max(maxHeight, window.extent.height);
+        for (swapchains) |swapchain| {
+            maxWidth = @max(maxWidth, swapchain.extent.width);
+            maxHeight = @max(maxHeight, swapchain.extent.height);
         }
 
         // If no windows exist, default to a small size.

@@ -31,9 +31,9 @@ pub fn main() !void {
         if (windowMan.close == true) return;
         if (windowMan.openWindows == 0) continue;
 
-        const windowsToDraw = try windowMan.getWindowsToDraw();
-        try renderer.updateRenderImageSize(windowsToDraw);
-        try renderer.draw(windowsToDraw);
+        const swapchainsToDraw = try windowMan.getSwapchainsToDraw();
+        try renderer.updateRenderImageSize(swapchainsToDraw);
+        try renderer.draw(swapchainsToDraw);
     }
 
     std.debug.print("App Closed\n", .{});
