@@ -75,35 +75,40 @@ pub const Renderer = struct {
         const alloc = self.alloc;
         const frameInFlight = self.scheduler.frameInFlight;
 
-        var presentTargets = std.ArrayList(*Swapchain).init(alloc);
-        defer presentTargets.deinit();
+        const enumLength = @typeInfo(PipelineType).@"enum".fields.len;
+        var presentTargets: [enumLength]std.ArrayList(*Swapchain) = undefined;
+        for (0..enumLength) |i| presentTargets[i] = std.ArrayList(*Swapchain).init(alloc);
+        defer for (0..enumLength) |i| presentTargets[i].deinit();
+
+        var targetCount: u32 = 0;
 
         for (swapchainPtrs) |swapchainPtr| {
             const acquireResult = c.vkAcquireNextImageKHR(self.context.gpi, swapchainPtr.handle, std.math.maxInt(u64), swapchainPtr.imageRdySemaphores[frameInFlight], null, &swapchainPtr.curIndex);
 
             switch (acquireResult) {
-                c.VK_SUCCESS => try presentTargets.append(swapchainPtr),
+                c.VK_SUCCESS => {
+                    try presentTargets[@intFromEnum(swapchainPtr.pipeType)].append(swapchainPtr);
+                    targetCount += 1;
+                },
                 c.VK_ERROR_OUT_OF_DATE_KHR, c.VK_SUBOPTIMAL_KHR => continue, //not handling error yet
                 else => try check(acquireResult, "Could not acquire swapchain image"),
             }
         }
-        if (presentTargets.items.len == 0) return;
-
-        const enumLength = @typeInfo(PipelineType).@"enum".fields.len;
-        var groupedTargets: [enumLength]std.ArrayList(*Swapchain) = undefined;
-
-        for (0..enumLength) |i| groupedTargets[i] = std.ArrayList(*Swapchain).init(alloc);
-        defer for (0..enumLength) |i| groupedTargets[i].deinit();
-
-        for (presentTargets.items) |target| try groupedTargets[@intFromEnum(target.pipeType)].append(target);
+        if (targetCount == 0) return;
 
         try self.cmdMan.beginRecording(frameInFlight);
-        for (0..groupedTargets.len) |i| {
-            if (groupedTargets[i].items.len != 0) try self.recordCommands(groupedTargets[i].items, @enumFromInt(i), frameInFlight);
+        for (0..presentTargets.len) |i| {
+            if (presentTargets[i].items.len != 0) try self.recordCommands(presentTargets[i].items, @enumFromInt(i), frameInFlight);
         }
         const cmd = try self.cmdMan.endRecording();
-        try self.queueSubmit(cmd, presentTargets.items, frameInFlight);
-        try self.present(presentTargets.items);
+
+        var allTargets = std.ArrayList(*Swapchain).init(self.alloc);
+        defer allTargets.deinit();
+        try allTargets.ensureTotalCapacity(targetCount);
+        for (presentTargets) |group| try allTargets.appendSlice(group.items);
+
+        try self.queueSubmit(cmd, allTargets.items, frameInFlight);
+        try self.present(allTargets.items);
     }
 
     fn recordCommands(self: *Renderer, targets: []const *Swapchain, pipeType: PipelineType, frameInFlight: u8) !void {
