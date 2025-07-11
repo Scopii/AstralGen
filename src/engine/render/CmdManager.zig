@@ -5,7 +5,7 @@ const RenderImage = @import("ResourceManager.zig").RenderImage;
 const PipelineBucket = @import("PipelineBucket.zig").Pipeline;
 const PipelineType = @import("PipelineBucket.zig").PipelineType;
 const Context = @import("Context.zig").Context;
-const AcquiredImage = @import("../Renderer.zig").AcquiredImage;
+const PresentData = @import("../Renderer.zig").PresentData;
 const check = @import("../error.zig").check;
 
 pub const CmdManager = struct {
@@ -139,7 +139,7 @@ pub const CmdManager = struct {
         c.vkCmdEndRendering(cmd);
     }
 
-    pub fn blitToTargets(self: *CmdManager, renderImage: *RenderImage, targets: []const AcquiredImage) !void {
+    pub fn blitToTargets(self: *CmdManager, renderImage: *RenderImage, targets: []const PresentData) !void {
         const alloc = self.alloc;
         const cmd = self.activeCmd orelse return;
         var barriers = try alloc.alloc(c.VkImageMemoryBarrier2, targets.len + 1);

@@ -15,17 +15,9 @@ const DescriptorManager = @import("render/DescriptorManager.zig").DescriptorMana
 const RenderImage = @import("render/ResourceManager.zig").RenderImage;
 const Window = @import("../core/Window.zig").Window;
 
-pub const AcquiredImage = struct {
+pub const PresentData = struct {
     swapchain: *const Swapchain,
     imageIndex: u32,
-};
-
-const PresentData = struct {
-    pipeType: PipelineType,
-    swapchain: *const Swapchain,
-    imageIndex: u32,
-    renderDoneSemaphore: c.VkSemaphore,
-    imageRdySemaphore: c.VkSemaphore,
 };
 
 pub const MAX_IN_FLIGHT: u8 = 1;
@@ -93,19 +85,10 @@ pub const Renderer = struct {
 
         for (swapchainPtrs) |swapchainPtr| {
             var imageIndex: u32 = 0;
-            const imageReadySem = swapchainPtr.imageRdySemaphores[frameInFlight];
-            const acquireResult = c.vkAcquireNextImageKHR(self.context.gpi, swapchainPtr.handle, std.math.maxInt(u64), imageReadySem, null, &imageIndex);
+            const acquireResult = c.vkAcquireNextImageKHR(self.context.gpi, swapchainPtr.handle, std.math.maxInt(u64), swapchainPtr.imageRdySemaphores[frameInFlight], null, &imageIndex);
 
             switch (acquireResult) {
-                c.VK_SUCCESS => {
-                    try presentTargets.append(PresentData{
-                        .pipeType = swapchainPtr.pipeType,
-                        .swapchain = swapchainPtr,
-                        .renderDoneSemaphore = swapchainPtr.renderDoneSemaphores[imageIndex],
-                        .imageRdySemaphore = imageReadySem,
-                        .imageIndex = imageIndex,
-                    });
-                },
+                c.VK_SUCCESS => try presentTargets.append(PresentData{ .swapchain = swapchainPtr, .imageIndex = imageIndex }),
                 c.VK_ERROR_OUT_OF_DATE_KHR, c.VK_SUBOPTIMAL_KHR => return,
                 else => try check(acquireResult, "Could not acquire swapchain image"),
             }
@@ -113,14 +96,14 @@ pub const Renderer = struct {
         if (presentTargets.items.len == 0) return;
 
         const enumLength = @typeInfo(PipelineType).@"enum".fields.len;
-        var groupedTargets: [enumLength]std.ArrayList(AcquiredImage) = undefined;
+        var groupedTargets: [enumLength]std.ArrayList(PresentData) = undefined;
 
-        for (0..enumLength) |i| groupedTargets[i] = std.ArrayList(AcquiredImage).init(alloc);
+        for (0..enumLength) |i| groupedTargets[i] = std.ArrayList(PresentData).init(alloc);
         defer for (0..enumLength) |i| groupedTargets[i].deinit();
 
         for (presentTargets.items) |target| {
-            const acqImg = AcquiredImage{ .swapchain = target.swapchain, .imageIndex = target.imageIndex };
-            try groupedTargets[@intFromEnum(target.pipeType)].append(acqImg);
+            const acqImg = PresentData{ .swapchain = target.swapchain, .imageIndex = target.imageIndex };
+            try groupedTargets[@intFromEnum(target.swapchain.pipeType)].append(acqImg);
         }
 
         try self.cmdMan.beginRecording(frameInFlight);
@@ -128,11 +111,11 @@ pub const Renderer = struct {
             if (groupedTargets[i].items.len != 0) try self.recordCommands(groupedTargets[i].items, @enumFromInt(i), frameInFlight);
         }
         const cmd = try self.cmdMan.endRecording();
-        try self.queueSubmit(cmd, presentTargets.items);
+        try self.queueSubmit(cmd, presentTargets.items, frameInFlight);
         try self.present(presentTargets.items);
     }
 
-    fn recordCommands(self: *Renderer, targets: []const AcquiredImage, pipeType: PipelineType, frameInFlight: u8) !void {
+    fn recordCommands(self: *Renderer, targets: []const PresentData, pipeType: PipelineType, frameInFlight: u8) !void {
         switch (pipeType) {
             .compute => {
                 if (!self.descriptorsUpToDate) self.updateDescriptors();
@@ -144,14 +127,14 @@ pub const Renderer = struct {
         try self.cmdMan.blitToTargets(&self.renderImage, targets);
     }
 
-    fn queueSubmit(self: *Renderer, cmd: c.VkCommandBuffer, presentTargets: []const PresentData) !void {
+    fn queueSubmit(self: *Renderer, cmd: c.VkCommandBuffer, presentTargets: []const PresentData, frameInFlight: u8) !void {
         var waitInfos = try self.alloc.alloc(c.VkSemaphoreSubmitInfo, presentTargets.len);
         defer self.alloc.free(waitInfos);
 
         for (presentTargets, 0..) |target, i| {
             waitInfos[i] = .{
                 .sType = c.VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
-                .semaphore = target.imageRdySemaphore,
+                .semaphore = target.swapchain.imageRdySemaphores[frameInFlight],
                 .stageMask = c.VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
             };
         }
@@ -162,7 +145,7 @@ pub const Renderer = struct {
         for (presentTargets, 0..) |target, i| {
             signalInfos[i] = .{
                 .sType = c.VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
-                .semaphore = target.renderDoneSemaphore,
+                .semaphore = target.swapchain.renderDoneSemaphores[target.imageIndex],
                 .stageMask = c.VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
             };
         }
@@ -202,7 +185,7 @@ pub const Renderer = struct {
         for (presentTargets, 0..) |target, i| {
             swapchainHandles[i] = target.swapchain.handle;
             imageIndices[i] = target.imageIndex;
-            presentWaitSems[i] = target.renderDoneSemaphore;
+            presentWaitSems[i] = target.swapchain.renderDoneSemaphores[target.imageIndex];
         }
 
         const presentInfo = c.VkPresentInfoKHR{
