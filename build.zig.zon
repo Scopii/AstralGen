@@ -12,27 +12,27 @@
         },
         //GUI Package
         .zgui = .{
-            .url = "https://github.com/zig-gamedev/zgui/archive/refs/heads/main.tar.gz",
+            .url = "https://github.com/zig-gamedev/zgui/archive/b2f29f14bce688ec90a26a9a7906543d98e0f8a0.tar.gz",
             .hash = "zgui-0.6.0-dev--L6sZKTBaADLHp09LtUUifdfFpsczwbnyH7r2ajfVPuJ",
         },
         //Multithreading
         .zjobs = .{
-            .url = "https://github.com/zig-gamedev/zjobs/archive/refs/heads/main.tar.gz",
+            .url = "https://github.com/zig-gamedev/zjobs/archive/dfdb734e8084f7dc5010a4ded30bc8e04b6d4393.tar.gz",
             .hash = "zjobs-0.3.0-dev-59uaZmTQAABLe7t30aW2PD5P3VxjWbAoL1XXnhgs2Ymd",
         },
         //Pools
         .zpool = .{
-            .url = "https://github.com/zig-gamedev/zpool/archive/refs/heads/main.tar.gz",
+            .url = "https://github.com/zig-gamedev/zpool/archive/4c850e222e1ba507b45d7bab8cac83bdd74cacd6.tar.gz",
             .hash = "zpool-0.11.0-dev-bG692aVDAQBCKslGROl47fqnnp7HFYV8fI-8z3wY06xx",
         },
         //Game related Math
         .zmath = .{
-            .url = "https://github.com/zig-gamedev/zmath/archive/refs/heads/main.tar.gz",
+            .url = "https://github.com/zig-gamedev/zmath/archive/5128dc8a8068aab398f844c1f5fddc8132310146.tar.gz",
             .hash = "zmath-0.11.0-dev-wjwivTArAwDIkHSuSiU3KuBvxh7igjJjJMqYRfy3hihO",
         },
         //CPU Profiling
         .ztracy = .{
-            .url = "https://github.com/zig-gamedev/ztracy/archive/refs/heads/main.tar.gz",
+            .url = "https://github.com/zig-gamedev/ztracy/archive/be3d003f29d59d72e68e493ab531374ab474a795.tar.gz",
             .hash = "ztracy-0.14.0-dev-zHJSq1oQFwCAq2LhbqsBUmZAipMzsD8UfKL5Etc_OJMb",
         },
     },
