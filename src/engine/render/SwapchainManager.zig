@@ -16,6 +16,7 @@ pub const Swapchain = struct {
     extent: c.VkExtent2D,
     images: []c.VkImage,
     views: []c.VkImageView,
+    curIndex: u32 = 0,
     imageRdySemaphores: []c.VkSemaphore, // indexed by max-in-flight.
     renderDoneSemaphores: []c.VkSemaphore, // indexed by swapchain images
     surfaceFormat: c.VkSurfaceFormatKHR,
