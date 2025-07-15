@@ -14,12 +14,14 @@ const ResourceManager = @import("render/ResourceManager.zig").ResourceManager;
 const DescriptorManager = @import("render/DescriptorManager.zig").DescriptorManager;
 const RenderImage = @import("render/ResourceManager.zig").RenderImage;
 const Window = @import("../core/Window.zig").Window;
+const MemoryManager = @import("../core/MemoryManager.zig").MemoryManager;
 
-pub const MAX_IN_FLIGHT: u8 = 1;
+pub const MAX_IN_FLIGHT: u8 = 3;
 const Allocator = std.mem.Allocator;
 
 pub const Renderer = struct {
     alloc: Allocator,
+    arenaAlloc: Allocator,
     context: Context,
     resourceMan: ResourceManager,
     descriptorMan: DescriptorManager,
@@ -30,7 +32,9 @@ pub const Renderer = struct {
     renderImage: RenderImage,
     descriptorsUpToDate: bool = false,
 
-    pub fn init(alloc: Allocator) !Renderer {
+    pub fn init(memoryMan: *MemoryManager) !Renderer {
+        const alloc = memoryMan.getAllocator();
+
         const instance = try createInstance(alloc, DEBUG_TOGGLE);
         const context = try Context.init(alloc, instance);
         const resourceMan = try ResourceManager.init(&context);
@@ -43,6 +47,7 @@ pub const Renderer = struct {
 
         return .{
             .alloc = alloc,
+            .arenaAlloc = memoryMan.getGlobalArena(),
             .context = context,
             .resourceMan = resourceMan,
             .descriptorMan = descriptorMan,
@@ -72,13 +77,11 @@ pub const Renderer = struct {
         try self.scheduler.waitForGPU();
         defer self.scheduler.nextFrame();
 
-        const alloc = self.alloc;
         const frameInFlight = self.scheduler.frameInFlight;
 
         const enumLength = @typeInfo(PipelineType).@"enum".fields.len;
         var presentTargets: [enumLength]std.ArrayList(*Swapchain) = undefined;
-        for (0..enumLength) |i| presentTargets[i] = std.ArrayList(*Swapchain).init(alloc);
-        defer for (0..enumLength) |i| presentTargets[i].deinit();
+        for (0..enumLength) |i| presentTargets[i] = std.ArrayList(*Swapchain).init(self.arenaAlloc);
 
         var targetCount: u32 = 0;
 
@@ -102,8 +105,7 @@ pub const Renderer = struct {
         }
         const cmd = try self.cmdMan.endRecording();
 
-        var allTargets = std.ArrayList(*Swapchain).init(self.alloc);
-        defer allTargets.deinit();
+        var allTargets = std.ArrayList(*Swapchain).init(self.arenaAlloc);
         try allTargets.ensureTotalCapacity(targetCount);
         for (presentTargets) |group| try allTargets.appendSlice(group.items);
 
@@ -124,8 +126,7 @@ pub const Renderer = struct {
     }
 
     fn queueSubmit(self: *Renderer, cmd: c.VkCommandBuffer, presentTargets: []const *Swapchain, frameInFlight: u8) !void {
-        var waitInfos = try self.alloc.alloc(c.VkSemaphoreSubmitInfo, presentTargets.len);
-        defer self.alloc.free(waitInfos);
+        var waitInfos = try self.arenaAlloc.alloc(c.VkSemaphoreSubmitInfo, presentTargets.len);
 
         for (presentTargets, 0..) |swapchain, i| {
             waitInfos[i] = .{
@@ -135,8 +136,7 @@ pub const Renderer = struct {
             };
         }
 
-        var signalInfos = try self.alloc.alloc(c.VkSemaphoreSubmitInfo, presentTargets.len + 1); // (+1 is Timeline Semaphore)
-        defer self.alloc.free(signalInfos);
+        var signalInfos = try self.arenaAlloc.alloc(c.VkSemaphoreSubmitInfo, presentTargets.len + 1); // (+1 is Timeline Semaphore)
 
         for (presentTargets, 0..) |swapchain, i| {
             signalInfos[i] = .{

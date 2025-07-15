@@ -1,26 +1,28 @@
 const std = @import("std");
 const c = @import("../c.zig");
-const Allocator = std.mem.Allocator;
+const MemoryManger = @import("MemoryManager.zig").MemoryManager;
 const Window = @import("Window.zig").Window;
 const PipelineType = @import("../engine/render/PipelineBucket.zig").PipelineType;
 const Swapchain = @import("../engine/render/SwapchainManager.zig").Swapchain;
 const Renderer = @import("../engine/Renderer.zig").Renderer;
 
 pub const WindowManager = struct {
-    alloc: Allocator,
+    memoryMan: *MemoryManger,
     windows: std.AutoHashMap(u32, Window),
     swapchainsToDraw: std.ArrayList(*Swapchain),
     openWindows: u32 = 0,
     close: bool = false,
 
-    pub fn init(alloc: Allocator) !WindowManager {
+    pub fn init(memoryMan: *MemoryManger) !WindowManager {
         if (c.SDL_Init(c.SDL_INIT_VIDEO) != true) {
             std.log.err("SDL_Init failed: {s}\n", .{c.SDL_GetError()});
             return error.SdlInitFailed;
         }
 
+        const alloc = memoryMan.getAllocator();
+
         return .{
-            .alloc = alloc,
+            .memoryMan = memoryMan,
             .windows = std.AutoHashMap(u32, Window).init(alloc),
             .swapchainsToDraw = std.ArrayList(*Swapchain).init(alloc),
         };

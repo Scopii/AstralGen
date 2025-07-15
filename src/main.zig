@@ -1,6 +1,7 @@
 // Imports
 const std = @import("std");
 const WindowManager = @import("core/WindowManager.zig").WindowManager;
+const MemoryManager = @import("core/MemoryManager.zig").MemoryManager;
 const Renderer = @import("engine/Renderer.zig").Renderer;
 const Window = @import("core/Window.zig").Window;
 const zjobs = @import("zjobs");
@@ -11,14 +12,15 @@ const DEBUG_CLOSE = @import("settings.zig").DEBUG_CLOSE;
 const Allocator = std.mem.Allocator;
 
 pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}).init;
-    defer std.debug.print("Memory: {any}\n", .{gpa.deinit()});
-    const alloc = gpa.allocator();
+    var debugAlloc = std.heap.DebugAllocator(.{}).init;
+    defer std.debug.print("Memory: {any}\n", .{debugAlloc.deinit()});
+    var memoryMan = try MemoryManager.init(debugAlloc.allocator());
+    defer memoryMan.deinit();
 
-    var windowMan = try WindowManager.init(alloc);
+    var windowMan = try WindowManager.init(&memoryMan);
     defer windowMan.deinit();
 
-    var renderer = try Renderer.init(alloc);
+    var renderer = try Renderer.init(&memoryMan);
     defer renderer.deinit();
 
     try windowMan.addWindow("Astral1", &renderer, 1600, 900, .compute);
@@ -34,6 +36,7 @@ pub fn main() !void {
         const swapchainsToDraw = try windowMan.getSwapchainsToDraw();
         try renderer.updateRenderImage(swapchainsToDraw);
         try renderer.draw(swapchainsToDraw);
+        memoryMan.resetArena();
     }
 
     std.debug.print("App Closed\n", .{});
