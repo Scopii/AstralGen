@@ -1,9 +1,9 @@
 // Imports
 const std = @import("std");
-const WindowManager = @import("core/WindowManager.zig").WindowManager;
+const WindowManager = @import("platform/WindowManager.zig").WindowManager;
 const MemoryManager = @import("core/MemoryManager.zig").MemoryManager;
 const Renderer = @import("engine/Renderer.zig").Renderer;
-const Window = @import("core/Window.zig").Window;
+const Window = @import("platform/Window.zig").Window;
 const zjobs = @import("zjobs");
 
 const DEBUG_CLOSE = @import("settings.zig").DEBUG_CLOSE;

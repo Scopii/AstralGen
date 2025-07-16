@@ -13,7 +13,7 @@ const PipelineType = @import("render/PipelineBucket.zig").PipelineType;
 const ResourceManager = @import("render/ResourceManager.zig").ResourceManager;
 const DescriptorManager = @import("render/DescriptorManager.zig").DescriptorManager;
 const RenderImage = @import("render/ResourceManager.zig").RenderImage;
-const Window = @import("../core/Window.zig").Window;
+const Window = @import("../platform/Window.zig").Window;
 const MemoryManager = @import("../core/MemoryManager.zig").MemoryManager;
 
 pub const MAX_IN_FLIGHT: u8 = 3;

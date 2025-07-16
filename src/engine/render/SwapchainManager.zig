@@ -5,7 +5,7 @@ const Context = @import("Context.zig").Context;
 const check = @import("../error.zig").check;
 const createSemaphore = @import("../sync/primitives.zig").createSemaphore;
 const PipelineType = @import("../render/PipelineBucket.zig").PipelineType;
-const Window = @import("../../core/Window.zig").Window;
+const Window = @import("../../platform/Window.zig").Window;
 
 const MAX_IN_FLIGHT = @import("../Renderer.zig").MAX_IN_FLIGHT;
 const MAX_SWAPCHAINS_PER_PASS = 3;
