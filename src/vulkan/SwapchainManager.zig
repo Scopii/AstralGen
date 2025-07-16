@@ -1,14 +1,13 @@
 const std = @import("std");
-const c = @import("../../c.zig");
+const c = @import("../c.zig");
 const Allocator = std.mem.Allocator;
 const Context = @import("Context.zig").Context;
-const check = @import("../error.zig").check;
-const createSemaphore = @import("../sync/primitives.zig").createSemaphore;
-const PipelineType = @import("../render/PipelineBucket.zig").PipelineType;
-const Window = @import("../../platform/Window.zig").Window;
+const check = @import("error.zig").check;
+const createSemaphore = @import("primitives.zig").createSemaphore;
+const PipelineType = @import("PipelineBucket.zig").PipelineType;
+const Window = @import("../platform/Window.zig").Window;
 
-const MAX_IN_FLIGHT = @import("../Renderer.zig").MAX_IN_FLIGHT;
-const MAX_SWAPCHAINS_PER_PASS = 3;
+const MAX_IN_FLIGHT = @import("../settings.zig").MAX_IN_FLIGHT;
 
 pub const Swapchain = struct {
     surface: c.VkSurfaceKHR,

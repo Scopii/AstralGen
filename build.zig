@@ -15,7 +15,7 @@ pub fn build(b: *std.Build) void {
     exe.addIncludePath(b.path("include"));
 
     // Compile VMA's implementation by treating its header as a C source file.
-    exe.addCSourceFile(.{ .file = b.path("src/engine/vmaLink.cpp") });
+    exe.addCSourceFile(.{ .file = b.path("src/vulkan/vmaLink.cpp") });
     exe.linkLibCpp();
 
     exe.addLibraryPath(b.path("libs/SDL3"));

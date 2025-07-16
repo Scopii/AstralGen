@@ -1,6 +1,6 @@
 const std = @import("std");
-const c = @import("../../c.zig");
-const check = @import("../error.zig").check;
+const c = @import("../c.zig");
+const check = @import("error.zig").check;
 const Allocator = std.mem.Allocator;
 
 pub const QueueFamilies = struct {

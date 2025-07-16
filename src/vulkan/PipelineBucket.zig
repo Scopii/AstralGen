@@ -1,8 +1,8 @@
 const std = @import("std");
-const c = @import("../../c.zig");
+const c = @import("../c.zig");
 const Allocator = std.mem.Allocator;
-const check = @import("../error.zig").check;
-const createShaderModule = @import("../../shader/shader.zig").createShaderModule;
+const check = @import("error.zig").check;
+const createShaderModule = @import("../shader/shader.zig").createShaderModule;
 
 pub const ShaderInfo = struct {
     stage: c.VkShaderStageFlagBits,

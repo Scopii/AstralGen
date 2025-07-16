@@ -1,5 +1,5 @@
-const c = @import("../../c.zig");
-const check = @import("../error.zig").check;
+const c = @import("../c.zig");
+const check = @import("error.zig").check;
 
 pub fn createSemaphore(gpi: c.VkDevice) !c.VkSemaphore {
     const seamphoreInf = c.VkSemaphoreCreateInfo{ .sType = c.VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO };

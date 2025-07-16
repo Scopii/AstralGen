@@ -1,6 +1,6 @@
 const std = @import("std");
 const c = @import("../c.zig");
-const check = @import("../engine/error.zig").check;
+const check = @import("../vulkan/error.zig").check;
 const Allocator = std.mem.Allocator;
 
 // Compile and load shader from source

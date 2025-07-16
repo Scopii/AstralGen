@@ -2,9 +2,9 @@ const std = @import("std");
 const c = @import("../c.zig");
 const MemoryManger = @import("../core/MemoryManager.zig").MemoryManager;
 const Window = @import("Window.zig").Window;
-const PipelineType = @import("../engine/render/PipelineBucket.zig").PipelineType;
-const Swapchain = @import("../engine/render/SwapchainManager.zig").Swapchain;
-const Renderer = @import("../engine/Renderer.zig").Renderer;
+const PipelineType = @import("../vulkan/PipelineBucket.zig").PipelineType;
+const Swapchain = @import("../vulkan/SwapchainManager.zig").Swapchain;
+const Renderer = @import("../vulkan/Renderer.zig").Renderer;
 
 pub const WindowManager = struct {
     memoryMan: *MemoryManger,

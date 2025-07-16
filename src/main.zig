@@ -2,7 +2,7 @@
 const std = @import("std");
 const WindowManager = @import("platform/WindowManager.zig").WindowManager;
 const MemoryManager = @import("core/MemoryManager.zig").MemoryManager;
-const Renderer = @import("engine/Renderer.zig").Renderer;
+const Renderer = @import("vulkan/Renderer.zig").Renderer;
 const Window = @import("platform/Window.zig").Window;
 const zjobs = @import("zjobs");
 

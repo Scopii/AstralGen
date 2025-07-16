@@ -1,7 +1,7 @@
 const std = @import("std");
 const c = @import("../c.zig");
-const PipelineType = @import("../engine/render/PipelineBucket.zig").PipelineType;
-const Swapchain = @import("../engine/render/SwapchainManager.zig").Swapchain;
+const PipelineType = @import("../vulkan/PipelineBucket.zig").PipelineType;
+const Swapchain = @import("../vulkan/SwapchainManager.zig").Swapchain;
 
 pub const windowStatus = enum {
     active,

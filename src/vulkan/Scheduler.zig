@@ -1,14 +1,14 @@
 const std = @import("std");
-const c = @import("../../c.zig");
+const c = @import("../c.zig");
 const Allocator = std.mem.Allocator;
-const CmdManager = @import("../render/CmdManager.zig").CmdManager;
-const Context = @import("../render/Context.zig").Context;
-const check = @import("../error.zig").check;
-const createTimeline = @import("../sync/primitives.zig").createTimeline;
-const getTimelineVal = @import("../sync/primitives.zig").getTimelineVal;
-const waitForTimeline = @import("../sync/primitives.zig").waitForTimeline;
-const createSemaphore = @import("../sync/primitives.zig").createSemaphore;
-const MAX_IN_FLIGHT = @import("../renderer.zig").MAX_IN_FLIGHT;
+const CmdManager = @import("CmdManager.zig").CmdManager;
+const Context = @import("Context.zig").Context;
+const check = @import("error.zig").check;
+const createTimeline = @import("primitives.zig").createTimeline;
+const getTimelineVal = @import("primitives.zig").getTimelineVal;
+const waitForTimeline = @import("primitives.zig").waitForTimeline;
+const createSemaphore = @import("primitives.zig").createSemaphore;
+const MAX_IN_FLIGHT = @import("../settings.zig").MAX_IN_FLIGHT;
 
 pub const Scheduler = struct {
     gpi: c.VkDevice,
