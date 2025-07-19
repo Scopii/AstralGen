@@ -33,9 +33,18 @@ pub fn main() !void {
         if (windowMan.close == true) return;
         if (windowMan.openWindows == 0) continue;
 
-        const swapchainsToDraw = try windowMan.getSwapchainsToDraw();
-        try renderer.updateRenderImage(swapchainsToDraw);
-        try renderer.draw(swapchainsToDraw);
+        if (windowMan.needSwapchainUpdate == true) {
+            try renderer.updateSwapchains(try windowMan.getSwapchainsToDraw());
+            windowMan.needRenderResize = false;
+        }
+
+        if (windowMan.needRenderResize == true) {
+            try renderer.updateRenderImage();
+        }
+
+        //const swapchainsToDraw = try windowMan.getSwapchainsToDraw();
+        //try renderer.updateRenderImage(swapchainsToDraw);
+        try renderer.draw();
         memoryMan.resetArena();
     }
 

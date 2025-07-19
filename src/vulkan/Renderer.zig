@@ -71,9 +71,14 @@ pub const Renderer = struct {
         self.context.deinit();
     }
 
+    pub fn updateSwapchains(self: *Renderer, hashKeys: []u32) !void {
+        try self.swapchainMan.updateActiveSwapchains(hashKeys);
+        try self.updateRenderImage();
+    }
+
     fn acquirePresentData() !void {}
 
-    pub fn draw(self: *Renderer, swapchainPtrs: []*Swapchain) !void {
+    pub fn draw(self: *Renderer) !void {
         try self.scheduler.waitForGPU();
         defer self.scheduler.nextFrame();
 
@@ -85,7 +90,9 @@ pub const Renderer = struct {
 
         var targetCount: u32 = 0;
 
-        for (swapchainPtrs) |swapchainPtr| {
+        const activeSwapchains = try self.swapchainMan.getActiveSwapchains();
+
+        for (activeSwapchains) |swapchainPtr| {
             const acquireResult = c.vkAcquireNextImageKHR(self.context.gpi, swapchainPtr.handle, std.math.maxInt(u64), swapchainPtr.imageRdySemaphores[frameInFlight], null, &swapchainPtr.curIndex);
 
             switch (acquireResult) {
@@ -205,30 +212,26 @@ pub const Renderer = struct {
 
     pub fn giveSwapchain(self: *Renderer, window: *Window, pipeType: PipelineType, wantedExtent: c.VkExtent2D) !void {
         _ = c.vkDeviceWaitIdle(self.context.gpi);
-        try self.swapchainMan.addSwapchain(&self.context, window, null, pipeType, wantedExtent);
+        try self.swapchainMan.addSwapchain(&self.context, window, pipeType, wantedExtent);
     }
 
     pub fn renewSwapchain(self: *Renderer, window: *Window, wantedExtent: c.VkExtent2D) !void {
         _ = c.vkDeviceWaitIdle(self.context.gpi);
-        try self.swapchainMan.addSwapchain(&self.context, window, window.swapchain.?.handle, window.swapchain.?.pipeType, wantedExtent);
+        const pipeType = self.swapchainMan.getSwapchainPtr(window.id).?.pipeType;
+        self.swapchainMan.destroySwapchain(window);
+        try self.swapchainMan.addSwapchain(&self.context, window, pipeType, wantedExtent);
         std.debug.print("Swapchain for window {} recreated\n", .{window.id});
     }
 
-    pub fn updateRenderImage(self: *Renderer, swapchains: []const *Swapchain) !void {
-        var maxWidth: u32 = 0;
-        var maxHeight: u32 = 0;
+    pub fn updateRenderImage(self: *Renderer) !void {
+        const renderSize = self.swapchainMan.getRenderSize();
 
-        for (swapchains) |swapchain| {
-            maxWidth = @max(maxWidth, swapchain.extent.width);
-            maxHeight = @max(maxHeight, swapchain.extent.height);
-        }
-
-        if (maxWidth != self.renderImage.extent3d.width or maxHeight != self.renderImage.extent3d.height) {
+        if (renderSize.width != self.renderImage.extent3d.width or renderSize.height != self.renderImage.extent3d.height) {
             _ = c.vkDeviceWaitIdle(self.context.gpi);
             self.resourceMan.destroyRenderImage(self.renderImage);
-            self.renderImage = try self.resourceMan.createRenderImage(.{ .width = maxWidth, .height = maxHeight });
+            self.renderImage = try self.resourceMan.createRenderImage(.{ .width = renderSize.width, .height = renderSize.height });
             self.descriptorsUpToDate = false;
-            std.debug.print("renderImage now {}x{}\n", .{ maxWidth, maxHeight });
+            std.debug.print("renderImage now {}x{}\n", .{ renderSize.width, renderSize.height });
         }
     }
 

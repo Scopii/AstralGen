@@ -12,7 +12,6 @@ pub const Window = struct {
     handle: *c.SDL_Window,
     status: windowStatus = .inactive,
     id: u32,
-    swapchain: ?Swapchain = null,
 
     pub fn init(id: u32, sdlWindow: *c.SDL_Window) !Window {
         return Window{

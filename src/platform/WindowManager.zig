@@ -9,8 +9,10 @@ const Renderer = @import("../vulkan/Renderer.zig").Renderer;
 pub const WindowManager = struct {
     memoryMan: *MemoryManger,
     windows: std.AutoHashMap(u32, Window),
-    swapchainsToDraw: std.ArrayList(*Swapchain),
+    swapchainsToDraw: std.ArrayList(u32),
     openWindows: u32 = 0,
+    needSwapchainUpdate: bool = true,
+    needRenderResize: bool = true,
     close: bool = false,
 
     pub fn init(memoryMan: *MemoryManger) !WindowManager {
@@ -18,13 +20,12 @@ pub const WindowManager = struct {
             std.log.err("SDL_Init failed: {s}\n", .{c.SDL_GetError()});
             return error.SdlInitFailed;
         }
-
         const alloc = memoryMan.getAllocator();
 
         return .{
             .memoryMan = memoryMan,
             .windows = std.AutoHashMap(u32, Window).init(alloc),
-            .swapchainsToDraw = std.ArrayList(*Swapchain).init(alloc),
+            .swapchainsToDraw = std.ArrayList(u32).init(alloc),
         };
     }
 
@@ -58,12 +59,12 @@ pub const WindowManager = struct {
         return self.windows.getPtr(id);
     }
 
-    pub fn getSwapchainsToDraw(self: *WindowManager) ![]*Swapchain {
+    pub fn getSwapchainsToDraw(self: *WindowManager) ![]u32 {
         self.swapchainsToDraw.clearRetainingCapacity();
 
         var iter = self.windows.valueIterator();
         while (iter.next()) |windowPtr| {
-            if (windowPtr.status == .active) try self.swapchainsToDraw.append(&windowPtr.swapchain.?);
+            if (windowPtr.status == .active) try self.swapchainsToDraw.append(windowPtr.id);
         }
         return self.swapchainsToDraw.items;
     }
@@ -100,23 +101,26 @@ pub const WindowManager = struct {
                             if (window.status == .active) self.openWindows -= 1;
                             window.deinit();
                             _ = self.windows.remove(id);
+                            self.needSwapchainUpdate = true;
                             std.debug.print("Window {} CLOSED.\n", .{id});
                         },
                         c.SDL_EVENT_WINDOW_MINIMIZED => {
                             window.status = .inactive;
                             self.openWindows -= 1;
+                            self.needSwapchainUpdate = true;
                             std.debug.print("Window {} MINIMIZED.\n", .{id});
                         },
                         c.SDL_EVENT_WINDOW_RESTORED => {
                             window.status = .active;
                             self.openWindows += 1;
+                            self.needSwapchainUpdate = true;
                             std.debug.print("Window {} RESTORED.\n", .{id});
                         },
                         c.SDL_EVENT_WINDOW_RESIZED => {
                             var newExtent: c.VkExtent2D = undefined;
                             _ = c.SDL_GetWindowSize(window.handle, @ptrCast(&newExtent.width), @ptrCast(&newExtent.height));
                             try renderer.renewSwapchain(window, newExtent);
-                            _ = c.SDL_SetWindowSize(window.handle, @intCast(window.swapchain.?.extent.width), @intCast(window.swapchain.?.extent.height));
+                            self.needRenderResize = true;
                             std.debug.print("Window {} RESIZED.\n", .{id});
                         },
                         else => {},
