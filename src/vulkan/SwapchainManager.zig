@@ -45,7 +45,7 @@ pub const SwapchainManager = struct {
         self.activeSwapchains.deinit();
     }
 
-    pub fn addSwapchain(self: *SwapchainManager, context: *const Context, window: *Window, pipeType: PipelineType, extent: c.VkExtent2D) !void {
+    pub fn addSwapchain(self: *SwapchainManager, context: *const Context, window: Window) !void {
         const alloc = self.alloc;
         const gpi = self.gpi;
         const families = context.families;
@@ -70,7 +70,7 @@ pub const SwapchainManager = struct {
             familyCount = 2;
         }
 
-        const actualExtent = pickExtent(&caps, extent);
+        const actualExtent = pickExtent(&caps, window.extent);
 
         const swapchainInf = c.VkSwapchainCreateInfoKHR{
             .sType = c.VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
@@ -129,8 +129,6 @@ pub const SwapchainManager = struct {
         errdefer alloc.free(renderDoneSems);
         for (0..realImgCount) |i| renderDoneSems[i] = try createSemaphore(gpi);
 
-        //if (oldHandle != null) self.destroySwapchainNotSurface(window);
-
         const newSwapchain = Swapchain{
             .surface = surface,
             .surfaceFormat = surfaceFormat,
@@ -140,10 +138,9 @@ pub const SwapchainManager = struct {
             .views = views,
             .imageRdySemaphores = imageRdySems,
             .renderDoneSemaphores = renderDoneSems,
-            .pipeType = pipeType,
+            .pipeType = window.pipeType,
         };
         try self.swapchains.put(window.id, newSwapchain);
-        window.status = .active;
         std.debug.print("Swapchain added to Window {}\n", .{window.id});
     }
 
@@ -192,7 +189,7 @@ pub const SwapchainManager = struct {
         return self.activeSwapchains.items;
     }
 
-    pub fn destroySwapchain(self: *SwapchainManager, window: *Window) void {
+    pub fn destroySwapchain(self: *SwapchainManager, window: Window) void {
         const gpi = self.gpi;
         const swapchainPtr = self.swapchains.get(window.id);
 
@@ -215,10 +212,6 @@ pub const SwapchainManager = struct {
 
     pub fn getSwapchainPtr(self: *SwapchainManager, windowId: u32) ?*Swapchain {
         return self.swapchains.getPtr(windowId);
-    }
-
-    pub fn getSwapchainsCount(self: *SwapchainManager) u32 {
-        return @intCast(self.swapchains.items.len);
     }
 };
 

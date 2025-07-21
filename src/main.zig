@@ -23,9 +23,9 @@ pub fn main() !void {
     var renderer = try Renderer.init(&memoryMan);
     defer renderer.deinit();
 
-    try windowMan.addWindow("Astral1", &renderer, 1600, 900, .compute);
-    try windowMan.addWindow("Astral2", &renderer, 16 * 70, 9 * 70, .graphics);
-    try windowMan.addWindow("Astral3", &renderer, 350, 350, .mesh);
+    try windowMan.addWindow("Astral1", 1600, 900, .compute);
+    try windowMan.addWindow("Astral2", 16 * 70, 9 * 70, .graphics);
+    try windowMan.addWindow("Astral3", 350, 350, .mesh);
 
     // Main loop
     while (true) {
@@ -33,17 +33,21 @@ pub fn main() !void {
         if (windowMan.close == true) return;
         if (windowMan.openWindows == 0) continue;
 
+        if (windowMan.swapchainsToCreate.items.len > 0) {
+            try renderer.giveSwapchain(try windowMan.getEmptyWindows());
+            windowMan.swapchainsToCreate.clearRetainingCapacity();
+        }
+
         if (windowMan.needSwapchainUpdate == true) {
             try renderer.updateSwapchains(try windowMan.getSwapchainsToDraw());
-            windowMan.needRenderResize = false;
+            windowMan.needSwapchainUpdate = false;
         }
 
         if (windowMan.needRenderResize == true) {
             try renderer.updateRenderImage();
+            windowMan.needRenderResize = false;
         }
 
-        //const swapchainsToDraw = try windowMan.getSwapchainsToDraw();
-        //try renderer.updateRenderImage(swapchainsToDraw);
         try renderer.draw();
         memoryMan.resetArena();
     }

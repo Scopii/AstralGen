@@ -10,12 +10,16 @@ pub const windowStatus = enum {
 
 pub const Window = struct {
     handle: *c.SDL_Window,
-    status: windowStatus = .inactive,
+    status: windowStatus = .active,
+    pipeType: PipelineType,
+    extent: c.VkExtent2D,
     id: u32,
 
-    pub fn init(id: u32, sdlWindow: *c.SDL_Window) !Window {
+    pub fn init(id: u32, sdlWindow: *c.SDL_Window, pipeType: PipelineType, extent: c.VkExtent2D) !Window {
         return Window{
             .handle = sdlWindow,
+            .pipeType = pipeType,
+            .extent = extent,
             .id = id,
         };
     }

@@ -210,17 +210,13 @@ pub const Renderer = struct {
         self.descriptorsUpToDate = true;
     }
 
-    pub fn giveSwapchain(self: *Renderer, window: *Window, pipeType: PipelineType, wantedExtent: c.VkExtent2D) !void {
+    pub fn giveSwapchain(self: *Renderer, windows: []Window) !void {
         _ = c.vkDeviceWaitIdle(self.context.gpi);
-        try self.swapchainMan.addSwapchain(&self.context, window, pipeType, wantedExtent);
-    }
-
-    pub fn renewSwapchain(self: *Renderer, window: *Window, wantedExtent: c.VkExtent2D) !void {
-        _ = c.vkDeviceWaitIdle(self.context.gpi);
-        const pipeType = self.swapchainMan.getSwapchainPtr(window.id).?.pipeType;
-        self.swapchainMan.destroySwapchain(window);
-        try self.swapchainMan.addSwapchain(&self.context, window, pipeType, wantedExtent);
-        std.debug.print("Swapchain for window {} recreated\n", .{window.id});
+        for (windows) |window| {
+            if (self.swapchainMan.getSwapchainPtr(window.id) != null) self.swapchainMan.destroySwapchain(window);
+            try self.swapchainMan.addSwapchain(&self.context, window);
+            std.debug.print("Swapchain for window {} recreated\n", .{window.id});
+        }
     }
 
     pub fn updateRenderImage(self: *Renderer) !void {
@@ -235,7 +231,7 @@ pub const Renderer = struct {
         }
     }
 
-    pub fn destroyWindow(self: *Renderer, window: *Window) !void {
+    pub fn destroyWindow(self: *Renderer, window: Window) !void {
         _ = c.vkDeviceWaitIdle(self.context.gpi);
         self.swapchainMan.destroySwapchain(window);
         self.updateDescriptors();
