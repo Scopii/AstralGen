@@ -72,6 +72,7 @@ pub const Renderer = struct {
     }
 
     pub fn updateSwapchains(self: *Renderer, hashKeys: []u32) !void {
+        _ = c.vkDeviceWaitIdle(self.context.gpi);
         try self.swapchainMan.updateActiveSwapchains(hashKeys);
         try self.updateRenderImage();
     }
@@ -213,8 +214,11 @@ pub const Renderer = struct {
     pub fn giveSwapchain(self: *Renderer, windows: []Window) !void {
         _ = c.vkDeviceWaitIdle(self.context.gpi);
         for (windows) |window| {
-            if (self.swapchainMan.getSwapchainPtr(window.id) != null) self.swapchainMan.destroySwapchain(window);
+            if (self.swapchainMan.getSwapchainPtr(window.id) != null) {
+                self.swapchainMan.destroySwapchain(&.{window.id});
+            }
             try self.swapchainMan.addSwapchain(&self.context, window);
+            self.swapchainMan.updateRenderSize();
             std.debug.print("Swapchain for window {} recreated\n", .{window.id});
         }
     }
@@ -231,9 +235,9 @@ pub const Renderer = struct {
         }
     }
 
-    pub fn destroyWindow(self: *Renderer, window: Window) !void {
+    pub fn destroySwapchains(self: *Renderer, hashKeys: []u32) !void {
         _ = c.vkDeviceWaitIdle(self.context.gpi);
-        self.swapchainMan.destroySwapchain(window);
+        self.swapchainMan.destroySwapchain(hashKeys);
         self.updateDescriptors();
     }
 };

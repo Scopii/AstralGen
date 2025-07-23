@@ -29,13 +29,19 @@ pub fn main() !void {
 
     // Main loop
     while (true) {
-        try windowMan.pollEvents(&renderer);
+        try windowMan.pollEvents();
+
+        if (windowMan.swapchainsToDelete.items.len > 0) {
+            try renderer.destroySwapchains(try windowMan.getDeletedWindows());
+            windowMan.swapchainsToDelete.clearRetainingCapacity();
+        }
+
         if (windowMan.close == true) return;
         if (windowMan.openWindows == 0) continue;
 
-        if (windowMan.swapchainsToCreate.items.len > 0) {
+        if (windowMan.emptyWindows.items.len > 0) {
             try renderer.giveSwapchain(try windowMan.getEmptyWindows());
-            windowMan.swapchainsToCreate.clearRetainingCapacity();
+            windowMan.emptyWindows.clearRetainingCapacity();
         }
 
         if (windowMan.needSwapchainUpdate == true) {

@@ -167,10 +167,19 @@ pub const SwapchainManager = struct {
 
     pub fn updateActiveSwapchains(self: *SwapchainManager, hashKeys: []u32) !void {
         self.activeSwapchains.clearRetainingCapacity();
-        for (hashKeys) |i| {
-            try self.activeSwapchains.append(self.getSwapchainPtr(i).?);
-        }
+        var maxWidth: u32 = 0;
+        var maxHeight: u32 = 0;
 
+        for (hashKeys) |i| {
+            const swapchainPtr = self.getSwapchainPtr(i).?;
+            try self.activeSwapchains.append(swapchainPtr);
+            maxWidth = @max(maxWidth, swapchainPtr.extent.width);
+            maxHeight = @max(maxHeight, swapchainPtr.extent.height);
+        }
+        self.renderSize = c.VkExtent2D{ .width = maxWidth, .height = maxHeight };
+    }
+
+    pub fn updateRenderSize(self: *SwapchainManager) void {
         var maxWidth: u32 = 0;
         var maxHeight: u32 = 0;
 
@@ -189,25 +198,28 @@ pub const SwapchainManager = struct {
         return self.activeSwapchains.items;
     }
 
-    pub fn destroySwapchain(self: *SwapchainManager, window: Window) void {
+    pub fn destroySwapchain(self: *SwapchainManager, hashKeys: []const u32) void {
         const gpi = self.gpi;
-        const swapchainPtr = self.swapchains.get(window.id);
 
-        if (swapchainPtr) |swapchain| {
-            for (swapchain.views) |view| c.vkDestroyImageView(gpi, view, null);
-            for (swapchain.imageRdySemaphores) |sem| c.vkDestroySemaphore(gpi, sem, null);
-            for (swapchain.renderDoneSemaphores) |sem| c.vkDestroySemaphore(gpi, sem, null);
-            c.vkDestroySwapchainKHR(gpi, swapchain.handle, null);
-            c.vkDestroySurfaceKHR(self.instance, swapchain.surface, null);
+        for (hashKeys) |key| {
+            const swapchainPtr = self.swapchains.get(key);
 
-            self.alloc.free(swapchain.images);
-            self.alloc.free(swapchain.views);
-            self.alloc.free(swapchain.imageRdySemaphores);
-            self.alloc.free(swapchain.renderDoneSemaphores);
+            if (swapchainPtr) |swapchain| {
+                for (swapchain.views) |view| c.vkDestroyImageView(gpi, view, null);
+                for (swapchain.imageRdySemaphores) |sem| c.vkDestroySemaphore(gpi, sem, null);
+                for (swapchain.renderDoneSemaphores) |sem| c.vkDestroySemaphore(gpi, sem, null);
+                c.vkDestroySwapchainKHR(gpi, swapchain.handle, null);
+                c.vkDestroySurfaceKHR(self.instance, swapchain.surface, null);
 
-            _ = self.swapchains.remove(window.id);
-            std.debug.print("Swapchain destroyed\n", .{});
-        } else std.debug.print("Cant Swapchain to destroy missing.\n", .{});
+                self.alloc.free(swapchain.images);
+                self.alloc.free(swapchain.views);
+                self.alloc.free(swapchain.imageRdySemaphores);
+                self.alloc.free(swapchain.renderDoneSemaphores);
+
+                _ = self.swapchains.remove(key);
+                std.debug.print("Swapchain Key {} destroyed\n", .{key});
+            } else std.debug.print("Cant Swapchain to destroy missing.\n", .{});
+        }
     }
 
     pub fn getSwapchainPtr(self: *SwapchainManager, windowId: u32) ?*Swapchain {

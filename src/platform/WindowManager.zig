@@ -10,7 +10,8 @@ pub const WindowManager = struct {
     memoryMan: *MemoryManger,
     windows: std.AutoHashMap(u32, Window),
     swapchainsToDraw: std.ArrayList(u32),
-    swapchainsToCreate: std.ArrayList(Window),
+    swapchainsToDelete: std.ArrayList(u32),
+    emptyWindows: std.ArrayList(Window),
     openWindows: u32 = 0,
     needSwapchainUpdate: bool = true,
     needRenderResize: bool = true,
@@ -27,7 +28,8 @@ pub const WindowManager = struct {
             .memoryMan = memoryMan,
             .windows = std.AutoHashMap(u32, Window).init(alloc),
             .swapchainsToDraw = std.ArrayList(u32).init(alloc),
-            .swapchainsToCreate = std.ArrayList(Window).init(alloc),
+            .swapchainsToDelete = std.ArrayList(u32).init(alloc),
+            .emptyWindows = std.ArrayList(Window).init(alloc),
         };
     }
 
@@ -35,8 +37,9 @@ pub const WindowManager = struct {
         var iter = self.windows.valueIterator();
         while (iter.next()) |window| c.SDL_DestroyWindow(window.handle);
         self.windows.deinit();
+        self.emptyWindows.deinit();
+        self.swapchainsToDelete.deinit();
         self.swapchainsToDraw.deinit();
-        self.swapchainsToCreate.deinit();
         c.SDL_Quit();
     }
 
@@ -51,7 +54,7 @@ pub const WindowManager = struct {
         //_ = c.SDL_SetWindowOpacity(sdlWindow, 0.5);
 
         const window = try Window.init(id, sdlHandle, pipeType, c.VkExtent2D{ .width = @intCast(width), .height = @intCast(height) });
-        try self.swapchainsToCreate.append(window);
+        try self.emptyWindows.append(window);
         try self.windows.put(id, window);
         self.needSwapchainUpdate = true;
         self.openWindows += 1;
@@ -59,7 +62,11 @@ pub const WindowManager = struct {
     }
 
     pub fn getEmptyWindows(self: *WindowManager) ![]Window {
-        return self.swapchainsToCreate.items;
+        return self.emptyWindows.items;
+    }
+
+    pub fn getDeletedWindows(self: *WindowManager) ![]u32 {
+        return self.swapchainsToDelete.items;
     }
 
     pub fn getWindowPtr(self: *WindowManager, id: u32) ?*Window {
@@ -80,18 +87,18 @@ pub const WindowManager = struct {
         if (self.windows.remove(id)) |removedWindow| c.SDL_DestroyWindow(removedWindow.handle);
     }
 
-    pub fn pollEvents(self: *WindowManager, renderer: *Renderer) !void {
+    pub fn pollEvents(self: *WindowManager) !void {
         var event: c.SDL_Event = undefined;
 
         if (self.openWindows == 0) {
-            if (c.SDL_WaitEvent(&event)) try self.processEvent(&event, renderer); // On pause wait for an event and process
-            while (c.SDL_PollEvent(&event)) try self.processEvent(&event, renderer); // drain remaining events
+            if (c.SDL_WaitEvent(&event)) try self.processEvent(&event); // On pause wait for an event and process
+            while (c.SDL_PollEvent(&event)) try self.processEvent(&event); // drain remaining events
         } else {
-            while (c.SDL_PollEvent(&event)) try self.processEvent(&event, renderer); // When active process all events in queue
+            while (c.SDL_PollEvent(&event)) try self.processEvent(&event); // When active process all events in queue
         }
     }
 
-    fn processEvent(self: *WindowManager, event: *c.SDL_Event, renderer: *Renderer) !void {
+    fn processEvent(self: *WindowManager, event: *c.SDL_Event) !void {
         switch (event.type) {
             c.SDL_EVENT_QUIT => self.close = true,
 
@@ -104,7 +111,7 @@ pub const WindowManager = struct {
                 if (self.windows.getPtr(id)) |window| {
                     switch (event.type) {
                         c.SDL_EVENT_WINDOW_CLOSE_REQUESTED => {
-                            try renderer.destroyWindow(window.*);
+                            try self.swapchainsToDelete.append(window.id);
                             if (window.status == .active) self.openWindows -= 1;
                             window.deinit();
                             _ = self.windows.remove(id);
@@ -127,9 +134,8 @@ pub const WindowManager = struct {
                             var newExtent: c.VkExtent2D = undefined;
                             _ = c.SDL_GetWindowSize(window.handle, @ptrCast(&newExtent.width), @ptrCast(&newExtent.height));
                             window.extent = newExtent;
-                            try self.swapchainsToCreate.append(window.*);
+                            try self.emptyWindows.append(window.*);
                             self.needRenderResize = true;
-                            self.needSwapchainUpdate = true; //Why?
                             std.debug.print("Window {} RESIZED.\n", .{id});
                         },
                         else => {},
