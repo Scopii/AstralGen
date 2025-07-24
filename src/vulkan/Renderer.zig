@@ -74,14 +74,23 @@ pub const Renderer = struct {
     pub fn updateSwapchains(self: *Renderer, hashKeys: []u32) !void {
         _ = c.vkDeviceWaitIdle(self.context.gpi);
         try self.swapchainMan.updateActiveSwapchains(hashKeys);
-        try self.updateRenderImage();
+
+        if (self.swapchainMan.activeSwapchains.items.len != 0) {
+            const renderSize = self.swapchainMan.getRenderSize();
+
+            if (renderSize.width != self.renderImage.extent3d.width or renderSize.height != self.renderImage.extent3d.height) {
+                self.resourceMan.destroyRenderImage(self.renderImage);
+                self.renderImage = try self.resourceMan.createRenderImage(.{ .width = renderSize.width, .height = renderSize.height });
+                self.descriptorsUpToDate = false;
+                std.debug.print("renderImage now {}x{}\n", .{ renderSize.width, renderSize.height });
+            }
+        }
     }
 
     fn acquirePresentData() !void {}
 
     pub fn draw(self: *Renderer) !void {
         try self.scheduler.waitForGPU();
-        defer self.scheduler.nextFrame();
 
         const frameInFlight = self.scheduler.frameInFlight;
 
@@ -90,7 +99,6 @@ pub const Renderer = struct {
         for (0..enumLength) |i| presentTargets[i] = std.ArrayList(*Swapchain).init(self.arenaAlloc);
 
         var targetCount: u32 = 0;
-
         const activeSwapchains = try self.swapchainMan.getActiveSwapchains();
 
         for (activeSwapchains) |swapchainPtr| {
@@ -101,7 +109,7 @@ pub const Renderer = struct {
                     try presentTargets[@intFromEnum(swapchainPtr.pipeType)].append(swapchainPtr);
                     targetCount += 1;
                 },
-                c.VK_ERROR_OUT_OF_DATE_KHR, c.VK_SUBOPTIMAL_KHR => continue, //not handling error yet
+                c.VK_ERROR_OUT_OF_DATE_KHR, c.VK_SUBOPTIMAL_KHR => try self.swapchainMan.recreateSwapchain(swapchainPtr, &self.context), //not sure if this works
                 else => try check(acquireResult, "Could not acquire swapchain image"),
             }
         }
@@ -119,6 +127,8 @@ pub const Renderer = struct {
 
         try self.queueSubmit(cmd, allTargets.items, frameInFlight);
         try self.present(allTargets.items);
+
+        self.scheduler.nextFrame();
     }
 
     fn recordCommands(self: *Renderer, targets: []const *Swapchain, pipeType: PipelineType, frameInFlight: u8) !void {
@@ -200,6 +210,7 @@ pub const Renderer = struct {
             .pSwapchains = swapchainHandles.ptr,
             .pImageIndices = imageIndices.ptr,
         };
+
         const result = c.vkQueuePresentKHR(self.context.presentQ, &presentInfo);
         if (result != c.VK_SUCCESS and result != c.VK_ERROR_OUT_OF_DATE_KHR and result != c.VK_SUBOPTIMAL_KHR) {
             try check(result, "Failed to present swapchain image");
@@ -211,33 +222,26 @@ pub const Renderer = struct {
         self.descriptorsUpToDate = true;
     }
 
-    pub fn giveSwapchain(self: *Renderer, windows: []Window) !void {
+    pub fn passSwapchains(self: *Renderer, windows: []Window) !void {
         _ = c.vkDeviceWaitIdle(self.context.gpi);
+
         for (windows) |window| {
-            if (self.swapchainMan.getSwapchainPtr(window.id) != null) {
-                self.swapchainMan.destroySwapchain(&.{window.id});
+            stateSwitch: switch (window.status) {
+                .needUpdate => {
+                    if (self.swapchainMan.getSwapchainPtr(window.id) != null) {
+                        self.swapchainMan.destroySwapchains(&.{window.id});
+                        continue :stateSwitch .needCreation;
+                    }
+                },
+                .needCreation => {
+                    try self.swapchainMan.addSwapchain(&self.context, window);
+                },
+                .needDelete => {
+                    self.swapchainMan.destroySwapchains(&.{window.id});
+                },
+                else => {},
             }
-            try self.swapchainMan.addSwapchain(&self.context, window);
-            self.swapchainMan.updateRenderSize();
-            std.debug.print("Swapchain for window {} recreated\n", .{window.id});
         }
-    }
-
-    pub fn updateRenderImage(self: *Renderer) !void {
-        const renderSize = self.swapchainMan.getRenderSize();
-
-        if (renderSize.width != self.renderImage.extent3d.width or renderSize.height != self.renderImage.extent3d.height) {
-            _ = c.vkDeviceWaitIdle(self.context.gpi);
-            self.resourceMan.destroyRenderImage(self.renderImage);
-            self.renderImage = try self.resourceMan.createRenderImage(.{ .width = renderSize.width, .height = renderSize.height });
-            self.descriptorsUpToDate = false;
-            std.debug.print("renderImage now {}x{}\n", .{ renderSize.width, renderSize.height });
-        }
-    }
-
-    pub fn destroySwapchains(self: *Renderer, hashKeys: []u32) !void {
-        _ = c.vkDeviceWaitIdle(self.context.gpi);
-        self.swapchainMan.destroySwapchain(hashKeys);
         self.updateDescriptors();
     }
 };

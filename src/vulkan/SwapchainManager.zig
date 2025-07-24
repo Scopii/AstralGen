@@ -153,7 +153,6 @@ pub const SwapchainManager = struct {
         defer alloc.free(formats);
 
         try check(c.vkGetPhysicalDeviceSurfaceFormatsKHR(gpu, surface, &formatCount, formats.ptr), "Failed to get surface formats");
-
         // Return preferred format if available otherwise first one
         if (formats.len == 1 and formats[0].format == c.VK_FORMAT_UNDEFINED) {
             return c.VkSurfaceFormatKHR{ .format = c.VK_FORMAT_B8G8R8A8_UNORM, .colorSpace = c.VK_COLOR_SPACE_SRGB_NONLINEAR_KHR };
@@ -179,17 +178,6 @@ pub const SwapchainManager = struct {
         self.renderSize = c.VkExtent2D{ .width = maxWidth, .height = maxHeight };
     }
 
-    pub fn updateRenderSize(self: *SwapchainManager) void {
-        var maxWidth: u32 = 0;
-        var maxHeight: u32 = 0;
-
-        for (self.activeSwapchains.items) |swapchain| {
-            maxWidth = @max(maxWidth, swapchain.extent.width);
-            maxHeight = @max(maxHeight, swapchain.extent.height);
-        }
-        self.renderSize = c.VkExtent2D{ .width = maxWidth, .height = maxHeight };
-    }
-
     pub fn getRenderSize(self: *SwapchainManager) c.VkExtent2D {
         return self.renderSize;
     }
@@ -198,7 +186,7 @@ pub const SwapchainManager = struct {
         return self.activeSwapchains.items;
     }
 
-    pub fn destroySwapchain(self: *SwapchainManager, hashKeys: []const u32) void {
+    pub fn destroySwapchains(self: *SwapchainManager, hashKeys: []const u32) void {
         const gpi = self.gpi;
 
         for (hashKeys) |key| {
@@ -220,6 +208,118 @@ pub const SwapchainManager = struct {
                 std.debug.print("Swapchain Key {} destroyed\n", .{key});
             } else std.debug.print("Cant Swapchain to destroy missing.\n", .{});
         }
+    }
+
+    pub fn recreateSwapchain(self: *SwapchainManager, swapchainPtr: *Swapchain, context: *const Context) !void {
+        const gpi = self.gpi;
+
+        for (swapchainPtr.views) |view| c.vkDestroyImageView(gpi, view, null);
+        for (swapchainPtr.imageRdySemaphores) |sem| c.vkDestroySemaphore(gpi, sem, null);
+        for (swapchainPtr.renderDoneSemaphores) |sem| c.vkDestroySemaphore(gpi, sem, null);
+        c.vkDestroySwapchainKHR(gpi, swapchainPtr.handle, null);
+        //c.vkDestroySurfaceKHR(self.instance, swapchainPtr.surface, null);
+
+        self.alloc.free(swapchainPtr.images);
+        self.alloc.free(swapchainPtr.views);
+        self.alloc.free(swapchainPtr.imageRdySemaphores);
+        self.alloc.free(swapchainPtr.renderDoneSemaphores);
+
+        const alloc = self.alloc;
+        const families = context.families;
+        const gpu = context.gpu;
+
+        const surface = swapchainPtr.surface;
+        const surfaceFormat = try pickSurfaceFormat(alloc, gpu, surface);
+        const caps = try getSurfaceCaps(gpu, surface);
+        const mode = c.VK_PRESENT_MODE_IMMEDIATE_KHR; //try context.pickPresentMode();
+
+        var desiredImgCount: u32 = caps.minImageCount + 1;
+        if (caps.maxImageCount > 0 and desiredImgCount > caps.maxImageCount) desiredImgCount = caps.maxImageCount;
+
+        var sharingMode: c.VkSharingMode = c.VK_SHARING_MODE_EXCLUSIVE;
+        var familyIndices: [2]u32 = undefined;
+        var familyCount: u32 = 0;
+
+        if (families.graphics != families.present) {
+            sharingMode = c.VK_SHARING_MODE_CONCURRENT;
+            familyIndices[0] = families.graphics;
+            familyIndices[1] = families.present;
+            familyCount = 2;
+        }
+
+        const actualExtent = pickExtent(&caps, swapchainPtr.extent);
+
+        const swapchainInf = c.VkSwapchainCreateInfoKHR{
+            .sType = c.VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
+            .surface = surface,
+            .minImageCount = desiredImgCount,
+            .imageFormat = surfaceFormat.format,
+            .imageColorSpace = surfaceFormat.colorSpace,
+            .imageExtent = actualExtent,
+            .imageArrayLayers = 1,
+            .imageUsage = c.VK_IMAGE_USAGE_TRANSFER_DST_BIT | c.VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+            .imageSharingMode = sharingMode,
+            .queueFamilyIndexCount = familyCount,
+            .pQueueFamilyIndices = if (familyCount > 0) &familyIndices else null,
+            .preTransform = caps.currentTransform,
+            .compositeAlpha = c.VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
+            .presentMode = mode,
+            .clipped = c.VK_TRUE,
+            //.oldSwapchain = null,
+        };
+
+        var handle: c.VkSwapchainKHR = undefined;
+        try check(c.vkCreateSwapchainKHR(gpi, &swapchainInf, null, &handle), "Could not create Swapchain Handle");
+
+        var realImgCount: u32 = 0;
+        _ = c.vkGetSwapchainImagesKHR(gpi, handle, &realImgCount, null);
+
+        const images = try alloc.alloc(c.VkImage, realImgCount);
+        errdefer alloc.free(images);
+        try check(c.vkGetSwapchainImagesKHR(gpi, handle, &realImgCount, images.ptr), "Could not get Swapchain Images");
+
+        const views = try alloc.alloc(c.VkImageView, realImgCount);
+        errdefer alloc.free(views);
+
+        for (0..realImgCount) |i| {
+            const imgViewInf = c.VkImageViewCreateInfo{
+                .sType = c.VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+                .image = images[i],
+                .viewType = c.VK_IMAGE_VIEW_TYPE_2D,
+                .format = surfaceFormat.format,
+                .subresourceRange = c.VkImageSubresourceRange{
+                    .aspectMask = c.VK_IMAGE_ASPECT_COLOR_BIT,
+                    .baseMipLevel = 0,
+                    .levelCount = 1,
+                    .baseArrayLayer = 0,
+                    .layerCount = 1,
+                },
+            };
+            try check(c.vkCreateImageView(gpi, &imgViewInf, null, &views[i]), "Failed to create image view");
+        }
+
+        const imageRdySems = try alloc.alloc(c.VkSemaphore, MAX_IN_FLIGHT);
+        errdefer alloc.free(imageRdySems);
+        for (0..MAX_IN_FLIGHT) |i| imageRdySems[i] = try createSemaphore(gpi);
+
+        const renderDoneSems = try alloc.alloc(c.VkSemaphore, realImgCount);
+        errdefer alloc.free(renderDoneSems);
+        for (0..realImgCount) |i| renderDoneSems[i] = try createSemaphore(gpi);
+
+        const newSwapchain = Swapchain{
+            .surface = surface,
+            .surfaceFormat = surfaceFormat,
+            .extent = actualExtent,
+            .handle = handle,
+            .images = images,
+            .views = views,
+            .imageRdySemaphores = imageRdySems,
+            .renderDoneSemaphores = renderDoneSems,
+            .pipeType = swapchainPtr.pipeType,
+        };
+        swapchainPtr.* = newSwapchain;
+
+        std.debug.print("Swapchain Error Resolved\n", .{});
     }
 
     pub fn getSwapchainPtr(self: *SwapchainManager, windowId: u32) ?*Swapchain {

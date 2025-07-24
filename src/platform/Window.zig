@@ -6,11 +6,14 @@ const Swapchain = @import("../vulkan/SwapchainManager.zig").Swapchain;
 pub const windowStatus = enum {
     active,
     inactive,
+    needCreation,
+    needUpdate,
+    needDelete,
 };
 
 pub const Window = struct {
     handle: *c.SDL_Window,
-    status: windowStatus = .active,
+    status: windowStatus = .needCreation,
     pipeType: PipelineType,
     extent: c.VkExtent2D,
     id: u32,

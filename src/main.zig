@@ -7,7 +7,6 @@ const Window = @import("platform/Window.zig").Window;
 const zjobs = @import("zjobs");
 
 const DEBUG_CLOSE = @import("settings.zig").DEBUG_CLOSE;
-
 // Re-Formats
 const Allocator = std.mem.Allocator;
 
@@ -31,28 +30,14 @@ pub fn main() !void {
     while (true) {
         try windowMan.pollEvents();
 
-        if (windowMan.swapchainsToDelete.items.len > 0) {
-            try renderer.destroySwapchains(try windowMan.getDeletedWindows());
-            windowMan.swapchainsToDelete.clearRetainingCapacity();
+        if (windowMan.swapchainsToChange.items.len > 0) {
+            try renderer.passSwapchains(windowMan.swapchainsToChange.items);
+            windowMan.swapchainsToChange.clearRetainingCapacity();
+            try renderer.updateSwapchains(try windowMan.getSwapchainsToDraw());
         }
 
         if (windowMan.close == true) return;
         if (windowMan.openWindows == 0) continue;
-
-        if (windowMan.emptyWindows.items.len > 0) {
-            try renderer.giveSwapchain(try windowMan.getEmptyWindows());
-            windowMan.emptyWindows.clearRetainingCapacity();
-        }
-
-        if (windowMan.needSwapchainUpdate == true) {
-            try renderer.updateSwapchains(try windowMan.getSwapchainsToDraw());
-            windowMan.needSwapchainUpdate = false;
-        }
-
-        if (windowMan.needRenderResize == true) {
-            try renderer.updateRenderImage();
-            windowMan.needRenderResize = false;
-        }
 
         try renderer.draw();
         memoryMan.resetArena();
