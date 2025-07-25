@@ -28,21 +28,28 @@ pub const SwapchainManager = struct {
     instance: c.VkInstance,
     renderSize: c.VkExtent2D = .{ .width = 0, .height = 0 },
     swapchains: std.AutoHashMap(u32, Swapchain),
-    activeSwapchains: std.ArrayList(*Swapchain),
+    activeSwapchains: [@typeInfo(PipelineType).@"enum".fields.len]std.ArrayList(*Swapchain),
+    targets: std.ArrayList(*Swapchain),
 
     pub fn init(alloc: Allocator, context: *const Context) !SwapchainManager {
+        const enumLength = @typeInfo(PipelineType).@"enum".fields.len;
+        var presentTargets: [enumLength]std.ArrayList(*Swapchain) = undefined;
+        for (0..enumLength) |i| presentTargets[i] = std.ArrayList(*Swapchain).init(alloc);
+
         return .{
             .alloc = alloc,
             .gpi = context.gpi,
             .instance = context.instance,
             .swapchains = std.AutoHashMap(u32, Swapchain).init(alloc),
-            .activeSwapchains = std.ArrayList(*Swapchain).init(alloc),
+            .activeSwapchains = presentTargets,
+            .targets = std.ArrayList(*Swapchain).init(alloc),
         };
     }
 
     pub fn deinit(self: *SwapchainManager) void {
         self.swapchains.deinit();
-        self.activeSwapchains.deinit();
+        self.targets.deinit();
+        for (self.activeSwapchains) |swapchainList| swapchainList.deinit();
     }
 
     pub fn addSwapchain(self: *SwapchainManager, context: *const Context, window: Window) !void {
@@ -144,34 +151,43 @@ pub const SwapchainManager = struct {
         std.debug.print("Swapchain added to Window {}\n", .{window.id});
     }
 
-    pub fn pickSurfaceFormat(alloc: Allocator, gpu: c.VkPhysicalDevice, surface: c.VkSurfaceKHR) !c.VkSurfaceFormatKHR {
-        var formatCount: u32 = 0;
-        try check(c.vkGetPhysicalDeviceSurfaceFormatsKHR(gpu, surface, &formatCount, null), "Failed to get format count");
-        if (formatCount == 0) return error.NoSurfaceFormats;
+    pub fn updateTargets(self: *SwapchainManager, frameInFlight: u8, context: *Context) !bool {
+        self.targets.clearRetainingCapacity();
+        const activeSwapchains = self.activeSwapchains;
+        const gpi = self.gpi;
 
-        const formats = try alloc.alloc(c.VkSurfaceFormatKHR, formatCount);
-        defer alloc.free(formats);
+        for (0..activeSwapchains.len) |i| {
+            for (activeSwapchains[i].items) |swapchainPtr| {
+                const acquireResult = c.vkAcquireNextImageKHR(gpi, swapchainPtr.handle, std.math.maxInt(u64), swapchainPtr.imageRdySemaphores[frameInFlight], null, &swapchainPtr.curIndex);
 
-        try check(c.vkGetPhysicalDeviceSurfaceFormatsKHR(gpu, surface, &formatCount, formats.ptr), "Failed to get surface formats");
-        // Return preferred format if available otherwise first one
-        if (formats.len == 1 and formats[0].format == c.VK_FORMAT_UNDEFINED) {
-            return c.VkSurfaceFormatKHR{ .format = c.VK_FORMAT_B8G8R8A8_UNORM, .colorSpace = c.VK_COLOR_SPACE_SRGB_NONLINEAR_KHR };
+                switch (acquireResult) {
+                    c.VK_SUCCESS => try self.targets.append(swapchainPtr),
+                    c.VK_ERROR_OUT_OF_DATE_KHR, c.VK_SUBOPTIMAL_KHR => {
+                        try self.recreateSwapchain(swapchainPtr, context);
+                        const acquireResult2 = c.vkAcquireNextImageKHR(gpi, swapchainPtr.handle, std.math.maxInt(u64), swapchainPtr.imageRdySemaphores[frameInFlight], null, &swapchainPtr.curIndex);
+                        if (acquireResult2 == c.VK_SUCCESS) {
+                            try self.targets.append(swapchainPtr);
+                            std.debug.print("Resolved Error for Swapchain {}", .{swapchainPtr.*});
+                        } else std.debug.print("Could not Resolve Swapchain Error {}", .{swapchainPtr.*});
+                    },
+                    else => try check(acquireResult, "Could not acquire swapchain image"),
+                }
+            }
         }
-
-        for (formats) |format| {
-            if (format.format == c.VK_FORMAT_B8G8R8A8_UNORM and format.colorSpace == c.VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) return format;
-        }
-        return formats[0];
+        return if (self.targets.items.len != 0) true else false;
     }
 
     pub fn updateActiveSwapchains(self: *SwapchainManager, hashKeys: []u32) !void {
-        self.activeSwapchains.clearRetainingCapacity();
+        for (0..self.activeSwapchains.len) |i| {
+            self.activeSwapchains[i].clearRetainingCapacity();
+        }
+
         var maxWidth: u32 = 0;
         var maxHeight: u32 = 0;
 
         for (hashKeys) |i| {
             const swapchainPtr = self.getSwapchainPtr(i).?;
-            try self.activeSwapchains.append(swapchainPtr);
+            try self.activeSwapchains[@intFromEnum(swapchainPtr.pipeType)].append(swapchainPtr);
             maxWidth = @max(maxWidth, swapchainPtr.extent.width);
             maxHeight = @max(maxHeight, swapchainPtr.extent.height);
         }
@@ -348,4 +364,24 @@ fn pickExtent(caps: *const c.VkSurfaceCapabilitiesKHR, curExtent: c.VkExtent2D) 
         .width = std.math.clamp(curExtent.width, caps.minImageExtent.width, caps.maxImageExtent.width),
         .height = std.math.clamp(curExtent.height, caps.minImageExtent.height, caps.maxImageExtent.height),
     };
+}
+
+fn pickSurfaceFormat(alloc: Allocator, gpu: c.VkPhysicalDevice, surface: c.VkSurfaceKHR) !c.VkSurfaceFormatKHR {
+    var formatCount: u32 = 0;
+    try check(c.vkGetPhysicalDeviceSurfaceFormatsKHR(gpu, surface, &formatCount, null), "Failed to get format count");
+    if (formatCount == 0) return error.NoSurfaceFormats;
+
+    const formats = try alloc.alloc(c.VkSurfaceFormatKHR, formatCount);
+    defer alloc.free(formats);
+
+    try check(c.vkGetPhysicalDeviceSurfaceFormatsKHR(gpu, surface, &formatCount, formats.ptr), "Failed to get surface formats");
+    // Return preferred format if available otherwise first one
+    if (formats.len == 1 and formats[0].format == c.VK_FORMAT_UNDEFINED) {
+        return c.VkSurfaceFormatKHR{ .format = c.VK_FORMAT_B8G8R8A8_UNORM, .colorSpace = c.VK_COLOR_SPACE_SRGB_NONLINEAR_KHR };
+    }
+
+    for (formats) |format| {
+        if (format.format == c.VK_FORMAT_B8G8R8A8_UNORM and format.colorSpace == c.VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) return format;
+    }
+    return formats[0];
 }

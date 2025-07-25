@@ -33,7 +33,7 @@ pub fn main() !void {
         if (windowMan.swapchainsToChange.items.len > 0) {
             try renderer.passSwapchains(windowMan.swapchainsToChange.items);
             windowMan.swapchainsToChange.clearRetainingCapacity();
-            try renderer.updateSwapchains(try windowMan.getSwapchainsToDraw());
+            try renderer.update(try windowMan.getSwapchainsToDraw());
         }
 
         if (windowMan.close == true) return;

@@ -71,11 +71,11 @@ pub const Renderer = struct {
         self.context.deinit();
     }
 
-    pub fn updateSwapchains(self: *Renderer, hashKeys: []u32) !void {
+    pub fn update(self: *Renderer, hashKeys: []u32) !void {
         _ = c.vkDeviceWaitIdle(self.context.gpi);
         try self.swapchainMan.updateActiveSwapchains(hashKeys);
 
-        if (self.swapchainMan.activeSwapchains.items.len != 0) {
+        if (hashKeys.len != 0) {
             const renderSize = self.swapchainMan.getRenderSize();
 
             if (renderSize.width != self.renderImage.extent3d.width or renderSize.height != self.renderImage.extent3d.height) {
@@ -87,46 +87,21 @@ pub const Renderer = struct {
         }
     }
 
-    fn acquirePresentData() !void {}
-
     pub fn draw(self: *Renderer) !void {
         try self.scheduler.waitForGPU();
 
         const frameInFlight = self.scheduler.frameInFlight;
-
-        const enumLength = @typeInfo(PipelineType).@"enum".fields.len;
-        var presentTargets: [enumLength]std.ArrayList(*Swapchain) = undefined;
-        for (0..enumLength) |i| presentTargets[i] = std.ArrayList(*Swapchain).init(self.arenaAlloc);
-
-        var targetCount: u32 = 0;
-        const activeSwapchains = try self.swapchainMan.getActiveSwapchains();
-
-        for (activeSwapchains) |swapchainPtr| {
-            const acquireResult = c.vkAcquireNextImageKHR(self.context.gpi, swapchainPtr.handle, std.math.maxInt(u64), swapchainPtr.imageRdySemaphores[frameInFlight], null, &swapchainPtr.curIndex);
-
-            switch (acquireResult) {
-                c.VK_SUCCESS => {
-                    try presentTargets[@intFromEnum(swapchainPtr.pipeType)].append(swapchainPtr);
-                    targetCount += 1;
-                },
-                c.VK_ERROR_OUT_OF_DATE_KHR, c.VK_SUBOPTIMAL_KHR => try self.swapchainMan.recreateSwapchain(swapchainPtr, &self.context), //not sure if this works
-                else => try check(acquireResult, "Could not acquire swapchain image"),
-            }
-        }
-        if (targetCount == 0) return;
+        if (try self.swapchainMan.updateTargets(frameInFlight, &self.context) == false) return;
 
         try self.cmdMan.beginRecording(frameInFlight);
-        for (0..presentTargets.len) |i| {
-            if (presentTargets[i].items.len != 0) try self.recordCommands(presentTargets[i].items, @enumFromInt(i), frameInFlight);
+        const activeSwapchains = self.swapchainMan.activeSwapchains;
+        for (0..activeSwapchains.len) |i| {
+            if (activeSwapchains[i].items.len != 0) try self.recordCommands(activeSwapchains[i].items, @enumFromInt(i), frameInFlight);
         }
         const cmd = try self.cmdMan.endRecording();
 
-        var allTargets = std.ArrayList(*Swapchain).init(self.arenaAlloc);
-        try allTargets.ensureTotalCapacity(targetCount);
-        for (presentTargets) |group| try allTargets.appendSlice(group.items);
-
-        try self.queueSubmit(cmd, allTargets.items, frameInFlight);
-        try self.present(allTargets.items);
+        try self.queueSubmit(cmd, self.swapchainMan.targets.items, frameInFlight);
+        try self.present(self.swapchainMan.targets.items);
 
         self.scheduler.nextFrame();
     }
@@ -233,12 +208,8 @@ pub const Renderer = struct {
                         continue :stateSwitch .needCreation;
                     }
                 },
-                .needCreation => {
-                    try self.swapchainMan.addSwapchain(&self.context, window);
-                },
-                .needDelete => {
-                    self.swapchainMan.destroySwapchains(&.{window.id});
-                },
+                .needCreation => try self.swapchainMan.addSwapchain(&self.context, window),
+                .needDelete => self.swapchainMan.destroySwapchains(&.{window.id}),
                 else => {},
             }
         }
