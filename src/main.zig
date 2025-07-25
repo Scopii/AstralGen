@@ -5,8 +5,7 @@ const MemoryManager = @import("core/MemoryManager.zig").MemoryManager;
 const Renderer = @import("vulkan/Renderer.zig").Renderer;
 const Window = @import("platform/Window.zig").Window;
 const zjobs = @import("zjobs");
-
-const DEBUG_CLOSE = @import("settings.zig").DEBUG_CLOSE;
+const DEBUG_CLOSE = @import("config.zig").DEBUG_CLOSE;
 // Re-Formats
 const Allocator = std.mem.Allocator;
 

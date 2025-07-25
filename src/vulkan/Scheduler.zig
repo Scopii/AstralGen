@@ -8,7 +8,7 @@ const createTimeline = @import("primitives.zig").createTimeline;
 const getTimelineVal = @import("primitives.zig").getTimelineVal;
 const waitForTimeline = @import("primitives.zig").waitForTimeline;
 const createSemaphore = @import("primitives.zig").createSemaphore;
-const MAX_IN_FLIGHT = @import("../settings.zig").MAX_IN_FLIGHT;
+const MAX_IN_FLIGHT = @import("../config.zig").MAX_IN_FLIGHT;
 
 pub const Scheduler = struct {
     gpi: c.VkDevice,

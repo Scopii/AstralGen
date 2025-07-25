@@ -1,6 +1,5 @@
 const std = @import("std");
 const c = @import("../c.zig");
-const DEBUG_TOGGLE = @import("../settings.zig").DEBUG_TOGGLE;
 const check = @import("error.zig").check;
 const Context = @import("Context.zig").Context;
 const createInstance = @import("Context.zig").createInstance;
@@ -15,7 +14,9 @@ const DescriptorManager = @import("DescriptorManager.zig").DescriptorManager;
 const RenderImage = @import("ResourceManager.zig").RenderImage;
 const Window = @import("../platform/Window.zig").Window;
 const MemoryManager = @import("../core/MemoryManager.zig").MemoryManager;
-const MAX_IN_FLIGHT = @import("../settings.zig").MAX_IN_FLIGHT;
+const MAX_IN_FLIGHT = @import("../config.zig").MAX_IN_FLIGHT;
+const SHADER_HOTLOAD = @import("../config.zig").SHADER_HOTLOAD;
+const DEBUG_TOGGLE = @import("../config.zig").DEBUG_TOGGLE;
 
 const Allocator = std.mem.Allocator;
 
@@ -95,8 +96,13 @@ pub const Renderer = struct {
 
         try self.cmdMan.beginRecording(frameInFlight);
         const activeSwapchains = self.swapchainMan.activeSwapchains;
+
         for (0..activeSwapchains.len) |i| {
-            if (activeSwapchains[i].items.len != 0) try self.recordCommands(activeSwapchains[i].items, @enumFromInt(i), frameInFlight);
+            if (activeSwapchains[i].items.len != 0) {
+                const renderPass: PipelineType = @enumFromInt(i);
+                if (SHADER_HOTLOAD == true) try self.pipelineMan.checkShaderUpdate(renderPass);
+                try self.recordCommands(activeSwapchains[i].items, renderPass, frameInFlight);
+            }
         }
         const cmd = try self.cmdMan.endRecording();
 

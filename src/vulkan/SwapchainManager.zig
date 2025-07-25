@@ -7,7 +7,7 @@ const createSemaphore = @import("primitives.zig").createSemaphore;
 const PipelineType = @import("PipelineBucket.zig").PipelineType;
 const Window = @import("../platform/Window.zig").Window;
 
-const MAX_IN_FLIGHT = @import("../settings.zig").MAX_IN_FLIGHT;
+const MAX_IN_FLIGHT = @import("../config.zig").MAX_IN_FLIGHT;
 
 pub const Swapchain = struct {
     surface: c.VkSurfaceKHR,
