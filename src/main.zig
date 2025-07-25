@@ -27,18 +27,23 @@ pub fn main() !void {
 
     // Main loop
     while (true) {
-        try windowMan.pollEvents();
+        windowMan.pollEvents() catch |err| {
+            std.log.err("Error in pollEvents(): {}", .{err});
+            break;
+        };
 
         if (windowMan.swapchainsToChange.items.len > 0) {
-            try renderer.passSwapchains(windowMan.swapchainsToChange.items);
+            try renderer.update(windowMan.swapchainsToChange.items, try windowMan.getSwapchainsToDraw());
             windowMan.swapchainsToChange.clearRetainingCapacity();
-            try renderer.update(try windowMan.getSwapchainsToDraw());
         }
 
         if (windowMan.close == true) return;
         if (windowMan.openWindows == 0) continue;
 
-        try renderer.draw();
+        renderer.draw() catch |err| {
+            std.log.err("Error in renderer.draw(): {}", .{err});
+            break;
+        };
         memoryMan.resetArena();
     }
 

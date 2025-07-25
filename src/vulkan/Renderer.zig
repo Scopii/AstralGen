@@ -72,8 +72,29 @@ pub const Renderer = struct {
         self.context.deinit();
     }
 
-    pub fn update(self: *Renderer, hashKeys: []u32) !void {
-        _ = c.vkDeviceWaitIdle(self.context.gpi);
+    pub fn update(self: *Renderer, windows: []Window, hashKeys: []u32) !void {
+        for (windows) |window| {
+            if (window.status == .needDelete or window.status == .needUpdate) {
+                _ = c.vkDeviceWaitIdle(self.context.gpi);
+                break;
+            }
+        }
+
+        for (windows) |window| {
+            stateSwitch: switch (window.status) {
+                .needUpdate => {
+                    if (self.swapchainMan.getSwapchainPtr(window.id) != null) {
+                        self.swapchainMan.destroySwapchains(&.{window.id});
+                        continue :stateSwitch .needCreation;
+                    }
+                },
+                .needCreation => try self.swapchainMan.addSwapchain(&self.context, window),
+                .needDelete => self.swapchainMan.destroySwapchains(&.{window.id}),
+                else => {},
+            }
+        }
+        self.updateDescriptors();
+
         try self.swapchainMan.updateActiveSwapchains(hashKeys);
 
         if (hashKeys.len != 0) {
@@ -201,24 +222,5 @@ pub const Renderer = struct {
     fn updateDescriptors(self: *Renderer) void {
         self.descriptorMan.updateAllDescriptorSets(self.renderImage.view);
         self.descriptorsUpToDate = true;
-    }
-
-    pub fn passSwapchains(self: *Renderer, windows: []Window) !void {
-        _ = c.vkDeviceWaitIdle(self.context.gpi);
-
-        for (windows) |window| {
-            stateSwitch: switch (window.status) {
-                .needUpdate => {
-                    if (self.swapchainMan.getSwapchainPtr(window.id) != null) {
-                        self.swapchainMan.destroySwapchains(&.{window.id});
-                        continue :stateSwitch .needCreation;
-                    }
-                },
-                .needCreation => try self.swapchainMan.addSwapchain(&self.context, window),
-                .needDelete => self.swapchainMan.destroySwapchains(&.{window.id}),
-                else => {},
-            }
-        }
-        self.updateDescriptors();
     }
 };
