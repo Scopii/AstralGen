@@ -70,8 +70,15 @@ pub const WindowManager = struct {
         return self.swapchainsToDraw.items;
     }
 
+    pub fn cleanupWindows(self: *WindowManager) void {
+        for (self.swapchainsToChange.items) |window| {
+            if (window.status == .needDelete) self.destroyWindow(window.id);
+        }
+        self.swapchainsToChange.clearRetainingCapacity();
+    }
+
     pub fn destroyWindow(self: *WindowManager, id: u32) void {
-        if (self.windows.remove(id)) |removedWindow| c.SDL_DestroyWindow(removedWindow.handle);
+        if (self.windows.fetchRemove(id)) |removedPair| c.SDL_DestroyWindow(removedPair.value.handle);
     }
 
     pub fn pollEvents(self: *WindowManager) !void {
@@ -101,8 +108,6 @@ pub const WindowManager = struct {
                             if (window.status == .active) self.openWindows -= 1;
                             window.status = .needDelete;
                             try self.swapchainsToChange.append(window.*);
-                            window.deinit();
-                            _ = self.windows.remove(id);
                             std.debug.print("Window {} CLOSED.\n", .{id});
                         },
                         c.SDL_EVENT_WINDOW_MINIMIZED => {

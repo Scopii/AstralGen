@@ -26,8 +26,4 @@ pub const Window = struct {
             .id = id,
         };
     }
-
-    pub fn deinit(self: *Window) void {
-        c.SDL_DestroyWindow(self.handle);
-    }
 };
