@@ -93,7 +93,7 @@ pub const Renderer = struct {
                 else => {},
             }
         }
-        self.updateDescriptors();
+        //self.updateDescriptors();
 
         try self.swapchainMan.updateActiveSwapchains(hashKeys);
 

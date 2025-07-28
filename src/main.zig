@@ -3,6 +3,7 @@ const std = @import("std");
 const WindowManager = @import("platform/WindowManager.zig").WindowManager;
 const MemoryManager = @import("core/MemoryManager.zig").MemoryManager;
 const CreateMapArray = @import("structures/MapArray.zig").CreateMapArray;
+const CreateMapArray2 = @import("structures/MapArray2.zig").CreateMapArray;
 const Renderer = @import("vulkan/Renderer.zig").Renderer;
 const Window = @import("platform/Window.zig").Window;
 const zjobs = @import("zjobs");
@@ -32,34 +33,47 @@ pub fn main() !void {
     const win2: f32 = 1.234;
     const win3: f32 = 6.666;
 
-    const WinMapArray = CreateMapArray(f32, u6, 18);
-    var mapArray: WinMapArray = .{};
-    mapArray.printAll();
-    std.debug.print("\nMap Array count {}\n", .{mapArray.getCount()});
-    try mapArray.addWithKey(4, win1);
-    mapArray.printAll();
+    // const WinMapArray = CreateMapArray(f32, u6, 5);
+    // var mapArray: WinMapArray = .{};
+    // mapArray.printAll();
+    // std.debug.print("\nMapArray count {}\n", .{mapArray.getCount()});
+    // std.debug.print("\nMapArray Size {}\n", .{mapArray.size});
+    // try mapArray.addWithKey(4, win1);
+    // mapArray.printAll();
 
-    try mapArray.addWithKey(6, win2);
-    mapArray.printAll();
+    // try mapArray.addWithKey(6, win2);
+    // mapArray.printAll();
 
-    try mapArray.addWithKey(8, win3);
-    mapArray.printAll();
-    std.debug.print("Map Array count {}\n", .{mapArray.getCount()});
+    // try mapArray.addWithKey(8, win3);
+    // mapArray.printAll();
+    // std.debug.print("MapArray count {}\n", .{mapArray.getCount()});
 
-    try mapArray.addWithKey(62, win3);
-    std.debug.print("Map Array Sentinel {}\n", .{mapArray.getSentinel()});
-    std.debug.print("Map Array Last Key {}\n", .{mapArray.getLastKey()});
-    mapArray.printAll();
+    // try mapArray.addWithKey(62, win3);
+    // std.debug.print("MapArray Sentinel {}\n", .{mapArray.getSentinel()});
+    // std.debug.print("MapArray Last Key {}\n", .{mapArray.getLastKey()});
+    // mapArray.printAll();
+
+    // try mapArray.addWithoutKey(win3);
+    // std.debug.print("MapArray count {}\n", .{mapArray.getCount()});
+    // mapArray.printAll2();
 
     // std.debug.print("Map Array Key 4 = {}\n", .{try mapArray.getFromKey(4)});
     // std.debug.print("Map Array Spot 4 = {}\n", .{try mapArray.getAtIndex(3)});
     // std.debug.print("Map Array Size = {}\n", .{mapArray.size});
-    std.debug.print("Map Array Size in Bytes {}\n", .{@sizeOf(WinMapArray)});
+    // std.debug.print("MapArray Size in Bytes {}\n", .{@sizeOf(WinMapArray)});
 
     // std.debug.print("?u8: {} bytes\n", .{@sizeOf(?u8)});
     // std.debug.print("?u32: {} bytes\n", .{@sizeOf(?u32)});
     // std.debug.print("?usize: {} bytes\n", .{@sizeOf(?usize)});
+    //std.debug.print("Bit Array: {} bytes\n", .{@sizeOf([1000]u1)});
+    std.debug.print("\n", .{});
 
+    const WinMapArray2 = CreateMapArray2(f32, 2, u32, 10, 0);
+    std.debug.print("NewArray Size: {} bytes\n", .{@sizeOf(WinMapArray2)});
+    var mapArray2: WinMapArray2 = .{};
+    mapArray2.set(8, win1);
+    mapArray2.set(8, win2);
+    mapArray2.set(8, win3);
     std.debug.print("\n", .{});
 
     // Main loop

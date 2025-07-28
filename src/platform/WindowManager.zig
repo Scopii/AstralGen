@@ -68,20 +68,12 @@ pub const WindowManager = struct {
         return try self.windows2.getPtrFromKey(id);
     }
 
-    pub fn getSwapchainsToDraw(self: *WindowManager) ![]u32 {
-        self.swapchainsToDraw.clearRetainingCapacity();
-        var iter = self.windows.valueIterator();
-
-        while (iter.next()) |windowPtr| {
-            if (windowPtr.status == .active) try self.swapchainsToDraw.append(windowPtr.id);
-        }
-        return self.swapchainsToDraw.items;
-    }
-
     pub fn getSwapchainsToDraw2(self: *WindowManager) ![]u32 {
         self.swapchainsToDraw.clearRetainingCapacity();
+        const count = self.windows2.getCount();
+        if (count == 0) return self.swapchainsToDraw.items;
 
-        for (0..self.windows2.getCount()) |i| {
+        for (0..count) |i| {
             const windowPtr = try self.windows2.getPtrAtIndex(@intCast(i));
             if (windowPtr.status == .active) try self.swapchainsToDraw.append(windowPtr.id);
         }
