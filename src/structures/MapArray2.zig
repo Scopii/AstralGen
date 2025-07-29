@@ -7,7 +7,7 @@ const std = @import("std");
 ///     (can still be done if wished by using the internally provided "is*" bool and getter functions)
 /// - ALL operations are O(1) the only exception to this is getUsedKeyCount()
 /// - removeAtKey() and removeAtIndex() replace the deleted element with the last element
-/// - Keys are validated using an ArrayBitSet from the std library to keep data packed
+/// - Keys are validated using an sentinel value that is reserved for empty keys
 /// - Elements can be added using a key for lookup using the set() function
 /// - Elements added using setAtIndex() or append() will not allow access via key and are not internally linked to a key yet
 ///     (can still be linked later using the link() function)
@@ -27,21 +27,19 @@ const std = @import("std");
 ///
 /// *Hint: This can also be used as a general Map storing Indices for multiple Arrays by storing an unsigned integer type as elementType!*
 /// *Hint2: It is strongly adviced to keep size, keyMax and keyMin small, higher values can flood memory very quickly!
-///  (sizeOf(MapArray) = (1 bit keyRange) + (keyType keyRange) + (keyType size) + (elements size)*
+///  (sizeOf(MapArray) = (keyType keyRange) + (keyType size) + (elements size)*
 ///
 /// implementation details:
 /// - elementLimit: Last elements array Index
 /// - keyLimit: Last keys array index
 /// - usedKeyCount: Number of keys within the valid range of min and max
 /// - smallKeyType: Smallest possible unsigned integer type that can store usedKeyCount + 1 (sentinelValue)
-/// - BitSet: The Type used for the key validation array
 /// - indexType: Smallest possible unsigned integer type that can store the number of Elements
 ///
 /// - key: Used as keys array index,
 /// - index: Used as index for the links and elements arrays
 ///
 /// - count: Number of elements stored, also describes next available index;
-/// - bits: The BitSet used to check which keys are used
 /// - keys: The sparse Array of index values for the links and elements arrays
 /// - elements: The dense array of elements
 ///
@@ -56,25 +54,21 @@ pub fn CreateMapArray(comptime elementType: type, comptime size: u32, comptime k
     const usedKeyCount = keyMax - keyMin + 1;
     const sentinel = usedKeyCount + 1;
     const smallKeyType = FindSmallestIntType(sentinel);
-    const BitSet = std.bit_set.ArrayBitSet(usize, usedKeyCount);
     const indexType = FindSmallestIntType(size + 1); //
 
     return struct {
         const Self = @This();
         count: indexType = 0,
 
-        bits: BitSet = BitSet.initEmpty(),
-        keys: [usedKeyCount]smallKeyType = undefined,
-
+        keys: [usedKeyCount]smallKeyType = .{sentinel} ** usedKeyCount,
         links: [size]smallKeyType = .{sentinel} ** size,
         elements: [size]elementType = undefined,
 
         pub fn set(self: *Self, key: keyType, element: elementType) void {
             const castedKey: smallKeyType = @intCast(key - keyMin);
 
-            if (self.isKeyUsed(key) == false) {
+            if (self.keys[castedKey] == sentinel) {
                 const index = self.count;
-                self.bits.setValue(castedKey, true);
                 self.keys[castedKey] = index;
                 self.links[index] = castedKey;
                 self.elements[index] = element;
@@ -107,11 +101,7 @@ pub fn CreateMapArray(comptime elementType: type, comptime size: u32, comptime k
             const castedKey: smallKeyType = @intCast(key - keyMin);
             const oldKey = self.links[index];
 
-            if (oldKey != sentinel) {
-                self.bits.setValue(oldKey, false);
-                self.keys[oldKey] = sentinel;
-            }
-            self.bits.setValue(castedKey, true);
+            if (oldKey != sentinel) self.keys[oldKey] = sentinel;
             self.keys[castedKey] = @intCast(index);
             self.links[index] = castedKey;
         }
@@ -124,7 +114,6 @@ pub fn CreateMapArray(comptime elementType: type, comptime size: u32, comptime k
         pub fn unlinkAtIndex(self: *Self, index: u32) void {
             const key = self.links[index];
             if (key != sentinel) {
-                self.bits.setValue(key, false);
                 self.keys[key] = sentinel;
                 self.links[index] = sentinel;
             }
@@ -132,16 +121,14 @@ pub fn CreateMapArray(comptime elementType: type, comptime size: u32, comptime k
 
         pub fn clear(self: *Self) void {
             self.count = 0;
-            self.bits = BitSet.initEmpty();
+            for (0..usedKeyCount) |i| self.keys[i] = sentinel;
             for (0..size) |i| self.links[i] = sentinel;
         }
 
         pub fn removeLast(self: *Self) void {
             const key = self.links[self.count - 1];
-            if (key != sentinel) {
-                self.bits.setValue(key, false);
-                self.keys[key] = sentinel;
-            }
+            if (key != sentinel) self.keys[key] = sentinel;
+
             self.links[self.count - 1] = sentinel;
             self.count -= 1;
         }
@@ -156,10 +143,7 @@ pub fn CreateMapArray(comptime elementType: type, comptime size: u32, comptime k
 
         pub fn removeAtIndex(self: *Self, index: u32) void {
             const keyIndex = self.links[index];
-            if (keyIndex != sentinel) {
-                self.bits.setValue(keyIndex, false);
-                self.keys[keyIndex] = sentinel;
-            }
+            if (keyIndex != sentinel) self.keys[keyIndex] = sentinel;
 
             const lastIndex = self.count - 1;
             self.count -= 1;
@@ -207,12 +191,12 @@ pub fn CreateMapArray(comptime elementType: type, comptime size: u32, comptime k
         pub fn isKeyUsedAndValid(self: *Self, key: keyType) bool {
             if (self.isKeyValid(key) == false) return false;
             const castedKey: smallKeyType = @intCast(key - keyMin);
-            return self.bits.isSet(castedKey);
+            return self.keys[castedKey] != sentinel;
         }
 
         pub fn isKeyUsed(self: *Self, key: keyType) bool {
             const castedKey: smallKeyType = @intCast(key - keyMin);
-            return self.bits.isSet(castedKey);
+            return self.keys[castedKey] != sentinel;
         }
 
         pub inline fn isKeyValid(_: *Self, key: keyType) bool {
