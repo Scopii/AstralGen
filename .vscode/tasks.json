@@ -22,7 +22,7 @@
         {
             "label": "Compile Errors only",
             "type": "shell",
-            "command": "zig build --watch -fincremental --prominent-compile-errors",
+            "command": "zig build --watch -fincremental --prominent-compile-errors", // "zig build --watch -fincremental --prominent-compile-errors",
             "group": {
                 "kind": "build",
                 "isDefault": true
