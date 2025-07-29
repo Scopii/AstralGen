@@ -65,7 +65,7 @@ pub fn CreateMapArray(comptime elementType: type, comptime size: u32, comptime k
         elements: [size]elementType = undefined,
 
         pub fn set(self: *Self, key: keyType, element: elementType) void {
-            const castedKey: smallKeyType = @intCast(key - keyMin);
+            const castedKey: smallKeyType = @truncate(key - keyMin);
 
             if (self.keys[castedKey] == sentinel) {
                 const index = self.count;
@@ -98,16 +98,16 @@ pub fn CreateMapArray(comptime elementType: type, comptime size: u32, comptime k
         }
 
         pub fn link(self: *Self, index: u32, key: keyType) void {
-            const castedKey: smallKeyType = @intCast(key - keyMin);
+            const castedKey: smallKeyType = @truncate(key - keyMin);
             const oldKey = self.links[index];
 
             if (oldKey != sentinel) self.keys[oldKey] = sentinel;
-            self.keys[castedKey] = @intCast(index);
+            self.keys[castedKey] = @truncate(index);
             self.links[index] = castedKey;
         }
 
         pub fn unlink(self: *Self, key: keyType) void {
-            const castedKey: smallKeyType = @intCast(key - keyMin);
+            const castedKey: smallKeyType = @truncate(key - keyMin);
             self.unlinkAtIndex(self.keys[castedKey]);
         }
 
@@ -121,8 +121,10 @@ pub fn CreateMapArray(comptime elementType: type, comptime size: u32, comptime k
 
         pub fn clear(self: *Self) void {
             self.count = 0;
-            for (0..usedKeyCount) |i| self.keys[i] = sentinel;
-            for (0..size) |i| self.links[i] = sentinel;
+            //for (0..usedKeyCount) |i| self.keys[i] = sentinel;
+            //for (0..size) |i| self.links[i] = sentinel;
+            @memset(&self.keys, sentinel);
+            @memset(&self.links, sentinel);
         }
 
         pub fn removeLast(self: *Self) void {
@@ -154,7 +156,7 @@ pub fn CreateMapArray(comptime elementType: type, comptime size: u32, comptime k
                 self.elements[index] = self.elements[lastIndex];
                 self.links[index] = lastKey;
                 // Update key mapping if last element has a key
-                if (lastKey != sentinel) self.keys[lastKey] = @intCast(index);
+                if (lastKey != sentinel) self.keys[lastKey] = @truncate(index);
             }
             self.links[lastIndex] = sentinel;
         }
@@ -184,18 +186,18 @@ pub fn CreateMapArray(comptime elementType: type, comptime size: u32, comptime k
             self.links[index1] = self.links[index2];
             self.links[index2] = tempLink;
 
-            if (self.links[index1] != sentinel) self.keys[self.links[index1]] = @intCast(index1);
-            if (self.links[index2] != sentinel) self.keys[self.links[index2]] = @intCast(index2);
+            if (self.links[index1] != sentinel) self.keys[self.links[index1]] = @truncate(index1);
+            if (self.links[index2] != sentinel) self.keys[self.links[index2]] = @truncate(index2);
         }
 
         pub fn isKeyUsedAndValid(self: *Self, key: keyType) bool {
             if (self.isKeyValid(key) == false) return false;
-            const castedKey: smallKeyType = @intCast(key - keyMin);
+            const castedKey: smallKeyType = @truncate(key - keyMin);
             return self.keys[castedKey] != sentinel;
         }
 
         pub fn isKeyUsed(self: *Self, key: keyType) bool {
-            const castedKey: smallKeyType = @intCast(key - keyMin);
+            const castedKey: smallKeyType = @truncate(key - keyMin);
             return self.keys[castedKey] != sentinel;
         }
 
@@ -248,11 +250,11 @@ pub fn CreateMapArray(comptime elementType: type, comptime size: u32, comptime k
         }
 
         pub inline fn get(self: *Self, key: keyType) elementType {
-            return self.elements[self.keys[key - keyMin]];
+            return self.elements[self.keys[(key - keyMin)]];
         }
 
         pub inline fn getPtr(self: *Self, key: keyType) *elementType {
-            return &self.elements[self.keys[key - keyMin]];
+            return &self.elements[self.keys[(key - keyMin)]];
         }
 
         pub inline fn getAtIndex(self: *Self, index: u32) elementType {
