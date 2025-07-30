@@ -7,11 +7,9 @@ const Swapchain = @import("../vulkan/SwapchainManager.zig").Swapchain;
 const Renderer = @import("../vulkan/Renderer.zig").Renderer;
 const CreateMapArray = @import("../structures/MapArray.zig").CreateMapArray;
 
-//const WindowMapArray = CreateMapArray(Window, u8, 24);
-
 pub const WindowManager = struct {
     memoryMan: *MemoryManger,
-    windows2: CreateMapArray(Window, u8, 24),
+    windows: CreateMapArray(Window, 24, u8, 24, 0),
     swapchainsToChange: std.ArrayList(Window),
     swapchainsToDraw: std.ArrayList(u32),
     openWindows: u32 = 0,
@@ -26,16 +24,17 @@ pub const WindowManager = struct {
 
         return .{
             .memoryMan = memoryMan,
-            .windows2 = .{},
+            .windows = .{},
             .swapchainsToChange = std.ArrayList(Window).init(alloc),
             .swapchainsToDraw = std.ArrayList(u32).init(alloc),
         };
     }
 
-    pub fn deinit(self: *WindowManager) !void {
-        for (0..self.windows2.getCount()) |i| {
-            const windowPtr = try self.windows2.getPtrAtIndex(@intCast(i));
+    pub fn deinit(self: *WindowManager) void {
+        for (0..self.windows.getCount()) |_| {
+            const windowPtr = self.windows.getLastPtr();
             c.SDL_DestroyWindow(windowPtr.handle);
+            self.windows.removeLast();
         }
         self.swapchainsToChange.deinit();
         self.swapchainsToDraw.deinit();
@@ -55,26 +54,22 @@ pub const WindowManager = struct {
         var window = try Window.init(id, sdlHandle, pipeType, c.VkExtent2D{ .width = @intCast(width), .height = @intCast(height) });
         try self.swapchainsToChange.append(window);
         window.status = .active;
-        try self.windows2.addWithKey(@intCast(id), window);
+        self.windows.set(@intCast(id), window);
         self.openWindows += 1;
         std.debug.print("Window ID {} created\n", .{id});
     }
 
-    pub fn getWindowPtr(self: *WindowManager, id: u32) ?*Window {
-        return self.windows.getPtr(id);
-    }
-
-    pub fn getWindowPtr2(self: *WindowManager, id: u32) *Window {
-        return try self.windows2.getPtrFromKey(id);
+    pub fn getWindowPtr(self: *WindowManager, id: u32) *Window {
+        return try self.windows.getPtrFromKey(id);
     }
 
     pub fn getSwapchainsToDraw2(self: *WindowManager) ![]u32 {
         self.swapchainsToDraw.clearRetainingCapacity();
-        const count = self.windows2.getCount();
+        const count = self.windows.getCount();
         if (count == 0) return self.swapchainsToDraw.items;
 
         for (0..count) |i| {
-            const windowPtr = try self.windows2.getPtrAtIndex(@intCast(i));
+            const windowPtr = self.windows.getPtrAtIndex(@intCast(i));
             if (windowPtr.status == .active) try self.swapchainsToDraw.append(windowPtr.id);
         }
         return self.swapchainsToDraw.items;
@@ -82,14 +77,15 @@ pub const WindowManager = struct {
 
     pub fn cleanupWindows(self: *WindowManager) !void {
         for (self.swapchainsToChange.items) |window| {
-            if (window.status == .needDelete) try self.destroyWindow2(window.id);
+            if (window.status == .needDelete) try self.destroyWindow(window.id);
         }
         self.swapchainsToChange.clearRetainingCapacity();
     }
 
-    pub fn destroyWindow2(self: *WindowManager, id: u32) !void {
-        const window = try self.windows2.fetchRemoveFromKey(@intCast(id));
+    pub fn destroyWindow(self: *WindowManager, id: u32) !void {
+        const window = self.windows.get(@intCast(id));
         c.SDL_DestroyWindow(window.handle);
+        self.windows.removeAtKey(@intCast(id));
     }
 
     pub fn pollEvents(self: *WindowManager) !void {
@@ -113,7 +109,7 @@ pub const WindowManager = struct {
             c.SDL_EVENT_WINDOW_RESIZED,
             => {
                 const id = event.window.windowID;
-                const window = try self.windows2.getPtrFromKey(@intCast(id));
+                const window = self.windows.getPtr(@intCast(id));
 
                 switch (event.type) {
                     c.SDL_EVENT_WINDOW_CLOSE_REQUESTED => {

@@ -2,7 +2,7 @@
 const std = @import("std");
 const WindowManager = @import("platform/WindowManager.zig").WindowManager;
 const MemoryManager = @import("core/MemoryManager.zig").MemoryManager;
-const CreateMapArray2 = @import("structures/MapArray2.zig").CreateMapArray;
+const CreateMapArray = @import("structures/MapArray.zig").CreateMapArray;
 const Renderer = @import("vulkan/Renderer.zig").Renderer;
 const Window = @import("platform/Window.zig").Window;
 const zjobs = @import("zjobs");
@@ -17,15 +17,13 @@ pub fn main() !void {
     defer memoryMan.deinit();
 
     var windowMan = try WindowManager.init(&memoryMan);
-    defer windowMan.deinit() catch {
-        std.debug.print("could not cleanup windowMan", .{});
-    };
+    defer windowMan.deinit();
 
     var renderer = try Renderer.init(&memoryMan);
     defer renderer.deinit();
 
-    //try windowMan.addWindow("Astral1", 1600, 900, .compute);
-    //try windowMan.addWindow("Astral2", 16 * 70, 9 * 70, .graphics);
+    try windowMan.addWindow("Astral1", 1600, 900, .compute);
+    try windowMan.addWindow("Astral2", 16 * 70, 9 * 70, .graphics);
     try windowMan.addWindow("Astral3", 350, 350, .mesh);
 
     const win1: f32 = 3.333;
@@ -34,9 +32,9 @@ pub fn main() !void {
 
     std.debug.print("\n", .{});
 
-    const WinMapArray2 = CreateMapArray2(f64, 2, u32, 10, 0);
-    std.debug.print("NewArray Size: {} bytes\n", .{@sizeOf(WinMapArray2)});
-    var mapArray2: WinMapArray2 = .{};
+    const TestMapArray = CreateMapArray(f64, 2, u32, 10, 0);
+    std.debug.print("NewArray Size: {} bytes\n", .{@sizeOf(TestMapArray)});
+    var mapArray2: TestMapArray = .{};
     mapArray2.set(8, win1);
     mapArray2.set(8, win2);
     mapArray2.set(1, win3);
@@ -48,7 +46,7 @@ pub fn main() !void {
 
     const time1 = std.time.milliTimestamp();
 
-    for (0..1_000_000_00) |_| {
+    for (0..1_000) |_| {
         element += mapArray2.get(1);
         mapArray2.set(1, element);
     }
@@ -61,7 +59,7 @@ pub fn main() !void {
 
     const time3 = std.time.milliTimestamp();
 
-    for (0..1_000_000_00) |_| {
+    for (0..1_000) |_| {
         element += hashTestMap.get(1).?;
         const ptr = hashTestMap.getPtr(1).?;
         ptr.* = element;

@@ -93,7 +93,7 @@ pub const Renderer = struct {
                 else => {},
             }
         }
-        //self.updateDescriptors();
+        try self.updateDescriptors();
 
         try self.swapchainMan.updateActiveSwapchains(hashKeys);
 
@@ -136,7 +136,7 @@ pub const Renderer = struct {
     fn recordCommands(self: *Renderer, targets: []const *Swapchain, pipeType: PipelineType, frameInFlight: u8) !void {
         switch (pipeType) {
             .compute => {
-                if (!self.descriptorsUpToDate) self.updateDescriptors();
+                if (!self.descriptorsUpToDate) try self.updateDescriptors();
                 try self.cmdMan.recordComputePass(&self.renderImage, &self.pipelineMan.compute, self.descriptorMan.sets[frameInFlight]);
             },
             .graphics => try self.cmdMan.recordGraphicsPass(&self.renderImage, &self.pipelineMan.graphics, .graphics),
@@ -219,7 +219,8 @@ pub const Renderer = struct {
         }
     }
 
-    fn updateDescriptors(self: *Renderer) void {
+    fn updateDescriptors(self: *Renderer) !void {
+        try self.scheduler.waitForGPU();
         self.descriptorMan.updateAllDescriptorSets(self.renderImage.view);
         self.descriptorsUpToDate = true;
     }

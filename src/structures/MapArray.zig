@@ -1,287 +1,549 @@
 const std = @import("std");
 
-pub fn CreateMapArray(comptime elementType: type, comptime keyType: type, comptime size: u32) type {
-    // Choose smallest int for size
-    const IndexType = FindSmallestIntType(size);
-    const keyCount = std.math.maxInt(keyType);
-    const sentinel = keyCount;
+/// Creates a MapArray Type which links a sparse array of keys and a dense array of any type bidirectionally.
+/// (This is more performant than a hash map and does not have hash collisions at the cost of more memory)
+///
+/// - For performance/awareness reasons all operations manipulating the MapArray DO NOT CHECK VALIDITY of indices, keys, elements or links!
+///     (can still be done if wished by using the internally provided "is*" bool and getter functions)
+/// - ALL operations are O(1) the only exception to this is getUsedKeyCount()
+/// - removeAtKey() and removeAtIndex() replace the deleted element with the last element
+/// - Keys are validated using an sentinel value that is reserved for empty keys
+/// - Elements can be added using a key for lookup using the set() function
+/// - Elements added using setAtIndex() or append() will not allow access via key and are not internally linked to a key yet
+///     (can still be linked later using the link() function)
+/// - The MapArray is fully stack allocated and automatically creates internal types for minimal memory footprint
+///
+/// @param elementType: type, The type of elements to store
+/// @param size: u32, Maximum number of elements that can be stored
+/// @param keyType: type, The type of sparse keys (must be an unsigned integer type)
+/// @param keyMax: u32, Maximum value a key can have (must be >= size)
+/// @param keyMin: u32, Minimum value a key can have
+///
+/// example usage:
+/// const MyMapArray = CreateMapArray(Vec4, 1000, u32, 99999, 9999);
+/// var arr = MyMapArray{};
+/// arr.set(100, 42);
+/// arr.append(99);
+///
+/// *Hint: This can also be used as a general Map storing Indices for multiple Arrays by storing an unsigned integer type as elementType!*
+/// *Hint2: It is strongly adviced to keep size, keyMax and keyMin small, higher values can flood memory very quickly!
+///  (sizeOf(MapArray) = (keyType keyRange) + (keyType size) + (elements size)*
+///
+/// implementation details:
+/// - elementLimit: Last elements array Index
+/// - keyLimit: Last keys array index
+/// - usedKeyCount: Number of keys within the valid range of min and max
+/// - smallKeyType: Smallest possible unsigned integer type that can store usedKeyCount + 1 (sentinelValue)
+/// - indexType: Smallest possible unsigned integer type that can store the number of Elements
+///
+/// - key: Used as keys array index,
+/// - index: Used as index for the links and elements arrays
+///
+/// - count: Number of elements stored, also describes next available index;
+/// - keys: The sparse Array of index values for the links and elements arrays
+/// - elements: The dense array of elements
+///
+///
+pub fn CreateMapArray(comptime elementType: type, comptime size: u32, comptime keyType: type, comptime keyMax: u32, comptime keyMin: u32) type {
+    comptime {
+        if (keyMax < size) @compileError("MapArray: keyMax must be >= size");
+        if (keyMin > keyMax) @compileError("MapArray: keyMax must be > keyMin");
+    }
+    const elementLimit = size - 1;
+
+    const usedKeyCount = keyMax - keyMin + 1;
+    const sentinel = usedKeyCount + 1;
+    const smallKeyType = FindSmallestIntType(sentinel);
+    const indexType = FindSmallestIntType(size + 1); //
 
     return struct {
         const Self = @This();
-        //bits: [actualKeyMax]u1 = .{0} ** actualKeyMax,
-        keys: [keyCount]keyType = .{sentinel} ** keyCount, //Keys store Indices for the Elements and their Links Arrays
-        elements: [size]elementType = undefined, //Elements store the actual data
-        links: [size]keyType = undefined, //Links connect the Elements with their Keys
-        count: IndexType = 0, //Count stores current usage
-        size: IndexType = size,
+        count: indexType = 0,
 
-        pub fn addWithKey(self: *Self, key: keyType, element: elementType) !void {
-            if (self.isFull() == true) return error.addWithKey;
+        keys: [usedKeyCount]smallKeyType = .{sentinel} ** usedKeyCount,
+        links: [size]smallKeyType = .{sentinel} ** size,
+        elements: [size]elementType = undefined,
 
-            if (key == sentinel) {
-                std.debug.print("MapArray: Key {} reserved for being empty\n", .{sentinel});
-                return error.addWithKey;
+        pub fn set(self: *Self, key: keyType, element: elementType) void {
+            const castedKey: smallKeyType = @truncate(key - keyMin);
+
+            if (self.keys[castedKey] == sentinel) {
+                const index = self.count;
+                self.keys[castedKey] = index;
+                self.links[index] = castedKey;
+                self.elements[index] = element;
+                self.count += 1;
+            } else {
+                const index = self.keys[castedKey];
+                self.elements[index] = element;
             }
+        }
 
-            if (key >= keyCount) {
-                std.debug.print("MapArray: Key Out of Bounds ({}-{})\n", .{ 0, keyCount - 1 });
-                return error.addWithKey;
-            }
+        pub fn setMany(self: *Self, keys: []const keyType, elements: []const elementType) void {
+            for (keys, elements) |key, element| self.set(key, element);
+        }
 
-            const count = self.count;
-            self.elements[count] = element;
-            self.keys[key] = count;
-            self.links[count] = key;
+        pub fn overwriteAtIndex(self: *Self, index: u32, element: elementType) void {
+            self.elements[index] = element;
+        }
+
+        pub fn append(self: *Self, element: elementType) void {
+            self.elements[self.count] = element;
+            self.links[self.count] = sentinel;
             self.count += 1;
         }
 
-        pub fn addWithoutKey(self: *Self, element: elementType) !void {
-            if (self.isFull() == true) return error.addWithKey;
-
-            const count = self.count;
-            self.elements[count] = element;
-            self.links[count] = sentinel;
-            self.count += 1;
+        pub fn appendMany(self: *Self, elements: []const elementType) void {
+            for (elements) |element| self.append(element);
         }
 
-        // GET FUNCTIONS //
+        pub fn link(self: *Self, index: u32, key: keyType) void {
+            const castedKey: smallKeyType = @truncate(key - keyMin);
+            const oldKey = self.links[index];
 
-        pub fn getCount(self: *const Self) IndexType {
-            return self.count;
+            if (oldKey != sentinel) self.keys[oldKey] = sentinel;
+            self.keys[castedKey] = @truncate(index);
+            self.links[index] = castedKey;
         }
 
-        pub fn getFromKey(self: *Self, key: keyType) !elementType {
-            if (self.isKeyValid(key) == false) return error.getFromKey;
-            return self.elements[self.keys[key]];
+        pub fn unlink(self: *Self, key: keyType) void {
+            const castedKey: smallKeyType = @truncate(key - keyMin);
+            self.unlinkAtIndex(self.keys[castedKey]);
         }
 
-        pub fn getLinkFromKey(self: *const Self, key: keyType) !keyType {
-            if (self.isKeyValid(key) == false) return error.getLinkFromKey;
-            return self.links[self.keys[key]];
+        pub fn unlinkAtIndex(self: *Self, index: u32) void {
+            const key = self.links[index];
+            if (key != sentinel) {
+                self.keys[key] = sentinel;
+                self.links[index] = sentinel;
+            }
         }
 
-        pub fn getLinkAtIndex(self: *const Self, index: IndexType) !keyType {
-            if (self.isIndexValid(index) == false) return error.getLinkAtIndex;
-            return self.links[index];
+        pub fn clear(self: *Self) void {
+            self.count = 0;
+            //for (0..usedKeyCount) |i| self.keys[i] = sentinel;
+            //for (0..size) |i| self.links[i] = sentinel;
+            @memset(&self.keys, sentinel);
+            @memset(&self.links, sentinel);
         }
 
-        pub fn getLast(self: *const Self) !elementType {
-            if (self.isEmpty() == true) return error.getLast;
-            return self.elements[self.count - 1];
+        pub fn removeLast(self: *Self) void {
+            const key = self.links[self.count - 1];
+            if (key != sentinel) self.keys[key] = sentinel;
+
+            self.links[self.count - 1] = sentinel;
+            self.count -= 1;
         }
 
-        pub fn getLastLink(self: *const Self) !keyType {
-            if (self.isEmpty() == true) return error.getLastLink;
-            return self.links[self.count - 1];
+        pub fn removeMany(self: *Self, number: u32) void {
+            for (number) |_| self.removeLast();
         }
 
-        pub fn getLastPtr(self: *Self) !*elementType {
-            if (self.isEmpty()) return error.getLast;
-            return &self.elements[self.count - 1];
+        pub fn removeAtKey(self: *Self, key: keyType) void {
+            self.removeAtIndex(self.keys[key - keyMin]);
         }
 
-        pub fn getPtrFromKey(self: *Self, key: keyType) !*elementType {
-            if (self.isKeyValid(key) == false) return error.getFromKey;
-            return &self.elements[self.keys[key]];
+        pub fn removeAtIndex(self: *Self, index: u32) void {
+            const keyIndex = self.links[index];
+            if (keyIndex != sentinel) self.keys[keyIndex] = sentinel;
+
+            const lastIndex = self.count - 1;
+            self.count -= 1;
+
+            if (index != lastIndex) {
+                const lastKey = self.links[lastIndex];
+                // Move last element to removed position
+                self.elements[index] = self.elements[lastIndex];
+                self.links[index] = lastKey;
+                // Update key mapping if last element has a key
+                if (lastKey != sentinel) self.keys[lastKey] = @truncate(index);
+            }
+            self.links[lastIndex] = sentinel;
         }
 
-        pub fn getAtIndex(self: *const Self, index: IndexType) !elementType {
-            if (self.isIndexValid(index) == false) return error.getAtIndex;
+        pub fn swapOnlyElement(self: *Self, key1: keyType, key2: keyType) void {
+            self.swapOnlyElementAtIndex(self.keys[key1 - keyMin], self.keys[key2 - keyMin]);
+        }
+
+        pub fn swapOnlyElementAtIndex(self: *Self, index1: u32, index2: u32) void {
+            if (index1 == index2) return;
+            const tempElement = self.elements[index1];
+            self.elements[index1] = self.elements[index2];
+            self.elements[index2] = tempElement;
+        }
+
+        pub fn swap(self: *Self, key1: keyType, key2: keyType) void {
+            self.swapAtIndex(self.keys[key1 - keyMin], self.keys[key2 - keyMin]);
+        }
+
+        pub fn swapAtIndex(self: *Self, index1: u32, index2: u32) void {
+            if (index1 == index2) return;
+            const tempElement = self.elements[index1];
+            self.elements[index1] = self.elements[index2];
+            self.elements[index2] = tempElement;
+
+            const tempLink = self.links[index1];
+            self.links[index1] = self.links[index2];
+            self.links[index2] = tempLink;
+
+            if (self.links[index1] != sentinel) self.keys[self.links[index1]] = @truncate(index1);
+            if (self.links[index2] != sentinel) self.keys[self.links[index2]] = @truncate(index2);
+        }
+
+        pub fn isKeyUsedAndValid(self: *Self, key: keyType) bool {
+            if (self.isKeyValid(key) == false) return false;
+            const castedKey: smallKeyType = @truncate(key - keyMin);
+            return self.keys[castedKey] != sentinel;
+        }
+
+        pub fn isKeyUsed(self: *Self, key: keyType) bool {
+            const castedKey: smallKeyType = @truncate(key - keyMin);
+            return self.keys[castedKey] != sentinel;
+        }
+
+        pub inline fn isKeyValid(_: *Self, key: keyType) bool {
+            return key >= keyMin and (key - keyMin) < usedKeyCount;
+        }
+
+        pub inline fn isIndexUsed(self: *Self, index: u32) bool {
+            return index < self.count;
+        }
+
+        pub inline fn isIndexValid(_: *Self, index: u32) bool {
+            return index <= elementLimit;
+        }
+
+        pub inline fn isFull(self: *Self) bool {
+            return self.count >= size;
+        }
+
+        pub inline fn isLinked(self: *Self, index: u32) bool {
+            return self.links[index] != sentinel;
+        }
+
+        pub inline fn getElements(self: *Self) []elementType {
+            return self.elements[0..self.count];
+        }
+
+        pub inline fn getElementsArrayPtr(self: *Self) *[size]elementType {
+            return &self.elements;
+        }
+
+        pub inline fn getUpperKeyLimit(_: *Self) u32 {
+            return keyMax;
+        }
+
+        pub inline fn getLowerKeyLimit(_: *Self) u32 {
+            return keyMin;
+        }
+
+        pub inline fn getLastValidIndex(_: *Self) u32 {
+            return size - 1;
+        }
+
+        pub inline fn getMaximumElements(_: *Self) u32 {
+            return size;
+        }
+
+        pub inline fn getPossibleKeyCount(_: *Self) u32 {
+            return usedKeyCount;
+        }
+
+        pub inline fn get(self: *Self, key: keyType) elementType {
+            return self.elements[self.keys[(key - keyMin)]];
+        }
+
+        pub inline fn getPtr(self: *Self, key: keyType) *elementType {
+            return &self.elements[self.keys[(key - keyMin)]];
+        }
+
+        pub inline fn getAtIndex(self: *Self, index: u32) elementType {
             return self.elements[index];
         }
 
-        pub fn getPtrAtIndex(self: *Self, index: IndexType) !*elementType {
-            if (self.isIndexValid(index) == false) return error.getAtIndex;
+        pub inline fn getPtrAtIndex(self: *Self, index: u32) *elementType {
             return &self.elements[index];
         }
 
-        pub fn getIndexFromKey(self: *Self, key: keyType) !IndexType {
-            if (self.isKeyValid(key) == false) return error.getIndexFromKey;
-            return self.keys[key];
+        pub inline fn getFirst(self: *Self) elementType {
+            return self.elements[0];
         }
 
-        // TEST FUNCTIONS //
-
-        pub fn isEmpty(self: *const Self) bool {
-            if (self.count <= 0) {
-                std.debug.print("MapArray: No Elements stored\n", .{});
-                return true;
-            }
-            return false;
+        pub inline fn getFirstPtr(self: *Self) *elementType {
+            return &self.elements[0];
         }
 
-        pub fn isFull(self: *Self) bool {
-            if (self.count >= self.size) {
-                std.debug.print("MapArray: Cant add more than {} Elements\n", .{self.count});
-                return true;
-            }
-            return false;
+        pub inline fn getLast(self: *Self) elementType {
+            return self.elements[self.count - 1];
         }
 
-        pub fn isIndexValid(self: *const Self, index: IndexType) bool {
-            if (self.isEmpty() == true) return false;
-            if (index >= self.count) {
-                std.debug.print("MapArray: Index Access too big {} from {}\n", .{ index, self.count });
-                return false;
-            }
-            if (index > self.size - 1 or index < 0) {
-                std.debug.print("MapArray: Index Access Out of Bounds ({}-{})\n", .{ 0, self.size - 1 });
-                return false;
-            }
-            return true;
+        pub inline fn getLastPtr(self: *Self) *elementType {
+            return &self.elements[self.count - 1];
         }
 
-        pub fn isKeyValid(self: *Self, key: keyType) bool {
-            if (self.isEmpty() == true) return false;
-            if (key == sentinel) {
-                std.debug.print("MapArray: Key {} reserved for being empty\n", .{sentinel});
-                return false;
-            }
-            if (key >= keyCount) {
-                std.debug.print("MapArray: Key Out of Bounds ({}-{})\n", .{ 0, keyCount - 1 });
-                return false;
-            }
-            if (self.keys[key] == sentinel) {
-                std.debug.print("No Element stored for Key {}\n", .{key});
-                return false;
-            }
-            return true;
+        pub inline fn getNextFreeIndex(self: *Self) u32 {
+            return self.count;
         }
 
-        // REMOVE FUNCTIONS //
-
-        pub fn removeAtIndex(self: *Self, index: IndexType) !void {
-            if (self.isIndexValid(index) == false) return error.removeAtIndex;
-            const lastIndex = self.count - 1;
-
-            self.keys[self.links[index]] = sentinel;
-
-            if (index < lastIndex) {
-                const lastLink = self.links[lastIndex];
-                self.elements[index] = self.elements[lastIndex];
-                self.links[index] = lastLink;
-                self.keys[lastLink] = index;
-            }
-            self.count -= 1;
+        pub inline fn getCount(self: *Self) u32 {
+            return self.count;
         }
 
-        pub fn fetchRemoveAtIndex(self: *Self, index: IndexType) !elementType {
-            if (self.isIndexValid(index) == false) return error.fetchRemoveAtIndex;
-            const removedElement = self.elements[index];
-            const lastIndex = self.count - 1;
-
-            self.keys[self.links[index]] = sentinel;
-
-            if (index < lastIndex) {
-                const lastLink = self.links[lastIndex];
-                self.elements[index] = self.elements[lastIndex];
-                self.links[index] = lastLink;
-                self.keys[lastLink] = index;
-            }
-            self.count -= 1;
-            return removedElement;
-        }
-
-        pub fn removeLast(self: *Self) !void {
-            if (self.isEmpty() == true) return error.removeLast;
-            const lastKey = self.links[self.count - 1];
-            self.keys[lastKey] = sentinel;
-            self.count -= 1;
-        }
-
-        pub fn removeFromKey(self: *Self, key: keyType) !void {
-            if (self.isKeyValid(key) == false) return error.removeFromKey;
-            const index = self.keys[key];
-            const lastIndex = self.count - 1;
-
-            self.keys[key] = sentinel;
-
-            if (index < lastIndex) {
-                const lastLink = self.links[lastIndex];
-                self.elements[index] = self.elements[lastIndex];
-                self.links[index] = lastLink;
-                self.keys[lastLink] = index;
-            }
-
-            self.count -= 1;
-        }
-
-        pub fn fetchRemoveFromKey(self: *Self, key: keyType) !elementType {
-            if (self.isKeyValid(key) == false) return error.fetchRemoveFromKey;
-            const element = try self.getFromKey(key);
-            try self.removeFromKey(key);
-            return element;
-        }
-
-        // INFO FUNCTIONS //
-
-        pub fn printAll(self: *Self) void {
-            std.debug.print("\n", .{});
-            for (0..self.count) |i| {
-                std.debug.print("Key {} -> Index {} -> Element {}\n", .{ self.links[i], self.keys[self.links[i]], self.elements[i] });
-            }
-            std.debug.print("\n", .{});
-        }
-
-        pub fn printAll2(self: *Self) void {
-            std.debug.print("\n", .{});
-            for (0..self.count) |i| {
-                const key = self.links[i];
-                if (key == sentinel or key >= keyCount) {
-                    std.debug.print("Index {} -> Has No Link & Key\n", .{i});
-                    continue;
-                }
-                const idx = self.keys[key];
-                std.debug.print("Key {} -> Index {} -> Element {}\n", .{ key, idx, self.elements[i] });
-            }
-            std.debug.print("\n", .{});
-        }
-
-        pub fn getLastKey(_: *Self) keyType {
-            return keyCount - 1;
-        }
-
-        pub fn getSentinel(_: *Self) keyType {
-            return sentinel;
+        pub inline fn getUnusedCount(self: *Self) u32 {
+            return size - self.count;
         }
     };
 }
 
 fn FindSmallestIntType(number: usize) type {
-    if (number <= 1) return u1;
-    if (number <= 3) return u2;
-    if (number <= 7) return u3;
-    if (number <= 15) return u4;
-    if (number <= 31) return u5;
-    if (number <= 63) return u6;
-    if (number <= 127) return u7;
-    if (number <= 255) return u8;
-    if (number <= 511) return u9;
-    if (number <= 1023) return u10;
-    if (number <= 2047) return u11;
-    if (number <= 4095) return u12;
-    if (number <= 8191) return u13;
-    if (number <= 16_383) return u14;
-    if (number <= 31_767) return u15;
-    if (number <= 65_535) return u16;
-    if (number <= 131_071) return u17;
-    if (number <= 262_143) return u18;
-    if (number <= 524_287) return u19;
-    if (number <= 1_048_575) return u20;
-    if (number <= 2_097_151) return u21;
-    if (number <= 4_194_303) return u22;
-    if (number <= 8_388_607) return u23;
-    if (number <= 16_777_215) return u24;
-    if (number <= 33_554_431) return u25;
-    if (number <= 67_108_863) return u26;
-    if (number <= 134_217_727) return u27;
-    if (number <= 268_435_455) return u28;
-    if (number <= 536_870_911) return u29;
-    if (number <= 1_073_741_823) return u30;
-    if (number <= 2_147_483_647) return u31;
-    if (number <= 4_294_967_295) return u32;
+    return std.math.IntFittingRange(0, number - 1);
 }
 
-fn FindSmallestIntType2(number: usize) type {
-    return std.math.IntFittingRange(0, number - 1);
+const testing = std.testing;
+const expect = testing.expect;
+const expectEqual = testing.expectEqual;
+
+test "MapArrayTest" {
+    const elementType = u32;
+    const size = 5;
+    const keyType = u16;
+    const keyMax = 99;
+    const keyMin = 10;
+
+    const TestMapArray = CreateMapArray(elementType, size, keyType, keyMax, keyMin);
+    var arr = TestMapArray{};
+
+    // Validations
+    try expect(arr.isKeyUsed(keyMin) == false);
+    try expect(arr.isKeyUsed(keyMax) == false);
+
+    try expect(arr.isKeyValid(keyMin - 1) == false);
+    try expect(arr.isKeyValid(keyMin) == true);
+    try expect(arr.isKeyValid(keyMax) == true);
+    try expect(arr.isKeyValid(keyMax + 1) == false);
+
+    try expectEqual(keyMax, arr.getUpperKeyLimit());
+    try expectEqual(keyMin, arr.getLowerKeyLimit());
+
+    try expectEqual(size - 1, arr.getLastValidIndex());
+    try expectEqual(size, arr.getMaximumElements());
+
+    try expectEqual(arr.getPossibleKeyCount(), keyMax - keyMin + 1); // because its inclusive
+    try expectEqual(arr.getNextFreeIndex(), 0);
+    try expectEqual(arr.getUnusedCount(), size);
+
+    try expect(arr.isKeyUsedAndValid(keyMin - 1) == false);
+    try expect(arr.isKeyUsedAndValid(keyMin) == false);
+    try expect(arr.isKeyUsedAndValid(keyMax) == false);
+    try expect(arr.isKeyUsedAndValid(keyMax + 1) == false);
+
+    try expect(arr.isIndexUsed(0) == false);
+    try expect(arr.isIndexUsed(1) == false);
+    try expect(arr.isIndexUsed(size) == false);
+
+    try expect(arr.isIndexValid(0) == true);
+    try expect(arr.isIndexValid(size - 1) == true);
+    try expect(arr.isIndexValid(size) == false);
+    try expect(arr.isIndexValid(size + 1) == false);
+
+    try expect(arr.isLinked(0) == false);
+    try expect(arr.isLinked(size - 1) == false);
+
+    try expect(arr.isFull() == false);
+
+    try expect(arr.getElements().len == 0);
+    try expect(arr.getElementsArrayPtr() == &arr.elements);
+
+    // check if all Keys and Links have reserved Sentinel Value
+    for (arr.links) |link| try expectEqual(link, keyMax - keyMin + 2); // one for sentinel and one for index being inclusive
+    try expectEqual(0, arr.getCount());
+
+    const element1 = 42;
+    const element2 = 333;
+    const element3 = 1234;
+    const key1 = 84;
+    const key2 = 89;
+    const key3 = 66;
+
+    // Validations before first object
+    try expect(arr.isKeyUsed(key1) == false);
+    try expect(arr.isKeyUsed(key2) == false);
+
+    try expect(arr.isKeyValid(key1) == true);
+    try expect(arr.isKeyValid(key2) == true);
+
+    try expect(arr.isKeyUsedAndValid(key1) == false);
+    try expect(arr.isKeyUsedAndValid(key2) == false);
+
+    try expect(arr.isLinked(0) == false);
+    try expect(arr.isLinked(1) == false);
+
+    // set
+    arr.set(key1, element1);
+    try expectEqual(element1, arr.get(key1));
+    try expectEqual(1, arr.getCount());
+    try expect(arr.isKeyUsed(key1) == true);
+
+    try expect(arr.getElements().len == 1);
+    try expectEqual(arr.getNextFreeIndex(), 1);
+    try expectEqual(arr.getUnusedCount(), size - 1);
+
+    // Validations after first object
+    try expect(arr.isKeyUsed(key1) == true);
+    try expect(arr.isKeyValid(key1) == true);
+    try expect(arr.isKeyUsedAndValid(key1) == true);
+
+    try expect(arr.isIndexUsed(0) == true);
+    try expect(arr.isIndexUsed(1) == false);
+    try expect(arr.isIndexUsed(size) == false);
+
+    try expect(arr.isLinked(0) == true);
+    try expect(arr.isLinked(1) == false);
+
+    try expect(arr.get(key1) == element1);
+    try expect(arr.getAtIndex(0) == element1);
+    try expect(arr.getFirst() == arr.getAtIndex(0));
+
+    // set while key is already used
+    arr.set(key1, element2);
+    try expectEqual(1, arr.getCount());
+    try expect(arr.isKeyUsed(key1) == true);
+
+    try expect(arr.getElements().len == 1);
+    try expectEqual(arr.getNextFreeIndex(), 1);
+    try expectEqual(arr.getUnusedCount(), size - 1);
+
+    // Validation after second object (stored 1)
+    try expect(arr.isIndexUsed(0) == true);
+    try expect(arr.isIndexUsed(1) == false);
+
+    try expect(arr.isLinked(0) == true);
+    try expect(arr.isLinked(1) == false);
+
+    try expect(arr.get(key1) == element2);
+    try expect(arr.getPtr(key1).* == element2);
+    try expect(arr.getAtIndex(0) == element2);
+    try expect(arr.getPtrAtIndex(0).* == arr.getAtIndex(0));
+    try expect(arr.getFirst() == arr.getAtIndex(0));
+    try expect(arr.getFirst() == arr.getLast());
+    try expect(arr.getFirst() == arr.getLast());
+    try expect(arr.getFirstPtr() == arr.getLastPtr());
+
+    // setMany with 1 new key
+    try expect(arr.isKeyUsed(key2) == false);
+    arr.setMany(&.{ key1, key2 }, &.{ element1, element2 });
+    try expectEqual(2, arr.getCount());
+    try expect(arr.isKeyUsed(key2) == true);
+
+    try expect(arr.get(key1) == element1);
+    try expect(arr.getPtr(key1).* == element1);
+    try expect(arr.getAtIndex(0) == element1);
+
+    try expect(arr.get(key2) == element2);
+    try expect(arr.getPtr(key2).* == element2);
+    try expect(arr.getAtIndex(1) == element2);
+
+    try expect(arr.getFirst() == arr.getAtIndex(0));
+    try expect(arr.getFirst() == arr.getFirstPtr().*);
+    try expect(arr.getFirst() != arr.getAtIndex(1));
+    try expect(arr.getFirst() != arr.getLast());
+
+    try expectEqual(arr.getNextFreeIndex(), 2);
+    try expectEqual(arr.getUnusedCount(), size - 2);
+
+    // Validation after third object (stored 2)
+    try expect(arr.isIndexUsed(0) == true);
+    try expect(arr.isIndexUsed(1) == true);
+    try expect(arr.isIndexUsed(2) == false);
+
+    try expect(arr.isLinked(0) == true);
+    try expect(arr.isLinked(1) == true);
+    try expect(arr.isLinked(2) == false);
+
+    try expect(arr.getElements().len == 2);
+
+    // Fill and check counts
+    arr.overwriteAtIndex(size - 1, element1);
+    try expectEqual(2, arr.getCount());
+
+    arr.append(element3);
+    try expectEqual(3, arr.getCount());
+    try expectEqual(arr.getUnusedCount(), size - 3);
+
+    arr.append(element3);
+    try expectEqual(4, arr.getCount());
+    try expectEqual(arr.getUnusedCount(), size - 4);
+    try expect(arr.isFull() == false);
+    try expect(arr.isLinked(3) == false);
+
+    arr.set(key3, element3);
+    try expectEqual(5, arr.getCount());
+    try expectEqual(arr.getUnusedCount(), size - 5);
+    try expectEqual(arr.getUnusedCount(), 0);
+    try expect(arr.isFull() == true);
+    try expect(arr.isLinked(4) == true);
+
+    // FILL AND REMOVE TESTS //
+    arr.removeLast();
+    try expectEqual(4, arr.getCount());
+    try expectEqual(arr.getUnusedCount(), size - 4);
+    try expect(arr.isFull() == false);
+    try expect(arr.isLinked(4) == false);
+
+    const key4 = 55;
+    try expect(arr.isLinked(3) == false);
+    arr.link(3, key4);
+    try expect(arr.isLinked(3) == true);
+    try expect(arr.get(key4) == arr.getAtIndex(3));
+
+    arr.removeAtIndex(3);
+    try expectEqual(3, arr.getCount());
+    try expectEqual(arr.getUnusedCount(), size - 3);
+    try expect(arr.isFull() == false);
+    try expect(arr.isLinked(3) == false);
+
+    // remove to swap first and last
+    try expect(arr.getFirst() != arr.getAtIndex(2));
+    const tempElement = arr.getAtIndex(2);
+
+    try expect(arr.isLinked(0) == true);
+    try expect(arr.isKeyUsed(key1) == true);
+    arr.removeAtKey(key1);
+
+    try expect(arr.getFirst() == tempElement);
+    try expect(arr.isKeyUsed(key1) == false);
+    try expect(arr.isLinked(0) == false);
+    try expect(arr.isLinked(2) == false);
+    try expect(arr.isLinked(1) == true);
+
+    // Swap tests
+    try expect(arr.isLinked(0) == false);
+    arr.link(0, key4);
+    try expect(arr.isLinked(1) == true);
+    const e1 = arr.get(key2);
+    const e2 = arr.get(key4);
+    try expect(e1 != e2);
+
+    try expect(e2 == arr.getAtIndex(0));
+    try expect(e1 == arr.getAtIndex(1));
+
+    arr.swap(key2, key4);
+    try expect(e1 == arr.getAtIndex(0));
+    try expect(e2 == arr.getAtIndex(1));
+
+    arr.swapAtIndex(0, 1);
+    try expect(e2 == arr.getAtIndex(0));
+    try expect(e1 == arr.getAtIndex(1));
+
+    arr.unlink(key2);
+    try expect(arr.isLinked(0) == true);
+    try expect(arr.isLinked(1) == false);
+    try expect(e2 == arr.getAtIndex(0));
+    try expect(e1 == arr.getAtIndex(1));
+
+    arr.swapOnlyElementAtIndex(0, 1);
+    try expect(arr.isLinked(0) == true);
+    try expect(arr.isLinked(1) == false);
+    try expect(e2 == arr.getAtIndex(1));
+    try expect(e1 == arr.getAtIndex(0));
 }
