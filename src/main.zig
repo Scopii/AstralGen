@@ -46,7 +46,7 @@ pub fn main() !void {
 
     const time1 = std.time.milliTimestamp();
 
-    for (0..1_000) |_| {
+    for (0..1_000_000_00) |_| {
         element += mapArray2.get(1);
         mapArray2.set(1, element);
     }
@@ -59,7 +59,7 @@ pub fn main() !void {
 
     const time3 = std.time.milliTimestamp();
 
-    for (0..1_000) |_| {
+    for (0..1_000_000_00) |_| {
         element += hashTestMap.get(1).?;
         const ptr = hashTestMap.getPtr(1).?;
         ptr.* = element;
