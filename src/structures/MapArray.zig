@@ -44,6 +44,12 @@ const std = @import("std");
 /// - elements: The dense array of elements
 ///
 ///
+///
+///
+fn FindSmallestIntType(number: usize) type {
+    return std.math.IntFittingRange(0, number - 1);
+}
+
 pub fn CreateMapArray(comptime elementType: type, comptime size: u32, comptime keyType: type, comptime keyMax: u32, comptime keyMin: u32) type {
     comptime {
         if (keyMax < size) @compileError("MapArray: keyMax must be >= size");
@@ -190,38 +196,38 @@ pub fn CreateMapArray(comptime elementType: type, comptime size: u32, comptime k
             if (self.links[index2] != sentinel) self.keys[self.links[index2]] = @truncate(index2);
         }
 
-        pub fn isKeyUsedAndValid(self: *Self, key: keyType) bool {
+        pub fn isKeyUsedAndValid(self: *const Self, key: keyType) bool {
             if (self.isKeyValid(key) == false) return false;
             const castedKey: smallKeyType = @truncate(key - keyMin);
             return self.keys[castedKey] != sentinel;
         }
 
-        pub fn isKeyUsed(self: *Self, key: keyType) bool {
+        pub fn isKeyUsed(self: *const Self, key: keyType) bool {
             const castedKey: smallKeyType = @truncate(key - keyMin);
             return self.keys[castedKey] != sentinel;
         }
 
-        pub inline fn isKeyValid(_: *Self, key: keyType) bool {
+        pub inline fn isKeyValid(_: *const Self, key: keyType) bool {
             return key >= keyMin and (key - keyMin) < usedKeyCount;
         }
 
-        pub inline fn isIndexUsed(self: *Self, index: u32) bool {
+        pub inline fn isIndexUsed(self: *const Self, index: u32) bool {
             return index < self.count;
         }
 
-        pub inline fn isIndexValid(_: *Self, index: u32) bool {
+        pub inline fn isIndexValid(_: *const Self, index: u32) bool {
             return index <= elementLimit;
         }
 
-        pub inline fn isFull(self: *Self) bool {
+        pub inline fn isFull(self: *const Self) bool {
             return self.count >= size;
         }
 
-        pub inline fn isLinked(self: *Self, index: u32) bool {
+        pub inline fn isLinked(self: *const Self, index: u32) bool {
             return self.links[index] != sentinel;
         }
 
-        pub inline fn getElements(self: *Self) []elementType {
+        pub inline fn getElements(self: *const Self) []elementType {
             return self.elements[0..self.count];
         }
 
@@ -229,27 +235,27 @@ pub fn CreateMapArray(comptime elementType: type, comptime size: u32, comptime k
             return &self.elements;
         }
 
-        pub inline fn getUpperKeyLimit(_: *Self) u32 {
+        pub inline fn getUpperKeyLimit(_: *const Self) u32 {
             return keyMax;
         }
 
-        pub inline fn getLowerKeyLimit(_: *Self) u32 {
+        pub inline fn getLowerKeyLimit(_: *const Self) u32 {
             return keyMin;
         }
 
-        pub inline fn getLastValidIndex(_: *Self) u32 {
+        pub inline fn getLastValidIndex(_: *const Self) u32 {
             return size - 1;
         }
 
-        pub inline fn getMaximumElements(_: *Self) u32 {
+        pub inline fn getMaximumElements(_: *const Self) u32 {
             return size;
         }
 
-        pub inline fn getPossibleKeyCount(_: *Self) u32 {
+        pub inline fn getPossibleKeyCount(_: *const Self) u32 {
             return usedKeyCount;
         }
 
-        pub inline fn get(self: *Self, key: keyType) elementType {
+        pub inline fn get(self: *const Self, key: keyType) elementType {
             return self.elements[self.keys[(key - keyMin)]];
         }
 
@@ -257,7 +263,7 @@ pub fn CreateMapArray(comptime elementType: type, comptime size: u32, comptime k
             return &self.elements[self.keys[(key - keyMin)]];
         }
 
-        pub inline fn getAtIndex(self: *Self, index: u32) elementType {
+        pub inline fn getAtIndex(self: *const Self, index: u32) elementType {
             return self.elements[index];
         }
 
@@ -265,7 +271,7 @@ pub fn CreateMapArray(comptime elementType: type, comptime size: u32, comptime k
             return &self.elements[index];
         }
 
-        pub inline fn getFirst(self: *Self) elementType {
+        pub inline fn getFirst(self: *const Self) elementType {
             return self.elements[0];
         }
 
@@ -273,7 +279,7 @@ pub fn CreateMapArray(comptime elementType: type, comptime size: u32, comptime k
             return &self.elements[0];
         }
 
-        pub inline fn getLast(self: *Self) elementType {
+        pub inline fn getLast(self: *const Self) elementType {
             return self.elements[self.count - 1];
         }
 
@@ -281,22 +287,18 @@ pub fn CreateMapArray(comptime elementType: type, comptime size: u32, comptime k
             return &self.elements[self.count - 1];
         }
 
-        pub inline fn getNextFreeIndex(self: *Self) u32 {
+        pub inline fn getNextFreeIndex(self: *const Self) u32 {
             return self.count;
         }
 
-        pub inline fn getCount(self: *Self) u32 {
+        pub inline fn getCount(self: *const Self) u32 {
             return self.count;
         }
 
-        pub inline fn getUnusedCount(self: *Self) u32 {
+        pub inline fn getUnusedCount(self: *const Self) u32 {
             return size - self.count;
         }
     };
-}
-
-fn FindSmallestIntType(number: usize) type {
-    return std.math.IntFittingRange(0, number - 1);
 }
 
 const testing = std.testing;

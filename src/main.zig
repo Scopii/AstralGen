@@ -26,50 +26,6 @@ pub fn main() !void {
     try windowMan.addWindow("Astral2", 16 * 70, 9 * 70, .graphics);
     try windowMan.addWindow("Astral3", 350, 350, .mesh);
 
-    const win1: f32 = 3.333;
-    const win2: f32 = 1.234;
-    const win3: f32 = 6.666;
-
-    std.debug.print("\n", .{});
-
-    const TestMapArray = CreateMapArray(f64, 2, u32, 10, 0);
-    std.debug.print("NewArray Size: {} bytes\n", .{@sizeOf(TestMapArray)});
-    var mapArray2: TestMapArray = .{};
-    mapArray2.set(8, win1);
-    mapArray2.set(8, win2);
-    mapArray2.set(1, win3);
-
-    mapArray2.set(1, win2);
-
-    var element: f64 = 0;
-    std.debug.print("Size {}", .{@sizeOf(u8)});
-
-    const time1 = std.time.milliTimestamp();
-
-    for (0..1_000_000_00) |_| {
-        element += mapArray2.get(1);
-        mapArray2.set(1, element);
-    }
-    const time2 = std.time.milliTimestamp();
-
-    var hashTestMap = std.AutoHashMap(u32, f64).init(memoryMan.allocator);
-    defer hashTestMap.deinit();
-    try hashTestMap.put(1, win2);
-    element = 0;
-
-    const time3 = std.time.milliTimestamp();
-
-    for (0..1_000_000_00) |_| {
-        element += hashTestMap.get(1).?;
-        const ptr = hashTestMap.getPtr(1).?;
-        ptr.* = element;
-    }
-    const time4 = std.time.milliTimestamp();
-
-    std.debug.print("\n", .{});
-    std.debug.print("Time MapArray {}ms\n", .{time2 - time1});
-    std.debug.print("Time HashMap {}ms\n", .{time4 - time3});
-
     // Main loop
     while (true) {
         windowMan.pollEvents() catch |err| {
