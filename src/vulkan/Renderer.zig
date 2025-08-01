@@ -127,8 +127,9 @@ pub const Renderer = struct {
         }
         const cmd = try self.cmdMan.endRecording();
 
-        try self.queueSubmit(cmd, self.swapchainMan.targets.items, frameInFlight);
-        try self.present(self.swapchainMan.targets.items);
+        const targets = self.swapchainMan.targets.slice();
+        try self.queueSubmit(cmd, targets, frameInFlight);
+        try self.present(targets);
 
         self.scheduler.nextFrame();
     }

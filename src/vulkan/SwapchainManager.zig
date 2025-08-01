@@ -28,9 +28,9 @@ pub const SwapchainManager = struct {
     gpi: c.VkDevice,
     instance: c.VkInstance,
     renderSize: c.VkExtent2D = .{ .width = 0, .height = 0 },
-    swapchains: CreateMapArray(Swapchain, 24, u8, 24, 0),
+    swapchains: CreateMapArray(Swapchain, 24, u8, 24, 0) = .{},
     activeSwapchains: [@typeInfo(PipelineType).@"enum".fields.len]std.ArrayList(*Swapchain),
-    targets: std.ArrayList(*Swapchain),
+    targets: std.BoundedArray(*Swapchain, 24) = .{},
 
     pub fn init(alloc: Allocator, context: *const Context) !SwapchainManager {
         const enumLength = @typeInfo(PipelineType).@"enum".fields.len;
@@ -41,14 +41,11 @@ pub const SwapchainManager = struct {
             .alloc = alloc,
             .gpi = context.gpi,
             .instance = context.instance,
-            .swapchains = .{},
             .activeSwapchains = presentTargets,
-            .targets = std.ArrayList(*Swapchain).init(alloc),
         };
     }
 
     pub fn deinit(self: *SwapchainManager) void {
-        self.targets.deinit();
         for (self.activeSwapchains) |swapchainList| swapchainList.deinit();
     }
 
@@ -152,7 +149,7 @@ pub const SwapchainManager = struct {
     }
 
     pub fn updateTargets(self: *SwapchainManager, frameInFlight: u8, context: *Context) !bool {
-        self.targets.clearRetainingCapacity();
+        self.targets.clear();
         const activeSwapchains = self.activeSwapchains;
         const gpi = self.gpi;
 
@@ -174,7 +171,7 @@ pub const SwapchainManager = struct {
                 }
             }
         }
-        return if (self.targets.items.len != 0) true else false;
+        return if (self.targets.len != 0) true else false;
     }
 
     pub fn updateActiveSwapchains(self: *SwapchainManager, hashKeys: []u32) !void {

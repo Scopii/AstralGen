@@ -8,9 +8,9 @@ const Renderer = @import("../vulkan/Renderer.zig").Renderer;
 const CreateMapArray = @import("../structures/MapArray.zig").CreateMapArray;
 
 pub const WindowManager = struct {
-    windows: CreateMapArray(Window, 24, u8, 24, 0),
-    swapchainsToChange: std.BoundedArray(Window, 24),
-    swapchainsToDraw: std.BoundedArray(u32, 24),
+    windows: CreateMapArray(Window, 24, u8, 24, 0) = .{},
+    swapchainsToChange: std.BoundedArray(Window, 24) = .{},
+    swapchainsToDraw: std.BoundedArray(u32, 24) = .{},
     openWindows: u32 = 0,
     close: bool = false,
 
@@ -19,12 +19,7 @@ pub const WindowManager = struct {
             std.log.err("SDL_Init failed: {s}\n", .{c.SDL_GetError()});
             return error.SdlInitFailed;
         }
-
-        return .{
-            .windows = .{},
-            .swapchainsToChange = .{},
-            .swapchainsToDraw = .{},
-        };
+        return .{};
     }
 
     pub fn deinit(self: *WindowManager) void {
