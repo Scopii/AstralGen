@@ -259,6 +259,10 @@ pub fn CreateMapArray(comptime elementType: type, comptime size: u32, comptime k
             return self.elements[self.keys[(key - keyMin)]];
         }
 
+        pub inline fn getIndex(self: *const Self, key: keyType) smallKeyType {
+            return self.keys[(key - keyMin)];
+        }
+
         pub inline fn getPtr(self: *Self, key: keyType) *elementType {
             return &self.elements[self.keys[(key - keyMin)]];
         }

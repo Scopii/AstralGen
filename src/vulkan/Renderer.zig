@@ -163,7 +163,7 @@ pub const Renderer = struct {
         var waitInfos = try self.arenaAlloc.alloc(c.VkSemaphoreSubmitInfo, submitIds.len);
 
         for (submitIds, 0..) |id, i| {
-            const swapchain = self.swapchainMan.swapchains.getPtr(id);
+            const swapchain = self.swapchainMan.swapchains.getAtIndex(id);
 
             waitInfos[i] = .{
                 .sType = c.VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
@@ -175,7 +175,7 @@ pub const Renderer = struct {
         var signalInfos = try self.arenaAlloc.alloc(c.VkSemaphoreSubmitInfo, submitIds.len + 1); // (+1 is Timeline Semaphore)
 
         for (submitIds, 0..) |id, i| {
-            const swapchain = self.swapchainMan.swapchains.getPtr(id);
+            const swapchain = self.swapchainMan.swapchains.getAtIndex(id);
 
             signalInfos[i] = .{
                 .sType = c.VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
@@ -217,7 +217,7 @@ pub const Renderer = struct {
         defer self.alloc.free(presentWaitSems);
 
         for (presentIds, 0..) |id, i| {
-            const swapchain = self.swapchainMan.swapchains.getPtr(id);
+            const swapchain = self.swapchainMan.swapchains.getAtIndex(id);
 
             swapchainHandles[i] = swapchain.handle;
             imageIndices[i] = swapchain.curIndex;

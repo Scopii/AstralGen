@@ -153,16 +153,17 @@ pub const SwapchainManager = struct {
 
         for (0..activeGroups.len) |i| {
             for (activeGroups[i].slice()) |id| {
-                const ptr = self.swapchains.getPtr(id);
+                const elementIndex = self.swapchains.getIndex(id);
+                const ptr = self.swapchains.getPtrAtIndex(elementIndex);
                 const result1 = c.vkAcquireNextImageKHR(gpi, ptr.handle, std.math.maxInt(u64), ptr.imgRdySems[frameInFlight], null, &ptr.curIndex);
 
                 switch (result1) {
-                    c.VK_SUCCESS => try self.targets.append(id),
+                    c.VK_SUCCESS => try self.targets.append(elementIndex),
                     c.VK_ERROR_OUT_OF_DATE_KHR, c.VK_SUBOPTIMAL_KHR => {
                         try self.recreateSwapchain(ptr, context);
                         const result2 = c.vkAcquireNextImageKHR(gpi, ptr.handle, std.math.maxInt(u64), ptr.imgRdySems[frameInFlight], null, &ptr.curIndex);
                         if (result2 == c.VK_SUCCESS) {
-                            try self.targets.append(id);
+                            try self.targets.append(elementIndex);
                             std.debug.print("Resolved Error for Swapchain {}", .{ptr.*});
                         } else std.debug.print("Could not Resolve Swapchain Error {}", .{ptr.*});
                     },
