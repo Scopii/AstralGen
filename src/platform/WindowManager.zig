@@ -9,8 +9,7 @@ const CreateMapArray = @import("../structures/MapArray.zig").CreateMapArray;
 
 pub const WindowManager = struct {
     windows: CreateMapArray(Window, 24, u8, 24, 0) = .{},
-    swapchainsToChange: std.BoundedArray(Window, 24) = .{},
-    swapchainsToDraw: std.BoundedArray(u32, 24) = .{},
+    swapchainsToChange: std.BoundedArray(*Window, 24) = .{},
     openWindows: u32 = 0,
     close: bool = false,
 
@@ -42,9 +41,9 @@ pub const WindowManager = struct {
         //_ = c.SDL_SetWindowOpacity(sdlWindow, 0.5);
 
         var window = try Window.init(id, sdlHandle, pipeType, c.VkExtent2D{ .width = @intCast(width), .height = @intCast(height) });
-        try self.swapchainsToChange.append(window);
-        window.status = .active;
+        window.status = .needCreation;
         self.windows.set(@intCast(id), window);
+        try self.swapchainsToChange.append(self.windows.getPtr(@intCast(id)));
         self.openWindows += 1;
         std.debug.print("Window ID {} created\n", .{id});
     }
@@ -93,27 +92,24 @@ pub const WindowManager = struct {
                     c.SDL_EVENT_WINDOW_CLOSE_REQUESTED => {
                         if (window.status == .active) self.openWindows -= 1;
                         window.status = .needDelete;
-                        try self.swapchainsToChange.append(window.*);
+                        try self.swapchainsToChange.append(window);
                         std.debug.print("Window {} CLOSED.\n", .{id});
                     },
                     c.SDL_EVENT_WINDOW_MINIMIZED => {
                         window.status = .needInactive;
-                        try self.swapchainsToChange.append(window.*);
-                        window.status = .inactive;
+                        try self.swapchainsToChange.append(window);
                         self.openWindows -= 1;
                         std.debug.print("Window {} MINIMIZED.\n", .{id});
                     },
                     c.SDL_EVENT_WINDOW_RESTORED => {
                         window.status = .needActive;
-                        try self.swapchainsToChange.append(window.*);
-                        window.status = .active;
+                        try self.swapchainsToChange.append(window);
                         self.openWindows += 1;
                         std.debug.print("Window {} RESTORED.\n", .{id});
                     },
                     c.SDL_EVENT_WINDOW_RESIZED => {
                         window.status = .needUpdate;
-                        try self.swapchainsToChange.append(window.*);
-                        window.status = .active;
+                        try self.swapchainsToChange.append(window);
                         var newExtent: c.VkExtent2D = undefined;
                         _ = c.SDL_GetWindowSize(window.handle, @ptrCast(&newExtent.width), @ptrCast(&newExtent.height));
                         window.extent = newExtent;

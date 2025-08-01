@@ -228,11 +228,7 @@ pub const SwapchainManager = struct {
                 self.alloc.free(swapchain.renderDoneSemaphores);
 
                 _ = self.swapchains.removeAtKey(@intCast(key));
-                const swapchainGroupPtr = self.activeSwapchains[@intFromEnum(window.pipeType)].slice();
-
-                for (0..swapchainGroupPtr.len) |i| {
-                    if (swapchainGroupPtr[i] == key) _ = self.activeSwapchains[@intFromEnum(window.pipeType)].swapRemove(i);
-                }
+                self.removeActive(window);
 
                 std.debug.print("Swapchain Key {} destroyed\n", .{key});
             } else std.debug.print("Cant Swapchain to destroy missing.\n", .{});
