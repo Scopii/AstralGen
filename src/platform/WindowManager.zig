@@ -8,25 +8,22 @@ const Renderer = @import("../vulkan/Renderer.zig").Renderer;
 const CreateMapArray = @import("../structures/MapArray.zig").CreateMapArray;
 
 pub const WindowManager = struct {
-    memoryMan: *MemoryManger,
     windows: CreateMapArray(Window, 24, u8, 24, 0),
-    swapchainsToChange: std.ArrayList(Window),
-    swapchainsToDraw: std.ArrayList(u32),
+    swapchainsToChange: std.BoundedArray(Window, 24),
+    swapchainsToDraw: std.BoundedArray(u32, 24),
     openWindows: u32 = 0,
     close: bool = false,
 
-    pub fn init(memoryMan: *MemoryManger) !WindowManager {
+    pub fn init() !WindowManager {
         if (c.SDL_Init(c.SDL_INIT_VIDEO) != true) {
             std.log.err("SDL_Init failed: {s}\n", .{c.SDL_GetError()});
             return error.SdlInitFailed;
         }
-        const alloc = memoryMan.getAllocator();
 
         return .{
-            .memoryMan = memoryMan,
             .windows = .{},
-            .swapchainsToChange = std.ArrayList(Window).init(alloc),
-            .swapchainsToDraw = std.ArrayList(u32).init(alloc),
+            .swapchainsToChange = .{},
+            .swapchainsToDraw = .{},
         };
     }
 
@@ -36,8 +33,6 @@ pub const WindowManager = struct {
             c.SDL_DestroyWindow(windowPtr.handle);
             self.windows.removeLast();
         }
-        self.swapchainsToChange.deinit();
-        self.swapchainsToDraw.deinit();
         c.SDL_Quit();
     }
 
@@ -64,22 +59,22 @@ pub const WindowManager = struct {
     }
 
     pub fn getSwapchainsToDraw2(self: *WindowManager) ![]u32 {
-        self.swapchainsToDraw.clearRetainingCapacity();
+        self.swapchainsToDraw.clear();
         const count = self.windows.getCount();
-        if (count == 0) return self.swapchainsToDraw.items;
+        if (count == 0) return self.swapchainsToDraw.slice();
 
         for (0..count) |i| {
             const windowPtr = self.windows.getPtrAtIndex(@intCast(i));
             if (windowPtr.status == .active) try self.swapchainsToDraw.append(windowPtr.id);
         }
-        return self.swapchainsToDraw.items;
+        return self.swapchainsToDraw.slice();
     }
 
     pub fn cleanupWindows(self: *WindowManager) !void {
-        for (self.swapchainsToChange.items) |window| {
+        for (self.swapchainsToChange.slice()) |window| {
             if (window.status == .needDelete) try self.destroyWindow(window.id);
         }
-        self.swapchainsToChange.clearRetainingCapacity();
+        self.swapchainsToChange.clear();
     }
 
     pub fn destroyWindow(self: *WindowManager, id: u32) !void {

@@ -16,7 +16,7 @@ pub fn main() !void {
     var memoryMan = try MemoryManager.init(debugAlloc.allocator());
     defer memoryMan.deinit();
 
-    var windowMan = try WindowManager.init(&memoryMan);
+    var windowMan = try WindowManager.init();
     defer windowMan.deinit();
 
     var renderer = try Renderer.init(&memoryMan);
@@ -33,8 +33,8 @@ pub fn main() !void {
             break;
         };
 
-        if (windowMan.swapchainsToChange.items.len > 0) {
-            try renderer.update(windowMan.swapchainsToChange.items, try windowMan.getSwapchainsToDraw2());
+        if (windowMan.swapchainsToChange.len > 0) {
+            try renderer.update(windowMan.swapchainsToChange.slice(), try windowMan.getSwapchainsToDraw2());
             try windowMan.cleanupWindows();
         }
 

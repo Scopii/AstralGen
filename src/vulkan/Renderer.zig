@@ -72,7 +72,7 @@ pub const Renderer = struct {
         self.context.deinit();
     }
 
-    pub fn update(self: *Renderer, windows: []Window, hashKeys: []u32) !void {
+    pub fn update(self: *Renderer, windows: []Window, IdsToDraw: []u32) !void {
         for (windows) |window| {
             if (window.status == .needDelete or window.status == .needUpdate) {
                 _ = c.vkDeviceWaitIdle(self.context.gpi);
@@ -95,9 +95,9 @@ pub const Renderer = struct {
         }
         try self.updateDescriptors();
 
-        try self.swapchainMan.updateActiveSwapchains(hashKeys);
+        try self.swapchainMan.updateActiveSwapchains(IdsToDraw);
 
-        if (hashKeys.len != 0) {
+        if (IdsToDraw.len != 0) {
             const renderSize = self.swapchainMan.getRenderSize();
 
             if (renderSize.width != self.renderImage.extent3d.width or renderSize.height != self.renderImage.extent3d.height) {

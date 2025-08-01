@@ -28,7 +28,7 @@ pub const SwapchainManager = struct {
     gpi: c.VkDevice,
     instance: c.VkInstance,
     renderSize: c.VkExtent2D = .{ .width = 0, .height = 0 },
-    swapchains2: CreateMapArray(Swapchain, 24, u8, 24, 0),
+    swapchains: CreateMapArray(Swapchain, 24, u8, 24, 0),
     activeSwapchains: [@typeInfo(PipelineType).@"enum".fields.len]std.ArrayList(*Swapchain),
     targets: std.ArrayList(*Swapchain),
 
@@ -41,7 +41,7 @@ pub const SwapchainManager = struct {
             .alloc = alloc,
             .gpi = context.gpi,
             .instance = context.instance,
-            .swapchains2 = .{},
+            .swapchains = .{},
             .activeSwapchains = presentTargets,
             .targets = std.ArrayList(*Swapchain).init(alloc),
         };
@@ -147,7 +147,7 @@ pub const SwapchainManager = struct {
             .renderDoneSemaphores = renderDoneSems,
             .pipeType = window.pipeType,
         };
-        self.swapchains2.set(@intCast(window.id), newSwapchain);
+        self.swapchains.set(@intCast(window.id), newSwapchain);
         std.debug.print("Swapchain added to Window {}\n", .{window.id});
     }
 
@@ -206,8 +206,8 @@ pub const SwapchainManager = struct {
         const gpi = self.gpi;
 
         for (hashKeys) |key| {
-            if (self.swapchains2.isKeyValid(@intCast(key)) == true){
-                const swapchain = self.swapchains2.get(@intCast(key));
+            if (self.swapchains.isKeyValid(@intCast(key)) == true) {
+                const swapchain = self.swapchains.get(@intCast(key));
                 for (swapchain.views) |view| c.vkDestroyImageView(gpi, view, null);
                 for (swapchain.imageRdySemaphores) |sem| c.vkDestroySemaphore(gpi, sem, null);
                 for (swapchain.renderDoneSemaphores) |sem| c.vkDestroySemaphore(gpi, sem, null);
@@ -219,7 +219,7 @@ pub const SwapchainManager = struct {
                 self.alloc.free(swapchain.imageRdySemaphores);
                 self.alloc.free(swapchain.renderDoneSemaphores);
 
-                _ = self.swapchains2.removeAtKey(@intCast(key));
+                _ = self.swapchains.removeAtKey(@intCast(key));
                 std.debug.print("Swapchain Key {} destroyed\n", .{key});
             } else std.debug.print("Cant Swapchain to destroy missing.\n", .{});
         }
@@ -338,7 +338,7 @@ pub const SwapchainManager = struct {
     }
 
     pub fn getSwapchainPtr(self: *SwapchainManager, windowId: u32) ?*Swapchain {
-        return self.swapchains2.getPtr(@intCast(windowId));
+        return self.swapchains.getPtr(@intCast(windowId));
     }
 };
 
