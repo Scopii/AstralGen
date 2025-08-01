@@ -53,18 +53,6 @@ pub const WindowManager = struct {
         return try self.windows.getPtrFromKey(id);
     }
 
-    pub fn getSwapchainsToDraw2(self: *WindowManager) ![]u32 {
-        self.swapchainsToDraw.clear();
-        const count = self.windows.getCount();
-        if (count == 0) return self.swapchainsToDraw.slice();
-
-        for (0..count) |i| {
-            const windowPtr = self.windows.getPtrAtIndex(@intCast(i));
-            if (windowPtr.status == .active) try self.swapchainsToDraw.append(windowPtr.id);
-        }
-        return self.swapchainsToDraw.slice();
-    }
-
     pub fn cleanupWindows(self: *WindowManager) !void {
         for (self.swapchainsToChange.slice()) |window| {
             if (window.status == .needDelete) try self.destroyWindow(window.id);
@@ -109,14 +97,16 @@ pub const WindowManager = struct {
                         std.debug.print("Window {} CLOSED.\n", .{id});
                     },
                     c.SDL_EVENT_WINDOW_MINIMIZED => {
-                        window.status = .inactive;
+                        window.status = .needInactive;
                         try self.swapchainsToChange.append(window.*);
+                        window.status = .inactive;
                         self.openWindows -= 1;
                         std.debug.print("Window {} MINIMIZED.\n", .{id});
                     },
                     c.SDL_EVENT_WINDOW_RESTORED => {
-                        window.status = .active;
+                        window.status = .needActive;
                         try self.swapchainsToChange.append(window.*);
+                        window.status = .active;
                         self.openWindows += 1;
                         std.debug.print("Window {} RESTORED.\n", .{id});
                     },

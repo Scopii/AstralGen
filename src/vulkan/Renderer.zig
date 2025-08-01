@@ -72,7 +72,7 @@ pub const Renderer = struct {
         self.context.deinit();
     }
 
-    pub fn update(self: *Renderer, windows: []Window, IdsToDraw: []u32) !void {
+    pub fn update(self: *Renderer, windows: []Window) !void {
         for (windows) |window| {
             if (window.status == .needDelete or window.status == .needUpdate) {
                 _ = c.vkDeviceWaitIdle(self.context.gpi);
@@ -84,22 +84,24 @@ pub const Renderer = struct {
             stateSwitch: switch (window.status) {
                 .needUpdate => {
                     if (self.swapchainMan.getSwapchainPtr(window.id) != null) {
-                        self.swapchainMan.destroySwapchains(&.{window.id});
+                        self.swapchainMan.destroySwapchains(&.{window});
                         continue :stateSwitch .needCreation;
                     }
                 },
                 .needCreation => try self.swapchainMan.addSwapchain(&self.context, window),
-                .needDelete => self.swapchainMan.destroySwapchains(&.{window.id}),
+                .needDelete => self.swapchainMan.destroySwapchains(&.{window}),
+                .needActive => try self.swapchainMan.addActive(window),
+                .needInactive => self.swapchainMan.removeActive(window),
                 else => {},
             }
         }
         try self.updateDescriptors();
 
-        try self.swapchainMan.updateActiveSwapchains(IdsToDraw);
+        try self.swapchainMan.updateRenderSize();
 
-        if (IdsToDraw.len != 0) {
-            const renderSize = self.swapchainMan.getRenderSize();
+        const renderSize = self.swapchainMan.getRenderSize();
 
+        if (renderSize.height != 0 or renderSize.width != 0) {
             if (renderSize.width != self.renderImage.extent3d.width or renderSize.height != self.renderImage.extent3d.height) {
                 self.resourceMan.destroyRenderImage(self.renderImage);
                 self.renderImage = try self.resourceMan.createRenderImage(.{ .width = renderSize.width, .height = renderSize.height });
@@ -119,10 +121,10 @@ pub const Renderer = struct {
         const activeSwapchains = self.swapchainMan.activeSwapchains;
 
         for (0..activeSwapchains.len) |i| {
-            if (activeSwapchains[i].items.len != 0) {
+            if (activeSwapchains[i].len != 0) {
                 const renderPass: PipelineType = @enumFromInt(i);
                 if (SHADER_HOTLOAD == true) try self.pipelineMan.checkShaderUpdate(renderPass);
-                try self.recordCommands(activeSwapchains[i].items, renderPass, frameInFlight);
+                try self.recordCommands(activeSwapchains[i].slice(), renderPass, frameInFlight);
             }
         }
         const cmd = try self.cmdMan.endRecording();
@@ -134,7 +136,7 @@ pub const Renderer = struct {
         self.scheduler.nextFrame();
     }
 
-    fn recordCommands(self: *Renderer, targets: []const *Swapchain, pipeType: PipelineType, frameInFlight: u8) !void {
+    fn recordCommands(self: *Renderer, recordIds: []const u8, pipeType: PipelineType, frameInFlight: u8) !void {
         switch (pipeType) {
             .compute => {
                 if (!self.descriptorsUpToDate) try self.updateDescriptors();
@@ -143,13 +145,15 @@ pub const Renderer = struct {
             .graphics => try self.cmdMan.recordGraphicsPass(&self.renderImage, &self.pipelineMan.graphics, .graphics),
             .mesh => try self.cmdMan.recordGraphicsPass(&self.renderImage, &self.pipelineMan.mesh, .mesh),
         }
-        try self.cmdMan.blitToTargets(&self.renderImage, targets);
+        try self.cmdMan.blitToTargets(&self.renderImage, recordIds, &self.swapchainMan.swapchains);
     }
 
-    fn queueSubmit(self: *Renderer, cmd: c.VkCommandBuffer, presentTargets: []const *Swapchain, frameInFlight: u8) !void {
-        var waitInfos = try self.arenaAlloc.alloc(c.VkSemaphoreSubmitInfo, presentTargets.len);
+    fn queueSubmit(self: *Renderer, cmd: c.VkCommandBuffer, submitIds: []const u8, frameInFlight: u8) !void {
+        var waitInfos = try self.arenaAlloc.alloc(c.VkSemaphoreSubmitInfo, submitIds.len);
 
-        for (presentTargets, 0..) |swapchain, i| {
+        for (submitIds, 0..) |id, i| {
+            const swapchain = self.swapchainMan.swapchains.getPtr(id);
+
             waitInfos[i] = .{
                 .sType = c.VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
                 .semaphore = swapchain.imageRdySemaphores[frameInFlight],
@@ -157,9 +161,11 @@ pub const Renderer = struct {
             };
         }
 
-        var signalInfos = try self.arenaAlloc.alloc(c.VkSemaphoreSubmitInfo, presentTargets.len + 1); // (+1 is Timeline Semaphore)
+        var signalInfos = try self.arenaAlloc.alloc(c.VkSemaphoreSubmitInfo, submitIds.len + 1); // (+1 is Timeline Semaphore)
 
-        for (presentTargets, 0..) |swapchain, i| {
+        for (submitIds, 0..) |id, i| {
+            const swapchain = self.swapchainMan.swapchains.getPtr(id);
+
             signalInfos[i] = .{
                 .sType = c.VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
                 .semaphore = swapchain.renderDoneSemaphores[swapchain.curIndex],
@@ -168,7 +174,7 @@ pub const Renderer = struct {
         }
 
         // Adding the timeline
-        signalInfos[presentTargets.len] = .{
+        signalInfos[submitIds.len] = .{
             .sType = c.VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
             .semaphore = self.scheduler.cpuSyncTimeline,
             .value = self.scheduler.totalFrames + 1,
@@ -191,15 +197,17 @@ pub const Renderer = struct {
         try check(c.vkQueueSubmit2(self.context.graphicsQ, 1, &submitInfo, null), "Failed main submission");
     }
 
-    fn present(self: *Renderer, presentTargets: []const *Swapchain) !void {
-        var swapchainHandles = try self.alloc.alloc(c.VkSwapchainKHR, presentTargets.len);
+    fn present(self: *Renderer, presentIds: []const u8) !void {
+        var swapchainHandles = try self.alloc.alloc(c.VkSwapchainKHR, presentIds.len);
         defer self.alloc.free(swapchainHandles);
-        var imageIndices = try self.alloc.alloc(u32, presentTargets.len);
+        var imageIndices = try self.alloc.alloc(u32, presentIds.len);
         defer self.alloc.free(imageIndices);
-        var presentWaitSems = try self.alloc.alloc(c.VkSemaphore, presentTargets.len);
+        var presentWaitSems = try self.alloc.alloc(c.VkSemaphore, presentIds.len);
         defer self.alloc.free(presentWaitSems);
 
-        for (presentTargets, 0..) |swapchain, i| {
+        for (presentIds, 0..) |id, i| {
+            const swapchain = self.swapchainMan.swapchains.getPtr(id);
+
             swapchainHandles[i] = swapchain.handle;
             imageIndices[i] = swapchain.curIndex;
             presentWaitSems[i] = swapchain.renderDoneSemaphores[swapchain.curIndex];

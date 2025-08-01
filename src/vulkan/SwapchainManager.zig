@@ -20,7 +20,6 @@ pub const Swapchain = struct {
     imageRdySemaphores: []c.VkSemaphore, // indexed by max-in-flight.
     renderDoneSemaphores: []c.VkSemaphore, // indexed by swapchain images
     surfaceFormat: c.VkSurfaceFormatKHR,
-    pipeType: PipelineType,
 };
 
 pub const SwapchainManager = struct {
@@ -29,13 +28,13 @@ pub const SwapchainManager = struct {
     instance: c.VkInstance,
     renderSize: c.VkExtent2D = .{ .width = 0, .height = 0 },
     swapchains: CreateMapArray(Swapchain, 24, u8, 24, 0) = .{},
-    activeSwapchains: [@typeInfo(PipelineType).@"enum".fields.len]std.ArrayList(*Swapchain),
-    targets: std.BoundedArray(*Swapchain, 24) = .{},
+    activeSwapchains: [@typeInfo(PipelineType).@"enum".fields.len]std.BoundedArray(u8, 24),
+    targets: std.BoundedArray(u8, 24) = .{},
 
     pub fn init(alloc: Allocator, context: *const Context) !SwapchainManager {
         const enumLength = @typeInfo(PipelineType).@"enum".fields.len;
-        var presentTargets: [enumLength]std.ArrayList(*Swapchain) = undefined;
-        for (0..enumLength) |i| presentTargets[i] = std.ArrayList(*Swapchain).init(alloc);
+        var presentTargets: [enumLength]std.BoundedArray(u8, 24) = undefined;
+        for (0..enumLength) |i| presentTargets[i] = .{};
 
         return .{
             .alloc = alloc,
@@ -45,9 +44,7 @@ pub const SwapchainManager = struct {
         };
     }
 
-    pub fn deinit(self: *SwapchainManager) void {
-        for (self.activeSwapchains) |swapchainList| swapchainList.deinit();
-    }
+    pub fn deinit(_: *SwapchainManager) void {}
 
     pub fn addSwapchain(self: *SwapchainManager, context: *const Context, window: Window) !void {
         const alloc = self.alloc;
@@ -142,9 +139,9 @@ pub const SwapchainManager = struct {
             .views = views,
             .imageRdySemaphores = imageRdySems,
             .renderDoneSemaphores = renderDoneSems,
-            .pipeType = window.pipeType,
         };
         self.swapchains.set(@intCast(window.id), newSwapchain);
+        try self.activeSwapchains[@intFromEnum(window.pipeType)].append(@intCast(window.id));
         std.debug.print("Swapchain added to Window {}\n", .{window.id});
     }
 
@@ -154,16 +151,17 @@ pub const SwapchainManager = struct {
         const gpi = self.gpi;
 
         for (0..activeSwapchains.len) |i| {
-            for (activeSwapchains[i].items) |swapchainPtr| {
+            for (activeSwapchains[i].slice()) |id| {
+                const swapchainPtr = self.swapchains.getPtr(id);
                 const acquireResult = c.vkAcquireNextImageKHR(gpi, swapchainPtr.handle, std.math.maxInt(u64), swapchainPtr.imageRdySemaphores[frameInFlight], null, &swapchainPtr.curIndex);
 
                 switch (acquireResult) {
-                    c.VK_SUCCESS => try self.targets.append(swapchainPtr),
+                    c.VK_SUCCESS => try self.targets.append(id),
                     c.VK_ERROR_OUT_OF_DATE_KHR, c.VK_SUBOPTIMAL_KHR => {
                         try self.recreateSwapchain(swapchainPtr, context);
                         const acquireResult2 = c.vkAcquireNextImageKHR(gpi, swapchainPtr.handle, std.math.maxInt(u64), swapchainPtr.imageRdySemaphores[frameInFlight], null, &swapchainPtr.curIndex);
                         if (acquireResult2 == c.VK_SUCCESS) {
-                            try self.targets.append(swapchainPtr);
+                            try self.targets.append(id);
                             std.debug.print("Resolved Error for Swapchain {}", .{swapchainPtr.*});
                         } else std.debug.print("Could not Resolve Swapchain Error {}", .{swapchainPtr.*});
                     },
@@ -174,19 +172,30 @@ pub const SwapchainManager = struct {
         return if (self.targets.len != 0) true else false;
     }
 
-    pub fn updateActiveSwapchains(self: *SwapchainManager, hashKeys: []u32) !void {
-        for (0..self.activeSwapchains.len) |i| {
-            self.activeSwapchains[i].clearRetainingCapacity();
-        }
+    pub fn addActive(self: *SwapchainManager, window: Window) !void {
+        try self.activeSwapchains[@intFromEnum(window.pipeType)].append(@intCast(window.id));
+    }
 
+    pub fn removeActive(self: *SwapchainManager, window: Window) void {
+        const swapchainGroupPtr = self.activeSwapchains[@intFromEnum(window.pipeType)].slice();
+
+        for (0..swapchainGroupPtr.len) |i| {
+            if (swapchainGroupPtr[i] == window.id) _ = self.activeSwapchains[@intFromEnum(window.pipeType)].swapRemove(i);
+        }
+    }
+
+    pub fn updateRenderSize(self: *SwapchainManager) !void {
         var maxWidth: u32 = 0;
         var maxHeight: u32 = 0;
 
-        for (hashKeys) |i| {
-            const swapchainPtr = self.getSwapchainPtr(i).?;
-            try self.activeSwapchains[@intFromEnum(swapchainPtr.pipeType)].append(swapchainPtr);
-            maxWidth = @max(maxWidth, swapchainPtr.extent.width);
-            maxHeight = @max(maxHeight, swapchainPtr.extent.height);
+        for (0..self.activeSwapchains.len) |i| {
+            const slice = self.activeSwapchains[i].slice();
+
+            for (0..slice.len) |index| {
+                const swapchainPtr = self.swapchains.getPtr(slice[index]);
+                maxWidth = @max(maxWidth, swapchainPtr.extent.width);
+                maxHeight = @max(maxHeight, swapchainPtr.extent.height);
+            }
         }
         self.renderSize = c.VkExtent2D{ .width = maxWidth, .height = maxHeight };
     }
@@ -199,10 +208,12 @@ pub const SwapchainManager = struct {
         return self.activeSwapchains.items;
     }
 
-    pub fn destroySwapchains(self: *SwapchainManager, hashKeys: []const u32) void {
+    pub fn destroySwapchains(self: *SwapchainManager, windows: []const Window) void {
         const gpi = self.gpi;
 
-        for (hashKeys) |key| {
+        for (windows) |window| {
+            const key = window.id;
+
             if (self.swapchains.isKeyValid(@intCast(key)) == true) {
                 const swapchain = self.swapchains.get(@intCast(key));
                 for (swapchain.views) |view| c.vkDestroyImageView(gpi, view, null);
@@ -217,6 +228,12 @@ pub const SwapchainManager = struct {
                 self.alloc.free(swapchain.renderDoneSemaphores);
 
                 _ = self.swapchains.removeAtKey(@intCast(key));
+                const swapchainGroupPtr = self.activeSwapchains[@intFromEnum(window.pipeType)].slice();
+
+                for (0..swapchainGroupPtr.len) |i| {
+                    if (swapchainGroupPtr[i] == key) _ = self.activeSwapchains[@intFromEnum(window.pipeType)].swapRemove(i);
+                }
+
                 std.debug.print("Swapchain Key {} destroyed\n", .{key});
             } else std.debug.print("Cant Swapchain to destroy missing.\n", .{});
         }
@@ -327,7 +344,6 @@ pub const SwapchainManager = struct {
             .views = views,
             .imageRdySemaphores = imageRdySems,
             .renderDoneSemaphores = renderDoneSems,
-            .pipeType = swapchainPtr.pipeType,
         };
         swapchainPtr.* = newSwapchain;
 

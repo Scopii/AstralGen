@@ -34,7 +34,7 @@ pub fn main() !void {
         };
 
         if (windowMan.swapchainsToChange.len > 0) {
-            try renderer.update(windowMan.swapchainsToChange.slice(), try windowMan.getSwapchainsToDraw2());
+            try renderer.update(windowMan.swapchainsToChange.slice());
             try windowMan.cleanupWindows();
         }
 

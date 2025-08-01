@@ -9,6 +9,8 @@ pub const windowStatus = enum {
     needCreation,
     needUpdate,
     needDelete,
+    needInactive,
+    needActive,
 };
 
 pub const Window = struct {

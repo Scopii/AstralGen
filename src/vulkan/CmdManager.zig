@@ -139,7 +139,9 @@ pub const CmdManager = struct {
         c.vkCmdEndRendering(cmd);
     }
 
-    pub fn blitToTargets(self: *CmdManager, renderImage: *RenderImage, targets: []const *Swapchain) !void {
+    const CreateMapArray = @import("../structures/MapArray.zig").CreateMapArray;
+
+    pub fn blitToTargets(self: *CmdManager, renderImage: *RenderImage, targets: []const u8, swapchainMap: *CreateMapArray(Swapchain, 24, u8, 24, 0)) !void {
         const alloc = self.alloc;
         const cmd = self.activeCmd orelse return;
         var barriers = try alloc.alloc(c.VkImageMemoryBarrier2, targets.len + 1);
@@ -157,7 +159,9 @@ pub const CmdManager = struct {
         );
         renderImage.curLayout = c.VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
 
-        for (targets, 1..) |swapchain, i| {
+        for (targets, 1..) |id, i| {
+            const swapchain = swapchainMap.getPtr(id);
+
             barriers[i] = createImageMemoryBarrier2(
                 c.VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
                 0,
@@ -171,7 +175,9 @@ pub const CmdManager = struct {
         }
         createPipelineBarriers2(cmd, barriers);
 
-        for (targets) |swapchain| {
+        for (targets) |id| {
+            const swapchain = swapchainMap.getPtr(id);
+
             copyImageToImage(
                 cmd,
                 renderImage.image,
@@ -184,7 +190,9 @@ pub const CmdManager = struct {
         var presentBarriers = try alloc.alloc(c.VkImageMemoryBarrier2, targets.len);
         defer alloc.free(presentBarriers);
 
-        for (targets, 0..) |swapchain, i| {
+        for (targets, 0..) |id, i| {
+            const swapchain = swapchainMap.getPtr(id);
+
             presentBarriers[i] = createImageMemoryBarrier2(
                 c.VK_PIPELINE_STAGE_2_TRANSFER_BIT,
                 c.VK_ACCESS_2_TRANSFER_WRITE_BIT,
