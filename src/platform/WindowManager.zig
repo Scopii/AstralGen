@@ -6,10 +6,11 @@ const PipelineType = @import("../vulkan/PipelineBucket.zig").PipelineType;
 const Swapchain = @import("../vulkan/SwapchainManager.zig").Swapchain;
 const Renderer = @import("../vulkan/Renderer.zig").Renderer;
 const CreateMapArray = @import("../structures/MapArray.zig").CreateMapArray;
+const MAX_WINDOWS = @import("../config.zig").MAX_WINDOWS;
 
 pub const WindowManager = struct {
-    windows: CreateMapArray(Window, 24, u8, 24, 0) = .{},
-    swapchainsToChange: std.BoundedArray(*Window, 24) = .{},
+    windows: CreateMapArray(Window, MAX_WINDOWS, u8, MAX_WINDOWS, 0) = .{},
+    swapchainsToChange: std.BoundedArray(*Window, MAX_WINDOWS) = .{},
     openWindows: u32 = 0,
     close: bool = false,
 

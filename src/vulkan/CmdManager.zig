@@ -140,8 +140,9 @@ pub const CmdManager = struct {
     }
 
     const CreateMapArray = @import("../structures/MapArray.zig").CreateMapArray;
+    const MAX_WINDOWS = @import("../config.zig").MAX_WINDOWS;
 
-    pub fn blitToTargets(self: *CmdManager, renderImage: *RenderImage, targets: []const u8, swapchainMap: *CreateMapArray(Swapchain, 24, u8, 24, 0)) !void {
+    pub fn blitToTargets(self: *CmdManager, renderImage: *RenderImage, targets: []const u8, swapchainMap: *CreateMapArray(Swapchain, MAX_WINDOWS, u8, MAX_WINDOWS, 0)) !void {
         const alloc = self.alloc;
         const cmd = self.activeCmd orelse return;
         var barriers = try alloc.alloc(c.VkImageMemoryBarrier2, targets.len + 1);

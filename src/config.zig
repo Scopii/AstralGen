@@ -7,4 +7,4 @@ pub const SHADER_HOTLOAD = true;
 pub const MAX_IN_FLIGHT: u8 = 3; // (Frames)
 
 // Swapchain and Windows
-pub const MAX_WINDOWS = 24;
+pub const MAX_WINDOWS: u8 = 12;

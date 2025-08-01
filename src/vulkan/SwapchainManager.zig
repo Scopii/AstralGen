@@ -9,6 +9,7 @@ const Window = @import("../platform/Window.zig").Window;
 const CreateMapArray = @import("../structures/MapArray.zig").CreateMapArray;
 
 const MAX_IN_FLIGHT = @import("../config.zig").MAX_IN_FLIGHT;
+const MAX_WINDOWS = @import("../config.zig").MAX_WINDOWS;
 
 pub const Swapchain = struct {
     surface: c.VkSurfaceKHR,
@@ -17,8 +18,8 @@ pub const Swapchain = struct {
     images: []c.VkImage,
     views: []c.VkImageView,
     curIndex: u32 = 0,
-    imageRdySemaphores: []c.VkSemaphore, // indexed by max-in-flight.
-    renderDoneSemaphores: []c.VkSemaphore, // indexed by swapchain images
+    imgRdySems: []c.VkSemaphore, // indexed by max-in-flight.
+    renderDoneSems: []c.VkSemaphore, // indexed by swapchain images
     surfaceFormat: c.VkSurfaceFormatKHR,
 };
 
@@ -27,20 +28,20 @@ pub const SwapchainManager = struct {
     gpi: c.VkDevice,
     instance: c.VkInstance,
     renderSize: c.VkExtent2D = .{ .width = 0, .height = 0 },
-    swapchains: CreateMapArray(Swapchain, 24, u8, 24, 0) = .{},
-    activeSwapchains: [@typeInfo(PipelineType).@"enum".fields.len]std.BoundedArray(u8, 24),
-    targets: std.BoundedArray(u8, 24) = .{},
+    swapchains: CreateMapArray(Swapchain, MAX_WINDOWS, u8, MAX_WINDOWS, 0) = .{},
+    activeGroups: [@typeInfo(PipelineType).@"enum".fields.len]std.BoundedArray(u8, MAX_WINDOWS),
+    targets: std.BoundedArray(u8, MAX_WINDOWS) = .{},
 
     pub fn init(alloc: Allocator, context: *const Context) !SwapchainManager {
         const enumLength = @typeInfo(PipelineType).@"enum".fields.len;
-        var presentTargets: [enumLength]std.BoundedArray(u8, 24) = undefined;
-        for (0..enumLength) |i| presentTargets[i] = .{};
+        var activeGroups: [enumLength]std.BoundedArray(u8, MAX_WINDOWS) = undefined;
+        for (0..enumLength) |i| activeGroups[i] = .{};
 
         return .{
             .alloc = alloc,
             .gpi = context.gpi,
             .instance = context.instance,
-            .activeSwapchains = presentTargets,
+            .activeGroups = activeGroups,
         };
     }
 
@@ -130,42 +131,42 @@ pub const SwapchainManager = struct {
         errdefer alloc.free(renderDoneSems);
         for (0..realImgCount) |i| renderDoneSems[i] = try createSemaphore(gpi);
 
-        const newSwapchain = Swapchain{
+        const swapchain = Swapchain{
             .surface = surface,
             .surfaceFormat = surfaceFormat,
             .extent = actualExtent,
             .handle = handle,
             .images = images,
             .views = views,
-            .imageRdySemaphores = imageRdySems,
-            .renderDoneSemaphores = renderDoneSems,
+            .imgRdySems = imageRdySems,
+            .renderDoneSems = renderDoneSems,
         };
-        self.swapchains.set(@intCast(window.id), newSwapchain);
-        try self.activeSwapchains[@intFromEnum(window.pipeType)].append(@intCast(window.id));
+        self.swapchains.set(@intCast(window.id), swapchain);
+        try self.activeGroups[@intFromEnum(window.pipeType)].append(@intCast(window.id));
         std.debug.print("Swapchain added to Window {}\n", .{window.id});
     }
 
     pub fn updateTargets(self: *SwapchainManager, frameInFlight: u8, context: *Context) !bool {
         self.targets.clear();
-        const activeSwapchains = self.activeSwapchains;
+        const activeGroups = self.activeGroups;
         const gpi = self.gpi;
 
-        for (0..activeSwapchains.len) |i| {
-            for (activeSwapchains[i].slice()) |id| {
-                const swapchainPtr = self.swapchains.getPtr(id);
-                const acquireResult = c.vkAcquireNextImageKHR(gpi, swapchainPtr.handle, std.math.maxInt(u64), swapchainPtr.imageRdySemaphores[frameInFlight], null, &swapchainPtr.curIndex);
+        for (0..activeGroups.len) |i| {
+            for (activeGroups[i].slice()) |id| {
+                const ptr = self.swapchains.getPtr(id);
+                const result1 = c.vkAcquireNextImageKHR(gpi, ptr.handle, std.math.maxInt(u64), ptr.imgRdySems[frameInFlight], null, &ptr.curIndex);
 
-                switch (acquireResult) {
+                switch (result1) {
                     c.VK_SUCCESS => try self.targets.append(id),
                     c.VK_ERROR_OUT_OF_DATE_KHR, c.VK_SUBOPTIMAL_KHR => {
-                        try self.recreateSwapchain(swapchainPtr, context);
-                        const acquireResult2 = c.vkAcquireNextImageKHR(gpi, swapchainPtr.handle, std.math.maxInt(u64), swapchainPtr.imageRdySemaphores[frameInFlight], null, &swapchainPtr.curIndex);
-                        if (acquireResult2 == c.VK_SUCCESS) {
+                        try self.recreateSwapchain(ptr, context);
+                        const result2 = c.vkAcquireNextImageKHR(gpi, ptr.handle, std.math.maxInt(u64), ptr.imgRdySems[frameInFlight], null, &ptr.curIndex);
+                        if (result2 == c.VK_SUCCESS) {
                             try self.targets.append(id);
-                            std.debug.print("Resolved Error for Swapchain {}", .{swapchainPtr.*});
-                        } else std.debug.print("Could not Resolve Swapchain Error {}", .{swapchainPtr.*});
+                            std.debug.print("Resolved Error for Swapchain {}", .{ptr.*});
+                        } else std.debug.print("Could not Resolve Swapchain Error {}", .{ptr.*});
                     },
-                    else => try check(acquireResult, "Could not acquire swapchain image"),
+                    else => try check(result1, "Could not acquire swapchain image"),
                 }
             }
         }
@@ -173,14 +174,14 @@ pub const SwapchainManager = struct {
     }
 
     pub fn addActive(self: *SwapchainManager, window: Window) !void {
-        try self.activeSwapchains[@intFromEnum(window.pipeType)].append(@intCast(window.id));
+        try self.activeGroups[@intFromEnum(window.pipeType)].append(@intCast(window.id));
     }
 
     pub fn removeActive(self: *SwapchainManager, window: Window) void {
-        const swapchainGroupPtr = self.activeSwapchains[@intFromEnum(window.pipeType)].slice();
+        const group = self.activeGroups[@intFromEnum(window.pipeType)].slice();
 
-        for (0..swapchainGroupPtr.len) |i| {
-            if (swapchainGroupPtr[i] == window.id) _ = self.activeSwapchains[@intFromEnum(window.pipeType)].swapRemove(i);
+        for (0..group.len) |i| {
+            if (group[i] == window.id) _ = self.activeGroups[@intFromEnum(window.pipeType)].swapRemove(i);
         }
     }
 
@@ -188,8 +189,8 @@ pub const SwapchainManager = struct {
         var maxWidth: u32 = 0;
         var maxHeight: u32 = 0;
 
-        for (0..self.activeSwapchains.len) |i| {
-            const slice = self.activeSwapchains[i].slice();
+        for (0..self.activeGroups.len) |i| {
+            const slice = self.activeGroups[i].slice();
 
             for (0..slice.len) |index| {
                 const swapchainPtr = self.swapchains.getPtr(slice[index]);
@@ -204,8 +205,8 @@ pub const SwapchainManager = struct {
         return self.renderSize;
     }
 
-    pub fn getActiveSwapchains(self: *SwapchainManager) ![]*Swapchain {
-        return self.activeSwapchains.items;
+    pub fn getActiveGroups(self: *SwapchainManager) ![]*Swapchain {
+        return self.activeGroups.items;
     }
 
     pub fn destroySwapchains(self: *SwapchainManager, windows: []const Window) void {
@@ -217,15 +218,15 @@ pub const SwapchainManager = struct {
             if (self.swapchains.isKeyValid(@intCast(key)) == true) {
                 const swapchain = self.swapchains.get(@intCast(key));
                 for (swapchain.views) |view| c.vkDestroyImageView(gpi, view, null);
-                for (swapchain.imageRdySemaphores) |sem| c.vkDestroySemaphore(gpi, sem, null);
-                for (swapchain.renderDoneSemaphores) |sem| c.vkDestroySemaphore(gpi, sem, null);
+                for (swapchain.imgRdySems) |sem| c.vkDestroySemaphore(gpi, sem, null);
+                for (swapchain.renderDoneSems) |sem| c.vkDestroySemaphore(gpi, sem, null);
                 c.vkDestroySwapchainKHR(gpi, swapchain.handle, null);
                 c.vkDestroySurfaceKHR(self.instance, swapchain.surface, null);
 
                 self.alloc.free(swapchain.images);
                 self.alloc.free(swapchain.views);
-                self.alloc.free(swapchain.imageRdySemaphores);
-                self.alloc.free(swapchain.renderDoneSemaphores);
+                self.alloc.free(swapchain.imgRdySems);
+                self.alloc.free(swapchain.renderDoneSems);
 
                 _ = self.swapchains.removeAtKey(@intCast(key));
                 self.removeActive(window);
@@ -239,15 +240,15 @@ pub const SwapchainManager = struct {
         const gpi = self.gpi;
 
         for (swapchainPtr.views) |view| c.vkDestroyImageView(gpi, view, null);
-        for (swapchainPtr.imageRdySemaphores) |sem| c.vkDestroySemaphore(gpi, sem, null);
-        for (swapchainPtr.renderDoneSemaphores) |sem| c.vkDestroySemaphore(gpi, sem, null);
+        for (swapchainPtr.imgRdySems) |sem| c.vkDestroySemaphore(gpi, sem, null);
+        for (swapchainPtr.renderDoneSems) |sem| c.vkDestroySemaphore(gpi, sem, null);
         c.vkDestroySwapchainKHR(gpi, swapchainPtr.handle, null);
         //c.vkDestroySurfaceKHR(self.instance, swapchainPtr.surface, null);
 
         self.alloc.free(swapchainPtr.images);
         self.alloc.free(swapchainPtr.views);
-        self.alloc.free(swapchainPtr.imageRdySemaphores);
-        self.alloc.free(swapchainPtr.renderDoneSemaphores);
+        self.alloc.free(swapchainPtr.imgRdySems);
+        self.alloc.free(swapchainPtr.renderDoneSems);
 
         const alloc = self.alloc;
         const families = context.families;
@@ -338,8 +339,8 @@ pub const SwapchainManager = struct {
             .handle = handle,
             .images = images,
             .views = views,
-            .imageRdySemaphores = imageRdySems,
-            .renderDoneSemaphores = renderDoneSems,
+            .imgRdySems = imageRdySems,
+            .renderDoneSems = renderDoneSems,
         };
         swapchainPtr.* = newSwapchain;
 

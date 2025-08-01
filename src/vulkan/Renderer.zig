@@ -103,7 +103,7 @@ pub const Renderer = struct {
                 .needDelete => {
                     self.swapchainMan.destroySwapchains(&.{window.*});
                 },
-                else => std.debug.print("invalid window State for renderer", .{}),
+                else => std.debug.print("invalid window State for Renderer\n", .{}),
             }
         }
         try self.updateDescriptors();
@@ -129,7 +129,7 @@ pub const Renderer = struct {
         if (try self.swapchainMan.updateTargets(frameInFlight, &self.context) == false) return;
 
         try self.cmdMan.beginRecording(frameInFlight);
-        const activeSwapchains = self.swapchainMan.activeSwapchains;
+        const activeSwapchains = self.swapchainMan.activeGroups;
 
         for (0..activeSwapchains.len) |i| {
             if (activeSwapchains[i].len != 0) {
@@ -167,7 +167,7 @@ pub const Renderer = struct {
 
             waitInfos[i] = .{
                 .sType = c.VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
-                .semaphore = swapchain.imageRdySemaphores[frameInFlight],
+                .semaphore = swapchain.imgRdySems[frameInFlight],
                 .stageMask = c.VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
             };
         }
@@ -179,7 +179,7 @@ pub const Renderer = struct {
 
             signalInfos[i] = .{
                 .sType = c.VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
-                .semaphore = swapchain.renderDoneSemaphores[swapchain.curIndex],
+                .semaphore = swapchain.renderDoneSems[swapchain.curIndex],
                 .stageMask = c.VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
             };
         }
@@ -221,7 +221,7 @@ pub const Renderer = struct {
 
             swapchainHandles[i] = swapchain.handle;
             imageIndices[i] = swapchain.curIndex;
-            presentWaitSems[i] = swapchain.renderDoneSemaphores[swapchain.curIndex];
+            presentWaitSems[i] = swapchain.renderDoneSems[swapchain.curIndex];
         }
 
         const presentInfo = c.VkPresentInfoKHR{
