@@ -11,6 +11,13 @@ const CLOSE_WITH_CONSOLE = @import("config.zig").CLOSE_WITH_CONSOLE;
 const Allocator = std.mem.Allocator;
 
 pub fn main() !void {
+    defer {
+        if (CLOSE_WITH_CONSOLE) {
+            std.debug.print("Press Any Key to exit...\n", .{});
+            _ = std.io.getStdIn().reader().readByte() catch {};
+        }
+    }
+
     var debugAlloc = std.heap.DebugAllocator(.{}).init;
     defer std.debug.print("Memory: {any}\n", .{debugAlloc.deinit()});
     var memoryMan = try MemoryManager.init(debugAlloc.allocator());
@@ -52,10 +59,4 @@ pub fn main() !void {
         memoryMan.resetArena();
     }
     std.debug.print("App Closed\n", .{});
-
-    if (CLOSE_WITH_CONSOLE == true) {
-        const stdout = std.io.getStdOut().writer();
-        _ = try stdout.write("Press Enter to exit...\n");
-        _ = std.io.getStdIn().reader().readByte() catch {};
-    }
 }
