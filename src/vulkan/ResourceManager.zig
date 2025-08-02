@@ -25,11 +25,7 @@ pub const ResourceManager = struct {
     }
 
     pub fn createRenderImage(self: *const ResourceManager, extent: c.VkExtent2D) !RenderImage {
-        const drawImageExtent = c.VkExtent3D{
-            .width = extent.width,
-            .height = extent.height,
-            .depth = 1,
-        };
+        const drawImageExtent = c.VkExtent3D{ .width = extent.width, .height = extent.height, .depth = 1 };
 
         const drawImageUsages = c.VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
             c.VK_IMAGE_USAGE_TRANSFER_DST_BIT |
@@ -39,8 +35,8 @@ pub const ResourceManager = struct {
         const format = c.VK_FORMAT_R16G16B16A16_SFLOAT;
 
         // Allocation from GPU local memory
-        const renderImageInfo = createAllocatedImageInfo(format, drawImageUsages, drawImageExtent);
-        const renderImageAllocInfo = c.VmaAllocationCreateInfo{
+        const renderImageInf = createAllocatedImageInf(format, drawImageUsages, drawImageExtent);
+        const renderImageAllocInf = c.VmaAllocationCreateInfo{
             .usage = c.VMA_MEMORY_USAGE_GPU_ONLY,
             .requiredFlags = c.VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
         };
@@ -49,17 +45,9 @@ pub const ResourceManager = struct {
         var allocation: c.VmaAllocation = undefined;
         var view: c.VkImageView = undefined;
 
-        try check(c.vmaCreateImage(
-            self.vkAlloc.handle,
-            &renderImageInfo,
-            &renderImageAllocInfo,
-            &image,
-            &allocation,
-            null,
-        ), "Could not create Render Image");
-
-        const renderViewInfo = createAllocatedImageViewInfo(format, image, c.VK_IMAGE_ASPECT_COLOR_BIT);
-        try check(c.vkCreateImageView(self.gpi, &renderViewInfo, null, &view), "Could not create Render Image View");
+        try check(c.vmaCreateImage(self.vkAlloc.handle, &renderImageInf, &renderImageAllocInf, &image, &allocation, null), "Could not create Render Image");
+        const renderViewInf = createAllocatedImageViewInf(format, image, c.VK_IMAGE_ASPECT_COLOR_BIT);
+        try check(c.vkCreateImageView(self.gpi, &renderViewInf, null, &view), "Could not create Render Image View");
 
         return .{
             .allocation = allocation,
@@ -80,7 +68,7 @@ pub const ResourceManager = struct {
     }
 };
 
-pub fn createAllocatedImageInfo(format: c.VkFormat, usageFlags: c.VkImageUsageFlags, extent3d: c.VkExtent3D) c.VkImageCreateInfo {
+pub fn createAllocatedImageInf(format: c.VkFormat, usageFlags: c.VkImageUsageFlags, extent3d: c.VkExtent3D) c.VkImageCreateInfo {
     return c.VkImageCreateInfo{
         .sType = c.VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
         .imageType = c.VK_IMAGE_TYPE_2D,
@@ -94,7 +82,7 @@ pub fn createAllocatedImageInfo(format: c.VkFormat, usageFlags: c.VkImageUsageFl
     };
 }
 
-pub fn createAllocatedImageViewInfo(format: c.VkFormat, image: c.VkImage, aspectFlags: c.VkImageAspectFlags) c.VkImageViewCreateInfo {
+pub fn createAllocatedImageViewInf(format: c.VkFormat, image: c.VkImage, aspectFlags: c.VkImageAspectFlags) c.VkImageViewCreateInfo {
     return c.VkImageViewCreateInfo{
         .sType = c.VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
         .viewType = c.VK_IMAGE_VIEW_TYPE_2D,

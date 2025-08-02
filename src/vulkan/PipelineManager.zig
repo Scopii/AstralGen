@@ -10,14 +10,14 @@ const PipelineType = @import("PipelineBucket.zig").PipelineType;
 const ShaderInfo = @import("PipelineBucket.zig").ShaderInfo;
 const Context = @import("Context.zig").Context;
 
-const computeInfo = [_]ShaderInfo{
+const computeInf = [_]ShaderInfo{
     .{ .stage = c.VK_SHADER_STAGE_COMPUTE_BIT, .inputPath = "src/shader/Compute.comp", .outputPath = "zig-out/shader/Compute.spv" },
 };
-const graphicsInfo = [_]ShaderInfo{
+const graphicsInf = [_]ShaderInfo{
     .{ .stage = c.VK_SHADER_STAGE_FRAGMENT_BIT, .inputPath = "src/shader/Graphics.frag", .outputPath = "zig-out/shader/Graphics.spv" },
     .{ .stage = c.VK_SHADER_STAGE_VERTEX_BIT, .inputPath = "src/shader/Graphics.vert", .outputPath = "zig-out/shader/Graphics.spv" },
 };
-const meshShaderPaths = [_]ShaderInfo{
+const meshShaderInf = [_]ShaderInfo{
     .{ .stage = c.VK_SHADER_STAGE_FRAGMENT_BIT, .inputPath = "src/shader/Mesh.frag", .outputPath = "zig-out/shader/Mesh.spv" },
     .{ .stage = c.VK_SHADER_STAGE_MESH_BIT_EXT, .inputPath = "src/shader/Mesh.mesh", .outputPath = "zig-out/shader/Mesh.spv" },
 };
@@ -35,16 +35,16 @@ pub const PipelineManager = struct {
         const cache = try createPipelineCache(gpi);
         const format = c.VK_FORMAT_R16G16B16A16_SFLOAT;
 
-        const computePipeline = try PipelineBucket.init(alloc, gpi, cache, format, &computeInfo, .compute, descriptorManager.computeLayout, 1);
-        const graphicsPipeline = try PipelineBucket.init(alloc, gpi, cache, format, &graphicsInfo, .graphics, null, 0);
-        const meshPipeline = try PipelineBucket.init(alloc, gpi, cache, format, &meshShaderPaths, .mesh, null, 0);
+        const computePipe = try PipelineBucket.init(alloc, gpi, cache, format, &computeInf, .compute, descriptorManager.computeLayout, 1);
+        const graphicsPipe = try PipelineBucket.init(alloc, gpi, cache, format, &graphicsInf, .graphics, null, 0);
+        const meshPipe = try PipelineBucket.init(alloc, gpi, cache, format, &meshShaderInf, .mesh, null, 0);
 
         return .{
             .alloc = alloc,
             .gpi = gpi,
-            .compute = computePipeline,
-            .graphics = graphicsPipeline,
-            .mesh = meshPipeline,
+            .compute = computePipe,
+            .graphics = graphicsPipe,
+            .mesh = meshPipe,
             .cache = cache,
         };
     }

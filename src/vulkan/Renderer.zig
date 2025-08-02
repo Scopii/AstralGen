@@ -35,7 +35,6 @@ pub const Renderer = struct {
 
     pub fn init(memoryMan: *MemoryManager) !Renderer {
         const alloc = memoryMan.getAllocator();
-
         const instance = try createInstance(alloc, DEBUG_TOGGLE);
         const context = try Context.init(alloc, instance);
         const resourceMan = try ResourceManager.init(&context);
@@ -81,12 +80,9 @@ pub const Renderer = struct {
         }
 
         for (windows) |window| {
-            stateSwitch: switch (window.status) {
+            switch (window.status) {
                 .needUpdate => {
-                    if (self.swapchainMan.getSwapchainPtr(window.id) != null) {
-                        self.swapchainMan.destroySwapchains(&.{window.*});
-                        continue :stateSwitch .needCreation;
-                    }
+                    try self.swapchainMan.recreateSwapchain(&self.context, window.*);
                 },
                 .needActive => {
                     try self.swapchainMan.addActive(window.*);
@@ -100,48 +96,42 @@ pub const Renderer = struct {
                     try self.swapchainMan.addSwapchain(&self.context, window.*);
                     window.status = .active;
                 },
-                .needDelete => {
-                    self.swapchainMan.destroySwapchains(&.{window.*});
-                },
-                else => std.debug.print("invalid window State for Renderer\n", .{}),
+                .needDelete => self.swapchainMan.removeSwapchain(&.{window.*}),
+                else => std.debug.print("Invalid Window State in Renderer Update\n", .{}),
+            }
+        }
+        self.swapchainMan.updateMaxExtent();
+        const extent = self.swapchainMan.getMaxExtent();
+
+        if (extent.height != 0 or extent.width != 0) {
+            if (extent.width != self.renderImage.extent3d.width or extent.height != self.renderImage.extent3d.height) {
+                self.resourceMan.destroyRenderImage(self.renderImage);
+                self.renderImage = try self.resourceMan.createRenderImage(.{ .width = extent.width, .height = extent.height });
+                std.debug.print("Render Image now {}x{}\n", .{ extent.width, extent.height });
             }
         }
         try self.updateDescriptors();
-
-        try self.swapchainMan.updateRenderSize();
-
-        const renderSize = self.swapchainMan.getRenderSize();
-
-        if (renderSize.height != 0 or renderSize.width != 0) {
-            if (renderSize.width != self.renderImage.extent3d.width or renderSize.height != self.renderImage.extent3d.height) {
-                self.resourceMan.destroyRenderImage(self.renderImage);
-                self.renderImage = try self.resourceMan.createRenderImage(.{ .width = renderSize.width, .height = renderSize.height });
-                self.descriptorsUpToDate = false;
-                std.debug.print("renderImage now {}x{}\n", .{ renderSize.width, renderSize.height });
-            }
-        }
     }
 
     pub fn draw(self: *Renderer) !void {
         try self.scheduler.waitForGPU();
 
-        const frameInFlight = self.scheduler.frameInFlight;
-        if (try self.swapchainMan.updateTargets(frameInFlight, &self.context) == false) return;
+        const frame = self.scheduler.frameInFlight;
+        if (try self.swapchainMan.updateTargets(frame, &self.context) == false) return;
+        try self.cmdMan.beginRecording(frame);
+        const activeGroups = self.swapchainMan.activeGroups;
 
-        try self.cmdMan.beginRecording(frameInFlight);
-        const activeSwapchains = self.swapchainMan.activeGroups;
-
-        for (0..activeSwapchains.len) |i| {
-            if (activeSwapchains[i].len != 0) {
-                const renderPass: PipelineType = @enumFromInt(i);
-                if (SHADER_HOTLOAD == true) try self.pipelineMan.checkShaderUpdate(renderPass);
-                try self.recordCommands(activeSwapchains[i].slice(), renderPass, frameInFlight);
+        for (0..activeGroups.len) |i| {
+            if (activeGroups[i].len != 0) {
+                const pipeType: PipelineType = @enumFromInt(i);
+                if (SHADER_HOTLOAD == true) try self.pipelineMan.checkShaderUpdate(pipeType);
+                try self.recordCommands(activeGroups[i].slice(), pipeType, frame);
             }
         }
         const cmd = try self.cmdMan.endRecording();
 
         const targets = self.swapchainMan.targets.slice();
-        try self.queueSubmit(cmd, targets, frameInFlight);
+        try self.queueSubmit(cmd, targets, frame);
         try self.present(targets);
 
         self.scheduler.nextFrame();
@@ -161,10 +151,8 @@ pub const Renderer = struct {
 
     fn queueSubmit(self: *Renderer, cmd: c.VkCommandBuffer, submitIds: []const u8, frameInFlight: u8) !void {
         var waitInfos = try self.arenaAlloc.alloc(c.VkSemaphoreSubmitInfo, submitIds.len);
-
         for (submitIds, 0..) |id, i| {
             const swapchain = self.swapchainMan.swapchains.getAtIndex(id);
-
             waitInfos[i] = .{
                 .sType = c.VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
                 .semaphore = swapchain.imgRdySems[frameInFlight],
@@ -173,17 +161,14 @@ pub const Renderer = struct {
         }
 
         var signalInfos = try self.arenaAlloc.alloc(c.VkSemaphoreSubmitInfo, submitIds.len + 1); // (+1 is Timeline Semaphore)
-
         for (submitIds, 0..) |id, i| {
             const swapchain = self.swapchainMan.swapchains.getAtIndex(id);
-
             signalInfos[i] = .{
                 .sType = c.VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
                 .semaphore = swapchain.renderDoneSems[swapchain.curIndex],
                 .stageMask = c.VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
             };
         }
-
         // Adding the timeline
         signalInfos[submitIds.len] = .{
             .sType = c.VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
@@ -192,20 +177,19 @@ pub const Renderer = struct {
             .stageMask = c.VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
         };
 
-        const cmdInfo = c.VkCommandBufferSubmitInfo{
-            .sType = c.VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
-            .commandBuffer = cmd,
-        };
-        const submitInfo = c.VkSubmitInfo2{
+        const submitInf = c.VkSubmitInfo2{
             .sType = c.VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
             .waitSemaphoreInfoCount = @intCast(waitInfos.len),
             .pWaitSemaphoreInfos = waitInfos.ptr,
             .commandBufferInfoCount = 1,
-            .pCommandBufferInfos = &cmdInfo,
+            .pCommandBufferInfos = &.{
+                .sType = c.VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
+                .commandBuffer = cmd,
+            },
             .signalSemaphoreInfoCount = @intCast(signalInfos.len),
             .pSignalSemaphoreInfos = signalInfos.ptr,
         };
-        try check(c.vkQueueSubmit2(self.context.graphicsQ, 1, &submitInfo, null), "Failed main submission");
+        try check(c.vkQueueSubmit2(self.context.graphicsQ, 1, &submitInf, null), "Failed main submission");
     }
 
     fn present(self: *Renderer, presentIds: []const u8) !void {
@@ -218,13 +202,12 @@ pub const Renderer = struct {
 
         for (presentIds, 0..) |id, i| {
             const swapchain = self.swapchainMan.swapchains.getAtIndex(id);
-
             swapchainHandles[i] = swapchain.handle;
             imageIndices[i] = swapchain.curIndex;
             presentWaitSems[i] = swapchain.renderDoneSems[swapchain.curIndex];
         }
 
-        const presentInfo = c.VkPresentInfoKHR{
+        const presetInf = c.VkPresentInfoKHR{
             .sType = c.VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
             .waitSemaphoreCount = @intCast(presentWaitSems.len),
             .pWaitSemaphores = presentWaitSems.ptr,
@@ -233,7 +216,7 @@ pub const Renderer = struct {
             .pImageIndices = imageIndices.ptr,
         };
 
-        const result = c.vkQueuePresentKHR(self.context.presentQ, &presentInfo);
+        const result = c.vkQueuePresentKHR(self.context.presentQ, &presetInf);
         if (result != c.VK_SUCCESS and result != c.VK_ERROR_OUT_OF_DATE_KHR and result != c.VK_SUBOPTIMAL_KHR) {
             try check(result, "Failed to present swapchain image");
         }

@@ -10,8 +10,8 @@ const MAX_WINDOWS = @import("../config.zig").MAX_WINDOWS;
 
 pub const WindowManager = struct {
     windows: CreateMapArray(Window, MAX_WINDOWS, u8, MAX_WINDOWS, 0) = .{},
-    swapchainsToChange: std.BoundedArray(*Window, MAX_WINDOWS) = .{},
-    openWindows: u32 = 0,
+    changedWindows: std.BoundedArray(*Window, MAX_WINDOWS) = .{},
+    openWindows: u8 = 0,
     close: bool = false,
 
     pub fn init() !WindowManager {
@@ -41,10 +41,9 @@ pub const WindowManager = struct {
         //_ = c.SDL_SetWindowRelativeMouseMode(window, true);
         //_ = c.SDL_SetWindowOpacity(sdlWindow, 0.5);
 
-        var window = try Window.init(id, sdlHandle, pipeType, c.VkExtent2D{ .width = @intCast(width), .height = @intCast(height) });
-        window.status = .needCreation;
+        const window = try Window.init(id, sdlHandle, pipeType, c.VkExtent2D{ .width = @intCast(width), .height = @intCast(height) });
         self.windows.set(@intCast(id), window);
-        try self.swapchainsToChange.append(self.windows.getPtr(@intCast(id)));
+        try self.changedWindows.append(self.windows.getPtr(@intCast(id)));
         self.openWindows += 1;
         std.debug.print("Window ID {} created\n", .{id});
     }
@@ -53,21 +52,11 @@ pub const WindowManager = struct {
         _ = c.SDL_ShowSimpleMessageBox(c.SDL_MESSAGEBOX_ERROR, title.ptr, message.ptr, null);
     }
 
-    pub fn getWindowPtr(self: *WindowManager, id: u32) *Window {
-        return try self.windows.getPtrFromKey(id);
-    }
-
     pub fn cleanupWindows(self: *WindowManager) !void {
-        for (self.swapchainsToChange.slice()) |window| {
+        for (self.changedWindows.slice()) |window| {
             if (window.status == .needDelete) try self.destroyWindow(window.id);
         }
-        self.swapchainsToChange.clear();
-    }
-
-    pub fn destroyWindow(self: *WindowManager, id: u32) !void {
-        const window = self.windows.get(@intCast(id));
-        c.SDL_DestroyWindow(window.handle);
-        self.windows.removeAtKey(@intCast(id));
+        self.changedWindows.clear();
     }
 
     pub fn pollEvents(self: *WindowManager) !void {
@@ -81,7 +70,13 @@ pub const WindowManager = struct {
         }
     }
 
-    fn processEvent(self: *WindowManager, event: *c.SDL_Event) !void {
+    fn destroyWindow(self: *WindowManager, id: u32) !void {
+        const window = self.windows.get(@intCast(id));
+        c.SDL_DestroyWindow(window.handle);
+        self.windows.removeAtKey(@intCast(id));
+    }
+
+    pub fn processEvent(self: *WindowManager, event: *c.SDL_Event) !void {
         switch (event.type) {
             c.SDL_EVENT_QUIT => self.close = true,
 
@@ -97,31 +92,25 @@ pub const WindowManager = struct {
                     c.SDL_EVENT_WINDOW_CLOSE_REQUESTED => {
                         if (window.status == .active) self.openWindows -= 1;
                         window.status = .needDelete;
-                        try self.swapchainsToChange.append(window);
-                        std.debug.print("Window {} CLOSED.\n", .{id});
                     },
                     c.SDL_EVENT_WINDOW_MINIMIZED => {
-                        window.status = .needInactive;
-                        try self.swapchainsToChange.append(window);
                         self.openWindows -= 1;
-                        std.debug.print("Window {} MINIMIZED.\n", .{id});
+                        window.status = .needInactive;
                     },
                     c.SDL_EVENT_WINDOW_RESTORED => {
-                        window.status = .needActive;
-                        try self.swapchainsToChange.append(window);
                         self.openWindows += 1;
-                        std.debug.print("Window {} RESTORED.\n", .{id});
+                        window.status = .needActive;
                     },
                     c.SDL_EVENT_WINDOW_RESIZED => {
-                        window.status = .needUpdate;
-                        try self.swapchainsToChange.append(window);
                         var newExtent: c.VkExtent2D = undefined;
                         _ = c.SDL_GetWindowSize(window.handle, @ptrCast(&newExtent.width), @ptrCast(&newExtent.height));
                         window.extent = newExtent;
-                        std.debug.print("Window {} RESIZED.\n", .{id});
+                        window.status = .needUpdate;
                     },
                     else => {},
                 }
+                try self.changedWindows.append(window);
+                std.debug.print("Status of Window {} now {s}\n", .{ id, @tagName(window.status) });
             },
             else => {},
         }

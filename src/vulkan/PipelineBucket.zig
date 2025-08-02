@@ -299,21 +299,21 @@ fn createPipeline(
 }
 
 pub fn getFileTimeStamp(alloc: Allocator, src: []const u8) !u64 {
-    const abs_path = try resolveAssetPath(alloc, src);
-    defer alloc.free(abs_path);
+    const absolutePath = try resolvePath(alloc, src);
+    defer alloc.free(absolutePath);
 
     const cwd = std.fs.cwd();
-    const stat = try cwd.statFile(abs_path);
+    const stat = try cwd.statFile(absolutePath);
     const ns: u64 = @intCast(stat.mtime);
     return ns / 1_000_000; // nanoseconds -> milliseconds
 }
 
-pub fn resolveAssetPath(alloc: Allocator, asset_path: []const u8) ![]u8 {
-    const exe_dir = try std.fs.selfExeDirPathAlloc(alloc);
-    defer alloc.free(exe_dir);
+pub fn resolvePath(alloc: Allocator, path: []const u8) ![]u8 {
+    const exeDir = try std.fs.selfExeDirPathAlloc(alloc);
+    defer alloc.free(exeDir);
     // Project root (up two levels from zig-out/bin)
-    const project_root = try std.fs.path.resolve(alloc, &[_][]const u8{ exe_dir, "..", ".." });
-    defer alloc.free(project_root);
+    const projectRoot = try std.fs.path.resolve(alloc, &[_][]const u8{ exeDir, "..", ".." });
+    defer alloc.free(projectRoot);
 
-    return std.fs.path.join(alloc, &[_][]const u8{ project_root, asset_path });
+    return std.fs.path.join(alloc, &[_][]const u8{ projectRoot, path });
 }

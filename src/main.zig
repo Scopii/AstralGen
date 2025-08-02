@@ -37,8 +37,8 @@ pub fn main() !void {
             break;
         };
 
-        if (windowMan.swapchainsToChange.len > 0) {
-            try renderer.update(windowMan.swapchainsToChange.slice());
+        if (windowMan.changedWindows.len > 0) {
+            try renderer.update(windowMan.changedWindows.slice());
             try windowMan.cleanupWindows();
         }
 

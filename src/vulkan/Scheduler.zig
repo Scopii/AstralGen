@@ -21,7 +21,6 @@ pub const Scheduler = struct {
 
     pub fn init(context: *const Context, maxInFlight: u8) !Scheduler {
         std.debug.print("Scheduler: In Flight {}\n", .{maxInFlight});
-
         var passFinishedSemaphores: [MAX_IN_FLIGHT]c.VkSemaphore = undefined;
         for (0..maxInFlight) |i| passFinishedSemaphores[i] = try createSemaphore(context.gpi);
 

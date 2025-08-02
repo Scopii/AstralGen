@@ -172,8 +172,8 @@ pub const CmdManager = struct {
                 createSubresourceRange(c.VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1),
             );
         }
-        const barriersPtr0 = self.blitBarriers[0 .. targets.len + 1];
-        createPipelineBarriers2(cmd, barriersPtr0);
+        const barriersPtr1 = self.blitBarriers[0 .. targets.len + 1];
+        createPipelineBarriers2(cmd, barriersPtr1);
 
         for (targets) |id| {
             const swapchain = swapchainMap.getPtr(id);
@@ -201,8 +201,8 @@ pub const CmdManager = struct {
                 createSubresourceRange(c.VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1),
             );
         }
-        const barriersPtr = self.blitBarriers[targets.len + 1 .. (targets.len * 2) + 1];
-        createPipelineBarriers2(cmd, barriersPtr);
+        const barriersPtr2 = self.blitBarriers[targets.len + 1 .. (targets.len * 2) + 1];
+        createPipelineBarriers2(cmd, barriersPtr2);
     }
 };
 
