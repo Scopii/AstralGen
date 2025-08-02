@@ -6,7 +6,7 @@ const CreateMapArray = @import("structures/MapArray.zig").CreateMapArray;
 const Renderer = @import("vulkan/Renderer.zig").Renderer;
 const Window = @import("platform/Window.zig").Window;
 const zjobs = @import("zjobs");
-const DEBUG_CLOSE = @import("config.zig").DEBUG_CLOSE;
+const CLOSE_WITH_CONSOLE = @import("config.zig").CLOSE_WITH_CONSOLE;
 // Re-Formats
 const Allocator = std.mem.Allocator;
 
@@ -19,7 +19,11 @@ pub fn main() !void {
     var windowMan = try WindowManager.init();
     defer windowMan.deinit();
 
-    var renderer = try Renderer.init(&memoryMan);
+    var renderer = Renderer.init(&memoryMan) catch |err| {
+        windowMan.showErrorBox("Renderer Could not launch", "Your GPU might not support Mesh Shaders.\n");
+        std.debug.print("Error {}\n", .{err});
+        return;
+    };
     defer renderer.deinit();
 
     try windowMan.addWindow("Astral1", 1600, 900, .compute);
@@ -49,7 +53,7 @@ pub fn main() !void {
     }
     std.debug.print("App Closed\n", .{});
 
-    if (DEBUG_CLOSE == true) {
+    if (CLOSE_WITH_CONSOLE == true) {
         const stdout = std.io.getStdOut().writer();
         _ = try stdout.write("Press Enter to exit...\n");
         _ = std.io.getStdIn().reader().readByte() catch {};

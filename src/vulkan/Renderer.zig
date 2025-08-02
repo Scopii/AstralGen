@@ -16,7 +16,7 @@ const Window = @import("../platform/Window.zig").Window;
 const MemoryManager = @import("../core/MemoryManager.zig").MemoryManager;
 const MAX_IN_FLIGHT = @import("../config.zig").MAX_IN_FLIGHT;
 const SHADER_HOTLOAD = @import("../config.zig").SHADER_HOTLOAD;
-const DEBUG_TOGGLE = @import("../config.zig").DEBUG_TOGGLE;
+const DEBUG_TOGGLE = @import("../config.zig").DEBUG_MODE;
 
 const Allocator = std.mem.Allocator;
 

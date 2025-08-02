@@ -9,6 +9,8 @@ pub const c_api = @cImport({
     @cInclude("vma/vk_mem_alloc.h");
 });
 
+extern fn SDL_ShowSimpleMessageBox(flags: u32, title: [*c]const u8, message: [*c]const u8, window: ?*anyopaque) c_int;
+
 // Step 2: Declare the function pointer variable as a separate public member of this file.
 // It uses the PFN type from the c_api struct we just defined.
 pub var pfn_vkCmdDrawMeshTasksEXT: c_api.PFN_vkCmdDrawMeshTasksEXT = null;

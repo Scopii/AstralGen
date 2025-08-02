@@ -49,6 +49,10 @@ pub const WindowManager = struct {
         std.debug.print("Window ID {} created\n", .{id});
     }
 
+    pub fn showErrorBox(_: *WindowManager, title: [:0]const u8, message: [:0]const u8) void {
+        _ = c.SDL_ShowSimpleMessageBox(c.SDL_MESSAGEBOX_ERROR, title.ptr, message.ptr, null);
+    }
+
     pub fn getWindowPtr(self: *WindowManager, id: u32) *Window {
         return try self.windows.getPtrFromKey(id);
     }
