@@ -49,7 +49,7 @@ pub const SwapchainManager = struct {
 
     pub fn deinit(self: *SwapchainManager) void {
         for (self.swapchains.getElements()) |*swapchain| {
-            self.destroySwapchain(swapchain, false);
+            self.destroySwapchain(swapchain, .withSurface);
         }
     }
 
@@ -117,7 +117,7 @@ pub const SwapchainManager = struct {
             const key = window.id;
 
             if (self.swapchains.isKeyValid(@intCast(key)) == true) {
-                self.destroySwapchain(self.swapchains.getPtr(@intCast(key)), true);
+                self.destroySwapchain(self.swapchains.getPtr(@intCast(key)), .withSurface);
 
                 _ = self.swapchains.removeAtKey(@intCast(key));
                 self.removeActive(window);
@@ -127,14 +127,14 @@ pub const SwapchainManager = struct {
         }
     }
 
-    fn destroySwapchain(self: *SwapchainManager, swapchainPtr: *Swapchain, withSurface: bool) void {
+    fn destroySwapchain(self: *SwapchainManager, swapchainPtr: *Swapchain, withSurface: enum { withSurface, withoutSurface }) void {
         const gpi = self.gpi;
 
         for (swapchainPtr.views) |view| c.vkDestroyImageView(gpi, view, null);
         for (swapchainPtr.imgRdySems) |sem| c.vkDestroySemaphore(gpi, sem, null);
         for (swapchainPtr.renderDoneSems) |sem| c.vkDestroySemaphore(gpi, sem, null);
         c.vkDestroySwapchainKHR(gpi, swapchainPtr.handle, null);
-        if (withSurface == true) c.vkDestroySurfaceKHR(self.instance, swapchainPtr.surface, null);
+        if (withSurface == .withSurface) c.vkDestroySurfaceKHR(self.instance, swapchainPtr.surface, null);
 
         self.alloc.free(swapchainPtr.images);
         self.alloc.free(swapchainPtr.views);
@@ -151,42 +151,38 @@ pub const SwapchainManager = struct {
         const alloc = self.alloc;
         const gpu = context.gpu;
         const families = context.families;
+        var extent: c.VkExtent2D = undefined;
+        var swapchainPtr: *Swapchain = undefined;
 
         switch (swapchainInput) {
             .window => |window| if (window.status == .needCreation) {
+                extent = window.extent;
                 const surface = try createSurface(window.handle, self.instance);
-                const surfaceFormat = try pickSurfaceFormat(alloc, gpu, surface);
                 const caps = try getSurfaceCaps(gpu, surface);
+                const surfaceFormat = try pickSurfaceFormat(alloc, gpu, surface);
 
-                const swapchain = try self.createInternalSwapchain(surfaceFormat, surface, window.extent, families, caps);
+                const swapchain = try self.createInternalSwapchain(surfaceFormat, surface, extent, families, caps, null);
                 self.swapchains.set(@intCast(window.id), swapchain);
                 try self.activeGroups[@intFromEnum(window.pipeType)].append(@intCast(window.id));
                 std.debug.print("Swapchain added to Window {}\n", .{window.id});
+                return;
             } else {
-                const swapchainPtr = self.swapchains.getPtr(@intCast(window.id));
-                self.destroySwapchain(swapchainPtr, false);
-                const surface = swapchainPtr.surface;
-                const surfaceFormat = try pickSurfaceFormat(alloc, gpu, surface);
-                const caps = try getSurfaceCaps(gpu, surface);
-                const extent = window.extent;
-
-                const swapchain = try self.createInternalSwapchain(surfaceFormat, surface, extent, families, caps);
-                swapchainPtr.* = swapchain;
-                std.debug.print("Swapchain Recreated\n", .{});
+                swapchainPtr = self.swapchains.getPtr(@intCast(window.id));
+                extent = window.extent;
+                std.debug.print("Swapchain recreated\n", .{});
             },
             .id => |id| {
-                const swapchainPtr = self.swapchains.getPtr(@intCast(id));
-                self.destroySwapchain(swapchainPtr, false);
-                const surface = swapchainPtr.surface;
-                const surfaceFormat = try pickSurfaceFormat(alloc, gpu, surface);
-                const caps = try getSurfaceCaps(gpu, surface);
-                const extent = swapchainPtr.extent;
-
-                const swapchain = try self.createInternalSwapchain(surfaceFormat, surface, extent, families, caps);
-                swapchainPtr.* = swapchain;
-                std.debug.print("Swapchain Error Resolved\n", .{});
+                swapchainPtr = self.swapchains.getPtr(@intCast(id));
+                extent = swapchainPtr.extent;
+                std.debug.print("Swapchain Error resolved\n", .{});
             },
         }
+        const surface = swapchainPtr.surface;
+        const caps = try getSurfaceCaps(gpu, surface);
+        const surfaceFormat = try pickSurfaceFormat(alloc, gpu, surface);
+        const swapchain = try self.createInternalSwapchain(surfaceFormat, surface, extent, families, caps, swapchainPtr.handle);
+        self.destroySwapchain(swapchainPtr, .withoutSurface);
+        swapchainPtr.* = swapchain;
     }
 
     fn createInternalSwapchain(
@@ -196,6 +192,7 @@ pub const SwapchainManager = struct {
         extent: c.VkExtent2D,
         families: QueueFamilies,
         caps: c.VkSurfaceCapabilitiesKHR,
+        oldHandle: ?c.VkSwapchainKHR,
     ) !Swapchain {
         const alloc = self.alloc;
         const gpi = self.gpi;
@@ -232,7 +229,7 @@ pub const SwapchainManager = struct {
             .compositeAlpha = c.VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
             .presentMode = mode,
             .clipped = c.VK_TRUE,
-            //.oldSwapchain = null,
+            .oldSwapchain = if (oldHandle != null) oldHandle.? else null,
         };
 
         var handle: c.VkSwapchainKHR = undefined;
