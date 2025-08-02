@@ -7,6 +7,8 @@ const PipelineType = @import("PipelineBucket.zig").PipelineType;
 const Context = @import("Context.zig").Context;
 const Swapchain = @import("SwapchainManager.zig").Swapchain;
 const check = @import("error.zig").check;
+const CreateMapArray = @import("../structures/MapArray.zig").CreateMapArray;
+const MAX_WINDOWS = @import("../config.zig").MAX_WINDOWS;
 
 pub const CmdManager = struct {
     alloc: Allocator,
@@ -14,6 +16,7 @@ pub const CmdManager = struct {
     pool: c.VkCommandPool,
     cmds: []c.VkCommandBuffer,
     activeCmd: ?c.VkCommandBuffer = null,
+    blitBarriers: [(MAX_WINDOWS * 2) + 1]c.VkImageMemoryBarrier2 = undefined,
 
     pub fn init(alloc: Allocator, context: *const @import("Context.zig").Context, maxInFlight: u32) !CmdManager {
         const gpi = context.gpi;
@@ -139,14 +142,9 @@ pub const CmdManager = struct {
         c.vkCmdEndRendering(cmd);
     }
 
-    const CreateMapArray = @import("../structures/MapArray.zig").CreateMapArray;
-    const MAX_WINDOWS = @import("../config.zig").MAX_WINDOWS;
-
     pub fn blitToTargets(self: *CmdManager, renderImage: *RenderImage, targets: []const u8, swapchainMap: *CreateMapArray(Swapchain, MAX_WINDOWS, u8, MAX_WINDOWS, 0)) !void {
-        const alloc = self.alloc;
         const cmd = self.activeCmd orelse return;
-        var barriers = try alloc.alloc(c.VkImageMemoryBarrier2, targets.len + 1);
-        defer alloc.free(barriers);
+        var barriers = &self.blitBarriers;
 
         barriers[0] = createImageMemoryBarrier2(
             c.VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
@@ -174,7 +172,8 @@ pub const CmdManager = struct {
                 createSubresourceRange(c.VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1),
             );
         }
-        createPipelineBarriers2(cmd, barriers);
+        const barriersPtr0 = self.blitBarriers[0 .. targets.len + 1];
+        createPipelineBarriers2(cmd, barriersPtr0);
 
         for (targets) |id| {
             const swapchain = swapchainMap.getPtr(id);
@@ -188,13 +187,10 @@ pub const CmdManager = struct {
             );
         }
 
-        var presentBarriers = try alloc.alloc(c.VkImageMemoryBarrier2, targets.len);
-        defer alloc.free(presentBarriers);
-
-        for (targets, 0..) |id, i| {
+        for (targets, targets.len + 1..(targets.len * 2) + 1) |id, i| {
             const swapchain = swapchainMap.getPtr(id);
 
-            presentBarriers[i] = createImageMemoryBarrier2(
+            barriers[i] = createImageMemoryBarrier2(
                 c.VK_PIPELINE_STAGE_2_TRANSFER_BIT,
                 c.VK_ACCESS_2_TRANSFER_WRITE_BIT,
                 c.VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT,
@@ -205,7 +201,8 @@ pub const CmdManager = struct {
                 createSubresourceRange(c.VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1),
             );
         }
-        createPipelineBarriers2(cmd, presentBarriers);
+        const barriersPtr = self.blitBarriers[targets.len + 1 .. (targets.len * 2) + 1];
+        createPipelineBarriers2(cmd, barriersPtr);
     }
 };
 
