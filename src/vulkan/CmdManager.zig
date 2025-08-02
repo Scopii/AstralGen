@@ -16,7 +16,7 @@ pub const CmdManager = struct {
     pool: c.VkCommandPool,
     cmds: []c.VkCommandBuffer,
     activeCmd: ?c.VkCommandBuffer = null,
-    blitBarriers: [(MAX_WINDOWS * 2) + 1]c.VkImageMemoryBarrier2 = undefined,
+    blitBarriers: [MAX_WINDOWS + 1]c.VkImageMemoryBarrier2 = undefined,
 
     pub fn init(alloc: Allocator, context: *const @import("Context.zig").Context, maxInFlight: u32) !CmdManager {
         const gpi = context.gpi;
@@ -145,7 +145,6 @@ pub const CmdManager = struct {
     pub fn blitToTargets(self: *CmdManager, renderImage: *RenderImage, targets: []const u8, swapchainMap: *CreateMapArray(Swapchain, MAX_WINDOWS, u8, MAX_WINDOWS, 0)) !void {
         const cmd = self.activeCmd orelse return;
         var barriers = &self.blitBarriers;
-
         barriers[0] = createImageMemoryBarrier2(
             c.VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
             c.VK_ACCESS_2_MEMORY_WRITE_BIT,
@@ -157,10 +156,8 @@ pub const CmdManager = struct {
             createSubresourceRange(c.VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1),
         );
         renderImage.curLayout = c.VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-
         for (targets, 1..) |id, i| {
             const swapchain = swapchainMap.getPtr(id);
-
             barriers[i] = createImageMemoryBarrier2(
                 c.VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
                 0,
@@ -174,10 +171,8 @@ pub const CmdManager = struct {
         }
         const barriersPtr1 = self.blitBarriers[0 .. targets.len + 1];
         createPipelineBarriers2(cmd, barriersPtr1);
-
         for (targets) |id| {
             const swapchain = swapchainMap.getPtr(id);
-
             copyImageToImage(
                 cmd,
                 renderImage.image,
@@ -186,10 +181,8 @@ pub const CmdManager = struct {
                 swapchain.extent,
             );
         }
-
-        for (targets, targets.len + 1..(targets.len * 2) + 1) |id, i| {
+        for (targets, 0..targets.len) |id, i| {
             const swapchain = swapchainMap.getPtr(id);
-
             barriers[i] = createImageMemoryBarrier2(
                 c.VK_PIPELINE_STAGE_2_TRANSFER_BIT,
                 c.VK_ACCESS_2_TRANSFER_WRITE_BIT,
@@ -201,7 +194,7 @@ pub const CmdManager = struct {
                 createSubresourceRange(c.VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1),
             );
         }
-        const barriersPtr2 = self.blitBarriers[targets.len + 1 .. (targets.len * 2) + 1];
+        const barriersPtr2 = self.blitBarriers[0..targets.len];
         createPipelineBarriers2(cmd, barriersPtr2);
     }
 };
