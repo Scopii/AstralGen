@@ -67,7 +67,7 @@ pub const SwapchainManager = struct {
                 switch (result1) {
                     c.VK_SUCCESS => try self.targets.append(index),
                     c.VK_ERROR_OUT_OF_DATE_KHR, c.VK_SUBOPTIMAL_KHR => {
-                        try self.recreateSwapchain(context, .{ .id = id });
+                        try self.createSwapchain(context, .{ .id = id });
                         const result2 = c.vkAcquireNextImageKHR(gpi, ptr.handle, std.math.maxInt(u64), ptr.imgRdySems[frameInFlight], null, &ptr.curIndex);
                         if (result2 == c.VK_SUCCESS) {
                             try self.targets.append(index);
@@ -142,52 +142,50 @@ pub const SwapchainManager = struct {
         self.alloc.free(swapchainPtr.renderDoneSems);
     }
 
-    pub fn addSwapchain(self: *SwapchainManager, context: *const Context, window: *Window) !void {
-        const alloc = self.alloc;
-        const families = context.families;
-        const gpu = context.gpu;
-
-        const surface = try createSurface(window.handle, self.instance);
-        const surfaceFormat = try pickSurfaceFormat(alloc, gpu, surface);
-        const caps = try getSurfaceCaps(gpu, surface);
-        const swapchain = try self.createInternalSwapchain(surfaceFormat, surface, window.extent, families, caps);
-
-        self.swapchains.set(@intCast(window.id), swapchain);
-        try self.activeGroups[@intFromEnum(window.pipeType)].append(@intCast(window.id));
-        std.debug.print("Swapchain added to Window {}\n", .{window.id});
-    }
-
     const SwapchainInput = union(enum) {
         window: *Window,
         id: u8,
     };
 
-    pub fn recreateSwapchain(self: *SwapchainManager, context: *const Context, swapchainInput: SwapchainInput) !void {
+    pub fn createSwapchain(self: *SwapchainManager, context: *const Context, swapchainInput: SwapchainInput) !void {
         const alloc = self.alloc;
         const gpu = context.gpu;
         const families = context.families;
 
-        const swapchainPtr: *Swapchain = switch (swapchainInput) {
-            .window => |window| self.swapchains.getPtr(@intCast(window.id)),
-            .id => |id| self.swapchains.getPtr(@intCast(id)),
-        };
-        self.destroySwapchain(swapchainPtr, false);
-
-        const surface = swapchainPtr.surface;
-        const surfaceFormat = try pickSurfaceFormat(alloc, gpu, surface);
-        const caps = try getSurfaceCaps(gpu, surface);
-
-        const extent: c.VkExtent2D = switch (swapchainInput) {
-            .window => |window| window.extent,
-            .id => |_| swapchainPtr.extent,
-        };
-
-        const swapchain = try self.createInternalSwapchain(surfaceFormat, surface, extent, families, caps);
-        swapchainPtr.* = swapchain;
-
         switch (swapchainInput) {
-            .window => std.debug.print("Swapchain Recreated\n", .{}),
-            .id => std.debug.print("Swapchain Error Resolved\n", .{}),
+            .window => |window| if (window.status == .needCreation) {
+                const surface = try createSurface(window.handle, self.instance);
+                const surfaceFormat = try pickSurfaceFormat(alloc, gpu, surface);
+                const caps = try getSurfaceCaps(gpu, surface);
+
+                const swapchain = try self.createInternalSwapchain(surfaceFormat, surface, window.extent, families, caps);
+                self.swapchains.set(@intCast(window.id), swapchain);
+                try self.activeGroups[@intFromEnum(window.pipeType)].append(@intCast(window.id));
+                std.debug.print("Swapchain added to Window {}\n", .{window.id});
+            } else {
+                const swapchainPtr = self.swapchains.getPtr(@intCast(window.id));
+                self.destroySwapchain(swapchainPtr, false);
+                const surface = swapchainPtr.surface;
+                const surfaceFormat = try pickSurfaceFormat(alloc, gpu, surface);
+                const caps = try getSurfaceCaps(gpu, surface);
+                const extent = window.extent;
+
+                const swapchain = try self.createInternalSwapchain(surfaceFormat, surface, extent, families, caps);
+                swapchainPtr.* = swapchain;
+                std.debug.print("Swapchain Recreated\n", .{});
+            },
+            .id => |id| {
+                const swapchainPtr = self.swapchains.getPtr(@intCast(id));
+                self.destroySwapchain(swapchainPtr, false);
+                const surface = swapchainPtr.surface;
+                const surfaceFormat = try pickSurfaceFormat(alloc, gpu, surface);
+                const caps = try getSurfaceCaps(gpu, surface);
+                const extent = swapchainPtr.extent;
+
+                const swapchain = try self.createInternalSwapchain(surfaceFormat, surface, extent, families, caps);
+                swapchainPtr.* = swapchain;
+                std.debug.print("Swapchain Error Resolved\n", .{});
+            },
         }
     }
 

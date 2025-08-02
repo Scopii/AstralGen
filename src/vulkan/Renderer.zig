@@ -82,7 +82,7 @@ pub const Renderer = struct {
         for (windows) |windowPtr| {
             switch (windowPtr.status) {
                 .needUpdate => {
-                    try self.swapchainMan.recreateSwapchain(&self.context, .{ .window = windowPtr });
+                    try self.swapchainMan.createSwapchain(&self.context, .{ .window = windowPtr });
                 },
                 .needActive => {
                     try self.swapchainMan.addActive(windowPtr);
@@ -93,7 +93,7 @@ pub const Renderer = struct {
                     windowPtr.status = .inactive;
                 },
                 .needCreation => {
-                    try self.swapchainMan.addSwapchain(&self.context, windowPtr);
+                    try self.swapchainMan.createSwapchain(&self.context, .{ .window = windowPtr });
                     windowPtr.status = .active;
                 },
                 .needDelete => self.swapchainMan.removeSwapchain(&.{windowPtr}),
