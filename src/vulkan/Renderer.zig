@@ -72,31 +72,31 @@ pub const Renderer = struct {
     }
 
     pub fn update(self: *Renderer, windows: []*Window) !void {
-        for (windows) |window| {
-            if (window.status == .needDelete or window.status == .needUpdate) {
+        for (windows) |windowPtr| {
+            if (windowPtr.status == .needDelete or windowPtr.status == .needUpdate) {
                 _ = c.vkDeviceWaitIdle(self.context.gpi);
                 break;
             }
         }
 
-        for (windows) |window| {
-            switch (window.status) {
+        for (windows) |windowPtr| {
+            switch (windowPtr.status) {
                 .needUpdate => {
-                    try self.swapchainMan.recreateSwapchain(&self.context, window.*);
+                    try self.swapchainMan.recreateSwapchain(&self.context, windowPtr);
                 },
                 .needActive => {
-                    try self.swapchainMan.addActive(window.*);
-                    window.status = .active;
+                    try self.swapchainMan.addActive(windowPtr);
+                    windowPtr.status = .active;
                 },
                 .needInactive => {
-                    self.swapchainMan.removeActive(window.*);
-                    window.status = .inactive;
+                    self.swapchainMan.removeActive(windowPtr);
+                    windowPtr.status = .inactive;
                 },
                 .needCreation => {
-                    try self.swapchainMan.addSwapchain(&self.context, window.*);
-                    window.status = .active;
+                    try self.swapchainMan.addSwapchain(&self.context, windowPtr);
+                    windowPtr.status = .active;
                 },
-                .needDelete => self.swapchainMan.removeSwapchain(&.{window.*}),
+                .needDelete => self.swapchainMan.removeSwapchain(&.{windowPtr}),
                 else => std.debug.print("Invalid Window State in Renderer Update\n", .{}),
             }
         }

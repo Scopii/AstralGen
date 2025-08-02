@@ -81,11 +81,11 @@ pub const SwapchainManager = struct {
         return if (self.targets.len != 0) true else false;
     }
 
-    pub fn addActive(self: *SwapchainManager, window: Window) !void {
+    pub fn addActive(self: *SwapchainManager, window: *Window) !void {
         try self.activeGroups[@intFromEnum(window.pipeType)].append(@intCast(window.id));
     }
 
-    pub fn removeActive(self: *SwapchainManager, window: Window) void {
+    pub fn removeActive(self: *SwapchainManager, window: *Window) void {
         const group = self.activeGroups[@intFromEnum(window.pipeType)].slice();
         for (0..group.len) |i| {
             if (group[i] == window.id) _ = self.activeGroups[@intFromEnum(window.pipeType)].swapRemove(i);
@@ -112,7 +112,7 @@ pub const SwapchainManager = struct {
         return self.maxExtent;
     }
 
-    pub fn removeSwapchain(self: *SwapchainManager, windows: []const Window) void {
+    pub fn removeSwapchain(self: *SwapchainManager, windows: []const *Window) void {
         for (windows) |window| {
             const key = window.id;
 
@@ -142,7 +142,7 @@ pub const SwapchainManager = struct {
         self.alloc.free(swapchainPtr.renderDoneSems);
     }
 
-    pub fn addSwapchain(self: *SwapchainManager, context: *const Context, window: Window) !void {
+    pub fn addSwapchain(self: *SwapchainManager, context: *const Context, window: *Window) !void {
         const alloc = self.alloc;
         const families = context.families;
         const gpu = context.gpu;
@@ -156,7 +156,7 @@ pub const SwapchainManager = struct {
         std.debug.print("Swapchain added to Window {}\n", .{window.id});
     }
 
-    pub fn recreateSwapchain(self: *SwapchainManager, context: *const Context, window: Window) !void {
+    pub fn recreateSwapchain(self: *SwapchainManager, context: *const Context, window: *Window) !void {
         const swapchainPtr = self.swapchains.getPtr(@intCast(window.id));
         self.destroySwapchain(swapchainPtr, false);
 
