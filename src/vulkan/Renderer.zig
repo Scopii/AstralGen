@@ -83,6 +83,7 @@ pub const Renderer = struct {
             switch (windowPtr.status) {
                 .needUpdate => {
                     try self.swapchainMan.createSwapchain(&self.context, .{ .window = windowPtr });
+                    windowPtr.status = .active;
                 },
                 .needActive => {
                     try self.swapchainMan.addActive(windowPtr);
@@ -97,7 +98,7 @@ pub const Renderer = struct {
                     windowPtr.status = .active;
                 },
                 .needDelete => self.swapchainMan.removeSwapchain(&.{windowPtr}),
-                else => std.debug.print("Invalid Window State in Renderer Update\n", .{}),
+                else => std.debug.print("Window State {s} cant be handled in Renderer\n", .{@tagName(windowPtr.status)}),
             }
         }
         self.swapchainMan.updateMaxExtent();
@@ -116,37 +117,36 @@ pub const Renderer = struct {
     pub fn draw(self: *Renderer) !void {
         try self.scheduler.waitForGPU();
 
-        const frame = self.scheduler.frameInFlight;
-        if (try self.swapchainMan.updateTargets(frame, &self.context) == false) return;
-        try self.cmdMan.beginRecording(frame);
+        const frameInFlight = self.scheduler.frameInFlight;
+        if (try self.swapchainMan.updateTargets(frameInFlight, &self.context) == false) return;
+
+        try self.cmdMan.beginRecording(frameInFlight);
+        try self.recordCommands(frameInFlight);
+        const cmd = try self.cmdMan.endRecording();
+
+        const targets = self.swapchainMan.targets.slice();
+        try self.queueSubmit(cmd, targets, frameInFlight);
+        try self.present(targets);
+
+        self.scheduler.nextFrame();
+    }
+
+    fn recordCommands(self: *Renderer, frameInFlight: u8) !void {
         const activeGroups = self.swapchainMan.activeGroups;
 
         for (0..activeGroups.len) |i| {
             if (activeGroups[i].len != 0) {
                 const pipeType: PipelineType = @enumFromInt(i);
                 if (SHADER_HOTLOAD == true) try self.pipelineMan.checkShaderUpdate(pipeType);
-                try self.recordCommands(activeGroups[i].slice(), pipeType, frame);
+
+                switch (pipeType) {
+                    .compute => try self.cmdMan.recordComputePass(&self.renderImage, &self.pipelineMan.compute, self.descriptorMan.sets[frameInFlight]),
+                    .graphics => try self.cmdMan.recordGraphicsPass(&self.renderImage, &self.pipelineMan.graphics, .graphics),
+                    .mesh => try self.cmdMan.recordGraphicsPass(&self.renderImage, &self.pipelineMan.mesh, .mesh),
+                }
+                try self.cmdMan.blitToTargets(&self.renderImage, activeGroups[i].slice(), &self.swapchainMan.swapchains);
             }
         }
-        const cmd = try self.cmdMan.endRecording();
-
-        const targets = self.swapchainMan.targets.slice();
-        try self.queueSubmit(cmd, targets, frame);
-        try self.present(targets);
-
-        self.scheduler.nextFrame();
-    }
-
-    fn recordCommands(self: *Renderer, recordIds: []const u8, pipeType: PipelineType, frameInFlight: u8) !void {
-        switch (pipeType) {
-            .compute => {
-                if (!self.descriptorsUpToDate) try self.updateDescriptors();
-                try self.cmdMan.recordComputePass(&self.renderImage, &self.pipelineMan.compute, self.descriptorMan.sets[frameInFlight]);
-            },
-            .graphics => try self.cmdMan.recordGraphicsPass(&self.renderImage, &self.pipelineMan.graphics, .graphics),
-            .mesh => try self.cmdMan.recordGraphicsPass(&self.renderImage, &self.pipelineMan.mesh, .mesh),
-        }
-        try self.cmdMan.blitToTargets(&self.renderImage, recordIds, &self.swapchainMan.swapchains);
     }
 
     fn queueSubmit(self: *Renderer, cmd: c.VkCommandBuffer, submitIds: []const u8, frameInFlight: u8) !void {

@@ -98,6 +98,7 @@ pub const WindowManager = struct {
                         window.status = .needInactive;
                     },
                     c.SDL_EVENT_WINDOW_RESTORED => {
+                        if (window.status == .active) return;
                         self.openWindows += 1;
                         window.status = .needActive;
                     },
