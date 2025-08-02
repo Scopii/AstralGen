@@ -1,6 +1,6 @@
 // Debug
 pub const DEBUG_MODE = false;
-pub const CLOSE_WITH_CONSOLE = false;
+pub const CLOSE_WITH_CONSOLE = true;
 pub const SHADER_HOTLOAD = false;
 
 // Rendering

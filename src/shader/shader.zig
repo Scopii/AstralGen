@@ -1,6 +1,7 @@
 const std = @import("std");
 const c = @import("../c.zig");
 const check = @import("../vulkan/error.zig").check;
+const SHADER_HOTLOAD = @import("../config.zig").SHADER_HOTLOAD;
 const Allocator = std.mem.Allocator;
 
 // Compile and load shader from source
@@ -23,7 +24,10 @@ fn compileShader(alloc: Allocator, srcPath: []const u8, spvPath: []const u8) !vo
 }
 
 fn loadShader(alloc: Allocator, spvPath: []const u8) ![]align(@alignOf(u32)) u8 {
-    const file = std.fs.cwd().openFile(spvPath, .{}) catch |err| {
+    const absPath = try resolvePath(alloc, spvPath);
+    defer alloc.free(absPath);
+
+    const file = std.fs.openFileAbsolute(absPath, .{}) catch |err| {
         std.debug.print("Failed to open compiled shader: {s}\n", .{spvPath});
         return err;
     };
@@ -50,13 +54,16 @@ pub fn createShaderModule(alloc: std.mem.Allocator, srcPath: []const u8, spvPath
     const abs_spv_path = try std.fs.path.join(alloc, &[_][]const u8{ exe_dir, "..", "..", spvPath });
     defer alloc.free(abs_spv_path);
 
+    const abs_spv_path2 = try std.fs.path.join(alloc, &[_][]const u8{ exe_dir, spvPath });
+    defer alloc.free(abs_spv_path2);
+
     // Create output directory if it doesn't exist
     if (std.fs.path.dirname(abs_spv_path)) |dir_path| {
         std.fs.cwd().makePath(dir_path) catch {}; // Ignore if already exists
     }
 
-    try compileShader(alloc, abs_src_path, abs_spv_path);
-    const loadedShader = try loadShader(alloc, abs_spv_path);
+    if (SHADER_HOTLOAD == true) try compileShader(alloc, abs_src_path, abs_spv_path);
+    const loadedShader = try loadShader(alloc, spvPath);
     defer alloc.free(loadedShader);
 
     const createInf = c.VkShaderModuleCreateInfo{
@@ -67,4 +74,12 @@ pub fn createShaderModule(alloc: std.mem.Allocator, srcPath: []const u8, spvPath
     var shdrMod: c.VkShaderModule = undefined;
     try check(c.vkCreateShaderModule(gpi, &createInf, null, &shdrMod), "Failed to create shader module");
     return shdrMod;
+}
+
+fn resolvePath(alloc: Allocator, rel: []const u8) ![]u8 {
+    const exe_dir = try std.fs.selfExeDirPathAlloc(alloc);
+    defer alloc.free(exe_dir);
+    const root = try std.fs.path.resolve(alloc, &[_][]const u8{ exe_dir, "..", ".." });
+    defer alloc.free(root);
+    return std.fs.path.join(alloc, &[_][]const u8{ root, rel });
 }

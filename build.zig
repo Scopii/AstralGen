@@ -91,12 +91,18 @@ pub fn build(b: *std.Build) void {
         std.debug.print("Failed to create directory '{s}': {}\n", .{ "zig-out/shader", err });
     };
 
-    // Shader Compilation (currently in Pipeline Creation)
-    //const compile_shaders = b.addSystemCommand(&[_][]const u8{ "glslc", "src/shader/shdr.vert", "-o", "zig-out/vert.spv" });
-    //const compile_frag = b.addSystemCommand(&[_][]const u8{ "glslc", "src/shader/shdr.frag", "-o", "zig-out/frag.spv" });
+    // Shader Compilation (also currently in Pipeline Creation)
+    const compileComputeShdr = b.addSystemCommand(&[_][]const u8{ "glslc", "--target-spv=spv1.6", "src/shader/Compute.comp", "-o", "zig-out/shader/Compute.spv" });
+    const compileGraphicsFragShdr = b.addSystemCommand(&[_][]const u8{ "glslc", "--target-spv=spv1.6", "src/shader/Graphics.frag", "-o", "zig-out/shader/GraphicsFrag.spv" });
+    const compileGraphicsVertShdr = b.addSystemCommand(&[_][]const u8{ "glslc", "--target-spv=spv1.6", "src/shader/Graphics.vert", "-o", "zig-out/shader/GraphicsVert.spv" });
+    const compileMeshFragShdr = b.addSystemCommand(&[_][]const u8{ "glslc", "--target-spv=spv1.6", "src/shader/Mesh.frag", "-o", "zig-out/shader/MeshFrag.spv" });
+    const compileMeshMeshShdr = b.addSystemCommand(&[_][]const u8{ "glslc", "--target-spv=spv1.6", "src/shader/Mesh.mesh", "-o", "zig-out/shader/MeshMesh.spv" });
     // Make exe depend on shader compilation
-    //exe.step.dependOn(&compile_shaders.step);
-    //exe.step.dependOn(&compile_frag.step);
+    exe.step.dependOn(&compileComputeShdr.step);
+    exe.step.dependOn(&compileGraphicsFragShdr.step);
+    exe.step.dependOn(&compileGraphicsVertShdr.step);
+    exe.step.dependOn(&compileMeshFragShdr.step);
+    exe.step.dependOn(&compileMeshMeshShdr.step);
 
     const run_cmd = b.addRunArtifact(exe);
     run_cmd.step.dependOn(b.getInstallStep());
