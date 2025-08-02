@@ -82,7 +82,7 @@ pub const Renderer = struct {
         for (windows) |windowPtr| {
             switch (windowPtr.status) {
                 .needUpdate => {
-                    try self.swapchainMan.recreateSwapchain(&self.context, windowPtr);
+                    try self.swapchainMan.recreateSwapchain(&self.context, .{ .window = windowPtr });
                 },
                 .needActive => {
                     try self.swapchainMan.addActive(windowPtr);
