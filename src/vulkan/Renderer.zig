@@ -153,42 +153,20 @@ pub const Renderer = struct {
         var waitInfos = try self.arenaAlloc.alloc(c.VkSemaphoreSubmitInfo, submitIds.len);
         for (submitIds, 0..) |id, i| {
             const swapchain = self.swapchainMan.swapchains.getAtIndex(id);
-            waitInfos[i] = .{
-                .sType = c.VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
-                .semaphore = swapchain.imgRdySems[frameInFlight],
-                .stageMask = c.VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-            };
+            waitInfos[i] = createSemaphoreSubmitInfo(swapchain.imgRdySems[frameInFlight], c.VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, 0);
         }
 
         var signalInfos = try self.arenaAlloc.alloc(c.VkSemaphoreSubmitInfo, submitIds.len + 1); // (+1 is Timeline Semaphore)
         for (submitIds, 0..) |id, i| {
             const swapchain = self.swapchainMan.swapchains.getAtIndex(id);
-            signalInfos[i] = .{
-                .sType = c.VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
-                .semaphore = swapchain.renderDoneSems[swapchain.curIndex],
-                .stageMask = c.VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
-            };
+            signalInfos[i] = createSemaphoreSubmitInfo(swapchain.renderDoneSems[swapchain.curIndex], c.VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, 0);
         }
         // Adding the timeline
-        signalInfos[submitIds.len] = .{
-            .sType = c.VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
-            .semaphore = self.scheduler.cpuSyncTimeline,
-            .value = self.scheduler.totalFrames + 1,
-            .stageMask = c.VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
-        };
+        signalInfos[submitIds.len] =
+            createSemaphoreSubmitInfo(self.scheduler.cpuSyncTimeline, c.VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, self.scheduler.totalFrames + 1);
 
-        const submitInf = c.VkSubmitInfo2{
-            .sType = c.VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
-            .waitSemaphoreInfoCount = @intCast(waitInfos.len),
-            .pWaitSemaphoreInfos = waitInfos.ptr,
-            .commandBufferInfoCount = 1,
-            .pCommandBufferInfos = &.{
-                .sType = c.VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
-                .commandBuffer = cmd,
-            },
-            .signalSemaphoreInfoCount = @intCast(signalInfos.len),
-            .pSignalSemaphoreInfos = signalInfos.ptr,
-        };
+        const cmdSubmitInfo = createCmdSubmitInfo(cmd);
+        const submitInf = createSubmitInfo(waitInfos, &cmdSubmitInfo, signalInfos);
         try check(c.vkQueueSubmit2(self.context.graphicsQ, 1, &submitInf, null), "Failed main submission");
     }
 
@@ -206,17 +184,9 @@ pub const Renderer = struct {
             imageIndices[i] = swapchain.curIndex;
             presentWaitSems[i] = swapchain.renderDoneSems[swapchain.curIndex];
         }
+        const presentInf = createPresentInfo(presentWaitSems, swapchainHandles, imageIndices);
 
-        const presetInf = c.VkPresentInfoKHR{
-            .sType = c.VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
-            .waitSemaphoreCount = @intCast(presentWaitSems.len),
-            .pWaitSemaphores = presentWaitSems.ptr,
-            .swapchainCount = @intCast(swapchainHandles.len),
-            .pSwapchains = swapchainHandles.ptr,
-            .pImageIndices = imageIndices.ptr,
-        };
-
-        const result = c.vkQueuePresentKHR(self.context.presentQ, &presetInf);
+        const result = c.vkQueuePresentKHR(self.context.presentQ, &presentInf);
         if (result != c.VK_SUCCESS and result != c.VK_ERROR_OUT_OF_DATE_KHR and result != c.VK_SUBOPTIMAL_KHR) {
             try check(result, "Failed to present swapchain image");
         }
@@ -228,3 +198,42 @@ pub const Renderer = struct {
         self.descriptorsUpToDate = true;
     }
 };
+
+fn createSemaphoreSubmitInfo(semaphore: c.VkSemaphore, stageMask: u64, value: u64) c.VkSemaphoreSubmitInfo {
+    return .{
+        .sType = c.VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+        .semaphore = semaphore,
+        .stageMask = stageMask,
+        .value = value,
+    };
+}
+
+fn createSubmitInfo(waitInfos: []c.VkSemaphoreSubmitInfo, cmdInfo: *const c.VkCommandBufferSubmitInfo, signalInfos: []c.VkSemaphoreSubmitInfo) c.VkSubmitInfo2 {
+    return c.VkSubmitInfo2{
+        .sType = c.VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
+        .waitSemaphoreInfoCount = @intCast(waitInfos.len),
+        .pWaitSemaphoreInfos = waitInfos.ptr,
+        .commandBufferInfoCount = 1,
+        .pCommandBufferInfos = cmdInfo,
+        .signalSemaphoreInfoCount = @intCast(signalInfos.len),
+        .pSignalSemaphoreInfos = signalInfos.ptr,
+    };
+}
+
+fn createCmdSubmitInfo(cmd: c.VkCommandBuffer) c.VkCommandBufferSubmitInfo {
+    return .{
+        .sType = c.VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
+        .commandBuffer = cmd,
+    };
+}
+
+fn createPresentInfo(waitSemaphores: []c.VkSemaphore, swapchainHandles: []c.VkSwapchainKHR, imageIndices: []u32) c.VkPresentInfoKHR {
+    return c.VkPresentInfoKHR{
+        .sType = c.VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
+        .waitSemaphoreCount = @intCast(waitSemaphores.len),
+        .pWaitSemaphores = waitSemaphores.ptr,
+        .swapchainCount = @intCast(swapchainHandles.len),
+        .pSwapchains = swapchainHandles.ptr,
+        .pImageIndices = imageIndices.ptr,
+    };
+}

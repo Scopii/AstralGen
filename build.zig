@@ -1,4 +1,5 @@
 const std = @import("std");
+const SHADER_HOTLOAD = @import("src/config.zig").SHADER_HOTLOAD;
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
@@ -91,18 +92,21 @@ pub fn build(b: *std.Build) void {
         std.debug.print("Failed to create directory '{s}': {}\n", .{ "zig-out/shader", err });
     };
 
-    // Shader Compilation (also currently in Pipeline Creation)
-    const compileComputeShdr = b.addSystemCommand(&[_][]const u8{ "glslc", "--target-spv=spv1.6", "src/shader/Compute.comp", "-o", "zig-out/shader/Compute.spv" });
-    const compileGraphicsFragShdr = b.addSystemCommand(&[_][]const u8{ "glslc", "--target-spv=spv1.6", "src/shader/Graphics.frag", "-o", "zig-out/shader/GraphicsFrag.spv" });
-    const compileGraphicsVertShdr = b.addSystemCommand(&[_][]const u8{ "glslc", "--target-spv=spv1.6", "src/shader/Graphics.vert", "-o", "zig-out/shader/GraphicsVert.spv" });
-    const compileMeshFragShdr = b.addSystemCommand(&[_][]const u8{ "glslc", "--target-spv=spv1.6", "src/shader/Mesh.frag", "-o", "zig-out/shader/MeshFrag.spv" });
-    const compileMeshMeshShdr = b.addSystemCommand(&[_][]const u8{ "glslc", "--target-spv=spv1.6", "src/shader/Mesh.mesh", "-o", "zig-out/shader/MeshMesh.spv" });
-    // Make exe depend on shader compilation
-    exe.step.dependOn(&compileComputeShdr.step);
-    exe.step.dependOn(&compileGraphicsFragShdr.step);
-    exe.step.dependOn(&compileGraphicsVertShdr.step);
-    exe.step.dependOn(&compileMeshFragShdr.step);
-    exe.step.dependOn(&compileMeshMeshShdr.step);
+    if (SHADER_HOTLOAD == false) {
+        std.debug.print("Shaders Compiled in Build Step\n", .{});
+        // Shader Compilation (also currently in Pipeline Creation)
+        const compileComputeShdr = b.addSystemCommand(&[_][]const u8{ "glslc", "--target-spv=spv1.6", "src/shader/Compute.comp", "-o", "zig-out/shader/Compute.spv" });
+        const compileGraphicsFragShdr = b.addSystemCommand(&[_][]const u8{ "glslc", "--target-spv=spv1.6", "src/shader/Graphics.frag", "-o", "zig-out/shader/GraphicsFrag.spv" });
+        const compileGraphicsVertShdr = b.addSystemCommand(&[_][]const u8{ "glslc", "--target-spv=spv1.6", "src/shader/Graphics.vert", "-o", "zig-out/shader/GraphicsVert.spv" });
+        const compileMeshFragShdr = b.addSystemCommand(&[_][]const u8{ "glslc", "--target-spv=spv1.6", "src/shader/Mesh.frag", "-o", "zig-out/shader/MeshFrag.spv" });
+        const compileMeshMeshShdr = b.addSystemCommand(&[_][]const u8{ "glslc", "--target-spv=spv1.6", "src/shader/Mesh.mesh", "-o", "zig-out/shader/MeshMesh.spv" });
+        // Make exe depend on shader compilation
+        exe.step.dependOn(&compileComputeShdr.step);
+        exe.step.dependOn(&compileGraphicsFragShdr.step);
+        exe.step.dependOn(&compileGraphicsVertShdr.step);
+        exe.step.dependOn(&compileMeshFragShdr.step);
+        exe.step.dependOn(&compileMeshMeshShdr.step);
+    }
 
     const run_cmd = b.addRunArtifact(exe);
     run_cmd.step.dependOn(b.getInstallStep());

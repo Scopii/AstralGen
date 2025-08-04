@@ -6,6 +6,7 @@ const Allocator = std.mem.Allocator;
 
 // Compile and load shader from source
 fn compileShader(alloc: Allocator, srcPath: []const u8, spvPath: []const u8) !void {
+    std.debug.print("Compiling Shader: {s} -> {s}\n", .{ srcPath, spvPath });
     // Compile shader using glslc
     const result = std.process.Child.run(.{
         .allocator = alloc,
@@ -24,8 +25,9 @@ fn compileShader(alloc: Allocator, srcPath: []const u8, spvPath: []const u8) !vo
 }
 
 fn loadShader(alloc: Allocator, spvPath: []const u8) ![]align(@alignOf(u32)) u8 {
+    std.debug.print("Loading shader: {s}\n", .{spvPath});
     const file = std.fs.cwd().openFile(spvPath, .{}) catch |err| {
-        std.debug.print("Failed to open compiled shader: {s}\n", .{spvPath});
+        std.debug.print("Failed to load shader: {s}\n", .{spvPath});
         return err;
     };
     defer file.close();

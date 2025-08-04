@@ -11,6 +11,7 @@ const CreateMapArray = @import("../structures/MapArray.zig").CreateMapArray;
 
 const MAX_IN_FLIGHT = @import("../config.zig").MAX_IN_FLIGHT;
 const MAX_WINDOWS = @import("../config.zig").MAX_WINDOWS;
+const DESIRED_SWAPCHAIN_IMAGES = @import("../config.zig").DESIRED_SWAPCHAIN_IMAGES;
 
 pub const Swapchain = struct {
     surface: c.VkSurfaceKHR,
@@ -69,6 +70,7 @@ pub const SwapchainManager = struct {
                     c.VK_ERROR_OUT_OF_DATE_KHR, c.VK_SUBOPTIMAL_KHR => {
                         try self.createSwapchain(context, .{ .id = id });
                         const result2 = c.vkAcquireNextImageKHR(gpi, ptr.handle, std.math.maxInt(u64), ptr.imgRdySems[frameInFlight], null, &ptr.curIndex);
+
                         if (result2 == c.VK_SUCCESS) {
                             try self.targets.append(index);
                             std.debug.print("Resolved Error for Swapchain {}", .{ptr.*});
@@ -88,7 +90,8 @@ pub const SwapchainManager = struct {
     pub fn removeActive(self: *SwapchainManager, window: *Window) void {
         const group = self.activeGroups[@intFromEnum(window.pipeType)].slice();
         for (0..group.len) |i| {
-            if (group[i] == window.id) _ = self.activeGroups[@intFromEnum(window.pipeType)].swapRemove(i);
+            if (group[i] == window.id)
+                _ = self.activeGroups[@intFromEnum(window.pipeType)].swapRemove(i);
         }
     }
 
@@ -172,9 +175,11 @@ pub const SwapchainManager = struct {
                 std.debug.print("Swapchain Error resolved\n", .{});
             },
         }
+
         const surface = ptr.surface;
         const caps = try getSurfaceCaps(gpu, surface);
         const surfaceFormat = try pickSurfaceFormat(alloc, gpu, surface);
+
         const swapchain = try self.createInternalSwapchain(surfaceFormat, surface, extent, families, caps, ptr.handle);
         self.destroySwapchain(ptr, .withoutSurface);
         ptr.* = swapchain;
@@ -194,8 +199,11 @@ pub const SwapchainManager = struct {
         const mode = c.VK_PRESENT_MODE_IMMEDIATE_KHR; //try context.pickPresentMode();
         const actualExtent = pickExtent(&caps, extent);
 
-        var desiredImgCount: u32 = caps.minImageCount + 1;
-        if (caps.maxImageCount > 0 and desiredImgCount > caps.maxImageCount) desiredImgCount = caps.maxImageCount;
+        var desiredImgCount: u32 = DESIRED_SWAPCHAIN_IMAGES;
+        if (caps.maxImageCount < desiredImgCount or DESIRED_SWAPCHAIN_IMAGES < caps.minImageCount) {
+            std.debug.print("Swapchain supports {}{} Images, using max", .{ caps.minImageCount, caps.maxImageCount });
+            desiredImgCount = caps.maxImageCount;
+        }
 
         var sharingMode: c.VkSharingMode = c.VK_SHARING_MODE_EXCLUSIVE;
         var familyIndices: [2]u32 = undefined;
