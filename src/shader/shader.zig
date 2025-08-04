@@ -6,7 +6,7 @@ const Allocator = std.mem.Allocator;
 
 // Compile and load shader from source
 fn compileShader(alloc: Allocator, srcPath: []const u8, spvPath: []const u8) !void {
-    std.debug.print("Compiling Shader: {s} -> {s}\n", .{ srcPath, spvPath });
+    std.debug.print("Compiling Shader: from {s} \n to -> {s}\n", .{ srcPath, spvPath });
     // Compile shader using glslc
     const result = std.process.Child.run(.{
         .allocator = alloc,
@@ -42,24 +42,27 @@ pub fn createShaderModule(alloc: std.mem.Allocator, srcPath: []const u8, spvPath
     const exe_dir = try std.fs.selfExeDirPathAlloc(alloc);
     defer alloc.free(exe_dir);
 
-    // Project root (up two levels from zig-out/bin)
-    const project_root = try std.fs.path.resolve(alloc, &[_][]const u8{ exe_dir, "..", ".." });
-    defer alloc.free(project_root);
+    // For runtime: look for shader folder next to exe (in parent of bin/)
+    const runtimeSpvPath = try std.fs.path.join(alloc, &[_][]const u8{ exe_dir, "..", spvPath });
+    defer alloc.free(runtimeSpvPath);
 
-    const abs_src_path = try std.fs.path.join(alloc, &[_][]const u8{ project_root, srcPath });
-    defer alloc.free(abs_src_path);
+    if (SHADER_HOTLOAD) {
+        // For development: resolve source path from project root
+        const projectRoot = try std.fs.path.resolve(alloc, &[_][]const u8{ exe_dir, "..", ".." });
+        defer alloc.free(projectRoot);
 
-    // Output goes in exe directory, not project root
-    const abs_spv_path = try std.fs.path.join(alloc, &[_][]const u8{ exe_dir, "..", "..", spvPath });
-    defer alloc.free(abs_spv_path);
+        const absSrcPath = try std.fs.path.join(alloc, &[_][]const u8{ projectRoot, srcPath });
+        defer alloc.free(absSrcPath);
 
-    // Create output directory if it doesn't exist
-    if (std.fs.path.dirname(abs_spv_path)) |dir_path| {
-        std.fs.cwd().makePath(dir_path) catch {}; // Ignore if already exists
+        // Create output directory if needed
+        if (std.fs.path.dirname(runtimeSpvPath)) |dir_path| {
+            std.fs.cwd().makePath(dir_path) catch {}; // Ignore if exists
+        }
+        try compileShader(alloc, absSrcPath, runtimeSpvPath);
     }
 
-    if (SHADER_HOTLOAD == true) try compileShader(alloc, abs_src_path, abs_spv_path);
-    const loadedShader = try loadShader(alloc, abs_spv_path);
+    // Load compiled shader (works for both hotload and pre-compiled)
+    const loadedShader = try loadShader(alloc, runtimeSpvPath);
     defer alloc.free(loadedShader);
 
     const createInf = c.VkShaderModuleCreateInfo{

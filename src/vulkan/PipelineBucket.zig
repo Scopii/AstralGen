@@ -3,6 +3,7 @@ const c = @import("../c.zig");
 const Allocator = std.mem.Allocator;
 const check = @import("error.zig").check;
 const createShaderModule = @import("../shader/shader.zig").createShaderModule;
+const SHADER_HOTLOAD = @import("../config.zig").SHADER_HOTLOAD;
 
 pub const ShaderInfo = struct {
     stage: c.VkShaderStageFlagBits,
@@ -41,9 +42,11 @@ pub const Pipeline = struct {
         }
 
         var timeStamp: u64 = 0;
-        for (0..shaderInfos.len) |i| {
-            const tempTimeStamp = try getFileTimeStamp(alloc, shaderInfos[i].inputPath);
-            if (tempTimeStamp > timeStamp) timeStamp = tempTimeStamp;
+        if (SHADER_HOTLOAD == true) {
+            for (0..shaderInfos.len) |i| {
+                const tempTimeStamp = try getFileTimeStamp(alloc, shaderInfos[i].inputPath);
+                if (tempTimeStamp > timeStamp) timeStamp = tempTimeStamp;
+            }
         }
 
         const layout = try createPipelineLayout(gpi, descriptorLayout, layoutCount);
