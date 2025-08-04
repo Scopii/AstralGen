@@ -200,9 +200,12 @@ pub const SwapchainManager = struct {
         const actualExtent = pickExtent(&caps, extent);
 
         var desiredImgCount: u32 = DESIRED_SWAPCHAIN_IMAGES;
-        if (caps.maxImageCount < desiredImgCount or DESIRED_SWAPCHAIN_IMAGES < caps.minImageCount) {
-            std.debug.print("Swapchain supports {}{} Images, using max", .{ caps.minImageCount, caps.maxImageCount });
+        if (caps.maxImageCount < desiredImgCount) {
+            std.debug.print("Swapchain does not support {} Images({}-{}), using {}\n", .{ DESIRED_SWAPCHAIN_IMAGES, caps.minImageCount, caps.maxImageCount, caps.maxImageCount });
             desiredImgCount = caps.maxImageCount;
+        } else if (DESIRED_SWAPCHAIN_IMAGES < caps.minImageCount) {
+            std.debug.print("Swapchain does not support {} Images ({}-{}), using {}\n", .{ DESIRED_SWAPCHAIN_IMAGES, caps.minImageCount, caps.maxImageCount, caps.minImageCount });
+            desiredImgCount = caps.minImageCount;
         }
 
         var sharingMode: c.VkSharingMode = c.VK_SHARING_MODE_EXCLUSIVE;
