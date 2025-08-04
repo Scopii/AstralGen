@@ -14,57 +14,77 @@ pub const CmdManager = struct {
     alloc: Allocator,
     gpi: c.VkDevice,
     pool: c.VkCommandPool,
-    cmds: []c.VkCommandBuffer,
-    activeCmd: ?c.VkCommandBuffer = null,
+    activeFrame: ?u8 = null,
+    primaryCmds: []c.VkCommandBuffer,
+    computeCmds: []c.VkCommandBuffer,
+    graphicsCmds: []c.VkCommandBuffer,
+    meshCmds: []c.VkCommandBuffer,
     blitBarriers: [MAX_WINDOWS + 1]c.VkImageMemoryBarrier2 = undefined,
+    needNewRecording: bool = true,
 
     pub fn init(alloc: Allocator, context: *const @import("Context.zig").Context, maxInFlight: u32) !CmdManager {
         const gpi = context.gpi;
         const family = context.families.graphics;
         const pool = try createCmdPool(gpi, family);
-        const cmds = try alloc.alloc(c.VkCommandBuffer, maxInFlight);
+
+        const primaryCmds = try alloc.alloc(c.VkCommandBuffer, maxInFlight);
+        const computeCmds = try alloc.alloc(c.VkCommandBuffer, maxInFlight);
+        const graphicsCmds = try alloc.alloc(c.VkCommandBuffer, maxInFlight);
+        const meshCmds = try alloc.alloc(c.VkCommandBuffer, maxInFlight);
 
         for (0..maxInFlight) |i| {
-            cmds[i] = try createCmd(gpi, pool);
+            primaryCmds[i] = try createCmd(gpi, pool);
+            computeCmds[i] = try createCmd(gpi, pool);
+            graphicsCmds[i] = try createCmd(gpi, pool);
+            meshCmds[i] = try createCmd(gpi, pool);
         }
+
         return .{
             .alloc = alloc,
             .gpi = gpi,
             .pool = pool,
-            .cmds = cmds,
+            .primaryCmds = primaryCmds,
+            .computeCmds = computeCmds,
+            .graphicsCmds = graphicsCmds,
+            .meshCmds = meshCmds,
         };
     }
 
     pub fn deinit(self: *CmdManager) void {
-        self.alloc.free(self.cmds);
+        self.alloc.free(self.primaryCmds);
+        self.alloc.free(self.computeCmds);
+        self.alloc.free(self.graphicsCmds);
+        self.alloc.free(self.meshCmds);
         c.vkDestroyCommandPool(self.gpi, self.pool, null);
     }
 
     pub fn beginRecording(self: *CmdManager, frameInFlight: u8) !void {
-        if (self.activeCmd != null) return error.RecordingInProgress;
-        const cmd = self.cmds[frameInFlight];
+        if (self.activeFrame != null) return error.RecordingInProgress;
+        const cmd = self.primaryCmds[frameInFlight];
         const beginInf = c.VkCommandBufferBeginInfo{
             .sType = c.VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
             .flags = 0, //c.VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT / VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT
             .pInheritanceInfo = null,
         };
         try check(c.vkBeginCommandBuffer(cmd, &beginInf), "could not Begin CmdBuffer");
-        self.activeCmd = cmd;
+        self.activeFrame = frameInFlight;
     }
 
     pub fn endRecording(self: *CmdManager) !c.VkCommandBuffer {
-        const cmd = self.activeCmd orelse return error.NoActiveRecording;
+        const activeFrame = self.activeFrame orelse return error.NoActiveRecording;
+        const cmd = self.primaryCmds[activeFrame];
         try check(c.vkEndCommandBuffer(cmd), "Could not End Cmd Buffer");
-        self.activeCmd = null;
+        self.activeFrame = null;
         return cmd;
     }
 
     pub fn getCmd(self: *const CmdManager, frameInFlight: u8) c.VkCommandBuffer {
-        return self.cmds[frameInFlight];
+        return self.primaryCmds[frameInFlight];
     }
 
     pub fn recordComputePass(self: *CmdManager, renderImage: *RenderImage, pipe: *const PipelineBucket, set: c.VkDescriptorSet) !void {
-        const activeCmd = self.activeCmd orelse return error.ActiveCmdBlocked;
+        const activeFrame = self.activeFrame orelse return error.ActiveCmdBlocked;
+        const cmd = self.primaryCmds[activeFrame];
 
         const barrier = createImageMemoryBarrier2(
             c.VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
@@ -76,16 +96,17 @@ pub const CmdManager = struct {
             renderImage.image,
             createSubresourceRange(c.VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1),
         );
-        createPipelineBarriers2(activeCmd, &.{barrier});
+        createPipelineBarriers2(cmd, &.{barrier});
         renderImage.curLayout = c.VK_IMAGE_LAYOUT_GENERAL;
 
-        c.vkCmdBindPipeline(activeCmd, c.VK_PIPELINE_BIND_POINT_COMPUTE, pipe.handle);
-        c.vkCmdBindDescriptorSets(activeCmd, c.VK_PIPELINE_BIND_POINT_COMPUTE, pipe.layout, 0, 1, &set, 0, null);
-        c.vkCmdDispatch(activeCmd, (renderImage.extent3d.width + 7) / 8, (renderImage.extent3d.height + 7) / 8, 1);
+        c.vkCmdBindPipeline(cmd, c.VK_PIPELINE_BIND_POINT_COMPUTE, pipe.handle);
+        c.vkCmdBindDescriptorSets(cmd, c.VK_PIPELINE_BIND_POINT_COMPUTE, pipe.layout, 0, 1, &set, 0, null);
+        c.vkCmdDispatch(cmd, (renderImage.extent3d.width + 7) / 8, (renderImage.extent3d.height + 7) / 8, 1);
     }
 
     pub fn recordGraphicsPass(self: *CmdManager, renderImage: *RenderImage, pipe: *const PipelineBucket, pipeType: PipelineType) !void {
-        const cmd = self.activeCmd orelse return error.ActiveCmdBlocked;
+        const activeFrame = self.activeFrame orelse return error.ActiveCmdBlocked;
+        const cmd = self.primaryCmds[activeFrame];
 
         const barrier = createImageMemoryBarrier2(
             c.VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
@@ -143,7 +164,9 @@ pub const CmdManager = struct {
     }
 
     pub fn blitToTargets(self: *CmdManager, renderImage: *RenderImage, targets: []const u8, swapchainMap: *CreateMapArray(Swapchain, MAX_WINDOWS, u8, MAX_WINDOWS, 0)) !void {
-        const cmd = self.activeCmd orelse return;
+        const activeFrame = self.activeFrame orelse return error.ActiveCmdBlocked;
+        const cmd = self.primaryCmds[activeFrame];
+
         var barriers = &self.blitBarriers;
         barriers[0] = createImageMemoryBarrier2(
             c.VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
@@ -206,9 +229,9 @@ fn createCmd(gpi: c.VkDevice, pool: c.VkCommandPool) !c.VkCommandBuffer {
         .level = c.VK_COMMAND_BUFFER_LEVEL_PRIMARY,
         .commandBufferCount = 1,
     };
-    var buff: c.VkCommandBuffer = undefined;
-    try check(c.vkAllocateCommandBuffers(gpi, &allocInf, &buff), "Could not create CMD Buffer");
-    return buff;
+    var cmd: c.VkCommandBuffer = undefined;
+    try check(c.vkAllocateCommandBuffers(gpi, &allocInf, &cmd), "Could not create CMD Buffer");
+    return cmd;
 }
 
 fn createCmdPool(gpi: c.VkDevice, familyIndex: u32) !c.VkCommandPool {

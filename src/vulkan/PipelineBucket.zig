@@ -143,10 +143,10 @@ fn createPipeline(
     layout: c.VkPipelineLayout,
     shaderStages: []const c.VkPipelineShaderStageCreateInfo,
     cache: c.VkPipelineCache,
-    pipelineType: PipelineType,
+    pipeType: PipelineType,
     format: ?c.VkFormat,
 ) !c.VkPipeline {
-    switch (pipelineType) {
+    switch (pipeType) {
         .compute => {
             if (shaderStages.len > 1) return error.ComputeCantHaveMultipleStages;
 
@@ -237,7 +237,7 @@ fn createPipeline(
                 .stencilAttachmentFormat = c.VK_FORMAT_UNDEFINED,
             };
 
-            if (pipelineType == .mesh) {
+            if (pipeType == .mesh) {
                 const pipelineInf = c.VkGraphicsPipelineCreateInfo{
                     .sType = c.VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
                     .pNext = &pipeline_rendering_info,

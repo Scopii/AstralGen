@@ -1,7 +1,7 @@
 // Debug
-pub const DEBUG_MODE = true;
-pub const CLOSE_WITH_CONSOLE = false;
-pub const SHADER_HOTLOAD = true;
+pub const DEBUG_MODE = false;
+pub const CLOSE_WITH_CONSOLE = true;
+pub const SHADER_HOTLOAD = false;
 
 // Rendering
 pub const MAX_IN_FLIGHT: u8 = 1; // (Frames)
