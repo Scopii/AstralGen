@@ -237,12 +237,18 @@ fn createGPI(alloc: Allocator, gpu: c.VkPhysicalDevice, families: QueueFamilies)
         .meshShader = c.VK_TRUE,
     };
 
+    var descriptor_buffer_features = c.VkPhysicalDeviceDescriptorBufferFeaturesEXT{
+        .sType = c.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_BUFFER_FEATURES_EXT,
+        .pNext = &mesh_shader_features,
+        .descriptorBuffer = c.VK_TRUE,
+    };
+
     const features_vulkan12 = c.VkPhysicalDeviceVulkan12Features{
         .sType = c.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
         .bufferDeviceAddress = c.VK_TRUE,
         .descriptorIndexing = c.VK_TRUE,
         .timelineSemaphore = c.VK_TRUE,
-        .pNext = &mesh_shader_features,
+        .pNext = &descriptor_buffer_features,
     };
 
     const features13_to_enable = c.VkPhysicalDeviceVulkan13Features{
@@ -253,7 +259,7 @@ fn createGPI(alloc: Allocator, gpu: c.VkPhysicalDevice, families: QueueFamilies)
         .pNext = @constCast(@ptrCast(&features_vulkan12)),
     };
 
-    const gpuExtensions = [_][*c]const u8{ "VK_KHR_swapchain", "VK_EXT_mesh_shader" };
+    const gpuExtensions = [_][*c]const u8{ "VK_KHR_swapchain", "VK_EXT_mesh_shader", "VK_EXT_descriptor_buffer" };
 
     const createInfo = c.VkDeviceCreateInfo{
         .sType = c.VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
@@ -278,5 +284,24 @@ fn createGPI(alloc: Allocator, gpu: c.VkPhysicalDevice, families: QueueFamilies)
         std.log.err("FATAL: Could not load the vkCmdDrawMeshTasksEXT function pointer!\n", .{});
         return error.MissingVulkanFunction;
     }
+
+    const generic_fn_ptr_bind = c.vkGetDeviceProcAddr(gpi, "vkCmdBindDescriptorBuffersEXT");
+    c.pfn_vkCmdBindDescriptorBuffersEXT = if (generic_fn_ptr_bind) |p| @ptrCast(p) else null;
+
+    const generic_fn_ptr_offset = c.vkGetDeviceProcAddr(gpi, "vkCmdSetDescriptorBufferOffsetsEXT");
+    c.pfn_vkCmdSetDescriptorBufferOffsetsEXT = if (generic_fn_ptr_offset) |p| @ptrCast(p) else null;
+
+    const generic_fn_ptr_get = c.vkGetDeviceProcAddr(gpi, "vkGetDescriptorEXT");
+    c.pfn_vkGetDescriptorEXT = if (generic_fn_ptr_get) |p| @ptrCast(p) else null;
+
+    // Add error checking these functions were loaded
+    if (c.pfn_vkCmdBindDescriptorBuffersEXT == null or
+        c.pfn_vkCmdSetDescriptorBufferOffsetsEXT == null or
+        c.pfn_vkGetDescriptorEXT == null)
+    {
+        std.log.err("FATAL: Could not load descriptor buffer function pointers!\n", .{});
+        return error.MissingVulkanFunction;
+    }
+
     return gpi;
 }

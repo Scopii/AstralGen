@@ -11,10 +11,10 @@ pub const c_api = @cImport({
 
 extern fn SDL_ShowSimpleMessageBox(flags: u32, title: [*c]const u8, message: [*c]const u8, window: ?*anyopaque) c_int;
 
-// Step 2: Declare the function pointer variable as a separate public member of this file.
-// It uses the PFN type from the c_api struct we just defined.
 pub var pfn_vkCmdDrawMeshTasksEXT: c_api.PFN_vkCmdDrawMeshTasksEXT = null;
 
-// Step 3 (Optional but recommended): For convenience, you can still use `usingnamespace`
-// so you don't have to type `c_api.` everywhere in your project.
+pub var pfn_vkCmdBindDescriptorBuffersEXT: c_api.PFN_vkCmdBindDescriptorBuffersEXT = null;
+pub var pfn_vkCmdSetDescriptorBufferOffsetsEXT: c_api.PFN_vkCmdSetDescriptorBufferOffsetsEXT = null;
+pub var pfn_vkGetDescriptorEXT: c_api.PFN_vkGetDescriptorEXT = null;
+
 pub usingnamespace c_api;

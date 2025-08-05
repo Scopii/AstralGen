@@ -218,7 +218,7 @@ pub const CmdManager = struct {
         const renderingInfo = c.VkRenderingInfo{
             .sType = c.VK_STRUCTURE_TYPE_RENDERING_INFO,
             // VUID-vkCmdExecuteCommands-flags-06024: flags must include SECONDARY_COMMAND_BUFFERS_BIT
-            .flags = c.VK_RENDERING_CONTENTS_SECONDARY_COMMAND_BUFFERS_BIT, // <-- FIX: Add the flag
+            .flags = c.VK_RENDERING_CONTENTS_SECONDARY_COMMAND_BUFFERS_BIT,
             .renderArea = scissor,
             .layerCount = 1,
             .colorAttachmentCount = 1,
