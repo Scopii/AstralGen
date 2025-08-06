@@ -277,29 +277,31 @@ fn createGPI(alloc: Allocator, gpu: c.VkPhysicalDevice, families: QueueFamilies)
     try check(c.vkCreateDevice(gpu, &createInfo, null, &gpi), "Unable to create Vulkan device!");
 
     // Import Mesh Shader Draw Function
-    const generic_fn_ptr = c.vkGetDeviceProcAddr(gpi, "vkCmdDrawMeshTasksEXT");
+    const fnPtrDrawMeshTasks = c.vkGetDeviceProcAddr(gpi, "vkCmdDrawMeshTasksEXT");
 
-    if (generic_fn_ptr) |p| c.pfn_vkCmdDrawMeshTasksEXT = @ptrCast(p) else c.pfn_vkCmdDrawMeshTasksEXT = null;
+    if (fnPtrDrawMeshTasks) |p| c.pfn_vkCmdDrawMeshTasksEXT = @ptrCast(p) else c.pfn_vkCmdDrawMeshTasksEXT = null;
     if (c.pfn_vkCmdDrawMeshTasksEXT == null) {
-        std.log.err("FATAL: Could not load the vkCmdDrawMeshTasksEXT function pointer!\n", .{});
+        std.log.err("Could not load the vkCmdDrawMeshTasksEXT function pointer!\n", .{});
         return error.MissingVulkanFunction;
     }
 
-    const generic_fn_ptr_bind = c.vkGetDeviceProcAddr(gpi, "vkCmdBindDescriptorBuffersEXT");
-    c.pfn_vkCmdBindDescriptorBuffersEXT = if (generic_fn_ptr_bind) |p| @ptrCast(p) else null;
+    // Import Descriptor Buffer Functions
+    const fnPtrBindDescBuff = c.vkGetDeviceProcAddr(gpi, "vkCmdBindDescriptorBuffersEXT");
+    c.pfn_vkCmdBindDescriptorBuffersEXT = if (fnPtrBindDescBuff) |p| @ptrCast(p) else null;
+    const fnPtrCmdSetDescBuffOffsets = c.vkGetDeviceProcAddr(gpi, "vkCmdSetDescriptorBufferOffsetsEXT");
+    c.pfn_vkCmdSetDescriptorBufferOffsetsEXT = if (fnPtrCmdSetDescBuffOffsets) |p| @ptrCast(p) else null;
+    const fnPtrGetDesc = c.vkGetDeviceProcAddr(gpi, "vkGetDescriptorEXT");
+    c.pfn_vkGetDescriptorEXT = if (fnPtrGetDesc) |p| @ptrCast(p) else null;
 
-    const generic_fn_ptr_offset = c.vkGetDeviceProcAddr(gpi, "vkCmdSetDescriptorBufferOffsetsEXT");
-    c.pfn_vkCmdSetDescriptorBufferOffsetsEXT = if (generic_fn_ptr_offset) |p| @ptrCast(p) else null;
+    const fnPtrGetDescSetLayoutSize = c.vkGetDeviceProcAddr(gpi, "vkGetDescriptorSetLayoutSizeEXT");
+    c.pfn_vkGetDescriptorSetLayoutSizeEXT = if (fnPtrGetDescSetLayoutSize) |p| @ptrCast(p) else null;
 
-    const generic_fn_ptr_get = c.vkGetDeviceProcAddr(gpi, "vkGetDescriptorEXT");
-    c.pfn_vkGetDescriptorEXT = if (generic_fn_ptr_get) |p| @ptrCast(p) else null;
-
-    // Add error checking these functions were loaded
     if (c.pfn_vkCmdBindDescriptorBuffersEXT == null or
         c.pfn_vkCmdSetDescriptorBufferOffsetsEXT == null or
-        c.pfn_vkGetDescriptorEXT == null)
+        c.pfn_vkGetDescriptorEXT == null or
+        c.pfn_vkGetDescriptorSetLayoutSizeEXT == null)
     {
-        std.log.err("FATAL: Could not load descriptor buffer function pointers!\n", .{});
+        std.log.err("Could not load descriptor buffer function pointers!\n", .{});
         return error.MissingVulkanFunction;
     }
 

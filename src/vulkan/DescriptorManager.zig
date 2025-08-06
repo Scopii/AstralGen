@@ -2,59 +2,72 @@ const std = @import("std");
 const c = @import("../c.zig");
 const check = @import("error.zig").check;
 const Context = @import("Context.zig").Context;
-const Allocator = std.mem.Allocator;
+const ResourceManager = @import("ResourceManager.zig").ResourceManager;
 
 pub const DescriptorManager = struct {
-    alloc: Allocator,
+    alloc: std.mem.Allocator,
     gpi: c.VkDevice,
-    pool: c.VkDescriptorPool,
-    sets: []c.VkDescriptorSet,
+    descBufferAllocation: c.VmaAllocation,
+    descBuffer: c.VkBuffer,
+    descBufferAddr: c.VkDeviceAddress,
     computeLayout: c.VkDescriptorSetLayout,
+    storageImageDescSize: u32,
+    bufferSize: c.VkDeviceSize, // Store actual buffer size for validation
 
-    pub fn init(alloc: Allocator, context: *const Context, maxInFlight: u32) !DescriptorManager {
+    pub fn init(alloc: std.mem.Allocator, context: *const Context, resourceMan: *const ResourceManager) !DescriptorManager {
         const gpi = context.gpi;
 
-        const poolSize = c.VkDescriptorPoolSize{
-            .type = c.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-            .descriptorCount = maxInFlight,
+        // Query descriptor buffer properties
+        var descBufferProps = c.VkPhysicalDeviceDescriptorBufferPropertiesEXT{
+            .sType = c.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_BUFFER_PROPERTIES_EXT,
         };
-
-        const poolInfo = c.VkDescriptorPoolCreateInfo{
-            .sType = c.VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-            .poolSizeCount = 1,
-            .pPoolSizes = &poolSize,
-            .maxSets = maxInFlight,
+        var physDevProps = c.VkPhysicalDeviceProperties2{
+            .sType = c.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2,
+            .pNext = &descBufferProps,
         };
+        c.vkGetPhysicalDeviceProperties2(context.gpu, &physDevProps);
+        const storageImageDescSize: u32 = @intCast(descBufferProps.storageImageDescriptorSize);
 
-        var pool: c.VkDescriptorPool = undefined;
-        try check(c.vkCreateDescriptorPool(gpi, &poolInfo, null, &pool), "Failed to create descriptor pool");
-
+        // Create descriptor set layout for compute pipeline
         const computeLayout = try createComputeDescriptorSetLayout(gpi);
         errdefer c.vkDestroyDescriptorSetLayout(gpi, computeLayout, null);
 
-        // Allocate descriptor sets
-        const layouts = try alloc.alloc(c.VkDescriptorSetLayout, maxInFlight);
-        defer alloc.free(layouts);
-        for (layouts) |*layoutPtr| {
-            layoutPtr.* = computeLayout;
-        }
+        // Get the exact size required for this layout from the driver
+        var layoutSize: c.VkDeviceSize = undefined;
+        c.pfn_vkGetDescriptorSetLayoutSizeEXT.?(gpi, computeLayout, &layoutSize);
 
-        const allocInfo = c.VkDescriptorSetAllocateInfo{
-            .sType = c.VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-            .descriptorPool = pool,
-            .descriptorSetCount = maxInFlight,
-            .pSetLayouts = layouts.ptr,
+        // Create descriptor buffer with driver-provided size
+        const bufferInf = c.VkBufferCreateInfo{
+            .sType = c.VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+            .size = layoutSize,
+            .usage = c.VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT | c.VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
         };
 
-        const sets = try alloc.alloc(c.VkDescriptorSet, maxInFlight);
-        try check(c.vkAllocateDescriptorSets(gpi, &allocInfo, sets.ptr), "Failed to allocate descriptor sets");
+        const allocInf = c.VmaAllocationCreateInfo{
+            .usage = c.VMA_MEMORY_USAGE_CPU_TO_GPU,
+            .flags = c.VMA_ALLOCATION_CREATE_MAPPED_BIT,
+        };
+
+        var buffer: c.VkBuffer = undefined;
+        var allocation: c.VmaAllocation = undefined;
+        try check(c.vmaCreateBuffer(resourceMan.vkAlloc.handle, &bufferInf, &allocInf, &buffer, &allocation, null), "Failed to create descriptor buffer");
+
+        // Get buffer device address
+        const addrInf = c.VkBufferDeviceAddressInfo{
+            .sType = c.VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
+            .buffer = buffer,
+        };
+        const bufferAddr = c.vkGetBufferDeviceAddress(gpi, &addrInf);
 
         return .{
             .alloc = alloc,
             .gpi = gpi,
-            .pool = pool,
-            .sets = sets,
+            .descBuffer = buffer,
+            .descBufferAllocation = allocation,
+            .descBufferAddr = bufferAddr,
             .computeLayout = computeLayout,
+            .storageImageDescSize = storageImageDescSize,
+            .bufferSize = layoutSize,
         };
     }
 
@@ -66,49 +79,57 @@ pub const DescriptorManager = struct {
             .stageFlags = c.VK_SHADER_STAGE_COMPUTE_BIT,
             .pImmutableSamplers = null,
         };
-
         const layoutInf = c.VkDescriptorSetLayoutCreateInfo{
             .sType = c.VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
             .bindingCount = 1,
             .pBindings = &binding,
+            .flags = c.VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT, // Required for descriptor buffers
+        };
+        var computeLayout: c.VkDescriptorSetLayout = undefined;
+        try check(c.vkCreateDescriptorSetLayout(gpi, &layoutInf, null, &computeLayout), "Failed to create descriptor set layout");
+        return computeLayout;
+    }
+
+    pub fn updateStorageImageDescriptor(self: *DescriptorManager, vkAlloc: c.VmaAllocator, imageView: c.VkImageView, index: u32) !void {
+        const gpi = self.gpi;
+
+        // Validate offset bounds
+        const requiredSize = index * self.storageImageDescSize + self.storageImageDescSize;
+        if (requiredSize > self.bufferSize) {
+            return error.DescriptorOffsetOutOfBounds;
+        }
+
+        const imageInf = c.VkDescriptorImageInfo{
+            .sampler = null,
+            .imageView = imageView,
+            .imageLayout = c.VK_IMAGE_LAYOUT_GENERAL,
         };
 
-        var descriptorSetLayout: c.VkDescriptorSetLayout = undefined;
-        try check(c.vkCreateDescriptorSetLayout(gpi, &layoutInf, null, &descriptorSetLayout), "Failed to create descriptor set layout");
-        return descriptorSetLayout;
-    }
+        const getInf = c.VkDescriptorGetInfoEXT{
+            .sType = c.VK_STRUCTURE_TYPE_DESCRIPTOR_GET_INFO_EXT,
+            .pNext = null,
+            .type = c.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+            .data = .{ .pStorageImage = &imageInf },
+        };
 
-    pub fn updateAllDescriptorSets(self: *DescriptorManager, imageView: c.VkImageView) void {
-        // Batch all descriptor updates for better performance
-        const imageInfos = self.alloc.alloc(c.VkDescriptorImageInfo, self.sets.len) catch unreachable;
-        defer self.alloc.free(imageInfos);
-
-        const writeDescriptors = self.alloc.alloc(c.VkWriteDescriptorSet, self.sets.len) catch unreachable;
-        defer self.alloc.free(writeDescriptors);
-
-        for (self.sets, 0..) |set, i| {
-            imageInfos[i] = c.VkDescriptorImageInfo{
-                .sampler = null,
-                .imageView = imageView,
-                .imageLayout = c.VK_IMAGE_LAYOUT_GENERAL,
-            };
-
-            writeDescriptors[i] = c.VkWriteDescriptorSet{
-                .sType = c.VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-                .dstSet = set,
-                .dstBinding = 0,
-                .dstArrayElement = 0,
-                .descriptorType = c.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-                .descriptorCount = 1,
-                .pImageInfo = &imageInfos[i],
-            };
+        var descData: [32]u8 = undefined;
+        if (self.storageImageDescSize > descData.len) {
+            return error.DescriptorSizeTooLarge;
         }
-        c.vkUpdateDescriptorSets(self.gpi, @intCast(writeDescriptors.len), writeDescriptors.ptr, 0, null);
+        c.pfn_vkGetDescriptorEXT.?(gpi, &getInf, self.storageImageDescSize, &descData);
+
+        var allocVmaInf: c.VmaAllocationInfo = undefined;
+        c.vmaGetAllocationInfo(vkAlloc, self.descBufferAllocation, &allocVmaInf);
+
+        const offset = index * self.storageImageDescSize;
+        const mappedData = @as([*]u8, @ptrCast(allocVmaInf.pMappedData));
+        const destPtr = mappedData + offset;
+
+        @memcpy(destPtr[0..self.storageImageDescSize], descData[0..self.storageImageDescSize]);
     }
 
-    pub fn deinit(self: *DescriptorManager) void {
+    pub fn deinit(self: *DescriptorManager, vkAlloc: c.VmaAllocator) void {
+        c.vmaDestroyBuffer(vkAlloc, self.descBuffer, self.descBufferAllocation);
         c.vkDestroyDescriptorSetLayout(self.gpi, self.computeLayout, null);
-        c.vkDestroyDescriptorPool(self.gpi, self.pool, null);
-        self.alloc.free(self.sets);
     }
 };

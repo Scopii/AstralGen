@@ -9,6 +9,16 @@ pub const ShaderInfo = struct {
     stage: c.VkShaderStageFlagBits,
     inputPath: []const u8,
     outputPath: []const u8,
+
+    fn getStage(self: ShaderInfo) enum { compute, vertex, fragment, mesh, task } {
+        return switch (self.stage) {
+            c.VK_SHADER_STAGE_COMPUTE_BIT => .compute,
+            c.VK_SHADER_STAGE_VERTEX_BIT => .vertex,
+            c.VK_SHADER_STAGE_FRAGMENT_BIT => .fragment,
+            c.VK_SHADER_STAGE_MESH_BIT_EXT => .mesh,
+            c.VK_SHADER_STAGE_TASK_BIT_EXT => .task,
+        };
+    }
 };
 
 pub const PipelineType = enum { compute, graphics, mesh };
@@ -130,7 +140,11 @@ fn createPipelineLayout(gpi: c.VkDevice, descriptorSetLayout: c.VkDescriptorSetL
     const pipeLayoutInf = c.VkPipelineLayoutCreateInfo{
         .sType = c.VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
         .setLayoutCount = layoutCount,
-        .pSetLayouts = &descriptorSetLayout,
+
+        // --- THIS IS THE FINAL FIX ---
+        // Use a ternary operator to ensure pSetLayouts is a true null pointer when the count is 0.
+        .pSetLayouts = if (layoutCount > 0) &descriptorSetLayout else null,
+
         .pushConstantRangeCount = 0,
     };
     var layout: c.VkPipelineLayout = undefined;
@@ -154,6 +168,7 @@ fn createPipeline(
                 .sType = c.VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
                 .stage = shaderStages[0],
                 .layout = layout,
+                .flags = c.VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT, // NEEDED for shader reference!
             };
 
             var pipe: c.VkPipeline = undefined;

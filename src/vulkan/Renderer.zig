@@ -14,9 +14,7 @@ const DescriptorManager = @import("DescriptorManager.zig").DescriptorManager;
 const RenderImage = @import("ResourceManager.zig").RenderImage;
 const Window = @import("../platform/Window.zig").Window;
 const MemoryManager = @import("../core/MemoryManager.zig").MemoryManager;
-const MAX_IN_FLIGHT = @import("../config.zig").MAX_IN_FLIGHT;
-const SHADER_HOTLOAD = @import("../config.zig").SHADER_HOTLOAD;
-const DEBUG_TOGGLE = @import("../config.zig").DEBUG_MODE;
+const config = @import("../config.zig");
 
 const Allocator = std.mem.Allocator;
 
@@ -31,18 +29,17 @@ pub const Renderer = struct {
     cmdMan: CmdManager,
     scheduler: Scheduler,
     renderImage: RenderImage,
-    descriptorsUpToDate: bool = false,
 
     pub fn init(memoryMan: *MemoryManager) !Renderer {
         const alloc = memoryMan.getAllocator();
-        const instance = try createInstance(alloc, DEBUG_TOGGLE);
+        const instance = try createInstance(alloc, config.DEBUG_MODE);
         const context = try Context.init(alloc, instance);
         const resourceMan = try ResourceManager.init(&context);
-        const cmdMan = try CmdManager.init(alloc, &context, MAX_IN_FLIGHT);
-        const scheduler = try Scheduler.init(&context, MAX_IN_FLIGHT);
-        const descriptorMan = try DescriptorManager.init(alloc, &context, MAX_IN_FLIGHT);
+        const cmdMan = try CmdManager.init(alloc, &context, config.MAX_IN_FLIGHT);
+        const scheduler = try Scheduler.init(&context, config.MAX_IN_FLIGHT);
+        const descriptorMan = try DescriptorManager.init(alloc, &context, &resourceMan);
         const pipelineMan = try PipelineManager.init(alloc, &context, &descriptorMan);
-        const renderImage = try resourceMan.createRenderImage(c.VkExtent2D{ .width = 1920, .height = 1080 });
+        const renderImage = try resourceMan.createRenderImage(config.RENDER_IMAGE_PRESET);
         const swapchainMan = try SwapchainManager.init(alloc, &context);
 
         return .{
@@ -65,13 +62,14 @@ pub const Renderer = struct {
         self.scheduler.deinit();
         self.cmdMan.deinit();
         self.swapchainMan.deinit();
-        self.resourceMan.deinit();
-        self.descriptorMan.deinit();
+        self.descriptorMan.deinit(self.resourceMan.vkAlloc.handle);
         self.pipelineMan.deinit();
+        self.resourceMan.deinit();
         self.context.deinit();
     }
 
     pub fn update(self: *Renderer, windows: []*Window) !void {
+        // Handle window state changes...
         for (windows) |windowPtr| {
             if (windowPtr.status == .needDelete or windowPtr.status == .needUpdate) {
                 _ = c.vkDeviceWaitIdle(self.context.gpi);
@@ -108,10 +106,11 @@ pub const Renderer = struct {
             if (extent.width != self.renderImage.extent3d.width or extent.height != self.renderImage.extent3d.height) {
                 self.resourceMan.destroyRenderImage(self.renderImage);
                 self.renderImage = try self.resourceMan.createRenderImage(.{ .width = extent.width, .height = extent.height });
+                // Update descriptor buffer with new image view (binding 0)
+                try self.descriptorMan.updateStorageImageDescriptor(self.resourceMan.vkAlloc.handle, self.renderImage.view, 0);
                 std.debug.print("Render Image now {}x{}\n", .{ extent.width, extent.height });
             }
         }
-        try self.updateDescriptors();
     }
 
     pub fn draw(self: *Renderer) !void {
@@ -121,7 +120,7 @@ pub const Renderer = struct {
         if (try self.swapchainMan.updateTargets(frameInFlight, &self.context) == false) return;
 
         try self.cmdMan.beginRecording(frameInFlight);
-        try self.recordCommands(frameInFlight);
+        try self.recordCommands();
         const cmd = try self.cmdMan.endRecording();
 
         const targets = self.swapchainMan.targets.slice();
@@ -131,16 +130,16 @@ pub const Renderer = struct {
         self.scheduler.nextFrame();
     }
 
-    fn recordCommands(self: *Renderer, frameInFlight: u8) !void {
+    fn recordCommands(self: *Renderer) !void {
         const activeGroups = self.swapchainMan.activeGroups;
 
         for (0..activeGroups.len) |i| {
             if (activeGroups[i].len != 0) {
                 const pipeType: PipelineType = @enumFromInt(i);
-                if (SHADER_HOTLOAD == true) try self.pipelineMan.checkShaderUpdate(pipeType);
+                if (config.SHADER_HOTLOAD == true) try self.pipelineMan.checkShaderUpdate(pipeType);
 
                 switch (pipeType) {
-                    .compute => try self.cmdMan.recordComputePass(&self.renderImage, &self.pipelineMan.compute, self.descriptorMan.sets[frameInFlight]),
+                    .compute => try self.cmdMan.recordComputePass(&self.renderImage, &self.pipelineMan.compute, &self.descriptorMan),
                     .graphics => try self.cmdMan.recordGraphicsPass(&self.renderImage, &self.pipelineMan.graphics, .graphics),
                     .mesh => try self.cmdMan.recordGraphicsPass(&self.renderImage, &self.pipelineMan.mesh, .mesh),
                 }
@@ -190,12 +189,6 @@ pub const Renderer = struct {
         if (result != c.VK_SUCCESS and result != c.VK_ERROR_OUT_OF_DATE_KHR and result != c.VK_SUBOPTIMAL_KHR) {
             try check(result, "Failed to present swapchain image");
         }
-    }
-
-    fn updateDescriptors(self: *Renderer) !void {
-        try self.scheduler.waitForGPU();
-        self.descriptorMan.updateAllDescriptorSets(self.renderImage.view);
-        self.descriptorsUpToDate = true;
     }
 };
 

@@ -6,6 +6,7 @@ const PipelineBucket = @import("PipelineBucket.zig").Pipeline;
 const PipelineType = @import("PipelineBucket.zig").PipelineType;
 const Context = @import("Context.zig").Context;
 const Swapchain = @import("SwapchainManager.zig").Swapchain;
+const DescriptorManager = @import("DescriptorManager.zig").DescriptorManager;
 const check = @import("error.zig").check;
 const CreateMapArray = @import("../structures/MapArray.zig").CreateMapArray;
 const MAX_WINDOWS = @import("../config.zig").MAX_WINDOWS;
@@ -62,9 +63,12 @@ pub const CmdManager = struct {
     pub fn beginRecording(self: *CmdManager, frameInFlight: u8) !void {
         if (self.activeFrame != null) return error.RecordingInProgress;
         const cmd = self.primaryCmds[frameInFlight];
+
+        try check(c.vkResetCommandBuffer(cmd, 0), "could not reset command buffer");
+
         const beginInf = c.VkCommandBufferBeginInfo{
             .sType = c.VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-            .flags = 0, //c.VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT / VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT
+            .flags = c.VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT, //c.VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT
             .pInheritanceInfo = null,
         };
         try check(c.vkBeginCommandBuffer(cmd, &beginInf), "could not Begin CmdBuffer");
@@ -85,37 +89,50 @@ pub const CmdManager = struct {
         return self.primaryCmds[frameInFlight];
     }
 
-    pub fn recordComputePass(self: *CmdManager, renderImage: *RenderImage, pipe: *const PipelineBucket, set: c.VkDescriptorSet) !void {
+    pub fn recordComputePass(self: *CmdManager, renderImage: *RenderImage, pipe: *const PipelineBucket, descriptorMan: *const DescriptorManager) !void {
         const activeFrame = self.activeFrame orelse return error.ActiveCmdBlocked;
         const primaryCmd = self.primaryCmds[activeFrame];
         const computeCmd = self.computeCmds[activeFrame];
 
-        const inheritanceInfo = c.VkCommandBufferInheritanceInfo{
+        //try check(c.vkResetCommandBuffer(computeCmd, 0), "could not reset secondary compute command buffer"); Might not have to reset cuz they are always reset?
+
+        const inheritInf = c.VkCommandBufferInheritanceInfo{
             .sType = c.VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO,
-            .pNext = null,
             .subpass = 0,
             .occlusionQueryEnable = c.VK_FALSE,
             .queryFlags = 0,
             .pipelineStatistics = 0,
         };
-
-        // 1. Begin recording the secondary command buffer
-        const beginInfo = c.VkCommandBufferBeginInfo{
+        const beginInf = c.VkCommandBufferBeginInfo{
             .sType = c.VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
             .flags = c.VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
-            .pInheritanceInfo = &inheritanceInfo, // No complex inheritance needed for compute
+            .pInheritanceInfo = &inheritInf,
         };
-        try check(c.vkBeginCommandBuffer(computeCmd, &beginInfo), "Could not begin compute command buffer");
 
-        // 2. Record commands into the secondary command buffer
+        try check(c.vkBeginCommandBuffer(computeCmd, &beginInf), "Could not begin compute command buffer");
         c.vkCmdBindPipeline(computeCmd, c.VK_PIPELINE_BIND_POINT_COMPUTE, pipe.handle);
-        c.vkCmdBindDescriptorSets(computeCmd, c.VK_PIPELINE_BIND_POINT_COMPUTE, pipe.layout, 0, 1, &set, 0, null);
-        c.vkCmdDispatch(computeCmd, (renderImage.extent3d.width + 7) / 8, (renderImage.extent3d.height + 7) / 8, 1);
 
-        // 3. End recording of the secondary command buffer
+        // Bind descriptor buffer, replaces descriptor set binding
+        const bufferBindingInf = c.VkDescriptorBufferBindingInfoEXT{
+            .sType = c.VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT,
+            .address = descriptorMan.descBufferAddr,
+            .usage = c.VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT,
+        };
+        c.pfn_vkCmdBindDescriptorBuffersEXT.?(computeCmd, 1, &bufferBindingInf);
+
+        // Set descriptor buffer offsets
+        const bufferIndex: u32 = 0; // Buffer index in the array
+        const descriptorOffset: c.VkDeviceSize = 0; // Offset within that buffer (0 for binding 0)
+        c.pfn_vkCmdSetDescriptorBufferOffsetsEXT.?(computeCmd, c.VK_PIPELINE_BIND_POINT_COMPUTE, pipe.layout, //
+            0, //First set number
+            1, // Number of offsets
+            &bufferIndex, &descriptorOffset);
+
+        // Dispatch compute work
+        c.vkCmdDispatch(computeCmd, (renderImage.extent3d.width + 7) / 8, (renderImage.extent3d.height + 7) / 8, 1);
         try check(c.vkEndCommandBuffer(computeCmd), "Could not end compute command buffer");
 
-        // 4. Record pipeline barrier in primary command buffer
+        // Image layout transition
         const barrier = createImageMemoryBarrier2(
             c.VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
             0,
@@ -129,29 +146,29 @@ pub const CmdManager = struct {
         createPipelineBarriers2(primaryCmd, &.{barrier});
         renderImage.curLayout = c.VK_IMAGE_LAYOUT_GENERAL;
 
-        // 5. Execute the secondary command buffer in the primary one
+        // Execute secondary command buffer
         c.vkCmdExecuteCommands(primaryCmd, 1, &computeCmd);
     }
 
     pub fn recordGraphicsPass(self: *CmdManager, renderImage: *RenderImage, pipe: *const PipelineBucket, pipeType: PipelineType) !void {
         const activeFrame = self.activeFrame orelse return error.ActiveCmdBlocked;
         const primaryCmd = self.primaryCmds[activeFrame];
-        // Select the correct secondary command buffer based on pipeline type
         const gfxCmd = if (pipeType == .mesh) self.meshCmds[activeFrame] else self.graphicsCmds[activeFrame];
 
-        // 1. Set up inheritance info for dynamic rendering
-        const color_format = renderImage.format; // Assuming format is stored in RenderImage
+        //try check(c.vkResetCommandBuffer(gfxCmd, 0), "could not reset secondary compute command buffer"); Might not have to reset cuz they are always reset?
+
+        const colorFormat = renderImage.format; // Assuming format is stored in RenderImage
         const renderingInheritanceInfo = c.VkCommandBufferInheritanceRenderingInfo{
             .sType = c.VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_RENDERING_INFO,
             .pNext = null,
             .colorAttachmentCount = 1,
-            .pColorAttachmentFormats = &color_format,
+            .pColorAttachmentFormats = &colorFormat,
             .depthAttachmentFormat = c.VK_FORMAT_UNDEFINED,
             .stencilAttachmentFormat = c.VK_FORMAT_UNDEFINED,
             .rasterizationSamples = c.VK_SAMPLE_COUNT_1_BIT,
         };
 
-        const inheritanceInfo = c.VkCommandBufferInheritanceInfo{
+        const inheritInf = c.VkCommandBufferInheritanceInfo{
             .sType = c.VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO,
             .pNext = &renderingInheritanceInfo,
             .subpass = 0,
@@ -160,16 +177,14 @@ pub const CmdManager = struct {
             .pipelineStatistics = 0,
         };
 
-        const beginInfo = c.VkCommandBufferBeginInfo{
+        const beginInf = c.VkCommandBufferBeginInfo{
             .sType = c.VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
             .flags = c.VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT | c.VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT,
-            .pInheritanceInfo = &inheritanceInfo,
+            .pInheritanceInfo = &inheritInf,
         };
 
-        // 2. Begin recording the secondary command buffer
-        try check(c.vkBeginCommandBuffer(gfxCmd, &beginInfo), "Could not begin graphics command buffer");
+        try check(c.vkBeginCommandBuffer(gfxCmd, &beginInf), "Could not begin graphics command buffer");
 
-        // 3. Record commands into the secondary command buffer
         const viewport = c.VkViewport{
             .x = 0,
             .y = 0,
@@ -189,10 +204,8 @@ pub const CmdManager = struct {
         c.vkCmdBindPipeline(gfxCmd, c.VK_PIPELINE_BIND_POINT_GRAPHICS, pipe.handle);
         if (pipeType == .mesh) c.pfn_vkCmdDrawMeshTasksEXT.?(gfxCmd, 1, 1, 1) else c.vkCmdDraw(gfxCmd, 3, 1, 0, 0);
 
-        // 4. End recording of the secondary command buffer
         try check(c.vkEndCommandBuffer(gfxCmd), "Could not end graphics command buffer");
 
-        // 5. Record barriers and begin rendering in the primary command buffer
         const barrier = createImageMemoryBarrier2(
             c.VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
             0,
@@ -206,7 +219,7 @@ pub const CmdManager = struct {
         createPipelineBarriers2(primaryCmd, &.{barrier});
         renderImage.curLayout = c.VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
-        const colorAttachmentInfo = c.VkRenderingAttachmentInfo{
+        const colorAttachInf = c.VkRenderingAttachmentInfo{
             .sType = c.VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
             .imageView = renderImage.view,
             .imageLayout = c.VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
@@ -215,23 +228,20 @@ pub const CmdManager = struct {
             .clearValue = .{ .color = .{ .float32 = .{ 0.0, 0.0, 0.1, 1.0 } } },
         };
 
-        const renderingInfo = c.VkRenderingInfo{
+        const renderInf = c.VkRenderingInfo{
             .sType = c.VK_STRUCTURE_TYPE_RENDERING_INFO,
             // VUID-vkCmdExecuteCommands-flags-06024: flags must include SECONDARY_COMMAND_BUFFERS_BIT
             .flags = c.VK_RENDERING_CONTENTS_SECONDARY_COMMAND_BUFFERS_BIT,
             .renderArea = scissor,
             .layerCount = 1,
             .colorAttachmentCount = 1,
-            .pColorAttachments = &colorAttachmentInfo,
+            .pColorAttachments = &colorAttachInf,
             .pDepthAttachment = null,
             .pStencilAttachment = null,
         };
-        c.vkCmdBeginRendering(primaryCmd, &renderingInfo);
 
-        // 6. Execute the secondary command buffer
+        c.vkCmdBeginRendering(primaryCmd, &renderInf);
         c.vkCmdExecuteCommands(primaryCmd, 1, &gfxCmd);
-
-        // 7. End rendering in the primary command buffer
         c.vkCmdEndRendering(primaryCmd);
     }
 
