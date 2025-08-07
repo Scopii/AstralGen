@@ -1,15 +1,15 @@
 const std = @import("std");
 const c = @import("../c.zig");
 const Allocator = std.mem.Allocator;
-const RenderImage = @import("ResourceManager.zig").RenderImage;
 const PipelineBucket = @import("PipelineBucket.zig").Pipeline;
 const PipelineType = @import("PipelineBucket.zig").PipelineType;
 const Context = @import("Context.zig").Context;
 const Swapchain = @import("SwapchainManager.zig").Swapchain;
-const DescriptorManager = @import("DescriptorManager.zig").DescriptorManager;
+const NewResourceManager = @import("NewResourceManager.zig").NewResourceManager;
 const check = @import("error.zig").check;
 const CreateMapArray = @import("../structures/MapArray.zig").CreateMapArray;
 const MAX_WINDOWS = @import("../config.zig").MAX_WINDOWS;
+const Image = @import("NewResourceManager.zig").Image;
 
 pub const CmdManager = struct {
     alloc: Allocator,
@@ -91,7 +91,7 @@ pub const CmdManager = struct {
 
     const ComputePushConstants = @import("PipelineBucket.zig").ComputePushConstants;
 
-    pub fn recordComputePass(self: *CmdManager, renderImage: *RenderImage, pipe: *const PipelineBucket, descriptorMan: *const DescriptorManager, pushConstants: ComputePushConstants) !void {
+    pub fn recordComputePass(self: *CmdManager, renderImage: *Image, pipe: *const PipelineBucket, resourceManager: *const NewResourceManager, pushConstants: ComputePushConstants) !void {
         const activeFrame = self.activeFrame orelse return error.ActiveCmdBlocked;
         const primaryCmd = self.primaryCmds[activeFrame];
         const computeCmd = self.computeCmds[activeFrame];
@@ -120,7 +120,7 @@ pub const CmdManager = struct {
         // Bind descriptor buffer, replaces descriptor set binding
         const bufferBindingInf = c.VkDescriptorBufferBindingInfoEXT{
             .sType = c.VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT,
-            .address = descriptorMan.descBufferAddr,
+            .address = resourceManager.descBufferAddr,
             .usage = c.VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT,
         };
         c.pfn_vkCmdBindDescriptorBuffersEXT.?(computeCmd, 1, &bufferBindingInf);
@@ -155,7 +155,7 @@ pub const CmdManager = struct {
         c.vkCmdExecuteCommands(primaryCmd, 1, &computeCmd);
     }
 
-    pub fn recordGraphicsPass(self: *CmdManager, renderImage: *RenderImage, pipe: *const PipelineBucket, pipeType: PipelineType) !void {
+    pub fn recordGraphicsPass(self: *CmdManager, renderImage: *Image, pipe: *const PipelineBucket, pipeType: PipelineType) !void {
         const activeFrame = self.activeFrame orelse return error.ActiveCmdBlocked;
         const primaryCmd = self.primaryCmds[activeFrame];
         const gfxCmd = if (pipeType == .mesh) self.meshCmds[activeFrame] else self.graphicsCmds[activeFrame];
@@ -250,7 +250,7 @@ pub const CmdManager = struct {
         c.vkCmdEndRendering(primaryCmd);
     }
 
-    pub fn blitToTargets(self: *CmdManager, renderImage: *RenderImage, targets: []const u8, swapchainMap: *CreateMapArray(Swapchain, MAX_WINDOWS, u8, MAX_WINDOWS, 0)) !void {
+    pub fn blitToTargets(self: *CmdManager, renderImage: *Image, targets: []const u8, swapchainMap: *CreateMapArray(Swapchain, MAX_WINDOWS, u8, MAX_WINDOWS, 0)) !void {
         const activeFrame = self.activeFrame orelse return error.ActiveCmdBlocked;
         const cmd = self.primaryCmds[activeFrame];
 
