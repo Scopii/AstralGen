@@ -4,6 +4,7 @@ const WindowManager = @import("platform/WindowManager.zig").WindowManager;
 const MemoryManager = @import("core/MemoryManager.zig").MemoryManager;
 const CreateMapArray = @import("structures/MapArray.zig").CreateMapArray;
 const Renderer = @import("vulkan/Renderer.zig").Renderer;
+const EventManager = @import("core/EventManager.zig").EventManager;
 const Window = @import("platform/Window.zig").Window;
 const zjobs = @import("zjobs");
 const CLOSE_WITH_CONSOLE = @import("config.zig").CLOSE_WITH_CONSOLE;
@@ -22,6 +23,8 @@ pub fn main() !void {
     defer std.debug.print("Memory: {any}\n", .{debugAlloc.deinit()});
     var memoryMan = try MemoryManager.init(debugAlloc.allocator());
     defer memoryMan.deinit();
+
+    var eventMan: EventManager = .{};
 
     var windowMan = try WindowManager.init();
     defer windowMan.deinit();
@@ -43,6 +46,19 @@ pub fn main() !void {
             std.log.err("Error in pollEvents(): {}", .{err});
             break;
         };
+
+        if (windowMan.keyEvents.len > 0) {
+            eventMan.mapKeyEvents(windowMan.consumeKeyEvents());
+
+            for (eventMan.getAppEvents()) |appEvent| {
+                switch (appEvent) {
+                    .updateCam => {},
+                    .closeApp => return,
+                    .restartApp => {},
+                }
+            }
+            eventMan.cleanupAppEvents();
+        }
 
         if (windowMan.changedWindows.len > 0) {
             try renderer.update(windowMan.changedWindows.slice());

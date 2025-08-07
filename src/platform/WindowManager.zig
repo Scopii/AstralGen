@@ -8,9 +8,15 @@ const Renderer = @import("../vulkan/Renderer.zig").Renderer;
 const CreateMapArray = @import("../structures/MapArray.zig").CreateMapArray;
 const MAX_WINDOWS = @import("../config.zig").MAX_WINDOWS;
 
+pub const KeyEvent = struct {
+    key: c_uint,
+    event: enum { pressed, released },
+};
+
 pub const WindowManager = struct {
     windows: CreateMapArray(Window, MAX_WINDOWS, u8, MAX_WINDOWS, 0) = .{},
     changedWindows: std.BoundedArray(*Window, MAX_WINDOWS) = .{},
+    keyEvents: std.BoundedArray(KeyEvent, 127) = .{},
     openWindows: u8 = 0,
     close: bool = false,
 
@@ -76,6 +82,11 @@ pub const WindowManager = struct {
         self.windows.removeAtKey(@intCast(id));
     }
 
+    pub fn consumeKeyEvents(self: *WindowManager) []KeyEvent {
+        defer self.keyEvents.clear();
+        return self.keyEvents.slice();
+    }
+
     pub fn processEvent(self: *WindowManager, event: *c.SDL_Event) !void {
         switch (event.type) {
             c.SDL_EVENT_QUIT => self.close = true,
@@ -112,6 +123,18 @@ pub const WindowManager = struct {
                 }
                 try self.changedWindows.append(window);
                 std.debug.print("Status of Window {} now {s}\n", .{ id, @tagName(window.status) });
+            },
+            c.SDL_EVENT_KEY_DOWN => {
+                const keyEvent = KeyEvent{ .key = event.key.key, .event = .pressed };
+                self.keyEvents.append(keyEvent) catch |err| {
+                    std.debug.print("WindowManager: keyEvents append failed {}\n", .{err});
+                };
+            },
+            c.SDL_EVENT_KEY_UP => {
+                const keyEvent = KeyEvent{ .key = event.key.key, .event = .released };
+                self.keyEvents.append(keyEvent) catch |err| {
+                    std.debug.print("WindowManager: keyEvents append failed {}\n", .{err});
+                };
             },
             else => {},
         }
