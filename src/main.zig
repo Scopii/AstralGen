@@ -37,8 +37,8 @@ pub fn main() !void {
     defer renderer.deinit();
 
     try windowMan.addWindow("Astral1", 1600, 900, .compute);
-    //try windowMan.addWindow("Astral2", 16 * 70, 9 * 70, .graphics);
-    //try windowMan.addWindow("Astral3", 350, 350, .mesh);
+    try windowMan.addWindow("Astral2", 16 * 70, 9 * 70, .graphics);
+    try windowMan.addWindow("Astral3", 350, 350, .mesh);
 
     // Main loop
     while (true) {

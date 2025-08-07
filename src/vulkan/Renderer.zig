@@ -10,6 +10,8 @@ const CmdManager = @import("CmdManager.zig").CmdManager;
 const PipelineManager = @import("PipelineManager.zig").PipelineManager;
 const PipelineType = @import("PipelineBucket.zig").PipelineType;
 const ResourceManager = @import("ResourceManager.zig").ResourceManager;
+const ComputePushConstants = @import("PipelineBucket.zig").ComputePushConstants;
+const BufferReference = @import("ResourceManager.zig").BufferReference;
 const DescriptorManager = @import("DescriptorManager.zig").DescriptorManager;
 const RenderImage = @import("ResourceManager.zig").RenderImage;
 const Window = @import("../platform/Window.zig").Window;
@@ -31,6 +33,8 @@ pub const Renderer = struct {
     renderImage: RenderImage,
     startTime: i128 = 0,
 
+    testDataBuffer: BufferReference = undefined,
+
     pub fn init(memoryMan: *MemoryManager) !Renderer {
         const alloc = memoryMan.getAllocator();
         const instance = try createInstance(alloc, config.DEBUG_MODE);
@@ -41,7 +45,10 @@ pub const Renderer = struct {
         var descriptorMan = try DescriptorManager.init(alloc, &context, &resourceMan);
         const pipelineMan = try PipelineManager.init(alloc, &context, &descriptorMan);
         const renderImage = try resourceMan.createRenderImage(config.RENDER_IMAGE_PRESET);
+        const testDataBuffer = try resourceMan.createTestDataBuffer(config.RENDER_IMAGE_PRESET);
         const swapchainMan = try SwapchainManager.init(alloc, &context);
+
+        //try descriptorMan.updateStorageImageDescriptor(resourceMan.vkAlloc.handle, renderImage.view, 0);
 
         return .{
             .alloc = alloc,
@@ -55,6 +62,7 @@ pub const Renderer = struct {
             .renderImage = renderImage,
             .swapchainMan = swapchainMan,
             .startTime = std.time.nanoTimestamp(),
+            .testDataBuffer = testDataBuffer,
         };
     }
 
@@ -66,6 +74,7 @@ pub const Renderer = struct {
         self.swapchainMan.deinit();
         self.descriptorMan.deinit(self.resourceMan.vkAlloc.handle);
         self.pipelineMan.deinit();
+        self.resourceMan.destroyBufferReference(self.testDataBuffer);
         self.resourceMan.deinit();
         self.context.deinit();
     }
@@ -144,8 +153,14 @@ pub const Renderer = struct {
                 const pipeType: PipelineType = @enumFromInt(i);
                 if (config.SHADER_HOTLOAD == true) try self.pipelineMan.checkShaderUpdate(pipeType);
 
+                const pushConstants = ComputePushConstants{
+                    .data_address = self.testDataBuffer.deviceAddress,
+                    .runtime = runtime,
+                    .data_count = @intCast(self.testDataBuffer.size / @sizeOf([4]f32)),
+                };
+
                 switch (pipeType) {
-                    .compute => try self.cmdMan.recordComputePass(&self.renderImage, &self.pipelineMan.compute, &self.descriptorMan, runtime),
+                    .compute => try self.cmdMan.recordComputePass(&self.renderImage, &self.pipelineMan.compute, &self.descriptorMan, pushConstants),
                     .graphics => try self.cmdMan.recordGraphicsPass(&self.renderImage, &self.pipelineMan.graphics, .graphics),
                     .mesh => try self.cmdMan.recordGraphicsPass(&self.renderImage, &self.pipelineMan.mesh, .mesh),
                 }
