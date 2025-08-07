@@ -89,7 +89,7 @@ pub const CmdManager = struct {
         return self.primaryCmds[frameInFlight];
     }
 
-    pub fn recordComputePass(self: *CmdManager, renderImage: *RenderImage, pipe: *const PipelineBucket, descriptorMan: *const DescriptorManager) !void {
+    pub fn recordComputePass(self: *CmdManager, renderImage: *RenderImage, pipe: *const PipelineBucket, descriptorMan: *const DescriptorManager, runtime: f32) !void {
         const activeFrame = self.activeFrame orelse return error.ActiveCmdBlocked;
         const primaryCmd = self.primaryCmds[activeFrame];
         const computeCmd = self.computeCmds[activeFrame];
@@ -111,6 +111,9 @@ pub const CmdManager = struct {
 
         try check(c.vkBeginCommandBuffer(computeCmd, &beginInf), "Could not begin compute command buffer");
         c.vkCmdBindPipeline(computeCmd, c.VK_PIPELINE_BIND_POINT_COMPUTE, pipe.handle);
+
+        // Push delta time constant
+        c.vkCmdPushConstants(computeCmd, pipe.layout, c.VK_SHADER_STAGE_COMPUTE_BIT, 0, @sizeOf(f32), &runtime);
 
         // Bind descriptor buffer, replaces descriptor set binding
         const bufferBindingInf = c.VkDescriptorBufferBindingInfoEXT{

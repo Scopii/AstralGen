@@ -29,6 +29,7 @@ pub const Renderer = struct {
     cmdMan: CmdManager,
     scheduler: Scheduler,
     renderImage: RenderImage,
+    startTime: i128 = 0,
 
     pub fn init(memoryMan: *MemoryManager) !Renderer {
         const alloc = memoryMan.getAllocator();
@@ -37,7 +38,7 @@ pub const Renderer = struct {
         const resourceMan = try ResourceManager.init(&context);
         const cmdMan = try CmdManager.init(alloc, &context, config.MAX_IN_FLIGHT);
         const scheduler = try Scheduler.init(&context, config.MAX_IN_FLIGHT);
-        const descriptorMan = try DescriptorManager.init(alloc, &context, &resourceMan);
+        var descriptorMan = try DescriptorManager.init(alloc, &context, &resourceMan);
         const pipelineMan = try PipelineManager.init(alloc, &context, &descriptorMan);
         const renderImage = try resourceMan.createRenderImage(config.RENDER_IMAGE_PRESET);
         const swapchainMan = try SwapchainManager.init(alloc, &context);
@@ -53,6 +54,7 @@ pub const Renderer = struct {
             .scheduler = scheduler,
             .renderImage = renderImage,
             .swapchainMan = swapchainMan,
+            .startTime = std.time.nanoTimestamp(),
         };
     }
 
@@ -133,13 +135,17 @@ pub const Renderer = struct {
     fn recordCommands(self: *Renderer) !void {
         const activeGroups = self.swapchainMan.activeGroups;
 
+        const runtimeAsInt: i128 = std.time.nanoTimestamp() - self.startTime;
+        const runtimeAsFloat: f32 = @floatFromInt(runtimeAsInt);
+        const runtime: f32 = runtimeAsFloat / 1_000_000_000.0;
+
         for (0..activeGroups.len) |i| {
             if (activeGroups[i].len != 0) {
                 const pipeType: PipelineType = @enumFromInt(i);
                 if (config.SHADER_HOTLOAD == true) try self.pipelineMan.checkShaderUpdate(pipeType);
 
                 switch (pipeType) {
-                    .compute => try self.cmdMan.recordComputePass(&self.renderImage, &self.pipelineMan.compute, &self.descriptorMan),
+                    .compute => try self.cmdMan.recordComputePass(&self.renderImage, &self.pipelineMan.compute, &self.descriptorMan, runtime),
                     .graphics => try self.cmdMan.recordGraphicsPass(&self.renderImage, &self.pipelineMan.graphics, .graphics),
                     .mesh => try self.cmdMan.recordGraphicsPass(&self.renderImage, &self.pipelineMan.mesh, .mesh),
                 }

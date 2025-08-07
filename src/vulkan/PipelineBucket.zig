@@ -137,15 +137,17 @@ fn createShaderModules(alloc: Allocator, gpi: c.VkDevice, shaderInf: []const Sha
 }
 
 fn createPipelineLayout(gpi: c.VkDevice, descriptorSetLayout: c.VkDescriptorSetLayout, layoutCount: u32) !c.VkPipelineLayout {
+    const pushConstantRange = c.VkPushConstantRange{
+        .stageFlags = c.VK_SHADER_STAGE_COMPUTE_BIT, // Can be extended to other stages
+        .offset = 0,
+        .size = @sizeOf(f32), // sizeof(float) for runtime
+    };
     const pipeLayoutInf = c.VkPipelineLayoutCreateInfo{
         .sType = c.VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
         .setLayoutCount = layoutCount,
-
-        // --- THIS IS THE FINAL FIX ---
-        // Use a ternary operator to ensure pSetLayouts is a true null pointer when the count is 0.
         .pSetLayouts = if (layoutCount > 0) &descriptorSetLayout else null,
-
-        .pushConstantRangeCount = 0,
+        .pushConstantRangeCount = 1,
+        .pPushConstantRanges = &pushConstantRange,
     };
     var layout: c.VkPipelineLayout = undefined;
     try check(c.vkCreatePipelineLayout(gpi, &pipeLayoutInf, null, &layout), "Failed to create pipeline layout");

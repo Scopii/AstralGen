@@ -9,6 +9,11 @@ layout(set = 0, binding = 0, rgba16f) uniform image2D image;
 //     vec4 positions[];  
 // } objects;
 
+// Push constant for delta time
+layout(push_constant) uniform PushConstants {
+    float runtime;
+} pushConstants;
+
 //size of a workgroup for compute
 layout (local_size_x = 8, local_size_y = 8) in;
 
@@ -62,7 +67,7 @@ void main() {
             hit = true;
             break;
         }
-        march += closest;
+        march += closest + pushConstants.runtime;
         if(march > MAX_DIST) break;
     }
 
