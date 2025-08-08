@@ -10,6 +10,7 @@ const check = @import("error.zig").check;
 const CreateMapArray = @import("../structures/MapArray.zig").CreateMapArray;
 const MAX_WINDOWS = @import("../config.zig").MAX_WINDOWS;
 const Image = @import("ResourceManager.zig").GpuImage;
+const ComputePushConstants = @import("PipelineBucket.zig").ComputePushConstants;
 
 pub const CmdManager = struct {
     alloc: Allocator,
@@ -18,11 +19,19 @@ pub const CmdManager = struct {
     activeFrame: ?u8 = null,
     lastUpdate: u8 = 0,
     primaryCmds: []c.VkCommandBuffer,
+
+    // per-frame secondary buffers
     computeCmds: []c.VkCommandBuffer,
     graphicsCmds: []c.VkCommandBuffer,
     meshCmds: []c.VkCommandBuffer,
+
+    // per-frame caches: optional since a frame's secondary might not be recorded yet
+    computeCmdCache: []?c.VkCommandBuffer,
+    graphicsCmdCache: []?c.VkCommandBuffer,
+    meshCmdCache: []?c.VkCommandBuffer,
+
     blitBarriers: [MAX_WINDOWS + 1]c.VkImageMemoryBarrier2 = undefined,
-    needNewRecording: bool = true,
+    needUpdate: bool = true,
 
     pub fn init(alloc: Allocator, context: *const @import("Context.zig").Context, maxInFlight: u32) !CmdManager {
         const gpi = context.gpi;
@@ -34,11 +43,21 @@ pub const CmdManager = struct {
         const graphicsCmds = try alloc.alloc(c.VkCommandBuffer, maxInFlight);
         const meshCmds = try alloc.alloc(c.VkCommandBuffer, maxInFlight);
 
+        // per-frame caches
+        const computeCmdCache = try alloc.alloc(?c.VkCommandBuffer, maxInFlight);
+        const graphicsCmdCache = try alloc.alloc(?c.VkCommandBuffer, maxInFlight);
+        const meshCmdCache = try alloc.alloc(?c.VkCommandBuffer, maxInFlight);
+
         for (0..maxInFlight) |i| {
             primaryCmds[i] = try createCmd(gpi, pool, c.VK_COMMAND_BUFFER_LEVEL_PRIMARY);
             computeCmds[i] = try createCmd(gpi, pool, c.VK_COMMAND_BUFFER_LEVEL_SECONDARY);
             graphicsCmds[i] = try createCmd(gpi, pool, c.VK_COMMAND_BUFFER_LEVEL_SECONDARY);
             meshCmds[i] = try createCmd(gpi, pool, c.VK_COMMAND_BUFFER_LEVEL_SECONDARY);
+
+            // initialize optional cache slots to null
+            computeCmdCache[i] = null;
+            graphicsCmdCache[i] = null;
+            meshCmdCache[i] = null;
         }
 
         return .{
@@ -49,6 +68,9 @@ pub const CmdManager = struct {
             .computeCmds = computeCmds,
             .graphicsCmds = graphicsCmds,
             .meshCmds = meshCmds,
+            .computeCmdCache = computeCmdCache,
+            .graphicsCmdCache = graphicsCmdCache,
+            .meshCmdCache = meshCmdCache,
         };
     }
 
@@ -57,6 +79,11 @@ pub const CmdManager = struct {
         self.alloc.free(self.computeCmds);
         self.alloc.free(self.graphicsCmds);
         self.alloc.free(self.meshCmds);
+
+        self.alloc.free(self.computeCmdCache);
+        self.alloc.free(self.graphicsCmdCache);
+        self.alloc.free(self.meshCmdCache);
+
         c.vkDestroyCommandPool(self.gpi, self.pool, null);
     }
 
@@ -73,7 +100,7 @@ pub const CmdManager = struct {
         };
         try check(c.vkBeginCommandBuffer(cmd, &beginInf), "could not Begin CmdBuffer");
         self.activeFrame = frameInFlight;
-        if (self.needNewRecording == true) self.lastUpdate = frameInFlight;
+        if (self.needUpdate == true) self.lastUpdate = frameInFlight;
     }
 
     pub fn endRecording(self: *CmdManager) !c.VkCommandBuffer {
@@ -81,7 +108,7 @@ pub const CmdManager = struct {
         const cmd = self.primaryCmds[activeFrame];
         try check(c.vkEndCommandBuffer(cmd), "Could not End Cmd Buffer");
         self.activeFrame = null;
-        self.needNewRecording = false;
+        self.needUpdate = false;
         return cmd;
     }
 
@@ -89,14 +116,21 @@ pub const CmdManager = struct {
         return self.primaryCmds[frameInFlight];
     }
 
-    const ComputePushConstants = @import("PipelineBucket.zig").ComputePushConstants;
-
+    // Compute: use per-frame cache slot
     pub fn recordComputePass(self: *CmdManager, renderImage: *Image, pipe: *const PipelineBucket, gpuAddress: deviceAddress, pushConstants: ComputePushConstants) !void {
         const activeFrame = self.activeFrame orelse return error.ActiveCmdBlocked;
         const primaryCmd = self.primaryCmds[activeFrame];
         const computeCmd = self.computeCmds[activeFrame];
 
         //try check(c.vkResetCommandBuffer(computeCmd, 0), "could not reset secondary compute command buffer"); Might not have to reset cuz they are always reset?
+
+        // If scene didn't change and we have a cached secondary for THIS frame index, execute it
+        if (self.needUpdate != true and self.computeCmdCache[activeFrame] != null) {
+            // execute per-frame cached secondary inside primary
+            var cached = self.computeCmdCache[activeFrame].?;
+            c.vkCmdExecuteCommands(primaryCmd, 1, &cached);
+            return;
+        }
 
         const inheritInf = c.VkCommandBufferInheritanceInfo{
             .sType = c.VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO,
@@ -107,7 +141,7 @@ pub const CmdManager = struct {
         };
         const beginInf = c.VkCommandBufferBeginInfo{
             .sType = c.VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-            .flags = c.VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+            .flags = c.VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT, // c.VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT
             .pInheritanceInfo = &inheritInf,
         };
 
@@ -151,6 +185,8 @@ pub const CmdManager = struct {
         createPipelineBarriers2(primaryCmd, &.{barrier});
         renderImage.curLayout = c.VK_IMAGE_LAYOUT_GENERAL;
 
+        // store into per-frame cache slot
+        self.computeCmdCache[activeFrame] = computeCmd;
         // Execute secondary command buffer
         c.vkCmdExecuteCommands(primaryCmd, 1, &computeCmd);
     }
@@ -160,9 +196,52 @@ pub const CmdManager = struct {
         const primaryCmd = self.primaryCmds[activeFrame];
         const gfxCmd = if (pipeType == .mesh) self.meshCmds[activeFrame] else self.graphicsCmds[activeFrame];
 
-        //try check(c.vkResetCommandBuffer(gfxCmd, 0), "could not reset secondary compute command buffer"); Might not have to reset cuz they are always reset?
+        const scissor = c.VkRect2D{
+            .offset = .{ .x = 0, .y = 0 },
+            .extent = .{ .width = renderImage.extent3d.width, .height = renderImage.extent3d.height },
+        };
 
-        const colorFormat = renderImage.format; // Assuming format is stored in RenderImage
+        const colorAttachInf = c.VkRenderingAttachmentInfo{
+            .sType = c.VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+            .imageView = renderImage.view,
+            .imageLayout = c.VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+            .loadOp = c.VK_ATTACHMENT_LOAD_OP_CLEAR,
+            .storeOp = c.VK_ATTACHMENT_STORE_OP_STORE,
+            .clearValue = .{ .color = .{ .float32 = .{ 0.0, 0.0, 0.1, 1.0 } } },
+        };
+
+        const renderInf = c.VkRenderingInfo{
+            .sType = c.VK_STRUCTURE_TYPE_RENDERING_INFO,
+            .flags = c.VK_RENDERING_CONTENTS_SECONDARY_COMMAND_BUFFERS_BIT,
+            .renderArea = scissor,
+            .layerCount = 1,
+            .colorAttachmentCount = 1,
+            .pColorAttachments = &colorAttachInf,
+            .pDepthAttachment = null,
+            .pStencilAttachment = null,
+        };
+
+        // Cache hit: execute cached secondary inside rendering scope (Option A)
+        if (pipeType == .mesh) {
+            if (self.needUpdate != true and self.meshCmdCache[activeFrame] != null) {
+                var cached = self.meshCmdCache[activeFrame].?;
+                c.vkCmdBeginRendering(primaryCmd, &renderInf);
+                c.vkCmdExecuteCommands(primaryCmd, 1, &cached);
+                c.vkCmdEndRendering(primaryCmd);
+                return;
+            }
+        } else {
+            if (self.needUpdate != true and self.graphicsCmdCache[activeFrame] != null) {
+                var cached = self.graphicsCmdCache[activeFrame].?;
+                c.vkCmdBeginRendering(primaryCmd, &renderInf);
+                c.vkCmdExecuteCommands(primaryCmd, 1, &cached);
+                c.vkCmdEndRendering(primaryCmd);
+                return;
+            }
+        }
+
+        // Cache miss: record secondary with inheritance info for dynamic rendering
+        const colorFormat = renderImage.format;
         const renderInheritInf = c.VkCommandBufferInheritanceRenderingInfo{
             .sType = c.VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_RENDERING_INFO,
             .pNext = null,
@@ -184,7 +263,7 @@ pub const CmdManager = struct {
 
         const beginInf = c.VkCommandBufferBeginInfo{
             .sType = c.VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-            .flags = c.VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT | c.VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT,
+            .flags = c.VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT | c.VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT, // c.VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT
             .pInheritanceInfo = &inheritInf,
         };
 
@@ -199,11 +278,6 @@ pub const CmdManager = struct {
             .maxDepth = 1.0,
         };
         c.vkCmdSetViewport(gfxCmd, 0, 1, &viewport);
-
-        const scissor = c.VkRect2D{
-            .offset = .{ .x = 0, .y = 0 },
-            .extent = .{ .width = renderImage.extent3d.width, .height = renderImage.extent3d.height },
-        };
         c.vkCmdSetScissor(gfxCmd, 0, 1, &scissor);
 
         c.vkCmdBindPipeline(gfxCmd, c.VK_PIPELINE_BIND_POINT_GRAPHICS, pipe.handle);
@@ -224,26 +298,12 @@ pub const CmdManager = struct {
         createPipelineBarriers2(primaryCmd, &.{barrier});
         renderImage.curLayout = c.VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
-        const colorAttachInf = c.VkRenderingAttachmentInfo{
-            .sType = c.VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-            .imageView = renderImage.view,
-            .imageLayout = c.VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-            .loadOp = c.VK_ATTACHMENT_LOAD_OP_CLEAR,
-            .storeOp = c.VK_ATTACHMENT_STORE_OP_STORE,
-            .clearValue = .{ .color = .{ .float32 = .{ 0.0, 0.0, 0.1, 1.0 } } },
-        };
+        // save into per-frame cache
+        if (pipeType == .mesh)
+            self.meshCmdCache[activeFrame] = gfxCmd
+        else
+            self.graphicsCmdCache[activeFrame] = gfxCmd;
 
-        const renderInf = c.VkRenderingInfo{
-            .sType = c.VK_STRUCTURE_TYPE_RENDERING_INFO,
-            // VUID-vkCmdExecuteCommands-flags-06024: flags must include SECONDARY_COMMAND_BUFFERS_BIT
-            .flags = c.VK_RENDERING_CONTENTS_SECONDARY_COMMAND_BUFFERS_BIT,
-            .renderArea = scissor,
-            .layerCount = 1,
-            .colorAttachmentCount = 1,
-            .pColorAttachments = &colorAttachInf,
-            .pDepthAttachment = null,
-            .pStencilAttachment = null,
-        };
         c.vkCmdBeginRendering(primaryCmd, &renderInf);
         c.vkCmdExecuteCommands(primaryCmd, 1, &gfxCmd);
         c.vkCmdEndRendering(primaryCmd);

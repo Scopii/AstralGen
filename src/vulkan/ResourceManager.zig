@@ -183,6 +183,43 @@ pub const ResourceManager = struct {
         return buffer;
     }
 
+    pub fn createStorageBuffer(self: *const ResourceManager, size: c.VkDeviceSize, initial_data: ?[]const u8) !GpuBuffer {
+        return createBuffer(
+            self.gpuAlloc.handle,
+            self.gpi,
+            size,
+            initial_data,
+            c.VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | c.VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | c.VK_BUFFER_USAGE_TRANSFER_DST_BIT, // Add transfer for updates
+            c.VMA_MEMORY_USAGE_GPU_ONLY, // GPU-only for performance
+            0,
+        );
+    }
+
+    pub fn createUniformBuffer(self: *const ResourceManager, size: c.VkDeviceSize) !GpuBuffer {
+        return createBuffer(
+            self.gpuAlloc.handle,
+            self.gpi,
+            size,
+            null,
+            c.VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | c.VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+            c.VMA_MEMORY_USAGE_CPU_TO_GPU, // Frequent CPU updates
+            c.VMA_ALLOCATION_CREATE_MAPPED_BIT,
+        );
+    }
+
+    // Create additional descriptor layouts dynamically
+    pub fn createDynamicLayout(self: *ResourceManager, bindings: []const c.VkDescriptorSetLayoutBinding) !c.VkDescriptorSetLayout {
+        const layoutInf = c.VkDescriptorSetLayoutCreateInfo{
+            .sType = c.VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+            .bindingCount = @intCast(bindings.len),
+            .pBindings = bindings.ptr,
+            .flags = c.VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT,
+        };
+        var layout: c.VkDescriptorSetLayout = undefined;
+        try check(c.vkCreateDescriptorSetLayout(self.gpi, &layoutInf, null, &layout), "Failed to create dynamic descriptor layout");
+        return layout;
+    }
+
     pub fn updateGpuBuffer(self: *const ResourceManager, bufRef: GpuBuffer, data: []const u8, offset: c.VkDeviceSize) !void {
         if (offset + data.len > bufRef.size) return error.BufferOverflow;
 

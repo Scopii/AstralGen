@@ -4,15 +4,15 @@
 #extension GL_EXT_scalar_block_layout : require // For better layout control
 
 // Buffer reference type - direct GPU memory access
-layout(buffer_reference, std430) buffer Vec4Buffer {
+layout(buffer_reference, std430) restrict buffer Vec4Buffer {
     vec4 data[];
 };
 
 // APPROACH A: Images/Textures/Samplers (using descriptor buffers)
-layout(set = 0, binding = 0, rgba16f) uniform image2D image;
+layout(set = 0, binding = 0, rgba16f) restrict uniform image2D image;
 
 // APPROACH B: Buffer references - direct access via GPU addresses
-layout(push_constant, std430) uniform PushConstants {
+layout(push_constant, std430) restrict uniform PushConstants {
     float runtime;
     uint data_count;
     Vec4Buffer testData; // The 64-bit address
