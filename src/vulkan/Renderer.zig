@@ -10,9 +10,9 @@ const CmdManager = @import("CmdManager.zig").CmdManager;
 const PipelineManager = @import("PipelineManager.zig").PipelineManager;
 const PipelineType = @import("PipelineBucket.zig").PipelineType;
 const ComputePushConstants = @import("PipelineBucket.zig").ComputePushConstants;
-const BufferReference = @import("NewResourceManager.zig").BufferReference;
-const NewResourceManager = @import("NewResourceManager.zig").NewResourceManager;
-const Image = @import("NewResourceManager.zig").Image;
+const GpuBuffer = @import("ResourceManager.zig").GpuBuffer;
+const ResourceManager = @import("ResourceManager.zig").ResourceManager;
+const GpuImage = @import("ResourceManager.zig").GpuImage;
 const Window = @import("../platform/Window.zig").Window;
 const MemoryManager = @import("../core/MemoryManager.zig").MemoryManager;
 const config = @import("../config.zig");
@@ -23,28 +23,24 @@ pub const Renderer = struct {
     alloc: Allocator,
     arenaAlloc: Allocator,
     context: Context,
-    resourceMan2: NewResourceManager,
+    resourceMan2: ResourceManager,
     pipelineMan: PipelineManager,
     swapchainMan: SwapchainManager,
     cmdMan: CmdManager,
     scheduler: Scheduler,
-    renderImage: Image,
+    renderImage: GpuImage,
     startTime: i128 = 0,
-
-    testDataBuffer: BufferReference = undefined,
+    testBuffer: GpuBuffer = undefined,
 
     pub fn init(memoryMan: *MemoryManager) !Renderer {
         const alloc = memoryMan.getAllocator();
         const instance = try createInstance(alloc, config.DEBUG_MODE);
         const context = try Context.init(alloc, instance);
-        const resourceMan2 = try NewResourceManager.init(alloc, &context);
+        const resourceMan2 = try ResourceManager.init(alloc, &context);
         const cmdMan = try CmdManager.init(alloc, &context, config.MAX_IN_FLIGHT);
         const scheduler = try Scheduler.init(&context, config.MAX_IN_FLIGHT);
         const pipelineMan = try PipelineManager.init(alloc, &context, &resourceMan2);
-        const testDataBuffer = try resourceMan2.createTestDataBuffer(config.RENDER_IMAGE_PRESET);
         const swapchainMan = try SwapchainManager.init(alloc, &context);
-
-        //try descriptorMan.updateStorageImageDescriptor(resourceMan.vkAlloc.handle, renderImage.view, 0);
 
         return .{
             .alloc = alloc,
@@ -54,10 +50,10 @@ pub const Renderer = struct {
             .pipelineMan = pipelineMan,
             .cmdMan = cmdMan,
             .scheduler = scheduler,
-            .renderImage = try resourceMan2.createImage(config.RENDER_IMAGE_PRESET, c.VK_FORMAT_R16G16B16A16_SFLOAT),
+            .renderImage = try resourceMan2.createGpuImage(config.RENDER_IMAGE_PRESET, c.VK_FORMAT_R16G16B16A16_SFLOAT, c.VMA_MEMORY_USAGE_GPU_ONLY),
             .swapchainMan = swapchainMan,
             .startTime = std.time.nanoTimestamp(),
-            .testDataBuffer = testDataBuffer,
+            .testBuffer = try resourceMan2.createTestDataBuffer(config.RENDER_IMAGE_PRESET),
         };
     }
 
@@ -68,7 +64,7 @@ pub const Renderer = struct {
         self.cmdMan.deinit();
         self.swapchainMan.deinit();
         self.pipelineMan.deinit();
-        self.resourceMan2.destroyBufferReference(self.testDataBuffer);
+        self.resourceMan2.destroyGpuBuffer(self.testBuffer);
         self.resourceMan2.deinit();
         self.context.deinit();
     }
@@ -110,8 +106,8 @@ pub const Renderer = struct {
         if (extent.height != 0 or extent.width != 0) {
             if (extent.width != self.renderImage.extent3d.width or extent.height != self.renderImage.extent3d.height) {
                 self.resourceMan2.destroyImage(self.renderImage);
-                self.renderImage = try self.resourceMan2.createImage(.{ .width = extent.width, .height = extent.height }, c.VK_FORMAT_R16G16B16A16_SFLOAT);
-                // Update descriptor buffer with new image view (binding 0)
+                const newRenderExtent = c.VkExtent3D{ .width = extent.width, .height = extent.height, .depth = config.RENDER_IMAGE_PRESET.depth };
+                self.renderImage = try self.resourceMan2.createGpuImage(newRenderExtent, c.VK_FORMAT_R16G16B16A16_SFLOAT, c.VMA_MEMORY_USAGE_GPU_ONLY);
                 try self.resourceMan2.updateImageDescriptor(self.renderImage.view, 0);
                 std.debug.print("Render Image now {}x{}\n", .{ extent.width, extent.height });
             }
@@ -147,14 +143,14 @@ pub const Renderer = struct {
                 const pipeType: PipelineType = @enumFromInt(i);
                 if (config.SHADER_HOTLOAD == true) try self.pipelineMan.checkShaderUpdate(pipeType);
 
-                const pushConstants = ComputePushConstants{
-                    .data_address = self.testDataBuffer.deviceAddress,
+                const compPushConstants = ComputePushConstants{
+                    .dataAddress = self.testBuffer.gpuAddress,
                     .runtime = runtime,
-                    .data_count = @intCast(self.testDataBuffer.size / @sizeOf([4]f32)),
+                    .dataCount = @intCast(self.testBuffer.size / @sizeOf([4]f32)),
                 };
 
                 switch (pipeType) {
-                    .compute => try self.cmdMan.recordComputePass(&self.renderImage, &self.pipelineMan.compute, &self.resourceMan2, pushConstants),
+                    .compute => try self.cmdMan.recordComputePass(&self.renderImage, &self.pipelineMan.compute, self.resourceMan2.imageBuffer.gpuAddress, compPushConstants),
                     .graphics => try self.cmdMan.recordGraphicsPass(&self.renderImage, &self.pipelineMan.graphics, .graphics),
                     .mesh => try self.cmdMan.recordGraphicsPass(&self.renderImage, &self.pipelineMan.mesh, .mesh),
                 }

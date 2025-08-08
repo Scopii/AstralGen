@@ -138,11 +138,11 @@ fn createShaderModules(alloc: Allocator, gpi: c.VkDevice, shaderInf: []const Sha
 
 pub const ComputePushConstants = extern struct {
     runtime: f32,
-    data_count: u32,
-    data_address: u64,
+    dataCount: u32,
+    dataAddress: u64,
 };
 
-fn createPipelineLayout(gpi: c.VkDevice, descriptorSetLayout: c.VkDescriptorSetLayout, layoutCount: u32) !c.VkPipelineLayout {
+fn createPipelineLayout(gpi: c.VkDevice, descSetLayout: c.VkDescriptorSetLayout, layoutCount: u32) !c.VkPipelineLayout {
     const pushConstantRange = c.VkPushConstantRange{
         .stageFlags = c.VK_SHADER_STAGE_COMPUTE_BIT,
         .offset = 0,
@@ -151,7 +151,7 @@ fn createPipelineLayout(gpi: c.VkDevice, descriptorSetLayout: c.VkDescriptorSetL
     const pipeLayoutInf = c.VkPipelineLayoutCreateInfo{
         .sType = c.VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
         .setLayoutCount = layoutCount,
-        .pSetLayouts = if (layoutCount > 0) &descriptorSetLayout else null,
+        .pSetLayouts = if (layoutCount > 0) &descSetLayout else null,
         .pushConstantRangeCount = 1,
         .pPushConstantRanges = &pushConstantRange,
     };

@@ -5,11 +5,11 @@ const PipelineBucket = @import("PipelineBucket.zig").Pipeline;
 const PipelineType = @import("PipelineBucket.zig").PipelineType;
 const Context = @import("Context.zig").Context;
 const Swapchain = @import("SwapchainManager.zig").Swapchain;
-const NewResourceManager = @import("NewResourceManager.zig").NewResourceManager;
+const deviceAddress = @import("ResourceManager.zig").GpuBuffer.deviceAddress;
 const check = @import("error.zig").check;
 const CreateMapArray = @import("../structures/MapArray.zig").CreateMapArray;
 const MAX_WINDOWS = @import("../config.zig").MAX_WINDOWS;
-const Image = @import("NewResourceManager.zig").Image;
+const Image = @import("ResourceManager.zig").GpuImage;
 
 pub const CmdManager = struct {
     alloc: Allocator,
@@ -91,7 +91,7 @@ pub const CmdManager = struct {
 
     const ComputePushConstants = @import("PipelineBucket.zig").ComputePushConstants;
 
-    pub fn recordComputePass(self: *CmdManager, renderImage: *Image, pipe: *const PipelineBucket, resourceManager: *const NewResourceManager, pushConstants: ComputePushConstants) !void {
+    pub fn recordComputePass(self: *CmdManager, renderImage: *Image, pipe: *const PipelineBucket, gpuAddress: deviceAddress, pushConstants: ComputePushConstants) !void {
         const activeFrame = self.activeFrame orelse return error.ActiveCmdBlocked;
         const primaryCmd = self.primaryCmds[activeFrame];
         const computeCmd = self.computeCmds[activeFrame];
@@ -120,7 +120,7 @@ pub const CmdManager = struct {
         // Bind descriptor buffer, replaces descriptor set binding
         const bufferBindingInf = c.VkDescriptorBufferBindingInfoEXT{
             .sType = c.VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT,
-            .address = resourceManager.descBufferAddr,
+            .address = gpuAddress,
             .usage = c.VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT,
         };
         c.pfn_vkCmdBindDescriptorBuffersEXT.?(computeCmd, 1, &bufferBindingInf);
@@ -163,7 +163,7 @@ pub const CmdManager = struct {
         //try check(c.vkResetCommandBuffer(gfxCmd, 0), "could not reset secondary compute command buffer"); Might not have to reset cuz they are always reset?
 
         const colorFormat = renderImage.format; // Assuming format is stored in RenderImage
-        const renderingInheritanceInfo = c.VkCommandBufferInheritanceRenderingInfo{
+        const renderInheritInf = c.VkCommandBufferInheritanceRenderingInfo{
             .sType = c.VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_RENDERING_INFO,
             .pNext = null,
             .colorAttachmentCount = 1,
@@ -175,7 +175,7 @@ pub const CmdManager = struct {
 
         const inheritInf = c.VkCommandBufferInheritanceInfo{
             .sType = c.VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO,
-            .pNext = &renderingInheritanceInfo,
+            .pNext = &renderInheritInf,
             .subpass = 0,
             .occlusionQueryEnable = c.VK_FALSE,
             .queryFlags = 0,
@@ -244,7 +244,6 @@ pub const CmdManager = struct {
             .pDepthAttachment = null,
             .pStencilAttachment = null,
         };
-
         c.vkCmdBeginRendering(primaryCmd, &renderInf);
         c.vkCmdExecuteCommands(primaryCmd, 1, &gfxCmd);
         c.vkCmdEndRendering(primaryCmd);

@@ -10,19 +10,17 @@ pub const VkAllocator = struct {
             .vkGetDeviceProcAddr = c.vkGetDeviceProcAddr,
         };
 
-        const createInfo = c.VmaAllocatorCreateInfo{
+        const createInf = c.VmaAllocatorCreateInfo{
             .physicalDevice = gpu,
             .device = gpi,
             .instance = instance,
             .flags = c.VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT,
-            // Passing the function pointers to VMA:
-            .pVulkanFunctions = &vulkanFunctions,
+            .pVulkanFunctions = &vulkanFunctions, // Passing the Function Pointers
         };
 
-        var allocator: c.VmaAllocator = undefined;
-        try check(c.vmaCreateAllocator(&createInfo, &allocator), "Failed to create VMA allocator");
-
-        return VkAllocator{ .handle = allocator };
+        var vmaAlloc: c.VmaAllocator = undefined;
+        try check(c.vmaCreateAllocator(&createInf, &vmaAlloc), "Failed to create VMA allocator");
+        return VkAllocator{ .handle = vmaAlloc };
     }
 
     pub fn deinit(self: *VkAllocator) void {

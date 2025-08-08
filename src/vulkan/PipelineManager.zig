@@ -4,7 +4,7 @@ const Allocator = std.mem.Allocator;
 const check = @import("error.zig").check;
 const createShaderModule = @import("../shader/shader.zig").createShaderModule;
 const ztracy = @import("ztracy");
-const NewResourceManager = @import("NewResourceManager.zig").NewResourceManager;
+const ResourceManager = @import("ResourceManager.zig").ResourceManager;
 const PipelineBucket = @import("PipelineBucket.zig").Pipeline;
 const PipelineType = @import("PipelineBucket.zig").PipelineType;
 const ShaderInfo = @import("PipelineBucket.zig").ShaderInfo;
@@ -30,12 +30,12 @@ pub const PipelineManager = struct {
     mesh: PipelineBucket,
     cache: c.VkPipelineCache,
 
-    pub fn init(alloc: Allocator, context: *const Context, resourceManager: *const NewResourceManager) !PipelineManager {
+    pub fn init(alloc: Allocator, context: *const Context, resourceManager: *const ResourceManager) !PipelineManager {
         const gpi = context.gpi;
         const cache = try createPipelineCache(gpi);
         const format = c.VK_FORMAT_R16G16B16A16_SFLOAT;
 
-        const computePipe = try PipelineBucket.init(alloc, gpi, cache, format, &computeInf, .compute, resourceManager.computeLayout, 1);
+        const computePipe = try PipelineBucket.init(alloc, gpi, cache, format, &computeInf, .compute, resourceManager.layout, 1);
         const graphicsPipe = try PipelineBucket.init(alloc, gpi, cache, format, &graphicsInf, .graphics, null, 0);
         const meshPipe = try PipelineBucket.init(alloc, gpi, cache, format, &meshShaderInf, .mesh, null, 0);
 
