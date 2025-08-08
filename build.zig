@@ -14,7 +14,7 @@ pub fn build(b: *std.Build) void {
     });
 
     // Windows Exe Metadata
-    exe.addObjectFile("app.res");
+    exe.addObjectFile(b.path("AstralGen.res"));
 
     exe.addIncludePath(b.path("include"));
 
