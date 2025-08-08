@@ -122,15 +122,30 @@ pub const CmdManager = struct {
         const primaryCmd = self.primaryCmds[activeFrame];
         const computeCmd = self.computeCmds[activeFrame];
 
-        //try check(c.vkResetCommandBuffer(computeCmd, 0), "could not reset secondary compute command buffer"); Might not have to reset cuz they are always reset?
-
         // If scene didn't change and we have a cached secondary for THIS frame index, execute it
         if (self.needUpdate != true and self.computeCmdCache[activeFrame] != null) {
-            // execute per-frame cached secondary inside primary
-            var cached = self.computeCmdCache[activeFrame].?;
+            const cached = self.computeCmdCache[activeFrame].?;
+
+            // Still need to do image layout transition
+            const barrier = createImageMemoryBarrier2(
+                c.VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
+                0,
+                c.VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+                c.VK_ACCESS_2_SHADER_WRITE_BIT,
+                renderImage.curLayout,
+                c.VK_IMAGE_LAYOUT_GENERAL,
+                renderImage.image,
+                createSubresourceRange(c.VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1),
+            );
+            createPipelineBarriers2(primaryCmd, &.{barrier});
+            renderImage.curLayout = c.VK_IMAGE_LAYOUT_GENERAL;
+
+            // Execute cached secondary
             c.vkCmdExecuteCommands(primaryCmd, 1, &cached);
             return;
         }
+
+        try check(c.vkResetCommandBuffer(computeCmd, 0), "could not reset secondary compute command buffer"); //Might not have to reset cuz they are always reset?
 
         const inheritInf = c.VkCommandBufferInheritanceInfo{
             .sType = c.VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO,
@@ -239,6 +254,8 @@ pub const CmdManager = struct {
                 return;
             }
         }
+
+        try check(c.vkResetCommandBuffer(gfxCmd, 0), "could not reset secondary compute command buffer"); //Might not have to reset cuz they are always reset?
 
         // Cache miss: record secondary with inheritance info for dynamic rendering
         const colorFormat = renderImage.format;
