@@ -13,6 +13,9 @@ pub fn build(b: *std.Build) void {
         .link_libc = true,
     });
 
+    // Windows Exe Metadata
+    exe.addObjectFile("app.res");
+
     exe.addIncludePath(b.path("include"));
 
     // Compile VMA's implementation by treating its header as a C source file.
