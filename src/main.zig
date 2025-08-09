@@ -52,21 +52,21 @@ pub fn main() !void {
 
         if (windowMan.keyEvents.len > 0) {
             eventMan.mapKeyEvents(windowMan.consumeKeyEvents());
-
-            for (eventMan.getAppEvents()) |appEvent| {
-                switch (appEvent) {
-                    .camForward => cam.moveForward(),
-                    .camBackward => cam.moveBackward(),
-                    .camUp => cam.moveUp(),
-                    .camDown => cam.moveDown(),
-                    .camLeft => cam.moveLeft(),
-                    .camRight => cam.moveRight(),
-                    .closeApp => return,
-                    .restartApp => {},
-                }
-            }
-            eventMan.cleanupAppEvents();
         }
+
+        for (eventMan.getAppEvents()) |appEvent| {
+            switch (appEvent) {
+                .camForward => cam.moveForward(),
+                .camBackward => cam.moveBackward(),
+                .camUp => cam.moveUp(),
+                .camDown => cam.moveDown(),
+                .camLeft => cam.moveLeft(),
+                .camRight => cam.moveRight(),
+                .closeApp => return,
+                .restartApp => {},
+            }
+        }
+        eventMan.cleanupAppEvents();
 
         if (windowMan.changedWindows.len > 0) {
             try renderer.update(windowMan.changedWindows.slice());

@@ -7,10 +7,11 @@ const Swapchain = @import("../vulkan/SwapchainManager.zig").Swapchain;
 const Renderer = @import("../vulkan/Renderer.zig").Renderer;
 const CreateMapArray = @import("../structures/MapArray.zig").CreateMapArray;
 const MAX_WINDOWS = @import("../config.zig").MAX_WINDOWS;
+const KeyState = @import("../core/EventManager.zig").KeyState;
 
 pub const KeyEvent = struct {
     key: c_uint,
-    event: enum { pressed, released },
+    event: KeyState,
 };
 
 pub const WindowManager = struct {

@@ -15,37 +15,57 @@ pub const AppEvent = enum {
     restartApp,
 };
 
-const KeyState = enum {
+pub const KeyState = enum {
     pressed,
-    held,
     released,
-    unused,
 };
 
 pub const EventManager = struct {
     appEvents: std.BoundedArray(AppEvent, 127) = .{},
-    //keyStates: std.BoundedArray(KeyState, 127) = .{},
-    //keyStates: CreateMapArray(KeyState, 500, c_uint, 500, 0) = .{},
+    keyStates: CreateMapArray(KeyState, 500, c_uint, 500, 0) = .{},
 
     pub fn mapKeyEvents(self: *EventManager, keyEvents: []KeyEvents) void {
         for (keyEvents) |keyEvent| {
-            switch (keyEvent.key) {
-                config.CAMERA_FORWARD_KEY.key => self.appEvents.append(.camForward) catch |err| std.debug.print("Could not Append KeyEvent {}", .{err}),
-                config.CAMERA_BACKWARD_KEY.key => self.appEvents.append(.camBackward) catch |err| std.debug.print("Could not Append KeyEvent {}", .{err}),
-                config.CAMERA_LEFT_KEY.key => self.appEvents.append(.camLeft) catch |err| std.debug.print("Could not Append KeyEvent {}", .{err}),
-                config.CAMERA_RIGHT_KEY.key => self.appEvents.append(.camRight) catch |err| std.debug.print("Could not Append KeyEvent {}", .{err}),
-                config.CAMERA_UP_KEY.key => self.appEvents.append(.camUp) catch |err| std.debug.print("Could not Append KeyEvent {}", .{err}),
-                config.CAMERA_DOWN_KEY.key => self.appEvents.append(.camDown) catch |err| std.debug.print("Could not Append KeyEvent {}", .{err}),
-
-                config.RESTART_KEY.key => self.appEvents.append(.restartApp) catch |err| std.debug.print("Could not Append KeyEvent {}", .{err}),
-                config.CLOSE_KEY.key => self.appEvents.append(.closeApp) catch |err| std.debug.print("Could not Append KeyEvent {}", .{err}),
-                else => std.debug.print("KeyEvent {} {s} not mapped", .{ keyEvent.key, @tagName(keyEvent.event) }),
-            }
+            self.keyStates.set(keyEvent.key, if (keyEvent.event == .pressed) .pressed else .released);
         }
+        //std.debug.print("KeyStates {}\n", .{self.keyStates.count});
     }
 
     pub fn getAppEvents(self: *EventManager) []AppEvent {
+        for (0..self.keyStates.getCount()) |i| {
+            const state = self.keyStates.getPtrAtIndex(@intCast(i)).*;
+            const link = self.keyStates.links[i];
+
+            switch (link) {
+                // State Events
+                config.CAMERA_FORWARD_KEY.key => if (state == config.CAMERA_FORWARD_KEY.event) self.appendEvent(.camForward),
+                config.CAMERA_BACKWARD_KEY.key => if (state == config.CAMERA_BACKWARD_KEY.event) self.appendEvent(.camBackward),
+                config.CAMERA_LEFT_KEY.key => if (state == config.CAMERA_LEFT_KEY.event) self.appendEvent(.camLeft),
+                config.CAMERA_RIGHT_KEY.key => if (state == config.CAMERA_RIGHT_KEY.event) self.appendEvent(.camRight),
+                config.CAMERA_UP_KEY.key => if (state == config.CAMERA_UP_KEY.event) self.appendEvent(.camUp),
+                config.CAMERA_DOWN_KEY.key => if (state == config.CAMERA_DOWN_KEY.event) self.appendEvent(.camDown),
+
+                // One Time Events
+                config.RESTART_KEY.key => {
+                    self.appendEvent(.restartApp);
+                    self.keyStates.removeAtIndex(@intCast(i));
+                },
+                config.CLOSE_KEY.key => {
+                    self.appendEvent(.closeApp);
+                    self.keyStates.removeAtIndex(@intCast(i));
+                },
+                else => {
+                    std.debug.print("KeyEvent {} not mapped\n", .{i});
+                    self.keyStates.removeAtIndex(@intCast(i));
+                },
+            }
+        }
         return self.appEvents.slice();
+    }
+
+    pub fn appendEvent(self: *EventManager, ev: AppEvent) void {
+        self.appEvents.append(ev) catch |err|
+            std.debug.print("EventManager.appendEvent failed: {}\n", .{err});
     }
 
     pub fn cleanupAppEvents(self: *EventManager) void {
