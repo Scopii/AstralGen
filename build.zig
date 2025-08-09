@@ -13,6 +13,14 @@ pub fn build(b: *std.Build) void {
         .link_libc = true,
     });
 
+    // Vulkan setup
+    const vulkan_zig_dep = b.dependency("vulkan_zig", .{
+        .registry = b.path("vk.xml"),
+        .target = target,
+        .optimize = optimize,
+    });
+    exe.root_module.addImport("vulkan", vulkan_zig_dep.module("vulkan-zig"));
+
     // Windows Exe Metadata
     exe.addObjectFile(b.path("AstralGen.res"));
 
