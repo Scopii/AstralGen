@@ -13,6 +13,7 @@ layout(set = 0, binding = 0, rgba16f) restrict uniform image2D image;
 
 // APPROACH B: Buffer references - direct access via GPU addresses
 layout(push_constant, std430) restrict uniform PushConstants {
+    vec4 camPos;
     float runtime;
     uint data_count;
     Vec4Buffer testData; // The 64-bit address
@@ -71,7 +72,7 @@ void main() {
         colorMod = 0.5 + 0.5 * sin(length(data.xyz) * 3.14 + pushConstants.runtime);
 
     for(int step = 0; step < MAX_STEPS; step++) {
-        pos = CAM + rayDir * march;
+        pos = pushConstants.camPos.xyz + rayDir * march;
         float closest = map(pos);
         if(closest < MIN_DIST) {
             hit = true;

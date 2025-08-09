@@ -4,7 +4,13 @@ const config = @import("../config.zig");
 const CreateMapArray = @import("../structures/MapArray.zig").CreateMapArray;
 
 pub const AppEvent = enum {
-    updateCam,
+    camForward,
+    camBackward,
+    camLeft,
+    camRight,
+    camUp,
+    camDown,
+
     closeApp,
     restartApp,
 };
@@ -24,7 +30,13 @@ pub const EventManager = struct {
     pub fn mapKeyEvents(self: *EventManager, keyEvents: []KeyEvents) void {
         for (keyEvents) |keyEvent| {
             switch (keyEvent.key) {
-                config.UPDATE_CAM_KEY.key => self.appEvents.append(.updateCam) catch |err| std.debug.print("Could not Append KeyEvent {}", .{err}),
+                config.CAMERA_FORWARD_KEY.key => self.appEvents.append(.camForward) catch |err| std.debug.print("Could not Append KeyEvent {}", .{err}),
+                config.CAMERA_BACKWARD_KEY.key => self.appEvents.append(.camBackward) catch |err| std.debug.print("Could not Append KeyEvent {}", .{err}),
+                config.CAMERA_LEFT_KEY.key => self.appEvents.append(.camLeft) catch |err| std.debug.print("Could not Append KeyEvent {}", .{err}),
+                config.CAMERA_RIGHT_KEY.key => self.appEvents.append(.camRight) catch |err| std.debug.print("Could not Append KeyEvent {}", .{err}),
+                config.CAMERA_UP_KEY.key => self.appEvents.append(.camUp) catch |err| std.debug.print("Could not Append KeyEvent {}", .{err}),
+                config.CAMERA_DOWN_KEY.key => self.appEvents.append(.camDown) catch |err| std.debug.print("Could not Append KeyEvent {}", .{err}),
+
                 config.RESTART_KEY.key => self.appEvents.append(.restartApp) catch |err| std.debug.print("Could not Append KeyEvent {}", .{err}),
                 config.CLOSE_KEY.key => self.appEvents.append(.closeApp) catch |err| std.debug.print("Could not Append KeyEvent {}", .{err}),
                 else => std.debug.print("KeyEvent {} {s} not mapped", .{ keyEvent.key, @tagName(keyEvent.event) }),

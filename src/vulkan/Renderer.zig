@@ -16,6 +16,7 @@ const GpuImage = @import("ResourceManager.zig").GpuImage;
 const Window = @import("../platform/Window.zig").Window;
 const MemoryManager = @import("../core/MemoryManager.zig").MemoryManager;
 const config = @import("../config.zig");
+const Camera = @import("../core/Camera.zig").Camera;
 
 const Allocator = std.mem.Allocator;
 
@@ -114,7 +115,7 @@ pub const Renderer = struct {
         }
     }
 
-    pub fn draw(self: *Renderer) !void {
+    pub fn draw(self: *Renderer, cam: *Camera) !void {
         try self.scheduler.waitForGPU();
 
         const frameInFlight = self.scheduler.frameInFlight;
@@ -123,7 +124,7 @@ pub const Renderer = struct {
         self.cmdMan.needUpdate = true;
 
         try self.cmdMan.beginRecording(frameInFlight);
-        try self.recordCommands();
+        try self.recordCommands(cam);
         const cmd = try self.cmdMan.endRecording();
 
         const targets = self.swapchainMan.targets.slice();
@@ -133,7 +134,7 @@ pub const Renderer = struct {
         self.scheduler.nextFrame();
     }
 
-    fn recordCommands(self: *Renderer) !void {
+    fn recordCommands(self: *Renderer, cam: *Camera) !void {
         const activeGroups = self.swapchainMan.activeGroups;
 
         const runtimeAsInt: i128 = std.time.nanoTimestamp() - self.startTime;
@@ -146,6 +147,7 @@ pub const Renderer = struct {
                 if (config.SHADER_HOTLOAD == true) try self.pipelineMan.checkShaderUpdate(pipeType);
 
                 const compPushConstants = ComputePushConstants{
+                    .camPos = cam.getPos(),
                     .dataAddress = self.testBuffer.gpuAddress,
                     .runtime = runtime,
                     .dataCount = @intCast(self.testBuffer.size / @sizeOf([4]f32)),

@@ -17,5 +17,12 @@ pub const MAX_WINDOWS: u8 = 12;
 
 // KeyMap
 pub const CLOSE_KEY: KeyEvent = .{ .key = c.SDLK_ESCAPE, .event = .pressed };
-pub const UPDATE_CAM_KEY: KeyEvent = .{ .key = c.SDLK_UP, .event = .pressed };
+
+pub const CAMERA_FORWARD_KEY: KeyEvent = .{ .key = c.SDLK_W, .event = .pressed };
+pub const CAMERA_BACKWARD_KEY: KeyEvent = .{ .key = c.SDLK_S, .event = .pressed };
+pub const CAMERA_LEFT_KEY: KeyEvent = .{ .key = c.SDLK_A, .event = .pressed };
+pub const CAMERA_RIGHT_KEY: KeyEvent = .{ .key = c.SDLK_D, .event = .pressed };
+pub const CAMERA_UP_KEY: KeyEvent = .{ .key = c.SDLK_Q, .event = .pressed };
+pub const CAMERA_DOWN_KEY: KeyEvent = .{ .key = c.SDLK_E, .event = .pressed };
+
 pub const RESTART_KEY: KeyEvent = .{ .key = c.SDLK_R, .event = .pressed };
