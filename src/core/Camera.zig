@@ -1,5 +1,6 @@
 const zm = @import("zmath");
 const std = @import("std");
+const config = @import("../config.zig");
 const M_PI = 3.14159; //3.1415927
 const TWO_PI = 2 * M_PI;
 
@@ -40,28 +41,28 @@ pub const Camera = struct {
         return self.radius;
     }
 
-    pub fn moveLeft(self: *Camera) void {
-        self.pos[0] -= 0.1;
+    pub fn moveLeft(self: *Camera, dt: f64) void {
+        self.pos[0] -= @floatCast(config.CAM_SPEED * dt);
     }
 
-    pub fn moveRight(self: *Camera) void {
-        self.pos[0] += 0.1;
+    pub fn moveRight(self: *Camera, dt: f64) void {
+        self.pos[0] += @floatCast(config.CAM_SPEED * dt);
     }
 
-    pub fn moveUp(self: *Camera) void {
-        self.pos[1] += 0.1;
+    pub fn moveUp(self: *Camera, dt: f64) void {
+        self.pos[1] += @floatCast(config.CAM_SPEED * dt);
     }
 
-    pub fn moveDown(self: *Camera) void {
-        self.pos[1] -= 0.1;
+    pub fn moveDown(self: *Camera, dt: f64) void {
+        self.pos[1] -= @floatCast(config.CAM_SPEED * dt);
     }
 
-    pub fn moveForward(self: *Camera) void {
-        self.pos[2] += 0.1;
+    pub fn moveForward(self: *Camera, dt: f64) void {
+        self.pos[2] += @floatCast(config.CAM_SPEED * dt);
     }
 
-    pub fn moveBackward(self: *Camera) void {
-        self.pos[2] -= 0.1;
+    pub fn moveBackward(self: *Camera, dt: f64) void {
+        self.pos[2] -= @floatCast(config.CAM_SPEED * dt);
     }
 
     pub fn setRadius(it: *Camera, newRadius: f32) void {

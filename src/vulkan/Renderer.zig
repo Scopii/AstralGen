@@ -115,7 +115,7 @@ pub const Renderer = struct {
         }
     }
 
-    pub fn draw(self: *Renderer, cam: *Camera) !void {
+    pub fn draw(self: *Renderer, cam: *Camera, runtimeAsFloat: f32) !void {
         try self.scheduler.waitForGPU();
 
         const frameInFlight = self.scheduler.frameInFlight;
@@ -124,7 +124,7 @@ pub const Renderer = struct {
         self.cmdMan.needUpdate = true;
 
         try self.cmdMan.beginRecording(frameInFlight);
-        try self.recordCommands(cam);
+        try self.recordCommands(cam, runtimeAsFloat);
         const cmd = try self.cmdMan.endRecording();
 
         const targets = self.swapchainMan.targets.slice();
@@ -134,12 +134,8 @@ pub const Renderer = struct {
         self.scheduler.nextFrame();
     }
 
-    fn recordCommands(self: *Renderer, cam: *Camera) !void {
+    fn recordCommands(self: *Renderer, cam: *Camera, runtimeAsFloat: f32) !void {
         const activeGroups = self.swapchainMan.activeGroups;
-
-        const runtimeAsInt: i128 = std.time.nanoTimestamp() - self.startTime;
-        const runtimeAsFloat: f32 = @floatFromInt(runtimeAsInt);
-        const runtime: f32 = runtimeAsFloat / 1_000_000_000.0;
 
         for (0..activeGroups.len) |i| {
             if (activeGroups[i].len != 0) {
@@ -149,7 +145,7 @@ pub const Renderer = struct {
                 const compPushConstants = ComputePushConstants{
                     .camPos = cam.getPos(),
                     .dataAddress = self.testBuffer.gpuAddress,
-                    .runtime = runtime,
+                    .runtime = runtimeAsFloat,
                     .dataCount = @intCast(self.testBuffer.size / @sizeOf([4]f32)),
                 };
 

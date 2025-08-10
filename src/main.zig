@@ -5,6 +5,7 @@ const MemoryManager = @import("core/MemoryManager.zig").MemoryManager;
 const CreateMapArray = @import("structures/MapArray.zig").CreateMapArray;
 const Renderer = @import("vulkan/Renderer.zig").Renderer;
 const EventManager = @import("core/EventManager.zig").EventManager;
+const TimeManager = @import("core/TimeManager.zig").TimeManager;
 const Camera = @import("core/Camera.zig").Camera;
 const Window = @import("platform/Window.zig").Window;
 const zjobs = @import("zjobs");
@@ -25,7 +26,9 @@ pub fn main() !void {
     var memoryMan = try MemoryManager.init(debugAlloc.allocator());
     defer memoryMan.deinit();
 
-    var eventMan: EventManager = .{};
+    var timeMan = TimeManager.init();
+
+    var eventMan = EventManager{};
 
     var windowMan = try WindowManager.init();
     defer windowMan.deinit();
@@ -54,14 +57,18 @@ pub fn main() !void {
             eventMan.mapKeyEvents(windowMan.consumeKeyEvents());
         }
 
+        timeMan.update();
+        const dt = timeMan.getDeltaTime(.nano, f64);
+        const runTime = timeMan.getRuntime(.seconds, f32);
+
         for (eventMan.getAppEvents()) |appEvent| {
             switch (appEvent) {
-                .camForward => cam.moveForward(),
-                .camBackward => cam.moveBackward(),
-                .camUp => cam.moveUp(),
-                .camDown => cam.moveDown(),
-                .camLeft => cam.moveLeft(),
-                .camRight => cam.moveRight(),
+                .camForward => cam.moveForward(dt),
+                .camBackward => cam.moveBackward(dt),
+                .camUp => cam.moveUp(dt),
+                .camDown => cam.moveDown(dt),
+                .camLeft => cam.moveLeft(dt),
+                .camRight => cam.moveRight(dt),
                 .closeApp => return,
                 .restartApp => {},
             }
@@ -76,7 +83,7 @@ pub fn main() !void {
         if (windowMan.close == true) return;
         if (windowMan.openWindows == 0) continue;
 
-        renderer.draw(&cam) catch |err| {
+        renderer.draw(&cam, runTime) catch |err| {
             std.log.err("Error in renderer.draw(): {}", .{err});
             break;
         };
