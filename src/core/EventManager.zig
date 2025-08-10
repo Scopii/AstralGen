@@ -55,7 +55,7 @@ pub const EventManager = struct {
                     self.keyStates.removeAtIndex(@intCast(i));
                 },
                 else => {
-                    std.debug.print("KeyEvent {} not mapped\n", .{i});
+                    std.debug.print("Key {} not mapped\n", .{link});
                     self.keyStates.removeAtIndex(@intCast(i));
                 },
             }
