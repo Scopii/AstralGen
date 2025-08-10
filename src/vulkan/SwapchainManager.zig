@@ -12,6 +12,7 @@ const CreateMapArray = @import("../structures/MapArray.zig").CreateMapArray;
 const MAX_IN_FLIGHT = @import("../config.zig").MAX_IN_FLIGHT;
 const MAX_WINDOWS = @import("../config.zig").MAX_WINDOWS;
 const DESIRED_SWAPCHAIN_IMAGES = @import("../config.zig").DESIRED_SWAPCHAIN_IMAGES;
+const DISPLAY_MODE = @import("../config.zig").DISPLAY_MODE;
 
 pub const Swapchain = struct {
     surface: c.VkSurfaceKHR,
@@ -196,7 +197,7 @@ pub const SwapchainManager = struct {
     ) !Swapchain {
         const alloc = self.alloc;
         const gpi = self.gpi;
-        const mode = c.VK_PRESENT_MODE_IMMEDIATE_KHR; //try context.pickPresentMode();
+        const mode = DISPLAY_MODE; //try context.pickPresentMode();
         const actualExtent = pickExtent(&caps, extent);
 
         var desiredImgCount: u32 = DESIRED_SWAPCHAIN_IMAGES;
