@@ -108,4 +108,9 @@ pub const EventManager = struct {
     pub fn cleanupAppEvents(self: *EventManager) void {
         self.appEvents.clear();
     }
+
+    pub fn resetMouseMovement(self: *EventManager) void {
+        self.mouseMovementX = 0;
+        self.mouseMovementY = 0;
+    }
 };

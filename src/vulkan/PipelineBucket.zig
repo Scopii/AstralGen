@@ -138,6 +138,7 @@ fn createShaderModules(alloc: Allocator, gpi: c.VkDevice, shaderInf: []const Sha
 
 pub const ComputePushConstants = extern struct {
     camPos: [4]f32,
+    camDir: [4]f32,
     runtime: f32,
     dataCount: u32,
     dataAddress: u64,

@@ -144,6 +144,7 @@ pub const Renderer = struct {
 
                 const compPushConstants = ComputePushConstants{
                     .camPos = cam.getPos(),
+                    .camDir = cam.getForward(),
                     .dataAddress = self.testBuffer.gpuAddress,
                     .runtime = runtimeAsFloat,
                     .dataCount = @intCast(self.testBuffer.size / @sizeOf([4]f32)),

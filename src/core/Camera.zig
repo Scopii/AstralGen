@@ -5,133 +5,88 @@ const M_PI = 3.14159; //3.1415927
 const TWO_PI = 2 * M_PI;
 
 pub const Camera = struct {
-    pos: zm.Vec = zm.f32x4(0, 0, 5, 0),
+    pos: zm.Vec = zm.f32x4(0, 0, -5, 0),
     fov: f32 = 90.0,
     aspectRatio: f32 = 16.0 / 9.0,
     near: f32 = 0.1,
     far: f32 = 100.0,
-    radius: f32 = 5.0,
     up: zm.Vec = zm.f32x4(0, 1, 0, 0),
-    azimuth: f32 = M_PI / 2.0, // Horizontal angle in radians
-    elevation: f32 = 0, // Vertical angle in radians
-    target: zm.Vec = zm.f32x4(0, 0, 0, 1.0), // The point to orbit
+    pitch: f32 = 0.0,
+    yaw: f32 = 0.0,
 
     // You can create a simple init function if needed
     pub fn init(cam: Camera) Camera {
-        var newCam = cam;
-        newCam.updatePosition();
-        return newCam;
+        return cam;
+    }
+
+    pub fn rotate(self: *Camera, x: f32, y: f32) void {
+        self.yaw += x * config.CAM_SENS; // Horizontal mouse movement affects yaw
+        self.pitch -= y * config.CAM_SENS; // Vertical mouse movement affect pitch
+        // Clamp pitch for gimbal lock
+        self.pitch = std.math.clamp(self.pitch, -M_PI * 0.48, M_PI * 0.48);
+        // Wrap yaw around 2π
+        if (self.yaw > M_PI) self.yaw -= TWO_PI;
+        if (self.yaw < -M_PI) self.yaw += TWO_PI;
+    }
+
+    pub fn getForward(self: *Camera) zm.Vec {
+        // Spherical coordinates to Cartesian
+        return zm.normalize3(zm.f32x4(@cos(self.pitch) * @sin(self.yaw), @sin(self.pitch), @cos(self.pitch) * @cos(self.yaw), 0));
+    }
+
+    pub fn moveLeft(self: *Camera, dt: f64) void {
+        const forward = self.getForward();
+        const right = zm.normalize3(zm.cross3(self.up, forward));
+        const speed = @as(f32, @floatCast(config.CAM_SPEED * dt));
+        const movement = right * zm.splat(zm.Vec, -speed);
+        self.pos = self.pos + movement;
+    }
+
+    pub fn moveRight(self: *Camera, dt: f64) void {
+        const forward = self.getForward();
+        const right = zm.normalize3(zm.cross3(self.up, forward));
+        const speed = @as(f32, @floatCast(config.CAM_SPEED * dt));
+        const movement = right * zm.splat(zm.Vec, speed);
+        self.pos = self.pos + movement;
+    }
+
+    pub fn moveUp(self: *Camera, dt: f64) void {
+        const speed = @as(f32, @floatCast(config.CAM_SPEED * dt));
+        const movement = self.up * zm.splat(zm.Vec, speed);
+        self.pos = self.pos + movement;
+    }
+
+    pub fn moveDown(self: *Camera, dt: f64) void {
+        const speed = @as(f32, @floatCast(config.CAM_SPEED * dt));
+        const movement = self.up * zm.splat(zm.Vec, -speed);
+        self.pos = self.pos + movement;
+    }
+
+    pub fn moveForward(self: *Camera, dt: f64) void {
+        const forward = self.getForward();
+        const speed = @as(f32, @floatCast(config.CAM_SPEED * dt));
+        const movement = forward * zm.splat(zm.Vec, speed);
+        self.pos = self.pos + movement;
+    }
+
+    pub fn moveBackward(self: *Camera, dt: f64) void {
+        const forward = self.getForward();
+        const speed = @as(f32, @floatCast(config.CAM_SPEED * dt));
+        const movement = forward * zm.splat(zm.Vec, -speed);
+        self.pos = self.pos + movement;
     }
 
     pub fn getView(self: *const Camera) zm.Mat {
-        return zm.lookAtRh(self.pos, self.target, self.up);
+        const target = self.pos + self.getForward();
+        return zm.lookAtRh(self.pos, target, self.up);
     }
 
     pub fn getProjection(self: *const Camera) zm.Mat {
-        // Standard OpenGL projection matrix (RH)
-        return zm.perspectiveFovRh(self.fov * (M_PI / 180.0), // Convert FOV from degrees to radians
-            self.aspectRatio, self.near, self.far);
+        return zm.perspectiveFovRh(self.fov * (M_PI / 180.0), self.aspectRatio, self.near, self.far);
     }
 
     pub fn getPos(self: *const Camera) [4]f32 {
         return [4]f32{ self.pos[0], self.pos[1], self.pos[2], 0 };
-    }
-
-    pub fn getRadius(self: *Camera) f32 {
-        return self.radius;
-    }
-
-    pub fn moveLeft(self: *Camera, dt: f64) void {
-        self.pos[0] -= @floatCast(config.CAM_SPEED * dt);
-    }
-
-    pub fn moveRight(self: *Camera, dt: f64) void {
-        self.pos[0] += @floatCast(config.CAM_SPEED * dt);
-    }
-
-    pub fn moveUp(self: *Camera, dt: f64) void {
-        self.pos[1] += @floatCast(config.CAM_SPEED * dt);
-    }
-
-    pub fn moveDown(self: *Camera, dt: f64) void {
-        self.pos[1] -= @floatCast(config.CAM_SPEED * dt);
-    }
-
-    pub fn moveForward(self: *Camera, dt: f64) void {
-        self.pos[2] += @floatCast(config.CAM_SPEED * dt);
-    }
-
-    pub fn moveBackward(self: *Camera, dt: f64) void {
-        self.pos[2] -= @floatCast(config.CAM_SPEED * dt);
-    }
-
-    pub fn setRadius(it: *Camera, newRadius: f32) void {
-        it.radius = newRadius;
-    }
-
-    pub fn updatePosition(self: *Camera) void {
-        // First calculate the offset vector
-        const x = self.radius * @cos(self.elevation) * @cos(self.azimuth);
-        const y = self.radius * @sin(self.elevation);
-        const z = self.radius * @cos(self.elevation) * @sin(self.azimuth);
-
-        // Add offset to target (this is consistent with your C++ implementation)
-        self.pos = zm.f32x4(self.target[0] + x, self.target[1] + y, self.target[2] + z, 0);
-    }
-
-    pub fn rotateHorizontal(self: *Camera, angleDegrees: f32) void {
-        const angleRadians = angleDegrees * (M_PI / 180.0);
-        self.azimuth += angleRadians;
-
-        // Keep azimuth in the range [0, 2π]
-        while (self.azimuth > TWO_PI) {
-            self.azimuth -= TWO_PI;
-        }
-        while (self.azimuth < 0) {
-            self.azimuth += TWO_PI;
-        }
-
-        self.updatePosition();
-    }
-
-    pub fn setHorizontal(self: *Camera, angleDegrees: f32) void {
-        const angleRadians = angleDegrees * (M_PI / 180.0);
-        self.azimuth = angleRadians;
-
-        // Keep azimuth in the range [0, 2π]
-        while (self.azimuth > TWO_PI) {
-            self.azimuth -= TWO_PI;
-        }
-        while (self.azimuth < 0) {
-            self.azimuth += TWO_PI;
-        }
-
-        self.updatePosition();
-    }
-
-    pub fn addHorizontal(self: *Camera, value: f32) void {
-        self.azimuth += value;
-        // Keep azimuth in the range [0, 2π]
-        while (self.azimuth > TWO_PI) {
-            self.azimuth -= TWO_PI;
-        }
-        while (self.azimuth < 0) {
-            self.azimuth += TWO_PI;
-        }
-        self.updatePosition();
-    }
-
-    pub fn rotateVertical(self: *Camera, angleDegrees: f32) void {
-        const angle_radians = angleDegrees * (M_PI / 180.0);
-        self.elevation += angle_radians;
-        self.elevation = @max(-M_PI / 2.0 + 0.1, @min(self.elevation, M_PI / 2.0 - 0.1));
-        self.updatePosition();
-    }
-
-    pub fn addVertical(self: *Camera, value: f32) void {
-        self.elevation += value;
-        self.elevation = @max(-M_PI / 2.0 + 0.1, @min(self.elevation, M_PI / 2.0 - 0.1));
-        self.updatePosition();
     }
 
     pub fn debug(self: *Camera) void {

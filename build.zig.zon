@@ -27,8 +27,8 @@
         },
         //Game related Math
         .zmath = .{
-            .url = "https://github.com/zig-gamedev/zmath/archive/5128dc8a8068aab398f844c1f5fddc8132310146.tar.gz",
-            .hash = "zmath-0.11.0-dev-wjwivTArAwDIkHSuSiU3KuBvxh7igjJjJMqYRfy3hihO",
+            .url = "https://github.com/zig-gamedev/zmath/archive/05799b336d4eb315cd5a5e5693a5704ba01db36c.tar.gz",
+            .hash = "zmath-0.11.0-dev-wjwivdErAwA9JvOksjectxgnDUZumDR1V9DwKy5UeTOT",
         },
         //CPU Profiling
         .ztracy = .{

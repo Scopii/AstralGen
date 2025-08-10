@@ -77,6 +77,8 @@ pub const App = struct {
             const dt = timeMan.getDeltaTime(.nano, f64);
             const runTime = timeMan.getRuntime(.seconds, f32);
 
+            cam.rotate(self.eventMan.mouseMovementX, self.eventMan.mouseMovementY);
+
             // Generate and Process and clear Events
             for (eventMan.getAppEvents()) |appEvent| {
                 switch (appEvent) {
@@ -91,6 +93,7 @@ pub const App = struct {
                 }
             }
             eventMan.cleanupAppEvents();
+            eventMan.resetMouseMovement();
 
             // Process Window Changes
             if (windowMan.changedWindows.len > 0) {

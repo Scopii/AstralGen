@@ -1,51 +1,81 @@
 #version 460
 #extension GL_EXT_shader_image_load_formatted : require
-#extension GL_EXT_buffer_reference : require // Enable buffer references
-#extension GL_EXT_scalar_block_layout : require // For better layout control
+#extension GL_EXT_buffer_reference : require
+#extension GL_EXT_scalar_block_layout : require
 
-// Buffer reference type - direct GPU memory access
+// Buffer reference type
 layout(buffer_reference, std430) restrict buffer Vec4Buffer {
     vec4 data[];
 };
 
-// APPROACH A: Images/Textures/Samplers (using descriptor buffers)
 layout(set = 0, binding = 0, rgba16f) restrict uniform image2D image;
 
-// APPROACH B: Buffer references - direct access via GPU addresses
+// Add camDir back to push constants
 layout(push_constant, std430) restrict uniform PushConstants {
     vec4 camPos;
+    vec4 camDir; // You need this for proper camera rotation!
     float runtime;
     uint data_count;
-    Vec4Buffer testData; // The 64-bit address
+    Vec4Buffer testData;
 } pushConstants;
 
-//size of a workgroup for compute
 layout (local_size_x = 8, local_size_y = 8) in;
 
 // View constants
-const vec2 RESOLUTION = vec2(1600.0, 900.0);
 const float ASPECT_RATIO = 16.0 / 9.0;
-const float FOV_DEGREES = 120.0;
+const float FOV_DEGREES = 100.0; // Matched to Camera!
 const float FOCAL_LENGTH = 1.0 / tan(radians(FOV_DEGREES * 0.5));
+
 // Marching constants
 const int MAX_STEPS = 1024 * 2;
 const float MIN_DIST = 0.0001;
 const float MAX_DIST = 500.0;
 const float EPSILON = 0.001;
-const vec3 CAM = vec3(0.0, 0.0, -5.0);
 
 // SDFs
-float sdSphere(vec3 pos, float radius) { return length(pos) - radius; }
+float sdSphere(vec3 pos, float radius) { 
+    return length(pos) - radius; 
+}
+
+float sdBox(vec3 p, vec3 b) {
+    vec3 q = abs(p) - b;
+    return length(max(q, 0.0)) + min(max(q.x, max(q.y, q.z)), 0.0);
+}
+
+float sdTorus(vec3 p, vec2 t) {
+    vec2 q = vec2(length(p.xz) - t.x, p.y);
+    return length(q) - t.y;
+}
+
+float sdCylinder(vec3 p, vec2 h) {
+    vec2 d = abs(vec2(length(p.xz), p.y)) - h;
+    return min(max(d.x, d.y), 0.0) + length(max(d, 0.0));
+}
 
 // Operations
-vec3 opRep(vec3 pos, vec3 spacing) { return mod(pos + 0.5 * spacing, spacing) - 0.5 * spacing; }
+vec3 opRep(vec3 pos, vec3 spacing) { 
+    return mod(pos + 0.5 * spacing, spacing) - 0.5 * spacing; 
+}
 
-// Scene
+// Repeating Scene
 float map(vec3 pos) {
     vec3 repPos = opRep(pos, vec3(4.0, 4.0, 4.0));
     float sphere = sdSphere(repPos, 0.3);
     return sphere;
 }
+
+// Test Scene
+// float map(vec3 pos) {
+//     float sphere = sdSphere(pos, 0.5);
+//     // 2. Box to the right, translated by (2, 0, 0)
+//     float box = sdBox(pos - vec3(2.0, 0.0, 0.0), vec3(0.4));
+//     // 3. Torus to the left, translated by (-2, 0, 0)
+//     float torus = sdTorus(pos - vec3(-2.0, 0.0, 0.0), vec2(0.4, 0.1));
+//     // Combine the distances using min() to get the closest surface
+//     float result = min(sphere, box);
+//     result = min(result, torus);
+//     return result;
+// }
 
 // Functions
 vec3 getNormal(vec3 pos) {
@@ -57,20 +87,19 @@ vec3 getNormal(vec3 pos) {
     return normalize(n);
 }
 
-// MAIN PROGRAM
 void main() {
     vec2 uv = (vec2(gl_GlobalInvocationID.xy) / vec2(imageSize(image))) * 2.0 - 1.0;
-    vec3 rayDir = normalize(vec3(uv.x * ASPECT_RATIO, -uv.y, FOCAL_LENGTH));
-
+    // Camera basis vectors
+    vec3 camForward = normalize(pushConstants.camDir.xyz);
+    vec3 camRight = normalize(cross(vec3(0, 1, 0), camForward));
+    vec3 camUp = normalize(cross(camForward, camRight));
+    // Ray direction
+    vec3 rayDir = normalize(uv.x * camRight * ASPECT_RATIO - uv.y * camUp + FOCAL_LENGTH * camForward);
+    
     float march = 0.0;
     bool hit = false;
     vec3 pos;
-
-    // Use test data for color variation
-        float colorMod = 1.0;
-        vec4 data = pushConstants.testData.data[1];
-        colorMod = 0.5 + 0.5 * sin(length(data.xyz) * 3.14 + pushConstants.runtime);
-
+    
     for(int step = 0; step < MAX_STEPS; step++) {
         pos = pushConstants.camPos.xyz + rayDir * march;
         float closest = map(pos);
@@ -81,7 +110,7 @@ void main() {
         march += closest;
         if(march > MAX_DIST) break;
     }
-
+    
     if(hit) {
         vec3 normal = getNormal(pos);
         vec3 lightDir = normalize(vec3(1.0, 1.0, -1.0));
@@ -89,8 +118,10 @@ void main() {
         
         // Use test data for color variation
         float colorMod = 1.0;
-        vec4 data = pushConstants.testData.data[1];
-        colorMod = 0.5 + 0.5 * sin(length(data.xyz) * 3.14 + pushConstants.runtime);
+        if(pushConstants.data_count > 1) { // Safety check
+            vec4 data = pushConstants.testData.data[1];
+            colorMod = 0.5 + 0.5 * sin(length(data.xyz) * 3.14 + pushConstants.runtime);
+        }
         
         vec3 surfaceColor = vec3(0.0, 0.8 * colorMod, 0.5);
         imageStore(image, ivec2(gl_GlobalInvocationID.xy), mix(vec4(surfaceColor * lighting, 1.0), vec4(0.0, 0.0, 0.0, 1.0), march / MAX_DIST));

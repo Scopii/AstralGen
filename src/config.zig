@@ -16,6 +16,7 @@ pub const MAX_WINDOWS: u8 = 12;
 
 // Camera
 pub const CAM_SPEED = 0.00000001;
+pub const CAM_SENS = 0.0003;
 
 // KeyMap
 pub const CAMERA_FORWARD_KEY: KeyEvent = .{ .key = c.SDLK_W, .event = .pressed };
