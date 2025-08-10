@@ -21,14 +21,14 @@ pub const CAM_INIT_FOV = 100;
 pub const CAM_FOV_CHANGE = 0.0000001;
 
 // KeyMap
-pub const CAMERA_FORWARD_KEY: KeyEvent = .{ .key = c.SDLK_W, .event = .pressed };
-pub const CAMERA_BACKWARD_KEY: KeyEvent = .{ .key = c.SDLK_S, .event = .pressed };
-pub const CAMERA_LEFT_KEY: KeyEvent = .{ .key = c.SDLK_A, .event = .pressed };
-pub const CAMERA_RIGHT_KEY: KeyEvent = .{ .key = c.SDLK_D, .event = .pressed };
-pub const CAMERA_UP_KEY: KeyEvent = .{ .key = c.SDLK_Q, .event = .pressed };
-pub const CAMERA_DOWN_KEY: KeyEvent = .{ .key = c.SDLK_E, .event = .pressed };
-pub const CAMERA_FOV_INCREASE_KEY: KeyEvent = .{ .key = c.SDLK_1, .event = .pressed };
-pub const CAMERA_FOV_DECREASE_KEY: KeyEvent = .{ .key = c.SDLK_2, .event = .pressed };
+pub const CAM_FORWARD_KEY: KeyEvent = .{ .key = c.SDLK_W, .event = .pressed };
+pub const CAM_BACKWARD_KEY: KeyEvent = .{ .key = c.SDLK_S, .event = .pressed };
+pub const CAM_LEFT_KEY: KeyEvent = .{ .key = c.SDLK_A, .event = .pressed };
+pub const CAM_RIGHT_KEY: KeyEvent = .{ .key = c.SDLK_D, .event = .pressed };
+pub const CAM_UP_KEY: KeyEvent = .{ .key = c.SDLK_Q, .event = .pressed };
+pub const CAM_DOWN_KEY: KeyEvent = .{ .key = c.SDLK_E, .event = .pressed };
+pub const CAM_FOV_INC_KEY: KeyEvent = .{ .key = 81, .event = .pressed }; // ARROW DOWN
+pub const CAM_FOV_DEC_KEY: KeyEvent = .{ .key = 82, .event = .pressed }; // ARROW UP
 
 pub const CLOSE_KEY: KeyEvent = .{ .key = c.SDLK_ESCAPE, .event = .pressed };
 pub const RESTART_KEY: KeyEvent = .{ .key = c.SDLK_R, .event = .pressed };

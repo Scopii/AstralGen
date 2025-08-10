@@ -60,14 +60,14 @@ pub const EventManager = struct {
 
             switch (link) {
                 // State Events
-                config.CAMERA_FORWARD_KEY.key => if (state == config.CAMERA_FORWARD_KEY.event) self.appendEvent(.camForward),
-                config.CAMERA_BACKWARD_KEY.key => if (state == config.CAMERA_BACKWARD_KEY.event) self.appendEvent(.camBackward),
-                config.CAMERA_LEFT_KEY.key => if (state == config.CAMERA_LEFT_KEY.event) self.appendEvent(.camLeft),
-                config.CAMERA_RIGHT_KEY.key => if (state == config.CAMERA_RIGHT_KEY.event) self.appendEvent(.camRight),
-                config.CAMERA_UP_KEY.key => if (state == config.CAMERA_UP_KEY.event) self.appendEvent(.camUp),
-                config.CAMERA_DOWN_KEY.key => if (state == config.CAMERA_DOWN_KEY.event) self.appendEvent(.camDown),
-                config.CAMERA_FOV_INCREASE_KEY.key => if (state == config.CAMERA_FOV_INCREASE_KEY.event) self.appendEvent(.camFovIncrease),
-                config.CAMERA_FOV_DECREASE_KEY.key => if (state == config.CAMERA_FOV_DECREASE_KEY.event) self.appendEvent(.camFovDecrease),
+                config.CAM_FORWARD_KEY.key => if (state == config.CAM_FORWARD_KEY.event) self.appendEvent(.camForward),
+                config.CAM_BACKWARD_KEY.key => if (state == config.CAM_BACKWARD_KEY.event) self.appendEvent(.camBackward),
+                config.CAM_LEFT_KEY.key => if (state == config.CAM_LEFT_KEY.event) self.appendEvent(.camLeft),
+                config.CAM_RIGHT_KEY.key => if (state == config.CAM_RIGHT_KEY.event) self.appendEvent(.camRight),
+                config.CAM_UP_KEY.key => if (state == config.CAM_UP_KEY.event) self.appendEvent(.camUp),
+                config.CAM_DOWN_KEY.key => if (state == config.CAM_DOWN_KEY.event) self.appendEvent(.camDown),
+                config.CAM_FOV_INC_KEY.key => if (state == config.CAM_FOV_INC_KEY.event) self.appendEvent(.camFovIncrease),
+                config.CAM_FOV_DEC_KEY.key => if (state == config.CAM_FOV_DEC_KEY.event) self.appendEvent(.camFovDecrease),
 
                 // One Time Events
                 config.RESTART_KEY.key => {
