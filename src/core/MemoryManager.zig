@@ -5,7 +5,7 @@ pub const MemoryManager = struct {
     allocator: std.mem.Allocator,
     arena: std.heap.ArenaAllocator, // adding FixedBufferAllocator?
 
-    pub fn init(baseAllocator: Allocator) !MemoryManager {
+    pub fn init(baseAllocator: Allocator) MemoryManager {
         const arena = std.heap.ArenaAllocator.init(baseAllocator);
 
         return .{

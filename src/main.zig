@@ -1,19 +1,10 @@
-// Imports
 const std = @import("std");
-const WindowManager = @import("platform/WindowManager.zig").WindowManager;
+const App = @import("App.zig").App;
 const MemoryManager = @import("core/MemoryManager.zig").MemoryManager;
-const CreateMapArray = @import("structures/MapArray.zig").CreateMapArray;
-const Renderer = @import("vulkan/Renderer.zig").Renderer;
-const EventManager = @import("core/EventManager.zig").EventManager;
-const TimeManager = @import("core/TimeManager.zig").TimeManager;
-const Camera = @import("core/Camera.zig").Camera;
-const Window = @import("platform/Window.zig").Window;
-const zjobs = @import("zjobs");
 const CLOSE_WITH_CONSOLE = @import("config.zig").CLOSE_WITH_CONSOLE;
-// Re-Formats
-const Allocator = std.mem.Allocator;
 
-pub fn main() !void {
+pub fn main() void {
+    std.debug.print("AstralGen Started\n", .{});
     defer {
         if (CLOSE_WITH_CONSOLE) {
             std.debug.print("Press Any Key to exit...\n", .{});
@@ -21,73 +12,28 @@ pub fn main() !void {
         }
     }
 
+    // Memory Setup
     var debugAlloc = std.heap.DebugAllocator(.{}).init;
     defer std.debug.print("Memory: {any}\n", .{debugAlloc.deinit()});
-    var memoryMan = try MemoryManager.init(debugAlloc.allocator());
+    var memoryMan = MemoryManager.init(debugAlloc.allocator());
     defer memoryMan.deinit();
 
-    var timeMan = TimeManager.init();
-
-    var eventMan = EventManager{};
-
-    var windowMan = try WindowManager.init();
-    defer windowMan.deinit();
-
-    var cam = Camera.init(.{ .fov = 100 });
-
-    var renderer = Renderer.init(&memoryMan) catch |err| {
-        windowMan.showErrorBox("Renderer Could not launch", "Your GPU might not support Mesh Shaders.\n");
-        std.debug.print("Error {}\n", .{err});
+    // Application Setup
+    var astralGen = App.init(&memoryMan) catch |err| {
+        std.debug.print("AstralGen failed to launch Err {}\n", .{err});
         return;
     };
-    defer renderer.deinit();
+    defer astralGen.deinit();
 
-    try windowMan.addWindow("Astral1", 1600, 900, .compute);
-    //try windowMan.addWindow("Astral2", 16 * 70, 9 * 70, .graphics);
-    //try windowMan.addWindow("Astral3", 350, 350, .mesh);
+    astralGen.initWindows() catch |err| {
+        std.debug.print("AstralGen failed to init Windows Err {}\n", .{err});
+        return;
+    };
 
-    // Main loop
-    while (true) {
-        windowMan.pollEvents() catch |err| {
-            std.log.err("Error in pollEvents(): {}", .{err});
-            break;
-        };
+    astralGen.run() catch |err| {
+        std.debug.print("AstralGen failed while running Err {}\n", .{err});
+        return;
+    };
 
-        if (windowMan.keyEvents.len > 0) {
-            eventMan.mapKeyEvents(windowMan.consumeKeyEvents());
-        }
-
-        timeMan.update();
-        const dt = timeMan.getDeltaTime(.nano, f64);
-        const runTime = timeMan.getRuntime(.seconds, f32);
-
-        for (eventMan.getAppEvents()) |appEvent| {
-            switch (appEvent) {
-                .camForward => cam.moveForward(dt),
-                .camBackward => cam.moveBackward(dt),
-                .camUp => cam.moveUp(dt),
-                .camDown => cam.moveDown(dt),
-                .camLeft => cam.moveLeft(dt),
-                .camRight => cam.moveRight(dt),
-                .closeApp => return,
-                .restartApp => {},
-            }
-        }
-        eventMan.cleanupAppEvents();
-
-        if (windowMan.changedWindows.len > 0) {
-            try renderer.update(windowMan.changedWindows.slice());
-            try windowMan.cleanupWindows();
-        }
-
-        if (windowMan.close == true) return;
-        if (windowMan.openWindows == 0) continue;
-
-        renderer.draw(&cam, runTime) catch |err| {
-            std.log.err("Error in renderer.draw(): {}", .{err});
-            break;
-        };
-        memoryMan.resetArena();
-    }
-    std.debug.print("App Closed\n", .{});
+    std.debug.print("AstralGen Closed Properly\n", .{});
 }
