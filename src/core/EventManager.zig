@@ -11,6 +11,8 @@ pub const AppEvent = enum {
     camRight,
     camUp,
     camDown,
+    camFovIncrease,
+    camFovDecrease,
 
     closeApp,
     restartApp,
@@ -64,6 +66,8 @@ pub const EventManager = struct {
                 config.CAMERA_RIGHT_KEY.key => if (state == config.CAMERA_RIGHT_KEY.event) self.appendEvent(.camRight),
                 config.CAMERA_UP_KEY.key => if (state == config.CAMERA_UP_KEY.event) self.appendEvent(.camUp),
                 config.CAMERA_DOWN_KEY.key => if (state == config.CAMERA_DOWN_KEY.event) self.appendEvent(.camDown),
+                config.CAMERA_FOV_INCREASE_KEY.key => if (state == config.CAMERA_FOV_INCREASE_KEY.event) self.appendEvent(.camFovIncrease),
+                config.CAMERA_FOV_DECREASE_KEY.key => if (state == config.CAMERA_FOV_DECREASE_KEY.event) self.appendEvent(.camFovDecrease),
 
                 // One Time Events
                 config.RESTART_KEY.key => {

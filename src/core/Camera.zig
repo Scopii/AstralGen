@@ -6,7 +6,7 @@ const TWO_PI = 2 * M_PI;
 
 pub const Camera = struct {
     pos: zm.Vec = zm.f32x4(0, 0, -5, 0),
-    fov: f32 = 90.0,
+    fov: f32 = config.CAM_INIT_FOV,
     aspectRatio: f32 = 16.0 / 9.0,
     near: f32 = 0.1,
     far: f32 = 100.0,
@@ -85,8 +85,21 @@ pub const Camera = struct {
         return zm.perspectiveFovRh(self.fov * (M_PI / 180.0), self.aspectRatio, self.near, self.far);
     }
 
-    pub fn getPos(self: *const Camera) [4]f32 {
-        return [4]f32{ self.pos[0], self.pos[1], self.pos[2], 0 };
+    pub fn getPos(self: *const Camera) [3]f32 {
+        return [4]f32{ self.pos[0], self.pos[1], self.pos[2] };
+    }
+
+    pub fn increaseFov(self: *Camera, dt: f64) void {
+        if (self.fov < 140) self.fov += @floatCast(config.CAM_FOV_CHANGE * dt);
+        std.debug.print("Increase Fov {}\n", .{self.fov});
+    }
+
+    pub fn decreaseFov(self: *Camera, dt: f64) void {
+        if (self.fov > 40) self.fov -= @floatCast(config.CAM_FOV_CHANGE * dt);
+    }
+
+    pub fn getPosAndFov(self: *const Camera) [4]f32 {
+        return [4]f32{ self.pos[0], self.pos[1], self.pos[2], self.fov };
     }
 
     pub fn debug(self: *Camera) void {

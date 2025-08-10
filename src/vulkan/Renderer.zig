@@ -143,7 +143,7 @@ pub const Renderer = struct {
                 if (config.SHADER_HOTLOAD == true) try self.pipelineMan.checkShaderUpdate(pipeType);
 
                 const compPushConstants = ComputePushConstants{
-                    .camPos = cam.getPos(),
+                    .camPosAndFov = cam.getPosAndFov(),
                     .camDir = cam.getForward(),
                     .dataAddress = self.testBuffer.gpuAddress,
                     .runtime = runtimeAsFloat,

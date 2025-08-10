@@ -32,7 +32,7 @@ pub const App = struct {
         errdefer renderer.deinit();
 
         return .{
-            .cam = Camera.init(.{ .fov = 100 }),
+            .cam = Camera.init(.{}),
             .timeMan = TimeManager.init(),
             .eventMan = EventManager{},
             .memoryMan = memoryMan,
@@ -88,6 +88,8 @@ pub const App = struct {
                     .camDown => cam.moveDown(dt),
                     .camLeft => cam.moveLeft(dt),
                     .camRight => cam.moveRight(dt),
+                    .camFovIncrease => cam.increaseFov(dt),
+                    .camFovDecrease => cam.decreaseFov(dt),
                     .closeApp => return,
                     .restartApp => {},
                 }

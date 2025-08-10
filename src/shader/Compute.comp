@@ -12,7 +12,7 @@ layout(set = 0, binding = 0, rgba16f) restrict uniform image2D image;
 
 // Add camDir back to push constants
 layout(push_constant, std430) restrict uniform PushConstants {
-    vec4 camPos;
+    vec4 camPosAndFov; // Last Vector is Fov
     vec4 camDir; // You need this for proper camera rotation!
     float runtime;
     uint data_count;
@@ -23,8 +23,6 @@ layout (local_size_x = 8, local_size_y = 8) in;
 
 // View constants
 const float ASPECT_RATIO = 16.0 / 9.0;
-const float FOV_DEGREES = 100.0; // Matched to Camera!
-const float FOCAL_LENGTH = 1.0 / tan(radians(FOV_DEGREES * 0.5));
 
 // Marching constants
 const int MAX_STEPS = 1024 * 2;
@@ -88,20 +86,24 @@ vec3 getNormal(vec3 pos) {
 }
 
 void main() {
-    vec2 uv = (vec2(gl_GlobalInvocationID.xy) / vec2(imageSize(image))) * 2.0 - 1.0;
+    vec2 imageDims = vec2(imageSize(image));
+    vec2 uv = (vec2(gl_GlobalInvocationID.xy) / imageDims) * 2.0 - 1.0;
     // Camera basis vectors
     vec3 camForward = normalize(pushConstants.camDir.xyz);
     vec3 camRight = normalize(cross(vec3(0, 1, 0), camForward));
     vec3 camUp = normalize(cross(camForward, camRight));
+
+    float focalLength = 1.0 / tan(radians(pushConstants.camPosAndFov.w * 0.5));
+    float aspectRatio = imageDims.x / imageDims.y;
     // Ray direction
-    vec3 rayDir = normalize(uv.x * camRight * ASPECT_RATIO - uv.y * camUp + FOCAL_LENGTH * camForward);
+    vec3 rayDir = normalize(uv.x * camRight * aspectRatio - uv.y * camUp + focalLength * camForward);
     
     float march = 0.0;
     bool hit = false;
     vec3 pos;
     
     for(int step = 0; step < MAX_STEPS; step++) {
-        pos = pushConstants.camPos.xyz + rayDir * march;
+        pos = pushConstants.camPosAndFov.xyz + rayDir * march;
         float closest = map(pos);
         if(closest < MIN_DIST) {
             hit = true;
@@ -123,7 +125,7 @@ void main() {
             colorMod = 0.5 + 0.5 * sin(length(data.xyz) * 3.14 + pushConstants.runtime);
         }
         
-        vec3 surfaceColor = vec3(0.0, 0.8 * colorMod, 0.5);
+        vec3 surfaceColor = vec3(0.0, 0.5 * colorMod + 0.5, 0.5);
         imageStore(image, ivec2(gl_GlobalInvocationID.xy), mix(vec4(surfaceColor * lighting, 1.0), vec4(0.0, 0.0, 0.0, 1.0), march / MAX_DIST));
     } else {
         imageStore(image, ivec2(gl_GlobalInvocationID.xy), vec4(0.0, 0.0, 0.0, 1.0));
