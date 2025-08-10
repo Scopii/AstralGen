@@ -69,13 +69,15 @@ pub const App = struct {
                 break;
             };
             if (windowMan.keyEvents.len > 0) eventMan.mapKeyEvents(windowMan.consumeKeyEvents());
+            if (windowMan.mouseButtonEvents.len > 0) eventMan.mapMouseButtonEvents(windowMan.consumeMouseButtonEvents());
+            if (windowMan.mouseMovements.len > 0) eventMan.mapMouseMovements(windowMan.consumeMouseMovements());
 
             // Update Time
             timeMan.update();
             const dt = timeMan.getDeltaTime(.nano, f64);
             const runTime = timeMan.getRuntime(.seconds, f32);
 
-            // Process Events
+            // Generate and Process and clear Events
             for (eventMan.getAppEvents()) |appEvent| {
                 switch (appEvent) {
                     .camForward => cam.moveForward(dt),

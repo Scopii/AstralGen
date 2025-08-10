@@ -14,12 +14,20 @@ pub const KeyEvent = struct {
     event: KeyState,
 };
 
+pub const MouseMovement = struct {
+    xChange: f32,
+    yChange: f32,
+};
+
 pub const WindowManager = struct {
     windows: CreateMapArray(Window, MAX_WINDOWS, u8, MAX_WINDOWS, 0) = .{},
     changedWindows: std.BoundedArray(*Window, MAX_WINDOWS) = .{},
-    keyEvents: std.BoundedArray(KeyEvent, 127) = .{},
     openWindows: u8 = 0,
     close: bool = false,
+
+    keyEvents: std.BoundedArray(KeyEvent, 127) = .{},
+    mouseButtonEvents: std.BoundedArray(KeyEvent, 30) = .{},
+    mouseMovements: std.BoundedArray(MouseMovement, 63) = .{},
 
     pub fn init() !WindowManager {
         if (c.SDL_Init(c.SDL_INIT_VIDEO) != true) {
@@ -45,8 +53,8 @@ pub const WindowManager = struct {
         };
         const id = c.SDL_GetWindowID(sdlHandle);
         _ = c.SDL_SetWindowFullscreen(sdlHandle, false);
-        //_ = c.SDL_SetWindowRelativeMouseMode(window, true);
-        //_ = c.SDL_SetWindowOpacity(sdlWindow, 0.5);
+        _ = c.SDL_SetWindowRelativeMouseMode(sdlHandle, true);
+        //_ = c.SDL_SetWindowOpacity(sdlHandle, 0.5);
 
         const window = try Window.init(id, sdlHandle, pipeType, c.VkExtent2D{ .width = @intCast(width), .height = @intCast(height) });
         self.windows.set(@intCast(id), window);
@@ -86,6 +94,16 @@ pub const WindowManager = struct {
     pub fn consumeKeyEvents(self: *WindowManager) []KeyEvent {
         defer self.keyEvents.clear();
         return self.keyEvents.slice();
+    }
+
+    pub fn consumeMouseButtonEvents(self: *WindowManager) []KeyEvent {
+        defer self.mouseButtonEvents.clear();
+        return self.mouseButtonEvents.slice();
+    }
+
+    pub fn consumeMouseMovements(self: *WindowManager) []MouseMovement {
+        defer self.mouseMovements.clear();
+        return self.mouseMovements.slice();
     }
 
     pub fn processEvent(self: *WindowManager, event: *c.SDL_Event) !void {
@@ -135,6 +153,24 @@ pub const WindowManager = struct {
                 const keyEvent = KeyEvent{ .key = event.key.key, .event = .released };
                 self.keyEvents.append(keyEvent) catch |err| {
                     std.debug.print("WindowManager: keyEvents append failed {}\n", .{err});
+                };
+            },
+            c.SDL_EVENT_MOUSE_BUTTON_DOWN => {
+                const keyEvent = KeyEvent{ .key = event.button.button, .event = .pressed };
+                self.mouseButtonEvents.append(keyEvent) catch |err| {
+                    std.debug.print("WindowManager: mouseButtonEvents append failed {}\n", .{err});
+                };
+            },
+            c.SDL_EVENT_MOUSE_BUTTON_UP => {
+                const keyEvent = KeyEvent{ .key = event.button.button, .event = .released };
+                self.mouseButtonEvents.append(keyEvent) catch |err| {
+                    std.debug.print("WindowManager: mouseButtonEvents append failed {}\n", .{err});
+                };
+            },
+            c.SDL_EVENT_MOUSE_MOTION => {
+                const mouseMovement = MouseMovement{ .xChange = event.motion.xrel, .yChange = event.motion.yrel };
+                self.mouseMovements.append(mouseMovement) catch |err| {
+                    std.debug.print("WindowManager: mouseMovements append failed {}\n", .{err});
                 };
             },
             else => {},
