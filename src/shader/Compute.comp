@@ -125,7 +125,7 @@ void main() {
             colorMod = 0.5 + 0.5 * sin(length(data.xyz) * 3.14 + pushConstants.runtime);
         }
         
-        vec3 surfaceColor = vec3(0.0, 0.5 * colorMod + 0.5, 0.5);
+        vec3 surfaceColor = vec3(0.0, 0.8 * colorMod, 0.5);
         imageStore(image, ivec2(gl_GlobalInvocationID.xy), mix(vec4(surfaceColor * lighting, 1.0), vec4(0.0, 0.0, 0.0, 1.0), march / MAX_DIST));
     } else {
         imageStore(image, ivec2(gl_GlobalInvocationID.xy), vec4(0.0, 0.0, 0.0, 1.0));

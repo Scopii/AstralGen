@@ -10,7 +10,7 @@ pub const SHADER_HOTLOAD = true;
 // Rendering, Swapchains and Windows
 pub const MAX_IN_FLIGHT: u8 = 2; // (Frames)
 pub const DESIRED_SWAPCHAIN_IMAGES: u8 = 3;
-pub const RENDER_IMAGE_PRESET: c.VkExtent3D = .{ .width = 1920, .height = 1080, .depth = 1 };
+pub const RENDER_IMAGE_PRESET: c.VkExtent3D = .{ .width = 2, .height = 2, .depth = 1 };
 pub const DISPLAY_MODE = c.VK_PRESENT_MODE_IMMEDIATE_KHR;
 pub const MAX_WINDOWS: u8 = 12;
 
