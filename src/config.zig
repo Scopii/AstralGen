@@ -30,7 +30,7 @@ pub const KeyAssignments = struct {
     key: c_uint,
 };
 // KeyMap
-pub const keyAssignments: [11]KeyAssignments = .{
+pub const keyAssignments = [_]KeyAssignments{
     // Camera
     .{ .device = .keyboard, .state = .pressed, .cycle = .repeat, .key = c.SDL_SCANCODE_W, .appEvent = .camForward },
     .{ .device = .keyboard, .state = .pressed, .cycle = .repeat, .key = c.SDL_SCANCODE_S, .appEvent = .camBackward },
