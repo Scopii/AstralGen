@@ -91,11 +91,12 @@ pub const Camera = struct {
 
     pub fn increaseFov(self: *Camera, dt: f64) void {
         if (self.fov < 140) self.fov += @floatCast(config.CAM_FOV_CHANGE * dt);
-        std.debug.print("Increase Fov {}\n", .{self.fov});
+        std.debug.print("Increase Fov to {}\n", .{@as(u32, @intFromFloat(self.fov))});
     }
 
     pub fn decreaseFov(self: *Camera, dt: f64) void {
         if (self.fov > 40) self.fov -= @floatCast(config.CAM_FOV_CHANGE * dt);
+        std.debug.print("Decreased Fov to {}\n", .{@as(u32, @intFromFloat(self.fov))});
     }
 
     pub fn getPosAndFov(self: *const Camera) [4]f32 {

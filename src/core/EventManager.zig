@@ -1,6 +1,4 @@
 const std = @import("std");
-const KeyEvent = @import("../platform/WindowManager.zig").KeyEvent;
-const MouseMovement = @import("../platform/WindowManager.zig").MouseMovement;
 const config = @import("../config.zig");
 const CreateMapArray = @import("../structures/MapArray.zig").CreateMapArray;
 
@@ -18,87 +16,59 @@ pub const AppEvent = enum {
     restartApp,
 };
 
-pub const KeyState = enum {
-    pressed,
-    released,
+pub const KeyState = enum { pressed, released };
+
+pub const KeyEvent = struct {
+    key: c_uint,
+    event: KeyState,
+};
+
+pub const MouseMovement = struct {
+    xChange: f32,
+    yChange: f32,
 };
 
 pub const EventManager = struct {
+    keyStates: CreateMapArray(KeyState, 512 + 24, c_uint, 512 + 24, 0) = .{}, // 512 SDL Keys, 24 for Mouse
     appEvents: std.BoundedArray(AppEvent, 127) = .{},
-    keyStates: CreateMapArray(KeyState, 500, c_uint, 500, 0) = .{},
-    mouseButtonStates: CreateMapArray(KeyState, 24, c_uint, 24, 0) = .{},
-    mouseMovementX: f32 = 0,
-    mouseMovementY: f32 = 0,
+    mouseMoveX: f32 = 0,
+    mouseMoveY: f32 = 0,
 
     pub fn mapKeyEvents(self: *EventManager, keyEvents: []KeyEvent) void {
         for (keyEvents) |keyEvent| {
+            if (self.keyStates.isIndexValid(keyEvent.key) == false) {
+                std.debug.print("Key {} Invalid\n", .{keyEvent.key});
+                continue;
+            }
             self.keyStates.set(keyEvent.key, if (keyEvent.event == .pressed) .pressed else .released);
+            //std.debug.print("Key {} pressed \n", .{keyEvent.key});
         }
         //std.debug.print("KeyStates {}\n", .{self.keyStates.count});
     }
 
-    pub fn mapMouseButtonEvents(self: *EventManager, mouseButtonEvents: []KeyEvent) void {
-        for (mouseButtonEvents) |mouseButtonEvent| {
-            self.mouseButtonStates.set(mouseButtonEvent.key, if (mouseButtonEvent.event == .pressed) .pressed else .released);
-        }
-        //std.debug.print("MouseStates {}\n", .{self.mouseButtonStates.count});
-    }
-
     pub fn mapMouseMovements(self: *EventManager, movements: []MouseMovement) void {
         for (movements) |movement| {
-            self.mouseMovementX += movement.xChange;
-            self.mouseMovementY += movement.yChange;
+            self.mouseMoveX += movement.xChange;
+            self.mouseMoveY += movement.yChange;
             //std.debug.print("Mouse Moved x:{} y:{}\n", .{ movement.xChange, movement.yChange });
         }
         //std.debug.print("Mouse Total Movement x:{} y:{}, processed {} movements\n", .{ self.mouseMovementX, self.mouseMovementY, movements.len });
     }
 
     pub fn getAppEvents(self: *EventManager) []AppEvent {
-        for (0..self.keyStates.getCount()) |i| {
-            const state = self.keyStates.getPtrAtIndex(@intCast(i)).*;
-            const link = self.keyStates.links[i];
+        for (config.keyAssignments) |assignment| {
+            const actualKey = switch (assignment.device) {
+                .keyboard => assignment.key,
+                .mouse => assignment.key + 512,
+            };
+            // If key is valid check if value at key is same as assignment state
+            if (self.keyStates.isKeyUsed(actualKey) == true) {
+                const keyState = self.keyStates.get(actualKey);
 
-            switch (link) {
-                // State Events
-                config.CAM_FORWARD_KEY.key => if (state == config.CAM_FORWARD_KEY.event) self.appendEvent(.camForward),
-                config.CAM_BACKWARD_KEY.key => if (state == config.CAM_BACKWARD_KEY.event) self.appendEvent(.camBackward),
-                config.CAM_LEFT_KEY.key => if (state == config.CAM_LEFT_KEY.event) self.appendEvent(.camLeft),
-                config.CAM_RIGHT_KEY.key => if (state == config.CAM_RIGHT_KEY.event) self.appendEvent(.camRight),
-                config.CAM_UP_KEY.key => if (state == config.CAM_UP_KEY.event) self.appendEvent(.camUp),
-                config.CAM_DOWN_KEY.key => if (state == config.CAM_DOWN_KEY.event) self.appendEvent(.camDown),
-                config.CAM_FOV_INC_KEY.key => if (state == config.CAM_FOV_INC_KEY.event) self.appendEvent(.camFovIncrease),
-                config.CAM_FOV_DEC_KEY.key => if (state == config.CAM_FOV_DEC_KEY.event) self.appendEvent(.camFovDecrease),
-
-                // One Time Events
-                config.RESTART_KEY.key => {
-                    self.appendEvent(.restartApp);
-                    self.keyStates.removeAtIndex(@intCast(i));
-                },
-                config.CLOSE_KEY.key => {
-                    self.appendEvent(.closeApp);
-                    self.keyStates.removeAtIndex(@intCast(i));
-                },
-                else => {
-                    std.debug.print("Key {} State {s} not mapped\n", .{ link, @tagName(state) });
-                    self.keyStates.removeAtIndex(@intCast(i));
-                },
-            }
-        }
-
-        // Mouse Related
-        for (0..self.mouseButtonStates.getCount()) |i| {
-            const state = self.mouseButtonStates.getPtrAtIndex(@intCast(i)).*;
-            const link = self.mouseButtonStates.links[i];
-
-            switch (link) {
-                // State Events
-                //config.CAMERA_FORWARD_KEY.key => if (state == config.CAMERA_FORWARD_KEY.event) self.appendEvent(.camForward),
-
-                // One Time Events
-                else => {
-                    std.debug.print("Mouse Button {} State {s} not mapped\n", .{ link, @tagName(state) });
-                    self.mouseButtonStates.removeAtIndex(@intCast(i));
-                },
+                if (keyState == assignment.state) {
+                    self.appendEvent(assignment.appEvent);
+                    if (assignment.cycle == .oneTime) self.keyStates.set(actualKey, .released);
+                }
             }
         }
         return self.appEvents.slice();
@@ -114,7 +84,7 @@ pub const EventManager = struct {
     }
 
     pub fn resetMouseMovement(self: *EventManager) void {
-        self.mouseMovementX = 0;
-        self.mouseMovementY = 0;
+        self.mouseMoveX = 0;
+        self.mouseMoveY = 0;
     }
 };

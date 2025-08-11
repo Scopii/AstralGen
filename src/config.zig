@@ -1,6 +1,8 @@
 pub const c = @import("c.zig");
 pub const std = @import("std");
-const KeyEvent = @import("platform/WindowManager.zig").KeyEvent;
+const KeyEvent = @import("core/EventManager.zig").KeyEvent;
+const KeyState = @import("core/EventManager.zig").KeyState;
+const AppEvent = @import("core/EventManager.zig").AppEvent;
 
 // Debug
 pub const DEBUG_MODE = true;
@@ -20,15 +22,28 @@ pub const CAM_SENS = 0.0003;
 pub const CAM_INIT_FOV = 100;
 pub const CAM_FOV_CHANGE = 0.0000001;
 
+pub const KeyAssignments = struct {
+    device: enum { mouse, keyboard },
+    state: KeyState,
+    cycle: enum { oneTime, repeat },
+    appEvent: AppEvent,
+    key: c_uint,
+};
 // KeyMap
-pub const CAM_FORWARD_KEY: KeyEvent = .{ .key = c.SDLK_W, .event = .pressed };
-pub const CAM_BACKWARD_KEY: KeyEvent = .{ .key = c.SDLK_S, .event = .pressed };
-pub const CAM_LEFT_KEY: KeyEvent = .{ .key = c.SDLK_A, .event = .pressed };
-pub const CAM_RIGHT_KEY: KeyEvent = .{ .key = c.SDLK_D, .event = .pressed };
-pub const CAM_UP_KEY: KeyEvent = .{ .key = c.SDLK_Q, .event = .pressed };
-pub const CAM_DOWN_KEY: KeyEvent = .{ .key = c.SDLK_E, .event = .pressed };
-pub const CAM_FOV_INC_KEY: KeyEvent = .{ .key = 81, .event = .pressed }; // ARROW DOWN
-pub const CAM_FOV_DEC_KEY: KeyEvent = .{ .key = 82, .event = .pressed }; // ARROW UP
+pub const keyAssignments: [11]KeyAssignments = .{
+    // Camera
+    .{ .device = .keyboard, .state = .pressed, .cycle = .repeat, .key = c.SDL_SCANCODE_W, .appEvent = .camForward },
+    .{ .device = .keyboard, .state = .pressed, .cycle = .repeat, .key = c.SDL_SCANCODE_S, .appEvent = .camBackward },
+    .{ .device = .keyboard, .state = .pressed, .cycle = .repeat, .key = c.SDL_SCANCODE_A, .appEvent = .camLeft },
+    .{ .device = .keyboard, .state = .pressed, .cycle = .repeat, .key = c.SDL_SCANCODE_D, .appEvent = .camRight },
+    .{ .device = .keyboard, .state = .pressed, .cycle = .repeat, .key = c.SDL_SCANCODE_Q, .appEvent = .camUp },
+    .{ .device = .keyboard, .state = .pressed, .cycle = .repeat, .key = c.SDL_SCANCODE_E, .appEvent = .camDown },
+    .{ .device = .keyboard, .state = .pressed, .cycle = .repeat, .key = c.SDL_SCANCODE_DOWN, .appEvent = .camFovIncrease },
+    .{ .device = .keyboard, .state = .pressed, .cycle = .repeat, .key = c.SDL_SCANCODE_UP, .appEvent = .camFovDecrease },
+    // App Control
+    .{ .device = .keyboard, .state = .pressed, .cycle = .oneTime, .key = c.SDL_SCANCODE_ESCAPE, .appEvent = .closeApp },
+    .{ .device = .keyboard, .state = .pressed, .cycle = .oneTime, .key = c.SDL_SCANCODE_R, .appEvent = .restartApp },
 
-pub const CLOSE_KEY: KeyEvent = .{ .key = c.SDLK_ESCAPE, .event = .pressed };
-pub const RESTART_KEY: KeyEvent = .{ .key = c.SDLK_R, .event = .pressed };
+    // Mouse
+    .{ .device = .mouse, .state = .pressed, .cycle = .repeat, .key = c.SDL_BUTTON_LEFT, .appEvent = .camForward },
+};

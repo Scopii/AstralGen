@@ -7,17 +7,9 @@ const Swapchain = @import("../vulkan/SwapchainManager.zig").Swapchain;
 const Renderer = @import("../vulkan/Renderer.zig").Renderer;
 const CreateMapArray = @import("../structures/MapArray.zig").CreateMapArray;
 const MAX_WINDOWS = @import("../config.zig").MAX_WINDOWS;
-const KeyState = @import("../core/EventManager.zig").KeyState;
 
-pub const KeyEvent = struct {
-    key: c_uint,
-    event: KeyState,
-};
-
-pub const MouseMovement = struct {
-    xChange: f32,
-    yChange: f32,
-};
+const KeyEvent = @import("../core/EventManager.zig").KeyEvent;
+const MouseMovement = @import("../core/EventManager.zig").MouseMovement;
 
 pub const WindowManager = struct {
     windows: CreateMapArray(Window, MAX_WINDOWS, u8, MAX_WINDOWS, 0) = .{},
@@ -26,7 +18,6 @@ pub const WindowManager = struct {
     close: bool = false,
 
     keyEvents: std.BoundedArray(KeyEvent, 127) = .{},
-    mouseButtonEvents: std.BoundedArray(KeyEvent, 30) = .{},
     mouseMovements: std.BoundedArray(MouseMovement, 63) = .{},
 
     pub fn init() !WindowManager {
@@ -95,12 +86,6 @@ pub const WindowManager = struct {
         defer self.keyEvents.clear();
         return self.keyEvents.slice();
     }
-
-    pub fn consumeMouseButtonEvents(self: *WindowManager) []KeyEvent {
-        defer self.mouseButtonEvents.clear();
-        return self.mouseButtonEvents.slice();
-    }
-
     pub fn consumeMouseMovements(self: *WindowManager) []MouseMovement {
         defer self.mouseMovements.clear();
         return self.mouseMovements.slice();
@@ -143,27 +128,19 @@ pub const WindowManager = struct {
                 try self.changedWindows.append(window);
                 std.debug.print("Status of Window {} now {s}\n", .{ id, @tagName(window.status) });
             },
-            c.SDL_EVENT_KEY_DOWN => {
-                const keyEvent = KeyEvent{ .key = event.key.key, .event = .pressed };
+            c.SDL_EVENT_MOUSE_BUTTON_DOWN,
+            c.SDL_EVENT_MOUSE_BUTTON_UP,
+            c.SDL_EVENT_KEY_DOWN,
+            c.SDL_EVENT_KEY_UP,
+            => {
+                const keyEvent: KeyEvent = switch (event.type) {
+                    c.SDL_EVENT_MOUSE_BUTTON_DOWN => .{ .key = @as(c_uint, event.button.button) + 512, .event = .pressed },
+                    c.SDL_EVENT_MOUSE_BUTTON_UP => .{ .key = @as(c_uint, event.button.button) + 512, .event = .released },
+                    c.SDL_EVENT_KEY_DOWN => .{ .key = event.key.scancode, .event = .pressed },
+                    c.SDL_EVENT_KEY_UP => .{ .key = event.key.scancode, .event = .released },
+                    else => unreachable,
+                };
                 self.keyEvents.append(keyEvent) catch |err| {
-                    std.debug.print("WindowManager: keyEvents append failed {}\n", .{err});
-                };
-            },
-            c.SDL_EVENT_KEY_UP => {
-                const keyEvent = KeyEvent{ .key = event.key.key, .event = .released };
-                self.keyEvents.append(keyEvent) catch |err| {
-                    std.debug.print("WindowManager: keyEvents append failed {}\n", .{err});
-                };
-            },
-            c.SDL_EVENT_MOUSE_BUTTON_DOWN => {
-                const keyEvent = KeyEvent{ .key = event.button.button, .event = .pressed };
-                self.mouseButtonEvents.append(keyEvent) catch |err| {
-                    std.debug.print("WindowManager: mouseButtonEvents append failed {}\n", .{err});
-                };
-            },
-            c.SDL_EVENT_MOUSE_BUTTON_UP => {
-                const keyEvent = KeyEvent{ .key = event.button.button, .event = .released };
-                self.mouseButtonEvents.append(keyEvent) catch |err| {
                     std.debug.print("WindowManager: mouseButtonEvents append failed {}\n", .{err});
                 };
             },
