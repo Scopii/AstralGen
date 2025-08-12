@@ -3,6 +3,7 @@ pub const std = @import("std");
 const KeyEvent = @import("core/EventManager.zig").KeyEvent;
 const KeyState = @import("core/EventManager.zig").KeyState;
 const AppEvent = @import("core/EventManager.zig").AppEvent;
+const ShaderInfo = @import("vulkan/PipelineBucket.zig").ShaderInfo;
 
 // Debug
 pub const DEBUG_MODE = true;
@@ -46,4 +47,22 @@ pub const keyAssignments = [_]KeyAssignments{
 
     // Mouse
     .{ .device = .mouse, .state = .pressed, .cycle = .repeat, .key = c.SDL_BUTTON_LEFT, .appEvent = .camForward },
+};
+
+// Paths
+pub const rootPath: []const u8 = "../..";
+pub const shaderPath: []const u8 = "/shader";
+pub const outputRoot: []const u8 = "/shader";
+
+// Shader Infos
+pub const computeInf = [_]ShaderInfo{
+    .{ .stage = c.VK_SHADER_STAGE_COMPUTE_BIT, .inputPath = "src/shader/Compute.comp", .outputPath = "shader/Compute.spv" },
+};
+pub const graphicsInf = [_]ShaderInfo{
+    .{ .stage = c.VK_SHADER_STAGE_FRAGMENT_BIT, .inputPath = "src/shader/Graphics.frag", .outputPath = "shader/GraphicsFrag.spv" },
+    .{ .stage = c.VK_SHADER_STAGE_VERTEX_BIT, .inputPath = "src/shader/Graphics.vert", .outputPath = "shader/GraphicsVert.spv" },
+};
+pub const meshShaderInf = [_]ShaderInfo{
+    .{ .stage = c.VK_SHADER_STAGE_FRAGMENT_BIT, .inputPath = "src/shader/Mesh.frag", .outputPath = "shader/MeshFrag.spv" },
+    .{ .stage = c.VK_SHADER_STAGE_MESH_BIT_EXT, .inputPath = "src/shader/Mesh.mesh", .outputPath = "shader/MeshMesh.spv" },
 };

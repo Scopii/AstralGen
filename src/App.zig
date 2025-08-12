@@ -5,6 +5,7 @@ const MemoryManager = @import("core/MemoryManager.zig").MemoryManager;
 const Renderer = @import("vulkan/Renderer.zig").Renderer;
 const EventManager = @import("core/EventManager.zig").EventManager;
 const TimeManager = @import("core/TimeManager.zig").TimeManager;
+const FileManager = @import("core/FileManager.zig").FileManager;
 const Camera = @import("core/Camera.zig").Camera;
 const zjobs = @import("zjobs");
 const CreateMapArray = @import("structures/MapArray.zig").CreateMapArray;
@@ -16,16 +17,24 @@ pub const App = struct {
     timeMan: TimeManager,
     cam: Camera,
     eventMan: EventManager,
+    fileMan: FileManager,
 
     pub fn init(memoryMan: *MemoryManager) !App {
         var windowMan = WindowManager.init() catch |err| {
-            std.debug.print("WindowManager Could not launch, Err {}\n", .{err});
+            std.debug.print("WindowManager could not launch, Err {}\n", .{err});
             return error.WindowManagerFailed;
         };
         errdefer windowMan.deinit();
 
+        var fileMan = FileManager.init(memoryMan.getAllocator()) catch |err| {
+            windowMan.showErrorBox("File Manager could not launch", "\n");
+            std.debug.print("Err {}\n", .{err});
+            return error.FileManagerFailed;
+        };
+        errdefer fileMan.deinit();
+
         var renderer = Renderer.init(memoryMan) catch |err| {
-            windowMan.showErrorBox("Renderer Could not launch", "\n");
+            windowMan.showErrorBox("Renderer could not launch", "\n");
             std.debug.print("Err {}\n", .{err});
             return error.RendererManagerFailed;
         };
@@ -38,6 +47,7 @@ pub const App = struct {
             .memoryMan = memoryMan,
             .windowMan = windowMan,
             .renderer = renderer,
+            .fileMan = fileMan,
         };
     }
 
@@ -49,6 +59,7 @@ pub const App = struct {
 
     pub fn deinit(self: *App) void {
         self.renderer.deinit();
+        self.fileMan.deinit();
         self.windowMan.deinit();
         self.memoryMan.deinit();
     }

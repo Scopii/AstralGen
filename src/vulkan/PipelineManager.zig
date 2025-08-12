@@ -7,20 +7,9 @@ const ztracy = @import("ztracy");
 const ResourceManager = @import("ResourceManager.zig").ResourceManager;
 const PipelineBucket = @import("PipelineBucket.zig").Pipeline;
 const PipelineType = @import("PipelineBucket.zig").PipelineType;
-const ShaderInfo = @import("PipelineBucket.zig").ShaderInfo;
 const Context = @import("Context.zig").Context;
 
-const computeInf = [_]ShaderInfo{
-    .{ .stage = c.VK_SHADER_STAGE_COMPUTE_BIT, .inputPath = "src/shader/Compute.comp", .outputPath = "shader/Compute.spv" },
-};
-const graphicsInf = [_]ShaderInfo{
-    .{ .stage = c.VK_SHADER_STAGE_FRAGMENT_BIT, .inputPath = "src/shader/Graphics.frag", .outputPath = "shader/GraphicsFrag.spv" },
-    .{ .stage = c.VK_SHADER_STAGE_VERTEX_BIT, .inputPath = "src/shader/Graphics.vert", .outputPath = "shader/GraphicsVert.spv" },
-};
-const meshShaderInf = [_]ShaderInfo{
-    .{ .stage = c.VK_SHADER_STAGE_FRAGMENT_BIT, .inputPath = "src/shader/Mesh.frag", .outputPath = "shader/MeshFrag.spv" },
-    .{ .stage = c.VK_SHADER_STAGE_MESH_BIT_EXT, .inputPath = "src/shader/Mesh.mesh", .outputPath = "shader/MeshMesh.spv" },
-};
+const config = @import("../config.zig");
 
 pub const PipelineManager = struct {
     alloc: Allocator,
@@ -35,9 +24,9 @@ pub const PipelineManager = struct {
         const cache = try createPipelineCache(gpi);
         const format = c.VK_FORMAT_R16G16B16A16_SFLOAT;
 
-        const computePipe = try PipelineBucket.init(alloc, gpi, cache, format, &computeInf, .compute, resourceManager.layout, 1);
-        const graphicsPipe = try PipelineBucket.init(alloc, gpi, cache, format, &graphicsInf, .graphics, null, 0);
-        const meshPipe = try PipelineBucket.init(alloc, gpi, cache, format, &meshShaderInf, .mesh, null, 0);
+        const computePipe = try PipelineBucket.init(alloc, gpi, cache, format, &config.computeInf, .compute, resourceManager.layout, 1);
+        const graphicsPipe = try PipelineBucket.init(alloc, gpi, cache, format, &config.graphicsInf, .graphics, null, 0);
+        const meshPipe = try PipelineBucket.init(alloc, gpi, cache, format, &config.meshShaderInf, .mesh, null, 0);
 
         return .{
             .alloc = alloc,
