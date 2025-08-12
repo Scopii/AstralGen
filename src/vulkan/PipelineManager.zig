@@ -21,7 +21,7 @@ pub const PipelineManager = struct {
     pub fn init(alloc: Allocator, context: *const Context, resourceManager: *const ResourceManager) !PipelineManager {
         const gpi = context.gpi;
         const cache = try createPipelineCache(gpi);
-        const format = c.VK_FORMAT_R16G16B16A16_SFLOAT;
+        const format = config.RENDER_IMAGE_FORMAT;
 
         const computePipe = try PipelineBucket.init(alloc, gpi, cache, format, &config.computeInf, .compute, resourceManager.layout, 1);
         const graphicsPipe = try PipelineBucket.init(alloc, gpi, cache, format, &config.graphicsInf, .graphics, null, 0);

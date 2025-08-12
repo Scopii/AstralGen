@@ -8,8 +8,8 @@ const SHADER_HOTLOAD = @import("../config.zig").SHADER_HOTLOAD;
 pub const ShaderInfo = struct {
     pipeType: PipelineType,
     stage: c.VkShaderStageFlagBits,
-    inputPath: []const u8,
-    outputPath: []const u8,
+    inputName: []const u8,
+    outputName: []const u8,
 
     fn getStage(self: ShaderInfo) enum { compute, vertex, fragment, mesh, task } {
         return switch (self.stage) {
@@ -111,7 +111,7 @@ fn createShaderStages(alloc: Allocator, modules: []c.VkShaderModule, shaderInf: 
 fn createShaderModules(alloc: Allocator, gpi: c.VkDevice, shaderInf: []const ShaderInfo) ![]c.VkShaderModule {
     var modules = try alloc.alloc(c.VkShaderModule, shaderInf.len);
     errdefer alloc.free(modules);
-    for (0..shaderInf.len) |i| modules[i] = try createShaderModule(alloc, shaderInf[i].inputPath, shaderInf[i].outputPath, gpi);
+    for (0..shaderInf.len) |i| modules[i] = try createShaderModule(alloc, shaderInf[i].inputName, shaderInf[i].outputName, gpi);
     return modules;
 }
 

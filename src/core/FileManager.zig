@@ -27,7 +27,7 @@ pub const FileManager = struct {
     shaderPath: []const u8,
     shaderOutputPath: []const u8,
     pipelineTimeStamps: [pipelineTypes]i128,
-    pipelineUpdateBools: [pipelineTypes]bool = .{config.SHADER_STARTUP_COMPILATION} ** pipelineTypes,
+    pipelineUpdateBools: [pipelineTypes]bool = .{false} ** pipelineTypes,
 
     pub fn init(alloc: Allocator) !FileManager {
         // Assign paths
@@ -40,6 +40,16 @@ pub const FileManager = struct {
         // Set defaults
         const currentTime = std.time.nanoTimestamp();
         const pipelineTimeStamps: [pipelineTypes]i128 = .{currentTime} ** pipelineTypes;
+        // Compile on Startup if wanted
+        if (config.SHADER_STARTUP_COMPILATION) {
+            for (config.shaderInfos) |shaderInfo| {
+                const shaderOutputName = try joinPath(alloc, shaderOutputPath, shaderInfo.outputName);
+                const filePath = try joinPath(alloc, shaderPath, shaderInfo.inputName);
+                try compileShader(alloc, filePath, shaderOutputName);
+                alloc.free(shaderOutputName);
+                alloc.free(filePath);
+            }
+        }
 
         return .{
             .alloc = alloc,
@@ -54,17 +64,17 @@ pub const FileManager = struct {
         const alloc = self.alloc;
         // Check all ShaderInfos and compile if needed
         for (config.shaderInfos) |shaderInfo| {
-            const filePath = try joinPath(alloc, self.shaderPath, shaderInfo.inputPath);
+            const filePath = try joinPath(alloc, self.shaderPath, shaderInfo.inputName);
             const newTimeStamp = try getFileTimeStamp(filePath);
 
             if (self.pipelineTimeStamps[@intFromEnum(shaderInfo.pipeType)] < newTimeStamp) {
-                const sprvPath = try joinPath(alloc, self.shaderOutputPath, shaderInfo.outputPath);
+                const shaderOutputPath = try joinPath(alloc, self.shaderOutputPath, shaderInfo.outputName);
 
-                compileShader(alloc, filePath, sprvPath) catch |err| {
+                compileShader(alloc, filePath, shaderOutputPath) catch |err| {
                     std.debug.print("Tried updating Shader but compilation failed {}\n", .{err});
                 };
 
-                alloc.free(sprvPath);
+                alloc.free(shaderOutputPath);
                 self.pipelineTimeStamps[@intFromEnum(shaderInfo.pipeType)] = newTimeStamp;
                 self.pipelineUpdateBools[@intFromEnum(shaderInfo.pipeType)] = true;
             }
