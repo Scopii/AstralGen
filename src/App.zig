@@ -53,8 +53,8 @@ pub const App = struct {
 
     pub fn initWindows(self: *App) !void {
         try self.windowMan.addWindow("Astral1", 1600, 900, .compute);
-        //try self.windowMan.addWindow("Astral2", 16 * 70, 9 * 70, .graphics);
-        //try self.windowMan.addWindow("Astral3", 350, 350, .mesh);
+        try self.windowMan.addWindow("Astral2", 16 * 70, 9 * 70, .graphics);
+        try self.windowMan.addWindow("Astral3", 350, 350, .mesh);
     }
 
     pub fn deinit(self: *App) void {
@@ -81,6 +81,17 @@ pub const App = struct {
             };
             if (windowMan.keyEvents.len > 0) eventMan.mapKeyEvents(windowMan.consumeKeyEvents());
             if (windowMan.mouseMovements.len > 0) eventMan.mapMouseMovements(windowMan.consumeMouseMovements());
+
+            try self.fileMan.checkShaderUpdate();
+
+            for (0..self.fileMan.pipelineUpdateBools.len) |i| {
+                const pipeBool = &self.fileMan.pipelineUpdateBools[i];
+
+                if (pipeBool.* == true) {
+                    try renderer.updatePipeline(@enumFromInt(i));
+                    pipeBool.* = false;
+                }
+            }
 
             // Update Time
             timeMan.update();

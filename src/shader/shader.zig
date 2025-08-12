@@ -1,28 +1,8 @@
 const std = @import("std");
 const c = @import("../c.zig");
 const check = @import("../vulkan/error.zig").check;
-const SHADER_HOTLOAD = @import("../config.zig").SHADER_HOTLOAD;
+const config = @import("../config.zig");
 const Allocator = std.mem.Allocator;
-
-// Compile and load shader from source
-fn compileShader(alloc: Allocator, srcPath: []const u8, spvPath: []const u8) !void {
-    std.debug.print("Compiling Shader: from {s} \n to -> {s}\n", .{ srcPath, spvPath });
-    // Compile shader using glslc
-    const result = std.process.Child.run(.{
-        .allocator = alloc,
-        .argv = &[_][]const u8{ "glslc", "--target-spv=spv1.6", srcPath, "-o", spvPath },
-    }) catch |err| {
-        std.debug.print("Failed to run glslc: {}\n", .{err});
-        return err;
-    };
-    defer alloc.free(result.stdout);
-    defer alloc.free(result.stderr);
-
-    if (result.term != .Exited or result.term.Exited != 0) {
-        std.debug.print("glslc failed:\n{s}\n", .{result.stderr});
-        return error.ShaderCompilationFailed;
-    }
-}
 
 fn loadShader(alloc: Allocator, spvPath: []const u8) ![]align(@alignOf(u32)) u8 {
     std.debug.print("Loading shader: {s}\n", .{spvPath});
@@ -46,9 +26,9 @@ pub fn createShaderModule(alloc: std.mem.Allocator, srcPath: []const u8, spvPath
     const runtimeSpvPath = try std.fs.path.join(alloc, &[_][]const u8{ exe_dir, "..", spvPath });
     defer alloc.free(runtimeSpvPath);
 
-    if (SHADER_HOTLOAD) {
+    if (config.SHADER_HOTLOAD) {
         // For development: resolve source path from project root
-        const projectRoot = try std.fs.path.resolve(alloc, &[_][]const u8{ exe_dir, "..", ".." });
+        const projectRoot = try std.fs.path.resolve(alloc, &[_][]const u8{ exe_dir, config.rootPath });
         defer alloc.free(projectRoot);
 
         const absSrcPath = try std.fs.path.join(alloc, &[_][]const u8{ projectRoot, srcPath });
@@ -58,7 +38,6 @@ pub fn createShaderModule(alloc: std.mem.Allocator, srcPath: []const u8, spvPath
         if (std.fs.path.dirname(runtimeSpvPath)) |dir_path| {
             std.fs.cwd().makePath(dir_path) catch {}; // Ignore if exists
         }
-        try compileShader(alloc, absSrcPath, runtimeSpvPath);
     }
 
     // Load compiled shader (works for both hotload and pre-compiled)

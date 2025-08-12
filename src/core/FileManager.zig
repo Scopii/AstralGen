@@ -1,6 +1,6 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
-
+const PipelineType = @import("../vulkan/PipelineBucket.zig").PipelineType;
 const config = @import("../config.zig");
 
 pub const FileType = enum {
@@ -9,50 +9,82 @@ pub const FileType = enum {
     savegame,
 };
 
-fn resolveProjectRoot(alloc: Allocator, relative_path: []const u8) ![]u8 {
+fn resolveProjectRoot(alloc: Allocator, relativePath: []const u8) ![]u8 {
     const exeDir = try std.fs.selfExeDirPathAlloc(alloc);
     defer alloc.free(exeDir);
-    return std.fs.path.resolve(alloc, &.{ exeDir, relative_path });
+    return std.fs.path.resolve(alloc, &.{ exeDir, relativePath });
 }
 
 pub fn joinPath(alloc: Allocator, path1: []const u8, path2: []const u8) ![]u8 {
-    const joinedPath = try std.fs.path.join(alloc, &[_][]const u8{ path1, path2 });
-    defer alloc.free(joinedPath);
-    std.debug.print("joined path: {s}\n", .{joinedPath});
-    return joinedPath;
+    return std.fs.path.join(alloc, &[_][]const u8{ path1, path2 });
 }
 
 pub const FileManager = struct {
+    const pipelineTypes = @typeInfo(PipelineType).@"enum".fields.len;
+
     alloc: Allocator,
     rootPath: []u8,
     shaderPath: []const u8,
+    shaderOutputPath: []const u8,
+    pipelineTimeStamps: [pipelineTypes]i128,
+    pipelineUpdateBools: [pipelineTypes]bool = .{config.SHADER_STARTUP_COMPILATION} ** pipelineTypes,
 
     pub fn init(alloc: Allocator) !FileManager {
-        const resolvedRoot = try resolveProjectRoot(alloc, config.rootPath);
-        std.debug.print("Root Folder: {s}\n", .{resolvedRoot});
-        const shaderPath = try joinPath(alloc, resolvedRoot, config.shaderPath);
+        // Assign paths
+        const rootPath = try resolveProjectRoot(alloc, config.rootPath);
+        std.debug.print("Root Path: {s}\n", .{rootPath});
+        const shaderPath = try joinPath(alloc, rootPath, config.shaderPath);
+        std.debug.print("Shader Path: {s}\n", .{shaderPath});
+        const shaderOutputPath = try joinPath(alloc, rootPath, config.shaderOutputPath);
+        std.debug.print("Shader Output Path: {s}\n", .{shaderOutputPath});
+        // Set defaults
+        const currentTime = std.time.nanoTimestamp();
+        const pipelineTimeStamps: [pipelineTypes]i128 = .{currentTime} ** pipelineTypes;
 
         return .{
             .alloc = alloc,
-            .rootPath = resolvedRoot,
+            .rootPath = rootPath,
             .shaderPath = shaderPath,
+            .shaderOutputPath = shaderOutputPath,
+            .pipelineTimeStamps = pipelineTimeStamps,
         };
+    }
+
+    pub fn checkShaderUpdate(self: *FileManager) !void {
+        const alloc = self.alloc;
+        // Check all ShaderInfos and compile if needed
+        for (config.shaderInfos) |shaderInfo| {
+            const filePath = try joinPath(alloc, self.shaderPath, shaderInfo.inputPath);
+            const newTimeStamp = try getFileTimeStamp(filePath);
+
+            if (self.pipelineTimeStamps[@intFromEnum(shaderInfo.pipeType)] < newTimeStamp) {
+                const sprvPath = try joinPath(alloc, self.shaderOutputPath, shaderInfo.outputPath);
+
+                compileShader(alloc, filePath, sprvPath) catch |err| {
+                    std.debug.print("Tried updating Shader but compilation failed {}\n", .{err});
+                };
+
+                alloc.free(sprvPath);
+                self.pipelineTimeStamps[@intFromEnum(shaderInfo.pipeType)] = newTimeStamp;
+                self.pipelineUpdateBools[@intFromEnum(shaderInfo.pipeType)] = true;
+            }
+            alloc.free(filePath);
+        }
     }
 
     pub fn deinit(self: *FileManager) void {
         self.alloc.free(self.rootPath);
+        self.alloc.free(self.shaderPath);
+        self.alloc.free(self.shaderOutputPath);
     }
 };
 
-// pub fn getFileTimeStamp(alloc: Allocator, src: []const u8) !u64 {
-//     const absolutePath = try joinPath(alloc, src);
-//     defer alloc.free(absolutePath);
-
-//     const cwd = std.fs.cwd();
-//     const stat = try cwd.statFile(absolutePath);
-//     const ns: u64 = @intCast(stat.mtime);
-//     return ns / 1_000_000; // nanoseconds -> milliseconds
-// }
+pub fn getFileTimeStamp(src: []const u8) !i128 {
+    const cwd = std.fs.cwd();
+    const stat = try cwd.statFile(src);
+    const ns: u64 = @intCast(stat.mtime);
+    return ns; // return ns / 1_000_000 nanoseconds -> milliseconds
+}
 
 fn compileShader(alloc: Allocator, srcPath: []const u8, spvPath: []const u8) !void {
     std.debug.print("Compiling Shader: from {s} \n to -> {s}\n", .{ srcPath, spvPath });
@@ -71,20 +103,6 @@ fn compileShader(alloc: Allocator, srcPath: []const u8, spvPath: []const u8) !vo
         std.debug.print("glslc failed:\n{s}\n", .{result.stderr});
         return error.ShaderCompilationFailed;
     }
-}
-
-fn loadShader(alloc: Allocator, spvPath: []const u8) ![]align(@alignOf(u32)) u8 {
-    std.debug.print("Loading shader: {s}\n", .{spvPath});
-    const file = std.fs.cwd().openFile(spvPath, .{}) catch |err| {
-        std.debug.print("Failed to load shader: {s}\n", .{spvPath});
-        return err;
-    };
-    defer file.close();
-
-    const size = try file.getEndPos();
-    const data = try alloc.alignedAlloc(u8, @alignOf(u32), size);
-    _ = try file.readAll(data);
-    return data;
 }
 
 pub fn readFile(self: *FileManager, fileType: FileType, relative_path: []const u8) ![]u8 {

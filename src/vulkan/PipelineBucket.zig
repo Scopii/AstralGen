@@ -6,6 +6,7 @@ const createShaderModule = @import("../shader/shader.zig").createShaderModule;
 const SHADER_HOTLOAD = @import("../config.zig").SHADER_HOTLOAD;
 
 pub const ShaderInfo = struct {
+    pipeType: PipelineType,
     stage: c.VkShaderStageFlagBits,
     inputPath: []const u8,
     outputPath: []const u8,
@@ -28,7 +29,6 @@ pub const Pipeline = struct {
     handle: c.VkPipeline,
     layout: c.VkPipelineLayout,
     format: ?c.VkFormat,
-    timeStamp: u64,
     pipelineType: PipelineType,
     shaderInfos: []const ShaderInfo,
 
@@ -51,14 +51,6 @@ pub const Pipeline = struct {
             alloc.free(stages);
         }
 
-        var timeStamp: u64 = 0;
-        if (SHADER_HOTLOAD == true) {
-            for (0..shaderInfos.len) |i| {
-                const tempTimeStamp = try getFileTimeStamp(alloc, shaderInfos[i].inputPath);
-                if (tempTimeStamp > timeStamp) timeStamp = tempTimeStamp;
-            }
-        }
-
         const layout = try createPipelineLayout(gpi, descriptorLayout, layoutCount);
         const pipeline = try createPipeline(gpi, layout, stages, cache, pipelineType, format);
 
@@ -67,7 +59,6 @@ pub const Pipeline = struct {
             .handle = pipeline,
             .layout = layout,
             .format = format,
-            .timeStamp = timeStamp,
             .pipelineType = pipelineType,
             .shaderInfos = shaderInfos,
         };
@@ -78,21 +69,9 @@ pub const Pipeline = struct {
         c.vkDestroyPipelineLayout(gpi, self.layout, null);
     }
 
-    pub fn checkUpdate(self: *Pipeline, gpi: c.VkDevice, cache: c.VkPipelineCache) !void {
+    pub fn updatePipeline(self: *Pipeline, gpi: c.VkDevice, cache: c.VkPipelineCache) !void {
         const alloc = self.alloc;
-        var timeStamp: u64 = 0;
-        var pathIndex: u64 = 0;
-        for (0..self.shaderInfos.len) |i| {
-            const tempTimeStamp = try getFileTimeStamp(alloc, self.shaderInfos[i].inputPath);
-            if (tempTimeStamp > timeStamp) {
-                timeStamp = tempTimeStamp;
-                pathIndex = i;
-            }
-        }
-
-        if (timeStamp == self.timeStamp) return;
-        self.timeStamp = timeStamp;
-        _ = c.vkDeviceWaitIdle(gpi);
+        _ = c.vkDeviceWaitIdle(gpi); // Should not be done here
         c.vkDestroyPipeline(gpi, self.handle, null);
 
         const modules = try createShaderModules(alloc, gpi, self.shaderInfos);
@@ -105,7 +84,7 @@ pub const Pipeline = struct {
         }
 
         self.handle = try createPipeline(gpi, self.layout, stages, cache, self.pipelineType, self.format);
-        std.debug.print("{s} at {s} updated\n", .{ @tagName(self.pipelineType), self.shaderInfos[pathIndex].inputPath });
+        std.debug.print("{s} updated\n", .{@tagName(self.pipelineType)});
     }
 };
 
@@ -324,24 +303,4 @@ fn createPipeline(
             }
         },
     }
-}
-
-pub fn getFileTimeStamp(alloc: Allocator, src: []const u8) !u64 {
-    const absolutePath = try resolvePath(alloc, src);
-    defer alloc.free(absolutePath);
-
-    const cwd = std.fs.cwd();
-    const stat = try cwd.statFile(absolutePath);
-    const ns: u64 = @intCast(stat.mtime);
-    return ns / 1_000_000; // nanoseconds -> milliseconds
-}
-
-pub fn resolvePath(alloc: Allocator, path: []const u8) ![]u8 {
-    const exeDir = try std.fs.selfExeDirPathAlloc(alloc);
-    defer alloc.free(exeDir);
-    // Project root (up two levels from zig-out/bin)
-    const projectRoot = try std.fs.path.resolve(alloc, &[_][]const u8{ exeDir, "..", ".." });
-    defer alloc.free(projectRoot);
-
-    return std.fs.path.join(alloc, &[_][]const u8{ projectRoot, path });
 }

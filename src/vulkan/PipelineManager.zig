@@ -2,7 +2,6 @@ const std = @import("std");
 const c = @import("../c.zig");
 const Allocator = std.mem.Allocator;
 const check = @import("error.zig").check;
-const createShaderModule = @import("../shader/shader.zig").createShaderModule;
 const ztracy = @import("ztracy");
 const ResourceManager = @import("ResourceManager.zig").ResourceManager;
 const PipelineBucket = @import("PipelineBucket.zig").Pipeline;
@@ -38,23 +37,20 @@ pub const PipelineManager = struct {
         };
     }
 
+    pub fn updatePipeline(self: *PipelineManager, pipeType: PipelineType) !void {
+        switch (pipeType) {
+            .compute => try self.compute.updatePipeline(self.gpi, self.cache),
+            .graphics => try self.graphics.updatePipeline(self.gpi, self.cache),
+            .mesh => try self.mesh.updatePipeline(self.gpi, self.cache),
+        }
+    }
+
     pub fn deinit(self: *PipelineManager) void {
         const gpi = self.gpi;
         self.compute.deinit(gpi);
         self.graphics.deinit(gpi);
         self.mesh.deinit(gpi);
         c.vkDestroyPipelineCache(gpi, self.cache, null);
-    }
-
-    pub fn checkShaderUpdate(self: *PipelineManager, pipelineType: PipelineType) !void {
-        const tracyZ1 = ztracy.ZoneNC(@src(), "checkShaderUpdate", 0x0000FFFF);
-        defer tracyZ1.End();
-
-        switch (pipelineType) {
-            .graphics => try self.graphics.checkUpdate(self.gpi, self.cache),
-            .compute => try self.compute.checkUpdate(self.gpi, self.cache),
-            .mesh => try self.mesh.checkUpdate(self.gpi, self.cache),
-        }
     }
 };
 

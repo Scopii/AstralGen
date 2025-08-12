@@ -115,6 +115,10 @@ pub const Renderer = struct {
         }
     }
 
+    pub fn updatePipeline(self: *Renderer, pipeType: PipelineType) !void {
+        if (config.SHADER_HOTLOAD == true) try self.pipelineMan.updatePipeline(pipeType);
+    }
+
     pub fn draw(self: *Renderer, cam: *Camera, runtimeAsFloat: f32) !void {
         try self.scheduler.waitForGPU();
 
@@ -140,7 +144,6 @@ pub const Renderer = struct {
         for (0..activeGroups.len) |i| {
             if (activeGroups[i].len != 0) {
                 const pipeType: PipelineType = @enumFromInt(i);
-                if (config.SHADER_HOTLOAD == true) try self.pipelineMan.checkShaderUpdate(pipeType);
 
                 const compPushConstants = ComputePushConstants{
                     .camPosAndFov = cam.getPosAndFov(),

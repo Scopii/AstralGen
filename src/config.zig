@@ -9,6 +9,7 @@ const ShaderInfo = @import("vulkan/PipelineBucket.zig").ShaderInfo;
 pub const DEBUG_MODE = true;
 pub const CLOSE_WITH_CONSOLE = false;
 pub const SHADER_HOTLOAD = true;
+pub const SHADER_STARTUP_COMPILATION = true;
 
 // Rendering, Swapchains and Windows
 pub const MAX_IN_FLIGHT: u8 = 2; // (Frames)
@@ -51,18 +52,28 @@ pub const keyAssignments = [_]KeyAssignments{
 
 // Paths
 pub const rootPath: []const u8 = "../..";
-pub const shaderPath: []const u8 = "/shader";
-pub const outputRoot: []const u8 = "/shader";
+pub const shaderPath: []const u8 = "/src/shader";
+pub const shaderOutputPath: []const u8 = "/zig-out/shader";
+
+pub const shaderInfos = [_]ShaderInfo{
+    .{ .pipeType = .compute, .stage = c.VK_SHADER_STAGE_COMPUTE_BIT, .inputPath = "Compute.comp", .outputPath = "Compute.spv" },
+
+    .{ .pipeType = .graphics, .stage = c.VK_SHADER_STAGE_VERTEX_BIT, .inputPath = "Graphics.vert", .outputPath = "GraphicsVert.spv" },
+    .{ .pipeType = .graphics, .stage = c.VK_SHADER_STAGE_FRAGMENT_BIT, .inputPath = "Graphics.frag", .outputPath = "GraphicsFrag.spv" },
+
+    .{ .pipeType = .mesh, .stage = c.VK_SHADER_STAGE_MESH_BIT_EXT, .inputPath = "Mesh.mesh", .outputPath = "MeshMesh.spv" },
+    .{ .pipeType = .mesh, .stage = c.VK_SHADER_STAGE_FRAGMENT_BIT, .inputPath = "Mesh.frag", .outputPath = "MeshFrag.spv" },
+};
 
 // Shader Infos
 pub const computeInf = [_]ShaderInfo{
-    .{ .stage = c.VK_SHADER_STAGE_COMPUTE_BIT, .inputPath = "src/shader/Compute.comp", .outputPath = "shader/Compute.spv" },
+    .{ .pipeType = .compute, .stage = c.VK_SHADER_STAGE_COMPUTE_BIT, .inputPath = "src/shader/Compute.comp", .outputPath = "shader/Compute.spv" },
 };
 pub const graphicsInf = [_]ShaderInfo{
-    .{ .stage = c.VK_SHADER_STAGE_FRAGMENT_BIT, .inputPath = "src/shader/Graphics.frag", .outputPath = "shader/GraphicsFrag.spv" },
-    .{ .stage = c.VK_SHADER_STAGE_VERTEX_BIT, .inputPath = "src/shader/Graphics.vert", .outputPath = "shader/GraphicsVert.spv" },
+    .{ .pipeType = .graphics, .stage = c.VK_SHADER_STAGE_FRAGMENT_BIT, .inputPath = "src/shader/Graphics.frag", .outputPath = "shader/GraphicsFrag.spv" },
+    .{ .pipeType = .graphics, .stage = c.VK_SHADER_STAGE_VERTEX_BIT, .inputPath = "src/shader/Graphics.vert", .outputPath = "shader/GraphicsVert.spv" },
 };
 pub const meshShaderInf = [_]ShaderInfo{
-    .{ .stage = c.VK_SHADER_STAGE_FRAGMENT_BIT, .inputPath = "src/shader/Mesh.frag", .outputPath = "shader/MeshFrag.spv" },
-    .{ .stage = c.VK_SHADER_STAGE_MESH_BIT_EXT, .inputPath = "src/shader/Mesh.mesh", .outputPath = "shader/MeshMesh.spv" },
+    .{ .pipeType = .mesh, .stage = c.VK_SHADER_STAGE_FRAGMENT_BIT, .inputPath = "src/shader/Mesh.frag", .outputPath = "shader/MeshFrag.spv" },
+    .{ .pipeType = .mesh, .stage = c.VK_SHADER_STAGE_MESH_BIT_EXT, .inputPath = "src/shader/Mesh.mesh", .outputPath = "shader/MeshMesh.spv" },
 };
