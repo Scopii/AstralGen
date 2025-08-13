@@ -80,7 +80,7 @@ pub const App = struct {
                 std.log.err("Error in pollEvents(): {}", .{err});
                 break;
             };
-            if (windowMan.keyEvents.len > 0) eventMan.mapKeyEvents(windowMan.consumeKeyEvents());
+            if (windowMan.inputEvents.len > 0) eventMan.mapKeyEvents(windowMan.consumeKeyEvents());
             if (windowMan.mouseMovements.len > 0) eventMan.mapMouseMovements(windowMan.consumeMouseMovements());
 
             // Close Or Idle

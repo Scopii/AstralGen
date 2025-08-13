@@ -18,7 +18,7 @@ pub const WindowManager = struct {
     openWindows: u8 = 0,
     close: bool = false,
 
-    keyEvents: std.BoundedArray(KeyEvent, 127) = .{},
+    inputEvents: std.BoundedArray(KeyEvent, 127) = .{},
     mouseMovements: std.BoundedArray(MouseMovement, 63) = .{},
 
     pub fn init() !WindowManager {
@@ -84,8 +84,8 @@ pub const WindowManager = struct {
     }
 
     pub fn consumeKeyEvents(self: *WindowManager) []KeyEvent {
-        defer self.keyEvents.clear();
-        return self.keyEvents.slice();
+        defer self.inputEvents.clear();
+        return self.inputEvents.slice();
     }
     pub fn consumeMouseMovements(self: *WindowManager) []MouseMovement {
         defer self.mouseMovements.clear();
@@ -141,7 +141,7 @@ pub const WindowManager = struct {
                     c.SDL_EVENT_KEY_UP => .{ .key = event.key.scancode, .event = .released },
                     else => unreachable,
                 };
-                self.keyEvents.append(keyEvent) catch |err| {
+                self.inputEvents.append(keyEvent) catch |err| {
                     std.debug.print("WindowManager: mouseButtonEvents append failed {}\n", .{err});
                 };
             },
