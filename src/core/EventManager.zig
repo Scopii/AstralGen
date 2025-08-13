@@ -15,8 +15,11 @@ pub const KeyAssignments = struct {
     key: c_uint,
 };
 
+pub const SDL_KEY_MAX = 512;
+pub const SDL_MOUSE_MAX = 24;
+
 pub const EventManager = struct {
-    keyStates: CreateMapArray(KeyState, 512 + 24, c_uint, 512 + 24, 0) = .{}, // 512 SDL Keys, 24 for Mouse
+    keyStates: CreateMapArray(KeyState, SDL_KEY_MAX + SDL_MOUSE_MAX, c_uint, SDL_KEY_MAX + SDL_MOUSE_MAX, 0) = .{}, // 512 SDL Keys, 24 for Mouse
     appEvents: std.BoundedArray(AppEvent, 127) = .{},
     mouseMoveX: f32 = 0,
     mouseMoveY: f32 = 0,
@@ -46,7 +49,7 @@ pub const EventManager = struct {
         for (config.keyAssignments) |assignment| {
             const actualKey = switch (assignment.device) {
                 .keyboard => assignment.key,
-                .mouse => assignment.key + 512,
+                .mouse => assignment.key + SDL_KEY_MAX,
             };
             // If key is valid check if value at key is same as assignment state
             if (self.keyStates.isKeyUsed(actualKey) == true) {

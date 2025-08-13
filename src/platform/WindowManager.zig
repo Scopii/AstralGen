@@ -7,6 +7,7 @@ const MemoryManger = @import("../core/MemoryManager.zig").MemoryManager;
 const PipelineType = @import("../vulkan/PipelineBucket.zig").PipelineType;
 const CreateMapArray = @import("../structures/MapArray.zig").CreateMapArray;
 const MAX_WINDOWS = @import("../config.zig").MAX_WINDOWS;
+const SDL_KEY_MAX = @import("../core/EventManager.zig").SDL_KEY_MAX;
 
 const KeyEvent = @import("../core/EventManager.zig").KeyEvent;
 const MouseMovement = @import("../core/EventManager.zig").MouseMovement;
@@ -134,8 +135,8 @@ pub const WindowManager = struct {
             c.SDL_EVENT_KEY_UP,
             => {
                 const keyEvent: KeyEvent = switch (event.type) {
-                    c.SDL_EVENT_MOUSE_BUTTON_DOWN => .{ .key = @as(c_uint, event.button.button) + 512, .event = .pressed },
-                    c.SDL_EVENT_MOUSE_BUTTON_UP => .{ .key = @as(c_uint, event.button.button) + 512, .event = .released },
+                    c.SDL_EVENT_MOUSE_BUTTON_DOWN => .{ .key = @as(c_uint, event.button.button) + SDL_KEY_MAX, .event = .pressed },
+                    c.SDL_EVENT_MOUSE_BUTTON_UP => .{ .key = @as(c_uint, event.button.button) + SDL_KEY_MAX, .event = .released },
                     c.SDL_EVENT_KEY_DOWN => .{ .key = event.key.scancode, .event = .pressed },
                     c.SDL_EVENT_KEY_UP => .{ .key = event.key.scancode, .event = .released },
                     else => unreachable,
