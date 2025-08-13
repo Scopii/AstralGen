@@ -43,11 +43,11 @@ pub const FileManager = struct {
         // Compile on Startup if wanted
         if (config.SHADER_STARTUP_COMPILATION) {
             for (config.shaderInfos) |shaderInfo| {
-                const shaderOutputName = try joinPath(alloc, shaderOutputPath, shaderInfo.outputName);
                 const filePath = try joinPath(alloc, shaderPath, shaderInfo.inputName);
+                const shaderOutputName = try joinPath(alloc, shaderOutputPath, shaderInfo.outputName);
                 try compileShader(alloc, filePath, shaderOutputName);
-                alloc.free(shaderOutputName);
                 alloc.free(filePath);
+                alloc.free(shaderOutputName);
             }
         }
 

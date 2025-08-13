@@ -154,9 +154,9 @@ pub const Renderer = struct {
                 };
 
                 switch (pipeType) {
-                    .compute => try self.cmdMan.recordComputePass(&self.renderImage, &self.pipelineMan.compute, self.resourceMan2.imageBuffer.gpuAddress, compPushConstants),
-                    .graphics => try self.cmdMan.recordGraphicsPass(&self.renderImage, &self.pipelineMan.graphics, .graphics),
-                    .mesh => try self.cmdMan.recordGraphicsPass(&self.renderImage, &self.pipelineMan.mesh, .mesh),
+                    .compute => try self.cmdMan.recordComputePass(&self.renderImage, &self.pipelineMan.pipelines[0], self.resourceMan2.imageBuffer.gpuAddress, compPushConstants),
+                    .graphics => try self.cmdMan.recordGraphicsPass(&self.renderImage, &self.pipelineMan.pipelines[1], .graphics),
+                    .mesh => try self.cmdMan.recordGraphicsPass(&self.renderImage, &self.pipelineMan.pipelines[2], .mesh),
                 }
                 try self.cmdMan.blitToTargets(&self.renderImage, activeGroups[i].slice(), &self.swapchainMan.swapchains);
             }

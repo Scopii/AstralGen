@@ -11,11 +11,10 @@ const Context = @import("Context.zig").Context;
 const config = @import("../config.zig");
 
 pub const PipelineManager = struct {
+    const pipelineTypes = @typeInfo(PipelineType).@"enum".fields.len;
+    pipelines: [pipelineTypes]PipelineBucket, // not used yet
     alloc: Allocator,
     gpi: c.VkDevice,
-    graphics: PipelineBucket,
-    compute: PipelineBucket,
-    mesh: PipelineBucket,
     cache: c.VkPipelineCache,
 
     pub fn init(alloc: Allocator, context: *const Context, resourceManager: *const ResourceManager) !PipelineManager {
@@ -23,33 +22,30 @@ pub const PipelineManager = struct {
         const cache = try createPipelineCache(gpi);
         const format = config.RENDER_IMAGE_FORMAT;
 
-        const computePipe = try PipelineBucket.init(alloc, gpi, cache, format, &config.computeInf, .compute, resourceManager.layout, 1);
-        const graphicsPipe = try PipelineBucket.init(alloc, gpi, cache, format, &config.graphicsInf, .graphics, null, 0);
-        const meshPipe = try PipelineBucket.init(alloc, gpi, cache, format, &config.meshShaderInf, .mesh, null, 0);
+        //const pipelines: [pipelineTypes]PipelineBucket = undefined;
+        const pipelines1 = try PipelineBucket.init(alloc, gpi, cache, format, &config.computeInf, .compute, resourceManager.layout, 1);
+        const pipelines2 = try PipelineBucket.init(alloc, gpi, cache, format, &config.graphicsInf, .graphics, null, 0);
+        const pipelines3 = try PipelineBucket.init(alloc, gpi, cache, format, &config.meshShaderInf, .mesh, null, 0);
+        const pipelines = .{ pipelines1, pipelines2, pipelines3 };
 
         return .{
             .alloc = alloc,
             .gpi = gpi,
-            .compute = computePipe,
-            .graphics = graphicsPipe,
-            .mesh = meshPipe,
+            .pipelines = pipelines,
             .cache = cache,
         };
     }
 
     pub fn updatePipeline(self: *PipelineManager, pipeType: PipelineType) !void {
-        switch (pipeType) {
-            .compute => try self.compute.updatePipeline(self.gpi, self.cache),
-            .graphics => try self.graphics.updatePipeline(self.gpi, self.cache),
-            .mesh => try self.mesh.updatePipeline(self.gpi, self.cache),
-        }
+        try self.pipelines[@intFromEnum(pipeType)].updatePipeline(self.gpi, self.cache);
     }
 
     pub fn deinit(self: *PipelineManager) void {
         const gpi = self.gpi;
-        self.compute.deinit(gpi);
-        self.graphics.deinit(gpi);
-        self.mesh.deinit(gpi);
+
+        for (0..self.pipelines.len) |i| {
+            self.pipelines[i].deinit(gpi);
+        }
         c.vkDestroyPipelineCache(gpi, self.cache, null);
     }
 };
