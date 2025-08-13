@@ -39,6 +39,7 @@ pub const AppEvent = enum {
     camFovIncrease,
     camFovDecrease,
 
+    toggleFullscreen,
     closeApp,
     restartApp,
 };
@@ -57,6 +58,7 @@ pub const keyAssignments = [_]KeyAssignments{
     // App Control
     .{ .device = .keyboard, .state = .pressed, .cycle = .oneTime, .key = c.SDL_SCANCODE_ESCAPE, .appEvent = .closeApp },
     .{ .device = .keyboard, .state = .pressed, .cycle = .oneTime, .key = c.SDL_SCANCODE_R, .appEvent = .restartApp },
+    .{ .device = .keyboard, .state = .pressed, .cycle = .oneTime, .key = c.SDL_SCANCODE_LCTRL, .appEvent = .toggleFullscreen },
 
     // Mouse
     .{ .device = .mouse, .state = .pressed, .cycle = .repeat, .key = c.SDL_BUTTON_LEFT, .appEvent = .camForward },

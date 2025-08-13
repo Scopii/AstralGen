@@ -17,6 +17,7 @@ pub const WindowManager = struct {
     mainWindow: ?*Window = null,
     changedWindows: std.BoundedArray(*Window, MAX_WINDOWS) = .{},
     openWindows: u8 = 0,
+    fullscreen: bool = false,
     close: bool = false,
 
     inputEvents: std.BoundedArray(KeyEvent, 127) = .{},
@@ -93,12 +94,28 @@ pub const WindowManager = struct {
         return self.mouseMovements.slice();
     }
 
+    pub fn toggleMainFullscreen(self: *WindowManager) void {
+        const sdlHandle = self.mainWindow.?.handle; // TODO: Test what happens for mainWindow null
+        if (self.fullscreen == false) {
+            _ = c.SDL_SetWindowFullscreen(sdlHandle, true);
+            self.fullscreen = true;
+        } else {
+            _ = c.SDL_SetWindowFullscreen(sdlHandle, false);
+            self.fullscreen = false;
+        }
+    }
+
     pub fn processEvent(self: *WindowManager, event: *c.SDL_Event) !void {
         switch (event.type) {
             c.SDL_EVENT_QUIT => self.close = true,
 
+            c.SDL_EVENT_WINDOW_FOCUS_LOST => {
+                std.debug.print("Focus Lost\n", .{});
+                self.mainWindow = null;
+            },
+
             c.SDL_EVENT_WINDOW_FOCUS_GAINED => {
-                std.debug.print("Focus Gained\n", .{});
+                std.debug.print("Focus Set\n", .{});
                 self.mainWindow = self.windows.getPtr(@intCast(event.window.windowID));
             },
 

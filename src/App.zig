@@ -115,6 +115,7 @@ pub const App = struct {
                     .camFovDecrease => cam.decreaseFov(dt),
                     .closeApp => return,
                     .restartApp => {},
+                    .toggleFullscreen => windowMan.toggleMainFullscreen(),
                 }
             }
             eventMan.clearAppEvents();
