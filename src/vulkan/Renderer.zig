@@ -116,7 +116,8 @@ pub const Renderer = struct {
     }
 
     pub fn updatePipeline(self: *Renderer, pipeType: PipelineType) !void {
-        if (config.SHADER_HOTLOAD == true) try self.pipelineMan.updatePipeline(pipeType);
+        _ = c.vkDeviceWaitIdle(self.context.gpi);
+        try self.pipelineMan.updatePipeline(pipeType);
     }
 
     pub fn draw(self: *Renderer, cam: *Camera, runtimeAsFloat: f32) !void {
@@ -125,7 +126,7 @@ pub const Renderer = struct {
         const frameInFlight = self.scheduler.frameInFlight;
         if (try self.swapchainMan.updateTargets(frameInFlight, &self.context) == false) return;
 
-        self.cmdMan.needUpdate = true;
+        self.cmdMan.needUpdate = true; // Hard Coded Cmd Recording Updates
 
         try self.cmdMan.beginRecording(frameInFlight);
         try self.recordCommands(cam, runtimeAsFloat);

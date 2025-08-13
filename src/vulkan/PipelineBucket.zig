@@ -4,6 +4,8 @@ const Allocator = std.mem.Allocator;
 const check = @import("error.zig").check;
 const config = @import("../config.zig");
 
+pub const PipelineType = enum { compute, graphics, mesh };
+
 pub const ShaderInfo = struct {
     pipeType: PipelineType,
     inputName: []const u8,
@@ -14,26 +16,14 @@ pub const PipelineInfo = struct {
     pipeType: PipelineType,
     stage: c.VkShaderStageFlagBits,
     sprvPath: []const u8,
-
-    fn getStage(self: ShaderInfo) enum { compute, vertex, fragment, mesh, task } {
-        return switch (self.stage) {
-            c.VK_SHADER_STAGE_COMPUTE_BIT => .compute,
-            c.VK_SHADER_STAGE_VERTEX_BIT => .vertex,
-            c.VK_SHADER_STAGE_FRAGMENT_BIT => .fragment,
-            c.VK_SHADER_STAGE_MESH_BIT_EXT => .mesh,
-            c.VK_SHADER_STAGE_TASK_BIT_EXT => .task,
-        };
-    }
 };
-
-pub const PipelineType = enum { compute, graphics, mesh };
 
 pub const Pipeline = struct {
     alloc: Allocator,
     handle: c.VkPipeline,
     layout: c.VkPipelineLayout,
     format: ?c.VkFormat,
-    pipelineType: PipelineType,
+    pipeType: PipelineType,
     shaderInfos: []const PipelineInfo,
 
     pub fn init(
@@ -42,7 +32,7 @@ pub const Pipeline = struct {
         cache: c.VkPipelineCache,
         format: c.VkFormat,
         shaderInfos: []const PipelineInfo,
-        pipelineType: PipelineType,
+        pipeType: PipelineType,
         descriptorLayout: c.VkDescriptorSetLayout,
         layoutCount: u32,
     ) !Pipeline {
@@ -54,16 +44,15 @@ pub const Pipeline = struct {
             alloc.free(modules);
             alloc.free(stages);
         }
-
         const layout = try createPipelineLayout(gpi, descriptorLayout, layoutCount);
-        const pipeline = try createPipeline(gpi, layout, stages, cache, pipelineType, format);
+        const pipeline = try createPipeline(gpi, layout, stages, cache, pipeType, format);
 
         return .{
             .alloc = alloc,
             .handle = pipeline,
             .layout = layout,
             .format = format,
-            .pipelineType = pipelineType,
+            .pipeType = pipeType,
             .shaderInfos = shaderInfos,
         };
     }
@@ -75,20 +64,16 @@ pub const Pipeline = struct {
 
     pub fn updatePipeline(self: *Pipeline, gpi: c.VkDevice, cache: c.VkPipelineCache) !void {
         const alloc = self.alloc;
-        _ = c.vkDeviceWaitIdle(gpi); // Should not be done here
         c.vkDestroyPipeline(gpi, self.handle, null);
 
         const modules = try createShaderModules(alloc, gpi, self.shaderInfos);
         const stages = try createShaderStages(alloc, modules, self.shaderInfos);
+        self.handle = try createPipeline(gpi, self.layout, stages, cache, self.pipeType, self.format);
+        std.debug.print("{s} updated\n", .{@tagName(self.pipeType)});
 
-        defer {
-            destroyShaderModules(gpi, modules);
-            alloc.free(modules);
-            alloc.free(stages);
-        }
-
-        self.handle = try createPipeline(gpi, self.layout, stages, cache, self.pipelineType, self.format);
-        std.debug.print("{s} updated\n", .{@tagName(self.pipelineType)});
+        destroyShaderModules(gpi, modules);
+        alloc.free(modules);
+        alloc.free(stages);
     }
 };
 
@@ -103,7 +88,7 @@ fn createShaderStages(alloc: Allocator, modules: []c.VkShaderModule, pipeInfos: 
     for (0..pipeInfos.len) |i| {
         stages[i] = c.VkPipelineShaderStageCreateInfo{
             .sType = c.VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-            .stage = pipeInfos[i].stage, //
+            .stage = pipeInfos[i].stage,
             .module = modules[i],
             .pName = "main",
             .pSpecializationInfo = null, // for constants

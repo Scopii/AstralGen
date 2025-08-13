@@ -11,8 +11,8 @@ const Context = @import("Context.zig").Context;
 const config = @import("../config.zig");
 
 pub const PipelineManager = struct {
-    const pipelineTypes = @typeInfo(PipelineType).@"enum".fields.len;
-    pipelines: [pipelineTypes]PipelineBucket, // not used yet
+    const pipeTypes = @typeInfo(PipelineType).@"enum".fields.len;
+    pipelines: [pipeTypes]PipelineBucket, // not used yet
     alloc: Allocator,
     gpi: c.VkDevice,
     cache: c.VkPipelineCache,
@@ -40,10 +40,7 @@ pub const PipelineManager = struct {
 
     pub fn deinit(self: *PipelineManager) void {
         const gpi = self.gpi;
-
-        for (0..self.pipelines.len) |i| {
-            self.pipelines[i].deinit(gpi);
-        }
+        for (0..self.pipelines.len) |i| self.pipelines[i].deinit(gpi);
         c.vkDestroyPipelineCache(gpi, self.cache, null);
     }
 };

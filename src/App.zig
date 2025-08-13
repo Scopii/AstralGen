@@ -9,6 +9,7 @@ const FileManager = @import("core/FileManager.zig").FileManager;
 const Camera = @import("core/Camera.zig").Camera;
 const zjobs = @import("zjobs");
 const CreateMapArray = @import("structures/MapArray.zig").CreateMapArray;
+const config = @import("config.zig");
 
 pub const App = struct {
     memoryMan: *MemoryManager,
@@ -82,14 +83,17 @@ pub const App = struct {
             if (windowMan.keyEvents.len > 0) eventMan.mapKeyEvents(windowMan.consumeKeyEvents());
             if (windowMan.mouseMovements.len > 0) eventMan.mapMouseMovements(windowMan.consumeMouseMovements());
 
-            try self.fileMan.checkShaderUpdate();
+            // Shader Hotloading
+            if (config.SHADER_HOTLOAD == true) {
+                try self.fileMan.checkShaderUpdate();
 
-            for (0..self.fileMan.pipelineUpdateBools.len) |i| {
-                const pipeBool = &self.fileMan.pipelineUpdateBools[i];
+                for (0..self.fileMan.pipelineUpdateBools.len) |i| {
+                    const pipeBool = &self.fileMan.pipelineUpdateBools[i];
 
-                if (pipeBool.* == true) {
-                    try renderer.updatePipeline(@enumFromInt(i));
-                    pipeBool.* = false;
+                    if (pipeBool.* == true) {
+                        try renderer.updatePipeline(@enumFromInt(i));
+                        pipeBool.* = false;
+                    }
                 }
             }
 

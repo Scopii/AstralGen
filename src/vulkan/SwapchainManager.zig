@@ -27,19 +27,19 @@ pub const Swapchain = struct {
 };
 
 pub const SwapchainManager = struct {
-    const pipelineTypes = @typeInfo(PipelineType).@"enum".fields.len;
+    const pipeTypes = @typeInfo(PipelineType).@"enum".fields.len;
 
     alloc: Allocator,
     gpi: c.VkDevice,
     instance: c.VkInstance,
     maxExtent: c.VkExtent2D = .{ .width = 0, .height = 0 },
     swapchains: CreateMapArray(Swapchain, MAX_WINDOWS, u8, MAX_WINDOWS, 0) = .{},
-    activeGroups: [pipelineTypes]std.BoundedArray(u8, MAX_WINDOWS),
+    activeGroups: [pipeTypes]std.BoundedArray(u8, MAX_WINDOWS),
     targets: std.BoundedArray(u8, MAX_WINDOWS) = .{},
 
     pub fn init(alloc: Allocator, context: *const Context) !SwapchainManager {
-        var activeGroups: [pipelineTypes]std.BoundedArray(u8, MAX_WINDOWS) = undefined;
-        for (0..pipelineTypes) |i| activeGroups[i] = .{};
+        var activeGroups: [pipeTypes]std.BoundedArray(u8, MAX_WINDOWS) = undefined;
+        for (0..pipeTypes) |i| activeGroups[i] = .{};
 
         return .{
             .alloc = alloc,
