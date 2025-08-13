@@ -35,7 +35,7 @@ pub const Renderer = struct {
 
     pub fn init(memoryMan: *MemoryManager) !Renderer {
         const alloc = memoryMan.getAllocator();
-        const instance = try createInstance(alloc, config.DEBUG_MODE);
+        const instance = try createInstance(alloc);
         const context = try Context.init(alloc, instance);
         const resourceMan2 = try ResourceManager.init(alloc, &context);
         const cmdMan = try CmdManager.init(alloc, &context, config.MAX_IN_FLIGHT);

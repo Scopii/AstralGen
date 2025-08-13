@@ -2,6 +2,7 @@ const std = @import("std");
 const c = @import("../c.zig");
 const Allocator = std.mem.Allocator;
 const check = @import("error.zig").check;
+const config = @import("../config.zig");
 
 pub const QueueFamilies = struct {
     graphics: u32,
@@ -62,7 +63,7 @@ pub const Context = struct {
     }
 };
 
-pub fn createInstance(alloc: Allocator, debugToggle: bool) !c.VkInstance {
+pub fn createInstance(alloc: Allocator) !c.VkInstance {
     var extensions = std.ArrayList([*c]const u8).init(alloc);
     defer extensions.deinit();
     var layers = std.ArrayList([*c]const u8).init(alloc);
@@ -73,14 +74,36 @@ pub fn createInstance(alloc: Allocator, debugToggle: bool) !c.VkInstance {
     const reqExtensions = c.SDL_Vulkan_GetInstanceExtensions(&extCount);
     for (0..extCount) |i| try extensions.append(reqExtensions[i]);
 
-    if (debugToggle) {
+    if (config.DEBUG_MODE) {
         try extensions.append("VK_EXT_debug_utils");
         try layers.append("VK_LAYER_KHRONOS_validation");
         try layers.append("VK_LAYER_KHRONOS_synchronization2");
     }
 
+    var extraValidationFeatures = switch (config.BEST_PRACTICES) {
+        true => if (config.EXTRA_VALIDATION == true) [_]c.VkValidationFeatureEnableEXT{
+            c.VK_VALIDATION_FEATURE_ENABLE_BEST_PRACTICES_EXT,
+            c.VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT,
+            c.VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_RESERVE_BINDING_SLOT_EXT,
+            c.VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT,
+        } else [_]c.VkValidationFeatureEnableEXT{c.VK_VALIDATION_FEATURE_ENABLE_BEST_PRACTICES_EXT},
+        false => [_]c.VkValidationFeatureEnableEXT{
+            c.VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT,
+            c.VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_RESERVE_BINDING_SLOT_EXT,
+            c.VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT,
+        },
+    };
+
+    var extraValidationExtensions = c.VkValidationFeaturesEXT{
+        .sType = c.VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT,
+        .pNext = null,
+        .enabledValidationFeatureCount = extraValidationFeatures.len,
+        .pEnabledValidationFeatures = &extraValidationFeatures,
+        .disabledValidationFeatureCount = 0,
+        .pDisabledValidationFeatures = null,
+    };
+
     //try extensions.append("VK_KHR_portability_enumeration");
-    try extensions.append("VK_KHR_get_physical_device_properties2");
     std.debug.print("Instance Extensions {}\n", .{extensions.items.len});
 
     const appInf = c.VkApplicationInfo{
@@ -95,7 +118,7 @@ pub fn createInstance(alloc: Allocator, debugToggle: bool) !c.VkInstance {
 
     const instanceInf = c.VkInstanceCreateInfo{
         .sType = c.VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
-        .pNext = null,
+        .pNext = if (config.EXTRA_VALIDATION or config.BEST_PRACTICES) @ptrCast(&extraValidationExtensions) else null,
         .flags = 0,
         .pApplicationInfo = &appInf,
         .enabledLayerCount = @intCast(layers.items.len),

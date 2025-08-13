@@ -4,8 +4,12 @@ const KeyAssignments = @import("core/EventManager.zig").KeyAssignments;
 const ShaderInfo = @import("vulkan/PipelineBucket.zig").ShaderInfo;
 const PipelineInfo = @import("vulkan/PipelineBucket.zig").PipelineInfo;
 
-// Debug
+// Vulkan Validation Layers
 pub const DEBUG_MODE = true;
+pub const EXTRA_VALIDATION = false;
+pub const BEST_PRACTICES = false;
+
+// Dev Mode
 pub const CLOSE_WITH_CONSOLE = false;
 pub const SHADER_HOTLOAD = true;
 pub const SHADER_STARTUP_COMPILATION = true;
