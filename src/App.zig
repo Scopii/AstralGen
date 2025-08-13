@@ -75,7 +75,7 @@ pub const App = struct {
 
         // Main loop
         while (true) {
-            // Process Inputs
+            // Poll Inputs
             windowMan.pollEvents() catch |err| {
                 std.log.err("Error in pollEvents(): {}", .{err});
                 break;
@@ -83,26 +83,18 @@ pub const App = struct {
             if (windowMan.keyEvents.len > 0) eventMan.mapKeyEvents(windowMan.consumeKeyEvents());
             if (windowMan.mouseMovements.len > 0) eventMan.mapMouseMovements(windowMan.consumeMouseMovements());
 
-            // Shader Hotloading
-            if (config.SHADER_HOTLOAD == true) {
-                try self.fileMan.checkShaderUpdate();
-
-                for (0..self.fileMan.pipelineUpdateBools.len) |i| {
-                    const pipeBool = &self.fileMan.pipelineUpdateBools[i];
-
-                    if (pipeBool.* == true) {
-                        try renderer.updatePipeline(@enumFromInt(i));
-                        pipeBool.* = false;
-                    }
-                }
-            }
+            // Close Or Idle
+            if (windowMan.close == true) return;
+            if (windowMan.openWindows == 0) continue;
 
             // Update Time
             timeMan.update();
             const dt = timeMan.getDeltaTime(.nano, f64);
             const runTime = timeMan.getRuntime(.seconds, f32);
 
+            // Handle Mouse Input
             cam.rotate(self.eventMan.mouseMoveX, self.eventMan.mouseMoveY);
+            eventMan.resetMouseChange();
 
             // Generate and Process and clear Events
             for (eventMan.getAppEvents()) |appEvent| {
@@ -119,8 +111,7 @@ pub const App = struct {
                     .restartApp => {},
                 }
             }
-            eventMan.cleanupAppEvents();
-            eventMan.resetMouseMovement();
+            eventMan.clearAppEvents();
 
             // Process Window Changes
             if (windowMan.changedWindows.len > 0) {
@@ -128,9 +119,19 @@ pub const App = struct {
                 try windowMan.cleanupWindows();
             }
 
-            // Handle Close or Idle
-            if (windowMan.close == true) return;
-            if (windowMan.openWindows == 0) continue;
+            // Shader Hotloading
+            if (config.SHADER_HOTLOAD == true) {
+                try self.fileMan.checkShaderUpdate();
+
+                for (0..self.fileMan.pipelineUpdateBools.len) |i| {
+                    const pipeBool = &self.fileMan.pipelineUpdateBools[i];
+
+                    if (pipeBool.* == true) {
+                        try renderer.updatePipeline(@enumFromInt(i));
+                        pipeBool.* = false;
+                    }
+                }
+            }
 
             // Draw and reset Frame Arena
             renderer.draw(cam, runTime) catch |err| {

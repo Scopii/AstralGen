@@ -74,7 +74,7 @@ pub const EventManager = struct {
                 const keyState = self.keyStates.get(actualKey);
 
                 if (keyState == assignment.state) {
-                    self.appendEvent(assignment.appEvent);
+                    self.appendAppEvent(assignment.appEvent);
                     if (assignment.cycle == .oneTime) self.keyStates.set(actualKey, .released);
                 }
             }
@@ -82,16 +82,16 @@ pub const EventManager = struct {
         return self.appEvents.slice();
     }
 
-    pub fn appendEvent(self: *EventManager, ev: AppEvent) void {
-        self.appEvents.append(ev) catch |err|
+    pub fn appendAppEvent(self: *EventManager, event: AppEvent) void {
+        self.appEvents.append(event) catch |err|
             std.debug.print("EventManager.appendEvent failed: {}\n", .{err});
     }
 
-    pub fn cleanupAppEvents(self: *EventManager) void {
+    pub fn clearAppEvents(self: *EventManager) void {
         self.appEvents.clear();
     }
 
-    pub fn resetMouseMovement(self: *EventManager) void {
+    pub fn resetMouseChange(self: *EventManager) void {
         self.mouseMoveX = 0;
         self.mouseMoveY = 0;
     }
