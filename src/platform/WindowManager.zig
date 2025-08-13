@@ -14,6 +14,7 @@ const MouseMovement = @import("../core/EventManager.zig").MouseMovement;
 
 pub const WindowManager = struct {
     windows: CreateMapArray(Window, MAX_WINDOWS, u8, MAX_WINDOWS, 0) = .{},
+    mainWindow: ?*Window = null,
     changedWindows: std.BoundedArray(*Window, MAX_WINDOWS) = .{},
     openWindows: u8 = 0,
     close: bool = false,
@@ -95,6 +96,11 @@ pub const WindowManager = struct {
     pub fn processEvent(self: *WindowManager, event: *c.SDL_Event) !void {
         switch (event.type) {
             c.SDL_EVENT_QUIT => self.close = true,
+
+            c.SDL_EVENT_WINDOW_FOCUS_GAINED => {
+                std.debug.print("Focus Gained\n", .{});
+                self.mainWindow = self.windows.getPtr(@intCast(event.window.windowID));
+            },
 
             c.SDL_EVENT_WINDOW_CLOSE_REQUESTED,
             c.SDL_EVENT_WINDOW_MINIMIZED,

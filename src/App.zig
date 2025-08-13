@@ -83,6 +83,12 @@ pub const App = struct {
             if (windowMan.inputEvents.len > 0) eventMan.mapKeyEvents(windowMan.consumeKeyEvents());
             if (windowMan.mouseMovements.len > 0) eventMan.mapMouseMovements(windowMan.consumeMouseMovements());
 
+            // Process Window Changes
+            if (windowMan.changedWindows.len > 0) {
+                try renderer.update(windowMan.changedWindows.slice());
+                try windowMan.cleanupWindows();
+            }
+
             // Close Or Idle
             if (windowMan.close == true) return;
             if (windowMan.openWindows == 0) continue;
@@ -113,12 +119,6 @@ pub const App = struct {
             }
             eventMan.clearAppEvents();
 
-            // Process Window Changes
-            if (windowMan.changedWindows.len > 0) {
-                try renderer.update(windowMan.changedWindows.slice());
-                try windowMan.cleanupWindows();
-            }
-
             // Shader Hotloading
             if (config.SHADER_HOTLOAD == true) {
                 try self.fileMan.checkShaderUpdate();
@@ -138,7 +138,7 @@ pub const App = struct {
                 std.log.err("Error in renderer.draw(): {}", .{err});
                 break;
             };
-            memoryMan.*.resetArena();
+            defer memoryMan.*.resetArena();
         }
     }
 };
