@@ -22,16 +22,14 @@ pub const PipelineManager = struct {
         const cache = try createPipelineCache(gpi);
         const format = config.RENDER_IMAGE_FORMAT;
 
-        //const pipelines: [pipelineTypes]PipelineBucket = undefined;
-        const pipelines1 = try PipelineBucket.init(alloc, gpi, cache, format, &config.computeInf, .compute, resourceManager.layout, 1);
-        const pipelines2 = try PipelineBucket.init(alloc, gpi, cache, format, &config.graphicsInf, .graphics, null, 0);
-        const pipelines3 = try PipelineBucket.init(alloc, gpi, cache, format, &config.meshShaderInf, .mesh, null, 0);
-        const pipelines = .{ pipelines1, pipelines2, pipelines3 };
+        const compute = try PipelineBucket.init(alloc, gpi, cache, format, &config.computePipeInf, .compute, resourceManager.layout, 1);
+        const graphics = try PipelineBucket.init(alloc, gpi, cache, format, &config.graphicsPipeInf, .graphics, null, 0);
+        const mesh = try PipelineBucket.init(alloc, gpi, cache, format, &config.meshPipeInf, .mesh, null, 0);
 
         return .{
             .alloc = alloc,
             .gpi = gpi,
-            .pipelines = pipelines,
+            .pipelines = .{ compute, graphics, mesh },
             .cache = cache,
         };
     }

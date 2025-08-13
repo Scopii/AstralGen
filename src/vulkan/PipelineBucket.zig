@@ -2,14 +2,18 @@ const std = @import("std");
 const c = @import("../c.zig");
 const Allocator = std.mem.Allocator;
 const check = @import("error.zig").check;
-const createShaderModule = @import("../shader/shader.zig").createShaderModule;
-const SHADER_HOTLOAD = @import("../config.zig").SHADER_HOTLOAD;
+const config = @import("../config.zig");
 
 pub const ShaderInfo = struct {
     pipeType: PipelineType,
-    stage: c.VkShaderStageFlagBits,
     inputName: []const u8,
     outputName: []const u8,
+};
+
+pub const PipelineInfo = struct {
+    pipeType: PipelineType,
+    stage: c.VkShaderStageFlagBits,
+    sprvPath: []const u8,
 
     fn getStage(self: ShaderInfo) enum { compute, vertex, fragment, mesh, task } {
         return switch (self.stage) {
@@ -30,14 +34,14 @@ pub const Pipeline = struct {
     layout: c.VkPipelineLayout,
     format: ?c.VkFormat,
     pipelineType: PipelineType,
-    shaderInfos: []const ShaderInfo,
+    shaderInfos: []const PipelineInfo,
 
     pub fn init(
         alloc: Allocator,
         gpi: c.VkDevice,
         cache: c.VkPipelineCache,
         format: c.VkFormat,
-        shaderInfos: []const ShaderInfo,
+        shaderInfos: []const PipelineInfo,
         pipelineType: PipelineType,
         descriptorLayout: c.VkDescriptorSetLayout,
         layoutCount: u32,
@@ -92,14 +96,14 @@ fn destroyShaderModules(gpi: c.VkDevice, modules: []c.VkShaderModule) void {
     for (0..modules.len) |i| c.vkDestroyShaderModule(gpi, modules[i], null);
 }
 
-fn createShaderStages(alloc: Allocator, modules: []c.VkShaderModule, shaderInf: []const ShaderInfo) ![]c.VkPipelineShaderStageCreateInfo {
-    var stages = try alloc.alloc(c.VkPipelineShaderStageCreateInfo, shaderInf.len);
+fn createShaderStages(alloc: Allocator, modules: []c.VkShaderModule, pipeInfos: []const PipelineInfo) ![]c.VkPipelineShaderStageCreateInfo {
+    var stages = try alloc.alloc(c.VkPipelineShaderStageCreateInfo, pipeInfos.len);
     errdefer alloc.free(stages);
 
-    for (0..shaderInf.len) |i| {
+    for (0..pipeInfos.len) |i| {
         stages[i] = c.VkPipelineShaderStageCreateInfo{
             .sType = c.VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-            .stage = shaderInf[i].stage, //
+            .stage = pipeInfos[i].stage, //
             .module = modules[i],
             .pName = "main",
             .pSpecializationInfo = null, // for constants
@@ -108,10 +112,10 @@ fn createShaderStages(alloc: Allocator, modules: []c.VkShaderModule, shaderInf: 
     return stages;
 }
 
-fn createShaderModules(alloc: Allocator, gpi: c.VkDevice, shaderInf: []const ShaderInfo) ![]c.VkShaderModule {
-    var modules = try alloc.alloc(c.VkShaderModule, shaderInf.len);
+fn createShaderModules(alloc: Allocator, gpi: c.VkDevice, pipeInfos: []const PipelineInfo) ![]c.VkShaderModule {
+    var modules = try alloc.alloc(c.VkShaderModule, pipeInfos.len);
     errdefer alloc.free(modules);
-    for (0..shaderInf.len) |i| modules[i] = try createShaderModule(alloc, shaderInf[i].inputName, shaderInf[i].outputName, gpi);
+    for (0..pipeInfos.len) |i| modules[i] = try createShaderModule(alloc, pipeInfos[i].sprvPath, gpi);
     return modules;
 }
 
@@ -303,4 +307,50 @@ fn createPipeline(
             }
         },
     }
+}
+
+fn loadShader(alloc: Allocator, spvPath: []const u8) ![]align(@alignOf(u32)) u8 {
+    std.debug.print("Loading shader: {s}\n", .{spvPath});
+    const file = std.fs.cwd().openFile(spvPath, .{}) catch |err| {
+        std.debug.print("Failed to load shader: {s}\n", .{spvPath});
+        return err;
+    };
+    defer file.close();
+
+    const size = try file.getEndPos();
+    const data = try alloc.alignedAlloc(u8, @alignOf(u32), size);
+    _ = try file.readAll(data);
+    return data;
+}
+
+pub fn createShaderModule(alloc: std.mem.Allocator, spvPath: []const u8, gpi: c.VkDevice) !c.VkShaderModule {
+    const exe_dir = try std.fs.selfExeDirPathAlloc(alloc);
+    defer alloc.free(exe_dir);
+
+    // For runtime: look for shader folder next to exe (in parent of bin/)
+    const runtimeSpvPath = try std.fs.path.join(alloc, &[_][]const u8{ exe_dir, "..", spvPath });
+    defer alloc.free(runtimeSpvPath);
+
+    if (config.SHADER_HOTLOAD) {
+        // For development: resolve source path from project root
+        const projectRoot = try std.fs.path.resolve(alloc, &[_][]const u8{ exe_dir, config.rootPath });
+        defer alloc.free(projectRoot);
+        // Create output directory if needed
+        if (std.fs.path.dirname(runtimeSpvPath)) |dir_path| {
+            std.fs.cwd().makePath(dir_path) catch {}; // Ignore if exists
+        }
+    }
+
+    // Load compiled shader (works for both hotload and pre-compiled)
+    const loadedShader = try loadShader(alloc, runtimeSpvPath);
+    defer alloc.free(loadedShader);
+
+    const createInf = c.VkShaderModuleCreateInfo{
+        .sType = c.VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+        .codeSize = loadedShader.len,
+        .pCode = @ptrCast(@alignCast(loadedShader.ptr)),
+    };
+    var shdrMod: c.VkShaderModule = undefined;
+    try check(c.vkCreateShaderModule(gpi, &createInf, null, &shdrMod), "Failed to create shader module");
+    return shdrMod;
 }

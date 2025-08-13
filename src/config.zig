@@ -1,9 +1,8 @@
 pub const c = @import("c.zig");
 pub const std = @import("std");
-const KeyEvent = @import("core/EventManager.zig").KeyEvent;
-const KeyState = @import("core/EventManager.zig").KeyState;
-const AppEvent = @import("core/EventManager.zig").AppEvent;
+const KeyAssignments = @import("core/EventManager.zig").KeyAssignments;
 const ShaderInfo = @import("vulkan/PipelineBucket.zig").ShaderInfo;
+const PipelineInfo = @import("vulkan/PipelineBucket.zig").PipelineInfo;
 
 // Debug
 pub const DEBUG_MODE = true;
@@ -25,13 +24,6 @@ pub const CAM_SENS = 0.0003;
 pub const CAM_INIT_FOV = 100;
 pub const CAM_FOV_CHANGE = 0.0000001;
 
-pub const KeyAssignments = struct {
-    device: enum { mouse, keyboard },
-    state: KeyState,
-    cycle: enum { oneTime, repeat },
-    appEvent: AppEvent,
-    key: c_uint,
-};
 // KeyMap
 pub const keyAssignments = [_]KeyAssignments{
     // Camera
@@ -57,24 +49,24 @@ pub const shaderPath: []const u8 = "/src/shader";
 pub const shaderOutputPath: []const u8 = "/zig-out/shader";
 
 pub const shaderInfos = [_]ShaderInfo{
-    .{ .pipeType = .compute, .stage = c.VK_SHADER_STAGE_COMPUTE_BIT, .inputName = "Compute.comp", .outputName = "Compute.spv" },
+    .{ .pipeType = .compute, .inputName = "Compute.comp", .outputName = "Compute.spv" },
 
-    .{ .pipeType = .graphics, .stage = c.VK_SHADER_STAGE_VERTEX_BIT, .inputName = "Graphics.vert", .outputName = "GraphicsVert.spv" },
-    .{ .pipeType = .graphics, .stage = c.VK_SHADER_STAGE_FRAGMENT_BIT, .inputName = "Graphics.frag", .outputName = "GraphicsFrag.spv" },
+    .{ .pipeType = .graphics, .inputName = "Graphics.vert", .outputName = "GraphicsVert.spv" },
+    .{ .pipeType = .graphics, .inputName = "Graphics.frag", .outputName = "GraphicsFrag.spv" },
 
-    .{ .pipeType = .mesh, .stage = c.VK_SHADER_STAGE_MESH_BIT_EXT, .inputName = "Mesh.mesh", .outputName = "MeshMesh.spv" },
-    .{ .pipeType = .mesh, .stage = c.VK_SHADER_STAGE_FRAGMENT_BIT, .inputName = "Mesh.frag", .outputName = "MeshFrag.spv" },
+    .{ .pipeType = .mesh, .inputName = "Mesh.mesh", .outputName = "MeshMesh.spv" },
+    .{ .pipeType = .mesh, .inputName = "Mesh.frag", .outputName = "MeshFrag.spv" },
 };
 
 // Shader Infos
-pub const computeInf = [_]ShaderInfo{
-    .{ .pipeType = .compute, .stage = c.VK_SHADER_STAGE_COMPUTE_BIT, .inputName = "src/shader/Compute.comp", .outputName = "shader/Compute.spv" },
+pub const computePipeInf = [_]PipelineInfo{
+    .{ .pipeType = .compute, .stage = c.VK_SHADER_STAGE_COMPUTE_BIT, .sprvPath = "shader/Compute.spv" },
 };
-pub const graphicsInf = [_]ShaderInfo{
-    .{ .pipeType = .graphics, .stage = c.VK_SHADER_STAGE_FRAGMENT_BIT, .inputName = "src/shader/Graphics.frag", .outputName = "shader/GraphicsFrag.spv" },
-    .{ .pipeType = .graphics, .stage = c.VK_SHADER_STAGE_VERTEX_BIT, .inputName = "src/shader/Graphics.vert", .outputName = "shader/GraphicsVert.spv" },
+pub const graphicsPipeInf = [_]PipelineInfo{
+    .{ .pipeType = .graphics, .stage = c.VK_SHADER_STAGE_FRAGMENT_BIT, .sprvPath = "shader/GraphicsFrag.spv" },
+    .{ .pipeType = .graphics, .stage = c.VK_SHADER_STAGE_VERTEX_BIT, .sprvPath = "shader/GraphicsVert.spv" },
 };
-pub const meshShaderInf = [_]ShaderInfo{
-    .{ .pipeType = .mesh, .stage = c.VK_SHADER_STAGE_FRAGMENT_BIT, .inputName = "src/shader/Mesh.frag", .outputName = "shader/MeshFrag.spv" },
-    .{ .pipeType = .mesh, .stage = c.VK_SHADER_STAGE_MESH_BIT_EXT, .inputName = "src/shader/Mesh.mesh", .outputName = "shader/MeshMesh.spv" },
+pub const meshPipeInf = [_]PipelineInfo{
+    .{ .pipeType = .mesh, .stage = c.VK_SHADER_STAGE_FRAGMENT_BIT, .sprvPath = "shader/MeshFrag.spv" },
+    .{ .pipeType = .mesh, .stage = c.VK_SHADER_STAGE_MESH_BIT_EXT, .sprvPath = "shader/MeshMesh.spv" },
 };

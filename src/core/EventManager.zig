@@ -18,6 +18,14 @@ pub const AppEvent = enum {
 
 pub const KeyState = enum { pressed, released };
 
+pub const KeyAssignments = struct {
+    device: enum { mouse, keyboard },
+    state: KeyState,
+    cycle: enum { oneTime, repeat },
+    appEvent: AppEvent,
+    key: c_uint,
+};
+
 pub const KeyEvent = struct {
     key: c_uint,
     event: KeyState,
