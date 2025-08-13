@@ -140,6 +140,8 @@ pub const App = struct {
                 break;
             };
             defer memoryMan.*.resetArena();
+
+            windowMan.resetMainWindowOpacity();
         }
     }
 };

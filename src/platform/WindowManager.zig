@@ -48,7 +48,6 @@ pub const WindowManager = struct {
         const id = c.SDL_GetWindowID(sdlHandle);
         _ = c.SDL_SetWindowFullscreen(sdlHandle, false);
         _ = c.SDL_SetWindowRelativeMouseMode(sdlHandle, true);
-        //_ = c.SDL_SetWindowOpacity(sdlHandle, 0.5);
 
         const window = try Window.init(id, sdlHandle, pipeType, c.VkExtent2D{ .width = @intCast(width), .height = @intCast(height) });
         self.windows.set(@intCast(id), window);
@@ -94,14 +93,28 @@ pub const WindowManager = struct {
         return self.mouseMovements.slice();
     }
 
+    pub fn resetMainWindowOpacity(self: *WindowManager) void {
+        if (self.mainWindow) |window| {
+            const sdlHandle = window.*.handle;
+            _ = c.SDL_SetWindowOpacity(sdlHandle, 1.0);
+        }
+    }
+
     pub fn toggleMainFullscreen(self: *WindowManager) void {
-        const sdlHandle = self.mainWindow.?.handle; // TODO: Test what happens for mainWindow null
-        if (self.fullscreen == false) {
-            _ = c.SDL_SetWindowFullscreen(sdlHandle, true);
-            self.fullscreen = true;
-        } else {
-            _ = c.SDL_SetWindowFullscreen(sdlHandle, false);
-            self.fullscreen = false;
+        if (self.mainWindow) |window| {
+            const sdlHandle = window.*.handle;
+
+            if (self.fullscreen == false) {
+                _ = c.SDL_SetWindowBordered(sdlHandle, false);
+                _ = c.SDL_SetWindowOpacity(sdlHandle, 0.0);
+                _ = c.SDL_SetWindowFullscreen(sdlHandle, true);
+                self.fullscreen = true;
+            } else {
+                _ = c.SDL_SetWindowBordered(sdlHandle, true);
+                _ = c.SDL_SetWindowOpacity(sdlHandle, 0.0);
+                _ = c.SDL_SetWindowFullscreen(sdlHandle, false);
+                self.fullscreen = false;
+            }
         }
     }
 
@@ -110,13 +123,17 @@ pub const WindowManager = struct {
             c.SDL_EVENT_QUIT => self.close = true,
 
             c.SDL_EVENT_WINDOW_FOCUS_LOST => {
-                std.debug.print("Focus Lost\n", .{});
+                std.debug.print("Main Window Lost\n", .{});
                 self.mainWindow = null;
             },
 
             c.SDL_EVENT_WINDOW_FOCUS_GAINED => {
-                std.debug.print("Focus Set\n", .{});
+                std.debug.print("Main Window Set\n", .{});
                 self.mainWindow = self.windows.getPtr(@intCast(event.window.windowID));
+            },
+
+            c.SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED => {
+                std.debug.print("Window Pixel changed! \n", .{});
             },
 
             c.SDL_EVENT_WINDOW_CLOSE_REQUESTED,

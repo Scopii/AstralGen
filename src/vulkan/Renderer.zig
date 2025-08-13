@@ -29,7 +29,7 @@ pub const Renderer = struct {
     swapchainMan: SwapchainManager,
     cmdMan: CmdManager,
     scheduler: Scheduler,
-    renderImage: GpuImage,
+    renderImage: GpuImage = undefined,
     startTime: i128 = 0,
     testBuffer: GpuBuffer = undefined,
 
@@ -37,7 +37,7 @@ pub const Renderer = struct {
         const alloc = memoryMan.getAllocator();
         const instance = try createInstance(alloc);
         const context = try Context.init(alloc, instance);
-        const resourceMan2 = try ResourceManager.init(alloc, &context);
+        var resourceMan2 = try ResourceManager.init(alloc, &context);
         const cmdMan = try CmdManager.init(alloc, &context, config.MAX_IN_FLIGHT);
         const scheduler = try Scheduler.init(&context, config.MAX_IN_FLIGHT);
         const pipelineMan = try PipelineManager.init(alloc, &context, &resourceMan2);
@@ -102,15 +102,19 @@ pub const Renderer = struct {
             }
         }
         self.swapchainMan.updateMaxExtent();
-        const extent = self.swapchainMan.getMaxExtent();
+        if (config.RENDER_IMAGE_AUTO_RESIZE == true) try self.updateRenderImage();
+    }
 
-        if (extent.height != 0 or extent.width != 0) {
-            if (extent.width != self.renderImage.extent3d.width or extent.height != self.renderImage.extent3d.height) {
+    pub fn updateRenderImage(self: *Renderer) !void {
+        const new = self.swapchainMan.getMaxExtent();
+        const old = self.renderImage.extent3d;
+
+        if (new.height != 0 or new.width != 0) {
+            if (new.width != old.width or new.height != old.height) {
                 self.resourceMan2.destroyImage(self.renderImage);
-                const newRenderExtent = c.VkExtent3D{ .width = extent.width, .height = extent.height, .depth = config.RENDER_IMAGE_PRESET.depth };
-                self.renderImage = try self.resourceMan2.createGpuImage(newRenderExtent, c.VK_FORMAT_R16G16B16A16_SFLOAT, c.VMA_MEMORY_USAGE_GPU_ONLY);
+                self.renderImage = try self.resourceMan2.createGpuImage(config.RENDER_IMAGE_PRESET, config.RENDER_IMAGE_FORMAT, c.VMA_MEMORY_USAGE_GPU_ONLY);
                 try self.resourceMan2.updateImageDescriptor(self.renderImage.view, 0);
-                std.debug.print("Render Image now {}x{}\n", .{ extent.width, extent.height });
+                std.debug.print("RenderImage recreated {}x{} to {}x{}\n", .{ old.width, old.height, new.width, new.height });
             }
         }
     }
