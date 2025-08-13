@@ -1,8 +1,8 @@
 const std = @import("std");
 const c = @import("../c.zig");
 const Allocator = std.mem.Allocator;
-const check = @import("error.zig").check;
 const config = @import("../config.zig");
+const check = @import("error.zig").check;
 
 pub const PipelineType = enum { compute, graphics, mesh };
 
@@ -38,7 +38,6 @@ pub const Pipeline = struct {
     ) !Pipeline {
         const modules = try createShaderModules(alloc, gpi, shaderInfos);
         const stages = try createShaderStages(alloc, modules, shaderInfos);
-
         defer {
             destroyShaderModules(gpi, modules);
             alloc.free(modules);
@@ -311,7 +310,6 @@ fn loadShader(alloc: Allocator, spvPath: []const u8) ![]align(@alignOf(u32)) u8 
 pub fn createShaderModule(alloc: std.mem.Allocator, spvPath: []const u8, gpi: c.VkDevice) !c.VkShaderModule {
     const exe_dir = try std.fs.selfExeDirPathAlloc(alloc);
     defer alloc.free(exe_dir);
-
     // For runtime: look for shader folder next to exe (in parent of bin/)
     const runtimeSpvPath = try std.fs.path.join(alloc, &[_][]const u8{ exe_dir, "..", spvPath });
     defer alloc.free(runtimeSpvPath);
@@ -325,7 +323,6 @@ pub fn createShaderModule(alloc: std.mem.Allocator, spvPath: []const u8, gpi: c.
             std.fs.cwd().makePath(dir_path) catch {}; // Ignore if exists
         }
     }
-
     // Load compiled shader (works for both hotload and pre-compiled)
     const loadedShader = try loadShader(alloc, runtimeSpvPath);
     defer alloc.free(loadedShader);

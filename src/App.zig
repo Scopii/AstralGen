@@ -22,20 +22,20 @@ pub const App = struct {
 
     pub fn init(memoryMan: *MemoryManager) !App {
         var windowMan = WindowManager.init() catch |err| {
-            std.debug.print("WindowManager could not launch, Err {}\n", .{err});
+            std.debug.print("Astral App Error WindowManager could not launch, Err {}\n", .{err});
             return error.WindowManagerFailed;
         };
         errdefer windowMan.deinit();
 
         var fileMan = FileManager.init(memoryMan.getAllocator()) catch |err| {
-            windowMan.showErrorBox("File Manager could not launch", "\n");
+            windowMan.showErrorBox("Astral App Error", "File Manager could not launch");
             std.debug.print("Err {}\n", .{err});
             return error.FileManagerFailed;
         };
         errdefer fileMan.deinit();
 
         var renderer = Renderer.init(memoryMan) catch |err| {
-            windowMan.showErrorBox("Renderer could not launch", "\n");
+            windowMan.showErrorBox("Astral App Error", "Renderer could not launch");
             std.debug.print("Err {}\n", .{err});
             return error.RendererManagerFailed;
         };

@@ -1,22 +1,11 @@
 const std = @import("std");
+const AppEvent = config.AppEvent;
 const config = @import("../config.zig");
 const CreateMapArray = @import("../structures/MapArray.zig").CreateMapArray;
 
-pub const AppEvent = enum {
-    camForward,
-    camBackward,
-    camLeft,
-    camRight,
-    camUp,
-    camDown,
-    camFovIncrease,
-    camFovDecrease,
-
-    closeApp,
-    restartApp,
-};
-
 pub const KeyState = enum { pressed, released };
+pub const KeyEvent = struct { key: c_uint, event: KeyState };
+pub const MouseMovement = struct { xChange: f32, yChange: f32 };
 
 pub const KeyAssignments = struct {
     device: enum { mouse, keyboard },
@@ -24,16 +13,6 @@ pub const KeyAssignments = struct {
     cycle: enum { oneTime, repeat },
     appEvent: AppEvent,
     key: c_uint,
-};
-
-pub const KeyEvent = struct {
-    key: c_uint,
-    event: KeyState,
-};
-
-pub const MouseMovement = struct {
-    xChange: f32,
-    yChange: f32,
 };
 
 pub const EventManager = struct {

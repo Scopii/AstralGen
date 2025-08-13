@@ -1,7 +1,7 @@
 const std = @import("std");
 const c = @import("../c.zig");
-const PipelineType = @import("../vulkan/PipelineBucket.zig").PipelineType;
 const Swapchain = @import("../vulkan/SwapchainManager.zig").Swapchain;
+const PipelineType = @import("../vulkan/PipelineBucket.zig").PipelineType;
 
 pub const Window = struct {
     pub const windowStatus = enum {

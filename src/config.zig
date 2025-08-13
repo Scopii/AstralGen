@@ -24,6 +24,21 @@ pub const CAM_SENS = 0.0003;
 pub const CAM_INIT_FOV = 100;
 pub const CAM_FOV_CHANGE = 0.0000001;
 
+// All Events of the Application
+pub const AppEvent = enum {
+    camForward,
+    camBackward,
+    camLeft,
+    camRight,
+    camUp,
+    camDown,
+    camFovIncrease,
+    camFovDecrease,
+
+    closeApp,
+    restartApp,
+};
+
 // KeyMap
 pub const keyAssignments = [_]KeyAssignments{
     // Camera

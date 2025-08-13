@@ -1,7 +1,5 @@
 const std = @import("std");
 
-// Step 1: Put the C imports into a named constant.
-// I've named it `c_api` for clarity.
 pub const c_api = @cImport({
     @cInclude("vulkan/vulkan.h");
     @cInclude("SDL3/SDL.h");

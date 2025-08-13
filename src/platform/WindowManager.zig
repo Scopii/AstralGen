@@ -1,10 +1,10 @@
 const std = @import("std");
 const c = @import("../c.zig");
-const MemoryManger = @import("../core/MemoryManager.zig").MemoryManager;
 const Window = @import("Window.zig").Window;
-const PipelineType = @import("../vulkan/PipelineBucket.zig").PipelineType;
-const Swapchain = @import("../vulkan/SwapchainManager.zig").Swapchain;
 const Renderer = @import("../vulkan/Renderer.zig").Renderer;
+const Swapchain = @import("../vulkan/SwapchainManager.zig").Swapchain;
+const MemoryManger = @import("../core/MemoryManager.zig").MemoryManager;
+const PipelineType = @import("../vulkan/PipelineBucket.zig").PipelineType;
 const CreateMapArray = @import("../structures/MapArray.zig").CreateMapArray;
 const MAX_WINDOWS = @import("../config.zig").MAX_WINDOWS;
 

@@ -2,17 +2,18 @@ const std = @import("std");
 const c = @import("../c.zig");
 const Allocator = std.mem.Allocator;
 const Context = @import("Context.zig").Context;
+const Window = @import("../platform/Window.zig").Window;
 const QueueFamilies = @import("Context.zig").QueueFamilies;
+const PipelineType = @import("PipelineBucket.zig").PipelineType;
+const CreateMapArray = @import("../structures/MapArray.zig").CreateMapArray;
 const check = @import("error.zig").check;
 const createSemaphore = @import("primitives.zig").createSemaphore;
-const PipelineType = @import("PipelineBucket.zig").PipelineType;
-const Window = @import("../platform/Window.zig").Window;
-const CreateMapArray = @import("../structures/MapArray.zig").CreateMapArray;
 
-const MAX_IN_FLIGHT = @import("../config.zig").MAX_IN_FLIGHT;
-const MAX_WINDOWS = @import("../config.zig").MAX_WINDOWS;
-const DESIRED_SWAPCHAIN_IMAGES = @import("../config.zig").DESIRED_SWAPCHAIN_IMAGES;
-const DISPLAY_MODE = @import("../config.zig").DISPLAY_MODE;
+const config = @import("../config.zig");
+const MAX_IN_FLIGHT = config.MAX_IN_FLIGHT;
+const MAX_WINDOWS = config.MAX_WINDOWS;
+const DESIRED_SWAPCHAIN_IMAGES = config.DESIRED_SWAPCHAIN_IMAGES;
+const DISPLAY_MODE = config.DISPLAY_MODE;
 
 pub const Swapchain = struct {
     surface: c.VkSurfaceKHR,

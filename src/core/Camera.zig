@@ -1,6 +1,7 @@
-const zm = @import("zmath");
 const std = @import("std");
+const zm = @import("zmath");
 const config = @import("../config.zig");
+
 const M_PI = 3.14159; //3.1415927
 const TWO_PI = 2 * M_PI;
 

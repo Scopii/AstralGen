@@ -1,9 +1,9 @@
-const c = @import("../c.zig");
 const std = @import("std");
+const c = @import("../c.zig");
+const Allocator = std.mem.Allocator;
 const Context = @import("Context.zig").Context;
 const VkAllocator = @import("vma.zig").VkAllocator;
 const check = @import("error.zig").check;
-const Allocator = std.mem.Allocator;
 
 pub const GpuImage = struct {
     allocation: c.VmaAllocation,

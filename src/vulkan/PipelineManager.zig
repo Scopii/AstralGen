@@ -1,14 +1,13 @@
 const std = @import("std");
 const c = @import("../c.zig");
 const Allocator = std.mem.Allocator;
-const check = @import("error.zig").check;
 const ztracy = @import("ztracy");
-const ResourceManager = @import("ResourceManager.zig").ResourceManager;
+const config = @import("../config.zig");
+const Context = @import("Context.zig").Context;
 const PipelineBucket = @import("PipelineBucket.zig").Pipeline;
 const PipelineType = @import("PipelineBucket.zig").PipelineType;
-const Context = @import("Context.zig").Context;
-
-const config = @import("../config.zig");
+const ResourceManager = @import("ResourceManager.zig").ResourceManager;
+const check = @import("error.zig").check;
 
 pub const PipelineManager = struct {
     const pipeTypes = @typeInfo(PipelineType).@"enum".fields.len;

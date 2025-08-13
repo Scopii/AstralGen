@@ -1,23 +1,7 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
-const PipelineType = @import("../vulkan/PipelineBucket.zig").PipelineType;
 const config = @import("../config.zig");
-
-pub const FileType = enum {
-    asset,
-    shader,
-    savegame,
-};
-
-fn resolveProjectRoot(alloc: Allocator, relativePath: []const u8) ![]u8 {
-    const exeDir = try std.fs.selfExeDirPathAlloc(alloc);
-    defer alloc.free(exeDir);
-    return std.fs.path.resolve(alloc, &.{ exeDir, relativePath });
-}
-
-pub fn joinPath(alloc: Allocator, path1: []const u8, path2: []const u8) ![]u8 {
-    return std.fs.path.join(alloc, &[_][]const u8{ path1, path2 });
-}
+const PipelineType = @import("../vulkan/PipelineBucket.zig").PipelineType;
 
 pub const FileManager = struct {
     const pipelineTypes = @typeInfo(PipelineType).@"enum".fields.len;
@@ -89,6 +73,16 @@ pub const FileManager = struct {
     }
 };
 
+fn resolveProjectRoot(alloc: Allocator, relativePath: []const u8) ![]u8 {
+    const exeDir = try std.fs.selfExeDirPathAlloc(alloc);
+    defer alloc.free(exeDir);
+    return std.fs.path.resolve(alloc, &.{ exeDir, relativePath });
+}
+
+pub fn joinPath(alloc: Allocator, path1: []const u8, path2: []const u8) ![]u8 {
+    return std.fs.path.join(alloc, &[_][]const u8{ path1, path2 });
+}
+
 pub fn getFileTimeStamp(src: []const u8) !i128 {
     const cwd = std.fs.cwd();
     const stat = try cwd.statFile(src);
@@ -113,12 +107,4 @@ fn compileShader(alloc: Allocator, srcPath: []const u8, spvPath: []const u8) !vo
         std.debug.print("glslc failed:\n{s}\n", .{result.stderr});
         return error.ShaderCompilationFailed;
     }
-}
-
-pub fn readFile(self: *FileManager, fileType: FileType, relative_path: []const u8) ![]u8 {
-    const base_path = self.getBasePath(fileType);
-    const full_path = try std.fs.path.join(self.alloc, &.{ base_path, relative_path });
-    defer self.alloc.free(full_path);
-
-    return std.fs.cwd().readFileAlloc(self.alloc, full_path, 1_000_000_000); // 1GB limit
 }
