@@ -172,18 +172,17 @@ pub const Renderer = struct {
         var waitInfos = try self.arenaAlloc.alloc(c.VkSemaphoreSubmitInfo, submitIds.len);
         for (submitIds, 0..) |id, i| {
             const swapchain = self.swapchainMan.swapchains.getAtIndex(id);
+            // Wait on the binary semaphore from vkAcquireNextImageKHR
             waitInfos[i] = createSemaphoreSubmitInfo(swapchain.imgRdySems[frameInFlight], c.VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, 0);
         }
-
-        var signalInfos = try self.arenaAlloc.alloc(c.VkSemaphoreSubmitInfo, submitIds.len + 1); // (+1 is Timeline Semaphore)
+        var signalInfos = try self.arenaAlloc.alloc(c.VkSemaphoreSubmitInfo, submitIds.len + 1);
+        // Signal the binary semaphores that presentation will wait on
         for (submitIds, 0..) |id, i| {
             const swapchain = self.swapchainMan.swapchains.getAtIndex(id);
             signalInfos[i] = createSemaphoreSubmitInfo(swapchain.renderDoneSems[swapchain.curIndex], c.VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, 0);
         }
-        // Adding the timeline
-        signalInfos[submitIds.len] =
-            createSemaphoreSubmitInfo(self.scheduler.cpuSyncTimeline, c.VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, self.scheduler.totalFrames + 1);
-
+        // Signal timeline semaphore for CPU
+        signalInfos[submitIds.len] = createSemaphoreSubmitInfo(self.scheduler.cpuSyncTimeline, c.VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, self.scheduler.totalFrames + 1);
         const cmdSubmitInfo = createCmdSubmitInfo(cmd);
         const submitInf = createSubmitInfo(waitInfos, &cmdSubmitInfo, signalInfos);
         try check(c.vkQueueSubmit2(self.context.graphicsQ, 1, &submitInf, null), "Failed main submission");
@@ -194,6 +193,7 @@ pub const Renderer = struct {
         defer self.alloc.free(swapchainHandles);
         var imageIndices = try self.alloc.alloc(u32, presentIds.len);
         defer self.alloc.free(imageIndices);
+        // BINARY semaphores that vkQueuePresentKHR will wait on.
         var presentWaitSems = try self.alloc.alloc(c.VkSemaphore, presentIds.len);
         defer self.alloc.free(presentWaitSems);
 
@@ -201,6 +201,7 @@ pub const Renderer = struct {
             const swapchain = self.swapchainMan.swapchains.getAtIndex(id);
             swapchainHandles[i] = swapchain.handle;
             imageIndices[i] = swapchain.curIndex;
+            // Get the specific binary semaphore for the image we just rendered to.
             presentWaitSems[i] = swapchain.renderDoneSems[swapchain.curIndex];
         }
         const presentInf = createPresentInfo(presentWaitSems, swapchainHandles, imageIndices);
