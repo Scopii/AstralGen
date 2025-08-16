@@ -11,6 +11,11 @@ extern fn SDL_ShowSimpleMessageBox(flags: u32, title: [*c]const u8, message: [*c
 
 pub var pfn_vkCmdDrawMeshTasksEXT: c_api.PFN_vkCmdDrawMeshTasksEXT = null;
 
+pub var pfn_vkCreateShadersEXT: c_api.PFN_vkCreateShadersEXT = null;
+pub var pfn_vkDestroyShaderEXT: c_api.PFN_vkDestroyShaderEXT = null;
+pub var pfn_vkCmdBindShadersEXT: c_api.PFN_vkCmdBindShadersEXT = null;
+pub var pfn_vkCmdSetVertexInputEXT: c_api.PFN_vkCmdSetVertexInputEXT = null;
+
 pub var pfn_vkCmdBindDescriptorBuffersEXT: c_api.PFN_vkCmdBindDescriptorBuffersEXT = null;
 pub var pfn_vkCmdSetDescriptorBufferOffsetsEXT: c_api.PFN_vkCmdSetDescriptorBufferOffsetsEXT = null;
 pub var pfn_vkGetDescriptorEXT: c_api.PFN_vkGetDescriptorEXT = null;

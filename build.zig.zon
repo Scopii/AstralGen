@@ -6,6 +6,10 @@
 
     .dependencies = .{
         //Vulkan
+        .vulkan_headers = .{
+            .url = "https://github.com/KhronosGroup/Vulkan-Headers/archive/2e0a6e699e35c9609bde2ca4abb0d380c0378639.tar.gz",
+            .hash = "N-V-__8AACJA9gH2PXN1QZ9vF1oi8qUvJMRdX8ZZRTA5lova",
+        },
         .vulkan_zig = .{
             .url = "https://github.com/Snektron/vulkan-zig/archive/9b4090c852760ce3210562f62ffaf301479c38ba.tar.gz",
             .hash = "vulkan-0.0.0-r7Ytx2dUAwDhoUvuIqliqPUbyDZZi0bl_CQIwspUpHs_",

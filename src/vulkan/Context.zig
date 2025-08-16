@@ -254,8 +254,14 @@ fn createGPI(alloc: Allocator, gpu: c.VkPhysicalDevice, families: QueueFamilies)
     var features: c.VkPhysicalDeviceFeatures = undefined;
     c.vkGetPhysicalDeviceFeatures(gpu, &features);
 
+    var shader_object_features = c.VkPhysicalDeviceShaderObjectFeaturesEXT{
+        .sType = c.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_OBJECT_FEATURES_EXT,
+        .shaderObject = c.VK_TRUE,
+    };
+
     var mesh_shader_features = c.VkPhysicalDeviceMeshShaderFeaturesEXT{
         .sType = c.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_EXT,
+        .pNext = &shader_object_features,
         .taskShader = c.VK_TRUE,
         .meshShader = c.VK_TRUE,
     };
@@ -282,7 +288,12 @@ fn createGPI(alloc: Allocator, gpu: c.VkPhysicalDevice, families: QueueFamilies)
         .pNext = @constCast(@ptrCast(&features_vulkan12)),
     };
 
-    const gpuExtensions = [_][*c]const u8{ "VK_KHR_swapchain", "VK_EXT_mesh_shader", "VK_EXT_descriptor_buffer" };
+    const gpuExtensions = [_][*c]const u8{
+        "VK_KHR_swapchain",
+        "VK_EXT_mesh_shader",
+        "VK_EXT_descriptor_buffer",
+        "VK_EXT_shader_object",
+    };
 
     const createInfo = c.VkDeviceCreateInfo{
         .sType = c.VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
@@ -305,6 +316,26 @@ fn createGPI(alloc: Allocator, gpu: c.VkPhysicalDevice, families: QueueFamilies)
     if (fnPtrDrawMeshTasks) |p| c.pfn_vkCmdDrawMeshTasksEXT = @ptrCast(p) else c.pfn_vkCmdDrawMeshTasksEXT = null;
     if (c.pfn_vkCmdDrawMeshTasksEXT == null) {
         std.log.err("Could not load the vkCmdDrawMeshTasksEXT function pointer!\n", .{});
+        return error.MissingVulkanFunction;
+    }
+
+    // Import Shader Object Functions
+    const fnPtrCreateShaders = c.vkGetDeviceProcAddr(gpi, "vkCreateShadersEXT");
+    c.pfn_vkCreateShadersEXT = if (fnPtrCreateShaders) |p| @ptrCast(p) else null;
+    const fnPtrDestroyShader = c.vkGetDeviceProcAddr(gpi, "vkDestroyShaderEXT");
+    c.pfn_vkDestroyShaderEXT = if (fnPtrDestroyShader) |p| @ptrCast(p) else null;
+    const fnPtrCmdBindShadersEXT = c.vkGetDeviceProcAddr(gpi, "vkCmdBindShadersEXT");
+    c.pfn_vkCmdBindShadersEXT = if (fnPtrCmdBindShadersEXT) |p| @ptrCast(p) else null;
+    const fnPtrCmdSetVertexInputEXT = c.vkGetDeviceProcAddr(gpi, "vkCmdSetVertexInputEXT");
+    c.pfn_vkCmdSetVertexInputEXT = if (fnPtrCmdSetVertexInputEXT) |p| @ptrCast(p) else null;
+
+    // Check if function pointers loaded successfully
+    if (c.pfn_vkCreateShadersEXT == null or
+        c.pfn_vkDestroyShaderEXT == null or
+        c.pfn_vkCmdBindShadersEXT == null or
+        c.pfn_vkCmdSetVertexInputEXT == null)
+    {
+        std.log.err("Could not load shader object function pointers!\n", .{});
         return error.MissingVulkanFunction;
     }
 
