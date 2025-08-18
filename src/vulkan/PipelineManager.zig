@@ -11,7 +11,7 @@ const check = @import("error.zig").check;
 
 pub const PipelineManager = struct {
     const pipeTypes = @typeInfo(PipelineType).@"enum".fields.len;
-    pipelines: [pipeTypes]PipelineBucket, // not used yet
+    pipelines: [pipeTypes]PipelineBucket,
     alloc: Allocator,
     gpi: c.VkDevice,
     cache: c.VkPipelineCache,
