@@ -29,7 +29,7 @@ pub const ResourceManager = struct {
     gpu: c.VkPhysicalDevice,
 
     layout: c.VkDescriptorSetLayout,
-    imageBuffer: GpuBuffer,
+    imageDescBuffer: GpuBuffer,
     imageDescSize: u32,
 
     pub fn init(alloc: Allocator, context: *const Context) !ResourceManager {
@@ -49,7 +49,7 @@ pub const ResourceManager = struct {
         c.pfn_vkGetDescriptorSetLayoutSizeEXT.?(gpi, layout, &layoutSize);
 
         // Create descriptor buffer with driver-provided size
-        const imageBuffer = try createDefinedBuffer(gpuAlloc.handle, gpi, layoutSize, null, .descriptor);
+        const imageDescBuffer = try createDefinedBuffer(gpuAlloc.handle, gpi, layoutSize, null, .descriptor);
 
         return .{
             .cpuAlloc = alloc,
@@ -57,13 +57,13 @@ pub const ResourceManager = struct {
             .gpi = context.gpi,
             .gpu = context.gpu,
             .imageDescSize = imageDescSize,
-            .imageBuffer = imageBuffer,
+            .imageDescBuffer = imageDescBuffer,
             .layout = layout,
         };
     }
 
     pub fn deinit(self: *ResourceManager) void {
-        c.vmaDestroyBuffer(self.gpuAlloc.handle, self.imageBuffer.buffer, self.imageBuffer.allocation);
+        c.vmaDestroyBuffer(self.gpuAlloc.handle, self.imageDescBuffer.buffer, self.imageDescBuffer.allocation);
         c.vkDestroyDescriptorSetLayout(self.gpi, self.layout, null);
         self.gpuAlloc.deinit();
     }
@@ -113,7 +113,7 @@ pub const ResourceManager = struct {
         c.pfn_vkGetDescriptorEXT.?(gpi, &getInf, imageDescSize, &descData);
 
         var allocVmaInf: c.VmaAllocationInfo = undefined;
-        c.vmaGetAllocationInfo(vkAlloc, self.imageBuffer.allocation, &allocVmaInf);
+        c.vmaGetAllocationInfo(vkAlloc, self.imageDescBuffer.allocation, &allocVmaInf);
 
         const offset = index * imageDescSize;
         const mappedData = @as([*]u8, @ptrCast(allocVmaInf.pMappedData));
@@ -178,8 +178,9 @@ fn createDefinedBuffer(vma: c.VmaAllocator, gpi: c.VkDevice, size: c.VkDeviceSiz
         .uniform, .descriptor, .testBuffer => c.VMA_MEMORY_USAGE_CPU_TO_GPU,
     };
     const memoryFlags: u32 = switch (bufferType) {
+        .uniform, .descriptor => c.VMA_ALLOCATION_CREATE_MAPPED_BIT,
         .testBuffer => c.VMA_ALLOCATION_CREATE_MAPPED_BIT | c.VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT,
-        else => c.VMA_ALLOCATION_CREATE_MAPPED_BIT,
+        .storage => 0, // Storage buffers should not be mapped
     };
     return createBuffer(vma, gpi, size, data, bufferUsage, memoryUsage, memoryFlags);
 }
@@ -203,7 +204,7 @@ fn createDescriptorLayout(gpi: c.VkDevice, binding: u32, descType: c.VkDescripto
     return layout;
 }
 
-fn createBuffer(vma: c.VmaAllocator, gpi: c.VkDevice, size: c.VkDeviceSize, data: ?[]const u8, bufferUsage: c.VkBufferUsageFlags, memoryUsage: c.VmaMemoryUsage, memoryFlags: c.VmaAllocationCreateFlags) !GpuBuffer {
+fn createBuffer(vma: c.VmaAllocator, gpi: c.VkDevice, size: c.VkDeviceSize, data: ?[]const u8, bufferUsage: c.VkBufferUsageFlags, memUsage: c.VmaMemoryUsage, memFlags: c.VmaAllocationCreateFlags) !GpuBuffer {
     const bufferInf = c.VkBufferCreateInfo{
         .sType = c.VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
         .size = size,
@@ -213,7 +214,7 @@ fn createBuffer(vma: c.VmaAllocator, gpi: c.VkDevice, size: c.VkDeviceSize, data
     var buffer: c.VkBuffer = undefined;
     var allocation: c.VmaAllocation = undefined;
     var allocVmaInf: c.VmaAllocationInfo = undefined;
-    const allocInf = c.VmaAllocationCreateInfo{ .usage = memoryUsage, .flags = memoryFlags };
+    const allocInf = c.VmaAllocationCreateInfo{ .usage = memUsage, .flags = memFlags };
     try check(c.vmaCreateBuffer(vma, &bufferInf, &allocInf, &buffer, &allocation, &allocVmaInf), "Failed to create buffer reference buffer");
 
     const addressInf = c.VkBufferDeviceAddressInfo{ .sType = c.VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO, .buffer = buffer };

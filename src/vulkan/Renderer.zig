@@ -112,7 +112,8 @@ pub const Renderer = struct {
         if (new.height != 0 or new.width != 0) {
             if (new.width != old.width or new.height != old.height) {
                 self.resourceMan2.destroyGpuImage(self.renderImage);
-                self.renderImage = try self.resourceMan2.createGpuImage(.{ .width = new.width, .height = new.height, .depth = config.RENDER_IMAGE_PRESET.depth }, config.RENDER_IMAGE_FORMAT, c.VMA_MEMORY_USAGE_GPU_ONLY);
+                const newExtent = c.VkExtent3D{ .width = new.width, .height = new.height, .depth = config.RENDER_IMAGE_PRESET.depth };
+                self.renderImage = try self.resourceMan2.createGpuImage(newExtent, config.RENDER_IMAGE_FORMAT, c.VMA_MEMORY_USAGE_GPU_ONLY);
                 try self.resourceMan2.updateImageDescriptor(self.renderImage.view, 0);
                 std.debug.print("RenderImage recreated {}x{} to {}x{}\n", .{ old.width, old.height, new.width, new.height });
             }
@@ -159,7 +160,7 @@ pub const Renderer = struct {
                 };
 
                 switch (pipeType) {
-                    .compute => try self.cmdMan.recordComputePass(&self.renderImage, &self.pipelineMan.pipelines[0], self.resourceMan2.imageBuffer.gpuAddress, compPushConstants),
+                    .compute => try self.cmdMan.recordComputePass(&self.renderImage, &self.pipelineMan.pipelines[0], self.resourceMan2.imageDescBuffer.gpuAddress, compPushConstants),
                     .graphics => try self.cmdMan.recordGraphicsPass(&self.renderImage, &self.pipelineMan.pipelines[1], .graphics),
                     .mesh => try self.cmdMan.recordGraphicsPass(&self.renderImage, &self.pipelineMan.pipelines[2], .mesh),
                 }
@@ -214,12 +215,7 @@ pub const Renderer = struct {
 };
 
 fn createSemaphoreSubmitInfo(semaphore: c.VkSemaphore, stageMask: u64, value: u64) c.VkSemaphoreSubmitInfo {
-    return .{
-        .sType = c.VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
-        .semaphore = semaphore,
-        .stageMask = stageMask,
-        .value = value,
-    };
+    return .{ .sType = c.VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO, .semaphore = semaphore, .stageMask = stageMask, .value = value };
 }
 
 fn createSubmitInfo(waitInfos: []c.VkSemaphoreSubmitInfo, cmdInfo: *const c.VkCommandBufferSubmitInfo, signalInfos: []c.VkSemaphoreSubmitInfo) c.VkSubmitInfo2 {
@@ -235,10 +231,7 @@ fn createSubmitInfo(waitInfos: []c.VkSemaphoreSubmitInfo, cmdInfo: *const c.VkCo
 }
 
 fn createCmdSubmitInfo(cmd: c.VkCommandBuffer) c.VkCommandBufferSubmitInfo {
-    return .{
-        .sType = c.VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
-        .commandBuffer = cmd,
-    };
+    return .{ .sType = c.VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO, .commandBuffer = cmd };
 }
 
 fn createPresentInfo(waitSemaphores: []c.VkSemaphore, swapchainHandles: []c.VkSwapchainKHR, imageIndices: []u32) c.VkPresentInfoKHR {
