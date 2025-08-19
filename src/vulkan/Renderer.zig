@@ -60,7 +60,7 @@ pub const Renderer = struct {
 
     pub fn deinit(self: *Renderer) void {
         _ = c.vkDeviceWaitIdle(self.context.gpi);
-        self.resourceMan2.destroyImage(self.renderImage);
+        self.resourceMan2.destroyGpuImage(self.renderImage);
         self.scheduler.deinit();
         self.cmdMan.deinit();
         self.swapchainMan.deinit();
@@ -111,7 +111,7 @@ pub const Renderer = struct {
 
         if (new.height != 0 or new.width != 0) {
             if (new.width != old.width or new.height != old.height) {
-                self.resourceMan2.destroyImage(self.renderImage);
+                self.resourceMan2.destroyGpuImage(self.renderImage);
                 self.renderImage = try self.resourceMan2.createGpuImage(.{ .width = new.width, .height = new.height, .depth = config.RENDER_IMAGE_PRESET.depth }, config.RENDER_IMAGE_FORMAT, c.VMA_MEMORY_USAGE_GPU_ONLY);
                 try self.resourceMan2.updateImageDescriptor(self.renderImage.view, 0);
                 std.debug.print("RenderImage recreated {}x{} to {}x{}\n", .{ old.width, old.height, new.width, new.height });

@@ -37,16 +37,10 @@ pub const ResourceManager = struct {
         const gpuAlloc = try VkAllocator.init(context.instance, context.gpi, context.gpu);
 
         // Query descriptor buffer properties
-        var descBufferProps = c.VkPhysicalDeviceDescriptorBufferPropertiesEXT{
-            .sType = c.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_BUFFER_PROPERTIES_EXT,
-        };
-        var physDevProps = c.VkPhysicalDeviceProperties2{
-            .sType = c.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2,
-            .pNext = &descBufferProps,
-        };
+        var descBufferProps = c.VkPhysicalDeviceDescriptorBufferPropertiesEXT{ .sType = c.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_BUFFER_PROPERTIES_EXT };
+        var physDevProps = c.VkPhysicalDeviceProperties2{ .sType = c.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2, .pNext = &descBufferProps };
         c.vkGetPhysicalDeviceProperties2(context.gpu, &physDevProps);
         const imageDescSize: u32 = @intCast(descBufferProps.storageImageDescriptorSize); // Whole gpu memory?
-
         // Create descriptor set layout for compute pipeline
         const layout = try createDescriptorLayout(gpi, 0, c.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, c.VK_SHADER_STAGE_COMPUTE_BIT);
         errdefer c.vkDestroyDescriptorSetLayout(gpi, layout, null);
@@ -79,7 +73,6 @@ pub const ResourceManager = struct {
     pub fn deinit(self: *ResourceManager) void {
         c.vmaDestroyBuffer(self.gpuAlloc.handle, self.imageBuffer.buffer, self.imageBuffer.allocation);
         c.vkDestroyDescriptorSetLayout(self.gpi, self.layout, null);
-
         self.gpuAlloc.deinit();
     }
 
@@ -92,10 +85,7 @@ pub const ResourceManager = struct {
 
         // Allocation from GPU local memory
         const imageInf = createAllocatedImageInf(format, drawImageUsages, extent);
-        const imageAllocInf = c.VmaAllocationCreateInfo{
-            .usage = usage,
-            .requiredFlags = c.VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-        };
+        const imageAllocInf = c.VmaAllocationCreateInfo{ .usage = usage, .requiredFlags = c.VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT };
 
         var image: c.VkImage = undefined;
         var allocation: c.VmaAllocation = undefined;
@@ -118,11 +108,7 @@ pub const ResourceManager = struct {
         const vkAlloc = self.gpuAlloc.handle;
         const imageDescSize = self.imageDescSize;
 
-        const imageInf = c.VkDescriptorImageInfo{
-            .sampler = null,
-            .imageView = imageView,
-            .imageLayout = c.VK_IMAGE_LAYOUT_GENERAL,
-        };
+        const imageInf = c.VkDescriptorImageInfo{ .sampler = null, .imageView = imageView, .imageLayout = c.VK_IMAGE_LAYOUT_GENERAL };
 
         const getInf = c.VkDescriptorGetInfoEXT{
             .sType = c.VK_STRUCTURE_TYPE_DESCRIPTOR_GET_INFO_EXT,
@@ -132,9 +118,7 @@ pub const ResourceManager = struct {
         };
 
         var descData: [32]u8 = undefined;
-        if (imageDescSize > descData.len) {
-            return error.DescriptorSizeTooLarge;
-        }
+        if (imageDescSize > descData.len) return error.DescriptorSizeTooLarge;
         c.pfn_vkGetDescriptorEXT.?(gpi, &getInf, imageDescSize, &descData);
 
         var allocVmaInf: c.VmaAllocationInfo = undefined;
@@ -143,7 +127,6 @@ pub const ResourceManager = struct {
         const offset = index * imageDescSize;
         const mappedData = @as([*]u8, @ptrCast(allocVmaInf.pMappedData));
         const destPtr = mappedData + offset;
-
         @memcpy(destPtr[0..imageDescSize], descData[0..imageDescSize]);
     }
 
@@ -207,19 +190,6 @@ pub const ResourceManager = struct {
         );
     }
 
-    // Create additional descriptor layouts dynamically
-    pub fn createDynamicLayout(self: *ResourceManager, bindings: []const c.VkDescriptorSetLayoutBinding) !c.VkDescriptorSetLayout {
-        const layoutInf = c.VkDescriptorSetLayoutCreateInfo{
-            .sType = c.VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-            .bindingCount = @intCast(bindings.len),
-            .pBindings = bindings.ptr,
-            .flags = c.VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT,
-        };
-        var layout: c.VkDescriptorSetLayout = undefined;
-        try check(c.vkCreateDescriptorSetLayout(self.gpi, &layoutInf, null, &layout), "Failed to create dynamic descriptor layout");
-        return layout;
-    }
-
     pub fn updateGpuBuffer(self: *const ResourceManager, bufRef: GpuBuffer, data: []const u8, offset: c.VkDeviceSize) !void {
         if (offset + data.len > bufRef.size) return error.BufferOverflow;
 
@@ -234,7 +204,7 @@ pub const ResourceManager = struct {
         c.vmaDestroyBuffer(self.gpuAlloc.handle, bufRef.buffer, bufRef.allocation);
     }
 
-    pub fn destroyImage(self: *const ResourceManager, image: GpuImage) void {
+    pub fn destroyGpuImage(self: *const ResourceManager, image: GpuImage) void {
         c.vkDestroyImageView(self.gpi, image.view, null);
         c.vmaDestroyImage(self.gpuAlloc.handle, image.image, image.allocation);
     }
@@ -273,10 +243,7 @@ fn createBuffer(vma: c.VmaAllocator, gpi: c.VkDevice, size: c.VkDeviceSize, data
     var allocVmaInf: c.VmaAllocationInfo = undefined;
     try check(c.vmaCreateBuffer(vma, &bufferInf, &allocInf, &buffer, &allocation, &allocVmaInf), "Failed to create buffer reference buffer");
 
-    const addressInf = c.VkBufferDeviceAddressInfo{
-        .sType = c.VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
-        .buffer = buffer,
-    };
+    const addressInf = c.VkBufferDeviceAddressInfo{ .sType = c.VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO, .buffer = buffer };
     const deviceAddress = c.vkGetBufferDeviceAddress(gpi, &addressInf);
 
     // Initialize with data if provided
