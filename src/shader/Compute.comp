@@ -3,26 +3,22 @@
 #extension GL_EXT_buffer_reference : require
 #extension GL_EXT_scalar_block_layout : require
 
-// Buffer reference type
+// Work Group
+layout (local_size_x = 8, local_size_y = 8) in;
+// Descriptors
+layout(set = 0, binding = 0, rgba16f) restrict uniform image2D image;
+// Buffer reference raw data
 layout(buffer_reference, std430) restrict buffer Vec4Buffer {
     vec4 data[];
 };
-
-layout(set = 0, binding = 0, rgba16f) restrict uniform image2D image;
-
-// Add camDir back to push constants
+// Push Constant
 layout(push_constant, std430) restrict uniform PushConstants {
-    vec4 camPosAndFov; // Last Vector is Fov
-    vec4 camDir; // You need this for proper camera rotation!
+    vec4 camPosAndFov; // Last Float is Fov
+    vec4 camDir;
     float runtime;
-    uint data_count;
+    uint dataCount;
     Vec4Buffer testData;
 } pushConstants;
-
-layout (local_size_x = 8, local_size_y = 8) in;
-
-// View constants
-const float ASPECT_RATIO = 16.0 / 9.0;
 
 // Marching constants
 const int MAX_STEPS = 1024 * 2;
@@ -120,7 +116,7 @@ void main() {
         
         // Use test data for color variation
         float colorMod = 1.0;
-        if(pushConstants.data_count > 1) { // Safety check
+        if(pushConstants.dataCount > 1) { // Safety check
             vec4 data = pushConstants.testData.data[1];
             colorMod = 0.5 + 0.5 * sin(length(data.xyz) * 3.14 + pushConstants.runtime);
         }
