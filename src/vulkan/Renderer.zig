@@ -32,8 +32,9 @@ pub const Renderer = struct {
     renderImage: GpuImage = undefined,
     startTime: i128 = 0,
     testBuffer: GpuBuffer = undefined,
+    const Object = @import("../ecs/EntityManager.zig").Object;
 
-    pub fn init(memoryMan: *MemoryManager) !Renderer {
+    pub fn init(memoryMan: *MemoryManager, objects: []Object) !Renderer {
         const alloc = memoryMan.getAllocator();
         const instance = try createInstance(alloc);
         const context = try Context.init(alloc, instance);
@@ -54,7 +55,7 @@ pub const Renderer = struct {
             .renderImage = try resourceMan2.createGpuImage(config.RENDER_IMAGE_PRESET, config.RENDER_IMAGE_FORMAT, c.VMA_MEMORY_USAGE_GPU_ONLY),
             .swapchainMan = swapchainMan,
             .startTime = std.time.nanoTimestamp(),
-            .testBuffer = try resourceMan2.createTestDataBuffer(config.RENDER_IMAGE_PRESET),
+            .testBuffer = try resourceMan2.createTestDataBuffer(objects),
         };
     }
 
@@ -156,7 +157,7 @@ pub const Renderer = struct {
                     .camDir = cam.getForward(),
                     .dataAddress = self.testBuffer.gpuAddress,
                     .runtime = runtimeAsFloat,
-                    .dataCount = @intCast(self.testBuffer.size / @sizeOf([4]f32)),
+                    .dataCount = @intCast(self.testBuffer.size / @sizeOf([4]f32)), // HAS TO BE RIGHT SIZE CURRENTLY HARD CODED!
                 };
 
                 switch (pipeType) {

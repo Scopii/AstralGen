@@ -21,9 +21,11 @@ layout(push_constant, std430) restrict uniform PushConstants {
 } pushConstants;
 
 // Marching constants
-const int MAX_STEPS = 1024 * 2;
-const float MIN_DIST = 0.0001;
-const float MAX_DIST = 500.0;
+const int MAX_STEPS = 512;
+const float MIN_DIST = 0.001;
+const float MAX_DIST = 200.0;
+
+// Other Constants
 const float EPSILON = 0.001;
 
 // SDFs
@@ -52,13 +54,13 @@ vec3 opRep(vec3 pos, vec3 spacing) {
 }
 
 // Repeating Scene
-float map(vec3 pos) {
-    vec3 repPos = opRep(pos, vec3(4.0, 4.0, 4.0));
-    float sphere = sdSphere(repPos, 0.3);
-    return sphere;
-}
+// float map(vec3 pos) {
+//     vec3 repPos = opRep(pos, vec3(4.0, 4.0, 4.0));
+//     float sphere = sdSphere(repPos, 0.3);
+//     return sphere;
+// }
 
-// Test Scene
+// // Test Scene
 // float map(vec3 pos) {
 //     float sphere = sdSphere(pos, 0.5);
 //     // 2. Box to the right, translated by (2, 0, 0)
@@ -70,6 +72,19 @@ float map(vec3 pos) {
 //     result = min(result, torus);
 //     return result;
 // }
+
+float map(vec3 pos) {
+    float closestDist = MAX_DIST;
+    // Loop through all objects
+    for (int i = 0; i < pushConstants.dataCount; i++) {
+        vec4 obj = pushConstants.testData.data[i];
+        // Create new SDF
+        float sphereDist = sdSphere(pos - obj.xyz, obj.w); 
+        // Get the minimum distance to any object
+        closestDist = min(closestDist, sphereDist);
+    }
+    return closestDist;
+}
 
 // Functions
 vec3 getNormal(vec3 pos) {
@@ -100,7 +115,9 @@ void main() {
     
     for(int step = 0; step < MAX_STEPS; step++) {
         pos = pushConstants.camPosAndFov.xyz + rayDir * march;
+
         float closest = map(pos);
+
         if(closest < MIN_DIST) {
             hit = true;
             break;
@@ -114,14 +131,7 @@ void main() {
         vec3 lightDir = normalize(vec3(1.0, 1.0, -1.0));
         float lighting = max(dot(normal, lightDir), 0.1);
         
-        // Use test data for color variation
-        float colorMod = 1.0;
-        if(pushConstants.dataCount > 1) { // Safety check
-            vec4 data = pushConstants.testData.data[1];
-            colorMod = 0.5 + 0.5 * sin(length(data.xyz) * 3.14 + pushConstants.runtime);
-        }
-        
-        vec3 surfaceColor = vec3(0.0, 0.8 * colorMod, 0.5);
+        vec3 surfaceColor = vec3(0.0, 0.8, 0.5);
         imageStore(image, ivec2(gl_GlobalInvocationID.xy), mix(vec4(surfaceColor * lighting, 1.0), vec4(0.0, 0.0, 0.0, 1.0), march / MAX_DIST));
     } else {
         imageStore(image, ivec2(gl_GlobalInvocationID.xy), vec4(0.0, 0.0, 0.0, 1.0));

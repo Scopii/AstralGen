@@ -121,30 +121,36 @@ pub const ResourceManager = struct {
         @memcpy(destPtr[0..imageDescSize], descData[0..imageDescSize]);
     }
 
-    pub fn createTestDataBuffer(self: *const ResourceManager, extent: c.VkExtent3D) !GpuBuffer {
-        const bufferSize = extent.width * extent.height * @sizeOf([4]f32);
+    const Object = @import("../ecs/EntityManager.zig").Object;
+
+    pub fn createTestDataBuffer(self: *const ResourceManager, objects: []Object) !GpuBuffer {
+        const bufferSize = objects.len * @sizeOf([4]f32); // CHECK ALIGNEMNT AND SIZE!
         const vma = self.gpuAlloc.handle;
 
         const buffer = try createDefinedBuffer(vma, self.gpi, bufferSize, null, .testBuffer);
         // Initialize with test data - sine wave pattern
         var allocVmaInf: c.VmaAllocationInfo = undefined;
         c.vmaGetAllocationInfo(vma, buffer.allocation, &allocVmaInf);
-        const dataPtr = @as([*][4]f32, @ptrCast(@alignCast(allocVmaInf.pMappedData)));
+        const dataPtr = @as([*]Object, @ptrCast(@alignCast(allocVmaInf.pMappedData))); // MUST BE RIGHT CAST!
 
-        for (0..extent.height) |y| {
-            for (0..extent.width) |x| {
-                const index = y * extent.width + x;
-                const fx = @as(f32, @floatFromInt(x)) / @as(f32, @floatFromInt(extent.width));
-                const fy = @as(f32, @floatFromInt(y)) / @as(f32, @floatFromInt(extent.height));
-
-                dataPtr[index] = [4]f32{
-                    std.math.sin(fx * 6.28) * 0.5, // x offset
-                    std.math.cos(fy * 6.28) * 0.5, // y offset
-                    0.0, // z offset
-                    std.math.sin(fx * fy * 12.56) * 0.3, // radius variation
-                };
-            }
+        for (0..objects.len) |i| {
+            dataPtr[i] = objects[i];
         }
+
+        // for (0..extent.height) |y| {
+        //     for (0..extent.width) |x| {
+        //         const index = y * extent.width + x;
+        //         const fx = @as(f32, @floatFromInt(x)) / @as(f32, @floatFromInt(extent.width));
+        //         const fy = @as(f32, @floatFromInt(y)) / @as(f32, @floatFromInt(extent.height));
+
+        //         dataPtr[index] = [4]f32{
+        //             std.math.sin(fx * 6.28) * 0.5, // x offset
+        //             std.math.cos(fy * 6.28) * 0.5, // y offset
+        //             0.0, // z offset
+        //             std.math.sin(fx * fy * 12.56) * 0.3, // radius variation
+        //         };
+        //     }
+        // }
         return buffer;
     }
 

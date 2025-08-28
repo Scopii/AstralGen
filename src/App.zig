@@ -6,6 +6,8 @@ const Renderer = @import("vulkan/Renderer.zig").Renderer;
 const EventManager = @import("core/EventManager.zig").EventManager;
 const TimeManager = @import("core/TimeManager.zig").TimeManager;
 const FileManager = @import("core/FileManager.zig").FileManager;
+const EntityManager = @import("ecs/EntityManager.zig").EntityManager;
+const RNGenerator = @import("core/RNGenerator.zig").RNGenerator;
 const Camera = @import("core/Camera.zig").Camera;
 const zjobs = @import("zjobs");
 const CreateMapArray = @import("structures/MapArray.zig").CreateMapArray;
@@ -19,6 +21,8 @@ pub const App = struct {
     cam: Camera,
     eventMan: EventManager,
     fileMan: FileManager,
+    ecs: EntityManager,
+    rng: RNGenerator,
 
     pub fn init(memoryMan: *MemoryManager) !App {
         var windowMan = WindowManager.init() catch |err| {
@@ -34,7 +38,16 @@ pub const App = struct {
         };
         errdefer fileMan.deinit();
 
-        var renderer = Renderer.init(memoryMan) catch |err| {
+        var rng = RNGenerator.init(std.Random.Xoshiro256, 1000);
+
+        var ecs = EntityManager.init(&rng) catch |err| {
+            windowMan.showErrorBox("Astral App Error", "Entity Manager could not launch");
+            std.debug.print("Err {}\n", .{err});
+            return error.EntityManagerFailed;
+        };
+        errdefer ecs.deinit();
+
+        var renderer = Renderer.init(memoryMan, ecs.getObjects()) catch |err| {
             windowMan.showErrorBox("Astral App Error", "Renderer could not launch");
             std.debug.print("Err {}\n", .{err});
             return error.RendererManagerFailed;
@@ -49,6 +62,8 @@ pub const App = struct {
             .windowMan = windowMan,
             .renderer = renderer,
             .fileMan = fileMan,
+            .ecs = ecs,
+            .rng = rng,
         };
     }
 

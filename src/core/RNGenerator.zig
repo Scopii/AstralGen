@@ -1,13 +1,12 @@
-pub const std = @import("std");
+const std = @import("std");
 
 pub const RNGenerator = struct {
-    prng: type,
-    random: std.rand.Random,
+    prng: std.Random.Xoshiro256,
+    random: std.Random,
 
     pub fn init(comptime PrngType: type, seed: u64) RNGenerator {
-        const prng = PrngType.init(seed);
-        const zigRandInterface = std.rand.Random.init(&prng);
-
+        var prng = PrngType.init(seed); // Create instance
+        const zigRandInterface = prng.random(); // Use .random() method
         return .{
             .prng = prng,
             .random = zigRandInterface,
@@ -21,7 +20,7 @@ pub const RNGenerator = struct {
 
     // integer within the given range (inclusive).
     pub fn intRange(self: *RNGenerator, comptime T: type, min: T, max: T) T {
-        return self.random.intRange(T, min, max);
+        return self.random.intRangeAtMost(T, min, max); // Use intRangeAtMost for inclusive
     }
 
     // float of the specified type (0.0 <= x < 1.0).
@@ -36,7 +35,8 @@ pub const RNGenerator = struct {
 
     // element from a slice.
     pub fn choice(self: *RNGenerator, comptime T: type, items: []const T) T {
-        return self.random.choice(items);
+        const index = self.random.intRangeLessThan(usize, 0, items.len);
+        return items[index];
     }
 
     // fills a slice with random bytes
