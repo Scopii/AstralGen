@@ -124,6 +124,10 @@ pub const ResourceManager = struct {
     const Object = @import("../ecs/EntityManager.zig").Object;
 
     pub fn createTestDataBuffer(self: *const ResourceManager, objects: []Object) !GpuBuffer {
+        if (@sizeOf(Object) % @sizeOf([2]f32) != 0) {
+            @compileError("TestDataBuffer must be % [2]f32 = 0");
+        }
+
         const bufferSize = objects.len * @sizeOf([4]f32); // CHECK ALIGNEMNT AND SIZE!
         const vma = self.gpuAlloc.handle;
 
@@ -137,20 +141,6 @@ pub const ResourceManager = struct {
             dataPtr[i] = objects[i];
         }
 
-        // for (0..extent.height) |y| {
-        //     for (0..extent.width) |x| {
-        //         const index = y * extent.width + x;
-        //         const fx = @as(f32, @floatFromInt(x)) / @as(f32, @floatFromInt(extent.width));
-        //         const fy = @as(f32, @floatFromInt(y)) / @as(f32, @floatFromInt(extent.height));
-
-        //         dataPtr[index] = [4]f32{
-        //             std.math.sin(fx * 6.28) * 0.5, // x offset
-        //             std.math.cos(fy * 6.28) * 0.5, // y offset
-        //             0.0, // z offset
-        //             std.math.sin(fx * fy * 12.56) * 0.3, // radius variation
-        //         };
-        //     }
-        // }
         return buffer;
     }
 

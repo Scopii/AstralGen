@@ -8,16 +8,26 @@ layout (local_size_x = 8, local_size_y = 8) in;
 // Descriptors
 layout(set = 0, binding = 0, rgba16f) restrict uniform image2D image;
 // Buffer reference raw data
-layout(buffer_reference, std430) restrict buffer Vec4Buffer {
-    vec4 data[];
+
+// Fixed struct with proper alignment
+struct Object {
+    vec3 position;  // 12 bytes
+    float size;     // 4 bytes (total: 16 bytes - vec4 aligned)
+    vec3 color;     // 12 bytes  
+    uint sdfId;     // 4 bytes (total: 32 bytes)
 };
+
+layout(buffer_reference, std430) restrict buffer ObjectBuffer {
+    Object objects[];
+};
+
 // Push Constant
 layout(push_constant, std430) restrict uniform PushConstants {
     vec4 camPosAndFov; // Last Float is Fov
     vec4 camDir;
     float runtime;
     uint dataCount;
-    Vec4Buffer testData;
+    ObjectBuffer objectData; 
 } pushConstants;
 
 // Marching constants
@@ -73,15 +83,28 @@ vec3 opRep(vec3 pos, vec3 spacing) {
 //     return result;
 // }
 
+int closestObjectIndex = -1;
+
 float map(vec3 pos) {
     float closestDist = MAX_DIST;
     // Loop through all objects
     for (int i = 0; i < pushConstants.dataCount; i++) {
-        vec4 obj = pushConstants.testData.data[i];
+        Object obj = pushConstants.objectData.objects[i]; // Fixed access
         // Create new SDF
-        float sphereDist = sdSphere(pos - obj.xyz, obj.w); 
-        // Get the minimum distance to any object
-        closestDist = min(closestDist, sphereDist);
+        float dist;
+        if (obj.sdfId == 0) {
+            dist = sdSphere(pos - obj.position, obj.size);
+        } else if (obj.sdfId == 1) {
+            dist = sdBox(pos - obj.position, vec3(obj.size));
+        } else {
+            dist = sdTorus(pos - obj.position, vec2(obj.size,obj.size)); // Default to sphere
+            
+        }
+        // Track closest object for coloring
+        if (dist < closestDist) {
+            closestDist = dist;
+            closestObjectIndex = i;
+        }
     }
     return closestDist;
 }
@@ -131,9 +154,15 @@ void main() {
         vec3 lightDir = normalize(vec3(1.0, 1.0, -1.0));
         float lighting = max(dot(normal, lightDir), 0.1);
         
-        vec3 surfaceColor = vec3(0.0, 0.8, 0.5);
-        imageStore(image, ivec2(gl_GlobalInvocationID.xy), mix(vec4(surfaceColor * lighting, 1.0), vec4(0.0, 0.0, 0.0, 1.0), march / MAX_DIST));
+        // Use object's color
+        Object hitObj = pushConstants.objectData.objects[closestObjectIndex];
+        vec3 surfaceColor = hitObj.color;
+        
+        imageStore(image, ivec2(gl_GlobalInvocationID.xy), 
+                  mix(vec4(surfaceColor * lighting, 1.0), 
+                      vec4(0.0, 0.0, 0.0, 1.0), 
+                      march / MAX_DIST));
     } else {
-        imageStore(image, ivec2(gl_GlobalInvocationID.xy), vec4(0.0, 0.0, 0.0, 1.0));
+        imageStore(image, ivec2(gl_GlobalInvocationID.xy), vec4(0.0, 0.0, 0.1, 1.0));
     }
 }

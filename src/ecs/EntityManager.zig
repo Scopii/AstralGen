@@ -9,10 +9,20 @@ pub const EntityManager = struct {
         var objects: [100]Object = undefined;
 
         for (0..objects.len) |i| {
-            const posX = rng.float(f32) * 100;
-            const posY = rng.float(f32) * 100;
-            const posZ = rng.float(f32) * 100;
-            objects[i] = .{ .posAndSize = zm.f32x4(posX - 50, posY - 50, posZ - 50, 0.5) };
+            const id = rng.intRange(u32, 0, @typeInfo(Object.SDF).@"enum".fields.len - 1);
+            std.debug.print("Id {} \n", .{id});
+
+            objects[i] = .{
+                .sdfId = @enumFromInt(id),
+                .colorR = rng.float(f32),
+                .colorG = rng.float(f32),
+                .colorB = rng.float(f32),
+
+                .posX = rng.float(f32) * 30 - 15,
+                .posY = rng.float(f32) * 30 - 15,
+                .posZ = rng.float(f32) * 30 - 15,
+                .size = rng.float(f32) + 0.2,
+            };
             std.debug.print("Assigned Object Array Index {}\n", .{i});
         }
         return .{ .objects = objects };
@@ -26,7 +36,15 @@ pub const EntityManager = struct {
 };
 
 pub const Object = struct {
-    //sdfId: enum(u32) { sphere, cube, triangle },
-    //boundingSize: f32 = 1,
-    posAndSize: zm.Vec = zm.f32x4(0, 0, 0, 0.5),
+    pub const SDF = enum(u32) { sphere, cube, box };
+
+    posX: f32,
+    posY: f32,
+    posZ: f32,
+    size: f32,
+
+    colorR: f32,
+    colorG: f32,
+    colorB: f32,
+    sdfId: SDF,
 };
