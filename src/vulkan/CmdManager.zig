@@ -122,30 +122,9 @@ pub const CmdManager = struct {
         const primaryCmd = self.primaryCmds[activeFrame];
         const computeCmd = self.computeCmds[activeFrame];
 
-        // If scene didn't change and we have a cached secondary for THIS frame index, execute it
-        if (self.needUpdate != true and self.computeCmdCache[activeFrame] != null) {
-            const cached = self.computeCmdCache[activeFrame].?;
+        // Skip cache check for now during testing - can add back later
 
-            // Still need to do image layout transition
-            const barrier = createImageMemoryBarrier2(
-                c.VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
-                0,
-                c.VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-                c.VK_ACCESS_2_SHADER_WRITE_BIT,
-                renderImage.curLayout,
-                c.VK_IMAGE_LAYOUT_GENERAL,
-                renderImage.image,
-                createSubresourceRange(c.VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1),
-            );
-            createPipelineBarriers2(primaryCmd, &.{barrier});
-            renderImage.curLayout = c.VK_IMAGE_LAYOUT_GENERAL;
-
-            // Execute cached secondary
-            c.vkCmdExecuteCommands(primaryCmd, 1, &cached);
-            return;
-        }
-
-        try check(c.vkResetCommandBuffer(computeCmd, 0), "could not reset secondary compute command buffer"); //Might not have to reset cuz they are always reset?
+        try check(c.vkResetCommandBuffer(computeCmd, 0), "could not reset secondary compute command buffer");
 
         const inheritInf = c.VkCommandBufferInheritanceInfo{
             .sType = c.VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO,
@@ -156,17 +135,29 @@ pub const CmdManager = struct {
         };
         const beginInf = c.VkCommandBufferBeginInfo{
             .sType = c.VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-            .flags = c.VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT, // c.VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT
+            .flags = c.VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT,
             .pInheritanceInfo = &inheritInf,
         };
 
         try check(c.vkBeginCommandBuffer(computeCmd, &beginInf), "Could not begin compute command buffer");
-        c.vkCmdBindPipeline(computeCmd, c.VK_PIPELINE_BIND_POINT_COMPUTE, pipe.handle);
 
-        // Push delta time constant
-        c.vkCmdPushConstants(computeCmd, pipe.layout, c.VK_SHADER_STAGE_COMPUTE_BIT, 0, @sizeOf(ComputePushConstants), &pushConstants);
+        // Bind shader object instead of pipeline
+        if (pipe.shaderObject) |shaderObj| {
+            const stages = [_]c.VkShaderStageFlagBits{c.VK_SHADER_STAGE_COMPUTE_BIT};
 
-        // Bind descriptor buffer, replaces descriptor set binding
+            // Pass a pointer to the array.
+            c.pfn_vkCmdBindShadersEXT.?(computeCmd, 1, &stages, &shaderObj.handle);
+            // CORRECT: Use the valid pipe.layout for push constants
+            c.vkCmdPushConstants(computeCmd, pipe.layout, c.VK_SHADER_STAGE_COMPUTE_BIT, 0, @sizeOf(ComputePushConstants), &pushConstants);
+        } else {
+            c.vkCmdBindPipeline(computeCmd, c.VK_PIPELINE_BIND_POINT_COMPUTE, pipe.handle);
+        }
+
+        // Push constants - works the same way
+        c.vkCmdPushConstants(computeCmd, pipe.layout, // Use NULL handle for shader objects
+            c.VK_SHADER_STAGE_COMPUTE_BIT, 0, @sizeOf(ComputePushConstants), &pushConstants);
+
+        // Descriptor buffer binding remains the same
         const bufferBindingInf = c.VkDescriptorBufferBindingInfoEXT{
             .sType = c.VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT,
             .address = gpuAddress,
@@ -174,15 +165,11 @@ pub const CmdManager = struct {
         };
         c.pfn_vkCmdBindDescriptorBuffersEXT.?(computeCmd, 1, &bufferBindingInf);
 
-        // Set descriptor buffer offsets
-        const bufferIndex: u32 = 0; // Buffer index in the array
-        const descriptorOffset: c.VkDeviceSize = 0; // Offset within that buffer (0 for binding 0)
-        c.pfn_vkCmdSetDescriptorBufferOffsetsEXT.?(computeCmd, c.VK_PIPELINE_BIND_POINT_COMPUTE, pipe.layout, //
-            0, //First set number
-            1, // Number of offsets
-            &bufferIndex, &descriptorOffset);
+        const bufferIndex: u32 = 0;
+        const descriptorOffset: c.VkDeviceSize = 0;
+        c.pfn_vkCmdSetDescriptorBufferOffsetsEXT.?(computeCmd, c.VK_PIPELINE_BIND_POINT_COMPUTE, pipe.layout, 0, 1, &bufferIndex, &descriptorOffset);
 
-        // Dispatch compute work
+        // Dispatch remains the same
         c.vkCmdDispatch(computeCmd, (renderImage.extent3d.width + 7) / 8, (renderImage.extent3d.height + 7) / 8, 1);
         try check(c.vkEndCommandBuffer(computeCmd), "Could not end compute command buffer");
 
@@ -200,9 +187,7 @@ pub const CmdManager = struct {
         createPipelineBarriers2(primaryCmd, &.{barrier});
         renderImage.curLayout = c.VK_IMAGE_LAYOUT_GENERAL;
 
-        // store into per-frame cache slot
         self.computeCmdCache[activeFrame] = computeCmd;
-        // Execute secondary command buffer
         c.vkCmdExecuteCommands(primaryCmd, 1, &computeCmd);
     }
 

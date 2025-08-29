@@ -4,6 +4,57 @@ const Allocator = std.mem.Allocator;
 const config = @import("../config.zig");
 const check = @import("error.zig").check;
 
+pub const ShaderObject = struct {
+    handle: c.VkShaderEXT,
+    stage: c.VkShaderStageFlagBits,
+
+    pub fn init(gpi: c.VkDevice, stage: c.VkShaderStageFlagBits, spvPath: []const u8, alloc: Allocator, descriptorLayout: c.VkDescriptorSetLayout) !ShaderObject {
+        const exe_dir = try std.fs.selfExeDirPathAlloc(alloc);
+        defer alloc.free(exe_dir);
+        // For runtime: look for shader folder next to exe (in parent of bin/)
+        const runtimeSpvPath = try std.fs.path.join(alloc, &[_][]const u8{ exe_dir, "..", spvPath });
+        defer alloc.free(runtimeSpvPath);
+
+        // Now, call loadShader with the corrected, full path
+        const spvData = try loadShader(alloc, runtimeSpvPath);
+        // --- END FIX ---
+        defer alloc.free(spvData);
+
+        const shaderCreateInfo = c.VkShaderCreateInfoEXT{
+            .sType = c.VK_STRUCTURE_TYPE_SHADER_CREATE_INFO_EXT,
+            .pNext = null,
+            .flags = 0,
+            .stage = stage,
+            .nextStage = 0, // No next stage for compute
+            .codeType = c.VK_SHADER_CODE_TYPE_SPIRV_EXT,
+            .codeSize = spvData.len,
+            .pCode = spvData.ptr,
+            .pName = "main",
+            .setLayoutCount = 1, // Your compute shader uses 1 descriptor set
+            .pSetLayouts = &descriptorLayout, // Will bind descriptor buffer instead
+            .pushConstantRangeCount = 1,
+            .pPushConstantRanges = &c.VkPushConstantRange{
+                .stageFlags = c.VK_SHADER_STAGE_COMPUTE_BIT,
+                .offset = 0,
+                .size = @sizeOf(ComputePushConstants),
+            },
+            .pSpecializationInfo = null,
+        };
+
+        var shader: c.VkShaderEXT = undefined;
+        try check(c.pfn_vkCreateShadersEXT.?(gpi, 1, &shaderCreateInfo, null, &shader), "Failed to create shader object");
+
+        return .{
+            .handle = shader,
+            .stage = stage,
+        };
+    }
+
+    pub fn deinit(self: ShaderObject, gpi: c.VkDevice) void {
+        c.pfn_vkDestroyShaderEXT.?(gpi, self.handle, null);
+    }
+};
+
 pub const PipelineType = enum { compute, graphics, mesh };
 
 pub const ShaderInfo = struct {
@@ -25,6 +76,37 @@ pub const Pipeline = struct {
     format: ?c.VkFormat,
     pipeType: PipelineType,
     shaderInfos: []const PipelineInfo,
+    shaderObject: ?ShaderObject = null, // Add shader object field
+
+    pub fn initShaderObject(alloc: Allocator, gpi: c.VkDevice, shaderInfo: PipelineInfo, descriptorLayout: c.VkDescriptorSetLayout) !Pipeline {
+        const shaderObj = try ShaderObject.init(gpi, shaderInfo.stage, shaderInfo.sprvPath, alloc, descriptorLayout);
+
+        const pushConstantRange = c.VkPushConstantRange{
+            .stageFlags = c.VK_SHADER_STAGE_COMPUTE_BIT,
+            .offset = 0,
+            .size = @sizeOf(ComputePushConstants),
+        };
+
+        const pipeLayoutInf = c.VkPipelineLayoutCreateInfo{
+            .sType = c.VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+            .setLayoutCount = 1,
+            .pSetLayouts = &descriptorLayout,
+            .pushConstantRangeCount = 1,
+            .pPushConstantRanges = &pushConstantRange,
+        };
+        var pipelineLayout: c.VkPipelineLayout = undefined;
+        try check(c.vkCreatePipelineLayout(gpi, &pipeLayoutInf, null, &pipelineLayout), "Failed to create pipeline layout for shader object");
+
+        return .{
+            .alloc = alloc,
+            .handle = undefined, // Not used with shader objects
+            .layout = pipelineLayout, // Not used with shader objects
+            .format = null,
+            .pipeType = .compute,
+            .shaderInfos = &.{shaderInfo}, // Store for hot reload
+            .shaderObject = shaderObj,
+        };
+    }
 
     pub fn init(
         alloc: Allocator,
@@ -57,8 +139,22 @@ pub const Pipeline = struct {
     }
 
     pub fn deinit(self: *Pipeline, gpi: c.VkDevice) void {
-        c.vkDestroyPipeline(gpi, self.handle, null);
-        c.vkDestroyPipelineLayout(gpi, self.layout, null);
+        if (self.shaderObject) |shaderObj| {
+            shaderObj.deinit(gpi);
+            c.vkDestroyPipelineLayout(gpi, self.layout, null);
+        } else {
+            c.vkDestroyPipeline(gpi, self.handle, null);
+            c.vkDestroyPipelineLayout(gpi, self.layout, null);
+        }
+    }
+
+    // Add update function for shader object hot reload
+    pub fn updateShaderObject(self: *Pipeline, gpi: c.VkDevice) !void {
+        if (self.shaderObject) |*shaderObj| {
+            shaderObj.deinit(gpi);
+            self.shaderObject = try ShaderObject.init(gpi, self.shaderInfos[0].stage, self.shaderInfos[0].sprvPath, self.alloc);
+            std.debug.print("Shader object {s} updated\n", .{@tagName(self.pipeType)});
+        }
     }
 
     pub fn updatePipeline(self: *Pipeline, gpi: c.VkDevice, cache: c.VkPipelineCache) !void {

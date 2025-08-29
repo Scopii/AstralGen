@@ -7,6 +7,8 @@ pub const c_api = @cImport({
     @cInclude("vma/vk_mem_alloc.h");
 });
 
+pub const VK_PIPELINE_LAYOUT_NULL_HANDLE: c_api.VkPipelineLayout = null;
+
 extern fn SDL_ShowSimpleMessageBox(flags: u32, title: [*c]const u8, message: [*c]const u8, window: ?*anyopaque) c_int;
 
 pub var pfn_vkCmdDrawMeshTasksEXT: c_api.PFN_vkCmdDrawMeshTasksEXT = null;

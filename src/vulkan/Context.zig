@@ -254,8 +254,15 @@ fn createGPI(alloc: Allocator, gpu: c.VkPhysicalDevice, families: QueueFamilies)
     var features: c.VkPhysicalDeviceFeatures = undefined;
     c.vkGetPhysicalDeviceFeatures(gpu, &features);
 
+    var extended_dynamic_state_features = c.VkPhysicalDeviceExtendedDynamicStateFeaturesEXT{
+        .sType = c.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_FEATURES_EXT,
+        .pNext = null,
+        .extendedDynamicState = c.VK_TRUE,
+    };
+
     var shader_object_features = c.VkPhysicalDeviceShaderObjectFeaturesEXT{
         .sType = c.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_OBJECT_FEATURES_EXT,
+        .pNext = &extended_dynamic_state_features,
         .shaderObject = c.VK_TRUE,
     };
 
@@ -293,6 +300,7 @@ fn createGPI(alloc: Allocator, gpu: c.VkPhysicalDevice, families: QueueFamilies)
         "VK_EXT_mesh_shader",
         "VK_EXT_descriptor_buffer",
         "VK_EXT_shader_object",
+        "VK_EXT_extended_dynamic_state",
     };
 
     const createInfo = c.VkDeviceCreateInfo{

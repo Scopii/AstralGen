@@ -21,7 +21,7 @@ pub const PipelineManager = struct {
         const cache = try createPipelineCache(gpi);
         const format = config.RENDER_IMAGE_FORMAT;
 
-        const compute = try PipelineBucket.init(alloc, gpi, cache, format, &config.computePipeInf, .compute, resourceManager.layout, 1);
+        const compute = try PipelineBucket.initShaderObject(alloc, gpi, config.computePipeInf[0], resourceManager.layout);
         const graphics = try PipelineBucket.init(alloc, gpi, cache, format, &config.graphicsPipeInf, .graphics, null, 0);
         const mesh = try PipelineBucket.init(alloc, gpi, cache, format, &config.meshPipeInf, .mesh, null, 0);
 
