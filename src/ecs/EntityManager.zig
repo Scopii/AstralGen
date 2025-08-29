@@ -3,10 +3,10 @@ const zm = @import("zmath");
 const RNGenerator = @import("../core/RNGenerator.zig").RNGenerator;
 
 pub const EntityManager = struct {
-    objects: [100]Object,
+    objects: [1000]Object,
 
     pub fn init(rng: *RNGenerator) !EntityManager {
-        var objects: [100]Object = undefined;
+        var objects: [1000]Object = undefined;
 
         for (0..objects.len) |i| {
             const id = rng.intRange(u32, 0, @typeInfo(Object.SDF).@"enum".fields.len - 1);

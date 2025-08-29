@@ -15,6 +15,7 @@ const GpuImage = @import("ResourceManager.zig").GpuImage;
 const GpuBuffer = @import("ResourceManager.zig").GpuBuffer;
 const ResourceManager = @import("ResourceManager.zig").ResourceManager;
 const MemoryManager = @import("../core/MemoryManager.zig").MemoryManager;
+const Object = @import("../ecs/EntityManager.zig").Object;
 const check = @import("error.zig").check;
 const createInstance = @import("Context.zig").createInstance;
 
@@ -32,7 +33,6 @@ pub const Renderer = struct {
     renderImage: GpuImage = undefined,
     startTime: i128 = 0,
     testBuffer: GpuBuffer = undefined,
-    const Object = @import("../ecs/EntityManager.zig").Object;
 
     pub fn init(memoryMan: *MemoryManager, objects: []Object) !Renderer {
         const alloc = memoryMan.getAllocator();
@@ -157,7 +157,7 @@ pub const Renderer = struct {
                     .camDir = cam.getForward(),
                     .dataAddress = self.testBuffer.gpuAddress,
                     .runtime = runtimeAsFloat,
-                    .dataCount = @intCast(self.testBuffer.size / @sizeOf([4]f32)), // HAS TO BE RIGHT SIZE CURRENTLY HARD CODED!
+                    .dataCount = @intCast(self.testBuffer.size / @sizeOf(Object)),
                 };
 
                 switch (pipeType) {
