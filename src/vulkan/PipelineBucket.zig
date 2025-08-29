@@ -7,6 +7,7 @@ const check = @import("error.zig").check;
 pub const ShaderObject = struct {
     handle: c.VkShaderEXT,
     stage: c.VkShaderStageFlagBits,
+    descLayout: c.VkDescriptorSetLayout,
 
     pub fn init(gpi: c.VkDevice, stage: c.VkShaderStageFlagBits, spvPath: []const u8, alloc: Allocator, descriptorLayout: c.VkDescriptorSetLayout) !ShaderObject {
         const exe_dir = try std.fs.selfExeDirPathAlloc(alloc);
@@ -15,9 +16,7 @@ pub const ShaderObject = struct {
         const runtimeSpvPath = try std.fs.path.join(alloc, &[_][]const u8{ exe_dir, "..", spvPath });
         defer alloc.free(runtimeSpvPath);
 
-        // Now, call loadShader with the corrected, full path
         const spvData = try loadShader(alloc, runtimeSpvPath);
-        // --- END FIX ---
         defer alloc.free(spvData);
 
         const shaderCreateInfo = c.VkShaderCreateInfoEXT{
@@ -47,6 +46,7 @@ pub const ShaderObject = struct {
         return .{
             .handle = shader,
             .stage = stage,
+            .descLayout = descriptorLayout,
         };
     }
 
@@ -78,7 +78,8 @@ pub const Pipeline = struct {
     shaderInfos: []const PipelineInfo,
     shaderObject: ?ShaderObject = null, // Add shader object field
 
-    pub fn initShaderObject(alloc: Allocator, gpi: c.VkDevice, shaderInfo: PipelineInfo, descriptorLayout: c.VkDescriptorSetLayout) !Pipeline {
+    pub fn initShaderObject(alloc: Allocator, gpi: c.VkDevice, shaderInfos: []const PipelineInfo, descriptorLayout: c.VkDescriptorSetLayout) !Pipeline {
+        const shaderInfo = shaderInfos[0];
         const shaderObj = try ShaderObject.init(gpi, shaderInfo.stage, shaderInfo.sprvPath, alloc, descriptorLayout);
 
         const pushConstantRange = c.VkPushConstantRange{
@@ -100,10 +101,10 @@ pub const Pipeline = struct {
         return .{
             .alloc = alloc,
             .handle = undefined, // Not used with shader objects
-            .layout = pipelineLayout, // Not used with shader objects
+            .layout = pipelineLayout,
             .format = null,
             .pipeType = .compute,
-            .shaderInfos = &.{shaderInfo}, // Store for hot reload
+            .shaderInfos = shaderInfos, // Store for hot reload
             .shaderObject = shaderObj,
         };
     }
@@ -151,8 +152,10 @@ pub const Pipeline = struct {
     // Add update function for shader object hot reload
     pub fn updateShaderObject(self: *Pipeline, gpi: c.VkDevice) !void {
         if (self.shaderObject) |*shaderObj| {
+            std.debug.print("sprv {s} \n", .{self.shaderInfos[0].sprvPath});
+            const layout = shaderObj.descLayout;
             shaderObj.deinit(gpi);
-            self.shaderObject = try ShaderObject.init(gpi, self.shaderInfos[0].stage, self.shaderInfos[0].sprvPath, self.alloc);
+            self.shaderObject = try ShaderObject.init(gpi, self.shaderInfos[0].stage, self.shaderInfos[0].sprvPath, self.alloc, layout);
             std.debug.print("Shader object {s} updated\n", .{@tagName(self.pipeType)});
         }
     }
