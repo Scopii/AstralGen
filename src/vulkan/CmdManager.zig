@@ -17,21 +17,8 @@ pub const CmdManager = struct {
     gpi: c.VkDevice,
     pool: c.VkCommandPool,
     activeFrame: ?u8 = null,
-    lastUpdate: u8 = 0,
     primaryCmds: []c.VkCommandBuffer,
-
-    // per-frame secondary buffers
-    computeCmds: []c.VkCommandBuffer,
-    graphicsCmds: []c.VkCommandBuffer,
-    meshCmds: []c.VkCommandBuffer,
-
-    // per-frame caches: optional since a frame's secondary might not be recorded yet
-    computeCmdCache: []?c.VkCommandBuffer,
-    graphicsCmdCache: []?c.VkCommandBuffer,
-    meshCmdCache: []?c.VkCommandBuffer,
-
     blitBarriers: [MAX_WINDOWS + 1]c.VkImageMemoryBarrier2 = undefined,
-    needUpdate: bool = true,
 
     pub fn init(alloc: Allocator, context: *const @import("Context.zig").Context, maxInFlight: u32) !CmdManager {
         const gpi = context.gpi;
@@ -39,25 +26,8 @@ pub const CmdManager = struct {
         const pool = try createCmdPool(gpi, family);
 
         const primaryCmds = try alloc.alloc(c.VkCommandBuffer, maxInFlight);
-        const computeCmds = try alloc.alloc(c.VkCommandBuffer, maxInFlight);
-        const graphicsCmds = try alloc.alloc(c.VkCommandBuffer, maxInFlight);
-        const meshCmds = try alloc.alloc(c.VkCommandBuffer, maxInFlight);
-
-        // per-frame caches
-        const computeCmdCache = try alloc.alloc(?c.VkCommandBuffer, maxInFlight);
-        const graphicsCmdCache = try alloc.alloc(?c.VkCommandBuffer, maxInFlight);
-        const meshCmdCache = try alloc.alloc(?c.VkCommandBuffer, maxInFlight);
-
         for (0..maxInFlight) |i| {
             primaryCmds[i] = try createCmd(gpi, pool, c.VK_COMMAND_BUFFER_LEVEL_PRIMARY);
-            computeCmds[i] = try createCmd(gpi, pool, c.VK_COMMAND_BUFFER_LEVEL_SECONDARY);
-            graphicsCmds[i] = try createCmd(gpi, pool, c.VK_COMMAND_BUFFER_LEVEL_SECONDARY);
-            meshCmds[i] = try createCmd(gpi, pool, c.VK_COMMAND_BUFFER_LEVEL_SECONDARY);
-
-            // initialize optional cache slots to null
-            computeCmdCache[i] = null;
-            graphicsCmdCache[i] = null;
-            meshCmdCache[i] = null;
         }
 
         return .{
@@ -65,25 +35,11 @@ pub const CmdManager = struct {
             .gpi = gpi,
             .pool = pool,
             .primaryCmds = primaryCmds,
-            .computeCmds = computeCmds,
-            .graphicsCmds = graphicsCmds,
-            .meshCmds = meshCmds,
-            .computeCmdCache = computeCmdCache,
-            .graphicsCmdCache = graphicsCmdCache,
-            .meshCmdCache = meshCmdCache,
         };
     }
 
     pub fn deinit(self: *CmdManager) void {
         self.alloc.free(self.primaryCmds);
-        self.alloc.free(self.computeCmds);
-        self.alloc.free(self.graphicsCmds);
-        self.alloc.free(self.meshCmds);
-
-        self.alloc.free(self.computeCmdCache);
-        self.alloc.free(self.graphicsCmdCache);
-        self.alloc.free(self.meshCmdCache);
-
         c.vkDestroyCommandPool(self.gpi, self.pool, null);
     }
 
@@ -100,7 +56,6 @@ pub const CmdManager = struct {
         };
         try check(c.vkBeginCommandBuffer(cmd, &beginInf), "could not Begin CmdBuffer");
         self.activeFrame = frameInFlight;
-        if (self.needUpdate == true) self.lastUpdate = frameInFlight;
     }
 
     pub fn endRecording(self: *CmdManager) !c.VkCommandBuffer {
@@ -108,7 +63,6 @@ pub const CmdManager = struct {
         const cmd = self.primaryCmds[activeFrame];
         try check(c.vkEndCommandBuffer(cmd), "Could not End Cmd Buffer");
         self.activeFrame = null;
-        self.needUpdate = false;
         return cmd;
     }
 
@@ -116,64 +70,10 @@ pub const CmdManager = struct {
         return self.primaryCmds[frameInFlight];
     }
 
-    // Compute: use per-frame cache slot
     pub fn recordComputePass(self: *CmdManager, renderImage: *Image, pipe: *const PipelineBucket, gpuAddress: deviceAddress, pushConstants: ComputePushConstants) !void {
         const activeFrame = self.activeFrame orelse return error.ActiveCmdBlocked;
-        const primaryCmd = self.primaryCmds[activeFrame];
-        const computeCmd = self.computeCmds[activeFrame];
+        const cmd = self.primaryCmds[activeFrame];
 
-        // Skip cache check for now during testing - can add back later
-
-        try check(c.vkResetCommandBuffer(computeCmd, 0), "could not reset secondary compute command buffer");
-
-        const inheritInf = c.VkCommandBufferInheritanceInfo{
-            .sType = c.VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO,
-            .subpass = 0,
-            .occlusionQueryEnable = c.VK_FALSE,
-            .queryFlags = 0,
-            .pipelineStatistics = 0,
-        };
-        const beginInf = c.VkCommandBufferBeginInfo{
-            .sType = c.VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-            .flags = c.VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT,
-            .pInheritanceInfo = &inheritInf,
-        };
-
-        try check(c.vkBeginCommandBuffer(computeCmd, &beginInf), "Could not begin compute command buffer");
-
-        // Bind shader object instead of pipeline
-        if (pipe.shaderObject) |shaderObj| {
-            const stages = [_]c.VkShaderStageFlagBits{c.VK_SHADER_STAGE_COMPUTE_BIT};
-
-            // Pass a pointer to the array.
-            c.pfn_vkCmdBindShadersEXT.?(computeCmd, 1, &stages, &shaderObj.handle);
-            // CORRECT: Use the valid pipe.layout for push constants
-            c.vkCmdPushConstants(computeCmd, pipe.layout, c.VK_SHADER_STAGE_COMPUTE_BIT, 0, @sizeOf(ComputePushConstants), &pushConstants);
-        } else {
-            c.vkCmdBindPipeline(computeCmd, c.VK_PIPELINE_BIND_POINT_COMPUTE, pipe.handle);
-        }
-
-        // Push constants - works the same way
-        c.vkCmdPushConstants(computeCmd, pipe.layout, // Use NULL handle for shader objects
-            c.VK_SHADER_STAGE_COMPUTE_BIT, 0, @sizeOf(ComputePushConstants), &pushConstants);
-
-        // Descriptor buffer binding remains the same
-        const bufferBindingInf = c.VkDescriptorBufferBindingInfoEXT{
-            .sType = c.VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT,
-            .address = gpuAddress,
-            .usage = c.VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT,
-        };
-        c.pfn_vkCmdBindDescriptorBuffersEXT.?(computeCmd, 1, &bufferBindingInf);
-
-        const bufferIndex: u32 = 0;
-        const descriptorOffset: c.VkDeviceSize = 0;
-        c.pfn_vkCmdSetDescriptorBufferOffsetsEXT.?(computeCmd, c.VK_PIPELINE_BIND_POINT_COMPUTE, pipe.layout, 0, 1, &bufferIndex, &descriptorOffset);
-
-        // Dispatch remains the same
-        c.vkCmdDispatch(computeCmd, (renderImage.extent3d.width + 7) / 8, (renderImage.extent3d.height + 7) / 8, 1);
-        try check(c.vkEndCommandBuffer(computeCmd), "Could not end compute command buffer");
-
-        // Image layout transition
         const barrier = createImageMemoryBarrier2(
             c.VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
             0,
@@ -184,17 +84,49 @@ pub const CmdManager = struct {
             renderImage.image,
             createSubresourceRange(c.VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1),
         );
-        createPipelineBarriers2(primaryCmd, &.{barrier});
+        createPipelineBarriers2(cmd, &.{barrier});
         renderImage.curLayout = c.VK_IMAGE_LAYOUT_GENERAL;
 
-        self.computeCmdCache[activeFrame] = computeCmd;
-        c.vkCmdExecuteCommands(primaryCmd, 1, &computeCmd);
+        // Bind shader object/pipeline directly to the primary command buffer.
+        if (pipe.shaderObject) |shaderObj| {
+            const stages = [_]c.VkShaderStageFlagBits{c.VK_SHADER_STAGE_COMPUTE_BIT};
+            c.pfn_vkCmdBindShadersEXT.?(cmd, 1, &stages, &shaderObj.handle);
+            c.vkCmdPushConstants(cmd, pipe.layout, c.VK_SHADER_STAGE_COMPUTE_BIT, 0, @sizeOf(ComputePushConstants), &pushConstants);
+        } else {
+            c.vkCmdBindPipeline(cmd, c.VK_PIPELINE_BIND_POINT_COMPUTE, pipe.handle);
+            c.vkCmdPushConstants(cmd, pipe.layout, c.VK_SHADER_STAGE_COMPUTE_BIT, 0, @sizeOf(ComputePushConstants), &pushConstants);
+        }
+
+        const bufferBindingInf = c.VkDescriptorBufferBindingInfoEXT{
+            .sType = c.VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT,
+            .address = gpuAddress,
+            .usage = c.VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT,
+        };
+        c.pfn_vkCmdBindDescriptorBuffersEXT.?(cmd, 1, &bufferBindingInf);
+
+        const bufferIndex: u32 = 0;
+        const descriptorOffset: c.VkDeviceSize = 0;
+        c.pfn_vkCmdSetDescriptorBufferOffsetsEXT.?(cmd, c.VK_PIPELINE_BIND_POINT_COMPUTE, pipe.layout, 0, 1, &bufferIndex, &descriptorOffset);
+
+        c.vkCmdDispatch(cmd, (renderImage.extent3d.width + 7) / 8, (renderImage.extent3d.height + 7) / 8, 1);
     }
 
     pub fn recordGraphicsPass(self: *CmdManager, renderImage: *Image, pipe: *const PipelineBucket, pipeType: PipelineType) !void {
         const activeFrame = self.activeFrame orelse return error.ActiveCmdBlocked;
-        const primaryCmd = self.primaryCmds[activeFrame];
-        const gfxCmd = if (pipeType == .mesh) self.meshCmds[activeFrame] else self.graphicsCmds[activeFrame];
+        const cmd = self.primaryCmds[activeFrame];
+        // Image layout transition
+        const barrier = createImageMemoryBarrier2(
+            c.VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
+            0,
+            c.VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+            c.VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+            renderImage.curLayout,
+            c.VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+            renderImage.image,
+            createSubresourceRange(c.VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1),
+        );
+        createPipelineBarriers2(cmd, &.{barrier});
+        renderImage.curLayout = c.VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
         const scissor = c.VkRect2D{
             .offset = .{ .x = 0, .y = 0 },
@@ -212,7 +144,9 @@ pub const CmdManager = struct {
 
         const renderInf = c.VkRenderingInfo{
             .sType = c.VK_STRUCTURE_TYPE_RENDERING_INFO,
-            .flags = c.VK_RENDERING_CONTENTS_SECONDARY_COMMAND_BUFFERS_BIT,
+            // --- CRITICAL CHANGE ---
+            // Remove the SECONDARY_COMMAND_BUFFERS_BIT flag.
+            .flags = 0,
             .renderArea = scissor,
             .layerCount = 1,
             .colorAttachmentCount = 1,
@@ -221,55 +155,7 @@ pub const CmdManager = struct {
             .pStencilAttachment = null,
         };
 
-        // Cache hit: execute cached secondary inside rendering scope (Option A)
-        if (pipeType == .mesh) {
-            if (self.needUpdate != true and self.meshCmdCache[activeFrame] != null) {
-                var cached = self.meshCmdCache[activeFrame].?;
-                c.vkCmdBeginRendering(primaryCmd, &renderInf);
-                c.vkCmdExecuteCommands(primaryCmd, 1, &cached);
-                c.vkCmdEndRendering(primaryCmd);
-                return;
-            }
-        } else {
-            if (self.needUpdate != true and self.graphicsCmdCache[activeFrame] != null) {
-                var cached = self.graphicsCmdCache[activeFrame].?;
-                c.vkCmdBeginRendering(primaryCmd, &renderInf);
-                c.vkCmdExecuteCommands(primaryCmd, 1, &cached);
-                c.vkCmdEndRendering(primaryCmd);
-                return;
-            }
-        }
-
-        try check(c.vkResetCommandBuffer(gfxCmd, 0), "could not reset secondary compute command buffer"); //Might not have to reset cuz they are always reset?
-
-        // Cache miss: record secondary with inheritance info for dynamic rendering
-        const colorFormat = renderImage.format;
-        const renderInheritInf = c.VkCommandBufferInheritanceRenderingInfo{
-            .sType = c.VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_RENDERING_INFO,
-            .pNext = null,
-            .colorAttachmentCount = 1,
-            .pColorAttachmentFormats = &colorFormat,
-            .depthAttachmentFormat = c.VK_FORMAT_UNDEFINED,
-            .stencilAttachmentFormat = c.VK_FORMAT_UNDEFINED,
-            .rasterizationSamples = c.VK_SAMPLE_COUNT_1_BIT,
-        };
-
-        const inheritInf = c.VkCommandBufferInheritanceInfo{
-            .sType = c.VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO,
-            .pNext = &renderInheritInf,
-            .subpass = 0,
-            .occlusionQueryEnable = c.VK_FALSE,
-            .queryFlags = 0,
-            .pipelineStatistics = 0,
-        };
-
-        const beginInf = c.VkCommandBufferBeginInfo{
-            .sType = c.VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-            .flags = c.VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT | c.VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT, // c.VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT
-            .pInheritanceInfo = &inheritInf,
-        };
-
-        try check(c.vkBeginCommandBuffer(gfxCmd, &beginInf), "Could not begin graphics command buffer");
+        c.vkCmdBeginRendering(cmd, &renderInf);
 
         const viewport = c.VkViewport{
             .x = 0,
@@ -279,36 +165,18 @@ pub const CmdManager = struct {
             .minDepth = 0.0,
             .maxDepth = 1.0,
         };
-        c.vkCmdSetViewport(gfxCmd, 0, 1, &viewport);
-        c.vkCmdSetScissor(gfxCmd, 0, 1, &scissor);
+        c.vkCmdSetViewport(cmd, 0, 1, &viewport);
+        c.vkCmdSetScissor(cmd, 0, 1, &scissor);
 
-        c.vkCmdBindPipeline(gfxCmd, c.VK_PIPELINE_BIND_POINT_GRAPHICS, pipe.handle);
-        if (pipeType == .mesh) c.pfn_vkCmdDrawMeshTasksEXT.?(gfxCmd, 1, 1, 1) else c.vkCmdDraw(gfxCmd, 3, 1, 0, 0);
+        // Bind and draw directly into the primary command buffer
+        c.vkCmdBindPipeline(cmd, c.VK_PIPELINE_BIND_POINT_GRAPHICS, pipe.handle);
+        if (pipeType == .mesh) {
+            c.pfn_vkCmdDrawMeshTasksEXT.?(cmd, 1, 1, 1);
+        } else {
+            c.vkCmdDraw(cmd, 3, 1, 0, 0);
+        }
 
-        try check(c.vkEndCommandBuffer(gfxCmd), "Could not end graphics command buffer");
-
-        const barrier = createImageMemoryBarrier2(
-            c.VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
-            0,
-            c.VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-            c.VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
-            renderImage.curLayout,
-            c.VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-            renderImage.image,
-            createSubresourceRange(c.VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1),
-        );
-        createPipelineBarriers2(primaryCmd, &.{barrier});
-        renderImage.curLayout = c.VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-
-        // save into per-frame cache
-        if (pipeType == .mesh)
-            self.meshCmdCache[activeFrame] = gfxCmd
-        else
-            self.graphicsCmdCache[activeFrame] = gfxCmd;
-
-        c.vkCmdBeginRendering(primaryCmd, &renderInf);
-        c.vkCmdExecuteCommands(primaryCmd, 1, &gfxCmd);
-        c.vkCmdEndRendering(primaryCmd);
+        c.vkCmdEndRendering(cmd);
     }
 
     pub fn blitToTargets(self: *CmdManager, renderImage: *Image, targets: []const u8, swapchainMap: *CreateMapArray(Swapchain, MAX_WINDOWS, u8, MAX_WINDOWS, 0)) !void {

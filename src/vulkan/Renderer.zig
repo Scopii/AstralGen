@@ -132,8 +132,6 @@ pub const Renderer = struct {
         const frameInFlight = self.scheduler.frameInFlight;
         if (try self.swapchainMan.updateTargets(frameInFlight, &self.context) == false) return;
 
-        self.cmdMan.needUpdate = true; // Hard Coded Cmd Recording Updates
-
         try self.cmdMan.beginRecording(frameInFlight);
         try self.recordCommands(cam, runtimeAsFloat);
         const cmd = try self.cmdMan.endRecording();
