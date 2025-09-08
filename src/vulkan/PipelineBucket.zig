@@ -4,10 +4,94 @@ const Allocator = std.mem.Allocator;
 const config = @import("../config.zig");
 const check = @import("error.zig").check;
 
+pub const GraphicsShaderObject = struct {
+    vertexShader: ?ShaderObject = null,
+    fragmentShader: ?ShaderObject = null,
+    meshShader: ?ShaderObject = null,
+    taskShader: ?ShaderObject = null, // Optional for mesh shaders
+    descLayout: c.VkDescriptorSetLayout,
+
+    pub fn deinit(self: GraphicsShaderObject, gpi: c.VkDevice) void {
+        if (self.vertexShader) |shader| shader.deinit(gpi);
+        if (self.fragmentShader) |shader| shader.deinit(gpi);
+        if (self.meshShader) |shader| shader.deinit(gpi);
+        if (self.taskShader) |shader| shader.deinit(gpi);
+    }
+};
+
 pub const ShaderObject = struct {
     handle: c.VkShaderEXT,
     stage: c.VkShaderStageFlagBits,
     descLayout: c.VkDescriptorSetLayout,
+
+    // New init function for graphics shaders
+    pub fn initGraphics(gpi: c.VkDevice, stage: c.VkShaderStageFlagBits, spvPath: []const u8, alloc: Allocator, descriptorLayout: c.VkDescriptorSetLayout, pipeType: PipelineType) !ShaderObject {
+        const exe_dir = try std.fs.selfExeDirPathAlloc(alloc);
+        defer alloc.free(exe_dir);
+        const runtimeSpvPath = try std.fs.path.join(alloc, &[_][]const u8{ exe_dir, "..", spvPath });
+        defer alloc.free(runtimeSpvPath);
+
+        const spvData = try loadShader(alloc, runtimeSpvPath);
+        defer alloc.free(spvData);
+
+        // Determine next stage for graphics pipeline
+        var nextStage: c.VkShaderStageFlags = 0;
+        if (stage == c.VK_SHADER_STAGE_VERTEX_BIT) {
+            nextStage = c.VK_SHADER_STAGE_FRAGMENT_BIT;
+        } else if (stage == c.VK_SHADER_STAGE_TASK_BIT_EXT) {
+            nextStage = c.VK_SHADER_STAGE_MESH_BIT_EXT;
+        } else if (stage == c.VK_SHADER_STAGE_MESH_BIT_EXT) {
+            nextStage = c.VK_SHADER_STAGE_FRAGMENT_BIT;
+        }
+
+        // Set flags based on shader stage
+        var flags: c.VkShaderCreateFlagsEXT = 0;
+        if (stage == c.VK_SHADER_STAGE_MESH_BIT_EXT and pipeType == .mesh) {
+            // If no task shader will be used, set this flag
+            flags |= c.VK_SHADER_CREATE_NO_TASK_SHADER_BIT_EXT;
+        }
+
+        // Push constant setup based on pipeline type
+        var pushConstantRange: c.VkPushConstantRange = undefined;
+        var pushConstantRangeCount: u32 = 0;
+        var pushConstantRanges: ?*const c.VkPushConstantRange = null;
+
+        if (pipeType == .compute) {
+            pushConstantRange = c.VkPushConstantRange{
+                .stageFlags = c.VK_SHADER_STAGE_COMPUTE_BIT,
+                .offset = 0,
+                .size = @sizeOf(ComputePushConstants),
+            };
+            pushConstantRangeCount = 1;
+            pushConstantRanges = &pushConstantRange;
+        }
+
+        const shaderCreateInfo = c.VkShaderCreateInfoEXT{
+            .sType = c.VK_STRUCTURE_TYPE_SHADER_CREATE_INFO_EXT,
+            .pNext = null,
+            .flags = flags, // Use the flags we set
+            .stage = stage,
+            .nextStage = nextStage,
+            .codeType = c.VK_SHADER_CODE_TYPE_SPIRV_EXT,
+            .codeSize = spvData.len,
+            .pCode = spvData.ptr,
+            .pName = "main",
+            .setLayoutCount = if (descriptorLayout != null) @as(u32, 1) else 0,
+            .pSetLayouts = if (descriptorLayout != null) &descriptorLayout else null,
+            .pushConstantRangeCount = pushConstantRangeCount,
+            .pPushConstantRanges = pushConstantRanges,
+            .pSpecializationInfo = null,
+        };
+
+        var shader: c.VkShaderEXT = undefined;
+        try check(c.pfn_vkCreateShadersEXT.?(gpi, 1, &shaderCreateInfo, null, &shader), "Failed to create graphics shader object");
+
+        return .{
+            .handle = shader,
+            .stage = stage,
+            .descLayout = descriptorLayout,
+        };
+    }
 
     pub fn init(gpi: c.VkDevice, stage: c.VkShaderStageFlagBits, spvPath: []const u8, alloc: Allocator, descriptorLayout: c.VkDescriptorSetLayout) !ShaderObject {
         const exe_dir = try std.fs.selfExeDirPathAlloc(alloc);
@@ -76,7 +160,8 @@ pub const Pipeline = struct {
     format: ?c.VkFormat,
     pipeType: PipelineType,
     shaderInfos: []const PipelineInfo,
-    shaderObject: ?ShaderObject = null, // Add shader object field
+    shaderObject: ?ShaderObject = null, // For compute
+    graphicsShaderObject: ?GraphicsShaderObject = null, // For graphics/mesh
 
     pub fn initShaderObject(alloc: Allocator, gpi: c.VkDevice, shaderInfos: []const PipelineInfo, descriptorLayout: c.VkDescriptorSetLayout) !Pipeline {
         const shaderInfo = shaderInfos[0];
@@ -109,33 +194,33 @@ pub const Pipeline = struct {
         };
     }
 
-    pub fn init(
-        alloc: Allocator,
-        gpi: c.VkDevice,
-        cache: c.VkPipelineCache,
-        format: c.VkFormat,
-        shaderInfos: []const PipelineInfo,
-        pipeType: PipelineType,
-        descriptorLayout: c.VkDescriptorSetLayout,
-        layoutCount: u32,
-    ) !Pipeline {
-        const modules = try createShaderModules(alloc, gpi, shaderInfos);
-        const stages = try createShaderStages(alloc, modules, shaderInfos);
-        defer {
-            destroyShaderModules(gpi, modules);
-            alloc.free(modules);
-            alloc.free(stages);
+    // New init function for graphics shader objects
+    pub fn initGraphicsShaderObject(alloc: Allocator, gpi: c.VkDevice, shaderInfos: []const PipelineInfo, descriptorLayout: c.VkDescriptorSetLayout, pipeType: PipelineType) !Pipeline {
+        var graphicsShaderObj = GraphicsShaderObject{ .descLayout = descriptorLayout };
+
+        // Create shaders based on pipeline type and shader infos
+        for (shaderInfos) |shaderInfo| {
+            const shader = try ShaderObject.initGraphics(gpi, shaderInfo.stage, shaderInfo.sprvPath, alloc, descriptorLayout, pipeType);
+
+            switch (shaderInfo.stage) {
+                c.VK_SHADER_STAGE_VERTEX_BIT => graphicsShaderObj.vertexShader = shader,
+                c.VK_SHADER_STAGE_FRAGMENT_BIT => graphicsShaderObj.fragmentShader = shader,
+                c.VK_SHADER_STAGE_MESH_BIT_EXT => graphicsShaderObj.meshShader = shader,
+                c.VK_SHADER_STAGE_TASK_BIT_EXT => graphicsShaderObj.taskShader = shader,
+                else => return error.UnsupportedShaderStage,
+            }
         }
-        const layout = try createPipelineLayout(gpi, descriptorLayout, layoutCount);
-        const pipeline = try createPipeline(gpi, layout, stages, cache, pipeType, format);
+
+        const layout = try createGraphicsPipelineLayout(gpi, descriptorLayout);
 
         return .{
             .alloc = alloc,
-            .handle = pipeline,
+            .handle = undefined, // Not used with shader objects
             .layout = layout,
-            .format = format,
+            .format = null,
             .pipeType = pipeType,
             .shaderInfos = shaderInfos,
+            .graphicsShaderObject = graphicsShaderObj,
         };
     }
 
@@ -143,13 +228,15 @@ pub const Pipeline = struct {
         if (self.shaderObject) |shaderObj| {
             shaderObj.deinit(gpi);
             c.vkDestroyPipelineLayout(gpi, self.layout, null);
+        } else if (self.graphicsShaderObject) |graphicsShaderObj| {
+            graphicsShaderObj.deinit(gpi);
+            c.vkDestroyPipelineLayout(gpi, self.layout, null);
         } else {
             c.vkDestroyPipeline(gpi, self.handle, null);
             c.vkDestroyPipelineLayout(gpi, self.layout, null);
         }
     }
 
-    // Add update function for shader object hot reload
     pub fn updateShaderObject(self: *Pipeline, gpi: c.VkDevice) !void {
         if (self.shaderObject) |*shaderObj| {
             std.debug.print("sprv {s} \n", .{self.shaderInfos[0].sprvPath});
@@ -160,46 +247,50 @@ pub const Pipeline = struct {
         }
     }
 
-    pub fn updatePipeline(self: *Pipeline, gpi: c.VkDevice, cache: c.VkPipelineCache) !void {
-        const alloc = self.alloc;
-        c.vkDestroyPipeline(gpi, self.handle, null);
+    // Update graphics shader objects for hot reload
+    pub fn updateGraphicsShaderObject(self: *Pipeline, gpi: c.VkDevice) !void {
+        if (self.graphicsShaderObject) |*graphicsShaderObj| {
+            // Recreate each shader
+            for (self.shaderInfos) |shaderInfo| {
+                const newShader = try ShaderObject.initGraphics(gpi, shaderInfo.stage, shaderInfo.sprvPath, self.alloc, graphicsShaderObj.descLayout, self.pipeType);
 
-        const modules = try createShaderModules(alloc, gpi, self.shaderInfos);
-        const stages = try createShaderStages(alloc, modules, self.shaderInfos);
-        self.handle = try createPipeline(gpi, self.layout, stages, cache, self.pipeType, self.format);
-        std.debug.print("{s} updated\n", .{@tagName(self.pipeType)});
-
-        destroyShaderModules(gpi, modules);
-        alloc.free(modules);
-        alloc.free(stages);
+                switch (shaderInfo.stage) {
+                    c.VK_SHADER_STAGE_VERTEX_BIT => {
+                        if (graphicsShaderObj.vertexShader) |old| old.deinit(gpi);
+                        graphicsShaderObj.vertexShader = newShader;
+                    },
+                    c.VK_SHADER_STAGE_FRAGMENT_BIT => {
+                        if (graphicsShaderObj.fragmentShader) |old| old.deinit(gpi);
+                        graphicsShaderObj.fragmentShader = newShader;
+                    },
+                    c.VK_SHADER_STAGE_MESH_BIT_EXT => {
+                        if (graphicsShaderObj.meshShader) |old| old.deinit(gpi);
+                        graphicsShaderObj.meshShader = newShader;
+                    },
+                    c.VK_SHADER_STAGE_TASK_BIT_EXT => {
+                        if (graphicsShaderObj.taskShader) |old| old.deinit(gpi);
+                        graphicsShaderObj.taskShader = newShader;
+                    },
+                    else => return error.UnsupportedShaderStage,
+                }
+            }
+            std.debug.print("Graphics shader objects {s} updated\n", .{@tagName(self.pipeType)});
+        }
     }
 };
 
-fn destroyShaderModules(gpi: c.VkDevice, modules: []c.VkShaderModule) void {
-    for (0..modules.len) |i| c.vkDestroyShaderModule(gpi, modules[i], null);
-}
-
-fn createShaderStages(alloc: Allocator, modules: []c.VkShaderModule, pipeInfos: []const PipelineInfo) ![]c.VkPipelineShaderStageCreateInfo {
-    var stages = try alloc.alloc(c.VkPipelineShaderStageCreateInfo, pipeInfos.len);
-    errdefer alloc.free(stages);
-
-    for (0..pipeInfos.len) |i| {
-        stages[i] = c.VkPipelineShaderStageCreateInfo{
-            .sType = c.VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-            .stage = pipeInfos[i].stage,
-            .module = modules[i],
-            .pName = "main",
-            .pSpecializationInfo = null, // for constants
-        };
-    }
-    return stages;
-}
-
-fn createShaderModules(alloc: Allocator, gpi: c.VkDevice, pipeInfos: []const PipelineInfo) ![]c.VkShaderModule {
-    var modules = try alloc.alloc(c.VkShaderModule, pipeInfos.len);
-    errdefer alloc.free(modules);
-    for (0..pipeInfos.len) |i| modules[i] = try createShaderModule(alloc, pipeInfos[i].sprvPath, gpi);
-    return modules;
+fn createGraphicsPipelineLayout(gpi: c.VkDevice, descSetLayout: c.VkDescriptorSetLayout) !c.VkPipelineLayout {
+    // Graphics pipelines typically don't need push constants like compute
+    const pipeLayoutInf = c.VkPipelineLayoutCreateInfo{
+        .sType = c.VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+        .setLayoutCount = if (descSetLayout != null) @as(u32, 1) else 0,
+        .pSetLayouts = if (descSetLayout != null) &descSetLayout else null,
+        .pushConstantRangeCount = 0,
+        .pPushConstantRanges = null,
+    };
+    var layout: c.VkPipelineLayout = undefined;
+    try check(c.vkCreatePipelineLayout(gpi, &pipeLayoutInf, null, &layout), "Failed to create graphics pipeline layout");
+    return layout;
 }
 
 pub const ComputePushConstants = extern struct {
@@ -226,170 +317,6 @@ fn createPipelineLayout(gpi: c.VkDevice, descSetLayout: c.VkDescriptorSetLayout,
     var layout: c.VkPipelineLayout = undefined;
     try check(c.vkCreatePipelineLayout(gpi, &pipeLayoutInf, null, &layout), "Failed to create pipeline layout");
     return layout;
-}
-
-fn createPipeline(
-    gpi: c.VkDevice,
-    layout: c.VkPipelineLayout,
-    shaderStages: []const c.VkPipelineShaderStageCreateInfo,
-    cache: c.VkPipelineCache,
-    pipeType: PipelineType,
-    format: ?c.VkFormat,
-) !c.VkPipeline {
-    switch (pipeType) {
-        .compute => {
-            if (shaderStages.len > 1) return error.ComputeCantHaveMultipleStages;
-
-            const pipeInf = c.VkComputePipelineCreateInfo{
-                .sType = c.VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
-                .stage = shaderStages[0],
-                .layout = layout,
-                .flags = c.VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT, // NEEDED for shader reference!
-            };
-
-            var pipe: c.VkPipeline = undefined;
-            try check(c.vkCreateComputePipelines(gpi, cache, 1, &pipeInf, null, &pipe), "Failed to create pipeline");
-            return pipe;
-        },
-        .graphics, .mesh => {
-            const viewInf = c.VkPipelineViewportStateCreateInfo{
-                .sType = c.VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
-                .viewportCount = 1,
-                .scissorCount = 1,
-            };
-
-            const rasterInf = c.VkPipelineRasterizationStateCreateInfo{
-                .sType = c.VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
-                .depthClampEnable = c.VK_FALSE,
-                .rasterizerDiscardEnable = c.VK_FALSE,
-                .polygonMode = c.VK_POLYGON_MODE_FILL,
-                .cullMode = c.VK_CULL_MODE_NONE, // VK_CULL_MODE_BACK_BIT
-                .frontFace = c.VK_FRONT_FACE_CLOCKWISE,
-                .depthBiasEnable = c.VK_FALSE,
-                .depthBiasConstantFactor = 0.0,
-                .depthBiasClamp = 0.0,
-                .depthBiasSlopeFactor = 0.0,
-                .lineWidth = 1.0,
-            };
-
-            const msaaInf = c.VkPipelineMultisampleStateCreateInfo{
-                .sType = c.VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
-                .flags = 0,
-                .rasterizationSamples = c.VK_SAMPLE_COUNT_1_BIT,
-                .sampleShadingEnable = c.VK_FALSE,
-                .minSampleShading = 1.0,
-                .pSampleMask = null,
-                .alphaToCoverageEnable = c.VK_FALSE,
-                .alphaToOneEnable = c.VK_FALSE,
-            };
-
-            const colBlendAttach = c.VkPipelineColorBlendAttachmentState{
-                .blendEnable = c.VK_FALSE,
-                .srcColorBlendFactor = c.VK_BLEND_FACTOR_ONE,
-                .dstColorBlendFactor = c.VK_BLEND_FACTOR_ZERO,
-                .colorBlendOp = c.VK_BLEND_OP_ADD,
-                .srcAlphaBlendFactor = c.VK_BLEND_FACTOR_ONE,
-                .dstAlphaBlendFactor = c.VK_BLEND_FACTOR_ZERO,
-                .alphaBlendOp = c.VK_BLEND_OP_ADD,
-                .colorWriteMask = c.VK_COLOR_COMPONENT_R_BIT | c.VK_COLOR_COMPONENT_G_BIT |
-                    c.VK_COLOR_COMPONENT_B_BIT | c.VK_COLOR_COMPONENT_A_BIT,
-            };
-
-            const colBlendInf = c.VkPipelineColorBlendStateCreateInfo{
-                .sType = c.VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
-                .logicOpEnable = c.VK_FALSE,
-                .logicOp = c.VK_LOGIC_OP_COPY,
-                .attachmentCount = 1,
-                .pAttachments = &colBlendAttach,
-                .blendConstants = [4]f32{ 0.0, 0.0, 0.0, 0.0 },
-            };
-
-            const dynStates = [_]c.VkDynamicState{
-                c.VK_DYNAMIC_STATE_VIEWPORT,
-                c.VK_DYNAMIC_STATE_SCISSOR,
-            };
-
-            const dynStateInf = c.VkPipelineDynamicStateCreateInfo{
-                .sType = c.VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
-                .dynamicStateCount = dynStates.len,
-                .pDynamicStates = &dynStates,
-            };
-
-            if (format == null) return error.PipelineNeedsFormat;
-            const checkedFormat = format.?; // Unwrap the optional to get the value.
-
-            const colFormats = [_]c.VkFormat{checkedFormat};
-            var pipeline_rendering_info = c.VkPipelineRenderingCreateInfo{
-                .sType = c.VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
-                .viewMask = 0,
-                .colorAttachmentCount = 1,
-                .pColorAttachmentFormats = &colFormats,
-                .depthAttachmentFormat = c.VK_FORMAT_UNDEFINED,
-                .stencilAttachmentFormat = c.VK_FORMAT_UNDEFINED,
-            };
-
-            if (pipeType == .mesh) {
-                const pipelineInf = c.VkGraphicsPipelineCreateInfo{
-                    .sType = c.VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
-                    .pNext = &pipeline_rendering_info,
-                    .stageCount = @intCast(shaderStages.len),
-                    .pStages = shaderStages.ptr,
-                    // Mesh shaders don't use Vertex Input or Input Assembly states.
-                    .pVertexInputState = null,
-                    .pInputAssemblyState = null,
-                    .pViewportState = &viewInf,
-                    .pRasterizationState = &rasterInf,
-                    .pMultisampleState = &msaaInf,
-                    .pDepthStencilState = null,
-                    .pColorBlendState = &colBlendInf,
-                    .pDynamicState = &dynStateInf,
-                    .layout = layout,
-                    .subpass = 0,
-                    .basePipelineIndex = -1,
-                };
-                var pipe: c.VkPipeline = undefined;
-                try check(c.vkCreateGraphicsPipelines(gpi, cache, 1, &pipelineInf, null, &pipe), "Failed to create Mesh Pipeline");
-                return pipe;
-            } else {
-                const vertInputInf = c.VkPipelineVertexInputStateCreateInfo{
-                    .sType = c.VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-                    .vertexBindingDescriptionCount = 0,
-                    .vertexAttributeDescriptionCount = 0,
-                };
-
-                const assemblyInf = c.VkPipelineInputAssemblyStateCreateInfo{
-                    .sType = c.VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
-                    .topology = c.VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, // triangle from every 3 vertices without reuse
-                    // VK_PRIMITIVE_TOPOLOGY_POINT_LIST         points from vertices
-                    // VK_PRIMITIVE_TOPOLOGY_LINE_LIST          line from every 2 vertices without reuse
-                    // VK_PRIMITIVE_TOPOLOGY_LINE_STRIP         end vertex of every line is used as start vertex for next line
-                    // VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP     second and third vertex of every triangle are used as first two vertices of the next triangle
-                    .primitiveRestartEnable = c.VK_FALSE,
-                };
-
-                const pipelineInf = c.VkGraphicsPipelineCreateInfo{
-                    .sType = c.VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
-                    .pNext = &pipeline_rendering_info,
-                    .stageCount = @intCast(shaderStages.len),
-                    .pStages = shaderStages.ptr,
-                    .pVertexInputState = &vertInputInf,
-                    .pInputAssemblyState = &assemblyInf,
-                    .pViewportState = &viewInf,
-                    .pRasterizationState = &rasterInf,
-                    .pMultisampleState = &msaaInf,
-                    .pDepthStencilState = null,
-                    .pColorBlendState = &colBlendInf,
-                    .pDynamicState = &dynStateInf,
-                    .layout = layout,
-                    .subpass = 0,
-                    .basePipelineIndex = -1,
-                };
-                var pipe: c.VkPipeline = undefined;
-                try check(c.vkCreateGraphicsPipelines(gpi, cache, 1, &pipelineInf, null, &pipe), "Failed to create Graphics Pipeline");
-                return pipe;
-            }
-        },
-    }
 }
 
 fn loadShader(alloc: Allocator, spvPath: []const u8) ![]align(@alignOf(u32)) u8 {

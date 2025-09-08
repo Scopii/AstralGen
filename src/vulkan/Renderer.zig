@@ -150,18 +150,20 @@ pub const Renderer = struct {
             if (activeGroups[i].len != 0) {
                 const pipeType: PipelineType = @enumFromInt(i);
 
-                const compPushConstants = ComputePushConstants{
-                    .camPosAndFov = cam.getPosAndFov(),
-                    .camDir = cam.getForward(),
-                    .dataAddress = self.testBuffer.gpuAddress,
-                    .runtime = runtimeAsFloat,
-                    .dataCount = @intCast(self.testBuffer.size / @sizeOf(Object)),
-                };
-
                 switch (pipeType) {
-                    .compute => try self.cmdMan.recordComputePass(&self.renderImage, &self.pipelineMan.pipelines[0], self.resourceMan2.imageDescBuffer.gpuAddress, compPushConstants),
-                    .graphics => try self.cmdMan.recordGraphicsPass(&self.renderImage, &self.pipelineMan.pipelines[1], .graphics),
-                    .mesh => try self.cmdMan.recordGraphicsPass(&self.renderImage, &self.pipelineMan.pipelines[2], .mesh),
+                    .compute => {
+                        const compPushConstants = ComputePushConstants{
+                            .camPosAndFov = cam.getPosAndFov(),
+                            .camDir = cam.getForward(),
+                            .dataAddress = self.testBuffer.gpuAddress,
+                            .runtime = runtimeAsFloat,
+                            .dataCount = @intCast(self.testBuffer.size / @sizeOf(Object)),
+                        };
+                        try self.cmdMan.recordComputePass(&self.renderImage, &self.pipelineMan.pipelines[@intFromEnum(pipeType)], self.resourceMan2.imageDescBuffer.gpuAddress, compPushConstants);
+                    },
+                    .graphics, .mesh => {
+                        try self.cmdMan.recordGraphicsPassShaderObject(&self.renderImage, &self.pipelineMan.pipelines[@intFromEnum(pipeType)], pipeType);
+                    },
                 }
                 try self.cmdMan.blitToTargets(&self.renderImage, activeGroups[i].slice(), &self.swapchainMan.swapchains);
             }

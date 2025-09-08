@@ -254,9 +254,25 @@ fn createGPI(alloc: Allocator, gpu: c.VkPhysicalDevice, families: QueueFamilies)
     var features: c.VkPhysicalDeviceFeatures = undefined;
     c.vkGetPhysicalDeviceFeatures(gpu, &features);
 
+    var extended_dynamic_state3_features = c.VkPhysicalDeviceExtendedDynamicState3FeaturesEXT{
+        .sType = c.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_3_FEATURES_EXT,
+        .pNext = null,
+        .extendedDynamicState3ColorBlendEnable = c.VK_TRUE,
+        .extendedDynamicState3ColorWriteMask = c.VK_TRUE,
+    };
+
+    var extended_dynamic_state2_features = c.VkPhysicalDeviceExtendedDynamicState2FeaturesEXT{
+        .sType = c.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_2_FEATURES_EXT,
+        .pNext = &extended_dynamic_state3_features,
+        .extendedDynamicState2 = c.VK_TRUE,
+        .extendedDynamicState2LogicOp = c.VK_TRUE,
+        .extendedDynamicState2PatchControlPoints = c.VK_TRUE,
+    };
+
+    // Chain it before extended_dynamic_state_features
     var extended_dynamic_state_features = c.VkPhysicalDeviceExtendedDynamicStateFeaturesEXT{
         .sType = c.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_FEATURES_EXT,
-        .pNext = null,
+        .pNext = &extended_dynamic_state2_features,
         .extendedDynamicState = c.VK_TRUE,
     };
 
@@ -301,6 +317,8 @@ fn createGPI(alloc: Allocator, gpu: c.VkPhysicalDevice, families: QueueFamilies)
         "VK_EXT_descriptor_buffer",
         "VK_EXT_shader_object",
         "VK_EXT_extended_dynamic_state",
+        "VK_EXT_extended_dynamic_state2",
+        "VK_EXT_extended_dynamic_state3",
     };
 
     const createInfo = c.VkDeviceCreateInfo{
@@ -327,13 +345,89 @@ fn createGPI(alloc: Allocator, gpu: c.VkPhysicalDevice, families: QueueFamilies)
         return error.MissingVulkanFunction;
     }
 
+    // Load additional dynamic state function pointers
+    const fnPtrSetRasterizerDiscard = c.vkGetDeviceProcAddr(gpi, "vkCmdSetRasterizerDiscardEnable");
+    c.pfn_vkCmdSetRasterizerDiscardEnable = if (fnPtrSetRasterizerDiscard) |p| @ptrCast(p) else null;
+
+    const fnPtrSetCullMode = c.vkGetDeviceProcAddr(gpi, "vkCmdSetCullMode");
+    c.pfn_vkCmdSetCullMode = if (fnPtrSetCullMode) |p| @ptrCast(p) else null;
+
+    const fnPtrSetFrontFace = c.vkGetDeviceProcAddr(gpi, "vkCmdSetFrontFace");
+    c.pfn_vkCmdSetFrontFace = if (fnPtrSetFrontFace) |p| @ptrCast(p) else null;
+
+    const fnPtrSetDepthTest = c.vkGetDeviceProcAddr(gpi, "vkCmdSetDepthTestEnable");
+    c.pfn_vkCmdSetDepthTestEnable = if (fnPtrSetDepthTest) |p| @ptrCast(p) else null;
+
+    const fnPtrSetDepthWrite = c.vkGetDeviceProcAddr(gpi, "vkCmdSetDepthWriteEnable");
+    c.pfn_vkCmdSetDepthWriteEnable = if (fnPtrSetDepthWrite) |p| @ptrCast(p) else null;
+
+    const fnPtrSetDepthBounds = c.vkGetDeviceProcAddr(gpi, "vkCmdSetDepthBoundsTestEnable");
+    c.pfn_vkCmdSetDepthBoundsTestEnable = if (fnPtrSetDepthBounds) |p| @ptrCast(p) else null;
+
+    const fnPtrSetStencilTest = c.vkGetDeviceProcAddr(gpi, "vkCmdSetStencilTestEnable");
+    c.pfn_vkCmdSetStencilTestEnable = if (fnPtrSetStencilTest) |p| @ptrCast(p) else null;
+
+    const fnPtrSetColorBlend = c.vkGetDeviceProcAddr(gpi, "vkCmdSetColorBlendEnableEXT");
+    c.pfn_vkCmdSetColorBlendEnableEXT = if (fnPtrSetColorBlend) |p| @ptrCast(p) else null;
+
+    const fnPtrSetColorWriteMask = c.vkGetDeviceProcAddr(gpi, "vkCmdSetColorWriteMaskEXT");
+    c.pfn_vkCmdSetColorWriteMaskEXT = if (fnPtrSetColorWriteMask) |p| @ptrCast(p) else null;
+
+    const fnPtrSetPrimitiveTopology = c.vkGetDeviceProcAddr(gpi, "vkCmdSetPrimitiveTopology");
+    c.pfn_vkCmdSetPrimitiveTopology = if (fnPtrSetPrimitiveTopology) |p| @ptrCast(p) else null;
+
+    const fnPtrSetPrimitiveRestart = c.vkGetDeviceProcAddr(gpi, "vkCmdSetPrimitiveRestartEnable");
+    c.pfn_vkCmdSetPrimitiveRestartEnable = if (fnPtrSetPrimitiveRestart) |p| @ptrCast(p) else null;
+
+    // Add missing function pointers that validation is complaining about
+    const fnPtrSetDepthBias = c.vkGetDeviceProcAddr(gpi, "vkCmdSetDepthBiasEnable");
+    c.pfn_vkCmdSetDepthBiasEnable = if (fnPtrSetDepthBias) |p| @ptrCast(p) else null;
+
+    const fnPtrSetPolygonMode = c.vkGetDeviceProcAddr(gpi, "vkCmdSetPolygonModeEXT");
+    c.pfn_vkCmdSetPolygonModeEXT = if (fnPtrSetPolygonMode) |p| @ptrCast(p) else null;
+
+    const fnPtrSetRasterizationSamples = c.vkGetDeviceProcAddr(gpi, "vkCmdSetRasterizationSamplesEXT");
+    c.pfn_vkCmdSetRasterizationSamplesEXT = if (fnPtrSetRasterizationSamples) |p| @ptrCast(p) else null;
+
+    const fnPtrSetSampleMask = c.vkGetDeviceProcAddr(gpi, "vkCmdSetSampleMaskEXT");
+    c.pfn_vkCmdSetSampleMaskEXT = if (fnPtrSetSampleMask) |p| @ptrCast(p) else null;
+
+    const fnPtrSetDepthClamp = c.vkGetDeviceProcAddr(gpi, "vkCmdSetDepthClampEnableEXT");
+    c.pfn_vkCmdSetDepthClampEnableEXT = if (fnPtrSetDepthClamp) |p| @ptrCast(p) else null;
+
+    const fnPtrSetAlphaToOne = c.vkGetDeviceProcAddr(gpi, "vkCmdSetAlphaToOneEnableEXT");
+    c.pfn_vkCmdSetAlphaToOneEnableEXT = if (fnPtrSetAlphaToOne) |p| @ptrCast(p) else null;
+
+    const fnPtrSetAlphaToCoverage = c.vkGetDeviceProcAddr(gpi, "vkCmdSetAlphaToCoverageEnableEXT");
+    c.pfn_vkCmdSetAlphaToCoverageEnableEXT = if (fnPtrSetAlphaToCoverage) |p| @ptrCast(p) else null;
+
+    const fnPtrSetLogicOpEnable = c.vkGetDeviceProcAddr(gpi, "vkCmdSetLogicOpEnableEXT");
+    c.pfn_vkCmdSetLogicOpEnableEXT = if (fnPtrSetLogicOpEnable) |p| @ptrCast(p) else null;
+
+    const fnPtrSetViewportWithCount = c.vkGetDeviceProcAddr(gpi, "vkCmdSetViewportWithCount");
+    c.pfn_vkCmdSetViewportWithCount = if (fnPtrSetViewportWithCount) |p| @ptrCast(p) else null;
+
+    const fnPtrSetScissorWithCount = c.vkGetDeviceProcAddr(gpi, "vkCmdSetScissorWithCount");
+    c.pfn_vkCmdSetScissorWithCount = if (fnPtrSetScissorWithCount) |p| @ptrCast(p) else null;
+
+    // Check essential function pointers (optional, for debugging)
+    if (c.pfn_vkCmdSetRasterizerDiscardEnable == null or
+        c.pfn_vkCmdSetCullMode == null or
+        c.pfn_vkCmdSetFrontFace == null)
+    {
+        std.log.err("Some dynamic state function pointers could not be loaded\n", .{});
+    }
+
     // Import Shader Object Functions
     const fnPtrCreateShaders = c.vkGetDeviceProcAddr(gpi, "vkCreateShadersEXT");
     c.pfn_vkCreateShadersEXT = if (fnPtrCreateShaders) |p| @ptrCast(p) else null;
+
     const fnPtrDestroyShader = c.vkGetDeviceProcAddr(gpi, "vkDestroyShaderEXT");
     c.pfn_vkDestroyShaderEXT = if (fnPtrDestroyShader) |p| @ptrCast(p) else null;
+
     const fnPtrCmdBindShadersEXT = c.vkGetDeviceProcAddr(gpi, "vkCmdBindShadersEXT");
     c.pfn_vkCmdBindShadersEXT = if (fnPtrCmdBindShadersEXT) |p| @ptrCast(p) else null;
+
     const fnPtrCmdSetVertexInputEXT = c.vkGetDeviceProcAddr(gpi, "vkCmdSetVertexInputEXT");
     c.pfn_vkCmdSetVertexInputEXT = if (fnPtrCmdSetVertexInputEXT) |p| @ptrCast(p) else null;
 
@@ -350,8 +444,10 @@ fn createGPI(alloc: Allocator, gpu: c.VkPhysicalDevice, families: QueueFamilies)
     // Import Descriptor Buffer Functions
     const fnPtrBindDescBuff = c.vkGetDeviceProcAddr(gpi, "vkCmdBindDescriptorBuffersEXT");
     c.pfn_vkCmdBindDescriptorBuffersEXT = if (fnPtrBindDescBuff) |p| @ptrCast(p) else null;
+
     const fnPtrCmdSetDescBuffOffsets = c.vkGetDeviceProcAddr(gpi, "vkCmdSetDescriptorBufferOffsetsEXT");
     c.pfn_vkCmdSetDescriptorBufferOffsetsEXT = if (fnPtrCmdSetDescBuffOffsets) |p| @ptrCast(p) else null;
+
     const fnPtrGetDesc = c.vkGetDeviceProcAddr(gpi, "vkGetDescriptorEXT");
     c.pfn_vkGetDescriptorEXT = if (fnPtrGetDesc) |p| @ptrCast(p) else null;
 

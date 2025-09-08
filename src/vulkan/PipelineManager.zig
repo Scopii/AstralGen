@@ -19,11 +19,10 @@ pub const PipelineManager = struct {
     pub fn init(alloc: Allocator, context: *const Context, resourceManager: *const ResourceManager) !PipelineManager {
         const gpi = context.gpi;
         const cache = try createPipelineCache(gpi);
-        const format = config.RENDER_IMAGE_FORMAT;
 
         const compute = try PipelineBucket.initShaderObject(alloc, gpi, &config.computePipeInf, resourceManager.layout);
-        const graphics = try PipelineBucket.init(alloc, gpi, cache, format, &config.graphicsPipeInf, .graphics, null, 0);
-        const mesh = try PipelineBucket.init(alloc, gpi, cache, format, &config.meshPipeInf, .mesh, null, 0);
+        const graphics = try PipelineBucket.initGraphicsShaderObject(alloc, gpi, &config.graphicsPipeInf, null, .graphics);
+        const mesh = try PipelineBucket.initGraphicsShaderObject(alloc, gpi, &config.meshPipeInf, null, .mesh);
 
         return .{
             .alloc = alloc,
@@ -36,7 +35,7 @@ pub const PipelineManager = struct {
     pub fn updatePipeline(self: *PipelineManager, pipeType: PipelineType) !void {
         switch (pipeType) {
             .compute => try self.pipelines[@intFromEnum(pipeType)].updateShaderObject(self.gpi),
-            else => try self.pipelines[@intFromEnum(pipeType)].updatePipeline(self.gpi, self.cache),
+            .graphics, .mesh => try self.pipelines[@intFromEnum(pipeType)].updateGraphicsShaderObject(self.gpi),
         }
     }
 
