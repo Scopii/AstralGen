@@ -4,7 +4,7 @@ const Allocator = std.mem.Allocator;
 const Context = @import("Context.zig").Context;
 const Image = @import("ResourceManager.zig").GpuImage;
 const Swapchain = @import("SwapchainManager.zig").Swapchain;
-const PipelineBucket = @import("PipelineBucket.zig").Pipeline;
+const PipelineBucket = @import("PipelineBucket.zig").ShaderPipeline;
 const PipelineType = @import("PipelineBucket.zig").PipelineType;
 const ComputePushConstants = @import("PipelineBucket.zig").ComputePushConstants;
 const CreateMapArray = @import("../structures/MapArray.zig").CreateMapArray;
@@ -88,13 +88,12 @@ pub const CmdManager = struct {
         renderImage.curLayout = c.VK_IMAGE_LAYOUT_GENERAL;
 
         // Bind shader object/pipeline directly to the primary command buffer.
-        if (pipe.shaderObject) |shaderObj| {
+        if (pipe.computeShaderObject) |shaderObj| {
             const stages = [_]c.VkShaderStageFlagBits{c.VK_SHADER_STAGE_COMPUTE_BIT};
             c.pfn_vkCmdBindShadersEXT.?(cmd, 1, &stages, &shaderObj.handle);
             c.vkCmdPushConstants(cmd, pipe.layout, c.VK_SHADER_STAGE_COMPUTE_BIT, 0, @sizeOf(ComputePushConstants), &pushConstants);
         } else {
-            c.vkCmdBindPipeline(cmd, c.VK_PIPELINE_BIND_POINT_COMPUTE, pipe.handle);
-            c.vkCmdPushConstants(cmd, pipe.layout, c.VK_SHADER_STAGE_COMPUTE_BIT, 0, @sizeOf(ComputePushConstants), &pushConstants);
+            std.debug.print("Could not beind Shader Object\n", .{});
         }
 
         const bufferBindingInf = c.VkDescriptorBufferBindingInfoEXT{

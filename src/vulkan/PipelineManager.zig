@@ -4,14 +4,14 @@ const Allocator = std.mem.Allocator;
 const ztracy = @import("ztracy");
 const config = @import("../config.zig");
 const Context = @import("Context.zig").Context;
-const PipelineBucket = @import("PipelineBucket.zig").Pipeline;
+const ShaderPipeline = @import("PipelineBucket.zig").ShaderPipeline;
 const PipelineType = @import("PipelineBucket.zig").PipelineType;
 const ResourceManager = @import("ResourceManager.zig").ResourceManager;
 const check = @import("error.zig").check;
 
 pub const PipelineManager = struct {
     const pipeTypes = @typeInfo(PipelineType).@"enum".fields.len;
-    pipelines: [pipeTypes]PipelineBucket,
+    pipelines: [pipeTypes]ShaderPipeline,
     alloc: Allocator,
     gpi: c.VkDevice,
     cache: c.VkPipelineCache,
@@ -20,9 +20,9 @@ pub const PipelineManager = struct {
         const gpi = context.gpi;
         const cache = try createPipelineCache(gpi);
 
-        const compute = try PipelineBucket.initShaderObject(alloc, gpi, &config.computePipeInf, resourceManager.layout);
-        const graphics = try PipelineBucket.initGraphicsShaderObject(alloc, gpi, &config.graphicsPipeInf, null, .graphics);
-        const mesh = try PipelineBucket.initGraphicsShaderObject(alloc, gpi, &config.meshPipeInf, null, .mesh);
+        const compute = try ShaderPipeline.init(alloc, gpi, &config.computePipeInf, resourceManager.layout, .compute);
+        const graphics = try ShaderPipeline.init(alloc, gpi, &config.graphicsPipeInf, null, .graphics);
+        const mesh = try ShaderPipeline.init(alloc, gpi, &config.meshPipeInf, null, .mesh);
 
         return .{
             .alloc = alloc,
@@ -33,10 +33,7 @@ pub const PipelineManager = struct {
     }
 
     pub fn updatePipeline(self: *PipelineManager, pipeType: PipelineType) !void {
-        switch (pipeType) {
-            .compute => try self.pipelines[@intFromEnum(pipeType)].updateShaderObject(self.gpi),
-            .graphics, .mesh => try self.pipelines[@intFromEnum(pipeType)].updateGraphicsShaderObject(self.gpi),
-        }
+        try self.pipelines[@intFromEnum(pipeType)].update(self.gpi, pipeType);
     }
 
     pub fn deinit(self: *PipelineManager) void {
