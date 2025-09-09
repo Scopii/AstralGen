@@ -14,11 +14,9 @@ pub const PipelineManager = struct {
     pipelines: [pipeTypes]ShaderPipeline,
     alloc: Allocator,
     gpi: c.VkDevice,
-    cache: c.VkPipelineCache,
 
     pub fn init(alloc: Allocator, context: *const Context, resourceManager: *const ResourceManager) !PipelineManager {
         const gpi = context.gpi;
-        const cache = try createPipelineCache(gpi);
 
         const compute = try ShaderPipeline.init(alloc, gpi, &config.computePipeInf, resourceManager.layout, .compute);
         const graphics = try ShaderPipeline.init(alloc, gpi, &config.graphicsPipeInf, null, .graphics);
@@ -28,7 +26,6 @@ pub const PipelineManager = struct {
             .alloc = alloc,
             .gpi = gpi,
             .pipelines = .{ compute, graphics, mesh },
-            .cache = cache,
         };
     }
 
@@ -39,18 +36,5 @@ pub const PipelineManager = struct {
     pub fn deinit(self: *PipelineManager) void {
         const gpi = self.gpi;
         for (0..self.pipelines.len) |i| self.pipelines[i].deinit(gpi);
-        c.vkDestroyPipelineCache(gpi, self.cache, null);
     }
 };
-
-fn createPipelineCache(gpi: c.VkDevice) !c.VkPipelineCache {
-    const cacheCreateInf = c.VkPipelineCacheCreateInfo{
-        .sType = c.VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO,
-        .flags = 0,
-        .initialDataSize = 0,
-        .pInitialData = null,
-    };
-    var cache: c.VkPipelineCache = undefined;
-    try check(c.vkCreatePipelineCache(gpi, &cacheCreateInf, null, &cache), "Failed to create Pipeline Cache");
-    return cache;
-}
