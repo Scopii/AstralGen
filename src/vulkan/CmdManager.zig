@@ -88,13 +88,10 @@ pub const CmdManager = struct {
         renderImage.curLayout = c.VK_IMAGE_LAYOUT_GENERAL;
 
         // Bind shader object/pipeline directly to the primary command buffer.
-        if (pipe.computeShaderObject) |shaderObj| {
-            const stages = [_]c.VkShaderStageFlagBits{c.VK_SHADER_STAGE_COMPUTE_BIT};
-            c.pfn_vkCmdBindShadersEXT.?(cmd, 1, &stages, &shaderObj.handle);
-            c.vkCmdPushConstants(cmd, pipe.layout, c.VK_SHADER_STAGE_COMPUTE_BIT, 0, @sizeOf(ComputePushConstants), &pushConstants);
-        } else {
-            std.debug.print("Could not beind Shader Object\n", .{});
-        }
+
+        const stages = [_]c.VkShaderStageFlagBits{c.VK_SHADER_STAGE_COMPUTE_BIT};
+        c.pfn_vkCmdBindShadersEXT.?(cmd, 1, &stages, &pipe.shaderObjects.items[0].handle);
+        c.vkCmdPushConstants(cmd, pipe.layout, c.VK_SHADER_STAGE_COMPUTE_BIT, 0, @sizeOf(ComputePushConstants), &pushConstants);
 
         const bufferBindingInf = c.VkDescriptorBufferBindingInfoEXT{
             .sType = c.VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT,
@@ -173,74 +170,72 @@ pub const CmdManager = struct {
             setScissorWithCount(cmd, 1, &scissor);
         }
 
+        const list = pipe.shaderObjects.items;
+
         // Bind shader objects based on pipeline type
-        if (pipe.graphicsShaderObject) |graphicsShaderObj| {
-            switch (pipeType) {
-                .graphics => {
-                    // Bind ALL 7 shader stages - clear everything first
-                    var stages = [_]c.VkShaderStageFlagBits{
-                        c.VK_SHADER_STAGE_VERTEX_BIT,
-                        c.VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT,
-                        c.VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT,
-                        c.VK_SHADER_STAGE_GEOMETRY_BIT,
-                        c.VK_SHADER_STAGE_FRAGMENT_BIT,
-                        c.VK_SHADER_STAGE_TASK_BIT_EXT, // Clear mesh stages
-                        c.VK_SHADER_STAGE_MESH_BIT_EXT, // Clear mesh stages
-                    };
-                    var shaders = [_]c.VkShaderEXT{
-                        if (graphicsShaderObj.vertexShader) |vertexShader| vertexShader.handle else null,
-                        null, // No tessellation control
-                        null, // No tessellation eval
-                        null, // No geometry shader
-                        if (graphicsShaderObj.fragmentShader) |fragmentShader| fragmentShader.handle else null,
-                        null, // Clear task shader
-                        null, // Clear mesh shader
-                    };
+        switch (pipeType) {
+            .graphics => {
+                // Bind ALL 7 shader stages - clear everything first
+                var stages = [_]c.VkShaderStageFlagBits{
+                    c.VK_SHADER_STAGE_VERTEX_BIT,
+                    c.VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT,
+                    c.VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT,
+                    c.VK_SHADER_STAGE_GEOMETRY_BIT,
+                    c.VK_SHADER_STAGE_FRAGMENT_BIT,
+                    c.VK_SHADER_STAGE_TASK_BIT_EXT, // Clear mesh stages
+                    c.VK_SHADER_STAGE_MESH_BIT_EXT, // Clear mesh stages
+                };
+                var shaders = [_]c.VkShaderEXT{
+                    list[1].handle,
+                    null, // No tessellation control
+                    null, // No tessellation eval
+                    null, // No geometry shader
+                    list[0].handle,
+                    null, // Clear task shader
+                    null, // Clear mesh shader
+                };
 
-                    c.pfn_vkCmdBindShadersEXT.?(cmd, 7, &stages, &shaders);
+                c.pfn_vkCmdBindShadersEXT.?(cmd, 7, &stages, &shaders);
 
-                    // Set vertex input state (empty for your case)
-                    if (c.pfn_vkCmdSetVertexInputEXT) |setVertexInput| {
-                        setVertexInput(cmd, 0, null, 0, null);
-                    }
-                    // Set other dynamic states
-                    setGraphicsDynamicStates(cmd);
-                    // Draw
-                    c.vkCmdDraw(cmd, 3, 1, 0, 0);
-                },
-                .mesh => {
-                    // For mesh shaders, bind ALL 7 stages to ensure clean state
-                    var stages = [_]c.VkShaderStageFlagBits{
-                        c.VK_SHADER_STAGE_VERTEX_BIT,
-                        c.VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT,
-                        c.VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT,
-                        c.VK_SHADER_STAGE_GEOMETRY_BIT,
-                        c.VK_SHADER_STAGE_FRAGMENT_BIT,
-                        c.VK_SHADER_STAGE_TASK_BIT_EXT,
-                        c.VK_SHADER_STAGE_MESH_BIT_EXT,
-                    };
-                    var shaders = [_]c.VkShaderEXT{
-                        null, // Clear vertex shader for mesh
-                        null, // No tessellation
-                        null, // No tessellation
-                        null, // No geometry
-                        if (graphicsShaderObj.fragmentShader) |fragmentShader| fragmentShader.handle else null,
-                        if (graphicsShaderObj.taskShader) |taskShader| taskShader.handle else null,
-                        if (graphicsShaderObj.meshShader) |meshShader| meshShader.handle else null,
-                    };
+                // Set vertex input state (empty for your case)
+                if (c.pfn_vkCmdSetVertexInputEXT) |setVertexInput| {
+                    setVertexInput(cmd, 0, null, 0, null);
+                }
+                // Set other dynamic states
+                setGraphicsDynamicStates(cmd);
+                // Draw
+                c.vkCmdDraw(cmd, 3, 1, 0, 0);
+            },
+            .mesh => {
+                // For mesh shaders, bind ALL 7 stages to ensure clean state
+                var stages = [_]c.VkShaderStageFlagBits{
+                    c.VK_SHADER_STAGE_VERTEX_BIT,
+                    c.VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT,
+                    c.VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT,
+                    c.VK_SHADER_STAGE_GEOMETRY_BIT,
+                    c.VK_SHADER_STAGE_FRAGMENT_BIT,
+                    c.VK_SHADER_STAGE_TASK_BIT_EXT,
+                    c.VK_SHADER_STAGE_MESH_BIT_EXT,
+                };
+                var shaders = [_]c.VkShaderEXT{
+                    null, // Clear vertex shader for mesh
+                    null, // No tessellation
+                    null, // No tessellation
+                    null, // No geometry
+                    list[0].handle,
+                    null,
+                    list[1].handle,
+                };
 
-                    c.pfn_vkCmdBindShadersEXT.?(cmd, 7, &stages, &shaders);
-                    // Set dynamic states
-                    setGraphicsDynamicStates(cmd);
-                    // Draw mesh tasks
-                    if (c.pfn_vkCmdDrawMeshTasksEXT) |drawMeshTasks| {
-                        drawMeshTasks(cmd, 1, 1, 1);
-                    }
-                },
-                else => return error.UnsupportedPipelineType,
-            }
-        } else {
-            return error.GraphicsShaderObjectNotFound;
+                c.pfn_vkCmdBindShadersEXT.?(cmd, 7, &stages, &shaders);
+                // Set dynamic states
+                setGraphicsDynamicStates(cmd);
+                // Draw mesh tasks
+                if (c.pfn_vkCmdDrawMeshTasksEXT) |drawMeshTasks| {
+                    drawMeshTasks(cmd, 1, 1, 1);
+                }
+            },
+            else => return error.UnsupportedPipelineType,
         }
 
         c.vkCmdEndRendering(cmd);

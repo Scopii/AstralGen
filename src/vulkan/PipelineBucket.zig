@@ -4,19 +4,18 @@ const Allocator = std.mem.Allocator;
 const config = @import("../config.zig");
 const check = @import("error.zig").check;
 
-pub const GraphicsShaderObject = struct {
-    vertexShader: ?ShaderObject = null,
-    fragmentShader: ?ShaderObject = null,
-    meshShader: ?ShaderObject = null,
-    taskShader: ?ShaderObject = null,
-    descLayout: c.VkDescriptorSetLayout,
+pub const PipelineType = enum { compute, graphics, mesh };
 
-    pub fn deinit(self: GraphicsShaderObject, gpi: c.VkDevice) void {
-        if (self.vertexShader) |shader| shader.deinit(gpi);
-        if (self.fragmentShader) |shader| shader.deinit(gpi);
-        if (self.meshShader) |shader| shader.deinit(gpi);
-        if (self.taskShader) |shader| shader.deinit(gpi);
-    }
+pub const ShaderInfo = struct {
+    pipeType: PipelineType,
+    inputName: []const u8,
+    outputName: []const u8,
+};
+
+pub const PipelineInfo = struct {
+    pipeType: PipelineType,
+    stage: c.VkShaderStageFlagBits,
+    sprvPath: []const u8,
 };
 
 pub const ComputePushConstants = extern struct {
@@ -60,7 +59,7 @@ pub const ShaderObject = struct {
         // Set flags based on shader stage
         var flags: c.VkShaderCreateFlagsEXT = 0;
         if (stage == c.VK_SHADER_STAGE_MESH_BIT_EXT and pipeType == .mesh) {
-            flags |= c.VK_SHADER_CREATE_NO_TASK_SHADER_BIT_EXT; // no task shader flag
+            flags |= c.VK_SHADER_CREATE_NO_TASK_SHADER_BIT_EXT; // because task shader isnt used YET
         }
 
         const shaderCreateInfo = c.VkShaderCreateInfoEXT{
@@ -99,123 +98,62 @@ pub const ShaderObject = struct {
     }
 };
 
-pub const PipelineType = enum { compute, graphics, mesh };
-
-pub const ShaderInfo = struct {
-    pipeType: PipelineType,
-    inputName: []const u8,
-    outputName: []const u8,
-};
-
-pub const PipelineInfo = struct {
-    pipeType: PipelineType,
-    stage: c.VkShaderStageFlagBits,
-    sprvPath: []const u8,
-};
-
 pub const ShaderPipeline = struct {
     alloc: Allocator,
     layout: c.VkPipelineLayout,
     pipeType: PipelineType,
     shaderInfos: []const PipelineInfo,
-    computeShaderObject: ?ShaderObject = null, // For compute
-    graphicsShaderObject: ?GraphicsShaderObject = null, // For graphics/mesh
+    descLayout: c.VkDescriptorSetLayout,
+    shaderObjects: std.ArrayList(ShaderObject),
 
-    pub fn init(alloc: Allocator, gpi: c.VkDevice, shaderInfos: []const PipelineInfo, descriptorLayout: c.VkDescriptorSetLayout, pipeType: PipelineType) !ShaderPipeline {
-        switch (pipeType) {
-            .compute => {
-                if (shaderInfos.len > 1) std.log.err("Compute only supports one Stage in ShaderInfos\n", .{});
-                const shaderInfo = shaderInfos[0];
-                const shaderObj = try ShaderObject.init(gpi, shaderInfo.stage, shaderInfo.sprvPath, alloc, descriptorLayout, .compute);
-                const layout = try createPipelineLayout(gpi, descriptorLayout, c.VK_SHADER_STAGE_COMPUTE_BIT, @sizeOf(ComputePushConstants));
-
-                return .{
-                    .alloc = alloc,
-                    .layout = layout,
-                    .pipeType = .compute,
-                    .shaderInfos = shaderInfos,
-                    .computeShaderObject = shaderObj,
-                };
-            },
-            else => {
-                var graphicsShaderObj = GraphicsShaderObject{ .descLayout = descriptorLayout };
-                const layout = try createPipelineLayout(gpi, descriptorLayout, 0, 0); // No push constants
-                // Create shaders based on pipeline type and shader infos
-                for (shaderInfos) |shaderInfo| {
-                    const shader = try ShaderObject.init(gpi, shaderInfo.stage, shaderInfo.sprvPath, alloc, descriptorLayout, pipeType);
-
-                    switch (shaderInfo.stage) {
-                        c.VK_SHADER_STAGE_VERTEX_BIT => graphicsShaderObj.vertexShader = shader,
-                        c.VK_SHADER_STAGE_FRAGMENT_BIT => graphicsShaderObj.fragmentShader = shader,
-                        c.VK_SHADER_STAGE_MESH_BIT_EXT => graphicsShaderObj.meshShader = shader,
-                        c.VK_SHADER_STAGE_TASK_BIT_EXT => graphicsShaderObj.taskShader = shader,
-                        else => return error.UnsupportedShaderStage,
-                    }
-                }
-
-                return .{
-                    .alloc = alloc,
-                    .layout = layout,
-                    .pipeType = pipeType,
-                    .shaderInfos = shaderInfos,
-                    .graphicsShaderObject = graphicsShaderObj,
-                };
-            },
+    pub fn init(alloc: Allocator, gpi: c.VkDevice, pipeInfos: []const PipelineInfo, descriptorLayout: c.VkDescriptorSetLayout, pipeType: PipelineType) !ShaderPipeline {
+        var shaderObjects = std.ArrayList(ShaderObject).init(alloc);
+        if (pipeType == .compute and pipeInfos.len > 1) {
+            std.log.err("ShaderPipeline: Compute only supports 1 Stage", .{});
+            return error.ShaderStageOverflow;
         }
+
+        const layout = switch (pipeType) {
+            .compute => try createPipelineLayout(gpi, descriptorLayout, pipeInfos[0].stage, @sizeOf(ComputePushConstants)),
+            else => try createPipelineLayout(gpi, descriptorLayout, 0, 0),
+        };
+
+        for (pipeInfos) |pipeInfo| {
+            const shaderObj = try ShaderObject.init(gpi, pipeInfo.stage, pipeInfo.sprvPath, alloc, descriptorLayout, pipeType);
+            shaderObjects.append(shaderObj) catch |err| {
+                std.debug.print("PipelineBucket: Could not append ShaderObject, err {}\n", .{err});
+            };
+        }
+
+        return .{
+            .alloc = alloc,
+            .layout = layout,
+            .pipeType = pipeType,
+            .shaderInfos = pipeInfos,
+            .shaderObjects = shaderObjects,
+            .descLayout = descriptorLayout,
+        };
     }
 
     pub fn deinit(self: *ShaderPipeline, gpi: c.VkDevice) void {
-        if (self.computeShaderObject) |shaderObj| {
-            shaderObj.deinit(gpi);
-            c.vkDestroyPipelineLayout(gpi, self.layout, null);
-        } else if (self.graphicsShaderObject) |graphicsShaderObj| {
-            graphicsShaderObj.deinit(gpi);
-            c.vkDestroyPipelineLayout(gpi, self.layout, null);
-        } else {
-            c.vkDestroyPipelineLayout(gpi, self.layout, null);
+        for (self.shaderObjects.items) |*shaderObject| {
+            shaderObject.deinit(gpi);
         }
+        c.vkDestroyPipelineLayout(gpi, self.layout, null);
+        self.shaderObjects.deinit();
     }
 
     pub fn update(self: *ShaderPipeline, gpi: c.VkDevice, pipeType: PipelineType) !void {
-        switch (pipeType) {
-            .compute => {
-                if (self.computeShaderObject) |*shaderObj| {
-                    std.debug.print("sprv {s} \n", .{self.shaderInfos[0].sprvPath});
-                    const layout = shaderObj.descLayout;
-                    shaderObj.deinit(gpi);
-                    self.computeShaderObject = try ShaderObject.init(gpi, self.shaderInfos[0].stage, self.shaderInfos[0].sprvPath, self.alloc, layout, .compute);
-                    std.debug.print("Shader object {s} updated\n", .{@tagName(self.pipeType)});
-                }
-            },
-            else => {
-                if (self.graphicsShaderObject) |*graphicsShaderObj| {
-                    // Recreate each shader
-                    for (self.shaderInfos) |shaderInfo| {
-                        const newShader = try ShaderObject.init(gpi, shaderInfo.stage, shaderInfo.sprvPath, self.alloc, graphicsShaderObj.descLayout, self.pipeType);
+        for (self.shaderObjects.items) |*shaderObject| {
+            shaderObject.deinit(gpi);
+        }
+        self.shaderObjects.clearRetainingCapacity();
+        for (self.shaderInfos) |shaderInfo| {
+            const shaderObj = try ShaderObject.init(gpi, shaderInfo.stage, shaderInfo.sprvPath, self.alloc, self.descLayout, pipeType);
 
-                        switch (shaderInfo.stage) {
-                            c.VK_SHADER_STAGE_VERTEX_BIT => {
-                                if (graphicsShaderObj.vertexShader) |old| old.deinit(gpi);
-                                graphicsShaderObj.vertexShader = newShader;
-                            },
-                            c.VK_SHADER_STAGE_FRAGMENT_BIT => {
-                                if (graphicsShaderObj.fragmentShader) |old| old.deinit(gpi);
-                                graphicsShaderObj.fragmentShader = newShader;
-                            },
-                            c.VK_SHADER_STAGE_MESH_BIT_EXT => {
-                                if (graphicsShaderObj.meshShader) |old| old.deinit(gpi);
-                                graphicsShaderObj.meshShader = newShader;
-                            },
-                            c.VK_SHADER_STAGE_TASK_BIT_EXT => {
-                                if (graphicsShaderObj.taskShader) |old| old.deinit(gpi);
-                                graphicsShaderObj.taskShader = newShader;
-                            },
-                            else => return error.UnsupportedShaderStage,
-                        }
-                    }
-                    std.debug.print("Graphics shader objects {s} updated\n", .{@tagName(self.pipeType)});
-                }
-            },
+            self.shaderObjects.append(shaderObj) catch |err| {
+                std.debug.print("PipelineBucket: Could not append ShaderObject, err {}\n", .{err});
+            };
         }
     }
 };
