@@ -73,15 +73,15 @@ pub const shaderOutputPath: []const u8 = "/zig-out/shader";
 
 // Shader Infos
 pub const computePipeInf = [_]PipelineInfo{
-    .{ .pipeType = .compute, .stage = c.VK_SHADER_STAGE_COMPUTE_BIT, .inputName = "Compute.comp", .outputName = "Compute.spv"},
+    .{ .pipeType = .compute, .stage = c.VK_SHADER_STAGE_COMPUTE_BIT, .inputFile = "Compute.comp", .spvName = "Compute.spv" },
 };
 pub const graphicsPipeInf = [_]PipelineInfo{
-    .{ .pipeType = .graphics, .stage = c.VK_SHADER_STAGE_VERTEX_BIT, .inputName = "Graphics.vert", .outputName = "GraphicsVert.spv"},
-    .{ .pipeType = .graphics, .stage = c.VK_SHADER_STAGE_FRAGMENT_BIT, .inputName = "Graphics.frag", .outputName = "GraphicsFrag.spv"},
+    .{ .pipeType = .graphics, .stage = c.VK_SHADER_STAGE_VERTEX_BIT, .inputFile = "Graphics.vert", .spvName = "GraphicsVert.spv" },
+    .{ .pipeType = .graphics, .stage = c.VK_SHADER_STAGE_FRAGMENT_BIT, .inputFile = "Graphics.frag", .spvName = "GraphicsFrag.spv" },
 };
 pub const meshPipeInf = [_]PipelineInfo{
-    .{ .pipeType = .mesh, .stage = c.VK_SHADER_STAGE_MESH_BIT_EXT, .inputName = "Mesh.mesh", .outputName = "MeshMesh.spv"},
-    .{ .pipeType = .mesh, .stage = c.VK_SHADER_STAGE_FRAGMENT_BIT, .inputName = "Mesh.frag", .outputName = "MeshFrag.spv"},
+    .{ .pipeType = .mesh, .stage = c.VK_SHADER_STAGE_MESH_BIT_EXT, .inputFile = "Mesh.mesh", .spvName = "MeshMesh.spv" },
+    .{ .pipeType = .mesh, .stage = c.VK_SHADER_STAGE_FRAGMENT_BIT, .inputFile = "Mesh.frag", .spvName = "MeshFrag.spv" },
 };
 
 pub const allPipeInf: []const []const PipelineInfo = &.{

@@ -11,8 +11,8 @@ pub const PipelineType = enum { compute, graphics, mesh };
 pub const PipelineInfo = struct {
     pipeType: PipelineType,
     stage: c.VkShaderStageFlagBits,
-    inputName: []const u8,
-    outputName: []const u8,
+    inputFile: []const u8,
+    spvName: []const u8,
 };
 
 pub const ComputePushConstants = extern struct {
@@ -121,7 +121,7 @@ pub const ShaderPipeline = struct {
         };
 
         for (pipeInfos) |pipeInf| {
-            const shaderObj = try ShaderObject.init(gpi, pipeInf.stage, pipeInf.outputName, alloc, descriptorLayout, pipeType);
+            const shaderObj = try ShaderObject.init(gpi, pipeInf.stage, pipeInf.spvName, alloc, descriptorLayout, pipeType);
             shaderObjects.append(shaderObj) catch |err| {
                 std.debug.print("PipelineBucket: Could not append ShaderObject, err {}\n", .{err});
             };
@@ -151,7 +151,7 @@ pub const ShaderPipeline = struct {
         }
         self.shaderObjects.clearRetainingCapacity();
         for (self.pipeInf) |pipeInf| {
-            const shaderObj = try ShaderObject.init(gpi, pipeInf.stage, pipeInf.outputName, self.alloc, self.descLayout, pipeType);
+            const shaderObj = try ShaderObject.init(gpi, pipeInf.stage, pipeInf.spvName, self.alloc, self.descLayout, pipeType);
 
             self.shaderObjects.append(shaderObj) catch |err| {
                 std.debug.print("PipelineBucket: Could not append ShaderObject, err {}\n", .{err});
