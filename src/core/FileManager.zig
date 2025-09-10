@@ -17,9 +17,9 @@ pub const FileManager = struct {
         // Assign paths
         const rootPath = try resolveProjectRoot(alloc, config.rootPath);
         std.debug.print("Root Path: {s}\n", .{rootPath});
-        const shaderPath = try joinPath(alloc, rootPath, config.shaderPath);
+        const shaderPath = try joinPath(alloc, rootPath, config.glslPath);
         std.debug.print("Shader Path: {s}\n", .{shaderPath});
-        const shaderOutputPath = try joinPath(alloc, rootPath, config.shaderOutputPath);
+        const shaderOutputPath = try joinPath(alloc, rootPath, config.sprvPath);
         std.debug.print("Shader Output Path: {s}\n", .{shaderOutputPath});
         // Set defaults
         const currentTime = std.time.nanoTimestamp();

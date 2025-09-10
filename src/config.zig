@@ -68,8 +68,8 @@ pub const keyAssignments = [_]KeyAssignments{
 
 // Paths
 pub const rootPath: []const u8 = "../..";
-pub const shaderPath: []const u8 = "/src/shader";
-pub const shaderOutputPath: []const u8 = "/zig-out/shader";
+pub const glslPath: []const u8 = "/src/shader";
+pub const sprvPath: []const u8 = "/zig-out/shader";
 
 // Shader Infos
 pub const computePipeInf = [_]PipelineInfo{

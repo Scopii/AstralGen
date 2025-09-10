@@ -38,7 +38,7 @@ pub const ShaderObject = struct {
     ) !ShaderObject {
         const rootPath = try resolveProjectRoot(alloc, config.rootPath);
         defer alloc.free(rootPath);
-        const spvFilePath = std.fs.path.join(alloc, &[_][]const u8{ rootPath, config.shaderOutputPath, spvFile }) catch |err| {
+        const spvFilePath = std.fs.path.join(alloc, &[_][]const u8{ rootPath, config.sprvPath, spvFile }) catch |err| {
             std.debug.print("PipelineBucket: spvFilePath could not be resolved {}\n", .{err});
             return err;
         };
