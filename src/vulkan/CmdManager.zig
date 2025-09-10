@@ -183,7 +183,7 @@ pub const CmdManager = struct {
         };
 
         // bind ALL 7 stages to ensure clean state
-        var shaders2 = [_]c.VkShaderEXT{
+        var shaders = [_]c.VkShaderEXT{
             null, // Clear vertex shader for mesh
             null, // No tessellation control
             null, // No tessellation eval
@@ -196,14 +196,14 @@ pub const CmdManager = struct {
         // Assign all stages to correct index
         for (pipe.shaderObjects.items) |shaderObject| {
             for (0..stages.len) |i| {
-                if (shaderObject.stage == stages[i]) shaders2[i] = shaderObject.handle;
+                if (shaderObject.stage == stages[i]) shaders[i] = shaderObject.handle;
             }
         }
 
         // Bind shader objects based on pipeline type
         switch (pipeType) {
             .graphics => {
-                c.pfn_vkCmdBindShadersEXT.?(cmd, 7, &stages, &shaders2);
+                c.pfn_vkCmdBindShadersEXT.?(cmd, 7, &stages, &shaders);
                 // Set empty vertex input state
                 if (c.pfn_vkCmdSetVertexInputEXT) |setVertexInput| {
                     setVertexInput(cmd, 0, null, 0, null);
@@ -213,7 +213,7 @@ pub const CmdManager = struct {
                 c.vkCmdDraw(cmd, 3, 1, 0, 0);
             },
             .mesh => {
-                c.pfn_vkCmdBindShadersEXT.?(cmd, 7, &stages, &shaders2);
+                c.pfn_vkCmdBindShadersEXT.?(cmd, 7, &stages, &shaders);
                 setGraphicsDynamicStates(cmd);
                 // Draw mesh tasks
                 if (c.pfn_vkCmdDrawMeshTasksEXT) |drawMeshTasks| {

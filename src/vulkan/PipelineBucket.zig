@@ -31,9 +31,10 @@ pub const ShaderObject = struct {
     pub fn init(
         gpi: c.VkDevice,
         stage: c.VkShaderStageFlagBits,
+        nextStage: c.VkShaderStageFlagBits,
         spvFile: []const u8,
         alloc: Allocator,
-        descriptorLayout: c.VkDescriptorSetLayout,
+        descLayout: c.VkDescriptorSetLayout,
         pipeType: PipelineType,
     ) !ShaderObject {
         const rootPath = try resolveProjectRoot(alloc, config.rootPath);
@@ -46,15 +47,6 @@ pub const ShaderObject = struct {
 
         const spvData = try loadShader(alloc, spvFilePath);
         defer alloc.free(spvData);
-
-        // Determine next stage for graphics pipeline
-        const nextStage: c.VkShaderStageFlags = switch (stage) {
-            c.VK_SHADER_STAGE_COMPUTE_BIT => 0,
-            c.VK_SHADER_STAGE_VERTEX_BIT => c.VK_SHADER_STAGE_FRAGMENT_BIT,
-            c.VK_SHADER_STAGE_TASK_BIT_EXT => c.VK_SHADER_STAGE_MESH_BIT_EXT,
-            c.VK_SHADER_STAGE_MESH_BIT_EXT => c.VK_SHADER_STAGE_FRAGMENT_BIT,
-            else => 0,
-        };
 
         // Set flags based on shader stage
         var flags: c.VkShaderCreateFlagsEXT = 0;
@@ -72,8 +64,8 @@ pub const ShaderObject = struct {
             .codeSize = spvData.len,
             .pCode = spvData.ptr,
             .pName = "main",
-            .setLayoutCount = if (descriptorLayout != null) @as(u32, 1) else 0,
-            .pSetLayouts = if (descriptorLayout != null) &descriptorLayout else null,
+            .setLayoutCount = if (descLayout != null) @as(u32, 1) else 0,
+            .pSetLayouts = if (descLayout != null) &descLayout else null,
             .pushConstantRangeCount = if (pipeType == .compute) 1 else 0,
             .pPushConstantRanges = if (pipeType == .compute) &c.VkPushConstantRange{
                 .stageFlags = c.VK_SHADER_STAGE_COMPUTE_BIT,
@@ -89,7 +81,7 @@ pub const ShaderObject = struct {
         return .{
             .handle = shader,
             .stage = stage,
-            .descLayout = descriptorLayout,
+            .descLayout = descLayout,
         };
     }
 
@@ -106,7 +98,7 @@ pub const ShaderPipeline = struct {
     descLayout: c.VkDescriptorSetLayout,
     shaderObjects: std.ArrayList(ShaderObject),
 
-    pub fn init(alloc: Allocator, gpi: c.VkDevice, pipeInfos: []const PipelineInfo, descriptorLayout: c.VkDescriptorSetLayout, pipeType: PipelineType) !ShaderPipeline {
+    pub fn init(alloc: Allocator, gpi: c.VkDevice, pipeInfos: []const PipelineInfo, descLayout: c.VkDescriptorSetLayout, pipeType: PipelineType) !ShaderPipeline {
         var shaderObjects = std.ArrayList(ShaderObject).init(alloc);
         if (pipeType == .compute and pipeInfos.len > 1) {
             std.log.err("ShaderPipeline: Compute only supports 1 Stage", .{});
@@ -114,12 +106,14 @@ pub const ShaderPipeline = struct {
         }
 
         const layout = switch (pipeType) {
-            .compute => try createPipelineLayout(gpi, descriptorLayout, pipeInfos[0].stage, @sizeOf(ComputePushConstants)),
-            else => try createPipelineLayout(gpi, descriptorLayout, 0, 0),
+            .compute => try createPipelineLayout(gpi, descLayout, pipeInfos[0].stage, @sizeOf(ComputePushConstants)),
+            else => try createPipelineLayout(gpi, descLayout, 0, 0),
         };
 
-        for (pipeInfos) |pipeInf| {
-            const shaderObj = try ShaderObject.init(gpi, pipeInf.stage, pipeInf.spvFile, alloc, descriptorLayout, pipeType);
+        for (0..pipeInfos.len) |i| {
+            const pipeInf = pipeInfos[i];
+            const nextStage = if (i + 1 <= pipeInfos.len - 1) pipeInfos[i + 1].stage else 0;
+            const shaderObj = try ShaderObject.init(gpi, pipeInf.stage, nextStage, pipeInf.spvFile, alloc, descLayout, pipeType);
             shaderObjects.append(shaderObj) catch |err| {
                 std.debug.print("PipelineBucket: Could not append ShaderObject, err {}\n", .{err});
             };
@@ -131,7 +125,7 @@ pub const ShaderPipeline = struct {
             .pipeType = pipeType,
             .pipeInf = pipeInfos,
             .shaderObjects = shaderObjects,
-            .descLayout = descriptorLayout,
+            .descLayout = descLayout,
         };
     }
 
@@ -148,9 +142,13 @@ pub const ShaderPipeline = struct {
             shaderObject.deinit(gpi);
         }
         self.shaderObjects.clearRetainingCapacity();
-        for (self.pipeInf) |pipeInf| {
-            const shaderObj = try ShaderObject.init(gpi, pipeInf.stage, pipeInf.spvFile, self.alloc, self.descLayout, pipeType);
 
+        const pipeInfo = self.pipeInf;
+
+        for (0..pipeInfo.len) |i| {
+            const pipeInf = pipeInfo[i];
+            const nextStage = if (i + 1 <= pipeInfo.len) pipeInfo[i + 1].stage else 0;
+            const shaderObj = try ShaderObject.init(gpi, pipeInf.stage, nextStage, pipeInf.spvFile, self.alloc, self.descLayout, pipeType);
             self.shaderObjects.append(shaderObj) catch |err| {
                 std.debug.print("PipelineBucket: Could not append ShaderObject, err {}\n", .{err});
             };
