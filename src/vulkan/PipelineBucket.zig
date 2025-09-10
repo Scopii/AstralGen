@@ -30,13 +30,15 @@ pub const ShaderObject = struct {
 
     pub fn init(
         gpi: c.VkDevice,
-        stage: c.VkShaderStageFlagBits,
+        pipeInf: PipelineInfo,
         nextStage: c.VkShaderStageFlagBits,
-        spvFile: []const u8,
         alloc: Allocator,
         descLayout: c.VkDescriptorSetLayout,
         pipeType: PipelineType,
     ) !ShaderObject {
+        const stage = pipeInf.stage;
+        const spvFile = pipeInf.spvFile;
+
         const rootPath = try resolveProjectRoot(alloc, config.rootPath);
         defer alloc.free(rootPath);
         const spvFilePath = std.fs.path.join(alloc, &[_][]const u8{ rootPath, config.sprvPath, spvFile }) catch |err| {
@@ -113,7 +115,7 @@ pub const ShaderPipeline = struct {
         for (0..pipeInfos.len) |i| {
             const pipeInf = pipeInfos[i];
             const nextStage = if (i + 1 <= pipeInfos.len - 1) pipeInfos[i + 1].stage else 0;
-            const shaderObj = try ShaderObject.init(gpi, pipeInf.stage, nextStage, pipeInf.spvFile, alloc, descLayout, pipeType);
+            const shaderObj = try ShaderObject.init(gpi, pipeInf, nextStage, alloc, descLayout, pipeType);
             shaderObjects.append(shaderObj) catch |err| {
                 std.debug.print("PipelineBucket: Could not append ShaderObject, err {}\n", .{err});
             };
@@ -135,24 +137,6 @@ pub const ShaderPipeline = struct {
         }
         c.vkDestroyPipelineLayout(gpi, self.layout, null);
         self.shaderObjects.deinit();
-    }
-
-    pub fn update(self: *ShaderPipeline, gpi: c.VkDevice, pipeType: PipelineType) !void {
-        for (self.shaderObjects.items) |*shaderObject| {
-            shaderObject.deinit(gpi);
-        }
-        self.shaderObjects.clearRetainingCapacity();
-
-        const pipeInfo = self.pipeInf;
-
-        for (0..pipeInfo.len) |i| {
-            const pipeInf = pipeInfo[i];
-            const nextStage = if (i + 1 <= pipeInfo.len) pipeInfo[i + 1].stage else 0;
-            const shaderObj = try ShaderObject.init(gpi, pipeInf.stage, nextStage, pipeInf.spvFile, self.alloc, self.descLayout, pipeType);
-            self.shaderObjects.append(shaderObj) catch |err| {
-                std.debug.print("PipelineBucket: Could not append ShaderObject, err {}\n", .{err});
-            };
-        }
     }
 };
 

@@ -30,7 +30,11 @@ pub const PipelineManager = struct {
     }
 
     pub fn updatePipeline(self: *PipelineManager, pipeType: PipelineType) !void {
-        try self.pipelines[@intFromEnum(pipeType)].update(self.gpi, pipeType);
+        const pipeEnum = @intFromEnum(pipeType);
+        const descLayout = self.pipelines[pipeEnum].descLayout;
+        const pipeInf = self.pipelines[pipeEnum].pipeInf;
+        self.pipelines[pipeEnum].deinit(self.gpi);
+        self.pipelines[pipeEnum] = try ShaderPipeline.init(self.alloc, self.gpi, pipeInf, descLayout, pipeType);
     }
 
     pub fn deinit(self: *PipelineManager) void {
