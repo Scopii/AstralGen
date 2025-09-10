@@ -3,19 +3,16 @@ const c = @import("../c.zig");
 const Allocator = std.mem.Allocator;
 const config = @import("../config.zig");
 const check = @import("error.zig").check;
+const joinPath = @import("../core/FileManager.zig").joinPath;
+const resolveProjectRoot = @import("../core/FileManager.zig").resolveProjectRoot;
 
 pub const PipelineType = enum { compute, graphics, mesh };
-
-pub const ShaderInfo = struct {
-    pipeType: PipelineType,
-    inputName: []const u8,
-    outputName: []const u8,
-};
 
 pub const PipelineInfo = struct {
     pipeType: PipelineType,
     stage: c.VkShaderStageFlagBits,
-    sprvPath: []const u8,
+    inputName: []const u8,
+    outputName: []const u8,
 };
 
 pub const ComputePushConstants = extern struct {
@@ -39,12 +36,17 @@ pub const ShaderObject = struct {
         descriptorLayout: c.VkDescriptorSetLayout,
         pipeType: PipelineType,
     ) !ShaderObject {
-        const exe_dir = try std.fs.selfExeDirPathAlloc(alloc);
-        defer alloc.free(exe_dir);
-        const runtimeSpvPath = try std.fs.path.join(alloc, &[_][]const u8{ exe_dir, "..", spvPath });
-        defer alloc.free(runtimeSpvPath);
+        const rootPath = try resolveProjectRoot(alloc, config.rootPath);
+        defer alloc.free(rootPath);
+        //std.debug.print("Root Path: {s}\n", .{rootPath});
+        const shaderPath = try joinPath(alloc, rootPath, config.shaderOutputPath);
+        defer alloc.free(shaderPath);
+        //std.debug.print("Shader Output Path: {s}\n", .{shaderPath});
+        const shaderFilePath = try joinPath(alloc, shaderPath, spvPath);
+        defer alloc.free(shaderFilePath);
+        //std.debug.print("Shader Output File Path: {s}\n", .{shaderFilePath});
 
-        const spvData = try loadShader(alloc, runtimeSpvPath);
+        const spvData = try loadShader(alloc, shaderFilePath);
         defer alloc.free(spvData);
 
         // Determine next stage for graphics pipeline
@@ -102,7 +104,7 @@ pub const ShaderPipeline = struct {
     alloc: Allocator,
     layout: c.VkPipelineLayout,
     pipeType: PipelineType,
-    shaderInfos: []const PipelineInfo,
+    pipeInf: []const PipelineInfo,
     descLayout: c.VkDescriptorSetLayout,
     shaderObjects: std.ArrayList(ShaderObject),
 
@@ -118,8 +120,8 @@ pub const ShaderPipeline = struct {
             else => try createPipelineLayout(gpi, descriptorLayout, 0, 0),
         };
 
-        for (pipeInfos) |pipeInfo| {
-            const shaderObj = try ShaderObject.init(gpi, pipeInfo.stage, pipeInfo.sprvPath, alloc, descriptorLayout, pipeType);
+        for (pipeInfos) |pipeInf| {
+            const shaderObj = try ShaderObject.init(gpi, pipeInf.stage, pipeInf.outputName, alloc, descriptorLayout, pipeType);
             shaderObjects.append(shaderObj) catch |err| {
                 std.debug.print("PipelineBucket: Could not append ShaderObject, err {}\n", .{err});
             };
@@ -129,7 +131,7 @@ pub const ShaderPipeline = struct {
             .alloc = alloc,
             .layout = layout,
             .pipeType = pipeType,
-            .shaderInfos = pipeInfos,
+            .pipeInf = pipeInfos,
             .shaderObjects = shaderObjects,
             .descLayout = descriptorLayout,
         };
@@ -148,8 +150,8 @@ pub const ShaderPipeline = struct {
             shaderObject.deinit(gpi);
         }
         self.shaderObjects.clearRetainingCapacity();
-        for (self.shaderInfos) |shaderInfo| {
-            const shaderObj = try ShaderObject.init(gpi, shaderInfo.stage, shaderInfo.sprvPath, self.alloc, self.descLayout, pipeType);
+        for (self.pipeInf) |pipeInf| {
+            const shaderObj = try ShaderObject.init(gpi, pipeInf.stage, pipeInf.outputName, self.alloc, self.descLayout, pipeType);
 
             self.shaderObjects.append(shaderObj) catch |err| {
                 std.debug.print("PipelineBucket: Could not append ShaderObject, err {}\n", .{err});

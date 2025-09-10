@@ -26,12 +26,14 @@ pub const FileManager = struct {
         const pipelineTimeStamps: [pipelineTypes]i128 = .{currentTime} ** pipelineTypes;
         // Compile on Startup if wanted
         if (config.SHADER_STARTUP_COMPILATION) {
-            for (config.shaderInfos) |shaderInfo| {
-                const filePath = try joinPath(alloc, shaderPath, shaderInfo.inputName);
-                const shaderOutputName = try joinPath(alloc, shaderOutputPath, shaderInfo.outputName);
-                try compileShader(alloc, filePath, shaderOutputName);
-                alloc.free(filePath);
-                alloc.free(shaderOutputName);
+            for (config.allPipeInf) |pipelineGroup| {
+                for (pipelineGroup) |pipelineInfo| {
+                    const filePath = try joinPath(alloc, shaderPath, pipelineInfo.inputName);
+                    const shaderOutputName = try joinPath(alloc, shaderOutputPath, pipelineInfo.outputName);
+                    try compileShader(alloc, filePath, shaderOutputName);
+                    alloc.free(filePath);
+                    alloc.free(shaderOutputName);
+                }
             }
         }
 
@@ -46,23 +48,26 @@ pub const FileManager = struct {
 
     pub fn checkShaderUpdate(self: *FileManager) !void {
         const alloc = self.alloc;
+
         // Check all ShaderInfos and compile if needed
-        for (config.shaderInfos) |shaderInfo| {
-            const filePath = try joinPath(alloc, self.shaderPath, shaderInfo.inputName);
-            const newTimeStamp = try getFileTimeStamp(filePath);
+        for (config.allPipeInf) |pipelineGroup| {
+            for (pipelineGroup) |pipelineInfo| {
+                const filePath = try joinPath(alloc, self.shaderPath, pipelineInfo.inputName);
+                const newTimeStamp = try getFileTimeStamp(filePath);
 
-            if (self.pipelineTimeStamps[@intFromEnum(shaderInfo.pipeType)] < newTimeStamp) {
-                const shaderOutputPath = try joinPath(alloc, self.shaderOutputPath, shaderInfo.outputName);
+                if (self.pipelineTimeStamps[@intFromEnum(pipelineInfo.pipeType)] < newTimeStamp) {
+                    const shaderOutputPath = try joinPath(alloc, self.shaderOutputPath, pipelineInfo.outputName);
 
-                compileShader(alloc, filePath, shaderOutputPath) catch |err| {
-                    std.debug.print("Tried updating Shader but compilation failed {}\n", .{err});
-                };
+                    compileShader(alloc, filePath, shaderOutputPath) catch |err| {
+                        std.debug.print("Tried updating Shader but compilation failed {}\n", .{err});
+                    };
 
-                alloc.free(shaderOutputPath);
-                self.pipelineTimeStamps[@intFromEnum(shaderInfo.pipeType)] = newTimeStamp;
-                self.pipelineUpdateBools[@intFromEnum(shaderInfo.pipeType)] = true;
+                    alloc.free(shaderOutputPath);
+                    self.pipelineTimeStamps[@intFromEnum(pipelineInfo.pipeType)] = newTimeStamp;
+                    self.pipelineUpdateBools[@intFromEnum(pipelineInfo.pipeType)] = true;
+                }
+                alloc.free(filePath);
             }
-            alloc.free(filePath);
         }
     }
 
@@ -73,7 +78,7 @@ pub const FileManager = struct {
     }
 };
 
-fn resolveProjectRoot(alloc: Allocator, relativePath: []const u8) ![]u8 {
+pub fn resolveProjectRoot(alloc: Allocator, relativePath: []const u8) ![]u8 {
     const exeDir = try std.fs.selfExeDirPathAlloc(alloc);
     defer alloc.free(exeDir);
     return std.fs.path.resolve(alloc, &.{ exeDir, relativePath });

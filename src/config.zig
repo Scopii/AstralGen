@@ -71,25 +71,21 @@ pub const rootPath: []const u8 = "../..";
 pub const shaderPath: []const u8 = "/src/shader";
 pub const shaderOutputPath: []const u8 = "/zig-out/shader";
 
-pub const shaderInfos = [_]ShaderInfo{
-    .{ .pipeType = .compute, .inputName = "Compute.comp", .outputName = "Compute.spv" },
-
-    .{ .pipeType = .graphics, .inputName = "Graphics.vert", .outputName = "GraphicsVert.spv" },
-    .{ .pipeType = .graphics, .inputName = "Graphics.frag", .outputName = "GraphicsFrag.spv" },
-
-    .{ .pipeType = .mesh, .inputName = "Mesh.mesh", .outputName = "MeshMesh.spv" },
-    .{ .pipeType = .mesh, .inputName = "Mesh.frag", .outputName = "MeshFrag.spv" },
-};
-
 // Shader Infos
 pub const computePipeInf = [_]PipelineInfo{
-    .{ .pipeType = .compute, .stage = c.VK_SHADER_STAGE_COMPUTE_BIT, .sprvPath = "shader/Compute.spv" },
+    .{ .pipeType = .compute, .stage = c.VK_SHADER_STAGE_COMPUTE_BIT, .inputName = "Compute.comp", .outputName = "Compute.spv"},
 };
 pub const graphicsPipeInf = [_]PipelineInfo{
-    .{ .pipeType = .graphics, .stage = c.VK_SHADER_STAGE_FRAGMENT_BIT, .sprvPath = "shader/GraphicsFrag.spv" },
-    .{ .pipeType = .graphics, .stage = c.VK_SHADER_STAGE_VERTEX_BIT, .sprvPath = "shader/GraphicsVert.spv" },
+    .{ .pipeType = .graphics, .stage = c.VK_SHADER_STAGE_VERTEX_BIT, .inputName = "Graphics.vert", .outputName = "GraphicsVert.spv"},
+    .{ .pipeType = .graphics, .stage = c.VK_SHADER_STAGE_FRAGMENT_BIT, .inputName = "Graphics.frag", .outputName = "GraphicsFrag.spv"},
 };
 pub const meshPipeInf = [_]PipelineInfo{
-    .{ .pipeType = .mesh, .stage = c.VK_SHADER_STAGE_FRAGMENT_BIT, .sprvPath = "shader/MeshFrag.spv" },
-    .{ .pipeType = .mesh, .stage = c.VK_SHADER_STAGE_MESH_BIT_EXT, .sprvPath = "shader/MeshMesh.spv" },
+    .{ .pipeType = .mesh, .stage = c.VK_SHADER_STAGE_MESH_BIT_EXT, .inputName = "Mesh.mesh", .outputName = "MeshMesh.spv"},
+    .{ .pipeType = .mesh, .stage = c.VK_SHADER_STAGE_FRAGMENT_BIT, .inputName = "Mesh.frag", .outputName = "MeshFrag.spv"},
+};
+
+pub const allPipeInf: []const []const PipelineInfo = &.{
+    &computePipeInf,
+    &graphicsPipeInf,
+    &meshPipeInf,
 };
