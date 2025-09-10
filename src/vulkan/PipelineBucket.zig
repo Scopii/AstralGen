@@ -11,8 +11,8 @@ pub const PipelineType = enum { compute, graphics, mesh };
 pub const PipelineInfo = struct {
     pipeType: PipelineType,
     stage: c.VkShaderStageFlagBits,
-    inputFile: []const u8,
-    spvName: []const u8,
+    glslFile: []const u8,
+    spvFile: []const u8,
 };
 
 pub const ComputePushConstants = extern struct {
@@ -31,22 +31,20 @@ pub const ShaderObject = struct {
     pub fn init(
         gpi: c.VkDevice,
         stage: c.VkShaderStageFlagBits,
-        spvPath: []const u8,
+        spvFile: []const u8,
         alloc: Allocator,
         descriptorLayout: c.VkDescriptorSetLayout,
         pipeType: PipelineType,
     ) !ShaderObject {
         const rootPath = try resolveProjectRoot(alloc, config.rootPath);
         defer alloc.free(rootPath);
-        //std.debug.print("Root Path: {s}\n", .{rootPath});
-        const shaderPath = try joinPath(alloc, rootPath, config.shaderOutputPath);
-        defer alloc.free(shaderPath);
-        //std.debug.print("Shader Output Path: {s}\n", .{shaderPath});
-        const shaderFilePath = try joinPath(alloc, shaderPath, spvPath);
-        defer alloc.free(shaderFilePath);
-        //std.debug.print("Shader Output File Path: {s}\n", .{shaderFilePath});
+        const spvFilePath = std.fs.path.join(alloc, &[_][]const u8{ rootPath, config.shaderOutputPath, spvFile }) catch |err| {
+            std.debug.print("PipelineBucket: spvFilePath could not be resolved {}\n", .{err});
+            return err;
+        };
+        defer alloc.free(spvFilePath);
 
-        const spvData = try loadShader(alloc, shaderFilePath);
+        const spvData = try loadShader(alloc, spvFilePath);
         defer alloc.free(spvData);
 
         // Determine next stage for graphics pipeline
@@ -121,7 +119,7 @@ pub const ShaderPipeline = struct {
         };
 
         for (pipeInfos) |pipeInf| {
-            const shaderObj = try ShaderObject.init(gpi, pipeInf.stage, pipeInf.spvName, alloc, descriptorLayout, pipeType);
+            const shaderObj = try ShaderObject.init(gpi, pipeInf.stage, pipeInf.spvFile, alloc, descriptorLayout, pipeType);
             shaderObjects.append(shaderObj) catch |err| {
                 std.debug.print("PipelineBucket: Could not append ShaderObject, err {}\n", .{err});
             };
@@ -151,7 +149,7 @@ pub const ShaderPipeline = struct {
         }
         self.shaderObjects.clearRetainingCapacity();
         for (self.pipeInf) |pipeInf| {
-            const shaderObj = try ShaderObject.init(gpi, pipeInf.stage, pipeInf.spvName, self.alloc, self.descLayout, pipeType);
+            const shaderObj = try ShaderObject.init(gpi, pipeInf.stage, pipeInf.spvFile, self.alloc, self.descLayout, pipeType);
 
             self.shaderObjects.append(shaderObj) catch |err| {
                 std.debug.print("PipelineBucket: Could not append ShaderObject, err {}\n", .{err});

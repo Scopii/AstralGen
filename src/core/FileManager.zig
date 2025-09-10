@@ -28,8 +28,8 @@ pub const FileManager = struct {
         if (config.SHADER_STARTUP_COMPILATION) {
             for (config.allPipeInf) |pipelineGroup| {
                 for (pipelineGroup) |pipelineInfo| {
-                    const filePath = try joinPath(alloc, shaderPath, pipelineInfo.inputFile);
-                    const shaderOutputName = try joinPath(alloc, shaderOutputPath, pipelineInfo.spvName);
+                    const filePath = try joinPath(alloc, shaderPath, pipelineInfo.glslFile);
+                    const shaderOutputName = try joinPath(alloc, shaderOutputPath, pipelineInfo.spvFile);
                     try compileShader(alloc, filePath, shaderOutputName);
                     alloc.free(filePath);
                     alloc.free(shaderOutputName);
@@ -52,11 +52,11 @@ pub const FileManager = struct {
         // Check all ShaderInfos and compile if needed
         for (config.allPipeInf) |pipelineGroup| {
             for (pipelineGroup) |pipelineInfo| {
-                const filePath = try joinPath(alloc, self.shaderPath, pipelineInfo.inputFile);
+                const filePath = try joinPath(alloc, self.shaderPath, pipelineInfo.glslFile);
                 const newTimeStamp = try getFileTimeStamp(filePath);
 
                 if (self.pipelineTimeStamps[@intFromEnum(pipelineInfo.pipeType)] < newTimeStamp) {
-                    const shaderOutputPath = try joinPath(alloc, self.shaderOutputPath, pipelineInfo.spvName);
+                    const shaderOutputPath = try joinPath(alloc, self.shaderOutputPath, pipelineInfo.spvFile);
 
                     compileShader(alloc, filePath, shaderOutputPath) catch |err| {
                         std.debug.print("Tried updating Shader but compilation failed {}\n", .{err});
