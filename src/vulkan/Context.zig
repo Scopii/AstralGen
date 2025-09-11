@@ -269,7 +269,6 @@ fn createGPI(alloc: Allocator, gpu: c.VkPhysicalDevice, families: QueueFamilies)
         .extendedDynamicState2PatchControlPoints = c.VK_TRUE,
     };
 
-    // Chain it before extended_dynamic_state_features
     var extended_dynamic_state_features = c.VkPhysicalDeviceExtendedDynamicStateFeaturesEXT{
         .sType = c.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_FEATURES_EXT,
         .pNext = &extended_dynamic_state2_features,
@@ -336,132 +335,50 @@ fn createGPI(alloc: Allocator, gpu: c.VkPhysicalDevice, families: QueueFamilies)
     var gpi: c.VkDevice = undefined;
     try check(c.vkCreateDevice(gpu, &createInfo, null, &gpi), "Unable to create Vulkan device!");
 
-    // Import Mesh Shader Draw Function
-    const fnPtrDrawMeshTasks = c.vkGetDeviceProcAddr(gpi, "vkCmdDrawMeshTasksEXT");
-
-    if (fnPtrDrawMeshTasks) |p| c.pfn_vkCmdDrawMeshTasksEXT = @ptrCast(p) else c.pfn_vkCmdDrawMeshTasksEXT = null;
-    if (c.pfn_vkCmdDrawMeshTasksEXT == null) {
-        std.log.err("Could not load the vkCmdDrawMeshTasksEXT function pointer!\n", .{});
-        return error.MissingVulkanFunction;
-    }
-
-    // Load additional dynamic state function pointers
-    const fnPtrSetRasterizerDiscard = c.vkGetDeviceProcAddr(gpi, "vkCmdSetRasterizerDiscardEnable");
-    c.pfn_vkCmdSetRasterizerDiscardEnable = if (fnPtrSetRasterizerDiscard) |p| @ptrCast(p) else null;
-
-    const fnPtrSetCullMode = c.vkGetDeviceProcAddr(gpi, "vkCmdSetCullMode");
-    c.pfn_vkCmdSetCullMode = if (fnPtrSetCullMode) |p| @ptrCast(p) else null;
-
-    const fnPtrSetFrontFace = c.vkGetDeviceProcAddr(gpi, "vkCmdSetFrontFace");
-    c.pfn_vkCmdSetFrontFace = if (fnPtrSetFrontFace) |p| @ptrCast(p) else null;
-
-    const fnPtrSetDepthTest = c.vkGetDeviceProcAddr(gpi, "vkCmdSetDepthTestEnable");
-    c.pfn_vkCmdSetDepthTestEnable = if (fnPtrSetDepthTest) |p| @ptrCast(p) else null;
-
-    const fnPtrSetDepthWrite = c.vkGetDeviceProcAddr(gpi, "vkCmdSetDepthWriteEnable");
-    c.pfn_vkCmdSetDepthWriteEnable = if (fnPtrSetDepthWrite) |p| @ptrCast(p) else null;
-
-    const fnPtrSetDepthBounds = c.vkGetDeviceProcAddr(gpi, "vkCmdSetDepthBoundsTestEnable");
-    c.pfn_vkCmdSetDepthBoundsTestEnable = if (fnPtrSetDepthBounds) |p| @ptrCast(p) else null;
-
-    const fnPtrSetStencilTest = c.vkGetDeviceProcAddr(gpi, "vkCmdSetStencilTestEnable");
-    c.pfn_vkCmdSetStencilTestEnable = if (fnPtrSetStencilTest) |p| @ptrCast(p) else null;
-
-    const fnPtrSetColorBlend = c.vkGetDeviceProcAddr(gpi, "vkCmdSetColorBlendEnableEXT");
-    c.pfn_vkCmdSetColorBlendEnableEXT = if (fnPtrSetColorBlend) |p| @ptrCast(p) else null;
-
-    const fnPtrSetColorWriteMask = c.vkGetDeviceProcAddr(gpi, "vkCmdSetColorWriteMaskEXT");
-    c.pfn_vkCmdSetColorWriteMaskEXT = if (fnPtrSetColorWriteMask) |p| @ptrCast(p) else null;
-
-    const fnPtrSetPrimitiveTopology = c.vkGetDeviceProcAddr(gpi, "vkCmdSetPrimitiveTopology");
-    c.pfn_vkCmdSetPrimitiveTopology = if (fnPtrSetPrimitiveTopology) |p| @ptrCast(p) else null;
-
-    const fnPtrSetPrimitiveRestart = c.vkGetDeviceProcAddr(gpi, "vkCmdSetPrimitiveRestartEnable");
-    c.pfn_vkCmdSetPrimitiveRestartEnable = if (fnPtrSetPrimitiveRestart) |p| @ptrCast(p) else null;
-
-    // Add missing function pointers that validation is complaining about
-    const fnPtrSetDepthBias = c.vkGetDeviceProcAddr(gpi, "vkCmdSetDepthBiasEnable");
-    c.pfn_vkCmdSetDepthBiasEnable = if (fnPtrSetDepthBias) |p| @ptrCast(p) else null;
-
-    const fnPtrSetPolygonMode = c.vkGetDeviceProcAddr(gpi, "vkCmdSetPolygonModeEXT");
-    c.pfn_vkCmdSetPolygonModeEXT = if (fnPtrSetPolygonMode) |p| @ptrCast(p) else null;
-
-    const fnPtrSetRasterizationSamples = c.vkGetDeviceProcAddr(gpi, "vkCmdSetRasterizationSamplesEXT");
-    c.pfn_vkCmdSetRasterizationSamplesEXT = if (fnPtrSetRasterizationSamples) |p| @ptrCast(p) else null;
-
-    const fnPtrSetSampleMask = c.vkGetDeviceProcAddr(gpi, "vkCmdSetSampleMaskEXT");
-    c.pfn_vkCmdSetSampleMaskEXT = if (fnPtrSetSampleMask) |p| @ptrCast(p) else null;
-
-    const fnPtrSetDepthClamp = c.vkGetDeviceProcAddr(gpi, "vkCmdSetDepthClampEnableEXT");
-    c.pfn_vkCmdSetDepthClampEnableEXT = if (fnPtrSetDepthClamp) |p| @ptrCast(p) else null;
-
-    const fnPtrSetAlphaToOne = c.vkGetDeviceProcAddr(gpi, "vkCmdSetAlphaToOneEnableEXT");
-    c.pfn_vkCmdSetAlphaToOneEnableEXT = if (fnPtrSetAlphaToOne) |p| @ptrCast(p) else null;
-
-    const fnPtrSetAlphaToCoverage = c.vkGetDeviceProcAddr(gpi, "vkCmdSetAlphaToCoverageEnableEXT");
-    c.pfn_vkCmdSetAlphaToCoverageEnableEXT = if (fnPtrSetAlphaToCoverage) |p| @ptrCast(p) else null;
-
-    const fnPtrSetLogicOpEnable = c.vkGetDeviceProcAddr(gpi, "vkCmdSetLogicOpEnableEXT");
-    c.pfn_vkCmdSetLogicOpEnableEXT = if (fnPtrSetLogicOpEnable) |p| @ptrCast(p) else null;
-
-    const fnPtrSetViewportWithCount = c.vkGetDeviceProcAddr(gpi, "vkCmdSetViewportWithCount");
-    c.pfn_vkCmdSetViewportWithCount = if (fnPtrSetViewportWithCount) |p| @ptrCast(p) else null;
-
-    const fnPtrSetScissorWithCount = c.vkGetDeviceProcAddr(gpi, "vkCmdSetScissorWithCount");
-    c.pfn_vkCmdSetScissorWithCount = if (fnPtrSetScissorWithCount) |p| @ptrCast(p) else null;
-
-    // Check essential function pointers (optional, for debugging)
-    if (c.pfn_vkCmdSetRasterizerDiscardEnable == null or
-        c.pfn_vkCmdSetCullMode == null or
-        c.pfn_vkCmdSetFrontFace == null)
-    {
-        std.log.err("Some dynamic state function pointers could not be loaded\n", .{});
-    }
-
+    // Mesh Shader Draw Function
+    loadVkProc(gpi, &c.pfn_vkCmdDrawMeshTasksEXT, "vkCmdDrawMeshTasksEXT");
+    // additional dynamic state function pointers
+    loadVkProc(gpi, &c.pfn_vkCmdSetRasterizerDiscardEnable, "vkCmdSetRasterizerDiscardEnable");
+    loadVkProc(gpi, &c.pfn_vkCmdSetCullMode, "vkCmdSetCullMode");
+    loadVkProc(gpi, &c.pfn_vkCmdSetFrontFace, "vkCmdSetFrontFace");
+    loadVkProc(gpi, &c.pfn_vkCmdSetDepthTestEnable, "vkCmdSetDepthTestEnable");
+    loadVkProc(gpi, &c.pfn_vkCmdSetDepthWriteEnable, "vkCmdSetDepthWriteEnable");
+    loadVkProc(gpi, &c.pfn_vkCmdSetDepthBoundsTestEnable, "vkCmdSetDepthBoundsTestEnable");
+    loadVkProc(gpi, &c.pfn_vkCmdSetStencilTestEnable, "vkCmdSetStencilTestEnable");
+    loadVkProc(gpi, &c.pfn_vkCmdSetColorBlendEnableEXT, "vkCmdSetColorBlendEnableEXT");
+    loadVkProc(gpi, &c.pfn_vkCmdSetColorWriteMaskEXT, "vkCmdSetColorWriteMaskEXT");
+    loadVkProc(gpi, &c.pfn_vkCmdSetPrimitiveTopology, "vkCmdSetPrimitiveTopology");
+    loadVkProc(gpi, &c.pfn_vkCmdSetPrimitiveRestartEnable, "vkCmdSetPrimitiveRestartEnable");
+    loadVkProc(gpi, &c.pfn_vkCmdSetDepthBiasEnable, "vkCmdSetDepthBiasEnable");
+    loadVkProc(gpi, &c.pfn_vkCmdSetPolygonModeEXT, "vkCmdSetPolygonModeEXT");
+    loadVkProc(gpi, &c.pfn_vkCmdSetRasterizationSamplesEXT, "vkCmdSetRasterizationSamplesEXT");
+    loadVkProc(gpi, &c.pfn_vkCmdSetSampleMaskEXT, "vkCmdSetSampleMaskEXT");
+    loadVkProc(gpi, &c.pfn_vkCmdSetDepthClampEnableEXT, "vkCmdSetDepthClampEnableEXT");
+    loadVkProc(gpi, &c.pfn_vkCmdSetAlphaToOneEnableEXT, "vkCmdSetAlphaToOneEnableEXT");
+    loadVkProc(gpi, &c.pfn_vkCmdSetAlphaToCoverageEnableEXT, "vkCmdSetAlphaToCoverageEnableEXT");
+    loadVkProc(gpi, &c.pfn_vkCmdSetLogicOpEnableEXT, "vkCmdSetLogicOpEnableEXT");
+    loadVkProc(gpi, &c.pfn_vkCmdSetViewportWithCount, "vkCmdSetViewportWithCount");
+    loadVkProc(gpi, &c.pfn_vkCmdSetScissorWithCount, "vkCmdSetScissorWithCount");
     // Import Shader Object Functions
-    const fnPtrCreateShaders = c.vkGetDeviceProcAddr(gpi, "vkCreateShadersEXT");
-    c.pfn_vkCreateShadersEXT = if (fnPtrCreateShaders) |p| @ptrCast(p) else null;
-
-    const fnPtrDestroyShader = c.vkGetDeviceProcAddr(gpi, "vkDestroyShaderEXT");
-    c.pfn_vkDestroyShaderEXT = if (fnPtrDestroyShader) |p| @ptrCast(p) else null;
-
-    const fnPtrCmdBindShadersEXT = c.vkGetDeviceProcAddr(gpi, "vkCmdBindShadersEXT");
-    c.pfn_vkCmdBindShadersEXT = if (fnPtrCmdBindShadersEXT) |p| @ptrCast(p) else null;
-
-    const fnPtrCmdSetVertexInputEXT = c.vkGetDeviceProcAddr(gpi, "vkCmdSetVertexInputEXT");
-    c.pfn_vkCmdSetVertexInputEXT = if (fnPtrCmdSetVertexInputEXT) |p| @ptrCast(p) else null;
-
-    // Check if function pointers loaded successfully
-    if (c.pfn_vkCreateShadersEXT == null or
-        c.pfn_vkDestroyShaderEXT == null or
-        c.pfn_vkCmdBindShadersEXT == null or
-        c.pfn_vkCmdSetVertexInputEXT == null)
-    {
-        std.log.err("Could not load shader object function pointers!\n", .{});
-        return error.MissingVulkanFunction;
-    }
-
+    loadVkProc(gpi, &c.pfn_vkCreateShadersEXT, "vkCreateShadersEXT");
+    loadVkProc(gpi, &c.pfn_vkDestroyShaderEXT, "vkDestroyShaderEXT");
+    loadVkProc(gpi, &c.pfn_vkCmdBindShadersEXT, "vkCmdBindShadersEXT");
+    loadVkProc(gpi, &c.pfn_vkCmdSetVertexInputEXT, "vkCmdSetVertexInputEXT");
     // Import Descriptor Buffer Functions
-    const fnPtrBindDescBuff = c.vkGetDeviceProcAddr(gpi, "vkCmdBindDescriptorBuffersEXT");
-    c.pfn_vkCmdBindDescriptorBuffersEXT = if (fnPtrBindDescBuff) |p| @ptrCast(p) else null;
-
-    const fnPtrCmdSetDescBuffOffsets = c.vkGetDeviceProcAddr(gpi, "vkCmdSetDescriptorBufferOffsetsEXT");
-    c.pfn_vkCmdSetDescriptorBufferOffsetsEXT = if (fnPtrCmdSetDescBuffOffsets) |p| @ptrCast(p) else null;
-
-    const fnPtrGetDesc = c.vkGetDeviceProcAddr(gpi, "vkGetDescriptorEXT");
-    c.pfn_vkGetDescriptorEXT = if (fnPtrGetDesc) |p| @ptrCast(p) else null;
-
-    const fnPtrGetDescSetLayoutSize = c.vkGetDeviceProcAddr(gpi, "vkGetDescriptorSetLayoutSizeEXT");
-    c.pfn_vkGetDescriptorSetLayoutSizeEXT = if (fnPtrGetDescSetLayoutSize) |p| @ptrCast(p) else null;
-
-    if (c.pfn_vkCmdBindDescriptorBuffersEXT == null or
-        c.pfn_vkCmdSetDescriptorBufferOffsetsEXT == null or
-        c.pfn_vkGetDescriptorEXT == null or
-        c.pfn_vkGetDescriptorSetLayoutSizeEXT == null)
-    {
-        std.log.err("Could not load descriptor buffer function pointers!\n", .{});
-        return error.MissingVulkanFunction;
-    }
+    loadVkProc(gpi, &c.pfn_vkCmdBindDescriptorBuffersEXT, "vkCmdBindDescriptorBuffersEXT");
+    loadVkProc(gpi, &c.pfn_vkCmdSetDescriptorBufferOffsetsEXT, "vkCmdSetDescriptorBufferOffsetsEXT");
+    loadVkProc(gpi, &c.pfn_vkGetDescriptorEXT, "vkGetDescriptorEXT");
+    loadVkProc(gpi, &c.pfn_vkGetDescriptorSetLayoutSizeEXT, "vkGetDescriptorSetLayoutSizeEXT");
 
     return gpi;
+}
+
+pub fn loadVkProc(
+    handle: anytype, //(instance or device)
+    comptime functionPtr: anytype,
+    comptime name: []const u8,
+) void {
+    const proc = c.vkGetDeviceProcAddr(handle, name.ptr);
+    functionPtr.* = if (proc) |p| @ptrCast(p) else null;
+    if (functionPtr.* == null) std.debug.print("{s} Could not be loaded\n", .{name});
 }
