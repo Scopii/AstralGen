@@ -124,22 +124,20 @@ pub const ResourceManager = struct {
     const Object = @import("../ecs/EntityManager.zig").Object;
 
     pub fn createTestDataBuffer(self: *const ResourceManager, objects: []Object) !GpuBuffer {
-        if (@sizeOf(Object) % @sizeOf([2]f32) != 0) {
-            @compileError("TestDataBuffer must be % [2]f32 = 0");
-        }
+        const bufferSize = objects.len * @sizeOf(Object);
 
-        const bufferSize = objects.len * @sizeOf([4]f32); // CHECK ALIGNEMNT AND SIZE!
-        const vma = self.gpuAlloc.handle;
-
-        const buffer = try createDefinedBuffer(vma, self.gpi, bufferSize, null, .testBuffer);
-        // Initialize with test data - sine wave pattern
+        const buffer = try createDefinedBuffer(self.gpuAlloc.handle, self.gpi, bufferSize, null, .testBuffer);
         var allocVmaInf: c.VmaAllocationInfo = undefined;
-        c.vmaGetAllocationInfo(vma, buffer.allocation, &allocVmaInf);
-        const dataPtr = @as([*]Object, @ptrCast(@alignCast(allocVmaInf.pMappedData))); // MUST BE RIGHT CAST!
+        c.vmaGetAllocationInfo(self.gpuAlloc.handle, buffer.allocation, &allocVmaInf);
 
-        for (0..objects.len) |i| {
-            dataPtr[i] = objects[i];
+        // Check Alignemnt naively (Doesnt catch everything)
+        const alignment = @alignOf(Object);
+        if (@intFromPtr(allocVmaInf.pMappedData) % alignment != 0) {
+            return error.ImproperAlignment;
         }
+
+        const dataPtr: [*]Object = @ptrCast(@alignCast(allocVmaInf.pMappedData));
+        @memcpy(dataPtr[0..objects.len], objects);
 
         return buffer;
     }
