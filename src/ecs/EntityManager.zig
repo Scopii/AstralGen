@@ -10,7 +10,6 @@ pub const EntityManager = struct {
 
         for (0..objects.len) |i| {
             const id = rng.intRange(u32, 0, @typeInfo(Object.SDF).@"enum".fields.len - 1);
-            std.debug.print("Id {} \n", .{id});
 
             objects[i] = .{
                 .sdfId = @enumFromInt(id),
@@ -23,8 +22,8 @@ pub const EntityManager = struct {
                 .posZ = rng.float(f32) * 30 - 15,
                 .size = rng.float(f32) + 0.2,
             };
-            std.debug.print("Assigned Object Array Index {}\n", .{i});
         }
+        std.debug.print("Created {} Objects\n", .{objects.len});
         return .{ .objects = objects };
     }
 

@@ -335,39 +335,39 @@ fn createGPI(alloc: Allocator, gpu: c.VkPhysicalDevice, families: QueueFamilies)
     try check(c.vkCreateDevice(gpu, &createInfo, null, &gpi), "Unable to create Vulkan device!");
 
     // Mesh Shader Draw Function
-    loadVkProc(gpi, &c.pfn_vkCmdDrawMeshTasksEXT, "vkCmdDrawMeshTasksEXT");
+    try loadVkProc(gpi, &c.pfn_vkCmdDrawMeshTasksEXT, "vkCmdDrawMeshTasksEXT");
     // additional dynamic state function pointers
-    loadVkProc(gpi, &c.pfn_vkCmdSetRasterizerDiscardEnable, "vkCmdSetRasterizerDiscardEnable");
-    loadVkProc(gpi, &c.pfn_vkCmdSetCullMode, "vkCmdSetCullMode");
-    loadVkProc(gpi, &c.pfn_vkCmdSetFrontFace, "vkCmdSetFrontFace");
-    loadVkProc(gpi, &c.pfn_vkCmdSetDepthTestEnable, "vkCmdSetDepthTestEnable");
-    loadVkProc(gpi, &c.pfn_vkCmdSetDepthWriteEnable, "vkCmdSetDepthWriteEnable");
-    loadVkProc(gpi, &c.pfn_vkCmdSetDepthBoundsTestEnable, "vkCmdSetDepthBoundsTestEnable");
-    loadVkProc(gpi, &c.pfn_vkCmdSetStencilTestEnable, "vkCmdSetStencilTestEnable");
-    loadVkProc(gpi, &c.pfn_vkCmdSetColorBlendEnableEXT, "vkCmdSetColorBlendEnableEXT");
-    loadVkProc(gpi, &c.pfn_vkCmdSetColorWriteMaskEXT, "vkCmdSetColorWriteMaskEXT");
-    loadVkProc(gpi, &c.pfn_vkCmdSetPrimitiveTopology, "vkCmdSetPrimitiveTopology");
-    loadVkProc(gpi, &c.pfn_vkCmdSetPrimitiveRestartEnable, "vkCmdSetPrimitiveRestartEnable");
-    loadVkProc(gpi, &c.pfn_vkCmdSetDepthBiasEnable, "vkCmdSetDepthBiasEnable");
-    loadVkProc(gpi, &c.pfn_vkCmdSetPolygonModeEXT, "vkCmdSetPolygonModeEXT");
-    loadVkProc(gpi, &c.pfn_vkCmdSetRasterizationSamplesEXT, "vkCmdSetRasterizationSamplesEXT");
-    loadVkProc(gpi, &c.pfn_vkCmdSetSampleMaskEXT, "vkCmdSetSampleMaskEXT");
-    loadVkProc(gpi, &c.pfn_vkCmdSetDepthClampEnableEXT, "vkCmdSetDepthClampEnableEXT");
-    loadVkProc(gpi, &c.pfn_vkCmdSetAlphaToOneEnableEXT, "vkCmdSetAlphaToOneEnableEXT");
-    loadVkProc(gpi, &c.pfn_vkCmdSetAlphaToCoverageEnableEXT, "vkCmdSetAlphaToCoverageEnableEXT");
-    loadVkProc(gpi, &c.pfn_vkCmdSetLogicOpEnableEXT, "vkCmdSetLogicOpEnableEXT");
-    loadVkProc(gpi, &c.pfn_vkCmdSetViewportWithCount, "vkCmdSetViewportWithCount");
-    loadVkProc(gpi, &c.pfn_vkCmdSetScissorWithCount, "vkCmdSetScissorWithCount");
+    try loadVkProc(gpi, &c.pfn_vkCmdSetRasterizerDiscardEnable, "vkCmdSetRasterizerDiscardEnable");
+    try loadVkProc(gpi, &c.pfn_vkCmdSetCullMode, "vkCmdSetCullMode");
+    try loadVkProc(gpi, &c.pfn_vkCmdSetFrontFace, "vkCmdSetFrontFace");
+    try loadVkProc(gpi, &c.pfn_vkCmdSetDepthTestEnable, "vkCmdSetDepthTestEnable");
+    try loadVkProc(gpi, &c.pfn_vkCmdSetDepthWriteEnable, "vkCmdSetDepthWriteEnable");
+    try loadVkProc(gpi, &c.pfn_vkCmdSetDepthBoundsTestEnable, "vkCmdSetDepthBoundsTestEnable");
+    try loadVkProc(gpi, &c.pfn_vkCmdSetStencilTestEnable, "vkCmdSetStencilTestEnable");
+    try loadVkProc(gpi, &c.pfn_vkCmdSetColorBlendEnableEXT, "vkCmdSetColorBlendEnableEXT");
+    try loadVkProc(gpi, &c.pfn_vkCmdSetColorWriteMaskEXT, "vkCmdSetColorWriteMaskEXT");
+    try loadVkProc(gpi, &c.pfn_vkCmdSetPrimitiveTopology, "vkCmdSetPrimitiveTopology");
+    try loadVkProc(gpi, &c.pfn_vkCmdSetPrimitiveRestartEnable, "vkCmdSetPrimitiveRestartEnable");
+    try loadVkProc(gpi, &c.pfn_vkCmdSetDepthBiasEnable, "vkCmdSetDepthBiasEnable");
+    try loadVkProc(gpi, &c.pfn_vkCmdSetPolygonModeEXT, "vkCmdSetPolygonModeEXT");
+    try loadVkProc(gpi, &c.pfn_vkCmdSetRasterizationSamplesEXT, "vkCmdSetRasterizationSamplesEXT");
+    try loadVkProc(gpi, &c.pfn_vkCmdSetSampleMaskEXT, "vkCmdSetSampleMaskEXT");
+    try loadVkProc(gpi, &c.pfn_vkCmdSetDepthClampEnableEXT, "vkCmdSetDepthClampEnableEXT");
+    try loadVkProc(gpi, &c.pfn_vkCmdSetAlphaToOneEnableEXT, "vkCmdSetAlphaToOneEnableEXT");
+    try loadVkProc(gpi, &c.pfn_vkCmdSetAlphaToCoverageEnableEXT, "vkCmdSetAlphaToCoverageEnableEXT");
+    try loadVkProc(gpi, &c.pfn_vkCmdSetLogicOpEnableEXT, "vkCmdSetLogicOpEnableEXT");
+    try loadVkProc(gpi, &c.pfn_vkCmdSetViewportWithCount, "vkCmdSetViewportWithCount");
+    try loadVkProc(gpi, &c.pfn_vkCmdSetScissorWithCount, "vkCmdSetScissorWithCount");
     // Import Shader Object Functions
-    loadVkProc(gpi, &c.pfn_vkCreateShadersEXT, "vkCreateShadersEXT");
-    loadVkProc(gpi, &c.pfn_vkDestroyShaderEXT, "vkDestroyShaderEXT");
-    loadVkProc(gpi, &c.pfn_vkCmdBindShadersEXT, "vkCmdBindShadersEXT");
-    loadVkProc(gpi, &c.pfn_vkCmdSetVertexInputEXT, "vkCmdSetVertexInputEXT");
+    try loadVkProc(gpi, &c.pfn_vkCreateShadersEXT, "vkCreateShadersEXT");
+    try loadVkProc(gpi, &c.pfn_vkDestroyShaderEXT, "vkDestroyShaderEXT");
+    try loadVkProc(gpi, &c.pfn_vkCmdBindShadersEXT, "vkCmdBindShadersEXT");
+    try loadVkProc(gpi, &c.pfn_vkCmdSetVertexInputEXT, "vkCmdSetVertexInputEXT");
     // Import Descriptor Buffer Functions
-    loadVkProc(gpi, &c.pfn_vkCmdBindDescriptorBuffersEXT, "vkCmdBindDescriptorBuffersEXT");
-    loadVkProc(gpi, &c.pfn_vkCmdSetDescriptorBufferOffsetsEXT, "vkCmdSetDescriptorBufferOffsetsEXT");
-    loadVkProc(gpi, &c.pfn_vkGetDescriptorEXT, "vkGetDescriptorEXT");
-    loadVkProc(gpi, &c.pfn_vkGetDescriptorSetLayoutSizeEXT, "vkGetDescriptorSetLayoutSizeEXT");
+    try loadVkProc(gpi, &c.pfn_vkCmdBindDescriptorBuffersEXT, "vkCmdBindDescriptorBuffersEXT");
+    try loadVkProc(gpi, &c.pfn_vkCmdSetDescriptorBufferOffsetsEXT, "vkCmdSetDescriptorBufferOffsetsEXT");
+    try loadVkProc(gpi, &c.pfn_vkGetDescriptorEXT, "vkGetDescriptorEXT");
+    try loadVkProc(gpi, &c.pfn_vkGetDescriptorSetLayoutSizeEXT, "vkGetDescriptorSetLayoutSizeEXT");
 
     return gpi;
 }
@@ -376,8 +376,11 @@ pub fn loadVkProc(
     handle: anytype, //(instance or device)
     comptime functionPtr: anytype,
     comptime name: []const u8,
-) void {
+) !void {
     const proc = c.vkGetDeviceProcAddr(handle, name.ptr);
     functionPtr.* = if (proc) |p| @ptrCast(p) else null;
-    if (functionPtr.* == null) std.debug.print("{s} Could not be loaded\n", .{name});
+    if (functionPtr.* == null) {
+        std.log.err("{s} Could not be loaded\n", .{name});
+        return error.CouldntLoadFunctionPointer;
+    }
 }

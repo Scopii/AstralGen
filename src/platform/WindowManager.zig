@@ -118,73 +118,91 @@ pub const WindowManager = struct {
         }
     }
 
-    pub fn processEvent(self: *WindowManager, event: *c.SDL_Event) !void {
-        switch (event.type) {
-            c.SDL_EVENT_QUIT => self.close = true,
+    pub fn processWindowEvent(self: *WindowManager, event: *c.SDL_Event) !void {
+        const id = event.window.windowID;
+        const window = self.windows.getPtr(@intCast(id));
 
+        switch (event.type) {
             c.SDL_EVENT_WINDOW_FOCUS_LOST => {
                 std.debug.print("Main Window Lost\n", .{});
                 self.mainWindow = null;
+                return;
             },
-
             c.SDL_EVENT_WINDOW_FOCUS_GAINED => {
                 std.debug.print("Main Window Set\n", .{});
                 self.mainWindow = self.windows.getPtr(@intCast(event.window.windowID));
+                return;
             },
-
-            c.SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED => {
+            c.SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED => { // Ran for every pixel change if CPU isnt blocked
                 std.debug.print("Window Pixel changed! \n", .{});
+                return;
             },
+            c.SDL_EVENT_WINDOW_CLOSE_REQUESTED => {
+                if (window.status == .active) self.openWindows -= 1;
+                window.status = .needDelete;
+            },
+            c.SDL_EVENT_WINDOW_MINIMIZED => {
+                self.openWindows -= 1;
+                window.status = .needInactive;
+            },
+            c.SDL_EVENT_WINDOW_RESTORED => {
+                if (window.status == .active) return;
+                self.openWindows += 1;
+                window.status = .needActive;
+            },
+            c.SDL_EVENT_WINDOW_RESIZED => {
+                var newExtent: c.VkExtent2D = undefined;
+                _ = c.SDL_GetWindowSize(window.handle, @ptrCast(&newExtent.width), @ptrCast(&newExtent.height));
+                window.extent = newExtent;
+                window.status = .needUpdate;
+            },
+            else => {
+                std.debug.print("Window Event {} could not be processed! \n", .{event.type});
+                return;
+            },
+        }
+        try self.changedWindows.append(window);
+        std.debug.print("Status of Window {} now {s}\n", .{ id, @tagName(window.status) });
+    }
 
+    pub fn processKeyEvent(self: *WindowManager, event: *c.SDL_Event) void {
+        var keyEvent: KeyEvent = undefined;
+
+        switch (event.type) {
+            c.SDL_EVENT_MOUSE_BUTTON_DOWN => keyEvent = .{ .key = @as(c_uint, event.button.button) + SDL_KEY_MAX, .event = .pressed },
+            c.SDL_EVENT_MOUSE_BUTTON_UP => keyEvent = .{ .key = @as(c_uint, event.button.button) + SDL_KEY_MAX, .event = .released },
+            c.SDL_EVENT_KEY_DOWN => keyEvent = .{ .key = event.key.scancode, .event = .pressed },
+            c.SDL_EVENT_KEY_UP => keyEvent = .{ .key = event.key.scancode, .event = .released },
+            else => {
+                std.debug.print("Key Event {} could not be processed! \n", .{event.type});
+                return;
+            },
+        }
+        self.inputEvents.append(keyEvent) catch |err| {
+            std.debug.print("WindowManager: mouseButtonEvents append failed {}\n", .{err});
+        };
+    }
+
+    pub fn processEvent(self: *WindowManager, event: *c.SDL_Event) !void {
+        switch (event.type) {
+            c.SDL_EVENT_QUIT => {
+                self.close = true;
+            },
+            c.SDL_EVENT_WINDOW_FOCUS_LOST,
+            c.SDL_EVENT_WINDOW_FOCUS_GAINED,
+            c.SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED,
             c.SDL_EVENT_WINDOW_CLOSE_REQUESTED,
             c.SDL_EVENT_WINDOW_MINIMIZED,
             c.SDL_EVENT_WINDOW_RESTORED,
             c.SDL_EVENT_WINDOW_RESIZED,
-            => {
-                const id = event.window.windowID;
-                const window = self.windows.getPtr(@intCast(id));
+            => try self.processWindowEvent(event),
 
-                switch (event.type) {
-                    c.SDL_EVENT_WINDOW_CLOSE_REQUESTED => {
-                        if (window.status == .active) self.openWindows -= 1;
-                        window.status = .needDelete;
-                    },
-                    c.SDL_EVENT_WINDOW_MINIMIZED => {
-                        self.openWindows -= 1;
-                        window.status = .needInactive;
-                    },
-                    c.SDL_EVENT_WINDOW_RESTORED => {
-                        if (window.status == .active) return;
-                        self.openWindows += 1;
-                        window.status = .needActive;
-                    },
-                    c.SDL_EVENT_WINDOW_RESIZED => {
-                        var newExtent: c.VkExtent2D = undefined;
-                        _ = c.SDL_GetWindowSize(window.handle, @ptrCast(&newExtent.width), @ptrCast(&newExtent.height));
-                        window.extent = newExtent;
-                        window.status = .needUpdate;
-                    },
-                    else => {},
-                }
-                try self.changedWindows.append(window);
-                std.debug.print("Status of Window {} now {s}\n", .{ id, @tagName(window.status) });
-            },
             c.SDL_EVENT_MOUSE_BUTTON_DOWN,
             c.SDL_EVENT_MOUSE_BUTTON_UP,
             c.SDL_EVENT_KEY_DOWN,
             c.SDL_EVENT_KEY_UP,
-            => {
-                const keyEvent: KeyEvent = switch (event.type) {
-                    c.SDL_EVENT_MOUSE_BUTTON_DOWN => .{ .key = @as(c_uint, event.button.button) + SDL_KEY_MAX, .event = .pressed },
-                    c.SDL_EVENT_MOUSE_BUTTON_UP => .{ .key = @as(c_uint, event.button.button) + SDL_KEY_MAX, .event = .released },
-                    c.SDL_EVENT_KEY_DOWN => .{ .key = event.key.scancode, .event = .pressed },
-                    c.SDL_EVENT_KEY_UP => .{ .key = event.key.scancode, .event = .released },
-                    else => unreachable,
-                };
-                self.inputEvents.append(keyEvent) catch |err| {
-                    std.debug.print("WindowManager: mouseButtonEvents append failed {}\n", .{err});
-                };
-            },
+            => self.processKeyEvent(event),
+
             c.SDL_EVENT_MOUSE_MOTION => {
                 const mouseMovement = MouseMovement{ .xChange = event.motion.xrel, .yChange = event.motion.yrel };
                 self.mouseMovements.append(mouseMovement) catch |err| {
