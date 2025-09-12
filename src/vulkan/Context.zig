@@ -103,7 +103,6 @@ pub fn createInstance(alloc: Allocator) !c.VkInstance {
         .pDisabledValidationFeatures = null,
     };
 
-    //try extensions.append("VK_KHR_portability_enumeration");
     std.debug.print("Instance Extensions {}\n", .{extensions.items.len});
 
     const appInf = c.VkApplicationInfo{

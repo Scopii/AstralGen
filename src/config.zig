@@ -88,3 +88,9 @@ pub const allPipeInf: []const []const PipelineInfo = &.{
     &graphicsPipeInf,
     &meshPipeInf,
 };
+
+pub const RenderPass = enum {
+    sortPass,
+    opaquePass,
+    guiPass,
+};

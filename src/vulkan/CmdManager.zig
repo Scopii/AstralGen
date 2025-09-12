@@ -87,10 +87,9 @@ pub const CmdManager = struct {
         createPipelineBarriers2(cmd, &.{barrier});
         renderImage.curLayout = c.VK_IMAGE_LAYOUT_GENERAL;
 
-        // Bind shader object/pipeline directly to the primary command buffer.
-
         const stages = [_]c.VkShaderStageFlagBits{c.VK_SHADER_STAGE_COMPUTE_BIT};
         c.pfn_vkCmdBindShadersEXT.?(cmd, 1, &stages, &pipe.shaderObjects.items[0].handle);
+
         c.vkCmdPushConstants(cmd, pipe.layout, c.VK_SHADER_STAGE_COMPUTE_BIT, 0, @sizeOf(ComputePushConstants), &pushConstants);
 
         const bufferBindingInf = c.VkDescriptorBufferBindingInfoEXT{
@@ -152,7 +151,7 @@ pub const CmdManager = struct {
 
         c.vkCmdBeginRendering(cmd, &renderInf);
 
-        // Set dynamic viewport and scissor - use WithCount versions for shader objects
+        // Set dynamic viewport and scissor - WithCount versions for shader objects
         const viewport = c.VkViewport{
             .x = 0,
             .y = 0,
@@ -162,15 +161,8 @@ pub const CmdManager = struct {
             .maxDepth = 1.0,
         };
 
-        // Use WithCount versions for shader objects
-        if (c.pfn_vkCmdSetViewportWithCount) |setViewportWithCount| {
-            setViewportWithCount(cmd, 1, &viewport);
-        }
-        if (c.pfn_vkCmdSetScissorWithCount) |setScissorWithCount| {
-            setScissorWithCount(cmd, 1, &scissor);
-        }
-
-        //const shaderObjects = pipe.shaderObjects.items;
+        c.pfn_vkCmdSetViewportWithCount.?(cmd, 1, &viewport);
+        c.pfn_vkCmdSetScissorWithCount.?(cmd, 1, &scissor);
 
         var stages = [_]c.VkShaderStageFlagBits{
             c.VK_SHADER_STAGE_VERTEX_BIT,
@@ -204,25 +196,17 @@ pub const CmdManager = struct {
         switch (pipeType) {
             .graphics => {
                 c.pfn_vkCmdBindShadersEXT.?(cmd, 7, &stages, &shaders);
-                // Set empty vertex input state
-                if (c.pfn_vkCmdSetVertexInputEXT) |setVertexInput| {
-                    setVertexInput(cmd, 0, null, 0, null);
-                }
+                c.pfn_vkCmdSetVertexInputEXT.?(cmd, 0, null, 0, null); // Set empty vertex input state
                 setGraphicsDynamicStates(cmd);
-                // Draw
                 c.vkCmdDraw(cmd, 3, 1, 0, 0);
             },
             .mesh => {
                 c.pfn_vkCmdBindShadersEXT.?(cmd, 7, &stages, &shaders);
                 setGraphicsDynamicStates(cmd);
-                // Draw mesh tasks
-                if (c.pfn_vkCmdDrawMeshTasksEXT) |drawMeshTasks| {
-                    drawMeshTasks(cmd, 1, 1, 1);
-                }
+                c.pfn_vkCmdDrawMeshTasksEXT.?(cmd, 1, 1, 1);
             },
             else => return error.UnsupportedPipelineType,
         }
-
         c.vkCmdEndRendering(cmd);
     }
 
@@ -286,41 +270,35 @@ pub const CmdManager = struct {
 };
 
 fn setGraphicsDynamicStates(cmd: c.VkCommandBuffer) void {
-    if (c.pfn_vkCmdSetRasterizerDiscardEnable) |setRasterizerDiscard| setRasterizerDiscard(cmd, c.VK_FALSE);
-    if (c.pfn_vkCmdSetDepthBiasEnable) |setDepthBias| setDepthBias(cmd, c.VK_FALSE);
-    if (c.pfn_vkCmdSetPolygonModeEXT) |setPolygonMode| setPolygonMode(cmd, c.VK_POLYGON_MODE_FILL);
-    if (c.pfn_vkCmdSetRasterizationSamplesEXT) |setRasterizationSamples| setRasterizationSamples(cmd, c.VK_SAMPLE_COUNT_1_BIT);
+    c.pfn_vkCmdSetRasterizerDiscardEnable.?(cmd, c.VK_FALSE);
+    c.pfn_vkCmdSetDepthBiasEnable.?(cmd, c.VK_FALSE);
+    c.pfn_vkCmdSetPolygonModeEXT.?(cmd, c.VK_POLYGON_MODE_FILL);
+    c.pfn_vkCmdSetRasterizationSamplesEXT.?(cmd, c.VK_SAMPLE_COUNT_1_BIT);
 
-    if (c.pfn_vkCmdSetSampleMaskEXT) |setSampleMask| {
-        const sampleMask: u32 = 0xFFFFFFFF;
-        setSampleMask(cmd, c.VK_SAMPLE_COUNT_1_BIT, &sampleMask);
-    }
-    if (c.pfn_vkCmdSetDepthClampEnableEXT) |setDepthClamp| setDepthClamp(cmd, c.VK_FALSE);
-    if (c.pfn_vkCmdSetAlphaToOneEnableEXT) |setAlphaToOne| setAlphaToOne(cmd, c.VK_FALSE);
-    if (c.pfn_vkCmdSetAlphaToCoverageEnableEXT) |setAlphaToCoverage| setAlphaToCoverage(cmd, c.VK_FALSE);
-    if (c.pfn_vkCmdSetLogicOpEnableEXT) |setLogicOpEnable| setLogicOpEnable(cmd, c.VK_FALSE);
-    if (c.pfn_vkCmdSetCullMode) |setCullMode| setCullMode(cmd, c.VK_CULL_MODE_NONE);
-    if (c.pfn_vkCmdSetFrontFace) |setFrontFace| setFrontFace(cmd, c.VK_FRONT_FACE_CLOCKWISE);
-    if (c.pfn_vkCmdSetDepthTestEnable) |setDepthTest| setDepthTest(cmd, c.VK_FALSE);
-    if (c.pfn_vkCmdSetDepthWriteEnable) |setDepthWrite| setDepthWrite(cmd, c.VK_FALSE);
-    if (c.pfn_vkCmdSetDepthBoundsTestEnable) |setDepthBounds| setDepthBounds(cmd, c.VK_FALSE);
-    if (c.pfn_vkCmdSetStencilTestEnable) |setStencilTest| setStencilTest(cmd, c.VK_FALSE);
+    const sampleMask: u32 = 0xFFFFFFFF;
+    c.pfn_vkCmdSetSampleMaskEXT.?(cmd, c.VK_SAMPLE_COUNT_1_BIT, &sampleMask);
 
-    if (c.pfn_vkCmdSetColorBlendEnableEXT) |setColorBlend| {
-        const colorBlendEnable = c.VK_FALSE;
-        const colorBlendAttachments = [_]c.VkBool32{colorBlendEnable};
-        setColorBlend(cmd, 0, 1, &colorBlendAttachments);
-    }
+    c.pfn_vkCmdSetDepthClampEnableEXT.?(cmd, c.VK_FALSE);
+    c.pfn_vkCmdSetAlphaToOneEnableEXT.?(cmd, c.VK_FALSE);
+    c.pfn_vkCmdSetAlphaToCoverageEnableEXT.?(cmd, c.VK_FALSE);
+    c.pfn_vkCmdSetLogicOpEnableEXT.?(cmd, c.VK_FALSE);
+    c.pfn_vkCmdSetCullMode.?(cmd, c.VK_CULL_MODE_NONE);
+    c.pfn_vkCmdSetFrontFace.?(cmd, c.VK_FRONT_FACE_CLOCKWISE);
+    c.pfn_vkCmdSetDepthTestEnable.?(cmd, c.VK_FALSE);
+    c.pfn_vkCmdSetDepthWriteEnable.?(cmd, c.VK_FALSE);
+    c.pfn_vkCmdSetDepthBoundsTestEnable.?(cmd, c.VK_FALSE);
+    c.pfn_vkCmdSetStencilTestEnable.?(cmd, c.VK_FALSE);
 
-    if (c.pfn_vkCmdSetColorWriteMaskEXT) |setColorWriteMask| {
-        const colorWriteMask = c.VK_COLOR_COMPONENT_R_BIT | c.VK_COLOR_COMPONENT_G_BIT |
-            c.VK_COLOR_COMPONENT_B_BIT | c.VK_COLOR_COMPONENT_A_BIT;
-        const colorWriteMasks = [_]c.VkColorComponentFlags{colorWriteMask};
-        setColorWriteMask(cmd, 0, 1, &colorWriteMasks);
-    }
+    const colorBlendEnable = c.VK_FALSE;
+    const colorBlendAttachments = [_]c.VkBool32{colorBlendEnable};
+    c.pfn_vkCmdSetColorBlendEnableEXT.?(cmd, 0, 1, &colorBlendAttachments);
 
-    if (c.pfn_vkCmdSetPrimitiveTopology) |setPrimitiveTopology| setPrimitiveTopology(cmd, c.VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
-    if (c.pfn_vkCmdSetPrimitiveRestartEnable) |setPrimitiveRestart| setPrimitiveRestart(cmd, c.VK_FALSE);
+    const colorWriteMask = c.VK_COLOR_COMPONENT_R_BIT | c.VK_COLOR_COMPONENT_G_BIT | c.VK_COLOR_COMPONENT_B_BIT | c.VK_COLOR_COMPONENT_A_BIT;
+    const colorWriteMasks = [_]c.VkColorComponentFlags{colorWriteMask};
+    c.pfn_vkCmdSetColorWriteMaskEXT.?(cmd, 0, 1, &colorWriteMasks);
+
+    c.pfn_vkCmdSetPrimitiveTopology.?(cmd, c.VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
+    c.pfn_vkCmdSetPrimitiveRestartEnable.?(cmd, c.VK_FALSE);
 }
 
 fn createCmd(gpi: c.VkDevice, pool: c.VkCommandPool, level: c.VkCommandBufferLevel) !c.VkCommandBuffer {
