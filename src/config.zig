@@ -12,6 +12,8 @@ pub const BEST_PRACTICES = false;
 pub const CLOSE_WITH_CONSOLE = false;
 pub const SHADER_HOTLOAD = true;
 pub const SHADER_STARTUP_COMPILATION = true;
+pub const MOUSE_MOVEMENT_INFO = false;
+pub const KEY_EVENT_INFO = false;
 
 // Rendering, Swapchains and Windows
 pub const MAX_IN_FLIGHT: u8 = 2; // (Frames)

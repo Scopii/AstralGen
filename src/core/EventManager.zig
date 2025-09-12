@@ -31,18 +31,21 @@ pub const EventManager = struct {
                 continue;
             }
             self.keyStates.set(keyEvent.key, if (keyEvent.event == .pressed) .pressed else .released);
-            //std.debug.print("Key {} pressed \n", .{keyEvent.key});
+
+            if (config.KEY_EVENT_INFO == true) std.debug.print("Key {} pressed \n", .{keyEvent.key});
         }
-        //std.debug.print("KeyStates {}\n", .{self.keyStates.count});
+        if (config.KEY_EVENT_INFO == true) std.debug.print("KeyStates {}\n", .{self.keyStates.count});
     }
 
     pub fn mapMouseMovements(self: *EventManager, movements: []MouseMovement) void {
         for (movements) |movement| {
             self.mouseMoveX += movement.xChange;
             self.mouseMoveY += movement.yChange;
-            //std.debug.print("Mouse Moved x:{} y:{}\n", .{ movement.xChange, movement.yChange });
+
+            if (config.MOUSE_MOVEMENT_INFO == true) std.debug.print("Mouse Moved x:{} y:{}\n", .{ movement.xChange, movement.yChange });
         }
-        //std.debug.print("Mouse Total Movement x:{} y:{}, processed {} movements\n", .{ self.mouseMovementX, self.mouseMovementY, movements.len });
+        if (config.MOUSE_MOVEMENT_INFO == true)
+            std.debug.print("Mouse Total Movement x:{} y:{}, processed {} movements\n", .{ self.mouseMoveX, self.mouseMoveY, movements.len });
     }
 
     pub fn getAppEvents(self: *EventManager) []AppEvent {
