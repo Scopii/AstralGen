@@ -4,7 +4,7 @@ const Window = @import("Window.zig").Window;
 const Renderer = @import("../vulkan/Renderer.zig").Renderer;
 const Swapchain = @import("../vulkan/SwapchainManager.zig").Swapchain;
 const MemoryManger = @import("../core/MemoryManager.zig").MemoryManager;
-const PipelineType = @import("../vulkan/PipelineBucket.zig").PipelineType;
+const PipelineType = @import("../vulkan/ShaderPipeline.zig").PipelineType;
 const CreateMapArray = @import("../structures/MapArray.zig").CreateMapArray;
 const MAX_WINDOWS = @import("../config.zig").MAX_WINDOWS;
 const SDL_KEY_MAX = @import("../core/EventManager.zig").SDL_KEY_MAX;
@@ -126,16 +126,16 @@ pub const WindowManager = struct {
             c.SDL_EVENT_WINDOW_FOCUS_LOST => {
                 std.debug.print("Main Window Lost\n", .{});
                 self.mainWindow = null;
-                return;
+                return; // Should not append window changes
             },
             c.SDL_EVENT_WINDOW_FOCUS_GAINED => {
                 std.debug.print("Main Window Set\n", .{});
                 self.mainWindow = self.windows.getPtr(@intCast(event.window.windowID));
-                return;
+                return; // Should not append window changes
             },
             c.SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED => { // Ran for every pixel change if CPU isnt blocked
                 std.debug.print("Window Pixel changed! \n", .{});
-                return;
+                return; // Should not append window changes
             },
             c.SDL_EVENT_WINDOW_CLOSE_REQUESTED => {
                 if (window.status == .active) self.openWindows -= 1;

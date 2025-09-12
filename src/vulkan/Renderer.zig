@@ -6,11 +6,11 @@ const Camera = @import("../core/Camera.zig").Camera;
 const Scheduler = @import("Scheduler.zig").Scheduler;
 const Window = @import("../platform/Window.zig").Window;
 const CmdManager = @import("CmdManager.zig").CmdManager;
-const PipelineManager = @import("PipelineManager.zig").PipelineManager;
+const ShaderManager = @import("ShaderManager.zig").ShaderManager;
 const Swapchain = @import("SwapchainManager.zig").Swapchain;
 const SwapchainManager = @import("SwapchainManager.zig").SwapchainManager;
-const PipelineType = @import("PipelineBucket.zig").PipelineType;
-const ComputePushConstants = @import("PipelineBucket.zig").ComputePushConstants;
+const PipelineType = @import("ShaderPipeline.zig").PipelineType;
+const ComputePushConstants = @import("ShaderPipeline.zig").ComputePushConstants;
 const GpuImage = @import("ResourceManager.zig").GpuImage;
 const GpuBuffer = @import("ResourceManager.zig").GpuBuffer;
 const ResourceManager = @import("ResourceManager.zig").ResourceManager;
@@ -26,7 +26,7 @@ pub const Renderer = struct {
     arenaAlloc: Allocator,
     context: Context,
     resourceMan2: ResourceManager,
-    pipelineMan: PipelineManager,
+    shaderMan: ShaderManager,
     swapchainMan: SwapchainManager,
     cmdMan: CmdManager,
     scheduler: Scheduler,
@@ -41,7 +41,7 @@ pub const Renderer = struct {
         var resourceMan2 = try ResourceManager.init(alloc, &context);
         const cmdMan = try CmdManager.init(alloc, &context, config.MAX_IN_FLIGHT);
         const scheduler = try Scheduler.init(&context, config.MAX_IN_FLIGHT);
-        const pipelineMan = try PipelineManager.init(alloc, &context, &resourceMan2);
+        const shaderMan = try ShaderManager.init(alloc, &context, &resourceMan2);
         const swapchainMan = try SwapchainManager.init(alloc, &context);
 
         return .{
@@ -49,7 +49,7 @@ pub const Renderer = struct {
             .arenaAlloc = memoryMan.getGlobalArena(),
             .context = context,
             .resourceMan2 = resourceMan2,
-            .pipelineMan = pipelineMan,
+            .shaderMan = shaderMan,
             .cmdMan = cmdMan,
             .scheduler = scheduler,
             .renderImage = try resourceMan2.createGpuImage(config.RENDER_IMAGE_PRESET, config.RENDER_IMAGE_FORMAT, c.VMA_MEMORY_USAGE_GPU_ONLY),
@@ -65,7 +65,7 @@ pub const Renderer = struct {
         self.scheduler.deinit();
         self.cmdMan.deinit();
         self.swapchainMan.deinit();
-        self.pipelineMan.deinit();
+        self.shaderMan.deinit();
         self.resourceMan2.destroyGpuBuffer(self.testBuffer);
         self.resourceMan2.deinit();
         self.context.deinit();
@@ -123,7 +123,7 @@ pub const Renderer = struct {
 
     pub fn updatePipeline(self: *Renderer, pipeType: PipelineType) !void {
         _ = c.vkDeviceWaitIdle(self.context.gpi);
-        try self.pipelineMan.updatePipeline(pipeType);
+        try self.shaderMan.update(pipeType);
     }
 
     pub fn draw(self: *Renderer, cam: *Camera, runtimeAsFloat: f32) !void {
@@ -159,10 +159,10 @@ pub const Renderer = struct {
                             .runtime = runtimeAsFloat,
                             .dataCount = @intCast(self.testBuffer.size / @sizeOf(Object)),
                         };
-                        try self.cmdMan.recordComputePass(&self.renderImage, &self.pipelineMan.pipelines[@intFromEnum(pipeType)], self.resourceMan2.imageDescBuffer.gpuAddress, compPushConstants);
+                        try self.cmdMan.recordComputePass(&self.renderImage, &self.shaderMan.pipelines[@intFromEnum(pipeType)], self.resourceMan2.imageDescBuffer.gpuAddress, compPushConstants);
                     },
                     .graphics, .mesh => {
-                        try self.cmdMan.recordGraphicsPassShaderObject(&self.renderImage, &self.pipelineMan.pipelines[@intFromEnum(pipeType)], pipeType);
+                        try self.cmdMan.recordGraphicsPassShaderObject(&self.renderImage, &self.shaderMan.pipelines[@intFromEnum(pipeType)], pipeType);
                     },
                 }
                 try self.cmdMan.blitToTargets(&self.renderImage, activeGroups[i].slice(), &self.swapchainMan.swapchains);

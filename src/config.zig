@@ -1,8 +1,7 @@
 pub const c = @import("c.zig");
 pub const std = @import("std");
 const KeyAssignments = @import("core/EventManager.zig").KeyAssignments;
-const ShaderInfo = @import("vulkan/PipelineBucket.zig").ShaderInfo;
-const PipelineInfo = @import("vulkan/PipelineBucket.zig").PipelineInfo;
+const ShaderInfo = @import("vulkan/ShaderPipeline.zig").ShaderInfo;
 
 // Vulkan Validation Layers
 pub const DEBUG_MODE = true;
@@ -71,22 +70,22 @@ pub const glslPath: []const u8 = "/src/shader";
 pub const sprvPath: []const u8 = "/zig-out/shader";
 
 // Shader Infos
-pub const computePipeInf = [_]PipelineInfo{
+pub const computePipe = [_]ShaderInfo{
     .{ .pipeType = .compute, .stage = c.VK_SHADER_STAGE_COMPUTE_BIT, .glslFile = "Compute.comp", .spvFile = "Compute.spv" },
 };
-pub const graphicsPipeInf = [_]PipelineInfo{
+pub const graphicsPipe = [_]ShaderInfo{
     .{ .pipeType = .graphics, .stage = c.VK_SHADER_STAGE_VERTEX_BIT, .glslFile = "Graphics.vert", .spvFile = "GraphicsVert.spv" },
     .{ .pipeType = .graphics, .stage = c.VK_SHADER_STAGE_FRAGMENT_BIT, .glslFile = "Graphics.frag", .spvFile = "GraphicsFrag.spv" },
 };
-pub const meshPipeInf = [_]PipelineInfo{
+pub const meshPipe = [_]ShaderInfo{
     .{ .pipeType = .mesh, .stage = c.VK_SHADER_STAGE_MESH_BIT_EXT, .glslFile = "Mesh.mesh", .spvFile = "MeshMesh.spv" },
     .{ .pipeType = .mesh, .stage = c.VK_SHADER_STAGE_FRAGMENT_BIT, .glslFile = "Mesh.frag", .spvFile = "MeshFrag.spv" },
 };
 
-pub const allPipeInf: []const []const PipelineInfo = &.{
-    &computePipeInf,
-    &graphicsPipeInf,
-    &meshPipeInf,
+pub const allPipeInf: []const []const ShaderInfo = &.{
+    &computePipe,
+    &graphicsPipe,
+    &meshPipe,
 };
 
 pub const RenderPass = enum {

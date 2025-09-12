@@ -1,7 +1,7 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 const config = @import("../config.zig");
-const PipelineType = @import("../vulkan/PipelineBucket.zig").PipelineType;
+const PipelineType = @import("../vulkan/ShaderPipeline.zig").PipelineType;
 
 pub const FileManager = struct {
     const pipelineTypes = @typeInfo(PipelineType).@"enum".fields.len;
@@ -27,9 +27,9 @@ pub const FileManager = struct {
         // Compile on Startup if wanted
         if (config.SHADER_STARTUP_COMPILATION) {
             for (config.allPipeInf) |pipelineGroup| {
-                for (pipelineGroup) |pipelineInfo| {
-                    const filePath = try joinPath(alloc, shaderPath, pipelineInfo.glslFile);
-                    const shaderOutputName = try joinPath(alloc, shaderOutputPath, pipelineInfo.spvFile);
+                for (pipelineGroup) |shaderInfo| {
+                    const filePath = try joinPath(alloc, shaderPath, shaderInfo.glslFile);
+                    const shaderOutputName = try joinPath(alloc, shaderOutputPath, shaderInfo.spvFile);
                     try compileShader(alloc, filePath, shaderOutputName);
                     alloc.free(filePath);
                     alloc.free(shaderOutputName);
@@ -51,20 +51,20 @@ pub const FileManager = struct {
 
         // Check all ShaderInfos and compile if needed
         for (config.allPipeInf) |pipelineGroup| {
-            for (pipelineGroup) |pipelineInfo| {
-                const filePath = try joinPath(alloc, self.shaderPath, pipelineInfo.glslFile);
+            for (pipelineGroup) |shaderInfo| {
+                const filePath = try joinPath(alloc, self.shaderPath, shaderInfo.glslFile);
                 const newTimeStamp = try getFileTimeStamp(filePath);
 
-                if (self.pipelineTimeStamps[@intFromEnum(pipelineInfo.pipeType)] < newTimeStamp) {
-                    const shaderOutputPath = try joinPath(alloc, self.shaderOutputPath, pipelineInfo.spvFile);
+                if (self.pipelineTimeStamps[@intFromEnum(shaderInfo.pipeType)] < newTimeStamp) {
+                    const shaderOutputPath = try joinPath(alloc, self.shaderOutputPath, shaderInfo.spvFile);
 
                     compileShader(alloc, filePath, shaderOutputPath) catch |err| {
                         std.debug.print("Tried updating Shader but compilation failed {}\n", .{err});
                     };
 
                     alloc.free(shaderOutputPath);
-                    self.pipelineTimeStamps[@intFromEnum(pipelineInfo.pipeType)] = newTimeStamp;
-                    self.pipelineUpdateBools[@intFromEnum(pipelineInfo.pipeType)] = true;
+                    self.pipelineTimeStamps[@intFromEnum(shaderInfo.pipeType)] = newTimeStamp;
+                    self.pipelineUpdateBools[@intFromEnum(shaderInfo.pipeType)] = true;
                 }
                 alloc.free(filePath);
             }

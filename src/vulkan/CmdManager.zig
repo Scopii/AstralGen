@@ -4,9 +4,9 @@ const Allocator = std.mem.Allocator;
 const Context = @import("Context.zig").Context;
 const Image = @import("ResourceManager.zig").GpuImage;
 const Swapchain = @import("SwapchainManager.zig").Swapchain;
-const PipelineBucket = @import("PipelineBucket.zig").ShaderPipeline;
-const PipelineType = @import("PipelineBucket.zig").PipelineType;
-const ComputePushConstants = @import("PipelineBucket.zig").ComputePushConstants;
+const ShaderPipeline = @import("ShaderPipeline.zig").ShaderPipeline;
+const PipelineType = @import("ShaderPipeline.zig").PipelineType;
+const ComputePushConstants = @import("ShaderPipeline.zig").ComputePushConstants;
 const CreateMapArray = @import("../structures/MapArray.zig").CreateMapArray;
 const deviceAddress = @import("ResourceManager.zig").GpuBuffer.deviceAddress;
 const MAX_WINDOWS = @import("../config.zig").MAX_WINDOWS;
@@ -70,7 +70,7 @@ pub const CmdManager = struct {
         return self.primaryCmds[frameInFlight];
     }
 
-    pub fn recordComputePass(self: *CmdManager, renderImage: *Image, pipe: *const PipelineBucket, gpuAddress: deviceAddress, pushConstants: ComputePushConstants) !void {
+    pub fn recordComputePass(self: *CmdManager, renderImage: *Image, pipe: *const ShaderPipeline, gpuAddress: deviceAddress, pushConstants: ComputePushConstants) !void {
         const activeFrame = self.activeFrame orelse return error.ActiveCmdBlocked;
         const cmd = self.primaryCmds[activeFrame];
 
@@ -106,7 +106,7 @@ pub const CmdManager = struct {
         c.vkCmdDispatch(cmd, (renderImage.extent3d.width + 7) / 8, (renderImage.extent3d.height + 7) / 8, 1);
     }
 
-    pub fn recordGraphicsPassShaderObject(self: *CmdManager, renderImage: *Image, pipe: *const PipelineBucket, pipeType: PipelineType) !void {
+    pub fn recordGraphicsPassShaderObject(self: *CmdManager, renderImage: *Image, pipe: *const ShaderPipeline, pipeType: PipelineType) !void {
         const activeFrame = self.activeFrame orelse return error.ActiveCmdBlocked;
         const cmd = self.primaryCmds[activeFrame];
 
