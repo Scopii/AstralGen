@@ -11,7 +11,7 @@ const check = @import("error.zig").check;
 
 pub const ShaderManager = struct {
     const pipeTypes = @typeInfo(PipelineType).@"enum".fields.len;
-    pipelines: [pipeTypes]ShaderPipeline,
+    shaderPipes: [pipeTypes]ShaderPipeline,
     alloc: Allocator,
     gpi: c.VkDevice,
 
@@ -25,20 +25,20 @@ pub const ShaderManager = struct {
         return .{
             .alloc = alloc,
             .gpi = gpi,
-            .pipelines = .{ compute, graphics, mesh },
+            .shaderPipes = .{ compute, graphics, mesh },
         };
     }
 
     pub fn update(self: *ShaderManager, pipeType: PipelineType) !void {
         const pipeEnum = @intFromEnum(pipeType);
-        const descLayout = self.pipelines[pipeEnum].descLayout;
-        const pipeInf = self.pipelines[pipeEnum].pipeInf;
-        self.pipelines[pipeEnum].deinit(self.gpi);
-        self.pipelines[pipeEnum] = try ShaderPipeline.init(self.alloc, self.gpi, pipeInf, descLayout, pipeType);
+        const descLayout = self.shaderPipes[pipeEnum].descLayout;
+        const pipeInf = self.shaderPipes[pipeEnum].pipeInf;
+        self.shaderPipes[pipeEnum].deinit(self.gpi);
+        self.shaderPipes[pipeEnum] = try ShaderPipeline.init(self.alloc, self.gpi, pipeInf, descLayout, pipeType);
     }
 
     pub fn deinit(self: *ShaderManager) void {
         const gpi = self.gpi;
-        for (0..self.pipelines.len) |i| self.pipelines[i].deinit(gpi);
+        for (0..self.shaderPipes.len) |i| self.shaderPipes[i].deinit(gpi);
     }
 };

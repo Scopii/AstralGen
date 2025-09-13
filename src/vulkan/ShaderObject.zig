@@ -11,7 +11,6 @@ const resolveProjectRoot = @import("../core/FileManager.zig").resolveProjectRoot
 pub const ShaderObject = struct {
     handle: c.VkShaderEXT,
     stage: c.VkShaderStageFlagBits,
-    descLayout: c.VkDescriptorSetLayout,
 
     pub fn init(
         gpi: c.VkDevice,
@@ -68,7 +67,6 @@ pub const ShaderObject = struct {
         return .{
             .handle = shader,
             .stage = stage,
-            .descLayout = descLayout,
         };
     }
 

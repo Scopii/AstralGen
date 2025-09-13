@@ -25,15 +25,12 @@ pub const ComputePushConstants = extern struct {
 };
 
 pub const ShaderPipeline = struct {
-    alloc: Allocator,
     layout: c.VkPipelineLayout,
-    pipeType: PipelineType,
     pipeInf: []const ShaderInfo,
     descLayout: c.VkDescriptorSetLayout,
     shaderObjects: std.ArrayList(ShaderObject),
 
     pub fn init(alloc: Allocator, gpi: c.VkDevice, pipeInfos: []const ShaderInfo, descLayout: c.VkDescriptorSetLayout, pipeType: PipelineType) !ShaderPipeline {
-        var shaderObjects = std.ArrayList(ShaderObject).init(alloc);
         if (pipeType == .compute and pipeInfos.len > 1) {
             std.log.err("ShaderPipeline: Compute only supports 1 Stage", .{});
             return error.ShaderStageOverflow;
@@ -41,22 +38,23 @@ pub const ShaderPipeline = struct {
 
         const layout = switch (pipeType) {
             .compute => try createPipelineLayout(gpi, descLayout, pipeInfos[0].stage, @sizeOf(ComputePushConstants)),
-            else => try createPipelineLayout(gpi, descLayout, 0, 0),
+            .graphics, .mesh => try createPipelineLayout(gpi, descLayout, 0, 0),
         };
+
+        var shaderObjects = std.ArrayList(ShaderObject).init(alloc);
 
         for (0..pipeInfos.len) |i| {
             const pipeInf = pipeInfos[i];
             const nextStage = if (i + 1 <= pipeInfos.len - 1) pipeInfos[i + 1].stage else 0;
             const shaderObj = try ShaderObject.init(gpi, pipeInf, nextStage, alloc, descLayout, pipeType);
             shaderObjects.append(shaderObj) catch |err| {
-                std.debug.print("PipelineBucket: Could not append ShaderObject, err {}\n", .{err});
+                std.debug.print("ShaderPipeline: Could not append ShaderObject, err {}\n", .{err});
+                return error.ShaderAppend;
             };
         }
 
         return .{
-            .alloc = alloc,
             .layout = layout,
-            .pipeType = pipeType,
             .pipeInf = pipeInfos,
             .shaderObjects = shaderObjects,
             .descLayout = descLayout,
@@ -64,9 +62,7 @@ pub const ShaderPipeline = struct {
     }
 
     pub fn deinit(self: *ShaderPipeline, gpi: c.VkDevice) void {
-        for (self.shaderObjects.items) |*shaderObject| {
-            shaderObject.deinit(gpi);
-        }
+        for (self.shaderObjects.items) |*shaderObject| shaderObject.deinit(gpi);
         c.vkDestroyPipelineLayout(gpi, self.layout, null);
         self.shaderObjects.deinit();
     }

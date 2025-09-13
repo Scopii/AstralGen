@@ -159,10 +159,10 @@ pub const Renderer = struct {
                             .runtime = runtimeAsFloat,
                             .dataCount = @intCast(self.testBuffer.size / @sizeOf(Object)),
                         };
-                        try self.cmdMan.recordComputePass(&self.renderImage, &self.shaderMan.pipelines[@intFromEnum(pipeType)], self.resourceMan2.imageDescBuffer.gpuAddress, compPushConstants);
+                        try self.cmdMan.recordComputePass(&self.renderImage, &self.shaderMan.shaderPipes[@intFromEnum(pipeType)], self.resourceMan2.imageDescBuffer.gpuAddress, compPushConstants);
                     },
                     .graphics, .mesh => {
-                        try self.cmdMan.recordGraphicsPassShaderObject(&self.renderImage, &self.shaderMan.pipelines[@intFromEnum(pipeType)], pipeType);
+                        try self.cmdMan.recordGraphicsPassShaderObject(&self.renderImage, &self.shaderMan.shaderPipes[@intFromEnum(pipeType)], pipeType);
                     },
                 }
                 try self.cmdMan.blitToTargets(&self.renderImage, activeGroups[i].slice(), &self.swapchainMan.swapchains);

@@ -8,10 +8,12 @@ pub const DEBUG_MODE = true;
 pub const EXTRA_VALIDATION = false;
 pub const BEST_PRACTICES = false;
 
-// Dev Mode
-pub const CLOSE_WITH_CONSOLE = false;
+// Shader Compilation
 pub const SHADER_HOTLOAD = true;
 pub const SHADER_STARTUP_COMPILATION = true;
+
+// Dev Mode
+pub const CLOSE_WITH_CONSOLE = false;
 pub const MOUSE_MOVEMENT_INFO = false;
 pub const KEY_EVENT_INFO = false;
 
