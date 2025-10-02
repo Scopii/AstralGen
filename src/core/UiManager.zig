@@ -39,7 +39,7 @@ pub const Container = struct {
     }
 
     pub fn deinit(self: *Container) void {
-        self.nodes.deinit();
+        self.nodeIDs.deinit();
     }
 };
 
@@ -66,7 +66,7 @@ pub const UiManager = struct {
 
     pub fn calculateUi(self: *UiManager) void {
         for (self.container.getElements()) |container| {
-            for (container.nodeIDs) |id| {
+            for (container.nodeIDs.items) |id| {
                 // Just adding offset
                 const nodePtr = self.nodes.getPtr(id);
                 nodePtr.*.curPos = nodePtr.*.pos + container.offset;

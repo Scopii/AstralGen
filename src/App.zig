@@ -46,7 +46,7 @@ pub const App = struct {
             return error.UiManagerFailed;
         };
         try uiMan.startUi();
-        try uiMan.calculateUi();
+        uiMan.calculateUi();
         //errdefer uiMan.deinit();
 
         var rng = RNGenerator.init(std.Random.Xoshiro256, 1000);
