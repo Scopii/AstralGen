@@ -7,6 +7,7 @@ const EventManager = @import("core/EventManager.zig").EventManager;
 const TimeManager = @import("core/TimeManager.zig").TimeManager;
 const FileManager = @import("core/FileManager.zig").FileManager;
 const EntityManager = @import("ecs/EntityManager.zig").EntityManager;
+const UiManager = @import("core/UiManager.zig").UiManager;
 const RNGenerator = @import("core/RNGenerator.zig").RNGenerator;
 const Camera = @import("core/Camera.zig").Camera;
 const zjobs = @import("zjobs");
@@ -16,6 +17,7 @@ const config = @import("config.zig");
 pub const App = struct {
     memoryMan: *MemoryManager,
     windowMan: WindowManager,
+    uiMan: UiManager,
     renderer: Renderer,
     timeMan: TimeManager,
     cam: Camera,
@@ -37,6 +39,15 @@ pub const App = struct {
             return error.FileManagerFailed;
         };
         errdefer fileMan.deinit();
+
+        var uiMan = UiManager.init(memoryMan.getAllocator()) catch |err| {
+            windowMan.showErrorBox("Astral App Error", "UI Manager could not launch");
+            std.debug.print("Err {}\n", .{err});
+            return error.UiManagerFailed;
+        };
+        try uiMan.startUi();
+        try uiMan.calculateUi();
+        //errdefer uiMan.deinit();
 
         var rng = RNGenerator.init(std.Random.Xoshiro256, 1000);
 
@@ -60,6 +71,7 @@ pub const App = struct {
             .eventMan = EventManager{},
             .memoryMan = memoryMan,
             .windowMan = windowMan,
+            .uiMan = uiMan,
             .renderer = renderer,
             .fileMan = fileMan,
             .ecs = ecs,
