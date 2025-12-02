@@ -14,11 +14,6 @@
             .url = "https://github.com/Snektron/vulkan-zig/archive/9b4090c852760ce3210562f62ffaf301479c38ba.tar.gz",
             .hash = "vulkan-0.0.0-r7Ytx2dUAwDhoUvuIqliqPUbyDZZi0bl_CQIwspUpHs_",
         },
-        //GUI Package
-        .zgui = .{
-            .url = "https://github.com/zig-gamedev/zgui/archive/b2f29f14bce688ec90a26a9a7906543d98e0f8a0.tar.gz",
-            .hash = "zgui-0.6.0-dev--L6sZKTBaADLHp09LtUUifdfFpsczwbnyH7r2ajfVPuJ",
-        },
         //Multithreading
         .zjobs = .{
             .url = "https://github.com/zig-gamedev/zjobs/archive/dfdb734e8084f7dc5010a4ded30bc8e04b6d4393.tar.gz",

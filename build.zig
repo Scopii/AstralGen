@@ -71,18 +71,6 @@ pub fn build(b: *std.Build) void {
     exe.root_module.addImport("ztracy", ztracy.module("root"));
     exe.linkLibrary(ztracy.artifact("tracy"));
 
-    const zgui_dep = b.dependency("zgui", .{ .target = target, .optimize = optimize, .with_implot = true, .backend = .glfw_vulkan });
-
-    // Get Vulkan SDK path and add headers
-    const vulkan_sdk = std.process.getEnvVarOwned(b.allocator, "VULKAN_SDK") catch null;
-    if (vulkan_sdk) |sdk_path| {
-        const vulkan_include = std.fs.path.join(b.allocator, &.{ sdk_path, "Include" }) catch unreachable;
-        zgui_dep.artifact("imgui").addIncludePath(.{ .cwd_relative = vulkan_include });
-    }
-
-    exe.root_module.addImport("zgui", zgui_dep.module("root"));
-    exe.linkLibrary(zgui_dep.artifact("imgui"));
-
     const zjobs_dep = b.dependency("zjobs", .{ .target = target, .optimize = optimize });
     exe.root_module.addImport("zjobs", zjobs_dep.module("root"));
 
