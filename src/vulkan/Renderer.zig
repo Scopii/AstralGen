@@ -10,7 +10,7 @@ const ShaderManager = @import("ShaderManager.zig").ShaderManager;
 const Swapchain = @import("SwapchainManager.zig").Swapchain;
 const SwapchainManager = @import("SwapchainManager.zig").SwapchainManager;
 const PipelineType = @import("ShaderPipeline.zig").PipelineType;
-const ComputePushConstants = @import("ShaderPipeline.zig").ComputePushConstants;
+const ComputePushConstants = @import("ShaderManager.zig").ComputePushConstants;
 const GpuImage = @import("ResourceManager.zig").GpuImage;
 const GpuBuffer = @import("ResourceManager.zig").GpuBuffer;
 const ResourceManager = @import("ResourceManager.zig").ResourceManager;
@@ -159,7 +159,7 @@ pub const Renderer = struct {
                             .runtime = runtimeAsFloat,
                             .dataCount = @intCast(self.testBuffer.size / @sizeOf(Object)),
                         };
-                        try self.cmdMan.recordComputePass(&self.renderImage, &self.shaderMan.shaderPipes[@intFromEnum(pipeType)], self.resourceMan2.imageDescBuffer.gpuAddress, compPushConstants);
+                        try self.cmdMan.recordComputePass(&self.renderImage, &self.shaderMan.shaderPipes[@intFromEnum(pipeType)], self.shaderMan.layout, self.resourceMan2.imageDescBuffer.gpuAddress, compPushConstants);
                     },
                     .graphics, .mesh => {
                         try self.cmdMan.recordGraphicsPassShaderObject(&self.renderImage, &self.shaderMan.shaderPipes[@intFromEnum(pipeType)], pipeType);

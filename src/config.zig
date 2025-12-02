@@ -86,6 +86,16 @@ pub const meshPipe = [_]ShaderInfo{
     .{ .pipeType = .mesh, .stage = c.VK_SHADER_STAGE_FRAGMENT_BIT, .glslFile = "Mesh.frag", .spvFile = "MeshFrag.spv" },
 };
 
+pub const renderSequence = [_]ShaderInfo{
+    .{ .pipeType = .compute, .stage = c.VK_SHADER_STAGE_COMPUTE_BIT, .glslFile = "Compute.comp", .spvFile = "Compute.spv" },
+
+    .{ .pipeType = .graphics, .stage = c.VK_SHADER_STAGE_VERTEX_BIT, .glslFile = "Graphics.vert", .spvFile = "GraphicsVert.spv" },
+    .{ .pipeType = .graphics, .stage = c.VK_SHADER_STAGE_FRAGMENT_BIT, .glslFile = "Graphics.frag", .spvFile = "GraphicsFrag.spv" },
+
+    .{ .pipeType = .mesh, .stage = c.VK_SHADER_STAGE_MESH_BIT_EXT, .glslFile = "Mesh.mesh", .spvFile = "MeshMesh.spv" },
+    .{ .pipeType = .mesh, .stage = c.VK_SHADER_STAGE_FRAGMENT_BIT, .glslFile = "Mesh.frag", .spvFile = "MeshFrag.spv" },
+};
+
 pub const allPipeInf: []const []const ShaderInfo = &.{
     &computePipe,
     &graphicsPipe,
@@ -93,7 +103,6 @@ pub const allPipeInf: []const []const ShaderInfo = &.{
 };
 
 pub const RenderPass = enum {
-    sortPass,
-    opaquePass,
-    guiPass,
+    computeVoxelization,
+    computeListbuild,
 };

@@ -16,16 +16,7 @@ pub const ShaderInfo = struct {
     spvFile: []const u8,
 };
 
-pub const ComputePushConstants = extern struct {
-    camPosAndFov: [4]f32,
-    camDir: [4]f32,
-    runtime: f32,
-    dataCount: u32,
-    dataAddress: u64,
-};
-
 pub const ShaderPipeline = struct {
-    layout: c.VkPipelineLayout,
     pipeInf: []const ShaderInfo,
     descLayout: c.VkDescriptorSetLayout,
     shaderObjects: std.ArrayList(ShaderObject),
@@ -35,11 +26,6 @@ pub const ShaderPipeline = struct {
             std.log.err("ShaderPipeline: Compute only supports 1 Stage", .{});
             return error.ShaderStageOverflow;
         }
-
-        const layout = switch (pipeType) {
-            .compute => try createPipelineLayout(gpi, descLayout, pipeInfos[0].stage, @sizeOf(ComputePushConstants)),
-            .graphics, .mesh => try createPipelineLayout(gpi, descLayout, 0, 0),
-        };
 
         var shaderObjects = std.ArrayList(ShaderObject).init(alloc);
 
@@ -54,7 +40,6 @@ pub const ShaderPipeline = struct {
         }
 
         return .{
-            .layout = layout,
             .pipeInf = pipeInfos,
             .shaderObjects = shaderObjects,
             .descLayout = descLayout,
@@ -63,35 +48,6 @@ pub const ShaderPipeline = struct {
 
     pub fn deinit(self: *ShaderPipeline, gpi: c.VkDevice) void {
         for (self.shaderObjects.items) |*shaderObject| shaderObject.deinit(gpi);
-        c.vkDestroyPipelineLayout(gpi, self.layout, null);
         self.shaderObjects.deinit();
     }
 };
-
-fn createPipelineLayout(gpi: c.VkDevice, descriptorLayout: c.VkDescriptorSetLayout, pushConstantStages: c.VkShaderStageFlags, pushConstantSize: u32) !c.VkPipelineLayout {
-    var pushConstantRange: c.VkPushConstantRange = undefined;
-    var pushConstantRangeCount: u32 = 0;
-    var pushConstantRanges: ?*const c.VkPushConstantRange = null;
-
-    if (pushConstantSize > 0) {
-        pushConstantRange = c.VkPushConstantRange{
-            .stageFlags = pushConstantStages,
-            .offset = 0,
-            .size = pushConstantSize,
-        };
-        pushConstantRangeCount = 1;
-        pushConstantRanges = &pushConstantRange;
-    }
-
-    const pipeLayoutInf = c.VkPipelineLayoutCreateInfo{
-        .sType = c.VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-        .setLayoutCount = if (descriptorLayout != null) @as(u32, 1) else 0,
-        .pSetLayouts = if (descriptorLayout != null) &descriptorLayout else null,
-        .pushConstantRangeCount = pushConstantRangeCount,
-        .pPushConstantRanges = pushConstantRanges,
-    };
-
-    var layout: c.VkPipelineLayout = undefined;
-    try check(c.vkCreatePipelineLayout(gpi, &pipeLayoutInf, null, &layout), "Failed to create pipeline layout");
-    return layout;
-}

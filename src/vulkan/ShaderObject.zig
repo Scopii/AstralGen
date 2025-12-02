@@ -4,7 +4,7 @@ const Allocator = std.mem.Allocator;
 const config = @import("../config.zig");
 const PipelineType = @import("ShaderPipeline.zig").PipelineType;
 const ShaderInfo = @import("ShaderPipeline.zig").ShaderInfo;
-const ComputePushConstants = @import("ShaderPipeline.zig").ComputePushConstants;
+const ComputePushConstants = @import("ShaderManager.zig").ComputePushConstants;
 const check = @import("error.zig").check;
 const resolveProjectRoot = @import("../core/FileManager.zig").resolveProjectRoot;
 
