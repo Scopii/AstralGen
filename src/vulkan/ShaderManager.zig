@@ -20,6 +20,7 @@ pub const ComputePushConstants = extern struct {
 pub const ShaderManager = struct {
     const pipeTypes = @typeInfo(PipelineType).@"enum".fields.len;
 
+    descLayout: c.VkDescriptorSetLayout,
     layout: c.VkPipelineLayout,
     shaderPipes: [pipeTypes]ShaderPipeline,
     alloc: Allocator,
@@ -36,6 +37,7 @@ pub const ShaderManager = struct {
 
         return .{
             .layout = layout,
+            .descLayout = resourceManager.layout,
             .alloc = alloc,
             .gpi = gpi,
             .shaderPipes = .{ compute, graphics, mesh },
@@ -44,7 +46,7 @@ pub const ShaderManager = struct {
 
     pub fn update(self: *ShaderManager, pipeType: PipelineType) !void {
         const pipeEnum = @intFromEnum(pipeType);
-        const descLayout = self.shaderPipes[pipeEnum].descLayout;
+        const descLayout = self.descLayout;
         const pipeInf = self.shaderPipes[pipeEnum].pipeInf;
         self.shaderPipes[pipeEnum].deinit(self.gpi);
         self.shaderPipes[pipeEnum] = try ShaderPipeline.init(self.alloc, self.gpi, pipeInf, descLayout, pipeType);

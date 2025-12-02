@@ -18,7 +18,6 @@ pub const ShaderInfo = struct {
 
 pub const ShaderPipeline = struct {
     pipeInf: []const ShaderInfo,
-    descLayout: c.VkDescriptorSetLayout,
     shaderObjects: std.ArrayList(ShaderObject),
 
     pub fn init(alloc: Allocator, gpi: c.VkDevice, pipeInfos: []const ShaderInfo, descLayout: c.VkDescriptorSetLayout, pipeType: PipelineType) !ShaderPipeline {
@@ -42,7 +41,6 @@ pub const ShaderPipeline = struct {
         return .{
             .pipeInf = pipeInfos,
             .shaderObjects = shaderObjects,
-            .descLayout = descLayout,
         };
     }
 
