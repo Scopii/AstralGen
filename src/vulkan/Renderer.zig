@@ -10,7 +10,7 @@ const ShaderManager = @import("ShaderManager.zig").ShaderManager;
 const Swapchain = @import("SwapchainManager.zig").Swapchain;
 const SwapchainManager = @import("SwapchainManager.zig").SwapchainManager;
 const PipelineType = @import("ShaderPipeline.zig").PipelineType;
-const ComputePushConstants = @import("ShaderManager.zig").ComputePushConstants;
+const PushConstants = @import("ShaderManager.zig").PushConstants;
 const GpuImage = @import("ResourceManager.zig").GpuImage;
 const GpuBuffer = @import("ResourceManager.zig").GpuBuffer;
 const ResourceManager = @import("ResourceManager.zig").ResourceManager;
@@ -152,7 +152,7 @@ pub const Renderer = struct {
 
                 switch (pipeType) {
                     .compute => {
-                        const compPushConstants = ComputePushConstants{
+                        const compPushConstants = PushConstants{
                             .camPosAndFov = cam.getPosAndFov(),
                             .camDir = cam.getForward(),
                             .dataAddress = self.testBuffer.gpuAddress,

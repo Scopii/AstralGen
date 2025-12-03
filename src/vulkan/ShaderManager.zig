@@ -9,7 +9,7 @@ const PipelineType = @import("ShaderPipeline.zig").PipelineType;
 const ResourceManager = @import("ResourceManager.zig").ResourceManager;
 const check = @import("error.zig").check;
 
-pub const ComputePushConstants = extern struct {
+pub const PushConstants = extern struct {
     camPosAndFov: [4]f32,
     camDir: [4]f32,
     runtime: f32,
@@ -28,7 +28,7 @@ pub const ShaderManager = struct {
 
     pub fn init(alloc: Allocator, context: *const Context, resourceManager: *const ResourceManager) !ShaderManager {
         const gpi = context.gpi;
-        const layout = try createPipelineLayout(gpi, resourceManager.layout, c.VK_SHADER_STAGE_COMPUTE_BIT, @sizeOf(ComputePushConstants));
+        const layout = try createPipelineLayout(gpi, resourceManager.layout, c.VK_SHADER_STAGE_COMPUTE_BIT, @sizeOf(PushConstants));
 
         var shaderPipes: [pipeTypes]ShaderPipeline = undefined;
         for (0..pipeTypes) |i| shaderPipes[i] = try ShaderPipeline.init(alloc, gpi, config.renderSequence[i], resourceManager.layout, @enumFromInt(i));

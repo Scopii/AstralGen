@@ -73,7 +73,7 @@ pub const rootPath: []const u8 = "../..";
 pub const glslPath: []const u8 = "/src/shader";
 pub const sprvPath: []const u8 = "/zig-out/shader";
 
-// Shader Infos
+// Render
 pub const computePipe = [_]ShaderInfo{
     .{ .pipeType = .compute, .stage = c.VK_SHADER_STAGE_COMPUTE_BIT, .glslFile = "Compute.comp", .spvFile = "Compute.spv" },
 };
@@ -90,9 +90,4 @@ pub const renderSequence: []const []const ShaderInfo = &.{
     &computePipe,
     &graphicsPipe,
     &meshPipe,
-};
-
-pub const RenderPass = enum {
-    computeVoxelization,
-    computeListbuild,
 };

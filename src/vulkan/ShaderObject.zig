@@ -4,7 +4,7 @@ const Allocator = std.mem.Allocator;
 const config = @import("../config.zig");
 const PipelineType = @import("ShaderPipeline.zig").PipelineType;
 const ShaderInfo = @import("ShaderPipeline.zig").ShaderInfo;
-const ComputePushConstants = @import("ShaderManager.zig").ComputePushConstants;
+const PushConstants = @import("ShaderManager.zig").PushConstants;
 const check = @import("error.zig").check;
 const resolveProjectRoot = @import("../core/FileManager.zig").resolveProjectRoot;
 
@@ -56,7 +56,7 @@ pub const ShaderObject = struct {
             .pPushConstantRanges = if (pipeType == .compute) &c.VkPushConstantRange{
                 .stageFlags = c.VK_SHADER_STAGE_COMPUTE_BIT,
                 .offset = 0,
-                .size = @sizeOf(ComputePushConstants),
+                .size = @sizeOf(PushConstants),
             } else null,
             .pSpecializationInfo = null,
         };

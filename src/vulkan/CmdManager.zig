@@ -6,7 +6,7 @@ const Image = @import("ResourceManager.zig").GpuImage;
 const Swapchain = @import("SwapchainManager.zig").Swapchain;
 const ShaderPipeline = @import("ShaderPipeline.zig").ShaderPipeline;
 const PipelineType = @import("ShaderPipeline.zig").PipelineType;
-const ComputePushConstants = @import("ShaderManager.zig").ComputePushConstants;
+const PushConstants = @import("ShaderManager.zig").PushConstants;
 const CreateMapArray = @import("../structures/MapArray.zig").CreateMapArray;
 const deviceAddress = @import("ResourceManager.zig").GpuBuffer.deviceAddress;
 const MAX_WINDOWS = @import("../config.zig").MAX_WINDOWS;
@@ -70,7 +70,7 @@ pub const CmdManager = struct {
         return self.primaryCmds[frameInFlight];
     }
 
-    pub fn recordComputePass(self: *CmdManager, renderImage: *Image, pipe: *const ShaderPipeline, layout: c.VkPipelineLayout, gpuAddress: deviceAddress, pushConstants: ComputePushConstants) !void {
+    pub fn recordComputePass(self: *CmdManager, renderImage: *Image, pipe: *const ShaderPipeline, layout: c.VkPipelineLayout, gpuAddress: deviceAddress, pushConstants: PushConstants) !void {
         const activeFrame = self.activeFrame orelse return error.ActiveCmdBlocked;
         const cmd = self.primaryCmds[activeFrame];
 
@@ -90,7 +90,7 @@ pub const CmdManager = struct {
         const stages = [_]c.VkShaderStageFlagBits{c.VK_SHADER_STAGE_COMPUTE_BIT};
         c.pfn_vkCmdBindShadersEXT.?(cmd, 1, &stages, &pipe.shaderObjects.items[0].handle);
 
-        c.vkCmdPushConstants(cmd, layout, c.VK_SHADER_STAGE_COMPUTE_BIT, 0, @sizeOf(ComputePushConstants), &pushConstants);
+        c.vkCmdPushConstants(cmd, layout, c.VK_SHADER_STAGE_COMPUTE_BIT, 0, @sizeOf(PushConstants), &pushConstants);
 
         const bufferBindingInf = c.VkDescriptorBufferBindingInfoEXT{
             .sType = c.VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT,
