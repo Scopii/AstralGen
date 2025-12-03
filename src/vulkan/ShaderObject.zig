@@ -2,7 +2,7 @@ const std = @import("std");
 const c = @import("../c.zig");
 const Allocator = std.mem.Allocator;
 const config = @import("../config.zig");
-const PipelineType = @import("ShaderPipeline.zig").PipelineType;
+const RenderType = @import("ShaderPipeline.zig").RenderType;
 const ShaderInfo = @import("ShaderPipeline.zig").ShaderInfo;
 const PushConstants = @import("ShaderManager.zig").PushConstants;
 const check = @import("error.zig").check;
@@ -18,7 +18,7 @@ pub const ShaderObject = struct {
         nextStage: c.VkShaderStageFlagBits,
         alloc: Allocator,
         descLayout: c.VkDescriptorSetLayout,
-        pipeType: PipelineType,
+        renderType: RenderType,
     ) !ShaderObject {
         const stage = pipeInf.stage;
         const spvFile = pipeInf.spvFile;
@@ -36,14 +36,14 @@ pub const ShaderObject = struct {
 
         // Set flags based on shader stage
         var flags: c.VkShaderCreateFlagsEXT = 0;
-        if (stage == c.VK_SHADER_STAGE_MESH_BIT_EXT and pipeType == .mesh) {
+        if (stage == c.VK_SHADER_STAGE_MESH_BIT_EXT and renderType == .mesh) {
             flags |= c.VK_SHADER_CREATE_NO_TASK_SHADER_BIT_EXT; // because task shader isnt used YET
         }
 
         const shaderCreateInfo = c.VkShaderCreateInfoEXT{
             .sType = c.VK_STRUCTURE_TYPE_SHADER_CREATE_INFO_EXT,
             .pNext = null,
-            .flags = if (pipeType == .compute) 0 else flags,
+            .flags = if (renderType == .compute) 0 else flags,
             .stage = stage,
             .nextStage = nextStage,
             .codeType = c.VK_SHADER_CODE_TYPE_SPIRV_EXT,
@@ -52,8 +52,8 @@ pub const ShaderObject = struct {
             .pName = "main",
             .setLayoutCount = if (descLayout != null) @as(u32, 1) else 0,
             .pSetLayouts = if (descLayout != null) &descLayout else null,
-            .pushConstantRangeCount = if (pipeType == .compute) 1 else 0,
-            .pPushConstantRanges = if (pipeType == .compute) &c.VkPushConstantRange{
+            .pushConstantRangeCount = if (renderType == .compute) 1 else 0,
+            .pPushConstantRanges = if (renderType == .compute) &c.VkPushConstantRange{
                 .stageFlags = c.VK_SHADER_STAGE_COMPUTE_BIT,
                 .offset = 0,
                 .size = @sizeOf(PushConstants),

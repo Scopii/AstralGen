@@ -4,7 +4,7 @@ const Allocator = std.mem.Allocator;
 const Context = @import("Context.zig").Context;
 const Window = @import("../platform/Window.zig").Window;
 const QueueFamilies = @import("Context.zig").QueueFamilies;
-const PipelineType = @import("ShaderPipeline.zig").PipelineType;
+const RenderPass = @import("ShaderPipeline.zig").RenderPass;
 const CreateMapArray = @import("../structures/MapArray.zig").CreateMapArray;
 const check = @import("error.zig").check;
 const createSemaphore = @import("primitives.zig").createSemaphore;
@@ -28,19 +28,19 @@ pub const Swapchain = struct {
 };
 
 pub const SwapchainManager = struct {
-    const pipeTypes = @typeInfo(PipelineType).@"enum".fields.len;
+    const renderPasses = @typeInfo(RenderPass).@"enum".fields.len;
 
     alloc: Allocator,
     gpi: c.VkDevice,
     instance: c.VkInstance,
     maxExtent: c.VkExtent2D = .{ .width = 0, .height = 0 },
     swapchains: CreateMapArray(Swapchain, MAX_WINDOWS, u8, MAX_WINDOWS, 0) = .{},
-    activeGroups: [pipeTypes]std.BoundedArray(u8, MAX_WINDOWS),
+    activeGroups: [renderPasses]std.BoundedArray(u8, MAX_WINDOWS),
     targets: std.BoundedArray(u8, MAX_WINDOWS) = .{},
 
     pub fn init(alloc: Allocator, context: *const Context) !SwapchainManager {
-        var activeGroups: [pipeTypes]std.BoundedArray(u8, MAX_WINDOWS) = undefined;
-        for (0..pipeTypes) |i| activeGroups[i] = .{};
+        var activeGroups: [renderPasses]std.BoundedArray(u8, MAX_WINDOWS) = undefined;
+        for (0..renderPasses) |i| activeGroups[i] = .{};
 
         return .{
             .alloc = alloc,
@@ -86,14 +86,14 @@ pub const SwapchainManager = struct {
     }
 
     pub fn addActive(self: *SwapchainManager, window: *Window) !void {
-        try self.activeGroups[@intFromEnum(window.pipeType)].append(@intCast(window.id));
+        try self.activeGroups[@intFromEnum(window.renderPass)].append(@intCast(window.id));
     }
 
     pub fn removeActive(self: *SwapchainManager, window: *Window) void {
-        const group = self.activeGroups[@intFromEnum(window.pipeType)].slice();
+        const group = self.activeGroups[@intFromEnum(window.renderPass)].slice();
         for (0..group.len) |i| {
             if (group[i] == window.id)
-                _ = self.activeGroups[@intFromEnum(window.pipeType)].swapRemove(i);
+                _ = self.activeGroups[@intFromEnum(window.renderPass)].swapRemove(i);
         }
     }
 
@@ -163,7 +163,7 @@ pub const SwapchainManager = struct {
 
                 const swapchain = try self.createInternalSwapchain(surfaceFormat, surface, extent, families, caps, null);
                 self.swapchains.set(@intCast(w.id), swapchain);
-                try self.activeGroups[@intFromEnum(w.pipeType)].append(@intCast(w.id));
+                try self.activeGroups[@intFromEnum(w.renderPass)].append(@intCast(w.id));
                 std.debug.print("Swapchain added to Window {}\n", .{w.id});
                 return;
             } else {

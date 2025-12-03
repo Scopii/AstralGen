@@ -9,7 +9,8 @@ const CmdManager = @import("CmdManager.zig").CmdManager;
 const ShaderManager = @import("ShaderManager.zig").ShaderManager;
 const Swapchain = @import("SwapchainManager.zig").Swapchain;
 const SwapchainManager = @import("SwapchainManager.zig").SwapchainManager;
-const PipelineType = @import("ShaderPipeline.zig").PipelineType;
+const RenderType = @import("ShaderPipeline.zig").RenderType;
+const RenderPass = @import("ShaderPipeline.zig").RenderPass;
 const PushConstants = @import("ShaderManager.zig").PushConstants;
 const GpuImage = @import("ResourceManager.zig").GpuImage;
 const GpuBuffer = @import("ResourceManager.zig").GpuBuffer;
@@ -121,9 +122,9 @@ pub const Renderer = struct {
         }
     }
 
-    pub fn updatePipeline(self: *Renderer, pipeType: PipelineType) !void {
+    pub fn updatePipeline(self: *Renderer, renderType: RenderType) !void {
         _ = c.vkDeviceWaitIdle(self.context.gpi);
-        try self.shaderMan.update(pipeType);
+        try self.shaderMan.update(renderType);
     }
 
     pub fn draw(self: *Renderer, cam: *Camera, runtimeAsFloat: f32) !void {
@@ -146,27 +147,26 @@ pub const Renderer = struct {
     fn recordCommands(self: *Renderer, cam: *Camera, runtimeAsFloat: f32) !void {
         const activeGroups = self.swapchainMan.activeGroups;
 
-        for (0..activeGroups.len) |i| {
-            if (activeGroups[i].len != 0) {
-                const pipeType: PipelineType = @enumFromInt(i);
+        for (0..config.renderSequence.len) |i| {
+            const renderStep = config.renderSequence[i][0];
 
-                switch (pipeType) {
-                    .compute => {
-                        const compPushConstants = PushConstants{
-                            .camPosAndFov = cam.getPosAndFov(),
-                            .camDir = cam.getForward(),
-                            .dataAddress = self.testBuffer.gpuAddress,
-                            .runtime = runtimeAsFloat,
-                            .dataCount = @intCast(self.testBuffer.size / @sizeOf(Object)),
-                        };
-                        try self.cmdMan.recordComputePass(&self.renderImage, &self.shaderMan.shaderPipes[@intFromEnum(pipeType)], self.shaderMan.layout, self.resourceMan2.imageDescBuffer.gpuAddress, compPushConstants);
-                    },
-                    .graphics, .mesh => {
-                        try self.cmdMan.recordGraphicsPassShaderObject(&self.renderImage, &self.shaderMan.shaderPipes[@intFromEnum(pipeType)], pipeType);
-                    },
-                }
-                try self.cmdMan.blitToTargets(&self.renderImage, activeGroups[i].slice(), &self.swapchainMan.swapchains);
+            switch (renderStep.renderType) {
+                .compute => {
+                    // PUSH COMMANDS HAVE TO BE CHANGED TO ALL TYPES
+                    const compPushConstants = PushConstants{
+                        .camPosAndFov = cam.getPosAndFov(),
+                        .camDir = cam.getForward(),
+                        .dataAddress = self.testBuffer.gpuAddress,
+                        .runtime = runtimeAsFloat,
+                        .dataCount = @intCast(self.testBuffer.size / @sizeOf(Object)),
+                    };
+                    try self.cmdMan.recordComputePass(&self.renderImage, &self.shaderMan.shaderPipes[i], self.shaderMan.layout, self.resourceMan2.imageDescBuffer.gpuAddress, compPushConstants);
+                },
+                .graphics, .mesh => {
+                    try self.cmdMan.recordGraphicsPassShaderObject(&self.renderImage, &self.shaderMan.shaderPipes[i], renderStep.renderType);
+                },
             }
+            try self.cmdMan.blitToTargets(&self.renderImage, activeGroups[@intFromEnum(renderStep.renderPass)].slice(), &self.swapchainMan.swapchains);
         }
     }
 

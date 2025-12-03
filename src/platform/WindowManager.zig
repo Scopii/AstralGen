@@ -4,7 +4,7 @@ const Window = @import("Window.zig").Window;
 const Renderer = @import("../vulkan/Renderer.zig").Renderer;
 const Swapchain = @import("../vulkan/SwapchainManager.zig").Swapchain;
 const MemoryManger = @import("../core/MemoryManager.zig").MemoryManager;
-const PipelineType = @import("../vulkan/ShaderPipeline.zig").PipelineType;
+const RenderPass = @import("../vulkan/ShaderPipeline.zig").RenderPass;
 const CreateMapArray = @import("../structures/MapArray.zig").CreateMapArray;
 const MAX_WINDOWS = @import("../config.zig").MAX_WINDOWS;
 const SDL_KEY_MAX = @import("../core/EventManager.zig").SDL_KEY_MAX;
@@ -40,7 +40,7 @@ pub const WindowManager = struct {
         c.SDL_Quit();
     }
 
-    pub fn addWindow(self: *WindowManager, title: [*c]const u8, width: c_int, height: c_int, pipeType: PipelineType) !void {
+    pub fn addWindow(self: *WindowManager, title: [*c]const u8, width: c_int, height: c_int, renderPass: RenderPass) !void {
         const sdlHandle = c.SDL_CreateWindow(title, width, height, c.SDL_WINDOW_VULKAN | c.SDL_WINDOW_RESIZABLE) orelse {
             std.log.err("SDL_CreateWindow failed: {s}\n", .{c.SDL_GetError()});
             return error.WindowInitFailed;
@@ -49,11 +49,11 @@ pub const WindowManager = struct {
         _ = c.SDL_SetWindowFullscreen(sdlHandle, false);
         _ = c.SDL_SetWindowRelativeMouseMode(sdlHandle, true);
 
-        const window = try Window.init(id, sdlHandle, pipeType, c.VkExtent2D{ .width = @intCast(width), .height = @intCast(height) });
+        const window = try Window.init(id, sdlHandle, renderPass, c.VkExtent2D{ .width = @intCast(width), .height = @intCast(height) });
         self.windows.set(@intCast(id), window);
         try self.changedWindows.append(self.windows.getPtr(@intCast(id)));
         self.openWindows += 1;
-        std.debug.print("Window ID {} for PipelineType {s} created\n", .{ id, @tagName(pipeType) });
+        std.debug.print("Window ID {} for PipelineType {s} created\n", .{ id, @tagName(renderPass) });
     }
 
     pub fn showErrorBox(_: *WindowManager, title: [:0]const u8, message: [:0]const u8) void {

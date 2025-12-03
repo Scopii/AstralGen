@@ -74,20 +74,24 @@ pub const glslPath: []const u8 = "/src/shader";
 pub const sprvPath: []const u8 = "/zig-out/shader";
 
 // Render
-pub const computePipe = [_]ShaderInfo{
-    .{ .pipeType = .compute, .stage = c.VK_SHADER_STAGE_COMPUTE_BIT, .glslFile = "Compute.comp", .spvFile = "Compute.spv" },
+pub const computePipe1 = [_]ShaderInfo{
+    .{ .renderType = .compute, .renderPass = .compute1, .stage = c.VK_SHADER_STAGE_COMPUTE_BIT, .glslFile = "Compute.comp", .spvFile = "Compute.spv" },
 };
-pub const graphicsPipe = [_]ShaderInfo{
-    .{ .pipeType = .graphics, .stage = c.VK_SHADER_STAGE_VERTEX_BIT, .glslFile = "Graphics.vert", .spvFile = "GraphicsVert.spv" },
-    .{ .pipeType = .graphics, .stage = c.VK_SHADER_STAGE_FRAGMENT_BIT, .glslFile = "Graphics.frag", .spvFile = "GraphicsFrag.spv" },
+pub const computePipe2 = [_]ShaderInfo{
+    .{ .renderType = .compute, .renderPass = .graphics1, .stage = c.VK_SHADER_STAGE_COMPUTE_BIT, .glslFile = "Compute.comp", .spvFile = "Compute.spv" },
 };
-pub const meshPipe = [_]ShaderInfo{
-    .{ .pipeType = .mesh, .stage = c.VK_SHADER_STAGE_MESH_BIT_EXT, .glslFile = "Mesh.mesh", .spvFile = "MeshMesh.spv" },
-    .{ .pipeType = .mesh, .stage = c.VK_SHADER_STAGE_FRAGMENT_BIT, .glslFile = "Mesh.frag", .spvFile = "MeshFrag.spv" },
+pub const graphicsPipe1 = [_]ShaderInfo{
+    .{ .renderType = .graphics, .renderPass = .graphics1, .stage = c.VK_SHADER_STAGE_VERTEX_BIT, .glslFile = "Graphics.vert", .spvFile = "GraphicsVert.spv" },
+    .{ .renderType = .graphics, .renderPass = .graphics1, .stage = c.VK_SHADER_STAGE_FRAGMENT_BIT, .glslFile = "Graphics.frag", .spvFile = "GraphicsFrag.spv" },
+};
+pub const meshPipe1 = [_]ShaderInfo{
+    .{ .renderType = .mesh, .renderPass = .mesh1, .stage = c.VK_SHADER_STAGE_MESH_BIT_EXT, .glslFile = "Mesh.mesh", .spvFile = "MeshMesh.spv" },
+    .{ .renderType = .mesh, .renderPass = .mesh1, .stage = c.VK_SHADER_STAGE_FRAGMENT_BIT, .glslFile = "Mesh.frag", .spvFile = "MeshFrag.spv" },
 };
 
 pub const renderSequence: []const []const ShaderInfo = &.{
-    &computePipe,
-    &graphicsPipe,
-    &meshPipe,
+    &computePipe1,
+    &graphicsPipe1,
+    &meshPipe1,
+    &computePipe2,
 };

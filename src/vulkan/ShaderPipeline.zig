@@ -7,10 +7,12 @@ const check = @import("error.zig").check;
 const joinPath = @import("../core/FileManager.zig").joinPath;
 const resolveProjectRoot = @import("../core/FileManager.zig").resolveProjectRoot;
 
-pub const PipelineType = enum { compute, graphics, mesh };
+pub const RenderType = enum { compute, graphics, mesh };
+pub const RenderPass = enum { compute1, compute2, graphics1, graphics2, mesh1, mesh2 };
 
 pub const ShaderInfo = struct {
-    pipeType: PipelineType,
+    renderType: RenderType,
+    renderPass: RenderPass,
     stage: c.VkShaderStageFlagBits,
     glslFile: []const u8,
     spvFile: []const u8,
@@ -20,8 +22,8 @@ pub const ShaderPipeline = struct {
     pipeInf: []const ShaderInfo,
     shaderObjects: std.ArrayList(ShaderObject),
 
-    pub fn init(alloc: Allocator, gpi: c.VkDevice, pipeInfos: []const ShaderInfo, descLayout: c.VkDescriptorSetLayout, pipeType: PipelineType) !ShaderPipeline {
-        if (pipeType == .compute and pipeInfos.len > 1) {
+    pub fn init(alloc: Allocator, gpi: c.VkDevice, pipeInfos: []const ShaderInfo, descLayout: c.VkDescriptorSetLayout, renderType: RenderType) !ShaderPipeline {
+        if (renderType == .compute and pipeInfos.len > 1) {
             std.log.err("ShaderPipeline: Compute only supports 1 Stage", .{});
             return error.ShaderStageOverflow;
         }
@@ -31,7 +33,7 @@ pub const ShaderPipeline = struct {
         for (0..pipeInfos.len) |i| {
             const pipeInf = pipeInfos[i];
             const nextStage = if (i + 1 <= pipeInfos.len - 1) pipeInfos[i + 1].stage else 0;
-            const shaderObj = try ShaderObject.init(gpi, pipeInf, nextStage, alloc, descLayout, pipeType);
+            const shaderObj = try ShaderObject.init(gpi, pipeInf, nextStage, alloc, descLayout, renderType);
             shaderObjects.append(shaderObj) catch |err| {
                 std.debug.print("ShaderPipeline: Could not append ShaderObject, err {}\n", .{err});
                 return error.ShaderAppend;

@@ -5,7 +5,8 @@ const ztracy = @import("ztracy");
 const config = @import("../config.zig");
 const Context = @import("Context.zig").Context;
 const ShaderPipeline = @import("ShaderPipeline.zig").ShaderPipeline;
-const PipelineType = @import("ShaderPipeline.zig").PipelineType;
+const RenderType = @import("ShaderPipeline.zig").RenderType;
+const RenderPass = @import("ShaderPipeline.zig").RenderPass;
 const ResourceManager = @import("ResourceManager.zig").ResourceManager;
 const check = @import("error.zig").check;
 
@@ -18,11 +19,12 @@ pub const PushConstants = extern struct {
 };
 
 pub const ShaderManager = struct {
-    const pipeTypes = @typeInfo(PipelineType).@"enum".fields.len;
+    //const renderPasses = @typeInfo(RenderPass).@"enum".fields.len;
+    const renderSequenceLen = config.renderSequence.len;
 
     descLayout: c.VkDescriptorSetLayout,
     layout: c.VkPipelineLayout,
-    shaderPipes: [pipeTypes]ShaderPipeline,
+    shaderPipes: [renderSequenceLen]ShaderPipeline,
     alloc: Allocator,
     gpi: c.VkDevice,
 
@@ -30,8 +32,8 @@ pub const ShaderManager = struct {
         const gpi = context.gpi;
         const layout = try createPipelineLayout(gpi, resourceManager.layout, c.VK_SHADER_STAGE_COMPUTE_BIT, @sizeOf(PushConstants));
 
-        var shaderPipes: [pipeTypes]ShaderPipeline = undefined;
-        for (0..pipeTypes) |i| shaderPipes[i] = try ShaderPipeline.init(alloc, gpi, config.renderSequence[i], resourceManager.layout, @enumFromInt(i));
+        var shaderPipes: [renderSequenceLen]ShaderPipeline = undefined;
+        for (0..renderSequenceLen) |i| shaderPipes[i] = try ShaderPipeline.init(alloc, gpi, config.renderSequence[i], resourceManager.layout, config.renderSequence[i][0].renderType);
 
         return .{
             .layout = layout,
@@ -42,12 +44,12 @@ pub const ShaderManager = struct {
         };
     }
 
-    pub fn update(self: *ShaderManager, pipeType: PipelineType) !void {
-        const pipeEnum = @intFromEnum(pipeType);
+    pub fn update(self: *ShaderManager, renderType: RenderType) !void {
+        const pipeEnum = @intFromEnum(renderType);
         const descLayout = self.descLayout;
         const pipeInf = self.shaderPipes[pipeEnum].pipeInf;
         self.shaderPipes[pipeEnum].deinit(self.gpi);
-        self.shaderPipes[pipeEnum] = try ShaderPipeline.init(self.alloc, self.gpi, pipeInf, descLayout, pipeType);
+        self.shaderPipes[pipeEnum] = try ShaderPipeline.init(self.alloc, self.gpi, pipeInf, descLayout, renderType);
     }
 
     pub fn deinit(self: *ShaderManager) void {

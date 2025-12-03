@@ -5,7 +5,7 @@ const Context = @import("Context.zig").Context;
 const Image = @import("ResourceManager.zig").GpuImage;
 const Swapchain = @import("SwapchainManager.zig").Swapchain;
 const ShaderPipeline = @import("ShaderPipeline.zig").ShaderPipeline;
-const PipelineType = @import("ShaderPipeline.zig").PipelineType;
+const RenderType = @import("ShaderPipeline.zig").RenderType;
 const PushConstants = @import("ShaderManager.zig").PushConstants;
 const CreateMapArray = @import("../structures/MapArray.zig").CreateMapArray;
 const deviceAddress = @import("ResourceManager.zig").GpuBuffer.deviceAddress;
@@ -106,7 +106,7 @@ pub const CmdManager = struct {
         c.vkCmdDispatch(cmd, (renderImage.extent3d.width + 7) / 8, (renderImage.extent3d.height + 7) / 8, 1);
     }
 
-    pub fn recordGraphicsPassShaderObject(self: *CmdManager, renderImage: *Image, pipe: *const ShaderPipeline, pipeType: PipelineType) !void {
+    pub fn recordGraphicsPassShaderObject(self: *CmdManager, renderImage: *Image, pipe: *const ShaderPipeline, renderType: RenderType) !void {
         const activeFrame = self.activeFrame orelse return error.ActiveCmdBlocked;
         const cmd = self.primaryCmds[activeFrame];
 
@@ -193,7 +193,7 @@ pub const CmdManager = struct {
         }
 
         // Bind shader objects based on pipeline type
-        switch (pipeType) {
+        switch (renderType) {
             .graphics => {
                 c.pfn_vkCmdBindShadersEXT.?(cmd, 7, &stages, &shaders);
                 c.pfn_vkCmdSetVertexInputEXT.?(cmd, 0, null, 0, null); // Set empty vertex input state

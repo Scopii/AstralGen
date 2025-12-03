@@ -1,7 +1,7 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 const config = @import("../config.zig");
-const PipelineType = @import("../vulkan/ShaderPipeline.zig").PipelineType;
+const PipelineType = @import("../vulkan/ShaderPipeline.zig").RenderType;
 
 pub const FileManager = struct {
     const pipelineTypes = @typeInfo(PipelineType).@"enum".fields.len;
@@ -55,7 +55,7 @@ pub const FileManager = struct {
                 const filePath = try joinPath(alloc, self.shaderPath, shaderInfo.glslFile);
                 const newTimeStamp = try getFileTimeStamp(filePath);
 
-                if (self.pipelineTimeStamps[@intFromEnum(shaderInfo.pipeType)] < newTimeStamp) {
+                if (self.pipelineTimeStamps[@intFromEnum(shaderInfo.renderType)] < newTimeStamp) {
                     const shaderOutputPath = try joinPath(alloc, self.shaderOutputPath, shaderInfo.spvFile);
 
                     compileShader(alloc, filePath, shaderOutputPath) catch |err| {
@@ -63,8 +63,8 @@ pub const FileManager = struct {
                     };
 
                     alloc.free(shaderOutputPath);
-                    self.pipelineTimeStamps[@intFromEnum(shaderInfo.pipeType)] = newTimeStamp;
-                    self.pipelineUpdateBools[@intFromEnum(shaderInfo.pipeType)] = true;
+                    self.pipelineTimeStamps[@intFromEnum(shaderInfo.renderType)] = newTimeStamp;
+                    self.pipelineUpdateBools[@intFromEnum(shaderInfo.renderType)] = true;
                 }
                 alloc.free(filePath);
             }
