@@ -26,7 +26,7 @@ pub const FileManager = struct {
         const pipelineTimeStamps: [pipelineTypes]i128 = .{currentTime} ** pipelineTypes;
         // Compile on Startup if wanted
         if (config.SHADER_STARTUP_COMPILATION) {
-            for (config.allPipeInf) |pipelineGroup| {
+            for (config.renderSequence) |pipelineGroup| {
                 for (pipelineGroup) |shaderInfo| {
                     const filePath = try joinPath(alloc, shaderPath, shaderInfo.glslFile);
                     const shaderOutputName = try joinPath(alloc, shaderOutputPath, shaderInfo.spvFile);
@@ -50,7 +50,7 @@ pub const FileManager = struct {
         const alloc = self.alloc;
 
         // Check all ShaderInfos and compile if needed
-        for (config.allPipeInf) |pipelineGroup| {
+        for (config.renderSequence) |pipelineGroup| {
             for (pipelineGroup) |shaderInfo| {
                 const filePath = try joinPath(alloc, self.shaderPath, shaderInfo.glslFile);
                 const newTimeStamp = try getFileTimeStamp(filePath);

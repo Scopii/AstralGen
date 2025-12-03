@@ -28,19 +28,17 @@ pub const ShaderManager = struct {
 
     pub fn init(alloc: Allocator, context: *const Context, resourceManager: *const ResourceManager) !ShaderManager {
         const gpi = context.gpi;
-
         const layout = try createPipelineLayout(gpi, resourceManager.layout, c.VK_SHADER_STAGE_COMPUTE_BIT, @sizeOf(ComputePushConstants));
 
-        const compute = try ShaderPipeline.init(alloc, gpi, &config.computePipe, resourceManager.layout, .compute);
-        const graphics = try ShaderPipeline.init(alloc, gpi, &config.graphicsPipe, resourceManager.layout, .graphics);
-        const mesh = try ShaderPipeline.init(alloc, gpi, &config.meshPipe, resourceManager.layout, .mesh);
+        var shaderPipes: [pipeTypes]ShaderPipeline = undefined;
+        for (0..pipeTypes) |i| shaderPipes[i] = try ShaderPipeline.init(alloc, gpi, config.renderSequence[i], resourceManager.layout, @enumFromInt(i));
 
         return .{
             .layout = layout,
             .descLayout = resourceManager.layout,
             .alloc = alloc,
             .gpi = gpi,
-            .shaderPipes = .{ compute, graphics, mesh },
+            .shaderPipes = shaderPipes,
         };
     }
 
