@@ -95,3 +95,33 @@ pub const renderSequence: []const []const ShaderInfo = &.{
     &meshPipe1,
     &computePipe2,
 };
+
+pub const ComputeConfig = struct {
+    shader: []const u8, // One file. Mandatory.
+    dispatch: [3]u32 = .{ 0, 1, 1 }, // 0 means "screen/grid dependent"
+};
+
+pub const GraphicsConfig = struct {
+    vertex: []const u8, // Mandatory
+    fragment: []const u8, // Mandatory
+    // No compute field exists here!
+};
+
+pub const MeshConfig = struct {
+    task: ?[]const u8 = null, // Optional
+    mesh: []const u8, // Mandatory
+    fragment: []const u8, // Mandatory
+};
+
+// The Union enforces that a pass is EXACTLY one of these valid types
+pub const PassType = union(enum) {
+    Compute: ComputeConfig,
+    Graphics: GraphicsConfig,
+    Mesh: MeshConfig,
+};
+
+pub const RenderPass = struct {
+    name: []const u8,
+    action: PassType, // The logic
+    barrier: bool = false, // Simple safety switch
+};
