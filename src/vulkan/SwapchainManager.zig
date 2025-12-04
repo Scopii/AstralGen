@@ -150,7 +150,6 @@ pub const SwapchainManager = struct {
     pub fn createSwapchain(self: *SwapchainManager, context: *const Context, input: union(enum) { window: *Window, id: u8 }) !void {
         const alloc = self.alloc;
         const gpu = context.gpu;
-        const families = context.families;
         var extent: c.VkExtent2D = undefined;
         var ptr: *Swapchain = undefined;
 
@@ -161,7 +160,7 @@ pub const SwapchainManager = struct {
                 const caps = try getSurfaceCaps(gpu, surface);
                 const surfaceFormat = try pickSurfaceFormat(alloc, gpu, surface);
 
-                const swapchain = try self.createInternalSwapchain(surfaceFormat, surface, extent, families, caps, null);
+                const swapchain = try self.createInternalSwapchain(surfaceFormat, surface, extent, caps, null);
                 self.swapchains.set(@intCast(w.id), swapchain);
                 try self.activeGroups[@intFromEnum(w.renderPass)].append(@intCast(w.id));
                 std.debug.print("Swapchain added to Window {}\n", .{w.id});
@@ -182,7 +181,7 @@ pub const SwapchainManager = struct {
         const caps = try getSurfaceCaps(gpu, surface);
         const surfaceFormat = try pickSurfaceFormat(alloc, gpu, surface);
 
-        const swapchain = try self.createInternalSwapchain(surfaceFormat, surface, extent, families, caps, ptr.handle);
+        const swapchain = try self.createInternalSwapchain(surfaceFormat, surface, extent, caps, ptr.handle);
         self.destroySwapchain(ptr, .withoutSurface);
         ptr.* = swapchain;
     }
@@ -192,7 +191,6 @@ pub const SwapchainManager = struct {
         surfaceFormat: c.VkSurfaceFormatKHR,
         surface: c.VkSurfaceKHR,
         extent: c.VkExtent2D,
-        families: QueueFamilies,
         caps: c.VkSurfaceCapabilitiesKHR,
         oldHandle: ?c.VkSwapchainKHR,
     ) !Swapchain {
@@ -210,17 +208,6 @@ pub const SwapchainManager = struct {
             desiredImgCount = caps.minImageCount;
         }
 
-        var sharingMode: c.VkSharingMode = c.VK_SHARING_MODE_EXCLUSIVE;
-        var familyIndices: [2]u32 = undefined;
-        var familyCount: u32 = 0;
-
-        if (families.graphics != families.present) {
-            sharingMode = c.VK_SHARING_MODE_CONCURRENT;
-            familyIndices[0] = families.graphics;
-            familyIndices[1] = families.present;
-            familyCount = 2;
-        }
-
         const swapchainInf = c.VkSwapchainCreateInfoKHR{
             .sType = c.VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
             .surface = surface,
@@ -230,9 +217,9 @@ pub const SwapchainManager = struct {
             .imageExtent = actualExtent,
             .imageArrayLayers = 1,
             .imageUsage = c.VK_IMAGE_USAGE_TRANSFER_DST_BIT | c.VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
-            .imageSharingMode = sharingMode,
-            .queueFamilyIndexCount = familyCount,
-            .pQueueFamilyIndices = if (familyCount > 0) &familyIndices else null,
+            .imageSharingMode = c.VK_SHARING_MODE_EXCLUSIVE,
+            .queueFamilyIndexCount = 0, // Not Needed for Exclusive
+            .pQueueFamilyIndices = null, // Not Needed for Exclusive
             .preTransform = caps.currentTransform,
             .compositeAlpha = c.VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
             .presentMode = mode,

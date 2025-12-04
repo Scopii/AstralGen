@@ -220,11 +220,15 @@ fn checkGPUfamilies(alloc: Allocator, gpu: c.VkPhysicalDevice) !QueueFamilies {
     defer alloc.free(families);
     c.vkGetPhysicalDeviceQueueFamilyProperties(gpu, &familyCount, families.ptr);
 
-    const graphics = findFamily(families) orelse return error.NoGraphicsFamily;
-    // Currently using the same Family because most Graphics Queues support Presentation and this avoids creating a Surface for setup
-    const present = graphics; // try findPresentFamily(families, surface, gpu) orelse return error.NoPresentFamily;
-
-    return QueueFamilies{ .graphics = graphics, .present = present };
+    for (families, 0..) |family, i| {
+        const hasGraphics = (family.queueFlags & c.VK_QUEUE_GRAPHICS_BIT) != 0;
+        //var hasPresent: c.VkBool32 = c.VK_FALSE;
+        //c.vkGetPhysicalDeviceSurfaceSupportKHR(gpu, @intCast(i), surface, &hasPresent);
+        if (hasGraphics == true) {
+            return QueueFamilies{ .graphics = @intCast(i), .present = @intCast(i) };
+        }
+    }
+    return error.NoSuitableQueueFamily;
 }
 
 fn createGPI(alloc: Allocator, gpu: c.VkPhysicalDevice, families: QueueFamilies) !c.VkDevice {
