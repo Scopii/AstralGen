@@ -135,7 +135,7 @@ pub const Renderer = struct {
 
         const cmd = try self.cmdMan.beginRecording(frameInFlight);
         try self.recordCommands(cmd, cam, runtimeAsFloat);
-        try self.cmdMan.endRecording(cmd);
+        try CmdManager.endRecording(cmd);
 
         const targets = self.swapchainMan.targets.slice();
         try self.queueSubmit(cmd, targets, frameInFlight);
@@ -201,7 +201,7 @@ pub const Renderer = struct {
             // Cleanup all Bitset Indices
             if ((touchedIndices & mask) == 0) {
                 const swapchain = self.swapchainMan.swapchains.getPtrAtIndex(index);
-                self.cmdMan.transitionToPresent(cmd, swapchain);
+                CmdManager.transitionToPresent(cmd, swapchain);
             }
         }
     }
