@@ -160,7 +160,9 @@ pub const Renderer = struct {
                 .dataCount = @intCast(self.testBuffer.size / @sizeOf(Object)),
             };
 
-            switch (renderStep.renderType) {
+            const renderType = self.shaderMan.getRenderType(i);
+
+            switch (renderType) {
                 .compute => {
                     try CmdManager.recordComputePass(
                         cmd,
@@ -176,11 +178,12 @@ pub const Renderer = struct {
                         cmd,
                         &self.renderImage,
                         self.shaderMan.shaderObjects[i].items,
-                        renderStep.renderType,
+                        renderType,
                         self.shaderMan.layout,
                         pushConstants,
                     );
                 },
+                else => std.debug.print("Renderer: {s} has no Command Recording\n", .{@tagName(renderType)}),
             }
             // BLIT LOGIC
             const groupIndex = @intFromEnum(renderStep.renderPass);

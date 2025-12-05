@@ -24,6 +24,7 @@ pub const ShaderManager = struct {
     descLayout: c.VkDescriptorSetLayout,
     layout: c.VkPipelineLayout,
     shaderObjects: [renderSeqLen]std.ArrayList(ShaderObject),
+    renderTypes: [renderSeqLen]RenderType,
     alloc: Allocator,
     gpi: c.VkDevice,
 
@@ -32,7 +33,13 @@ pub const ShaderManager = struct {
         const layout = try createPipelineLayout(gpi, resourceManager.layout, c.VK_SHADER_STAGE_ALL, @sizeOf(PushConstants));
 
         var shaderObjects: [renderSeqLen]std.ArrayList(ShaderObject) = undefined;
-        for (0..renderSeqLen) |i| shaderObjects[i] = try initShaderObjects(alloc, gpi, config.renderSeq[i].shaders, resourceManager.layout, config.renderSeq[i].renderType);
+        var renderTypes: [renderSeqLen]RenderType = undefined;
+
+        for (0..renderSeqLen) |i| {
+            const renderType = try checkShaderLayout(i);
+            renderTypes[i] = renderType;
+            shaderObjects[i] = try initShaderObjects(alloc, gpi, config.renderSeq[i].shaders, resourceManager.layout, renderType);
+        }
 
         return .{
             .layout = layout,
@@ -40,14 +47,90 @@ pub const ShaderManager = struct {
             .alloc = alloc,
             .gpi = gpi,
             .shaderObjects = shaderObjects,
+            .renderTypes = renderTypes,
         };
+    }
+
+    pub fn getRenderType(self: *ShaderManager, sequenceIndex: usize) RenderType {
+        return self.renderTypes[sequenceIndex];
+    }
+
+    pub fn checkShaderLayoutOrder(sequenceIndex: usize) bool {
+        var maxStages: [8]i8 = undefined;
+
+        for (0..config.renderSeq[sequenceIndex].shaders.len) |i| {
+            switch (config.renderSeq[sequenceIndex].shaders[i].stage) {
+                c.VK_SHADER_STAGE_COMPUTE_BIT => maxStages[i] = 0,
+                c.VK_SHADER_STAGE_VERTEX_BIT => maxStages[i] = 1,
+                c.VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT => maxStages[i] = 2,
+                c.VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT => maxStages[i] = 3,
+                c.VK_SHADER_STAGE_GEOMETRY_BIT => maxStages[i] = 4,
+                c.VK_SHADER_STAGE_TASK_BIT_EXT => maxStages[i] = 5,
+                c.VK_SHADER_STAGE_MESH_BIT_EXT => maxStages[i] = 6,
+                c.VK_SHADER_STAGE_FRAGMENT_BIT => maxStages[i] = 7,
+                else => std.debug.print("ShaderManager: Shader Stage is Unknown", .{}),
+            }
+        }
+        var temp: i8 = -1;
+        for (0..config.renderSeq[sequenceIndex].shaders.len) |i| {
+            if (temp <= maxStages[i]) temp = maxStages[i] else return false;
+        }
+        return true;
+    }
+
+    pub fn checkShaderLayout(sequenceIndex: usize) !RenderType {
+        var comp: u8 = 0;
+        var vert: u8 = 0;
+        var tessControl: u8 = 0;
+        var tessEval: u8 = 0;
+        var geo: u8 = 0;
+        var task: u8 = 0;
+        var mesh: u8 = 0;
+        var frag: u8 = 0;
+
+        for (config.renderSeq[sequenceIndex].shaders) |shader| {
+            switch (shader.stage) {
+                c.VK_SHADER_STAGE_COMPUTE_BIT => comp += 1,
+                c.VK_SHADER_STAGE_VERTEX_BIT => vert += 1,
+                c.VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT => tessControl += 1,
+                c.VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT => tessEval += 1,
+                c.VK_SHADER_STAGE_GEOMETRY_BIT => geo += 1,
+                c.VK_SHADER_STAGE_TASK_BIT_EXT => task += 1,
+                c.VK_SHADER_STAGE_MESH_BIT_EXT => mesh += 1,
+                c.VK_SHADER_STAGE_FRAGMENT_BIT => frag += 1,
+                else => std.debug.print("ShaderManager: Shader Stage is Unknown", .{}),
+            }
+        }
+
+        const isValidCompute: u8 = if (comp == 1 and config.renderSeq[sequenceIndex].shaders.len == 1) 1 else 0;
+        const isValidGraphics: u8 = if (comp == 0 and vert == 1 and tessControl <= 1 and tessEval <= 1 and geo <= 1 and task == 0 and mesh == 0 and frag == 1) 1 else 0;
+        const isValidMesh: u8 = if (comp == 0 and vert == 0 and tessControl <= 0 and tessEval <= 0 and geo <= 0 and task == 0 and mesh == 1 and frag == 1) 1 else 0;
+        const isValidTaskMesh: u8 = if (comp == 0 and vert == 0 and tessControl <= 0 and tessEval <= 0 and geo <= 0 and task == 1 and mesh == 1 and frag == 1) 1 else 0;
+        const isValidFragOnly: u8 = if (comp == 0 and vert == 1 and tessControl <= 0 and tessEval <= 0 and geo <= 0 and task == 0 and mesh == 0 and frag == 0) 1 else 0;
+
+        if (isValidCompute + isValidGraphics + isValidMesh + isValidTaskMesh + isValidFragOnly != 1) {
+            std.debug.print("ShaderManager: ShaderLayout {} is not valid ", .{sequenceIndex});
+            return error.ShaderLayoutInvalid;
+        }
+
+        if (checkShaderLayoutOrder(sequenceIndex) == false) {
+            std.debug.print("ShaderManager: ShaderLayout Index {} Order invalid", .{sequenceIndex});
+            return error.ShaderLayoutOrderInvalid;
+        }
+
+        if (isValidCompute == 1) return .compute;
+        if (isValidGraphics == 1) return .graphics;
+        if (isValidMesh == 1) return .mesh;
+        if (isValidTaskMesh == 1) return .meshTask;
+        if (isValidFragOnly == 1) return .fragOnly;
+        return error.ShaderLayoutMissing;
     }
 
     pub fn update(self: *ShaderManager, index: usize) !void {
         const descLayout = self.descLayout;
         const renderStep = config.renderSeq[index];
         const shaderList = renderStep.shaders;
-        const renderType = renderStep.renderType;
+        const renderType = try checkShaderLayout(index);
         // Deinit and Recreate at index
         deinitShaderObjects(self.shaderObjects[index], self.gpi);
         self.shaderObjects[index] = try initShaderObjects(self.alloc, self.gpi, shaderList, descLayout, renderType);
@@ -61,6 +144,8 @@ pub const ShaderManager = struct {
         c.vkDestroyPipelineLayout(gpi, self.layout, null);
     }
 };
+
+//fn validateShaderLayout(){}
 
 fn initShaderObjects(alloc: Allocator, gpi: c.VkDevice, shaders: []const config.Shader, descLayout: c.VkDescriptorSetLayout, renderType: RenderType) !std.ArrayList(ShaderObject) {
     if (renderType == .compute and shaders.len > 1) {
