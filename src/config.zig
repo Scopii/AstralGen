@@ -2,6 +2,8 @@ pub const c = @import("c.zig");
 pub const std = @import("std");
 const KeyAssignments = @import("core/EventManager.zig").KeyAssignments;
 const ShaderInfo = @import("vulkan/ShaderPipeline.zig").ShaderInfo;
+const RenderPass = @import("vulkan/ShaderPipeline.zig").RenderPass;
+const RenderType = @import("vulkan/ShaderPipeline.zig").RenderType;
 
 // Vulkan Validation Layers
 pub const DEBUG_MODE = true;
@@ -21,7 +23,7 @@ pub const KEY_EVENT_INFO = false;
 pub const MAX_IN_FLIGHT: u8 = 2; // (Frames)
 pub const DESIRED_SWAPCHAIN_IMAGES: u8 = 3;
 pub const DISPLAY_MODE = c.VK_PRESENT_MODE_IMMEDIATE_KHR;
-pub const MAX_WINDOWS: u8 = 12;
+pub const MAX_WINDOWS: u8 = 64; // u64 is set as Max Bitmask in Draw so no bigger than that!
 
 pub const RENDER_IMAGE_PRESET: c.VkExtent3D = .{ .width = 1920, .height = 1080, .depth = 1 };
 pub const RENDER_IMAGE_AUTO_RESIZE = true;
@@ -81,6 +83,7 @@ pub const Shader = struct {
 
 pub const ShaderLayout = struct {
     shaders: []const Shader,
+    renderType: RenderType,
     renderPass: RenderPass,
 };
 // Render
@@ -89,65 +92,14 @@ pub const vert1 = Shader{ .stage = c.VK_SHADER_STAGE_VERTEX_BIT, .glslFile = "Gr
 pub const frag1 = Shader{ .stage = c.VK_SHADER_STAGE_FRAGMENT_BIT, .glslFile = "Graphics.frag", .spvFile = "GraphicsFrag.spv" };
 pub const mesh1 = Shader{ .stage = c.VK_SHADER_STAGE_MESH_BIT_EXT, .glslFile = "Mesh.mesh", .spvFile = "MeshMesh.spv" };
 pub const frag2 = Shader{ .stage = c.VK_SHADER_STAGE_FRAGMENT_BIT, .glslFile = "Mesh.frag", .spvFile = "MeshFrag.spv" };
+pub const shadersToCompile: []const Shader = &.{ comp1, vert1, frag1, mesh1, frag2 };
 
-pub const computePass1: ShaderLayout = .{ .renderPass = .compute, .shaders = .{comp1} };
-pub const graphicsPass1: ShaderLayout = .{ .renderPass = .graphics1, .shaders = .{ vert1, frag1 } };
-pub const meshPass1: ShaderLayout = .{ .renderPass = .mesh1, .shaders = .{ mesh1, frag2 } };
+pub const computePass1: ShaderLayout = .{ .renderType = .compute, .renderPass = .compute1, .shaders = &.{comp1} };
+pub const graphicsPass1: ShaderLayout = .{ .renderType = .graphics, .renderPass = .graphics1, .shaders = &.{ vert1, frag1 } };
+pub const meshPass1: ShaderLayout = .{ .renderType = .mesh, .renderPass = .mesh1, .shaders = &.{ mesh1, frag2 } };
 
-pub const renderPassSequence: []const ShaderLayout = .{
+pub const renderSequence: []const ShaderLayout = &.{
     computePass1,
     graphicsPass1,
     meshPass1,
-};
-
-// Render
-pub const computePipe1 = [_]ShaderInfo{
-    .{ .renderType = .compute, .renderPass = .compute1, .stage = c.VK_SHADER_STAGE_COMPUTE_BIT, .glslFile = "Compute.comp", .spvFile = "Compute.spv" },
-};
-pub const computePipe2 = [_]ShaderInfo{
-    .{ .renderType = .compute, .renderPass = .graphics1, .stage = c.VK_SHADER_STAGE_COMPUTE_BIT, .glslFile = "Compute.comp", .spvFile = "Compute.spv" },
-};
-pub const graphicsPipe1 = [_]ShaderInfo{
-    .{ .renderType = .graphics, .renderPass = .graphics1, .stage = c.VK_SHADER_STAGE_VERTEX_BIT, .glslFile = "Graphics.vert", .spvFile = "GraphicsVert.spv" },
-    .{ .renderType = .graphics, .renderPass = .graphics1, .stage = c.VK_SHADER_STAGE_FRAGMENT_BIT, .glslFile = "Graphics.frag", .spvFile = "GraphicsFrag.spv" },
-};
-pub const meshPipe1 = [_]ShaderInfo{
-    .{ .renderType = .mesh, .renderPass = .mesh1, .stage = c.VK_SHADER_STAGE_MESH_BIT_EXT, .glslFile = "Mesh.mesh", .spvFile = "MeshMesh.spv" },
-    .{ .renderType = .mesh, .renderPass = .mesh1, .stage = c.VK_SHADER_STAGE_FRAGMENT_BIT, .glslFile = "Mesh.frag", .spvFile = "MeshFrag.spv" },
-};
-pub const renderSequence: []const []const ShaderInfo = &.{
-    &computePipe1,
-    &graphicsPipe1,
-    &meshPipe1,
-    &computePipe2,
-};
-
-pub const ComputeConfig = struct {
-    shader: []const u8, // One file. Mandatory.
-    dispatch: [3]u32 = .{ 0, 1, 1 }, // 0 means "screen/grid dependent"
-};
-
-pub const GraphicsConfig = struct {
-    vertex: []const u8, // Mandatory
-    fragment: []const u8, // Mandatory
-    // No compute field exists here!
-};
-
-pub const MeshConfig = struct {
-    task: ?[]const u8 = null, // Optional
-    mesh: []const u8, // Mandatory
-    fragment: []const u8, // Mandatory
-};
-
-// The Union enforces that a pass is EXACTLY one of these valid types
-pub const PassType = union(enum) {
-    Compute: ComputeConfig,
-    Graphics: GraphicsConfig,
-    Mesh: MeshConfig,
-};
-
-pub const RenderPass = struct {
-    name: []const u8,
-    action: PassType, // The logic
-    barrier: bool = false, // Simple safety switch
 };

@@ -4,14 +4,14 @@ const config = @import("../config.zig");
 const PipelineType = @import("../vulkan/ShaderPipeline.zig").RenderType;
 
 pub const FileManager = struct {
-    const pipelineTypes = @typeInfo(PipelineType).@"enum".fields.len;
+    const stepCount = config.renderSequence.len;
 
     alloc: Allocator,
     rootPath: []u8,
     shaderPath: []const u8,
     shaderOutputPath: []const u8,
-    pipelineTimeStamps: [pipelineTypes]i128,
-    pipelineUpdateBools: [pipelineTypes]bool = .{false} ** pipelineTypes,
+    pipelineTimeStamps: [stepCount]i128,
+    pipelineUpdateBools: [stepCount]bool = .{false} ** stepCount,
 
     pub fn init(alloc: Allocator) !FileManager {
         // Assign paths
@@ -23,17 +23,15 @@ pub const FileManager = struct {
         std.debug.print("Shader Output Path: {s}\n", .{shaderOutputPath});
         // Set defaults
         const currentTime = std.time.nanoTimestamp();
-        const pipelineTimeStamps: [pipelineTypes]i128 = .{currentTime} ** pipelineTypes;
+        const pipelineTimeStamps: [stepCount]i128 = .{currentTime} ** stepCount;
         // Compile on Startup if wanted
         if (config.SHADER_STARTUP_COMPILATION) {
-            for (config.renderSequence) |pipelineGroup| {
-                for (pipelineGroup) |shaderInfo| {
-                    const filePath = try joinPath(alloc, shaderPath, shaderInfo.glslFile);
-                    const shaderOutputName = try joinPath(alloc, shaderOutputPath, shaderInfo.spvFile);
-                    try compileShader(alloc, filePath, shaderOutputName);
-                    alloc.free(filePath);
-                    alloc.free(shaderOutputName);
-                }
+            for (config.shadersToCompile) |shader| {
+                const filePath = try joinPath(alloc, shaderPath, shader.glslFile);
+                const shaderOutputName = try joinPath(alloc, shaderOutputPath, shader.spvFile);
+                try compileShader(alloc, filePath, shaderOutputName);
+                alloc.free(filePath);
+                alloc.free(shaderOutputName);
             }
         }
 
@@ -50,21 +48,21 @@ pub const FileManager = struct {
         const alloc = self.alloc;
 
         // Check all ShaderInfos and compile if needed
-        for (config.renderSequence) |pipelineGroup| {
-            for (pipelineGroup) |shaderInfo| {
-                const filePath = try joinPath(alloc, self.shaderPath, shaderInfo.glslFile);
+        for (config.renderSequence, 0..) |shaderLayout, i| {
+            for (shaderLayout.shaders) |shader| {
+                const filePath = try joinPath(alloc, self.shaderPath, shader.glslFile);
                 const newTimeStamp = try getFileTimeStamp(filePath);
 
-                if (self.pipelineTimeStamps[@intFromEnum(shaderInfo.renderType)] < newTimeStamp) {
-                    const shaderOutputPath = try joinPath(alloc, self.shaderOutputPath, shaderInfo.spvFile);
+                if (self.pipelineTimeStamps[i] < newTimeStamp) {
+                    const shaderOutputPath = try joinPath(alloc, self.shaderOutputPath, shader.spvFile);
 
                     compileShader(alloc, filePath, shaderOutputPath) catch |err| {
                         std.debug.print("Tried updating Shader but compilation failed {}\n", .{err});
                     };
 
                     alloc.free(shaderOutputPath);
-                    self.pipelineTimeStamps[@intFromEnum(shaderInfo.renderType)] = newTimeStamp;
-                    self.pipelineUpdateBools[@intFromEnum(shaderInfo.renderType)] = true;
+                    self.pipelineTimeStamps[i] = newTimeStamp;
+                    self.pipelineUpdateBools[i] = true;
                 }
                 alloc.free(filePath);
             }

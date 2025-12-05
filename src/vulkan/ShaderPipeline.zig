@@ -19,21 +19,22 @@ pub const ShaderInfo = struct {
 };
 
 pub const ShaderPipeline = struct {
-    pipeInf: []const ShaderInfo,
+    shaders: []const config.Shader,
     shaderObjects: std.ArrayList(ShaderObject),
 
-    pub fn init(alloc: Allocator, gpi: c.VkDevice, pipeInfos: []const ShaderInfo, descLayout: c.VkDescriptorSetLayout, renderType: RenderType) !ShaderPipeline {
-        if (renderType == .compute and pipeInfos.len > 1) {
+    pub fn init(alloc: Allocator, gpi: c.VkDevice, shaders: []const config.Shader, descLayout: c.VkDescriptorSetLayout, renderType: RenderType) !ShaderPipeline {
+        
+        if (renderType == .compute and shaders.len > 1) {
             std.log.err("ShaderPipeline: Compute only supports 1 Stage", .{});
             return error.ShaderStageOverflow;
         }
 
         var shaderObjects = std.ArrayList(ShaderObject).init(alloc);
 
-        for (0..pipeInfos.len) |i| {
-            const pipeInf = pipeInfos[i];
-            const nextStage = if (i + 1 <= pipeInfos.len - 1) pipeInfos[i + 1].stage else 0;
-            const shaderObj = try ShaderObject.init(gpi, pipeInf, nextStage, alloc, descLayout, renderType);
+        for (0..shaders.len) |i| {
+            const shader = shaders[i];
+            const nextStage = if (i + 1 <= shaders.len - 1) shaders[i + 1].stage else 0;
+            const shaderObj = try ShaderObject.init(gpi, shader, nextStage, alloc, descLayout, renderType);
             shaderObjects.append(shaderObj) catch |err| {
                 std.debug.print("ShaderPipeline: Could not append ShaderObject, err {}\n", .{err});
                 return error.ShaderAppend;
@@ -41,7 +42,7 @@ pub const ShaderPipeline = struct {
         }
 
         return .{
-            .pipeInf = pipeInfos,
+            .shaders = shaders,
             .shaderObjects = shaderObjects,
         };
     }

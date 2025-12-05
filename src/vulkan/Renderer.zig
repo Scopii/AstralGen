@@ -75,7 +75,7 @@ pub const Renderer = struct {
     pub fn update(self: *Renderer, windows: []*Window) !void {
         // Handle window state changes...
         for (windows) |windowPtr| {
-            if (windowPtr.status == .needDelete or windowPtr.status == .needUpdate) {
+            if (windowPtr.status == .needDelete or windowPtr.status == .needUpdate or windowPtr.status == .needInactive) {
                 _ = c.vkDeviceWaitIdle(self.context.gpi);
                 break;
             }
@@ -147,26 +147,60 @@ pub const Renderer = struct {
     fn recordCommands(self: *Renderer, cam: *Camera, runtimeAsFloat: f32) !void {
         const activeGroups = self.swapchainMan.activeGroups;
 
+        var touchedIndices: u64 = 0;
+
         for (0..config.renderSequence.len) |i| {
-            const renderStep = config.renderSequence[i][0];
+            const renderStep = config.renderSequence[i];
+
+            const pushConstants = PushConstants{
+                .camPosAndFov = cam.getPosAndFov(),
+                .camDir = cam.getForward(),
+                .dataAddress = self.testBuffer.gpuAddress,
+                .runtime = runtimeAsFloat,
+                .dataCount = @intCast(self.testBuffer.size / @sizeOf(Object)),
+            };
 
             switch (renderStep.renderType) {
                 .compute => {
-                    // PUSH COMMANDS HAVE TO BE CHANGED TO ALL TYPES
-                    const compPushConstants = PushConstants{
-                        .camPosAndFov = cam.getPosAndFov(),
-                        .camDir = cam.getForward(),
-                        .dataAddress = self.testBuffer.gpuAddress,
-                        .runtime = runtimeAsFloat,
-                        .dataCount = @intCast(self.testBuffer.size / @sizeOf(Object)),
-                    };
-                    try self.cmdMan.recordComputePass(&self.renderImage, &self.shaderMan.shaderPipes[i], self.shaderMan.layout, self.resourceMan2.imageDescBuffer.gpuAddress, compPushConstants);
+                    try self.cmdMan.recordComputePass(
+                        &self.renderImage,
+                        &self.shaderMan.shaderPipes[i],
+                        self.shaderMan.layout,
+                        self.resourceMan2.imageDescBuffer.gpuAddress,
+                        pushConstants,
+                    );
                 },
                 .graphics, .mesh => {
-                    try self.cmdMan.recordGraphicsPassShaderObject(&self.renderImage, &self.shaderMan.shaderPipes[i], renderStep.renderType);
+                    try self.cmdMan.recordGraphicsPassShaderObject(
+                        &self.renderImage,
+                        &self.shaderMan.shaderPipes[i],
+                        renderStep.renderType,
+                        self.shaderMan.layout,
+                        pushConstants,
+                    );
                 },
             }
-            try self.cmdMan.blitToTargets(&self.renderImage, activeGroups[@intFromEnum(renderStep.renderPass)].slice(), &self.swapchainMan.swapchains);
+            // BLIT LOGIC
+            const groupIndex = @intFromEnum(renderStep.renderPass);
+            const windowIds = activeGroups[groupIndex].slice();
+
+            if (windowIds.len > 0) {
+                try self.cmdMan.blitToTargets(&self.renderImage, windowIds, &self.swapchainMan.swapchains);
+                for (windowIds) |id| {
+                    const index = self.swapchainMan.swapchains.getIndex(id);
+                    touchedIndices |= (@as(u64, 1) << @intCast(index));
+                }
+            }
+        }
+
+        // CLEANUP
+        for (self.swapchainMan.targets.slice()) |index| {
+            const mask = @as(u64, 1) << @intCast(index);
+            // Cleanup all Bitset Indices
+            if ((touchedIndices & mask) == 0) {
+                const swapchain = self.swapchainMan.swapchains.getPtrAtIndex(index);
+                self.cmdMan.transitionToPresent(swapchain);
+            }
         }
     }
 

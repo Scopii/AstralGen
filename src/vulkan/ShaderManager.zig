@@ -30,10 +30,10 @@ pub const ShaderManager = struct {
 
     pub fn init(alloc: Allocator, context: *const Context, resourceManager: *const ResourceManager) !ShaderManager {
         const gpi = context.gpi;
-        const layout = try createPipelineLayout(gpi, resourceManager.layout, c.VK_SHADER_STAGE_COMPUTE_BIT, @sizeOf(PushConstants));
+        const layout = try createPipelineLayout(gpi, resourceManager.layout, c.VK_SHADER_STAGE_ALL, @sizeOf(PushConstants));
 
         var shaderPipes: [renderSequenceLen]ShaderPipeline = undefined;
-        for (0..renderSequenceLen) |i| shaderPipes[i] = try ShaderPipeline.init(alloc, gpi, config.renderSequence[i], resourceManager.layout, config.renderSequence[i][0].renderType);
+        for (0..renderSequenceLen) |i| shaderPipes[i] = try ShaderPipeline.init(alloc, gpi, config.renderSequence[i].shaders, resourceManager.layout, config.renderSequence[i].renderType);
 
         return .{
             .layout = layout,
@@ -47,7 +47,7 @@ pub const ShaderManager = struct {
     pub fn update(self: *ShaderManager, renderType: RenderType) !void {
         const pipeEnum = @intFromEnum(renderType);
         const descLayout = self.descLayout;
-        const pipeInf = self.shaderPipes[pipeEnum].pipeInf;
+        const pipeInf = self.shaderPipes[pipeEnum].shaders;
         self.shaderPipes[pipeEnum].deinit(self.gpi);
         self.shaderPipes[pipeEnum] = try ShaderPipeline.init(self.alloc, self.gpi, pipeInf, descLayout, renderType);
     }

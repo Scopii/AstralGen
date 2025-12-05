@@ -14,14 +14,14 @@ pub const ShaderObject = struct {
 
     pub fn init(
         gpi: c.VkDevice,
-        pipeInf: ShaderInfo,
+        shader: config.Shader,
         nextStage: c.VkShaderStageFlagBits,
         alloc: Allocator,
         descLayout: c.VkDescriptorSetLayout,
         renderType: RenderType,
     ) !ShaderObject {
-        const stage = pipeInf.stage;
-        const spvFile = pipeInf.spvFile;
+        const stage = shader.stage;
+        const spvFile = shader.spvFile;
 
         const rootPath = try resolveProjectRoot(alloc, config.rootPath);
         defer alloc.free(rootPath);
@@ -52,20 +52,20 @@ pub const ShaderObject = struct {
             .pName = "main",
             .setLayoutCount = if (descLayout != null) @as(u32, 1) else 0,
             .pSetLayouts = if (descLayout != null) &descLayout else null,
-            .pushConstantRangeCount = if (renderType == .compute) 1 else 0,
-            .pPushConstantRanges = if (renderType == .compute) &c.VkPushConstantRange{
-                .stageFlags = c.VK_SHADER_STAGE_COMPUTE_BIT,
+            .pushConstantRangeCount = 1,
+            .pPushConstantRanges = &c.VkPushConstantRange{
+                .stageFlags = c.VK_SHADER_STAGE_ALL,
                 .offset = 0,
                 .size = @sizeOf(PushConstants),
-            } else null,
+            },
             .pSpecializationInfo = null,
         };
 
-        var shader: c.VkShaderEXT = undefined;
-        try check(c.pfn_vkCreateShadersEXT.?(gpi, 1, &shaderCreateInfo, null, &shader), "Failed to create graphics shader object");
+        var shaderObject: c.VkShaderEXT = undefined;
+        try check(c.pfn_vkCreateShadersEXT.?(gpi, 1, &shaderCreateInfo, null, &shaderObject), "Failed to create graphics shader object");
 
         return .{
-            .handle = shader,
+            .handle = shaderObject,
             .stage = stage,
         };
     }

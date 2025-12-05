@@ -90,7 +90,7 @@ pub const CmdManager = struct {
         const stages = [_]c.VkShaderStageFlagBits{c.VK_SHADER_STAGE_COMPUTE_BIT};
         c.pfn_vkCmdBindShadersEXT.?(cmd, 1, &stages, &pipe.shaderObjects.items[0].handle);
 
-        c.vkCmdPushConstants(cmd, layout, c.VK_SHADER_STAGE_COMPUTE_BIT, 0, @sizeOf(PushConstants), &pushConstants);
+        c.vkCmdPushConstants(cmd, layout, c.VK_SHADER_STAGE_ALL, 0, @sizeOf(PushConstants), &pushConstants);
 
         const bufferBindingInf = c.VkDescriptorBufferBindingInfoEXT{
             .sType = c.VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT,
@@ -106,7 +106,14 @@ pub const CmdManager = struct {
         c.vkCmdDispatch(cmd, (renderImage.extent3d.width + 7) / 8, (renderImage.extent3d.height + 7) / 8, 1);
     }
 
-    pub fn recordGraphicsPassShaderObject(self: *CmdManager, renderImage: *Image, pipe: *const ShaderPipeline, renderType: RenderType) !void {
+    pub fn recordGraphicsPassShaderObject(
+        self: *CmdManager,
+        renderImage: *Image,
+        pipe: *const ShaderPipeline,
+        renderType: RenderType,
+        layout: c.VkPipelineLayout,
+        pushConstants: PushConstants,
+    ) !void {
         const activeFrame = self.activeFrame orelse return error.ActiveCmdBlocked;
         const cmd = self.primaryCmds[activeFrame];
 
@@ -164,6 +171,8 @@ pub const CmdManager = struct {
         c.pfn_vkCmdSetViewportWithCount.?(cmd, 1, &viewport);
         c.pfn_vkCmdSetScissorWithCount.?(cmd, 1, &scissor);
 
+        c.vkCmdPushConstants(cmd, layout, c.VK_SHADER_STAGE_ALL, 0, @sizeOf(PushConstants), &pushConstants);
+
         var stages = [_]c.VkShaderStageFlagBits{
             c.VK_SHADER_STAGE_VERTEX_BIT,
             c.VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT,
@@ -208,6 +217,24 @@ pub const CmdManager = struct {
             else => return error.UnsupportedPipelineType,
         }
         c.vkCmdEndRendering(cmd);
+    }
+
+    pub fn transitionToPresent(self: *CmdManager, swapchain: *Swapchain) void {
+        const activeFrame = self.activeFrame orelse return;
+        const cmd = self.primaryCmds[activeFrame];
+
+        const barrier = createImageMemoryBarrier2(
+            c.VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
+            0,
+            c.VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT,
+            0,
+            c.VK_IMAGE_LAYOUT_UNDEFINED, // We don't care what it was
+            c.VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, // Must be this for presentation
+            swapchain.images[swapchain.curIndex],
+            createSubresourceRange(c.VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1),
+        );
+
+        createPipelineBarriers2(cmd, &.{barrier});
     }
 
     pub fn blitToTargets(self: *CmdManager, renderImage: *Image, targets: []const u8, swapchainMap: *CreateMapArray(Swapchain, MAX_WINDOWS, u8, MAX_WINDOWS, 0)) !void {
