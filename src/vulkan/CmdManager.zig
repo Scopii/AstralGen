@@ -16,7 +16,6 @@ pub const CmdManager = struct {
     alloc: Allocator,
     gpi: c.VkDevice,
     pool: c.VkCommandPool,
-    activeFrame: ?u8 = null,
     primaryCmds: []c.VkCommandBuffer,
     blitBarriers: [MAX_WINDOWS + 1]c.VkImageMemoryBarrier2 = undefined,
 
@@ -43,10 +42,8 @@ pub const CmdManager = struct {
         c.vkDestroyCommandPool(self.gpi, self.pool, null);
     }
 
-    pub fn beginRecording(self: *CmdManager, frameInFlight: u8) !void {
-        if (self.activeFrame != null) return error.RecordingInProgress;
+    pub fn beginRecording(self: *CmdManager, frameInFlight: u8) !c.VkCommandBuffer {
         const cmd = self.primaryCmds[frameInFlight];
-
         try check(c.vkResetCommandBuffer(cmd, 0), "could not reset command buffer"); // Might be optional
 
         const beginInf = c.VkCommandBufferBeginInfo{
@@ -55,25 +52,25 @@ pub const CmdManager = struct {
             .pInheritanceInfo = null,
         };
         try check(c.vkBeginCommandBuffer(cmd, &beginInf), "could not Begin CmdBuffer");
-        self.activeFrame = frameInFlight;
+        return self.primaryCmds[frameInFlight];
     }
 
-    pub fn endRecording(self: *CmdManager) !c.VkCommandBuffer {
-        const activeFrame = self.activeFrame orelse return error.NoActiveRecording;
-        const cmd = self.primaryCmds[activeFrame];
+    pub fn endRecording(cmd: c.VkCommandBuffer) !void {
         try check(c.vkEndCommandBuffer(cmd), "Could not End Cmd Buffer");
-        self.activeFrame = null;
-        return cmd;
     }
 
     pub fn getCmd(self: *const CmdManager, frameInFlight: u8) c.VkCommandBuffer {
         return self.primaryCmds[frameInFlight];
     }
 
-    pub fn recordComputePass(self: *CmdManager, renderImage: *Image, pipe: []const ShaderObject, layout: c.VkPipelineLayout, gpuAddress: deviceAddress, pushConstants: PushConstants) !void {
-        const activeFrame = self.activeFrame orelse return error.ActiveCmdBlocked;
-        const cmd = self.primaryCmds[activeFrame];
-
+    pub fn recordComputePass(
+        cmd: c.VkCommandBuffer,
+        renderImage: *Image,
+        pipe: []const ShaderObject,
+        layout: c.VkPipelineLayout,
+        gpuAddress: deviceAddress,
+        pushConstants: PushConstants,
+    ) !void {
         const barrier = createImageMemoryBarrier2(
             c.VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
             0,
@@ -107,15 +104,13 @@ pub const CmdManager = struct {
     }
 
     pub fn recordGraphicsPassShaderObject(
-        self: *CmdManager,
+        cmd: c.VkCommandBuffer,
         renderImage: *Image,
         pipe: []const ShaderObject,
         renderType: RenderType,
         layout: c.VkPipelineLayout,
         pushConstants: PushConstants,
     ) !void {
-        const activeFrame = self.activeFrame orelse return error.ActiveCmdBlocked;
-        const cmd = self.primaryCmds[activeFrame];
 
         // Image layout transition (same as before)
         const barrier = createImageMemoryBarrier2(
@@ -219,28 +214,27 @@ pub const CmdManager = struct {
         c.vkCmdEndRendering(cmd);
     }
 
-    pub fn transitionToPresent(self: *CmdManager, swapchain: *Swapchain) void {
-        const activeFrame = self.activeFrame orelse return;
-        const cmd = self.primaryCmds[activeFrame];
-
+    pub fn transitionToPresent(cmd: c.VkCommandBuffer, swapchain: *Swapchain) void {
         const barrier = createImageMemoryBarrier2(
             c.VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
             0,
             c.VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT,
             0,
-            c.VK_IMAGE_LAYOUT_UNDEFINED, // We don't care what it was
+            c.VK_IMAGE_LAYOUT_UNDEFINED, // Not important what it was
             c.VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, // Must be this for presentation
             swapchain.images[swapchain.curIndex],
             createSubresourceRange(c.VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1),
         );
-
         createPipelineBarriers2(cmd, &.{barrier});
     }
 
-    pub fn blitToTargets(self: *CmdManager, renderImage: *Image, targets: []const u8, swapchainMap: *CreateMapArray(Swapchain, MAX_WINDOWS, u8, MAX_WINDOWS, 0)) !void {
-        const activeFrame = self.activeFrame orelse return error.ActiveCmdBlocked;
-        const cmd = self.primaryCmds[activeFrame];
-
+    pub fn blitToTargets(
+        self: *CmdManager,
+        cmd: c.VkCommandBuffer,
+        renderImage: *Image,
+        targets: []const u8,
+        swapchainMap: *CreateMapArray(Swapchain, MAX_WINDOWS, u8, MAX_WINDOWS, 0),
+    ) !void {
         var barriers = &self.blitBarriers;
         barriers[0] = createImageMemoryBarrier2(
             c.VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,

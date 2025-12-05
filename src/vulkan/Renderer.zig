@@ -133,9 +133,9 @@ pub const Renderer = struct {
         const frameInFlight = self.scheduler.frameInFlight;
         if (try self.swapchainMan.updateTargets(frameInFlight, &self.context) == false) return;
 
-        try self.cmdMan.beginRecording(frameInFlight);
-        try self.recordCommands(cam, runtimeAsFloat);
-        const cmd = try self.cmdMan.endRecording();
+        const cmd = try self.cmdMan.beginRecording(frameInFlight);
+        try self.recordCommands(cmd, cam, runtimeAsFloat);
+        try self.cmdMan.endRecording(cmd);
 
         const targets = self.swapchainMan.targets.slice();
         try self.queueSubmit(cmd, targets, frameInFlight);
@@ -144,7 +144,7 @@ pub const Renderer = struct {
         self.scheduler.nextFrame();
     }
 
-    fn recordCommands(self: *Renderer, cam: *Camera, runtimeAsFloat: f32) !void {
+    fn recordCommands(self: *Renderer, cmd: c.VkCommandBuffer, cam: *Camera, runtimeAsFloat: f32) !void {
         const activeGroups = self.swapchainMan.activeGroups;
 
         var touchedIndices: u64 = 0;
@@ -162,7 +162,8 @@ pub const Renderer = struct {
 
             switch (renderStep.renderType) {
                 .compute => {
-                    try self.cmdMan.recordComputePass(
+                    try CmdManager.recordComputePass(
+                        cmd,
                         &self.renderImage,
                         self.shaderMan.shaderObjects[i].items,
                         self.shaderMan.layout,
@@ -171,7 +172,8 @@ pub const Renderer = struct {
                     );
                 },
                 .graphics, .mesh => {
-                    try self.cmdMan.recordGraphicsPassShaderObject(
+                    try CmdManager.recordGraphicsPassShaderObject(
+                        cmd,
                         &self.renderImage,
                         self.shaderMan.shaderObjects[i].items,
                         renderStep.renderType,
@@ -185,7 +187,7 @@ pub const Renderer = struct {
             const windowIds = activeGroups[groupIndex].slice();
 
             if (windowIds.len > 0) {
-                try self.cmdMan.blitToTargets(&self.renderImage, windowIds, &self.swapchainMan.swapchains);
+                try self.cmdMan.blitToTargets(cmd, &self.renderImage, windowIds, &self.swapchainMan.swapchains);
                 for (windowIds) |id| {
                     const index = self.swapchainMan.swapchains.getIndex(id);
                     touchedIndices |= (@as(u64, 1) << @intCast(index));
@@ -199,7 +201,7 @@ pub const Renderer = struct {
             // Cleanup all Bitset Indices
             if ((touchedIndices & mask) == 0) {
                 const swapchain = self.swapchainMan.swapchains.getPtrAtIndex(index);
-                self.cmdMan.transitionToPresent(swapchain);
+                self.cmdMan.transitionToPresent(cmd, swapchain);
             }
         }
     }
