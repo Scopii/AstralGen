@@ -1,9 +1,6 @@
 pub const c = @import("c.zig");
 pub const std = @import("std");
 const KeyAssignments = @import("core/EventManager.zig").KeyAssignments;
-const ShaderInfo = @import("vulkan/ShaderPipeline.zig").ShaderInfo;
-const RenderPass = @import("vulkan/ShaderPipeline.zig").RenderPass;
-const RenderType = @import("vulkan/ShaderPipeline.zig").RenderType;
 
 // Vulkan Validation Layers
 pub const DEBUG_MODE = true;
@@ -86,6 +83,10 @@ pub const ShaderLayout = struct {
     renderType: RenderType,
     renderPass: RenderPass,
 };
+
+pub const RenderType = enum { compute, graphics, mesh };
+pub const RenderPass = enum { compute1, compute2, graphics1, graphics2, mesh1, mesh2 };
+
 // Render
 pub const comp1 = Shader{ .stage = c.VK_SHADER_STAGE_COMPUTE_BIT, .glslFile = "Compute.comp", .spvFile = "Compute.spv" };
 pub const vert1 = Shader{ .stage = c.VK_SHADER_STAGE_VERTEX_BIT, .glslFile = "Graphics.vert", .spvFile = "GraphicsVert.spv" };
@@ -98,7 +99,7 @@ pub const computePass1: ShaderLayout = .{ .renderType = .compute, .renderPass = 
 pub const graphicsPass1: ShaderLayout = .{ .renderType = .graphics, .renderPass = .graphics1, .shaders = &.{ vert1, frag1 } };
 pub const meshPass1: ShaderLayout = .{ .renderType = .mesh, .renderPass = .mesh1, .shaders = &.{ mesh1, frag2 } };
 
-pub const renderSequence: []const ShaderLayout = &.{
+pub const renderSeq: []const ShaderLayout = &.{
     computePass1,
     graphicsPass1,
     meshPass1,

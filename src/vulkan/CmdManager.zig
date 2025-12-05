@@ -4,8 +4,8 @@ const Allocator = std.mem.Allocator;
 const Context = @import("Context.zig").Context;
 const Image = @import("ResourceManager.zig").GpuImage;
 const Swapchain = @import("SwapchainManager.zig").Swapchain;
-const ShaderPipeline = @import("ShaderPipeline.zig").ShaderPipeline;
-const RenderType = @import("ShaderPipeline.zig").RenderType;
+const ShaderObject = @import("ShaderObject.zig").ShaderObject;
+const RenderType = @import("../config.zig").RenderType;
 const PushConstants = @import("ShaderManager.zig").PushConstants;
 const CreateMapArray = @import("../structures/MapArray.zig").CreateMapArray;
 const deviceAddress = @import("ResourceManager.zig").GpuBuffer.deviceAddress;
@@ -70,7 +70,7 @@ pub const CmdManager = struct {
         return self.primaryCmds[frameInFlight];
     }
 
-    pub fn recordComputePass(self: *CmdManager, renderImage: *Image, pipe: *const ShaderPipeline, layout: c.VkPipelineLayout, gpuAddress: deviceAddress, pushConstants: PushConstants) !void {
+    pub fn recordComputePass(self: *CmdManager, renderImage: *Image, pipe: []const ShaderObject, layout: c.VkPipelineLayout, gpuAddress: deviceAddress, pushConstants: PushConstants) !void {
         const activeFrame = self.activeFrame orelse return error.ActiveCmdBlocked;
         const cmd = self.primaryCmds[activeFrame];
 
@@ -88,7 +88,7 @@ pub const CmdManager = struct {
         renderImage.curLayout = c.VK_IMAGE_LAYOUT_GENERAL;
 
         const stages = [_]c.VkShaderStageFlagBits{c.VK_SHADER_STAGE_COMPUTE_BIT};
-        c.pfn_vkCmdBindShadersEXT.?(cmd, 1, &stages, &pipe.shaderObjects.items[0].handle);
+        c.pfn_vkCmdBindShadersEXT.?(cmd, 1, &stages, &pipe[0].handle);
 
         c.vkCmdPushConstants(cmd, layout, c.VK_SHADER_STAGE_ALL, 0, @sizeOf(PushConstants), &pushConstants);
 
@@ -109,7 +109,7 @@ pub const CmdManager = struct {
     pub fn recordGraphicsPassShaderObject(
         self: *CmdManager,
         renderImage: *Image,
-        pipe: *const ShaderPipeline,
+        pipe: []const ShaderObject,
         renderType: RenderType,
         layout: c.VkPipelineLayout,
         pushConstants: PushConstants,
@@ -195,7 +195,7 @@ pub const CmdManager = struct {
         };
 
         // Assign all stages to correct index
-        for (pipe.shaderObjects.items) |shaderObject| {
+        for (pipe) |shaderObject| {
             for (0..stages.len) |i| {
                 if (shaderObject.stage == stages[i]) shaders[i] = shaderObject.handle;
             }

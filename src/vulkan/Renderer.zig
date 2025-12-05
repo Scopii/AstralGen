@@ -9,8 +9,8 @@ const CmdManager = @import("CmdManager.zig").CmdManager;
 const ShaderManager = @import("ShaderManager.zig").ShaderManager;
 const Swapchain = @import("SwapchainManager.zig").Swapchain;
 const SwapchainManager = @import("SwapchainManager.zig").SwapchainManager;
-const RenderType = @import("ShaderPipeline.zig").RenderType;
-const RenderPass = @import("ShaderPipeline.zig").RenderPass;
+const RenderPass = @import("../config.zig").RenderPass;
+const RenderType = @import("../config.zig").RenderType;
 const PushConstants = @import("ShaderManager.zig").PushConstants;
 const GpuImage = @import("ResourceManager.zig").GpuImage;
 const GpuBuffer = @import("ResourceManager.zig").GpuBuffer;
@@ -122,9 +122,9 @@ pub const Renderer = struct {
         }
     }
 
-    pub fn updatePipeline(self: *Renderer, renderType: RenderType) !void {
+    pub fn updatePipeline(self: *Renderer, index: usize) !void {
         _ = c.vkDeviceWaitIdle(self.context.gpi);
-        try self.shaderMan.update(renderType);
+        try self.shaderMan.update(index);
     }
 
     pub fn draw(self: *Renderer, cam: *Camera, runtimeAsFloat: f32) !void {
@@ -149,8 +149,8 @@ pub const Renderer = struct {
 
         var touchedIndices: u64 = 0;
 
-        for (0..config.renderSequence.len) |i| {
-            const renderStep = config.renderSequence[i];
+        for (0..config.renderSeq.len) |i| {
+            const renderStep = config.renderSeq[i];
 
             const pushConstants = PushConstants{
                 .camPosAndFov = cam.getPosAndFov(),
@@ -164,7 +164,7 @@ pub const Renderer = struct {
                 .compute => {
                     try self.cmdMan.recordComputePass(
                         &self.renderImage,
-                        &self.shaderMan.shaderPipes[i],
+                        self.shaderMan.shaderObjects[i].items,
                         self.shaderMan.layout,
                         self.resourceMan2.imageDescBuffer.gpuAddress,
                         pushConstants,
@@ -173,7 +173,7 @@ pub const Renderer = struct {
                 .graphics, .mesh => {
                     try self.cmdMan.recordGraphicsPassShaderObject(
                         &self.renderImage,
-                        &self.shaderMan.shaderPipes[i],
+                        self.shaderMan.shaderObjects[i].items,
                         renderStep.renderType,
                         self.shaderMan.layout,
                         pushConstants,

@@ -152,11 +152,9 @@ pub const App = struct {
                 try self.fileMan.checkShaderUpdate();
 
                 for (0..self.fileMan.pipelineUpdateBools.len) |i| {
-                    const pipeBool = &self.fileMan.pipelineUpdateBools[i];
-
-                    if (pipeBool.* == true) {
-                        try renderer.updatePipeline(@enumFromInt(i));
-                        pipeBool.* = false;
+                    if (self.fileMan.pipelineUpdateBools[i] == true) {
+                        try renderer.updatePipeline(i);
+                        self.fileMan.pipelineUpdateBools[i] = false;
                     }
                 }
             }

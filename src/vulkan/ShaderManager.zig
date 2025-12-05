@@ -4,11 +4,11 @@ const Allocator = std.mem.Allocator;
 const ztracy = @import("ztracy");
 const config = @import("../config.zig");
 const Context = @import("Context.zig").Context;
-const ShaderPipeline = @import("ShaderPipeline.zig").ShaderPipeline;
-const RenderType = @import("ShaderPipeline.zig").RenderType;
-const RenderPass = @import("ShaderPipeline.zig").RenderPass;
+const RenderPass = @import("../config.zig").RenderPass;
+const RenderType = @import("../config.zig").RenderType;
 const ResourceManager = @import("ResourceManager.zig").ResourceManager;
 const check = @import("error.zig").check;
+const ShaderObject = @import("ShaderObject.zig").ShaderObject;
 
 pub const PushConstants = extern struct {
     camPosAndFov: [4]f32,
@@ -19,12 +19,11 @@ pub const PushConstants = extern struct {
 };
 
 pub const ShaderManager = struct {
-    //const renderPasses = @typeInfo(RenderPass).@"enum".fields.len;
-    const renderSequenceLen = config.renderSequence.len;
+    const renderSeqLen = config.renderSeq.len;
 
     descLayout: c.VkDescriptorSetLayout,
     layout: c.VkPipelineLayout,
-    shaderPipes: [renderSequenceLen]ShaderPipeline,
+    shaderObjects: [renderSeqLen]std.ArrayList(ShaderObject),
     alloc: Allocator,
     gpi: c.VkDevice,
 
@@ -32,32 +31,61 @@ pub const ShaderManager = struct {
         const gpi = context.gpi;
         const layout = try createPipelineLayout(gpi, resourceManager.layout, c.VK_SHADER_STAGE_ALL, @sizeOf(PushConstants));
 
-        var shaderPipes: [renderSequenceLen]ShaderPipeline = undefined;
-        for (0..renderSequenceLen) |i| shaderPipes[i] = try ShaderPipeline.init(alloc, gpi, config.renderSequence[i].shaders, resourceManager.layout, config.renderSequence[i].renderType);
+        var shaderObjects: [renderSeqLen]std.ArrayList(ShaderObject) = undefined;
+        for (0..renderSeqLen) |i| shaderObjects[i] = try initShaderObjects(alloc, gpi, config.renderSeq[i].shaders, resourceManager.layout, config.renderSeq[i].renderType);
 
         return .{
             .layout = layout,
             .descLayout = resourceManager.layout,
             .alloc = alloc,
             .gpi = gpi,
-            .shaderPipes = shaderPipes,
+            .shaderObjects = shaderObjects,
         };
     }
 
-    pub fn update(self: *ShaderManager, renderType: RenderType) !void {
-        const pipeEnum = @intFromEnum(renderType);
+    pub fn update(self: *ShaderManager, index: usize) !void {
         const descLayout = self.descLayout;
-        const pipeInf = self.shaderPipes[pipeEnum].shaders;
-        self.shaderPipes[pipeEnum].deinit(self.gpi);
-        self.shaderPipes[pipeEnum] = try ShaderPipeline.init(self.alloc, self.gpi, pipeInf, descLayout, renderType);
+        const renderStep = config.renderSeq[index];
+        const shaderList = renderStep.shaders;
+        const renderType = renderStep.renderType;
+        // Deinit and Recreate at index
+        deinitShaderObjects(self.shaderObjects[index], self.gpi);
+        self.shaderObjects[index] = try initShaderObjects(self.alloc, self.gpi, shaderList, descLayout, renderType);
     }
 
     pub fn deinit(self: *ShaderManager) void {
         const gpi = self.gpi;
-        for (0..self.shaderPipes.len) |i| self.shaderPipes[i].deinit(gpi);
+        for (self.shaderObjects) |shaderObjectList| {
+            deinitShaderObjects(shaderObjectList, gpi);
+        }
         c.vkDestroyPipelineLayout(gpi, self.layout, null);
     }
 };
+
+fn initShaderObjects(alloc: Allocator, gpi: c.VkDevice, shaders: []const config.Shader, descLayout: c.VkDescriptorSetLayout, renderType: RenderType) !std.ArrayList(ShaderObject) {
+    if (renderType == .compute and shaders.len > 1) {
+        std.log.err("ShaderPipeline: Compute only supports 1 Stage", .{});
+        return error.ShaderStageOverflow;
+    }
+    var shaderObjects = std.ArrayList(ShaderObject).init(alloc);
+
+    for (0..shaders.len) |i| {
+        const shader = shaders[i];
+        const nextStage = if (i + 1 <= shaders.len - 1) shaders[i + 1].stage else 0;
+        const shaderObj = try ShaderObject.init(gpi, shader, nextStage, alloc, descLayout, renderType);
+        shaderObjects.append(shaderObj) catch |err| {
+            std.debug.print("ShaderPipeline: Could not append ShaderObject, err {}\n", .{err});
+            return error.ShaderAppend;
+        };
+    }
+
+    return shaderObjects;
+}
+
+fn deinitShaderObjects(list: std.ArrayList(ShaderObject), gpi: c.VkDevice) void {
+    for (list.items) |*shaderObject| shaderObject.deinit(gpi);
+    list.deinit();
+}
 
 fn createPipelineLayout(gpi: c.VkDevice, descriptorLayout: c.VkDescriptorSetLayout, pushConstantStages: c.VkShaderStageFlags, pushConstantSize: u32) !c.VkPipelineLayout {
     var pushConstantRange: c.VkPushConstantRange = undefined;

@@ -1,10 +1,10 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 const config = @import("../config.zig");
-const PipelineType = @import("../vulkan/ShaderPipeline.zig").RenderType;
+const RenderType = @import("../config.zig").RenderType;
 
 pub const FileManager = struct {
-    const stepCount = config.renderSequence.len;
+    const stepCount = config.renderSeq.len;
 
     alloc: Allocator,
     rootPath: []u8,
@@ -48,7 +48,7 @@ pub const FileManager = struct {
         const alloc = self.alloc;
 
         // Check all ShaderInfos and compile if needed
-        for (config.renderSequence, 0..) |shaderLayout, i| {
+        for (config.renderSeq, 0..) |shaderLayout, i| {
             for (shaderLayout.shaders) |shader| {
                 const filePath = try joinPath(alloc, self.shaderPath, shader.glslFile);
                 const newTimeStamp = try getFileTimeStamp(filePath);

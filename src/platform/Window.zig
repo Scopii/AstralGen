@@ -1,7 +1,7 @@
 const std = @import("std");
 const c = @import("../c.zig");
 const Swapchain = @import("../vulkan/SwapchainManager.zig").Swapchain;
-const RenderPass = @import("../vulkan/ShaderPipeline.zig").RenderPass;
+const RenderPass = @import("../config.zig").RenderPass;
 
 pub const Window = struct {
     pub const windowStatus = enum {
