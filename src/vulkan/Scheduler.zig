@@ -17,24 +17,19 @@ pub const Scheduler = struct {
     cpuSyncTimeline: c.VkSemaphore,
     totalFrames: u64 = 0,
     lastChecked: u64 = 0,
-    passFinishedSemaphores: [MAX_IN_FLIGHT]c.VkSemaphore,
 
     pub fn init(context: *const Context, maxInFlight: u8) !Scheduler {
         std.debug.print("Scheduler: In Flight {}\n", .{maxInFlight});
-        var passFinishedSemaphores: [MAX_IN_FLIGHT]c.VkSemaphore = undefined;
-        for (0..maxInFlight) |i| passFinishedSemaphores[i] = try createSemaphore(context.gpi);
 
         return Scheduler{
             .gpi = context.gpi,
             .cpuSyncTimeline = try createTimeline(context.gpi),
             .maxInFlight = maxInFlight,
-            .passFinishedSemaphores = passFinishedSemaphores,
         };
     }
 
     pub fn deinit(self: *Scheduler) void {
         c.vkDestroySemaphore(self.gpi, self.cpuSyncTimeline, null);
-        for (self.passFinishedSemaphores) |sem| c.vkDestroySemaphore(self.gpi, sem, null);
     }
 
     pub fn waitForGPU(self: *Scheduler) !void {
