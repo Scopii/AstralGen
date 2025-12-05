@@ -73,6 +73,33 @@ pub const rootPath: []const u8 = "../..";
 pub const glslPath: []const u8 = "/src/shader";
 pub const sprvPath: []const u8 = "/zig-out/shader";
 
+pub const Shader = struct {
+    stage: c.VkShaderStageFlagBits,
+    glslFile: []const u8,
+    spvFile: []const u8,
+};
+
+pub const ShaderLayout = struct {
+    shaders: []const Shader,
+    renderPass: RenderPass,
+};
+// Render
+pub const comp1 = Shader{ .stage = c.VK_SHADER_STAGE_COMPUTE_BIT, .glslFile = "Compute.comp", .spvFile = "Compute.spv" };
+pub const vert1 = Shader{ .stage = c.VK_SHADER_STAGE_VERTEX_BIT, .glslFile = "Graphics.vert", .spvFile = "GraphicsVert.spv" };
+pub const frag1 = Shader{ .stage = c.VK_SHADER_STAGE_FRAGMENT_BIT, .glslFile = "Graphics.frag", .spvFile = "GraphicsFrag.spv" };
+pub const mesh1 = Shader{ .stage = c.VK_SHADER_STAGE_MESH_BIT_EXT, .glslFile = "Mesh.mesh", .spvFile = "MeshMesh.spv" };
+pub const frag2 = Shader{ .stage = c.VK_SHADER_STAGE_FRAGMENT_BIT, .glslFile = "Mesh.frag", .spvFile = "MeshFrag.spv" };
+
+pub const computePass1: ShaderLayout = .{ .renderPass = .compute, .shaders = .{comp1} };
+pub const graphicsPass1: ShaderLayout = .{ .renderPass = .graphics1, .shaders = .{ vert1, frag1 } };
+pub const meshPass1: ShaderLayout = .{ .renderPass = .mesh1, .shaders = .{ mesh1, frag2 } };
+
+pub const renderPassSequence: []const ShaderLayout = .{
+    computePass1,
+    graphicsPass1,
+    meshPass1,
+};
+
 // Render
 pub const computePipe1 = [_]ShaderInfo{
     .{ .renderType = .compute, .renderPass = .compute1, .stage = c.VK_SHADER_STAGE_COMPUTE_BIT, .glslFile = "Compute.comp", .spvFile = "Compute.spv" },
@@ -88,7 +115,6 @@ pub const meshPipe1 = [_]ShaderInfo{
     .{ .renderType = .mesh, .renderPass = .mesh1, .stage = c.VK_SHADER_STAGE_MESH_BIT_EXT, .glslFile = "Mesh.mesh", .spvFile = "MeshMesh.spv" },
     .{ .renderType = .mesh, .renderPass = .mesh1, .stage = c.VK_SHADER_STAGE_FRAGMENT_BIT, .glslFile = "Mesh.frag", .spvFile = "MeshFrag.spv" },
 };
-
 pub const renderSequence: []const []const ShaderInfo = &.{
     &computePipe1,
     &graphicsPipe1,
