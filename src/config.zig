@@ -99,4 +99,8 @@ pub const computePass1: ShaderLayout = .{ .channel = .compute1, .shaders = &.{co
 pub const graphicsPass1: ShaderLayout = .{ .channel = .graphics1, .shaders = &.{ vert1, frag1 } };
 pub const meshPass1: ShaderLayout = .{ .channel = .mesh1, .shaders = &.{ mesh1, frag2 } };
 
-pub const renderSeq: []const ShaderLayout = &.{ computePass1, graphicsPass1, meshPass1 };
+pub const renderSeq: []const ShaderLayout = &.{
+    computePass1,
+    graphicsPass1,
+    meshPass1,
+};

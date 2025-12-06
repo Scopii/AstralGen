@@ -146,12 +146,9 @@ pub const Renderer = struct {
 
     fn recordCommands(self: *Renderer, cmd: c.VkCommandBuffer, cam: *Camera, runtimeAsFloat: f32) !void {
         const activeGroups = self.swapchainMan.activeGroups;
-
         var touchedIndices: u64 = 0;
 
         for (0..config.renderSeq.len) |i| {
-            const renderStep = config.renderSeq[i];
-
             const pushConstants = PushConstants{
                 .camPosAndFov = cam.getPosAndFov(),
                 .camDir = cam.getForward(),
@@ -159,45 +156,28 @@ pub const Renderer = struct {
                 .runtime = runtimeAsFloat,
                 .dataCount = @intCast(self.testBuffer.size / @sizeOf(Object)),
             };
-
-            const renderType = self.shaderMan.getRenderType(i);
-
-            switch (renderType) {
-                .compute => {
-                    try CmdManager.recordComputePass(
-                        cmd,
-                        &self.renderImage,
-                        self.shaderMan.shaderObjects[i].items,
-                        self.shaderMan.layout,
-                        self.resourceMan.imageDescBuffer.gpuAddress,
-                        pushConstants,
-                    );
-                },
-                .graphics, .mesh => {
-                    try CmdManager.recordGraphicsPassShaderObject(
-                        cmd,
-                        &self.renderImage,
-                        self.shaderMan.shaderObjects[i].items,
-                        renderType,
-                        self.shaderMan.layout,
-                        pushConstants,
-                    );
-                },
-                else => std.debug.print("Renderer: {s} has no Command Recording\n", .{@tagName(renderType)}),
-            }
+            try CmdManager.recordPass(
+                cmd,
+                &self.renderImage,
+                self.shaderMan.shaderObjects[i].items,
+                self.shaderMan.getRenderType(i),
+                self.shaderMan.layout,
+                self.resourceMan.imageDescBuffer.gpuAddress,
+                pushConstants,
+            );
             // BLIT LOGIC
-            const groupIndex = @intFromEnum(renderStep.channel);
+            const groupIndex = @intFromEnum(config.renderSeq[i].channel);
             const windowIds = activeGroups[groupIndex].slice();
 
             if (windowIds.len > 0) {
                 try self.cmdMan.blitToTargets(cmd, &self.renderImage, windowIds, &self.swapchainMan.swapchains);
+
                 for (windowIds) |id| {
                     const index = self.swapchainMan.swapchains.getIndex(id);
                     touchedIndices |= (@as(u64, 1) << @intCast(index));
                 }
             }
         }
-
         // CLEANUP
         for (self.swapchainMan.targets.slice()) |index| {
             const mask = @as(u64, 1) << @intCast(index);

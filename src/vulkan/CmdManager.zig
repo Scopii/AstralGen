@@ -63,10 +63,26 @@ pub const CmdManager = struct {
         return self.primaryCmds[frameInFlight];
     }
 
-    pub fn recordComputePass(
+    pub fn recordPass(
         cmd: c.VkCommandBuffer,
         renderImage: *Image,
-        pipe: []const ShaderObject,
+        shaderObjects: []const ShaderObject,
+        renderType: RenderType,
+        layout: c.VkPipelineLayout,
+        gpuAddress: deviceAddress,
+        pushConstants: PushConstants,
+    ) !void {
+        switch (renderType) {
+            .compute => try recordCompute(cmd, renderImage, shaderObjects, layout, gpuAddress, pushConstants),
+            .graphics, .mesh => try recordGraphics(cmd, renderImage, shaderObjects, renderType, layout, pushConstants),
+            else => std.debug.print("Renderer: {s} has no Command Recording\n", .{@tagName(renderType)}),
+        }
+    }
+
+    pub fn recordCompute(
+        cmd: c.VkCommandBuffer,
+        renderImage: *Image,
+        shaderObjects: []const ShaderObject,
         layout: c.VkPipelineLayout,
         gpuAddress: deviceAddress,
         pushConstants: PushConstants,
@@ -85,7 +101,7 @@ pub const CmdManager = struct {
         renderImage.curLayout = c.VK_IMAGE_LAYOUT_GENERAL;
 
         const stages = [_]c.VkShaderStageFlagBits{c.VK_SHADER_STAGE_COMPUTE_BIT};
-        c.pfn_vkCmdBindShadersEXT.?(cmd, 1, &stages, &pipe[0].handle);
+        c.pfn_vkCmdBindShadersEXT.?(cmd, 1, &stages, &shaderObjects[0].handle);
 
         c.vkCmdPushConstants(cmd, layout, c.VK_SHADER_STAGE_ALL, 0, @sizeOf(PushConstants), &pushConstants);
 
@@ -103,15 +119,14 @@ pub const CmdManager = struct {
         c.vkCmdDispatch(cmd, (renderImage.extent3d.width + 7) / 8, (renderImage.extent3d.height + 7) / 8, 1);
     }
 
-    pub fn recordGraphicsPassShaderObject(
+    pub fn recordGraphics(
         cmd: c.VkCommandBuffer,
         renderImage: *Image,
-        pipe: []const ShaderObject,
+        shaderObjects: []const ShaderObject,
         renderType: RenderType,
         layout: c.VkPipelineLayout,
         pushConstants: PushConstants,
     ) !void {
-
         // Image layout transition (same as before)
         const barrier = createImageMemoryBarrier2(
             c.VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
@@ -177,7 +192,6 @@ pub const CmdManager = struct {
             c.VK_SHADER_STAGE_MESH_BIT_EXT,
             c.VK_SHADER_STAGE_FRAGMENT_BIT,
         };
-
         // bind ALL 7 stages to ensure clean state
         var shaders = [_]c.VkShaderEXT{
             null, // Clear vertex shader for mesh
@@ -188,9 +202,8 @@ pub const CmdManager = struct {
             null, // Mesh
             null, // Frag
         };
-
         // Assign all stages to correct index
-        for (pipe) |shaderObject| {
+        for (shaderObjects) |shaderObject| {
             for (0..stages.len) |i| {
                 if (shaderObject.stage == stages[i]) shaders[i] = shaderObject.handle;
             }
