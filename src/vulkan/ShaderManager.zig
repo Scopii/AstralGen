@@ -4,7 +4,6 @@ const Allocator = std.mem.Allocator;
 const ztracy = @import("ztracy");
 const config = @import("../config.zig");
 const Context = @import("Context.zig").Context;
-const RenderPass = @import("../config.zig").RenderPass;
 const RenderType = @import("../config.zig").RenderType;
 const ResourceManager = @import("ResourceManager.zig").ResourceManager;
 const check = @import("error.zig").check;

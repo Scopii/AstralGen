@@ -9,7 +9,7 @@ const CmdManager = @import("CmdManager.zig").CmdManager;
 const ShaderManager = @import("ShaderManager.zig").ShaderManager;
 const Swapchain = @import("SwapchainManager.zig").Swapchain;
 const SwapchainManager = @import("SwapchainManager.zig").SwapchainManager;
-const RenderPass = @import("../config.zig").RenderPass;
+const WindowChannel = @import("../config.zig").WindowChannel;
 const RenderType = @import("../config.zig").RenderType;
 const PushConstants = @import("ShaderManager.zig").PushConstants;
 const GpuImage = @import("ResourceManager.zig").GpuImage;
@@ -26,7 +26,7 @@ pub const Renderer = struct {
     alloc: Allocator,
     arenaAlloc: Allocator,
     context: Context,
-    resourceMan2: ResourceManager,
+    resourceMan: ResourceManager,
     shaderMan: ShaderManager,
     swapchainMan: SwapchainManager,
     cmdMan: CmdManager,
@@ -39,36 +39,36 @@ pub const Renderer = struct {
         const alloc = memoryMan.getAllocator();
         const instance = try createInstance(alloc);
         const context = try Context.init(alloc, instance);
-        var resourceMan2 = try ResourceManager.init(alloc, &context);
+        var resourceMan = try ResourceManager.init(alloc, &context);
         const cmdMan = try CmdManager.init(alloc, &context, config.MAX_IN_FLIGHT);
         const scheduler = try Scheduler.init(&context, config.MAX_IN_FLIGHT);
-        const shaderMan = try ShaderManager.init(alloc, &context, &resourceMan2);
+        const shaderMan = try ShaderManager.init(alloc, &context, &resourceMan);
         const swapchainMan = try SwapchainManager.init(alloc, &context);
 
         return .{
             .alloc = alloc,
             .arenaAlloc = memoryMan.getGlobalArena(),
             .context = context,
-            .resourceMan2 = resourceMan2,
+            .resourceMan = resourceMan,
             .shaderMan = shaderMan,
             .cmdMan = cmdMan,
             .scheduler = scheduler,
-            .renderImage = try resourceMan2.createGpuImage(config.RENDER_IMAGE_PRESET, config.RENDER_IMAGE_FORMAT, c.VMA_MEMORY_USAGE_GPU_ONLY),
+            .renderImage = try resourceMan.createGpuImage(config.RENDER_IMAGE_PRESET, config.RENDER_IMAGE_FORMAT, c.VMA_MEMORY_USAGE_GPU_ONLY),
             .swapchainMan = swapchainMan,
             .startTime = std.time.nanoTimestamp(),
-            .testBuffer = try resourceMan2.createTestDataBuffer(objects),
+            .testBuffer = try resourceMan.createTestDataBuffer(objects),
         };
     }
 
     pub fn deinit(self: *Renderer) void {
         _ = c.vkDeviceWaitIdle(self.context.gpi);
-        self.resourceMan2.destroyGpuImage(self.renderImage);
+        self.resourceMan.destroyGpuImage(self.renderImage);
         self.scheduler.deinit();
         self.cmdMan.deinit();
         self.swapchainMan.deinit();
         self.shaderMan.deinit();
-        self.resourceMan2.destroyGpuBuffer(self.testBuffer);
-        self.resourceMan2.deinit();
+        self.resourceMan.destroyGpuBuffer(self.testBuffer);
+        self.resourceMan.deinit();
         self.context.deinit();
     }
 
@@ -113,10 +113,10 @@ pub const Renderer = struct {
 
         if (new.height != 0 or new.width != 0) {
             if (new.width != old.width or new.height != old.height) {
-                self.resourceMan2.destroyGpuImage(self.renderImage);
+                self.resourceMan.destroyGpuImage(self.renderImage);
                 const newExtent = c.VkExtent3D{ .width = new.width, .height = new.height, .depth = config.RENDER_IMAGE_PRESET.depth };
-                self.renderImage = try self.resourceMan2.createGpuImage(newExtent, config.RENDER_IMAGE_FORMAT, c.VMA_MEMORY_USAGE_GPU_ONLY);
-                try self.resourceMan2.updateImageDescriptor(self.renderImage.view, 0);
+                self.renderImage = try self.resourceMan.createGpuImage(newExtent, config.RENDER_IMAGE_FORMAT, c.VMA_MEMORY_USAGE_GPU_ONLY);
+                try self.resourceMan.updateImageDescriptor(self.renderImage.view, 0);
                 std.debug.print("RenderImage recreated {}x{} to {}x{}\n", .{ old.width, old.height, new.width, new.height });
             }
         }
@@ -169,7 +169,7 @@ pub const Renderer = struct {
                         &self.renderImage,
                         self.shaderMan.shaderObjects[i].items,
                         self.shaderMan.layout,
-                        self.resourceMan2.imageDescBuffer.gpuAddress,
+                        self.resourceMan.imageDescBuffer.gpuAddress,
                         pushConstants,
                     );
                 },
@@ -186,7 +186,7 @@ pub const Renderer = struct {
                 else => std.debug.print("Renderer: {s} has no Command Recording\n", .{@tagName(renderType)}),
             }
             // BLIT LOGIC
-            const groupIndex = @intFromEnum(renderStep.renderPass);
+            const groupIndex = @intFromEnum(renderStep.channel);
             const windowIds = activeGroups[groupIndex].slice();
 
             if (windowIds.len > 0) {

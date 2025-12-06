@@ -80,11 +80,11 @@ pub const Shader = struct {
 
 pub const ShaderLayout = struct {
     shaders: []const Shader,
-    renderPass: RenderPass,
+    channel: WindowChannel,
 };
 
 pub const RenderType = enum { compute, graphics, mesh, meshTask, fragOnly };
-pub const RenderPass = enum { compute1, compute2, graphics1, graphics2, mesh1, mesh2 };
+pub const WindowChannel = enum { compute1, compute2, graphics1, graphics2, mesh1, mesh2 };
 
 // Render
 pub const comp1 = Shader{ .stage = c.VK_SHADER_STAGE_COMPUTE_BIT, .glslFile = "Compute.comp", .spvFile = "Compute.spv" };
@@ -92,14 +92,11 @@ pub const vert1 = Shader{ .stage = c.VK_SHADER_STAGE_VERTEX_BIT, .glslFile = "Gr
 pub const frag1 = Shader{ .stage = c.VK_SHADER_STAGE_FRAGMENT_BIT, .glslFile = "Graphics.frag", .spvFile = "GraphicsFrag.spv" };
 pub const mesh1 = Shader{ .stage = c.VK_SHADER_STAGE_MESH_BIT_EXT, .glslFile = "Mesh.mesh", .spvFile = "MeshMesh.spv" };
 pub const frag2 = Shader{ .stage = c.VK_SHADER_STAGE_FRAGMENT_BIT, .glslFile = "Mesh.frag", .spvFile = "MeshFrag.spv" };
+
 pub const shadersToCompile: []const Shader = &.{ comp1, vert1, frag1, mesh1, frag2 };
 
-pub const computePass1: ShaderLayout = .{ .renderPass = .compute1, .shaders = &.{comp1} };
-pub const graphicsPass1: ShaderLayout = .{ .renderPass = .graphics1, .shaders = &.{ vert1, frag1 } };
-pub const meshPass1: ShaderLayout = .{ .renderPass = .mesh1, .shaders = &.{ mesh1, frag2 } };
+pub const computePass1: ShaderLayout = .{ .channel = .compute1, .shaders = &.{comp1} };
+pub const graphicsPass1: ShaderLayout = .{ .channel = .graphics1, .shaders = &.{ vert1, frag1 } };
+pub const meshPass1: ShaderLayout = .{ .channel = .mesh1, .shaders = &.{ mesh1, frag2 } };
 
-pub const renderSeq: []const ShaderLayout = &.{
-    computePass1,
-    graphicsPass1,
-    meshPass1,
-};
+pub const renderSeq: []const ShaderLayout = &.{ computePass1, graphicsPass1, meshPass1 };
