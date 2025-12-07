@@ -23,27 +23,27 @@ pub const ShaderManager = struct {
 
     alloc: Allocator,
     descLayout: c.VkDescriptorSetLayout,
-    layout: c.VkPipelineLayout,
+    pipeLayout: c.VkPipelineLayout,
     shaderObjects: [renderSeqLen]std.ArrayList(ShaderObject),
     renderTypes: [renderSeqLen]RenderType,
     gpi: c.VkDevice,
 
     pub fn init(alloc: Allocator, context: *const Context, resourceManager: *const ResourceManager) !ShaderManager {
         const gpi = context.gpi;
-        const layout = try createPipelineLayout(gpi, resourceManager.layout, c.VK_SHADER_STAGE_ALL, @sizeOf(PushConstants));
+        const pipeLayout = try createPipelineLayout(gpi, resourceManager.descLayout, c.VK_SHADER_STAGE_ALL, @sizeOf(PushConstants));
         var shaderObjects: [renderSeqLen]std.ArrayList(ShaderObject) = undefined;
         var renderTypes: [renderSeqLen]RenderType = undefined;
 
         for (0..renderSeqLen) |i| {
             const renderType = try checkShaderLayout(config.renderSeq[i]);
             renderTypes[i] = renderType;
-            shaderObjects[i] = try initShaderObjects(alloc, gpi, config.renderSeq[i].shaders, resourceManager.layout, renderType);
+            shaderObjects[i] = try initShaderObjects(alloc, gpi, config.renderSeq[i].shaders, resourceManager.descLayout, renderType);
         }
 
         return .{
             .alloc = alloc,
-            .descLayout = resourceManager.layout,
-            .layout = layout,
+            .descLayout = resourceManager.descLayout,
+            .pipeLayout = pipeLayout,
             .gpi = gpi,
             .shaderObjects = shaderObjects,
             .renderTypes = renderTypes,
@@ -54,61 +54,42 @@ pub const ShaderManager = struct {
         return self.renderTypes[sequenceIndex];
     }
 
-    fn checkShaderLayoutOrder(shaderLayout: ShaderLayout) bool {
-        var maxStages: [8]i8 = undefined;
-
-        for (0..shaderLayout.shaders.len) |i| {
-            switch (shaderLayout.shaders[i].stage) {
-                c.VK_SHADER_STAGE_COMPUTE_BIT => maxStages[i] = 0,
-                c.VK_SHADER_STAGE_VERTEX_BIT => maxStages[i] = 1,
-                c.VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT => maxStages[i] = 2,
-                c.VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT => maxStages[i] = 3,
-                c.VK_SHADER_STAGE_GEOMETRY_BIT => maxStages[i] = 4,
-                c.VK_SHADER_STAGE_TASK_BIT_EXT => maxStages[i] = 5,
-                c.VK_SHADER_STAGE_MESH_BIT_EXT => maxStages[i] = 6,
-                c.VK_SHADER_STAGE_FRAGMENT_BIT => maxStages[i] = 7,
-                else => std.debug.print("ShaderManager: Shader Stage is Unknown", .{}),
-            }
-        }
-        var temp: i8 = -1;
-        for (0..shaderLayout.shaders.len) |i| {
-            if (temp <= maxStages[i]) temp = maxStages[i] else return false;
-        }
-        return true;
-    }
-
     pub fn checkShaderLayout(shaderLayout: ShaderLayout) !RenderType {
-        var stage: [8]u8 = .{0} ** 8; // comp, vert, tessControl, tessEval, geo, task, mesh, frag
-        const layoutLength = shaderLayout.shaders.len;
-        if (checkShaderLayoutOrder(shaderLayout) == false) return error.ShaderLayoutOrderInvalid;
+        var stages: [8]u8 = .{0} ** 8;
+        var prevIndex: i8 = -1;
 
         for (shaderLayout.shaders) |shader| {
-            switch (shader.stage) {
-                c.VK_SHADER_STAGE_COMPUTE_BIT => stage[0] += 1,
-                c.VK_SHADER_STAGE_VERTEX_BIT => stage[1] += 1,
-                c.VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT => stage[2] += 1,
-                c.VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT => stage[3] += 1,
-                c.VK_SHADER_STAGE_GEOMETRY_BIT => stage[4] += 1,
-                c.VK_SHADER_STAGE_TASK_BIT_EXT => stage[5] += 1,
-                c.VK_SHADER_STAGE_MESH_BIT_EXT => stage[6] += 1,
-                c.VK_SHADER_STAGE_FRAGMENT_BIT => stage[7] += 1,
-                else => std.debug.print("ShaderManager: Shader Stage is Unknown", .{}),
-            }
+            const curIndex: i8 = switch (shader.stage) {
+                c.VK_SHADER_STAGE_COMPUTE_BIT => 0,
+                c.VK_SHADER_STAGE_VERTEX_BIT => 1,
+                c.VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT => 2,
+                c.VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT => 3,
+                c.VK_SHADER_STAGE_GEOMETRY_BIT => 4,
+                c.VK_SHADER_STAGE_TASK_BIT_EXT => 5,
+                c.VK_SHADER_STAGE_MESH_BIT_EXT => 6,
+                c.VK_SHADER_STAGE_FRAGMENT_BIT => 7,
+                else => return error.UnknownShaderStage,
+            };
+            if (curIndex <= prevIndex) return error.ShaderLayoutOrderInvalid;
+            prevIndex = curIndex;
+            stages[@intCast(curIndex)] += 1;
         }
-        if (layoutLength == 1) {
-            if (stage[0] == 1) return .compute;
-            if (stage[1] == 1) return .vertOnly;
+        switch (shaderLayout.shaders.len) {
+            1 => if (stages[0] == 1) return .compute else if (stages[1] == 1) return .vertOnly,
+            2 => if (stages[6] == 1 and stages[7] == 1) return .mesh,
+            3 => if (stages[5] == 1 and stages[6] == 1 and stages[7] == 1) return .taskMesh,
+            else => {},
         }
-        if (layoutLength == 3 and stage[5] == 1 and stage[6] == 1 and stage[7] == 1) return .taskMesh;
-        if (layoutLength == 2 and stage[6] == 1 and stage[7] == 1) return .mesh;
-        if (stage[1] == 1 and stage[2] <= 1 and stage[3] <= 1 and stage[4] <= 1 and stage[5] == 0 and stage[6] == 0 and stage[7] == 1) return .graphics;
-
+        if (stages[1] == 1 and stages[2] <= 1 and stages[3] <= 1 and stages[4] <= 1 and stages[5] == 0 and stages[6] == 0 and stages[7] == 1) return .graphics;
+        if (stages[2] != stages[3]) return error.ShaderLayoutTessellationMismatch;
         return error.ShaderLayoutInvalid;
     }
 
     pub fn update(self: *ShaderManager, index: usize) !void {
         const renderType = try checkShaderLayout(config.renderSeq[index]);
-        for (self.shaderObjects[index].items) |*shaderObject| shaderObject.deinit(self.gpi);
+        var list = &self.shaderObjects[index];
+        for (list.items) |*shaderObject| shaderObject.deinit(self.gpi);
+        list.deinit();
         self.shaderObjects[index] = try initShaderObjects(self.alloc, self.gpi, config.renderSeq[index].shaders, self.descLayout, renderType);
     }
 
@@ -119,15 +100,11 @@ pub const ShaderManager = struct {
             for (shaderObjectList.items) |*shaderObject| shaderObject.deinit(gpi);
             shaderObjectList.deinit();
         }
-        c.vkDestroyPipelineLayout(gpi, self.layout, null);
+        c.vkDestroyPipelineLayout(gpi, self.pipeLayout, null);
     }
 };
 
 fn initShaderObjects(alloc: Allocator, gpi: c.VkDevice, shaders: []const config.Shader, descLayout: c.VkDescriptorSetLayout, renderType: RenderType) !std.ArrayList(ShaderObject) {
-    if (renderType == .compute and shaders.len > 1) {
-        std.log.err("ShaderPipeline: Compute only supports 1 Stage", .{});
-        return error.ShaderStageOverflow;
-    }
     var shaderObjects = std.ArrayList(ShaderObject).init(alloc);
 
     for (0..shaders.len) |i| {
@@ -164,7 +141,6 @@ fn createPipelineLayout(gpi: c.VkDevice, descLayout: c.VkDescriptorSetLayout, pu
         .pushConstantRangeCount = pushConstantRangeCount,
         .pPushConstantRanges = pushConstantRanges,
     };
-
     var layout: c.VkPipelineLayout = undefined;
     try check(c.vkCreatePipelineLayout(gpi, &pipeLayoutInf, null, &layout), "Failed to create pipeline layout");
     return layout;

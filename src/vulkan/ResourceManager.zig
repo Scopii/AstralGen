@@ -28,7 +28,7 @@ pub const ResourceManager = struct {
     gpi: c.VkDevice,
     gpu: c.VkPhysicalDevice,
 
-    layout: c.VkDescriptorSetLayout,
+    descLayout: c.VkDescriptorSetLayout,
     imageDescBuffer: GpuBuffer,
     imageDescSize: u32,
 
@@ -42,11 +42,11 @@ pub const ResourceManager = struct {
         c.vkGetPhysicalDeviceProperties2(context.gpu, &physDevProps);
         const imageDescSize: u32 = @intCast(descBufferProps.storageImageDescriptorSize); // Whole gpu memory?
         // Create descriptor set layout for compute pipeline
-        const layout = try createDescriptorLayout(gpi, 0, c.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, c.VK_SHADER_STAGE_COMPUTE_BIT);
-        errdefer c.vkDestroyDescriptorSetLayout(gpi, layout, null);
+        const descLayout = try createDescriptorLayout(gpi, 0, c.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, c.VK_SHADER_STAGE_COMPUTE_BIT);
+        errdefer c.vkDestroyDescriptorSetLayout(gpi, descLayout, null);
         // Get the exact size required for this layout from the driver
         var layoutSize: c.VkDeviceSize = undefined;
-        c.pfn_vkGetDescriptorSetLayoutSizeEXT.?(gpi, layout, &layoutSize);
+        c.pfn_vkGetDescriptorSetLayoutSizeEXT.?(gpi, descLayout, &layoutSize);
 
         // Create descriptor buffer with driver-provided size
         const imageDescBuffer = try createDefinedBuffer(gpuAlloc.handle, gpi, layoutSize, null, .descriptor);
@@ -58,13 +58,13 @@ pub const ResourceManager = struct {
             .gpu = context.gpu,
             .imageDescSize = imageDescSize,
             .imageDescBuffer = imageDescBuffer,
-            .layout = layout,
+            .descLayout = descLayout,
         };
     }
 
     pub fn deinit(self: *ResourceManager) void {
         c.vmaDestroyBuffer(self.gpuAlloc.handle, self.imageDescBuffer.buffer, self.imageDescBuffer.allocation);
-        c.vkDestroyDescriptorSetLayout(self.gpi, self.layout, null);
+        c.vkDestroyDescriptorSetLayout(self.gpi, self.descLayout, null);
         self.gpuAlloc.deinit();
     }
 

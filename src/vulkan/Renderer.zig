@@ -161,7 +161,7 @@ pub const Renderer = struct {
                 &self.renderImage,
                 self.shaderMan.shaderObjects[i].items,
                 self.shaderMan.getRenderType(i),
-                self.shaderMan.layout,
+                self.shaderMan.pipeLayout,
                 self.resourceMan.imageDescBuffer.gpuAddress,
                 pushConstants,
             );
