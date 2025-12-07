@@ -41,7 +41,7 @@ pub const ResourceManager = struct {
         var physDevProps = c.VkPhysicalDeviceProperties2{ .sType = c.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2, .pNext = &descBufferProps };
         c.vkGetPhysicalDeviceProperties2(context.gpu, &physDevProps);
         const imageDescSize: u32 = @intCast(descBufferProps.storageImageDescriptorSize); // Whole gpu memory?
-        // Create descriptor set layout for compute pipeline
+        // Create descriptor set layout
         const descLayout = try createDescriptorLayout(gpi, 0, c.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, c.VK_SHADER_STAGE_COMPUTE_BIT);
         errdefer c.vkDestroyDescriptorSetLayout(gpi, descLayout, null);
         // Get the exact size required for this layout from the driver

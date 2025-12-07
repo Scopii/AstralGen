@@ -26,6 +26,9 @@ pub const RENDER_IMAGE_PRESET: c.VkExtent3D = .{ .width = 1920, .height = 1080, 
 pub const RENDER_IMAGE_AUTO_RESIZE = true;
 pub const RENDER_IMAGE_FORMAT = c.VK_FORMAT_R16G16B16A16_SFLOAT;
 
+pub const RENDER_IMAGE_PRESET2: c.VkExtent3D = .{ .width = 100, .height = 100, .depth = 1 };
+pub const RENDER_IMAGE_PRESET3: c.VkExtent3D = .{ .width = 5, .height = 5, .depth = 1 };
+
 // Camera
 pub const CAM_SPEED = 0.00000001;
 pub const CAM_SENS = 0.0003;
@@ -79,12 +82,25 @@ pub const Shader = struct {
 };
 
 pub const ShaderLayout = struct {
+    renderImage: RenderResource,
     shaders: []const Shader,
     channel: WindowChannel,
+    clear: bool,
 };
 
 pub const RenderType = enum { compute, graphics, mesh, taskMesh, vertOnly };
 pub const WindowChannel = enum { compute1, compute2, graphics1, graphics2, mesh1, mesh2 };
+
+pub const RenderResource = struct {
+    id: u8,
+    dimensions: c.VkExtent3D,
+    imageFormat: c_uint,
+    memoryUsage: c_uint,
+};
+
+pub const renderImage1 = RenderResource{ .id = 0, .dimensions = RENDER_IMAGE_PRESET, .imageFormat = RENDER_IMAGE_FORMAT, .memoryUsage = c.VMA_MEMORY_USAGE_GPU_ONLY };
+pub const renderImage2 = RenderResource{ .id = 1, .dimensions = RENDER_IMAGE_PRESET2, .imageFormat = RENDER_IMAGE_FORMAT, .memoryUsage = c.VMA_MEMORY_USAGE_GPU_ONLY };
+pub const renderImage3 = RenderResource{ .id = 2, .dimensions = RENDER_IMAGE_PRESET3, .imageFormat = RENDER_IMAGE_FORMAT, .memoryUsage = c.VMA_MEMORY_USAGE_GPU_ONLY };
 
 // Render
 pub const comp1 = Shader{ .stage = c.VK_SHADER_STAGE_COMPUTE_BIT, .glslFile = "Compute.comp", .spvFile = "Compute.spv" };
@@ -95,9 +111,9 @@ pub const frag2 = Shader{ .stage = c.VK_SHADER_STAGE_FRAGMENT_BIT, .glslFile = "
 
 pub const shadersToCompile: []const Shader = &.{ comp1, vert1, frag1, mesh1, frag2 };
 
-pub const computePass1: ShaderLayout = .{ .channel = .compute1, .shaders = &.{comp1} };
-pub const graphicsPass1: ShaderLayout = .{ .channel = .graphics1, .shaders = &.{ vert1, frag1 } };
-pub const meshPass1: ShaderLayout = .{ .channel = .mesh1, .shaders = &.{ mesh1, frag2 } };
+pub const computePass1: ShaderLayout = .{ .renderImage = renderImage1, .channel = .compute1, .shaders = &.{comp1}, .clear = true };
+pub const graphicsPass1: ShaderLayout = .{ .renderImage = renderImage2, .channel = .graphics1, .shaders = &.{ vert1, frag1 }, .clear = false };
+pub const meshPass1: ShaderLayout = .{ .renderImage = renderImage3, .channel = .mesh1, .shaders = &.{ mesh1, frag2 }, .clear = false };
 
 pub const renderSeq: []const ShaderLayout = &.{
     computePass1,

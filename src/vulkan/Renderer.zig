@@ -19,6 +19,7 @@ const MemoryManager = @import("../core/MemoryManager.zig").MemoryManager;
 const Object = @import("../ecs/EntityManager.zig").Object;
 const check = @import("error.zig").check;
 const createInstance = @import("Context.zig").createInstance;
+const CreateMapArray = @import("../structures/MapArray.zig").CreateMapArray;
 
 const Allocator = std.mem.Allocator;
 
@@ -31,7 +32,7 @@ pub const Renderer = struct {
     swapchainMan: SwapchainManager,
     cmdMan: CmdManager,
     scheduler: Scheduler,
-    renderImage: GpuImage = undefined,
+    renderImages: CreateMapArray(GpuImage, config.renderSeq.len, u8, config.renderSeq.len, 0) = .{},
     startTime: i128 = 0,
     testBuffer: GpuBuffer = undefined,
 
@@ -45,6 +46,18 @@ pub const Renderer = struct {
         const shaderMan = try ShaderManager.init(alloc, &context, &resourceMan);
         const swapchainMan = try SwapchainManager.init(alloc, &context);
 
+        var renderImages: CreateMapArray(GpuImage, config.renderSeq.len, u8, config.renderSeq.len, 0) = .{};
+
+        for (config.renderSeq) |shaderLayout| {
+            const renderImage = shaderLayout.renderImage;
+            if (renderImages.isKeyUsed(renderImage.id) == false) {
+                const gpuImage = try resourceMan.createGpuImage(renderImage.dimensions, renderImage.imageFormat, renderImage.memoryUsage);
+                renderImages.set(renderImage.id, gpuImage);
+                std.debug.print("Renderer: RenderImage {} created\n", .{renderImage.id});
+                try resourceMan.updateImageDescriptor(gpuImage.view, renderImage.id);
+            }
+        }
+
         return .{
             .alloc = alloc,
             .arenaAlloc = memoryMan.getGlobalArena(),
@@ -53,7 +66,7 @@ pub const Renderer = struct {
             .shaderMan = shaderMan,
             .cmdMan = cmdMan,
             .scheduler = scheduler,
-            .renderImage = try resourceMan.createGpuImage(config.RENDER_IMAGE_PRESET, config.RENDER_IMAGE_FORMAT, c.VMA_MEMORY_USAGE_GPU_ONLY),
+            .renderImages = renderImages,
             .swapchainMan = swapchainMan,
             .startTime = std.time.nanoTimestamp(),
             .testBuffer = try resourceMan.createTestDataBuffer(objects),
@@ -62,7 +75,11 @@ pub const Renderer = struct {
 
     pub fn deinit(self: *Renderer) void {
         _ = c.vkDeviceWaitIdle(self.context.gpi);
-        self.resourceMan.destroyGpuImage(self.renderImage);
+
+        for (self.renderImages.getElements()) |element| {
+            self.resourceMan.destroyGpuImage(element);
+        }
+
         self.scheduler.deinit();
         self.cmdMan.deinit();
         self.swapchainMan.deinit();
@@ -107,19 +124,21 @@ pub const Renderer = struct {
         if (config.RENDER_IMAGE_AUTO_RESIZE == true) try self.updateRenderImage();
     }
 
-    pub fn updateRenderImage(self: *Renderer) !void {
-        const new = self.swapchainMan.getMaxExtent();
-        const old = self.renderImage.extent3d;
+    pub fn updateRenderImage(_: *Renderer) !void {
+        //Has to be overhauled for Window Asigned Render Images
 
-        if (new.height != 0 or new.width != 0) {
-            if (new.width != old.width or new.height != old.height) {
-                self.resourceMan.destroyGpuImage(self.renderImage);
-                const newExtent = c.VkExtent3D{ .width = new.width, .height = new.height, .depth = config.RENDER_IMAGE_PRESET.depth };
-                self.renderImage = try self.resourceMan.createGpuImage(newExtent, config.RENDER_IMAGE_FORMAT, c.VMA_MEMORY_USAGE_GPU_ONLY);
-                try self.resourceMan.updateImageDescriptor(self.renderImage.view, 0);
-                std.debug.print("RenderImage recreated {}x{} to {}x{}\n", .{ old.width, old.height, new.width, new.height });
-            }
-        }
+        // const new = self.swapchainMan.getMaxExtent();
+        // const old = self.renderImage.extent3d;
+
+        // if (new.height != 0 or new.width != 0) {
+        //     if (new.width != old.width or new.height != old.height) {
+        //         self.resourceMan.destroyGpuImage(self.renderImage);
+        //         const newExtent = c.VkExtent3D{ .width = new.width, .height = new.height, .depth = config.RENDER_IMAGE_PRESET.depth };
+        //         self.renderImage = try self.resourceMan.createGpuImage(newExtent, config.RENDER_IMAGE_FORMAT, c.VMA_MEMORY_USAGE_GPU_ONLY);
+        //         try self.resourceMan.updateImageDescriptor(self.renderImage.view, 0);
+        //         std.debug.print("RenderImage recreated {}x{} to {}x{}\n", .{ old.width, old.height, new.width, new.height });
+        //     }
+        // }
     }
 
     pub fn updatePipeline(self: *Renderer, index: usize) !void {
@@ -156,21 +175,26 @@ pub const Renderer = struct {
                 .runtime = runtimeAsFloat,
                 .dataCount = @intCast(self.testBuffer.size / @sizeOf(Object)),
             };
+
+            const renderImage = self.renderImages.getPtr(config.renderSeq[i].renderImage.id);
+            //const renderType = self.shaderMan.getRenderType(i);
+
             try CmdManager.recordPass(
                 cmd,
-                &self.renderImage,
+                renderImage,
                 self.shaderMan.shaderObjects[i].items,
                 self.shaderMan.getRenderType(i),
                 self.shaderMan.pipeLayout,
                 self.resourceMan.imageDescBuffer.gpuAddress,
                 pushConstants,
+                config.renderSeq[i].clear,
             );
             // BLIT LOGIC
             const groupIndex = @intFromEnum(config.renderSeq[i].channel);
             const windowIds = activeGroups[groupIndex].slice();
 
             if (windowIds.len > 0) {
-                try self.cmdMan.blitToTargets(cmd, &self.renderImage, windowIds, &self.swapchainMan.swapchains);
+                try self.cmdMan.blitToTargets(cmd, renderImage, windowIds, &self.swapchainMan.swapchains);
 
                 for (windowIds) |id| {
                     const index = self.swapchainMan.swapchains.getIndex(id);

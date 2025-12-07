@@ -71,10 +71,11 @@ pub const CmdManager = struct {
         layout: c.VkPipelineLayout,
         gpuAddress: deviceAddress,
         pushConstants: PushConstants,
+        shouldClear: bool,
     ) !void {
         switch (renderType) {
             .compute => try recordCompute(cmd, renderImage, shaderObjects, layout, gpuAddress, pushConstants),
-            .graphics, .mesh => try recordGraphics(cmd, renderImage, shaderObjects, renderType, layout, pushConstants),
+            .graphics, .mesh => try recordGraphics(cmd, renderImage, shaderObjects, renderType, layout, pushConstants, shouldClear),
             else => std.debug.print("Renderer: {s} has no Command Recording\n", .{@tagName(renderType)}),
         }
     }
@@ -88,8 +89,8 @@ pub const CmdManager = struct {
         pushConstants: PushConstants,
     ) !void {
         const barrier = createImageMemoryBarrier2(
-            c.VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
-            0,
+            c.VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+            c.VK_ACCESS_2_MEMORY_WRITE_BIT | c.VK_ACCESS_2_MEMORY_READ_BIT,
             c.VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
             c.VK_ACCESS_2_SHADER_WRITE_BIT,
             renderImage.curLayout,
@@ -126,11 +127,12 @@ pub const CmdManager = struct {
         renderType: RenderType,
         layout: c.VkPipelineLayout,
         pushConstants: PushConstants,
+        shouldClear: bool,
     ) !void {
         // Image layout transition (same as before)
         const barrier = createImageMemoryBarrier2(
-            c.VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
-            0,
+            c.VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+            c.VK_ACCESS_2_MEMORY_WRITE_BIT | c.VK_ACCESS_2_MEMORY_READ_BIT,
             c.VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
             c.VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
             renderImage.curLayout,
@@ -146,11 +148,13 @@ pub const CmdManager = struct {
             .extent = .{ .width = renderImage.extent3d.width, .height = renderImage.extent3d.height },
         };
 
+        const loadOp: c_uint = if (shouldClear) c.VK_ATTACHMENT_LOAD_OP_CLEAR else c.VK_ATTACHMENT_LOAD_OP_LOAD;
+
         const colorAttachInf = c.VkRenderingAttachmentInfo{
             .sType = c.VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
             .imageView = renderImage.view,
             .imageLayout = c.VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-            .loadOp = c.VK_ATTACHMENT_LOAD_OP_CLEAR,
+            .loadOp = loadOp,
             .storeOp = c.VK_ATTACHMENT_STORE_OP_STORE,
             .clearValue = .{ .color = .{ .float32 = .{ 0.0, 0.0, 0.1, 1.0 } } },
         };
