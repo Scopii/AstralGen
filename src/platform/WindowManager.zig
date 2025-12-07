@@ -53,7 +53,7 @@ pub const WindowManager = struct {
         self.windows.set(@intCast(id), window);
         try self.changedWindows.append(self.windows.getPtr(@intCast(id)));
         self.openWindows += 1;
-        std.debug.print("Window ID {} for PipelineType {s} created\n", .{ id, @tagName(channel) });
+        std.debug.print("Window ID {} for Channel {s} created\n", .{ id, @tagName(channel) });
     }
 
     pub fn showErrorBox(_: *WindowManager, title: [:0]const u8, message: [:0]const u8) void {

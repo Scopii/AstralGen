@@ -83,7 +83,7 @@ pub const ShaderLayout = struct {
     channel: WindowChannel,
 };
 
-pub const RenderType = enum { compute, graphics, mesh, meshTask, fragOnly };
+pub const RenderType = enum { compute, graphics, mesh, taskMesh, vertOnly };
 pub const WindowChannel = enum { compute1, compute2, graphics1, graphics2, mesh1, mesh2 };
 
 // Render
