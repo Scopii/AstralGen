@@ -35,9 +35,11 @@ pub const ShaderManager = struct {
         var renderTypes: [renderSeqLen]RenderType = undefined;
 
         for (0..renderSeqLen) |i| {
-            const renderType = try checkShaderLayout(config.renderSeq[i]);
+            const renderPass = config.renderSeq[i];
+            const renderType = try checkShaderLayout(renderPass);
+            std.debug.print("ShaderLayout {} renderType {s} windowChannel {s} set\n", .{ i, @tagName(renderType), @tagName(renderPass.channel) });
+            shaderObjects[i] = try initShaderObjects(alloc, gpi, renderPass.shaders, resourceManager.descLayout, renderType);
             renderTypes[i] = renderType;
-            shaderObjects[i] = try initShaderObjects(alloc, gpi, config.renderSeq[i].shaders, resourceManager.descLayout, renderType);
         }
 
         return .{
@@ -86,11 +88,16 @@ pub const ShaderManager = struct {
     }
 
     pub fn update(self: *ShaderManager, index: usize) !void {
-        const renderType = try checkShaderLayout(config.renderSeq[index]);
+        const renderPass = config.renderSeq[index];
+        const renderType = try checkShaderLayout(renderPass);
+        std.debug.print("ShaderLayout {} renderType {s} windowChannel {s} set\n", .{ index, @tagName(renderType), @tagName(renderPass.channel) });
+
         var list = &self.shaderObjects[index];
         for (list.items) |*shaderObject| shaderObject.deinit(self.gpi);
         list.deinit();
+
         self.shaderObjects[index] = try initShaderObjects(self.alloc, self.gpi, config.renderSeq[index].shaders, self.descLayout, renderType);
+        self.renderTypes[index] = renderType;
     }
 
     pub fn deinit(self: *ShaderManager) void {
@@ -112,7 +119,7 @@ fn initShaderObjects(alloc: Allocator, gpi: c.VkDevice, shaders: []const config.
         const nextStage = if (i + 1 <= shaders.len - 1) shaders[i + 1].stage else 0;
         const shaderObj = try ShaderObject.init(gpi, shader, nextStage, alloc, descLayout, renderType);
         shaderObjects.append(shaderObj) catch |err| {
-            std.debug.print("ShaderPipeline: Could not append ShaderObject, err {}\n", .{err});
+            std.debug.print("ShaderManager could not append ShaderObject, err {}\n", .{err});
             return error.ShaderAppend;
         };
     }

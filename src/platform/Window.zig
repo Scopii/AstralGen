@@ -4,7 +4,7 @@ const Swapchain = @import("../vulkan/SwapchainManager.zig").Swapchain;
 const WindowChannel = @import("../config.zig").WindowChannel;
 
 pub const Window = struct {
-    pub const windowStatus = enum {
+    pub const WindowStatus = enum {
         active,
         inactive,
         needCreation,
@@ -14,7 +14,7 @@ pub const Window = struct {
         needActive,
     };
     handle: *c.SDL_Window,
-    status: windowStatus = .needCreation,
+    status: WindowStatus = .needCreation,
     channel: WindowChannel,
     extent: c.VkExtent2D,
     id: u32,

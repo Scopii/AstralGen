@@ -25,7 +25,7 @@ pub const ShaderObject = struct {
         const rootPath = try resolveProjectRoot(alloc, config.rootPath);
         defer alloc.free(rootPath);
         const spvFilePath = std.fs.path.join(alloc, &[_][]const u8{ rootPath, config.sprvPath, spvFile }) catch |err| {
-            std.debug.print("ShaderPipeline: spvFilePath could not be resolved {}\n", .{err});
+            std.debug.print("ShaderObject spvFilePath could not be resolved {}\n", .{err});
             return err;
         };
         defer alloc.free(spvFilePath);
@@ -61,7 +61,7 @@ pub const ShaderObject = struct {
         };
 
         var shaderObject: c.VkShaderEXT = undefined;
-        try check(c.pfn_vkCreateShadersEXT.?(gpi, 1, &shaderCreateInfo, null, &shaderObject), "Failed to create graphics shader object");
+        try check(c.pfn_vkCreateShadersEXT.?(gpi, 1, &shaderCreateInfo, null, &shaderObject), "Failed to create graphics ShaderObject");
 
         return .{
             .handle = shaderObject,
@@ -75,9 +75,9 @@ pub const ShaderObject = struct {
 };
 
 fn loadShader(alloc: Allocator, spvPath: []const u8) ![]align(@alignOf(u32)) u8 {
-    std.debug.print("Loading shader: {s}\n", .{spvPath});
+    std.debug.print("Shader Loaded {s}\n", .{spvPath});
     const file = std.fs.cwd().openFile(spvPath, .{}) catch |err| {
-        std.debug.print("Failed to load shader: {s}\n", .{spvPath});
+        std.debug.print("Shader Load Failed {s}\n", .{spvPath});
         return err;
     };
     defer file.close();

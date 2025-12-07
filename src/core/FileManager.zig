@@ -16,11 +16,11 @@ pub const FileManager = struct {
     pub fn init(alloc: Allocator) !FileManager {
         // Assign paths
         const rootPath = try resolveProjectRoot(alloc, config.rootPath);
-        std.debug.print("Root Path: {s}\n", .{rootPath});
+        std.debug.print("Root Path {s}\n", .{rootPath});
         const shaderPath = try joinPath(alloc, rootPath, config.glslPath);
-        std.debug.print("Shader Path: {s}\n", .{shaderPath});
+        std.debug.print("Shader Path {s}\n", .{shaderPath});
         const shaderOutputPath = try joinPath(alloc, rootPath, config.sprvPath);
-        std.debug.print("Shader Output Path: {s}\n", .{shaderOutputPath});
+        std.debug.print("Shader Output Path {s}\n", .{shaderOutputPath});
         // Set defaults
         const currentTime = std.time.nanoTimestamp();
         const pipelineTimeStamps: [stepCount]i128 = .{currentTime} ** stepCount;
@@ -46,7 +46,6 @@ pub const FileManager = struct {
 
     pub fn checkShaderUpdate(self: *FileManager) !void {
         const alloc = self.alloc;
-
         // Check all ShaderInfos and compile if needed
         for (config.renderSeq, 0..) |shaderLayout, i| {
             for (shaderLayout.shaders) |shader| {
@@ -94,7 +93,7 @@ pub fn getFileTimeStamp(src: []const u8) !i128 {
 }
 
 fn compileShader(alloc: Allocator, srcPath: []const u8, spvPath: []const u8) !void {
-    std.debug.print("Compiling Shader: from {s} \n to -> {s}\n", .{ srcPath, spvPath });
+    std.debug.print("Compiling Shader from {s} \n                to -> {s}\n", .{ srcPath, spvPath });
     // Compile shader using glslc
     const result = std.process.Child.run(.{
         .allocator = alloc,
