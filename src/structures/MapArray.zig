@@ -1,7 +1,7 @@
 const std = @import("std");
 
 fn FindSmallestIntType(number: usize) type {
-    return std.math.IntFittingRange(0, number - 1);
+    return std.math.IntFittingRange(0, number);
 }
 
 pub fn CreateMapArray(comptime elementType: type, comptime size: u32, comptime keyType: type, comptime keyMax: u32, comptime keyMin: u32) type {

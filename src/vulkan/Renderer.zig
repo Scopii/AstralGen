@@ -7,10 +7,7 @@ const Scheduler = @import("Scheduler.zig").Scheduler;
 const Window = @import("../platform/Window.zig").Window;
 const CmdManager = @import("CmdManager.zig").CmdManager;
 const ShaderManager = @import("ShaderManager.zig").ShaderManager;
-const Swapchain = @import("SwapchainManager.zig").Swapchain;
 const SwapchainManager = @import("SwapchainManager.zig").SwapchainManager;
-const WindowChannel = @import("../config.zig").WindowChannel;
-const RenderType = @import("../config.zig").RenderType;
 const PushConstants = @import("ShaderManager.zig").PushConstants;
 const GpuImage = @import("ResourceManager.zig").GpuImage;
 const GpuBuffer = @import("ResourceManager.zig").GpuBuffer;
@@ -22,6 +19,7 @@ const createInstance = @import("Context.zig").createInstance;
 const CreateMapArray = @import("../structures/MapArray.zig").CreateMapArray;
 
 const Allocator = std.mem.Allocator;
+const renderImageCount = @typeInfo(config.RenderId).@"enum".fields.len;
 
 pub const Renderer = struct {
     alloc: Allocator,
@@ -32,7 +30,7 @@ pub const Renderer = struct {
     swapchainMan: SwapchainManager,
     cmdMan: CmdManager,
     scheduler: Scheduler,
-    renderImages: CreateMapArray(GpuImage, config.renderSeq.len, u8, config.renderSeq.len, 0) = .{},
+    renderImages: CreateMapArray(GpuImage, renderImageCount, u8, renderImageCount, 0) = .{},
     startTime: i128 = 0,
     testBuffer: GpuBuffer = undefined,
 
@@ -46,7 +44,7 @@ pub const Renderer = struct {
         const shaderMan = try ShaderManager.init(alloc, &context, &resourceMan);
         const swapchainMan = try SwapchainManager.init(alloc, &context);
 
-        var renderImages: CreateMapArray(GpuImage, config.renderSeq.len, u8, config.renderSeq.len, 0) = .{};
+        var renderImages: CreateMapArray(GpuImage, renderImageCount, u8, renderImageCount, 0) = .{};
 
         for (config.renderSeq) |shaderLayout| {
             const renderImage = shaderLayout.renderImage;
@@ -170,7 +168,6 @@ pub const Renderer = struct {
         for (0..config.renderSeq.len) |i| {
             const renderImageId = config.renderSeq[i].renderImage.id;
             const renderImage = self.renderImages.getPtr(renderImageId);
-            //const renderType = self.shaderMan.getRenderType(i);
 
             const pushConstants = PushConstants{
                 .camPosAndFov = cam.getPosAndFov(),

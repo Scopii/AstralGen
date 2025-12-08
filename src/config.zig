@@ -84,12 +84,19 @@ pub const Shader = struct {
 pub const ShaderLayout = struct {
     renderImage: RenderResource,
     shaders: []const Shader,
-    channel: WindowChannel,
+    channel: RenderId,
     clear: bool,
 };
 
 pub const RenderType = enum { compute, graphics, mesh, taskMesh, vertOnly };
-pub const WindowChannel = enum { compute1, compute2, graphics1, graphics2, mesh1, mesh2 };
+pub const RenderId = enum(u8) {
+    compute1 = 0,
+    compute2 = 1,
+    graphics1 = 2,
+    graphics2 = 3,
+    mesh1 = 4,
+    mesh2 = 5,
+};
 
 pub const RenderResource = struct {
     id: u8,
@@ -98,9 +105,9 @@ pub const RenderResource = struct {
     memoryUsage: c_uint,
 };
 
-pub const renderImage1 = RenderResource{ .id = 0, .dimensions = RENDER_IMAGE_PRESET, .imageFormat = RENDER_IMAGE_FORMAT, .memoryUsage = c.VMA_MEMORY_USAGE_GPU_ONLY };
-pub const renderImage2 = RenderResource{ .id = 1, .dimensions = RENDER_IMAGE_PRESET2, .imageFormat = RENDER_IMAGE_FORMAT, .memoryUsage = c.VMA_MEMORY_USAGE_GPU_ONLY };
-pub const renderImage3 = RenderResource{ .id = 2, .dimensions = RENDER_IMAGE_PRESET3, .imageFormat = RENDER_IMAGE_FORMAT, .memoryUsage = c.VMA_MEMORY_USAGE_GPU_ONLY };
+pub const renderImage1 = RenderResource{ .id = @intFromEnum(RenderId.compute1), .dimensions = RENDER_IMAGE_PRESET, .imageFormat = RENDER_IMAGE_FORMAT, .memoryUsage = c.VMA_MEMORY_USAGE_GPU_ONLY };
+pub const renderImage2 = RenderResource{ .id = @intFromEnum(RenderId.graphics1), .dimensions = RENDER_IMAGE_PRESET2, .imageFormat = RENDER_IMAGE_FORMAT, .memoryUsage = c.VMA_MEMORY_USAGE_GPU_ONLY };
+pub const renderImage3 = RenderResource{ .id = @intFromEnum(RenderId.mesh1), .dimensions = RENDER_IMAGE_PRESET3, .imageFormat = RENDER_IMAGE_FORMAT, .memoryUsage = c.VMA_MEMORY_USAGE_GPU_ONLY };
 
 // Render
 pub const comp1 = Shader{ .stage = c.VK_SHADER_STAGE_COMPUTE_BIT, .glslFile = "Compute.comp", .spvFile = "Compute.spv" };

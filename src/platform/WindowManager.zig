@@ -4,7 +4,6 @@ const Window = @import("Window.zig").Window;
 const Renderer = @import("../vulkan/Renderer.zig").Renderer;
 const Swapchain = @import("../vulkan/SwapchainManager.zig").Swapchain;
 const MemoryManger = @import("../core/MemoryManager.zig").MemoryManager;
-const WindowChannel = @import("../config.zig").WindowChannel;
 const CreateMapArray = @import("../structures/MapArray.zig").CreateMapArray;
 const MAX_WINDOWS = @import("../config.zig").MAX_WINDOWS;
 const SDL_KEY_MAX = @import("../core/EventManager.zig").SDL_KEY_MAX;
@@ -40,20 +39,20 @@ pub const WindowManager = struct {
         c.SDL_Quit();
     }
 
-    pub fn addWindow(self: *WindowManager, title: [*c]const u8, width: c_int, height: c_int, channel: WindowChannel) !void {
+    pub fn addWindow(self: *WindowManager, title: [*c]const u8, width: c_int, height: c_int, renderId: u8) !void {
         const sdlHandle = c.SDL_CreateWindow(title, width, height, c.SDL_WINDOW_VULKAN | c.SDL_WINDOW_RESIZABLE) orelse {
             std.log.err("SDL_CreateWindow failed: {s}\n", .{c.SDL_GetError()});
             return error.WindowInitFailed;
         };
-        const id = c.SDL_GetWindowID(sdlHandle);
+        const windowId = c.SDL_GetWindowID(sdlHandle);
         _ = c.SDL_SetWindowFullscreen(sdlHandle, false);
         _ = c.SDL_SetWindowRelativeMouseMode(sdlHandle, true);
 
-        const window = try Window.init(id, sdlHandle, channel, c.VkExtent2D{ .width = @intCast(width), .height = @intCast(height) });
-        self.windows.set(@intCast(id), window);
-        try self.changedWindows.append(self.windows.getPtr(@intCast(id)));
+        const window = try Window.init(windowId, sdlHandle, renderId, c.VkExtent2D{ .width = @intCast(width), .height = @intCast(height) });
+        self.windows.set(@intCast(windowId), window);
+        try self.changedWindows.append(self.windows.getPtr(@intCast(windowId)));
         self.openWindows += 1;
-        std.debug.print("Window ID {} for Channel {s} created\n", .{ id, @tagName(channel) });
+        std.debug.print("Window ID {} created to present Render ID {}\n", .{ windowId, renderId });
     }
 
     pub fn showErrorBox(_: *WindowManager, title: [:0]const u8, message: [:0]const u8) void {
