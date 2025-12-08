@@ -302,6 +302,9 @@ fn createGPI(alloc: Allocator, gpu: c.VkPhysicalDevice, families: QueueFamilies)
         .bufferDeviceAddress = c.VK_TRUE,
         .descriptorIndexing = c.VK_TRUE,
         .timelineSemaphore = c.VK_TRUE,
+        .runtimeDescriptorArray = c.VK_TRUE,
+        .shaderStorageImageArrayNonUniformIndexing = c.VK_TRUE,
+        .shaderSampledImageArrayNonUniformIndexing = c.VK_TRUE, 
         .pNext = &descriptor_buffer_features,
     };
 

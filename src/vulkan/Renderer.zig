@@ -53,6 +53,9 @@ pub const Renderer = struct {
                 renderImages.set(renderImage.id, gpuImage);
                 std.debug.print("Renderer: RenderImage {} created\n", .{renderImage.id});
                 try resourceMan.updateImageDescriptor(gpuImage.view, renderImage.id);
+            } else {
+                std.debug.print("Renderer: RenderImage ID {} already in use", .{renderImage.id});
+                return error.RenderImageIdUsed;
             }
         }
 

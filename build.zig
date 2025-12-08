@@ -1,5 +1,5 @@
 const std = @import("std");
-const SHADER_HOTLOAD = @import("src/config.zig").SHADER_HOTLOAD;
+const config = @import("src/config.zig");
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
@@ -91,7 +91,7 @@ pub fn build(b: *std.Build) void {
         std.debug.print("Failed to create directory '{s}': {}\n", .{ "zig-out/shader", err });
     };
 
-    if (SHADER_HOTLOAD == false) {
+    if (config.SHADER_HOTLOAD == false) {
         std.debug.print("Shaders Compiled in Build Step\n", .{});
         // Shader Compilation (also currently in Pipeline Creation)
         const compileComputeShdr = b.addSystemCommand(&[_][]const u8{ "glslc", "--target-spv=spv1.6", "src/shader/Compute.comp", "-o", "zig-out/shader/Compute.spv" });
