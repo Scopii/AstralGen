@@ -19,7 +19,7 @@ const createInstance = @import("Context.zig").createInstance;
 const CreateMapArray = @import("../structures/MapArray.zig").CreateMapArray;
 
 const Allocator = std.mem.Allocator;
-const MAX_WINDOWS = config.MAX_WINDOWS;
+const RENDER_IMG_MAX = config.RENDER_IMG_MAX;
 
 pub const Renderer = struct {
     alloc: Allocator,
@@ -30,7 +30,8 @@ pub const Renderer = struct {
     swapchainMan: SwapchainManager,
     cmdMan: CmdManager,
     scheduler: Scheduler,
-    renderImages: CreateMapArray(GpuImage, MAX_WINDOWS, u8, MAX_WINDOWS, 0) = .{},
+    //renderImages: CreateMapArray(GpuImage, MAX_WINDOWS, u8, MAX_WINDOWS, 0) = .{},
+    renderImages: [RENDER_IMG_MAX]?GpuImage,
     startTime: i128 = 0,
     testBuffer: GpuBuffer = undefined,
 
@@ -44,18 +45,22 @@ pub const Renderer = struct {
         const shaderMan = try ShaderManager.init(alloc, &context, &resourceMan);
         const swapchainMan = try SwapchainManager.init(alloc, &context);
 
-        var renderImages: CreateMapArray(GpuImage, MAX_WINDOWS, u8, MAX_WINDOWS, 0) = .{};
+        var renderImages: [RENDER_IMG_MAX]?GpuImage = undefined;
+        for (0..renderImages.len) |i| renderImages[i] = null;
 
         for (config.renderSeq) |shaderLayout| {
             const renderImage = shaderLayout.renderImage;
-            if (renderImages.isKeyUsed(renderImage.id) == false) {
+
+            if (renderImage.id > RENDER_IMG_MAX - 1) {
+                std.debug.print("Renderer: RenderId Image ID cant be bigger than Max Windows\n", .{});
+                return error.RenderImageIdOutOfBounds;
+            }
+
+            if (renderImages[renderImage.id] == null) {
                 const gpuImage = try resourceMan.createGpuImage(renderImage.dimensions, renderImage.imageFormat, renderImage.memoryUsage);
-                renderImages.set(renderImage.id, gpuImage);
+                renderImages[renderImage.id] = gpuImage;
                 std.debug.print("Renderer: RenderImage {} created\n", .{renderImage.id});
                 try resourceMan.updateImageDescriptor(gpuImage.view, renderImage.id);
-            } else {
-                std.debug.print("Renderer: RenderImage ID {} already in use", .{renderImage.id});
-                return error.RenderImageIdUsed;
             }
         }
 
@@ -77,8 +82,8 @@ pub const Renderer = struct {
     pub fn deinit(self: *Renderer) void {
         _ = c.vkDeviceWaitIdle(self.context.gpi);
 
-        for (self.renderImages.getElements()) |element| {
-            self.resourceMan.destroyGpuImage(element);
+        for (self.renderImages) |renderImage| {
+            if (renderImage != null) self.resourceMan.destroyGpuImage(renderImage.?);
         }
 
         self.scheduler.deinit();
@@ -122,7 +127,7 @@ pub const Renderer = struct {
             }
         }
         self.swapchainMan.updateMaxExtent();
-        if (config.RENDER_IMAGE_AUTO_RESIZE == true) try self.updateRenderImage();
+        if (config.RENDER_IMG_AUTO_RESIZE == true) try self.updateRenderImage();
     }
 
     pub fn updateRenderImage(_: *Renderer) !void {
@@ -170,7 +175,7 @@ pub const Renderer = struct {
 
         for (0..config.renderSeq.len) |i| {
             const renderImageId = config.renderSeq[i].renderImage.id;
-            const renderImage = self.renderImages.getPtr(renderImageId);
+            const renderImagePtr = &self.renderImages[renderImageId].?;
 
             const pushConstants = PushConstants{
                 .camPosAndFov = cam.getPosAndFov(),
@@ -183,7 +188,7 @@ pub const Renderer = struct {
 
             try CmdManager.recordPass(
                 cmd,
-                renderImage,
+                renderImagePtr,
                 self.shaderMan.shaderObjects[i].items,
                 self.shaderMan.getRenderType(i),
                 self.shaderMan.pipeLayout,
@@ -196,7 +201,7 @@ pub const Renderer = struct {
             const windowIds = activeGroups[groupIndex].slice();
 
             if (windowIds.len > 0) {
-                try self.cmdMan.blitToTargets(cmd, renderImage, windowIds, &self.swapchainMan.swapchains);
+                try self.cmdMan.blitToTargets(cmd, renderImagePtr, windowIds, &self.swapchainMan.swapchains);
 
                 for (windowIds) |id| {
                     const index = self.swapchainMan.swapchains.getIndex(id);

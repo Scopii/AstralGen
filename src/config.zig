@@ -20,14 +20,14 @@ pub const KEY_EVENT_INFO = false;
 pub const MAX_IN_FLIGHT: u8 = 2; // (Frames)
 pub const DESIRED_SWAPCHAIN_IMAGES: u8 = 3;
 pub const DISPLAY_MODE = c.VK_PRESENT_MODE_IMMEDIATE_KHR;
-pub const MAX_WINDOWS: u8 = 64; // u64 is set as Max Bitmask in Draw so no bigger than that!
+pub const MAX_WINDOWS: u8 = 16; // u64 is set as Max Bitmask in Draw so no bigger than that!
 
-pub const RENDER_IMAGE_PRESET: c.VkExtent3D = .{ .width = 1920, .height = 1080, .depth = 1 };
-pub const RENDER_IMAGE_AUTO_RESIZE = true;
-pub const RENDER_IMAGE_FORMAT = c.VK_FORMAT_R16G16B16A16_SFLOAT;
-
-pub const RENDER_IMAGE_PRESET2: c.VkExtent3D = .{ .width = 100, .height = 100, .depth = 1 };
-pub const RENDER_IMAGE_PRESET3: c.VkExtent3D = .{ .width = 5, .height = 5, .depth = 1 };
+pub const RENDER_IMG_MAX = 64;
+pub const RENDER_IMG_AUTO_RESIZE = true;
+pub const RENDER_IMG_FORMAT = c.VK_FORMAT_R16G16B16A16_SFLOAT;
+pub const RENDER_IMG_EXTENT1: c.VkExtent3D = .{ .width = 1920, .height = 1080, .depth = 1 };
+pub const RENDER_IMG_EXTENT2: c.VkExtent3D = .{ .width = 100, .height = 100, .depth = 1 };
+pub const RENDER_IMG_EXTENT3: c.VkExtent3D = .{ .width = 5, .height = 5, .depth = 1 };
 
 // Camera
 pub const CAM_SPEED = 0.00000001;
@@ -95,9 +95,9 @@ pub const RenderResource = struct {
     memoryUsage: c_uint,
 };
 
-pub const renderImage1 = RenderResource{ .id = 0, .dimensions = RENDER_IMAGE_PRESET, .imageFormat = RENDER_IMAGE_FORMAT, .memoryUsage = c.VMA_MEMORY_USAGE_GPU_ONLY };
-pub const renderImage2 = RenderResource{ .id = 1, .dimensions = RENDER_IMAGE_PRESET2, .imageFormat = RENDER_IMAGE_FORMAT, .memoryUsage = c.VMA_MEMORY_USAGE_GPU_ONLY };
-pub const renderImage3 = RenderResource{ .id = 2, .dimensions = RENDER_IMAGE_PRESET3, .imageFormat = RENDER_IMAGE_FORMAT, .memoryUsage = c.VMA_MEMORY_USAGE_GPU_ONLY };
+pub const renderImage1 = RenderResource{ .id = 0, .dimensions = RENDER_IMG_EXTENT1, .imageFormat = RENDER_IMG_FORMAT, .memoryUsage = c.VMA_MEMORY_USAGE_GPU_ONLY };
+pub const renderImage2 = RenderResource{ .id = 1, .dimensions = RENDER_IMG_EXTENT2, .imageFormat = RENDER_IMG_FORMAT, .memoryUsage = c.VMA_MEMORY_USAGE_GPU_ONLY };
+pub const renderImage3 = RenderResource{ .id = 15, .dimensions = RENDER_IMG_EXTENT3, .imageFormat = RENDER_IMG_FORMAT, .memoryUsage = c.VMA_MEMORY_USAGE_GPU_ONLY };
 
 // Render
 pub const comp1 = Shader{ .stage = c.VK_SHADER_STAGE_COMPUTE_BIT, .glslFile = "Compute.comp", .spvFile = "Compute.spv" };
