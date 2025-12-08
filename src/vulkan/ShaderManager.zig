@@ -48,7 +48,7 @@ pub const ShaderManager = struct {
         for (0..seqLen) |i| {
             const renderPass = config.renderSeq[i];
             renderTypes[i] = try checkShaderLayout(renderPass);
-            std.debug.print("ShaderLayout {} renderType {s} windowChannel {s} valid\n", .{ i, @tagName(renderTypes[i]), @tagName(renderPass.channel) });
+            std.debug.print("ShaderLayout {} renderType {s} for RenderId {} valid\n", .{ i, @tagName(renderTypes[i]), renderPass.renderImage.id });
             shaderObjects[i] = try setShaderLayout(alloc, gpi, resourceManager.descLayout, i, renderTypes[i]);
         }
 
@@ -69,7 +69,7 @@ pub const ShaderManager = struct {
     pub fn update(self: *ShaderManager, seqIndex: usize) !void {
         const renderPass = config.renderSeq[seqIndex];
         const renderType = try checkShaderLayout(renderPass);
-        std.debug.print("ShaderLayout {} renderType {s} windowChannel {s} updated\n", .{ seqIndex, @tagName(renderType), @tagName(renderPass.channel) });
+        std.debug.print("ShaderLayout {} renderType {s} for RenderId {} updated\n", .{ seqIndex, @tagName(renderType), renderPass.renderImage.id });
 
         const newList = try setShaderLayout(self.alloc, self.gpi, self.descLayout, seqIndex, renderType);
 

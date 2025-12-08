@@ -84,20 +84,10 @@ pub const Shader = struct {
 pub const ShaderLayout = struct {
     renderImage: RenderResource,
     shaders: []const Shader,
-    channel: RenderId,
     clear: bool,
 };
 
 pub const RenderType = enum { compute, graphics, mesh, taskMesh, vertOnly };
-pub const RenderId = enum(u8) {
-    compute1 = 0,
-    compute2 = 1,
-    graphics1 = 2,
-    graphics2 = 3,
-    mesh1 = 4,
-    mesh2 = 5,
-};
-
 pub const RenderResource = struct {
     id: u8,
     dimensions: c.VkExtent3D,
@@ -105,9 +95,9 @@ pub const RenderResource = struct {
     memoryUsage: c_uint,
 };
 
-pub const renderImage1 = RenderResource{ .id = @intFromEnum(RenderId.compute1), .dimensions = RENDER_IMAGE_PRESET, .imageFormat = RENDER_IMAGE_FORMAT, .memoryUsage = c.VMA_MEMORY_USAGE_GPU_ONLY };
-pub const renderImage2 = RenderResource{ .id = @intFromEnum(RenderId.graphics1), .dimensions = RENDER_IMAGE_PRESET2, .imageFormat = RENDER_IMAGE_FORMAT, .memoryUsage = c.VMA_MEMORY_USAGE_GPU_ONLY };
-pub const renderImage3 = RenderResource{ .id = @intFromEnum(RenderId.mesh1), .dimensions = RENDER_IMAGE_PRESET3, .imageFormat = RENDER_IMAGE_FORMAT, .memoryUsage = c.VMA_MEMORY_USAGE_GPU_ONLY };
+pub const renderImage1 = RenderResource{ .id = 0, .dimensions = RENDER_IMAGE_PRESET, .imageFormat = RENDER_IMAGE_FORMAT, .memoryUsage = c.VMA_MEMORY_USAGE_GPU_ONLY };
+pub const renderImage2 = RenderResource{ .id = 1, .dimensions = RENDER_IMAGE_PRESET2, .imageFormat = RENDER_IMAGE_FORMAT, .memoryUsage = c.VMA_MEMORY_USAGE_GPU_ONLY };
+pub const renderImage3 = RenderResource{ .id = 2, .dimensions = RENDER_IMAGE_PRESET3, .imageFormat = RENDER_IMAGE_FORMAT, .memoryUsage = c.VMA_MEMORY_USAGE_GPU_ONLY };
 
 // Render
 pub const comp1 = Shader{ .stage = c.VK_SHADER_STAGE_COMPUTE_BIT, .glslFile = "Compute.comp", .spvFile = "Compute.spv" };
@@ -118,9 +108,9 @@ pub const frag2 = Shader{ .stage = c.VK_SHADER_STAGE_FRAGMENT_BIT, .glslFile = "
 
 pub const shadersToCompile: []const Shader = &.{ comp1, vert1, frag1, mesh1, frag2 };
 
-pub const computePass1: ShaderLayout = .{ .renderImage = renderImage1, .channel = .compute1, .shaders = &.{comp1}, .clear = true }; // clear does not work for compute
-pub const graphicsPass1: ShaderLayout = .{ .renderImage = renderImage2, .channel = .graphics1, .shaders = &.{ vert1, frag1 }, .clear = false };
-pub const meshPass1: ShaderLayout = .{ .renderImage = renderImage3, .channel = .mesh1, .shaders = &.{ mesh1, frag2 }, .clear = false };
+pub const computePass1: ShaderLayout = .{ .renderImage = renderImage1, .shaders = &.{comp1}, .clear = true }; // clear does not work for compute
+pub const graphicsPass1: ShaderLayout = .{ .renderImage = renderImage2, .shaders = &.{ vert1, frag1 }, .clear = false };
+pub const meshPass1: ShaderLayout = .{ .renderImage = renderImage3, .shaders = &.{ mesh1, frag2 }, .clear = false };
 
 pub const renderSeq: []const ShaderLayout = &.{
     computePass1,

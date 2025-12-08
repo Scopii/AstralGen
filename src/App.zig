@@ -80,9 +80,9 @@ pub const App = struct {
     }
 
     pub fn initWindows(self: *App) !void {
-        try self.windowMan.addWindow("Astral1", 1600, 900, @intFromEnum(config.RenderId.compute1));
-        try self.windowMan.addWindow("Astral2", 16 * 70, 9 * 70, @intFromEnum(config.RenderId.graphics1));
-        try self.windowMan.addWindow("Astral3", 350, 350, @intFromEnum(config.RenderId.mesh1));
+        try self.windowMan.addWindow("Astral1", 1600, 900, config.renderImage1.id);
+        try self.windowMan.addWindow("Astral2", 16 * 70, 9 * 70, config.renderImage2.id);
+        try self.windowMan.addWindow("Astral3", 350, 350, config.renderImage3.id);
     }
 
     pub fn deinit(self: *App) void {

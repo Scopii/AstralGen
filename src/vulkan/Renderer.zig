@@ -19,7 +19,7 @@ const createInstance = @import("Context.zig").createInstance;
 const CreateMapArray = @import("../structures/MapArray.zig").CreateMapArray;
 
 const Allocator = std.mem.Allocator;
-const renderImageCount = @typeInfo(config.RenderId).@"enum".fields.len;
+const MAX_WINDOWS = config.MAX_WINDOWS;
 
 pub const Renderer = struct {
     alloc: Allocator,
@@ -30,7 +30,7 @@ pub const Renderer = struct {
     swapchainMan: SwapchainManager,
     cmdMan: CmdManager,
     scheduler: Scheduler,
-    renderImages: CreateMapArray(GpuImage, renderImageCount, u8, renderImageCount, 0) = .{},
+    renderImages: CreateMapArray(GpuImage, MAX_WINDOWS, u8, MAX_WINDOWS, 0) = .{},
     startTime: i128 = 0,
     testBuffer: GpuBuffer = undefined,
 
@@ -44,7 +44,7 @@ pub const Renderer = struct {
         const shaderMan = try ShaderManager.init(alloc, &context, &resourceMan);
         const swapchainMan = try SwapchainManager.init(alloc, &context);
 
-        var renderImages: CreateMapArray(GpuImage, renderImageCount, u8, renderImageCount, 0) = .{};
+        var renderImages: CreateMapArray(GpuImage, MAX_WINDOWS, u8, MAX_WINDOWS, 0) = .{};
 
         for (config.renderSeq) |shaderLayout| {
             const renderImage = shaderLayout.renderImage;
@@ -192,7 +192,7 @@ pub const Renderer = struct {
                 config.renderSeq[i].clear,
             );
             // BLIT LOGIC
-            const groupIndex = @intFromEnum(config.renderSeq[i].channel);
+            const groupIndex = renderImageId;
             const windowIds = activeGroups[groupIndex].slice();
 
             if (windowIds.len > 0) {

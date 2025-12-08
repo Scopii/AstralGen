@@ -4,7 +4,6 @@ const Allocator = std.mem.Allocator;
 const Context = @import("Context.zig").Context;
 const Window = @import("../platform/Window.zig").Window;
 const QueueFamilies = @import("Context.zig").QueueFamilies;
-const RenderId = @import("../config.zig").RenderId;
 const CreateMapArray = @import("../structures/MapArray.zig").CreateMapArray;
 const check = @import("error.zig").check;
 const createSemaphore = @import("primitives.zig").createSemaphore;
@@ -28,19 +27,17 @@ pub const Swapchain = struct {
 };
 
 pub const SwapchainManager = struct {
-    const renderImageCount = @typeInfo(RenderId).@"enum".fields.len;
-
     alloc: Allocator,
     gpi: c.VkDevice,
     instance: c.VkInstance,
     maxExtent: c.VkExtent2D = .{ .width = 0, .height = 0 },
     swapchains: CreateMapArray(Swapchain, MAX_WINDOWS, u8, MAX_WINDOWS, 0) = .{},
-    activeGroups: [renderImageCount]std.BoundedArray(u8, MAX_WINDOWS),
+    activeGroups: [MAX_WINDOWS]std.BoundedArray(u8, MAX_WINDOWS),
     targets: std.BoundedArray(u8, MAX_WINDOWS) = .{},
 
     pub fn init(alloc: Allocator, context: *const Context) !SwapchainManager {
-        var activeGroups: [renderImageCount]std.BoundedArray(u8, MAX_WINDOWS) = undefined;
-        for (0..renderImageCount) |i| activeGroups[i] = .{};
+        var activeGroups: [MAX_WINDOWS]std.BoundedArray(u8, MAX_WINDOWS) = undefined;
+        for (0..MAX_WINDOWS) |i| activeGroups[i] = .{};
 
         return .{
             .alloc = alloc,
