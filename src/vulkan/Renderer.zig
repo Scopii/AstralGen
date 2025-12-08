@@ -168,16 +168,18 @@ pub const Renderer = struct {
         var touchedIndices: u64 = 0;
 
         for (0..config.renderSeq.len) |i| {
+            const renderImageId = config.renderSeq[i].renderImage.id;
+            const renderImage = self.renderImages.getPtr(renderImageId);
+            //const renderType = self.shaderMan.getRenderType(i);
+
             const pushConstants = PushConstants{
                 .camPosAndFov = cam.getPosAndFov(),
                 .camDir = cam.getForward(),
                 .dataAddress = self.testBuffer.gpuAddress,
                 .runtime = runtimeAsFloat,
                 .dataCount = @intCast(self.testBuffer.size / @sizeOf(Object)),
+                .outputImageIndex = renderImageId,
             };
-
-            const renderImage = self.renderImages.getPtr(config.renderSeq[i].renderImage.id);
-            //const renderType = self.shaderMan.getRenderType(i);
 
             try CmdManager.recordPass(
                 cmd,

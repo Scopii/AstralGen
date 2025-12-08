@@ -111,7 +111,7 @@ pub const frag2 = Shader{ .stage = c.VK_SHADER_STAGE_FRAGMENT_BIT, .glslFile = "
 
 pub const shadersToCompile: []const Shader = &.{ comp1, vert1, frag1, mesh1, frag2 };
 
-pub const computePass1: ShaderLayout = .{ .renderImage = renderImage1, .channel = .compute1, .shaders = &.{comp1}, .clear = true };
+pub const computePass1: ShaderLayout = .{ .renderImage = renderImage1, .channel = .compute1, .shaders = &.{comp1}, .clear = true }; // clear does not work for compute
 pub const graphicsPass1: ShaderLayout = .{ .renderImage = renderImage2, .channel = .graphics1, .shaders = &.{ vert1, frag1 }, .clear = false };
 pub const meshPass1: ShaderLayout = .{ .renderImage = renderImage3, .channel = .mesh1, .shaders = &.{ mesh1, frag2 }, .clear = false };
 

@@ -16,6 +16,7 @@ pub const PushConstants = extern struct {
     runtime: f32,
     dataCount: u32,
     dataAddress: u64,
+    outputImageIndex: u32,
 };
 
 pub const ShaderManager = struct {

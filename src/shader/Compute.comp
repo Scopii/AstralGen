@@ -2,11 +2,12 @@
 #extension GL_EXT_shader_image_load_formatted : require
 #extension GL_EXT_buffer_reference : require
 #extension GL_EXT_scalar_block_layout : require
+#extension GL_EXT_nonuniform_qualifier : require
 
 // Work Group
 layout (local_size_x = 8, local_size_y = 8) in;
 // Descriptors
-layout(set = 0, binding = 0, rgba16f) restrict uniform image2D image;
+layout(set = 0, binding = 0, rgba16f) uniform image2D globalImages[];
 // Buffer reference raw data
 
 // Fixed struct with proper alignment
@@ -32,6 +33,7 @@ layout(push_constant, std430) restrict uniform PushConstants {
     float runtime;
     uint dataCount;
     ObjectBuffer objectData; 
+    uint outputImageIndex;
 } pushConstants;
 
 // Marching constants
@@ -126,8 +128,15 @@ vec3 getNormal(vec3 pos) {
 }
 
 void main() {
-    vec2 imageDims = vec2(imageSize(image));
+    // 1. Get the specific image ID
+    uint imgIdx = pushConstants.outputImageIndex; 
+    // 2. Get dimensions of THIS specific image
+    vec2 imageDims = vec2(imageSize(globalImages[nonuniformEXT(imgIdx)]));
+
+    // Bounds check (Important because group size is 8x8) ??
+    if (gl_GlobalInvocationID.x >= imageDims.x || gl_GlobalInvocationID.y >= imageDims.y) return;
     vec2 uv = (vec2(gl_GlobalInvocationID.xy) / imageDims) * 2.0 - 1.0;
+
     // Camera basis vectors
     vec3 camForward = normalize(pushConstants.camDir.xyz);
     vec3 camRight = normalize(cross(vec3(0, 1, 0), camForward));
@@ -164,8 +173,8 @@ void main() {
         Object hitObj = pushConstants.objectData.objects[closestObjectIndex];
         vec3 surfaceColor = vec3(hitObj.colorR, hitObj.colorG, hitObj.colorB);
         
-        imageStore(image, ivec2(gl_GlobalInvocationID.xy), mix(vec4(surfaceColor * lighting, 1.0), vec4(0.0, 0.0, 0.0, 1.0), march / MAX_DIST));
+        imageStore(globalImages[nonuniformEXT(imgIdx)], ivec2(gl_GlobalInvocationID.xy), mix(vec4(surfaceColor * lighting, 1.0), vec4(0.0, 0.0, 0.0, 1.0), march / MAX_DIST));
     } else {
-        imageStore(image, ivec2(gl_GlobalInvocationID.xy), vec4(0.0, 0.0, 0.1, 1.0));
+        imageStore(globalImages[nonuniformEXT(imgIdx)], ivec2(gl_GlobalInvocationID.xy), vec4(0.0, 0.0, 0.1, 1.0));
     }
 }

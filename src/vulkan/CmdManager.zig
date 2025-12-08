@@ -68,14 +68,14 @@ pub const CmdManager = struct {
         renderImage: *Image,
         shaderObjects: []const ShaderObject,
         renderType: RenderType,
-        layout: c.VkPipelineLayout,
+        pipeLayout: c.VkPipelineLayout,
         gpuAddress: deviceAddress,
         pushConstants: PushConstants,
         shouldClear: bool,
     ) !void {
         switch (renderType) {
-            .compute => try recordCompute(cmd, renderImage, shaderObjects, layout, gpuAddress, pushConstants),
-            .graphics, .mesh => try recordGraphics(cmd, renderImage, shaderObjects, renderType, layout, pushConstants, shouldClear),
+            .compute => try recordCompute(cmd, renderImage, shaderObjects, pipeLayout, gpuAddress, pushConstants),
+            .graphics, .mesh => try recordGraphics(cmd, renderImage, shaderObjects, renderType, pipeLayout, pushConstants, shouldClear),
             else => std.debug.print("Renderer: {s} has no Command Recording\n", .{@tagName(renderType)}),
         }
     }
@@ -84,7 +84,7 @@ pub const CmdManager = struct {
         cmd: c.VkCommandBuffer,
         renderImage: *Image,
         shaderObjects: []const ShaderObject,
-        layout: c.VkPipelineLayout,
+        pipeLayout: c.VkPipelineLayout,
         gpuAddress: deviceAddress,
         pushConstants: PushConstants,
     ) !void {
@@ -104,8 +104,6 @@ pub const CmdManager = struct {
         const stages = [_]c.VkShaderStageFlagBits{c.VK_SHADER_STAGE_COMPUTE_BIT};
         c.pfn_vkCmdBindShadersEXT.?(cmd, 1, &stages, &shaderObjects[0].handle);
 
-        c.vkCmdPushConstants(cmd, layout, c.VK_SHADER_STAGE_ALL, 0, @sizeOf(PushConstants), &pushConstants);
-
         const bufferBindingInf = c.VkDescriptorBufferBindingInfoEXT{
             .sType = c.VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT,
             .address = gpuAddress,
@@ -115,7 +113,9 @@ pub const CmdManager = struct {
 
         const bufferIndex: u32 = 0;
         const descriptorOffset: c.VkDeviceSize = 0;
-        c.pfn_vkCmdSetDescriptorBufferOffsetsEXT.?(cmd, c.VK_PIPELINE_BIND_POINT_COMPUTE, layout, 0, 1, &bufferIndex, &descriptorOffset);
+        c.pfn_vkCmdSetDescriptorBufferOffsetsEXT.?(cmd, c.VK_PIPELINE_BIND_POINT_COMPUTE, pipeLayout, 0, 1, &bufferIndex, &descriptorOffset);
+
+        c.vkCmdPushConstants(cmd, pipeLayout, c.VK_SHADER_STAGE_ALL, 0, @sizeOf(PushConstants), &pushConstants);
 
         c.vkCmdDispatch(cmd, (renderImage.extent3d.width + 7) / 8, (renderImage.extent3d.height + 7) / 8, 1);
     }
@@ -125,7 +125,7 @@ pub const CmdManager = struct {
         renderImage: *Image,
         shaderObjects: []const ShaderObject,
         renderType: RenderType,
-        layout: c.VkPipelineLayout,
+        pipeLayout: c.VkPipelineLayout,
         pushConstants: PushConstants,
         shouldClear: bool,
     ) !void {
@@ -185,7 +185,7 @@ pub const CmdManager = struct {
         c.pfn_vkCmdSetViewportWithCount.?(cmd, 1, &viewport);
         c.pfn_vkCmdSetScissorWithCount.?(cmd, 1, &scissor);
 
-        c.vkCmdPushConstants(cmd, layout, c.VK_SHADER_STAGE_ALL, 0, @sizeOf(PushConstants), &pushConstants);
+        c.vkCmdPushConstants(cmd, pipeLayout, c.VK_SHADER_STAGE_ALL, 0, @sizeOf(PushConstants), &pushConstants);
 
         var stages = [_]c.VkShaderStageFlagBits{
             c.VK_SHADER_STAGE_VERTEX_BIT,
