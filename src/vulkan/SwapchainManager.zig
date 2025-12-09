@@ -80,19 +80,6 @@ pub const SwapchainManager = struct {
         return if (self.targets.len != 0) true else false;
     }
 
-    pub fn fillPassTargets(self: *SwapchainManager, renderId: u8, targetArray: []u8) []u8 {
-        var renderTargetCount: u8 = 0;
-
-        for (self.targets.slice()) |target| {
-            if (self.swapchains.getAtIndex(target).renderId == renderId) {
-                targetArray[renderTargetCount] = target;
-                renderTargetCount += 1;
-            }
-        }
-
-        return targetArray[0..renderTargetCount];
-    }
-
     pub fn addActive(self: *SwapchainManager, window: *Window) !void {
         self.swapchains.getPtr(@intCast(window.windowId)).active = true;
     }

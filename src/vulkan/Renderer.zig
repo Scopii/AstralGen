@@ -166,7 +166,7 @@ pub const Renderer = struct {
 
         const cmd = try self.cmdMan.beginRecording(frameInFlight);
         try self.recordPasses(cmd, cam, runtimeAsFloat);
-        try self.recordBlits(cmd);
+        try CmdManager.recordSwapchainBlits(cmd, &self.renderImages, self.swapchainMan.targets.slice(), &self.swapchainMan.swapchains);
         try CmdManager.endRecording(cmd);
 
         const targets = self.swapchainMan.targets.slice();
@@ -179,7 +179,6 @@ pub const Renderer = struct {
     fn recordPasses(self: *Renderer, cmd: c.VkCommandBuffer, cam: *Camera, runtimeAsFloat: f32) !void {
         for (0..config.renderSeq.len) |i| {
             const renderImgId = config.renderSeq[i].renderImg.id;
-            const renderImgPtr = &self.renderImages[renderImgId].?;
 
             const pushConstants = PushConstants{
                 .camPosAndFov = cam.getPosAndFov(),
@@ -192,7 +191,7 @@ pub const Renderer = struct {
 
             try CmdManager.recordPass(
                 cmd,
-                renderImgPtr,
+                &self.renderImages[renderImgId].?,
                 self.shaderMan.shaderObjects[i].items,
                 self.shaderMan.getRenderType(i),
                 self.shaderMan.pipeLayout,
@@ -200,35 +199,6 @@ pub const Renderer = struct {
                 pushConstants,
                 config.renderSeq[i].clear,
             );
-        }
-    }
-
-    fn recordBlits(self: *Renderer, cmd: c.VkCommandBuffer) !void {
-        var touchedIndices: u64 = 0;
-
-        for (0..config.renderSeq.len) |i| {
-            const renderImgId = config.renderSeq[i].renderImg.id;
-            const renderImgPtr = &self.renderImages[renderImgId].?;
-            // BLIT LOGIC
-            var passTargets: [config.MAX_WINDOWS]u8 = undefined;
-            const targets = self.swapchainMan.fillPassTargets(renderImgId, &passTargets);
-
-            if (targets.len > 0) {
-                try self.cmdMan.blitToTargets(cmd, renderImgPtr, targets, &self.swapchainMan.swapchains);
-
-                for (targets) |id| {
-                    touchedIndices |= (@as(u64, 1) << @intCast(id));
-                }
-            }
-        }
-        // CLEANUP
-        for (self.swapchainMan.targets.slice()) |index| {
-            const mask = @as(u64, 1) << @intCast(index);
-            // Cleanup all Bitset Indices
-            if ((touchedIndices & mask) == 0) {
-                const swapchain = self.swapchainMan.swapchains.getPtrAtIndex(index);
-                CmdManager.transitionToPresent(cmd, swapchain);
-            }
         }
     }
 

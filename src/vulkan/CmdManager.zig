@@ -2,7 +2,7 @@ const std = @import("std");
 const c = @import("../c.zig");
 const Allocator = std.mem.Allocator;
 const Context = @import("Context.zig").Context;
-const Image = @import("ResourceManager.zig").GpuImage;
+const GpuImage = @import("ResourceManager.zig").GpuImage;
 const SwapchainManager = @import("SwapchainManager.zig");
 const ShaderObject = @import("ShaderObject.zig").ShaderObject;
 const RenderType = @import("../config.zig").RenderType;
@@ -65,7 +65,7 @@ pub const CmdManager = struct {
 
     pub fn recordPass(
         cmd: c.VkCommandBuffer,
-        renderImg: *Image,
+        renderImg: *GpuImage,
         shaderObjects: []const ShaderObject,
         renderType: RenderType,
         pipeLayout: c.VkPipelineLayout,
@@ -82,7 +82,7 @@ pub const CmdManager = struct {
 
     pub fn recordCompute(
         cmd: c.VkCommandBuffer,
-        renderImg: *Image,
+        renderImg: *GpuImage,
         shaderObjects: []const ShaderObject,
         pipeLayout: c.VkPipelineLayout,
         gpuAddress: deviceAddress,
@@ -121,7 +121,7 @@ pub const CmdManager = struct {
 
     pub fn recordGraphics(
         cmd: c.VkCommandBuffer,
-        renderImg: *Image,
+        renderImg: *GpuImage,
         shaderObjects: []const ShaderObject,
         renderType: RenderType,
         pipeLayout: c.VkPipelineLayout,
@@ -129,7 +129,6 @@ pub const CmdManager = struct {
         pushConstants: PushConstants,
         shouldClear: bool,
     ) !void {
-        // Image layout transition (same as before)
         const barrier = createImageMemoryBarrier2(
             c.VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
             c.VK_ACCESS_2_MEMORY_WRITE_BIT | c.VK_ACCESS_2_MEMORY_READ_BIT,
@@ -181,7 +180,6 @@ pub const CmdManager = struct {
             .minDepth = 0.0,
             .maxDepth = 1.0,
         };
-
         c.pfn_vkCmdSetViewportWithCount.?(cmd, 1, &viewport);
         c.pfn_vkCmdSetScissorWithCount.?(cmd, 1, &scissor);
 
@@ -256,24 +254,30 @@ pub const CmdManager = struct {
         createPipelineBarriers2(cmd, &.{barrier});
     }
 
-    pub fn blitToTargets(self: *CmdManager, cmd: c.VkCommandBuffer, renderImg: *Image, targets: []const u8, swapchainMap: *SwapchainManager.SwapchainMap) !void {
-        var barriers = &self.blitBarriers;
-        barriers[0] = createImageMemoryBarrier2(
-            c.VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
-            c.VK_ACCESS_2_MEMORY_WRITE_BIT,
-            c.VK_PIPELINE_STAGE_2_TRANSFER_BIT,
-            c.VK_ACCESS_2_TRANSFER_READ_BIT,
-            renderImg.curLayout,
-            c.VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-            renderImg.img,
-            createSubresourceRange(c.VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1),
-        );
+    pub fn recordSwapchainBlits(cmd: c.VkCommandBuffer, renderImages: []?GpuImage, targets: []const u8, swapchainMap: *SwapchainManager.SwapchainMap) !void {
+        for (targets) |swapchainIndex| {
+            const swapchain = swapchainMap.getPtrAtIndex(swapchainIndex);
+            const imgID = swapchain.renderId;
+            // Safety
+            if (renderImages[imgID] == null) {
+                std.debug.print("Error: Window wants RenderID {} but it is null\n", .{imgID});
+                continue;
+            }
+            var srcImgPtr = &renderImages[imgID].?;
 
-        renderImg.curLayout = c.VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-
-        for (targets, 1..) |id, i| {
-            const swapchain = swapchainMap.getPtrAtIndex(id);
-            barriers[i] = createImageMemoryBarrier2(
+            // 1. BARRIER: Transition Source Image (Color/General -> Transfer Src)
+            const srcBarrier = createImageMemoryBarrier2(
+                c.VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+                c.VK_ACCESS_2_MEMORY_WRITE_BIT,
+                c.VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+                c.VK_ACCESS_2_TRANSFER_READ_BIT,
+                srcImgPtr.curLayout,
+                c.VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                srcImgPtr.img,
+                createSubresourceRange(c.VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1),
+            );
+            // 2. BARRIER: Transition Dest Swapchain (Undefined -> Transfer Dst)
+            const dstBarrier = createImageMemoryBarrier2(
                 c.VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
                 0,
                 c.VK_PIPELINE_STAGE_2_TRANSFER_BIT,
@@ -283,65 +287,37 @@ pub const CmdManager = struct {
                 swapchain.images[swapchain.curIndex],
                 createSubresourceRange(c.VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1),
             );
-        }
+            createPipelineBarriers2(cmd, &.{ srcBarrier, dstBarrier });
 
-        const barriersPtr1 = self.blitBarriers[0 .. targets.len + 1];
-        createPipelineBarriers2(cmd, barriersPtr1);
+            srcImgPtr.curLayout = c.VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
 
-        for (targets) |id| {
-            const swapchain = swapchainMap.getPtrAtIndex(id);
-
+            // 3. CALCULATE BLIT OFFSETS (Centering)
             var srcOffsets: [2]c.VkOffset3D = undefined;
             var dstOffsets: [2]c.VkOffset3D = undefined;
 
-            // Destination is ALWAYS the full window surface
             dstOffsets[0] = .{ .x = 0, .y = 0, .z = 0 };
             dstOffsets[1] = .{ .x = @intCast(swapchain.extent.width), .y = @intCast(swapchain.extent.height), .z = 1 };
 
             if (config.RENDER_IMG_STRETCH) {
-                // STRETCH: Use full source image
                 srcOffsets[0] = .{ .x = 0, .y = 0, .z = 0 };
-                srcOffsets[1] = .{ .x = @intCast(renderImg.extent3d.width), .y = @intCast(renderImg.extent3d.height), .z = 1 };
+                srcOffsets[1] = .{ .x = @intCast(srcImgPtr.extent3d.width), .y = @intCast(srcImgPtr.extent3d.height), .z = 1 };
             } else {
-                // CROP / CENTER:
-                // We want a window-sized chunk from the CENTER of the Render Image.
+                const srcW: i32 = @intCast(srcImgPtr.extent3d.width);
+                const srcH: i32 = @intCast(srcImgPtr.extent3d.height);
+                const winW: i32 = @intCast(swapchain.extent.width);
+                const winH: i32 = @intCast(swapchain.extent.height);
 
-                const srcW = renderImg.extent3d.width;
-                const srcH = renderImg.extent3d.height;
-                const winW = swapchain.extent.width;
-                const winH = swapchain.extent.height;
-
-                // Math to find the start point (Top-Left) in the source image
-                // Use @divFloor or simple integer division
-                const startX: i32 = @intCast((srcW - winW) / 2);
-                const startY: i32 = @intCast((srcH - winH) / 2);
-
+                // for Center
+                const startX = @divFloor(srcW - winW, 2);
+                const startY = @divFloor(srcH - winH, 2);
                 srcOffsets[0] = .{ .x = startX, .y = startY, .z = 0 };
-                srcOffsets[1] = .{ .x = startX + @as(i32, @intCast(winW)), .y = startY + @as(i32, @intCast(winH)), .z = 1 };
-
-                // Safety check: If Window is LARGER than Image (shouldn't happen with Auto-Resize),
-                // Vulkan Blit handles clamping, but logic might look weird (zoom in corner).
+                srcOffsets[1] = .{ .x = startX + winW, .y = startY + winH, .z = 1 };
             }
-
-            copyImageToImage(cmd, renderImg.img, srcOffsets, swapchain.images[swapchain.curIndex], dstOffsets);
+            // 4. BLIT
+            copyImageToImage(cmd, srcImgPtr.img, srcOffsets, swapchain.images[swapchain.curIndex], dstOffsets);
+            // 5. Transition Dest Swapchain to Present
+            transitionToPresent(cmd, swapchain);
         }
-
-        for (targets, 0..targets.len) |id, i| {
-            const swapchain = swapchainMap.getPtrAtIndex(id);
-            barriers[i] = createImageMemoryBarrier2(
-                c.VK_PIPELINE_STAGE_2_TRANSFER_BIT,
-                c.VK_ACCESS_2_TRANSFER_WRITE_BIT,
-                c.VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT,
-                0,
-                c.VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                c.VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-                swapchain.images[swapchain.curIndex],
-                createSubresourceRange(c.VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1),
-            );
-        }
-
-        const barriersPtr2 = self.blitBarriers[0..targets.len];
-        createPipelineBarriers2(cmd, barriersPtr2);
     }
 };
 
