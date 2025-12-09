@@ -1,0 +1,33 @@
+#version 460
+#extension GL_EXT_mesh_shader : require
+
+// We launch 1 thread per Task Workgroup (kept simple for now)
+layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
+
+// Define the payload structure to pass data to the Mesh Shader
+struct TaskPayload {
+    uint chunkID; // Example data
+    vec3 offset;  // Example data
+};
+
+// "taskPayloadSharedEXT" is memory shared between this Task WG and the child Mesh WGs
+taskPayloadSharedEXT TaskPayload payload;
+
+void main() {
+    // 1. Logic: Should we draw anything? (Frustum cull here later)
+    bool draw = true; 
+
+    if (draw) {
+        // Write data for the mesh shader to read
+        payload.chunkID = gl_WorkGroupID.x; 
+        payload.offset = vec3(0.0, 0.0, 0.0);
+
+        // 2. Launch Mesh Shaders
+        // EmitMeshTasksEXT(groupCountX, groupCountY, groupCountZ)
+        // This spawns 1 Mesh Shader Workgroup
+        EmitMeshTasksEXT(1, 1, 1); 
+    } else {
+        // Cull this chunk effectively
+        EmitMeshTasksEXT(0, 0, 0);
+    }
+}

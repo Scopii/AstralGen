@@ -96,25 +96,34 @@ pub const RenderResource = struct {
     memUsage: c_uint,
 };
 
-pub const renderImg1 = RenderResource{ .id = 0, .extent = RENDER_IMG_EXTENT1, .imgFormat = RENDER_IMG_FORMAT, .memUsage = c.VMA_MEMORY_USAGE_GPU_ONLY };
-pub const renderImg2 = RenderResource{ .id = 1, .extent = RENDER_IMG_EXTENT2, .imgFormat = RENDER_IMG_FORMAT, .memUsage = c.VMA_MEMORY_USAGE_GPU_ONLY };
-pub const renderImg3 = RenderResource{ .id = 15, .extent = RENDER_IMG_EXTENT3, .imgFormat = RENDER_IMG_FORMAT, .memUsage = c.VMA_MEMORY_USAGE_GPU_ONLY };
-
 // Render
 pub const comp1 = Shader{ .stage = c.VK_SHADER_STAGE_COMPUTE_BIT, .glslFile = "Compute.comp", .spvFile = "Compute.spv" };
+
 pub const vert1 = Shader{ .stage = c.VK_SHADER_STAGE_VERTEX_BIT, .glslFile = "Graphics.vert", .spvFile = "GraphicsVert.spv" };
 pub const frag1 = Shader{ .stage = c.VK_SHADER_STAGE_FRAGMENT_BIT, .glslFile = "Graphics.frag", .spvFile = "GraphicsFrag.spv" };
+
 pub const mesh1 = Shader{ .stage = c.VK_SHADER_STAGE_MESH_BIT_EXT, .glslFile = "Mesh.mesh", .spvFile = "MeshMesh.spv" };
 pub const frag2 = Shader{ .stage = c.VK_SHADER_STAGE_FRAGMENT_BIT, .glslFile = "Mesh.frag", .spvFile = "MeshFrag.spv" };
 
-pub const shadersToCompile: []const Shader = &.{ comp1, vert1, frag1, mesh1, frag2 };
+pub const task1 = Shader{ .stage = c.VK_SHADER_STAGE_TASK_BIT_EXT, .glslFile = "TaskMesh.task", .spvFile = "TaskMeshTask.spv" };
+pub const mesh2 = Shader{ .stage = c.VK_SHADER_STAGE_MESH_BIT_EXT, .glslFile = "TaskMesh.mesh", .spvFile = "TaskMeshMesh.spv" };
+pub const frag3 = Shader{ .stage = c.VK_SHADER_STAGE_FRAGMENT_BIT, .glslFile = "TaskMesh.frag", .spvFile = "TaskMeshFrag.spv" };
+
+pub const shadersToCompile: []const Shader = &.{ comp1, vert1, frag1, mesh1, frag2, task1, mesh2, frag3 };
+
+pub const renderImg1 = RenderResource{ .id = 0, .extent = RENDER_IMG_EXTENT1, .imgFormat = RENDER_IMG_FORMAT, .memUsage = c.VMA_MEMORY_USAGE_GPU_ONLY };
+pub const renderImg2 = RenderResource{ .id = 1, .extent = RENDER_IMG_EXTENT2, .imgFormat = RENDER_IMG_FORMAT, .memUsage = c.VMA_MEMORY_USAGE_GPU_ONLY };
+pub const renderImg3 = RenderResource{ .id = 15, .extent = RENDER_IMG_EXTENT3, .imgFormat = RENDER_IMG_FORMAT, .memUsage = c.VMA_MEMORY_USAGE_GPU_ONLY };
+pub const renderImg4 = RenderResource{ .id = 7, .extent = RENDER_IMG_EXTENT3, .imgFormat = RENDER_IMG_FORMAT, .memUsage = c.VMA_MEMORY_USAGE_GPU_ONLY };
 
 pub const computePass1: ShaderLayout = .{ .renderImg = renderImg1, .shaders = &.{comp1}, .clear = true }; // clear does not work for compute
 pub const graphicsPass1: ShaderLayout = .{ .renderImg = renderImg2, .shaders = &.{ vert1, frag1 }, .clear = false };
 pub const meshPass1: ShaderLayout = .{ .renderImg = renderImg3, .shaders = &.{ mesh1, frag2 }, .clear = false };
+pub const taskMeshPass1: ShaderLayout = .{ .renderImg = renderImg4, .shaders = &.{ task1, mesh2, frag3 }, .clear = false };
 
 pub const renderSeq: []const ShaderLayout = &.{
     graphicsPass1,
     meshPass1,
     computePass1,
+    taskMeshPass1,
 };

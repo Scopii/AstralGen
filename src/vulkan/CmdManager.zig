@@ -75,7 +75,7 @@ pub const CmdManager = struct {
     ) !void {
         switch (renderType) {
             .compute => try recordCompute(cmd, renderImg, shaderObjects, pipeLayout, gpuAddress, pushConstants),
-            .graphics, .mesh => try recordGraphics(cmd, renderImg, shaderObjects, renderType, pipeLayout, gpuAddress, pushConstants, shouldClear),
+            .graphics, .mesh, .taskMesh => try recordGraphics(cmd, renderImg, shaderObjects, renderType, pipeLayout, gpuAddress, pushConstants, shouldClear),
             else => std.debug.print("Renderer: {s} has no Command Recording yet\n", .{@tagName(renderType)}),
         }
     }
@@ -230,9 +230,13 @@ pub const CmdManager = struct {
                 setGraphicsDynamicStates(cmd);
                 c.vkCmdDraw(cmd, 3, 1, 0, 0);
             },
-            .mesh => {
+            .mesh, .taskMesh => {
                 c.pfn_vkCmdBindShadersEXT.?(cmd, 7, &stages, &shaders);
                 setGraphicsDynamicStates(cmd);
+
+                // When using Task Shaders, these arguments now mean:
+                // "How many TASK workgroups to launch"
+                // (The task shader then decides how many Mesh workgroups to launch)
                 c.pfn_vkCmdDrawMeshTasksEXT.?(cmd, 1, 1, 1);
             },
             else => return error.UnsupportedPipelineType,

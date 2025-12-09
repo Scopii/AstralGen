@@ -79,8 +79,9 @@ pub const App = struct {
     }
 
     pub fn initWindows(self: *App) !void {
-        try self.windowMan.addWindow("Astral1", 1600, 900, config.renderImg1.id);
-        try self.windowMan.addWindow("Astral2", 16 * 70, 9 * 70, config.renderImg2.id);
+        try self.windowMan.addWindow("Astral4", 1800, 950, config.renderImg4.id);
+        try self.windowMan.addWindow("Astral1", 1600, 800, config.renderImg1.id);
+        try self.windowMan.addWindow("Astral2", 1200, 600, config.renderImg2.id);
         try self.windowMan.addWindow("Astral3", 350, 350, config.renderImg3.id);
     }
 
