@@ -12,10 +12,10 @@ pub const ShaderObject = struct {
     stage: c.VkShaderStageFlagBits,
 
     pub fn init(
+        alloc: Allocator,
         gpi: c.VkDevice,
         shader: config.Shader,
         nextStage: c.VkShaderStageFlagBits,
-        alloc: Allocator,
         descLayout: c.VkDescriptorSetLayout,
         renderType: RenderType,
     ) !ShaderObject {
@@ -24,13 +24,13 @@ pub const ShaderObject = struct {
 
         const rootPath = try resolveProjectRoot(alloc, config.rootPath);
         defer alloc.free(rootPath);
-        const spvFilePath = std.fs.path.join(alloc, &[_][]const u8{ rootPath, config.sprvPath, spvFile }) catch |err| {
-            std.debug.print("ShaderObject spvFilePath could not be resolved {}\n", .{err});
+        const spvPath = std.fs.path.join(alloc, &[_][]const u8{ rootPath, config.sprvPath, spvFile }) catch |err| {
+            std.debug.print("ShaderObject spv Path could not be resolved {}\n", .{err});
             return err;
         };
-        defer alloc.free(spvFilePath);
+        defer alloc.free(spvPath);
 
-        const spvData = try loadShader(alloc, spvFilePath);
+        const spvData = try loadShader(alloc, spvPath);
         defer alloc.free(spvData);
 
         // Set flags based on shader stage
@@ -39,7 +39,7 @@ pub const ShaderObject = struct {
             flags |= c.VK_SHADER_CREATE_NO_TASK_SHADER_BIT_EXT; // because task shader isnt used YET
         }
 
-        const shaderCreateInfo = c.VkShaderCreateInfoEXT{
+        const shaderInf = c.VkShaderCreateInfoEXT{
             .sType = c.VK_STRUCTURE_TYPE_SHADER_CREATE_INFO_EXT,
             .pNext = null,
             .flags = if (renderType == .compute) 0 else flags,
@@ -59,12 +59,11 @@ pub const ShaderObject = struct {
             },
             .pSpecializationInfo = null,
         };
-
-        var shaderObject: c.VkShaderEXT = undefined;
-        try check(c.pfn_vkCreateShadersEXT.?(gpi, 1, &shaderCreateInfo, null, &shaderObject), "Failed to create graphics ShaderObject");
+        var shaderObj: c.VkShaderEXT = undefined;
+        try check(c.pfn_vkCreateShadersEXT.?(gpi, 1, &shaderInf, null, &shaderObj), "Failed to create graphics ShaderObject");
 
         return .{
-            .handle = shaderObject,
+            .handle = shaderObj,
             .stage = stage,
         };
     }

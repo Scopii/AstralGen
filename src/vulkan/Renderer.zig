@@ -16,7 +16,6 @@ const MemoryManager = @import("../core/MemoryManager.zig").MemoryManager;
 const Object = @import("../ecs/EntityManager.zig").Object;
 const check = @import("error.zig").check;
 const createInstance = @import("Context.zig").createInstance;
-const CreateMapArray = @import("../structures/MapArray.zig").CreateMapArray;
 
 const Allocator = std.mem.Allocator;
 const RENDER_IMG_MAX = config.RENDER_IMG_MAX;
@@ -30,10 +29,8 @@ pub const Renderer = struct {
     swapchainMan: SwapchainManager,
     cmdMan: CmdManager,
     scheduler: Scheduler,
-    //renderImages: CreateMapArray(GpuImage, MAX_WINDOWS, u8, MAX_WINDOWS, 0) = .{},
     renderImages: [RENDER_IMG_MAX]?GpuImage,
-    startTime: i128 = 0,
-    testBuffer: GpuBuffer = undefined,
+    gpuObjects: GpuBuffer = undefined,
 
     pub fn init(memoryMan: *MemoryManager, objects: []Object) !Renderer {
         const alloc = memoryMan.getAllocator();
@@ -49,18 +46,18 @@ pub const Renderer = struct {
         for (0..renderImages.len) |i| renderImages[i] = null;
 
         for (config.renderSeq) |shaderLayout| {
-            const renderImage = shaderLayout.renderImg;
+            const renderImg = shaderLayout.renderImg;
 
-            if (renderImage.id > RENDER_IMG_MAX - 1) {
+            if (renderImg.id > RENDER_IMG_MAX - 1) {
                 std.debug.print("Renderer: RenderId Image ID cant be bigger than Max Windows\n", .{});
                 return error.RenderImageIdOutOfBounds;
             }
 
-            if (renderImages[renderImage.id] == null) {
-                const gpuImage = try resourceMan.createGpuImage(renderImage.extent, renderImage.imgFormat, renderImage.memUsage);
-                renderImages[renderImage.id] = gpuImage;
-                std.debug.print("Renderer: RenderImage {} created\n", .{renderImage.id});
-                try resourceMan.updateImageDescriptor(gpuImage.view, renderImage.id);
+            if (renderImages[renderImg.id] == null) {
+                const gpuImg = try resourceMan.createGpuImage(renderImg.extent, renderImg.imgFormat, renderImg.memUsage);
+                renderImages[renderImg.id] = gpuImg;
+                std.debug.print("Renderer: RenderImage {} created\n", .{renderImg.id});
+                try resourceMan.updateImageDescriptor(gpuImg.view, renderImg.id);
             }
         }
 
@@ -74,23 +71,18 @@ pub const Renderer = struct {
             .scheduler = scheduler,
             .renderImages = renderImages,
             .swapchainMan = swapchainMan,
-            .startTime = std.time.nanoTimestamp(),
-            .testBuffer = try resourceMan.createTestDataBuffer(objects),
+            .gpuObjects = try resourceMan.createGpuBuffer(objects),
         };
     }
 
     pub fn deinit(self: *Renderer) void {
         _ = c.vkDeviceWaitIdle(self.context.gpi);
-
-        for (self.renderImages) |renderImage| {
-            if (renderImage != null) self.resourceMan.destroyGpuImage(renderImage.?);
-        }
-
+        for (self.renderImages) |renderImg| if (renderImg != null) self.resourceMan.destroyGpuImage(renderImg.?);
         self.scheduler.deinit();
         self.cmdMan.deinit();
         self.swapchainMan.deinit();
         self.shaderMan.deinit();
-        self.resourceMan.destroyGpuBuffer(self.testBuffer);
+        self.resourceMan.destroyGpuBuffer(self.gpuObjects);
         self.resourceMan.deinit();
         self.context.deinit();
     }
@@ -104,26 +96,26 @@ pub const Renderer = struct {
             }
         }
 
-        for (windows) |windowPtr| {
-            switch (windowPtr.status) {
+        for (windows) |winPtr| {
+            switch (winPtr.status) {
                 .needUpdate => {
-                    try self.swapchainMan.createSwapchain(&self.context, .{ .window = windowPtr });
-                    windowPtr.status = .active;
+                    try self.swapchainMan.createSwapchain(&self.context, .{ .window = winPtr });
+                    winPtr.status = .active;
                 },
                 .needActive => {
-                    try self.swapchainMan.addActive(windowPtr);
-                    windowPtr.status = .active;
+                    try self.swapchainMan.addActive(winPtr);
+                    winPtr.status = .active;
                 },
                 .needInactive => {
-                    self.swapchainMan.removeActive(windowPtr);
-                    windowPtr.status = .inactive;
+                    self.swapchainMan.removeActive(winPtr);
+                    winPtr.status = .inactive;
                 },
                 .needCreation => {
-                    try self.swapchainMan.createSwapchain(&self.context, .{ .window = windowPtr });
-                    windowPtr.status = .active;
+                    try self.swapchainMan.createSwapchain(&self.context, .{ .window = winPtr });
+                    winPtr.status = .active;
                 },
-                .needDelete => self.swapchainMan.removeSwapchain(&.{windowPtr}),
-                else => std.debug.print("Window State {s} cant be handled in Renderer\n", .{@tagName(windowPtr.status)}),
+                .needDelete => self.swapchainMan.removeSwapchain(&.{winPtr}),
+                else => std.debug.print("Window State {s} cant be handled in Renderer\n", .{@tagName(winPtr.status)}),
             }
         }
         self.swapchainMan.updateMaxExtent();
@@ -147,9 +139,9 @@ pub const Renderer = struct {
         // }
     }
 
-    pub fn updatePipeline(self: *Renderer, index: usize) !void {
+    pub fn updateShaderLayout(self: *Renderer, index: usize) !void {
         _ = c.vkDeviceWaitIdle(self.context.gpi);
-        try self.shaderMan.update(index);
+        try self.shaderMan.updateShaderLayout(index);
     }
 
     pub fn draw(self: *Renderer, cam: *Camera, runtimeAsFloat: f32) !void {
@@ -173,34 +165,34 @@ pub const Renderer = struct {
         var touchedIndices: u64 = 0;
 
         for (0..config.renderSeq.len) |i| {
-            const renderImageId = config.renderSeq[i].renderImg.id;
-            const renderImagePtr = &self.renderImages[renderImageId].?;
+            const renderImgId = config.renderSeq[i].renderImg.id;
+            const renderImgPtr = &self.renderImages[renderImgId].?;
 
             const pushConstants = PushConstants{
                 .camPosAndFov = cam.getPosAndFov(),
                 .camDir = cam.getForward(),
-                .dataAddress = self.testBuffer.gpuAddress,
+                .dataAddress = self.gpuObjects.gpuAddress,
                 .runtime = runtimeAsFloat,
-                .dataCount = @intCast(self.testBuffer.size / @sizeOf(Object)),
-                .outputImageIndex = renderImageId,
+                .dataCount = @intCast(self.gpuObjects.size / @sizeOf(Object)),
+                .renderImgIndex = renderImgId,
             };
 
             try CmdManager.recordPass(
                 cmd,
-                renderImagePtr,
+                renderImgPtr,
                 self.shaderMan.shaderObjects[i].items,
                 self.shaderMan.getRenderType(i),
                 self.shaderMan.pipeLayout,
-                self.resourceMan.imageDescBuffer.gpuAddress,
+                self.resourceMan.imgDescBuffer.gpuAddress,
                 pushConstants,
                 config.renderSeq[i].clear,
             );
             // BLIT LOGIC
-            var targetArray: [config.MAX_WINDOWS]u8 = undefined;
-            const targets = self.swapchainMan.findRenderIdTargets(renderImageId, &targetArray);
+            var passTargets: [config.MAX_WINDOWS]u8 = undefined;
+            const targets = self.swapchainMan.fillPassTargets(renderImgId, &passTargets);
 
             if (targets.len > 0) {
-                try self.cmdMan.blitToTargets(cmd, renderImagePtr, targets, &self.swapchainMan.swapchains);
+                try self.cmdMan.blitToTargets(cmd, renderImgPtr, targets, &self.swapchainMan.swapchains);
 
                 for (targets) |id| {
                     touchedIndices |= (@as(u64, 1) << @intCast(id));
@@ -233,8 +225,8 @@ pub const Renderer = struct {
         }
         // Signal timeline semaphore for CPU
         signalInfos[submitIds.len] = createSemaphoreSubmitInfo(self.scheduler.cpuSyncTimeline, c.VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, self.scheduler.totalFrames + 1);
-        const cmdSubmitInfo = createCmdSubmitInfo(cmd);
-        const submitInf = createSubmitInfo(waitInfos, &cmdSubmitInfo, signalInfos);
+        const cmdSubmitInf = createCmdSubmitInfo(cmd);
+        const submitInf = createSubmitInfo(waitInfos, &cmdSubmitInf, signalInfos);
         try check(c.vkQueueSubmit2(self.context.graphicsQ, 1, &submitInf, null), "Failed main submission");
     }
 

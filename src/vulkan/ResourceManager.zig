@@ -7,7 +7,7 @@ const check = @import("error.zig").check;
 
 pub const GpuImage = struct {
     allocation: c.VmaAllocation,
-    image: c.VkImage,
+    img: c.VkImage,
     view: c.VkImageView,
     extent3d: c.VkExtent3D,
     format: c.VkFormat,
@@ -29,8 +29,8 @@ pub const ResourceManager = struct {
     gpu: c.VkPhysicalDevice,
 
     descLayout: c.VkDescriptorSetLayout,
-    imageDescBuffer: GpuBuffer,
-    imageDescSize: u32,
+    imgDescBuffer: GpuBuffer,
+    imgDescSize: u32,
 
     pub fn init(alloc: Allocator, context: *const Context) !ResourceManager {
         const gpi = context.gpi;
@@ -40,90 +40,89 @@ pub const ResourceManager = struct {
         var descBufferProps = c.VkPhysicalDeviceDescriptorBufferPropertiesEXT{ .sType = c.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_BUFFER_PROPERTIES_EXT };
         var physDevProps = c.VkPhysicalDeviceProperties2{ .sType = c.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2, .pNext = &descBufferProps };
         c.vkGetPhysicalDeviceProperties2(context.gpu, &physDevProps);
-        const imageDescSize: u32 = @intCast(descBufferProps.storageImageDescriptorSize); // Whole gpu memory?
+        const imgDescSize: u32 = @intCast(descBufferProps.storageImageDescriptorSize); // Whole gpu memory?
         // Create descriptor set layout
         const descLayout = try createDescriptorLayout(gpi, 0, c.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1024, c.VK_SHADER_STAGE_ALL);
         errdefer c.vkDestroyDescriptorSetLayout(gpi, descLayout, null);
         // Get the exact size required for this layout from the driver
         var layoutSize: c.VkDeviceSize = undefined;
         c.pfn_vkGetDescriptorSetLayoutSizeEXT.?(gpi, descLayout, &layoutSize);
-
         // Create descriptor buffer with driver-provided size
-        const imageDescBuffer = try createDefinedBuffer(gpuAlloc.handle, gpi, layoutSize, null, .descriptor);
+        const imgDescBuffer = try createDefinedBuffer(gpuAlloc.handle, gpi, layoutSize, null, .descriptor);
 
         return .{
             .cpuAlloc = alloc,
             .gpuAlloc = gpuAlloc,
             .gpi = context.gpi,
             .gpu = context.gpu,
-            .imageDescSize = imageDescSize,
-            .imageDescBuffer = imageDescBuffer,
+            .imgDescSize = imgDescSize,
+            .imgDescBuffer = imgDescBuffer,
             .descLayout = descLayout,
         };
     }
 
     pub fn deinit(self: *ResourceManager) void {
-        c.vmaDestroyBuffer(self.gpuAlloc.handle, self.imageDescBuffer.buffer, self.imageDescBuffer.allocation);
+        c.vmaDestroyBuffer(self.gpuAlloc.handle, self.imgDescBuffer.buffer, self.imgDescBuffer.allocation);
         c.vkDestroyDescriptorSetLayout(self.gpi, self.descLayout, null);
         self.gpuAlloc.deinit();
     }
 
     pub fn createGpuImage(self: *const ResourceManager, extent: c.VkExtent3D, format: c.VkFormat, usage: c.VmaMemoryUsage) !GpuImage {
         // Extending Flags as Parameters later
-        const drawImageUsages = c.VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
+        const drawImgUsages = c.VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
             c.VK_IMAGE_USAGE_TRANSFER_DST_BIT |
             c.VK_IMAGE_USAGE_STORAGE_BIT |
             c.VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 
         // Allocation from GPU local memory
-        const imageInf = createAllocatedImageInf(format, drawImageUsages, extent);
-        const imageAllocInf = c.VmaAllocationCreateInfo{ .usage = usage, .requiredFlags = c.VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT };
+        const imgInf = createAllocatedImageInf(format, drawImgUsages, extent);
+        const imgAllocInf = c.VmaAllocationCreateInfo{ .usage = usage, .requiredFlags = c.VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT };
 
-        var image: c.VkImage = undefined;
+        var img: c.VkImage = undefined;
         var allocation: c.VmaAllocation = undefined;
         var view: c.VkImageView = undefined;
-        try check(c.vmaCreateImage(self.gpuAlloc.handle, &imageInf, &imageAllocInf, &image, &allocation, null), "Could not create Render Image");
-        const renderViewInf = createAllocatedImageViewInf(format, image, c.VK_IMAGE_ASPECT_COLOR_BIT);
+        try check(c.vmaCreateImage(self.gpuAlloc.handle, &imgInf, &imgAllocInf, &img, &allocation, null), "Could not create Render Image");
+        const renderViewInf = createAllocatedImageViewInf(format, img, c.VK_IMAGE_ASPECT_COLOR_BIT);
         try check(c.vkCreateImageView(self.gpi, &renderViewInf, null, &view), "Could not create Render Image View");
 
         return .{
             .allocation = allocation,
-            .image = image,
+            .img = img,
             .view = view,
             .extent3d = extent,
             .format = format,
         };
     }
 
-    pub fn updateImageDescriptor(self: *ResourceManager, imageView: c.VkImageView, index: u32) !void {
+    pub fn updateImageDescriptor(self: *ResourceManager, imgView: c.VkImageView, index: u32) !void {
         const gpi = self.gpi;
         const vkAlloc = self.gpuAlloc.handle;
-        const imageDescSize = self.imageDescSize;
+        const imgDescSize = self.imgDescSize;
 
-        const imageInf = c.VkDescriptorImageInfo{ .sampler = null, .imageView = imageView, .imageLayout = c.VK_IMAGE_LAYOUT_GENERAL };
+        const imgInf = c.VkDescriptorImageInfo{ .sampler = null, .imageView = imgView, .imageLayout = c.VK_IMAGE_LAYOUT_GENERAL };
 
         const getInf = c.VkDescriptorGetInfoEXT{
             .sType = c.VK_STRUCTURE_TYPE_DESCRIPTOR_GET_INFO_EXT,
             .type = c.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-            .data = .{ .pStorageImage = &imageInf },
+            .data = .{ .pStorageImage = &imgInf },
         };
 
         var descData: [32]u8 = undefined;
-        if (imageDescSize > descData.len) return error.DescriptorSizeTooLarge;
-        c.pfn_vkGetDescriptorEXT.?(gpi, &getInf, imageDescSize, &descData);
+        if (imgDescSize > descData.len) return error.DescriptorSizeTooLarge;
+        c.pfn_vkGetDescriptorEXT.?(gpi, &getInf, imgDescSize, &descData);
 
         var allocVmaInf: c.VmaAllocationInfo = undefined;
-        c.vmaGetAllocationInfo(vkAlloc, self.imageDescBuffer.allocation, &allocVmaInf);
+        c.vmaGetAllocationInfo(vkAlloc, self.imgDescBuffer.allocation, &allocVmaInf);
 
-        const offset = index * imageDescSize;
+        const offset = index * imgDescSize;
         const mappedData = @as([*]u8, @ptrCast(allocVmaInf.pMappedData));
         const destPtr = mappedData + offset;
-        @memcpy(destPtr[0..imageDescSize], descData[0..imageDescSize]);
+        @memcpy(destPtr[0..imgDescSize], descData[0..imgDescSize]);
     }
 
     const Object = @import("../ecs/EntityManager.zig").Object;
 
-    pub fn createTestDataBuffer(self: *const ResourceManager, objects: []Object) !GpuBuffer {
+    pub fn createGpuBuffer(self: *const ResourceManager, objects: []Object) !GpuBuffer {
         const bufferSize = objects.len * @sizeOf(Object);
 
         const buffer = try createDefinedBuffer(self.gpuAlloc.handle, self.gpi, bufferSize, null, .testBuffer);
@@ -135,7 +134,6 @@ pub const ResourceManager = struct {
         if (@intFromPtr(allocVmaInf.pMappedData) % alignment != 0) {
             return error.ImproperAlignment;
         }
-
         const dataPtr: [*]Object = @ptrCast(@alignCast(allocVmaInf.pMappedData));
         @memcpy(dataPtr[0..objects.len], objects);
 
@@ -155,9 +153,9 @@ pub const ResourceManager = struct {
         c.vmaDestroyBuffer(self.gpuAlloc.handle, bufRef.buffer, bufRef.allocation);
     }
 
-    pub fn destroyGpuImage(self: *const ResourceManager, image: GpuImage) void {
-        c.vkDestroyImageView(self.gpi, image.view, null);
-        c.vmaDestroyImage(self.gpuAlloc.handle, image.image, image.allocation);
+    pub fn destroyGpuImage(self: *const ResourceManager, gpuImg: GpuImage) void {
+        c.vkDestroyImageView(self.gpi, gpuImg.view, null);
+        c.vmaDestroyImage(self.gpuAlloc.handle, gpuImg.img, gpuImg.allocation);
     }
 };
 
@@ -167,16 +165,16 @@ fn createDefinedBuffer(vma: c.VmaAllocator, gpi: c.VkDevice, size: c.VkDeviceSiz
         .uniform => c.VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | c.VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
         .descriptor => c.VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT | c.VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
     };
-    const memoryUsage: u32 = switch (bufferType) {
+    const memUsage: u32 = switch (bufferType) {
         .storage => c.VMA_MEMORY_USAGE_GPU_ONLY,
         .uniform, .descriptor, .testBuffer => c.VMA_MEMORY_USAGE_CPU_TO_GPU,
     };
-    const memoryFlags: u32 = switch (bufferType) {
+    const memFlags: u32 = switch (bufferType) {
         .uniform, .descriptor => c.VMA_ALLOCATION_CREATE_MAPPED_BIT,
         .testBuffer => c.VMA_ALLOCATION_CREATE_MAPPED_BIT | c.VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT,
         .storage => 0, // Storage buffers should not be mapped
     };
-    return createBuffer(vma, gpi, size, data, bufferUsage, memoryUsage, memoryFlags);
+    return createBuffer(vma, gpi, size, data, bufferUsage, memUsage, memFlags);
 }
 
 fn createDescriptorLayout(gpi: c.VkDevice, binding: u32, descType: c.VkDescriptorType, count: u32, stageFlags: c.VkShaderStageFlags) !c.VkDescriptorSetLayout {

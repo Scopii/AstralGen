@@ -6,7 +6,7 @@ const Window = @import("../platform/Window.zig").Window;
 const QueueFamilies = @import("Context.zig").QueueFamilies;
 const CreateMapArray = @import("../structures/MapArray.zig").CreateMapArray;
 const check = @import("error.zig").check;
-const createSemaphore = @import("primitives.zig").createSemaphore;
+const createSemaphore = @import("Scheduler.zig").createSemaphore;
 
 const config = @import("../config.zig");
 const MAX_IN_FLIGHT = config.MAX_IN_FLIGHT;
@@ -28,12 +28,14 @@ pub const Swapchain = struct {
     active: bool = true,
 };
 
+pub const SwapchainMap = CreateMapArray(Swapchain, MAX_WINDOWS, u8, MAX_WINDOWS, 0);
+
 pub const SwapchainManager = struct {
     alloc: Allocator,
     gpi: c.VkDevice,
     instance: c.VkInstance,
     maxExtent: c.VkExtent2D = .{ .width = 0, .height = 0 },
-    swapchains: CreateMapArray(Swapchain, MAX_WINDOWS, u8, MAX_WINDOWS, 0) = .{},
+    swapchains: SwapchainMap = .{},
     targets: std.BoundedArray(u8, MAX_WINDOWS) = .{},
 
     pub fn init(alloc: Allocator, context: *const Context) !SwapchainManager {
@@ -63,6 +65,7 @@ pub const SwapchainManager = struct {
 
             switch (result1) {
                 c.VK_SUCCESS => try self.targets.append(@intCast(i)),
+
                 c.VK_ERROR_OUT_OF_DATE_KHR, c.VK_SUBOPTIMAL_KHR => {
                     try self.createSwapchain(context, .{ .id = @intCast(windowID) });
                     const result2 = c.vkAcquireNextImageKHR(gpi, ptr.handle, std.math.maxInt(u64), ptr.imgRdySems[frameInFlight], null, &ptr.curIndex);
@@ -75,11 +78,10 @@ pub const SwapchainManager = struct {
                 else => try check(result1, "Could not acquire swapchain image"),
             }
         }
-
         return if (self.targets.len != 0) true else false;
     }
 
-    pub fn findRenderIdTargets(self: *SwapchainManager, renderId: u8, targetArray: []u8) []u8 {
+    pub fn fillPassTargets(self: *SwapchainManager, renderId: u8, targetArray: []u8) []u8 {
         var renderTargetCount: u8 = 0;
 
         for (self.targets.slice()) |target| {
@@ -109,7 +111,6 @@ pub const SwapchainManager = struct {
             maxWidth = @max(maxWidth, swapchain.extent.width);
             maxHeight = @max(maxHeight, swapchain.extent.height);
         }
-
         self.maxExtent = c.VkExtent2D{ .width = maxWidth, .height = maxHeight };
     }
 
@@ -197,7 +198,7 @@ pub const SwapchainManager = struct {
         const alloc = self.alloc;
         const gpi = self.gpi;
         const mode = DISPLAY_MODE; //try context.pickPresentMode();
-        const actualExtent = pickExtent(&caps, extent);
+        const realExtent = pickExtent(&caps, extent);
 
         var desiredImgCount: u32 = DESIRED_SWAPCHAIN_IMAGES;
         if (caps.maxImageCount < desiredImgCount) {
@@ -214,7 +215,7 @@ pub const SwapchainManager = struct {
             .minImageCount = desiredImgCount,
             .imageFormat = surfaceFormat.format,
             .imageColorSpace = surfaceFormat.colorSpace,
-            .imageExtent = actualExtent,
+            .imageExtent = realExtent,
             .imageArrayLayers = 1,
             .imageUsage = c.VK_IMAGE_USAGE_TRANSFER_DST_BIT | c.VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
             .imageSharingMode = c.VK_SHARING_MODE_EXCLUSIVE,
@@ -226,7 +227,6 @@ pub const SwapchainManager = struct {
             .clipped = c.VK_TRUE,
             .oldSwapchain = if (oldHandle != null) oldHandle.? else null,
         };
-
         var handle: c.VkSwapchainKHR = undefined;
         try check(c.vkCreateSwapchainKHR(gpi, &swapchainInf, null, &handle), "Could not create Swapchain Handle");
 
@@ -257,9 +257,9 @@ pub const SwapchainManager = struct {
             try check(c.vkCreateImageView(gpi, &imgViewInf, null, &views[i]), "Failed to create image view");
         }
 
-        const imageRdySems = try alloc.alloc(c.VkSemaphore, MAX_IN_FLIGHT);
-        errdefer alloc.free(imageRdySems);
-        for (0..MAX_IN_FLIGHT) |i| imageRdySems[i] = try createSemaphore(gpi);
+        const imgRdySems = try alloc.alloc(c.VkSemaphore, MAX_IN_FLIGHT);
+        errdefer alloc.free(imgRdySems);
+        for (0..MAX_IN_FLIGHT) |i| imgRdySems[i] = try createSemaphore(gpi);
 
         const renderDoneSems = try alloc.alloc(c.VkSemaphore, realImgCount);
         errdefer alloc.free(renderDoneSems);
@@ -268,11 +268,11 @@ pub const SwapchainManager = struct {
         return .{
             .surface = surface,
             .surfaceFormat = surfaceFormat,
-            .extent = actualExtent,
+            .extent = realExtent,
             .handle = handle,
             .images = images,
             .views = views,
-            .imgRdySems = imageRdySems,
+            .imgRdySems = imgRdySems,
             .renderDoneSems = renderDoneSems,
             .renderId = undefined,
         };

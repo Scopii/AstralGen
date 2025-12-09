@@ -1,7 +1,6 @@
 const std = @import("std");
 const c = @import("../c.zig");
 const Allocator = std.mem.Allocator;
-const ztracy = @import("ztracy");
 const config = @import("../config.zig");
 const Context = @import("Context.zig").Context;
 const RenderType = @import("../config.zig").RenderType;
@@ -9,6 +8,7 @@ const ShaderLayout = @import("../config.zig").ShaderLayout;
 const ResourceManager = @import("ResourceManager.zig").ResourceManager;
 const check = @import("error.zig").check;
 const ShaderObject = @import("ShaderObject.zig").ShaderObject;
+const ztracy = @import("ztracy");
 
 pub const PushConstants = extern struct {
     camPosAndFov: [4]f32,
@@ -16,7 +16,7 @@ pub const PushConstants = extern struct {
     runtime: f32,
     dataCount: u32,
     dataAddress: u64,
-    outputImageIndex: u32,
+    renderImgIndex: u32,
 };
 
 pub const ShaderManager = struct {
@@ -66,17 +66,17 @@ pub const ShaderManager = struct {
         return self.renderTypes[seqIndex];
     }
 
-    pub fn update(self: *ShaderManager, seqIndex: usize) !void {
+    pub fn updateShaderLayout(self: *ShaderManager, seqIndex: usize) !void {
         const renderPass = config.renderSeq[seqIndex];
         const renderType = try checkShaderLayout(renderPass);
         std.debug.print("ShaderLayout {} renderType {s} for RenderId {} updated\n", .{ seqIndex, @tagName(renderType), renderPass.renderImg.id });
 
         const newList = try setShaderLayout(self.alloc, self.gpi, self.descLayout, seqIndex, renderType);
 
-        const list = &self.shaderObjects[seqIndex];
-        for (list.items) |*shaderObject| shaderObject.deinit(self.gpi);
-        list.deinit();
-        list.* = newList;
+        const listPtr = &self.shaderObjects[seqIndex];
+        for (listPtr.items) |*shaderObject| shaderObject.deinit(self.gpi);
+        listPtr.deinit();
+        listPtr.* = newList;
 
         self.renderTypes[seqIndex] = renderType;
     }
@@ -134,7 +134,7 @@ fn setShaderLayout(alloc: Allocator, gpi: c.VkDevice, descLayout: c.VkDescriptor
     for (0..shaders.len) |i| {
         const shader = shaders[i];
         const nextStage = if (i + 1 <= shaders.len - 1) shaders[i + 1].stage else 0;
-        const shaderObj = try ShaderObject.init(gpi, shader, nextStage, alloc, descLayout, renderType);
+        const shaderObj = try ShaderObject.init(alloc, gpi, shader, nextStage, descLayout, renderType);
 
         list.append(shaderObj) catch |err| {
             shaderObj.deinit(gpi);

@@ -152,7 +152,7 @@ pub const App = struct {
 
                 for (0..self.fileMan.layoutUpdateBools.len) |i| {
                     if (self.fileMan.layoutUpdateBools[i] == true) {
-                        try renderer.updatePipeline(i);
+                        try renderer.updateShaderLayout(i);
                         self.fileMan.layoutUpdateBools[i] = false;
                     }
                 }
