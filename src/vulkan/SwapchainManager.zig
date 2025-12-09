@@ -24,6 +24,8 @@ pub const Swapchain = struct {
     imgRdySems: []c.VkSemaphore, // indexed by max-in-flight.
     renderDoneSems: []c.VkSemaphore, // indexed by swapchain images
     surfaceFormat: c.VkSurfaceFormatKHR,
+    renderId: u8,
+    active: bool = true,
 };
 
 pub const SwapchainManager = struct {
@@ -32,18 +34,13 @@ pub const SwapchainManager = struct {
     instance: c.VkInstance,
     maxExtent: c.VkExtent2D = .{ .width = 0, .height = 0 },
     swapchains: CreateMapArray(Swapchain, MAX_WINDOWS, u8, MAX_WINDOWS, 0) = .{},
-    activeGroups: [MAX_WINDOWS]std.BoundedArray(u8, MAX_WINDOWS),
     targets: std.BoundedArray(u8, MAX_WINDOWS) = .{},
 
     pub fn init(alloc: Allocator, context: *const Context) !SwapchainManager {
-        var activeGroups: [MAX_WINDOWS]std.BoundedArray(u8, MAX_WINDOWS) = undefined;
-        for (0..MAX_WINDOWS) |i| activeGroups[i] = .{};
-
         return .{
             .alloc = alloc,
             .gpi = context.gpi,
             .instance = context.instance,
-            .activeGroups = activeGroups,
         };
     }
 
@@ -55,58 +52,64 @@ pub const SwapchainManager = struct {
 
     pub fn updateTargets(self: *SwapchainManager, frameInFlight: u8, context: *Context) !bool {
         self.targets.clear();
-        const activeGroups = self.activeGroups;
         const gpi = self.gpi;
 
-        for (0..activeGroups.len) |i| {
-            for (activeGroups[i].slice()) |id| {
-                const index = self.swapchains.getIndex(id);
-                const ptr = self.swapchains.getPtrAtIndex(index);
-                const result1 = c.vkAcquireNextImageKHR(gpi, ptr.handle, std.math.maxInt(u64), ptr.imgRdySems[frameInFlight], null, &ptr.curIndex);
+        for (0..self.swapchains.getCount()) |i| {
+            const ptr = self.swapchains.getPtrAtIndex(@intCast(i));
+            if (ptr.*.active == false) continue;
 
-                switch (result1) {
-                    c.VK_SUCCESS => try self.targets.append(index),
-                    c.VK_ERROR_OUT_OF_DATE_KHR, c.VK_SUBOPTIMAL_KHR => {
-                        try self.createSwapchain(context, .{ .id = id });
-                        const result2 = c.vkAcquireNextImageKHR(gpi, ptr.handle, std.math.maxInt(u64), ptr.imgRdySems[frameInFlight], null, &ptr.curIndex);
+            const windowID = self.swapchains.getKeyFromIndex(@intCast(i));
+            const result1 = c.vkAcquireNextImageKHR(gpi, ptr.handle, std.math.maxInt(u64), ptr.imgRdySems[frameInFlight], null, &ptr.curIndex);
 
-                        if (result2 == c.VK_SUCCESS) {
-                            try self.targets.append(index);
-                            std.debug.print("Resolved Error for Swapchain {}", .{ptr.*});
-                        } else std.debug.print("Could not Resolve Swapchain Error {}", .{ptr.*});
-                    },
-                    else => try check(result1, "Could not acquire swapchain image"),
-                }
+            switch (result1) {
+                c.VK_SUCCESS => try self.targets.append(@intCast(i)),
+                c.VK_ERROR_OUT_OF_DATE_KHR, c.VK_SUBOPTIMAL_KHR => {
+                    try self.createSwapchain(context, .{ .id = @intCast(windowID) });
+                    const result2 = c.vkAcquireNextImageKHR(gpi, ptr.handle, std.math.maxInt(u64), ptr.imgRdySems[frameInFlight], null, &ptr.curIndex);
+
+                    if (result2 == c.VK_SUCCESS) {
+                        try self.targets.append(@intCast(i));
+                        std.debug.print("Resolved Error for Swapchain {}", .{ptr.*});
+                    } else std.debug.print("Could not Resolve Swapchain Error {}", .{ptr.*});
+                },
+                else => try check(result1, "Could not acquire swapchain image"),
             }
         }
+
         return if (self.targets.len != 0) true else false;
     }
 
+    pub fn findRenderIdTargets(self: *SwapchainManager, renderId: u8, targetArray: []u8) []u8 {
+        var renderTargetCount: u8 = 0;
+
+        for (self.targets.slice()) |target| {
+            if (self.swapchains.getAtIndex(target).renderId == renderId) {
+                targetArray[renderTargetCount] = target;
+                renderTargetCount += 1;
+            }
+        }
+
+        return targetArray[0..renderTargetCount];
+    }
+
     pub fn addActive(self: *SwapchainManager, window: *Window) !void {
-        try self.activeGroups[window.renderId].append(@intCast(window.id));
+        self.swapchains.getPtr(@intCast(window.id)).active = true;
     }
 
     pub fn removeActive(self: *SwapchainManager, window: *Window) void {
-        const group = self.activeGroups[window.renderId].slice();
-        for (0..group.len) |i| {
-            if (group[i] == window.id)
-                _ = self.activeGroups[window.renderId].swapRemove(i);
-        }
+        self.swapchains.getPtr(@intCast(window.id)).active = false;
     }
 
     pub fn updateMaxExtent(self: *SwapchainManager) void {
         var maxWidth: u32 = 0;
         var maxHeight: u32 = 0;
 
-        for (0..self.activeGroups.len) |i| {
-            const slice = self.activeGroups[i].slice();
-
-            for (0..slice.len) |index| {
-                const ptr = self.swapchains.getPtr(slice[index]);
-                maxWidth = @max(maxWidth, ptr.extent.width);
-                maxHeight = @max(maxHeight, ptr.extent.height);
-            }
+        for (self.swapchains.getElements()) |swapchain| {
+            // TODO: SHOULD BE ACTIVE WINDOWS NOT ALL!!!
+            maxWidth = @max(maxWidth, swapchain.extent.width);
+            maxHeight = @max(maxHeight, swapchain.extent.height);
         }
+
         self.maxExtent = c.VkExtent2D{ .width = maxWidth, .height = maxHeight };
     }
 
@@ -122,7 +125,6 @@ pub const SwapchainManager = struct {
                 self.destroySwapchain(self.swapchains.getPtr(@intCast(key)), .withSurface);
 
                 _ = self.swapchains.removeAtKey(@intCast(key));
-                self.removeActive(window);
 
                 std.debug.print("Swapchain Key {} destroyed\n", .{key});
             } else std.debug.print("Cant Swapchain to destroy missing.\n", .{});
@@ -157,9 +159,9 @@ pub const SwapchainManager = struct {
                 const caps = try getSurfaceCaps(gpu, surface);
                 const surfaceFormat = try pickSurfaceFormat(alloc, gpu, surface);
 
-                const swapchain = try self.createInternalSwapchain(surfaceFormat, surface, extent, caps, null);
+                var swapchain = try self.createInternalSwapchain(surfaceFormat, surface, extent, caps, null);
+                swapchain.renderId = w.renderId;
                 self.swapchains.set(@intCast(w.id), swapchain);
-                try self.activeGroups[w.renderId].append(@intCast(w.id));
                 std.debug.print("Swapchain added to Window {}\n", .{w.id});
                 return;
             } else {
@@ -178,7 +180,8 @@ pub const SwapchainManager = struct {
         const caps = try getSurfaceCaps(gpu, surface);
         const surfaceFormat = try pickSurfaceFormat(alloc, gpu, surface);
 
-        const swapchain = try self.createInternalSwapchain(surfaceFormat, surface, extent, caps, ptr.handle);
+        var swapchain = try self.createInternalSwapchain(surfaceFormat, surface, extent, caps, ptr.handle);
+        swapchain.renderId = ptr.*.renderId;
         self.destroySwapchain(ptr, .withoutSurface);
         ptr.* = swapchain;
     }
@@ -271,6 +274,7 @@ pub const SwapchainManager = struct {
             .views = views,
             .imgRdySems = imageRdySems,
             .renderDoneSems = renderDoneSems,
+            .renderId = undefined,
         };
     }
 };

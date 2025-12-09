@@ -265,7 +265,7 @@ pub const CmdManager = struct {
         );
         renderImage.curLayout = c.VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
         for (targets, 1..) |id, i| {
-            const swapchain = swapchainMap.getPtr(id);
+            const swapchain = swapchainMap.getPtrAtIndex(id);
             barriers[i] = createImageMemoryBarrier2(
                 c.VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
                 0,
@@ -280,7 +280,7 @@ pub const CmdManager = struct {
         const barriersPtr1 = self.blitBarriers[0 .. targets.len + 1];
         createPipelineBarriers2(cmd, barriersPtr1);
         for (targets) |id| {
-            const swapchain = swapchainMap.getPtr(id);
+            const swapchain = swapchainMap.getPtrAtIndex(id);
             copyImageToImage(
                 cmd,
                 renderImage.image,
@@ -290,7 +290,7 @@ pub const CmdManager = struct {
             );
         }
         for (targets, 0..targets.len) |id, i| {
-            const swapchain = swapchainMap.getPtr(id);
+            const swapchain = swapchainMap.getPtrAtIndex(id);
             barriers[i] = createImageMemoryBarrier2(
                 c.VK_PIPELINE_STAGE_2_TRANSFER_BIT,
                 c.VK_ACCESS_2_TRANSFER_WRITE_BIT,

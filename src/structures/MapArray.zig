@@ -197,6 +197,10 @@ pub fn CreateMapArray(comptime elementType: type, comptime size: u32, comptime k
             return keyMin;
         }
 
+        pub inline fn getKeyFromIndex(self: *const Self, index: u32) u32 { // UNTESTED
+            return self.links[index] + keyMin;
+        }
+
         pub inline fn getLastValidIndex(_: *const Self) u32 {
             return size - 1;
         }

@@ -170,7 +170,6 @@ pub const Renderer = struct {
     }
 
     fn recordCommands(self: *Renderer, cmd: c.VkCommandBuffer, cam: *Camera, runtimeAsFloat: f32) !void {
-        const activeGroups = self.swapchainMan.activeGroups;
         var touchedIndices: u64 = 0;
 
         for (0..config.renderSeq.len) |i| {
@@ -197,15 +196,14 @@ pub const Renderer = struct {
                 config.renderSeq[i].clear,
             );
             // BLIT LOGIC
-            const groupIndex = renderImageId;
-            const windowIds = activeGroups[groupIndex].slice();
+            var targetArray: [config.MAX_WINDOWS]u8 = undefined;
+            const targets = self.swapchainMan.findRenderIdTargets(renderImageId, &targetArray);
 
-            if (windowIds.len > 0) {
-                try self.cmdMan.blitToTargets(cmd, renderImagePtr, windowIds, &self.swapchainMan.swapchains);
+            if (targets.len > 0) {
+                try self.cmdMan.blitToTargets(cmd, renderImagePtr, targets, &self.swapchainMan.swapchains);
 
-                for (windowIds) |id| {
-                    const index = self.swapchainMan.swapchains.getIndex(id);
-                    touchedIndices |= (@as(u64, 1) << @intCast(index));
+                for (targets) |id| {
+                    touchedIndices |= (@as(u64, 1) << @intCast(id));
                 }
             }
         }
