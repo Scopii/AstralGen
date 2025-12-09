@@ -96,11 +96,14 @@ pub const Renderer = struct {
             }
         }
 
+        var dirtyRenderImgs: [config.MAX_WINDOWS]bool = .{false} ** config.MAX_WINDOWS;
+
         for (windows) |winPtr| {
             switch (winPtr.status) {
                 .needUpdate => {
                     try self.swapchainMan.createSwapchain(&self.context, .{ .window = winPtr });
                     winPtr.status = .active;
+                    dirtyRenderImgs[winPtr.renderId] = true;
                 },
                 .needActive => {
                     try self.swapchainMan.addActive(winPtr);
@@ -113,30 +116,41 @@ pub const Renderer = struct {
                 .needCreation => {
                     try self.swapchainMan.createSwapchain(&self.context, .{ .window = winPtr });
                     winPtr.status = .active;
+                    dirtyRenderImgs[winPtr.renderId] = true;
                 },
-                .needDelete => self.swapchainMan.removeSwapchain(&.{winPtr}),
+                .needDelete => {
+                    self.swapchainMan.removeSwapchain(&.{winPtr});
+                },
                 else => std.debug.print("Window State {s} cant be handled in Renderer\n", .{@tagName(winPtr.status)}),
             }
         }
-        self.swapchainMan.updateMaxExtent();
-        if (config.RENDER_IMG_AUTO_RESIZE == true) try self.updateRenderImage();
+
+        if (config.RENDER_IMG_AUTO_RESIZE == true) {
+            for (0..dirtyRenderImgs.len) |i| {
+                if (dirtyRenderImgs[i] == true and self.renderImages[i] != null) {
+                    try self.updateRenderImage(@intCast(i));
+                }
+            }
+        }
     }
 
-    pub fn updateRenderImage(_: *Renderer) !void {
-        //Has to be overhauled for Window Asigned Render Images
+    pub fn updateRenderImage(self: *Renderer, renderId: u8) !void {
+        const renderImg = self.renderImages[renderId].?;
 
-        // const new = self.swapchainMan.getMaxExtent();
-        // const old = self.renderImage.extent3d;
+        const new = self.swapchainMan.getMaxRenderExtent(renderId);
+        const old = renderImg.extent3d;
 
-        // if (new.height != 0 or new.width != 0) {
-        //     if (new.width != old.width or new.height != old.height) {
-        //         self.resourceMan.destroyGpuImage(self.renderImage);
-        //         const newExtent = c.VkExtent3D{ .width = new.width, .height = new.height, .depth = config.RENDER_IMAGE_PRESET.depth };
-        //         self.renderImage = try self.resourceMan.createGpuImage(newExtent, config.RENDER_IMAGE_FORMAT, c.VMA_MEMORY_USAGE_GPU_ONLY);
-        //         try self.resourceMan.updateImageDescriptor(self.renderImage.view, 0);
-        //         std.debug.print("RenderImage recreated {}x{} to {}x{}\n", .{ old.width, old.height, new.width, new.height });
-        //     }
-        // }
+        if (new.height != 0 or new.width != 0) {
+            if (new.width != old.width or new.height != old.height) {
+                self.resourceMan.destroyGpuImage(renderImg);
+
+                const newExtent = c.VkExtent3D{ .width = new.width, .height = new.height, .depth = 1 };
+                self.renderImages[renderId] = try self.resourceMan.createGpuImage(newExtent, config.RENDER_IMG_FORMAT, c.VMA_MEMORY_USAGE_GPU_ONLY);
+
+                try self.resourceMan.updateImageDescriptor(self.renderImages[renderId].?.view, renderId);
+                std.debug.print("RenderImage recreated {}x{} to {}x{}\n", .{ old.width, old.height, new.width, new.height });
+            }
+        }
     }
 
     pub fn updateShaderLayout(self: *Renderer, index: usize) !void {

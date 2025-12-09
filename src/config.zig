@@ -28,6 +28,7 @@ pub const RENDER_IMG_FORMAT = c.VK_FORMAT_R16G16B16A16_SFLOAT;
 pub const RENDER_IMG_EXTENT1: c.VkExtent3D = .{ .width = 1920, .height = 1080, .depth = 1 };
 pub const RENDER_IMG_EXTENT2: c.VkExtent3D = .{ .width = 100, .height = 100, .depth = 1 };
 pub const RENDER_IMG_EXTENT3: c.VkExtent3D = .{ .width = 5, .height = 5, .depth = 1 };
+pub const RENDER_IMG_STRETCH = false;
 
 // Camera
 pub const CAM_SPEED = 0.00000001;
@@ -109,11 +110,11 @@ pub const frag2 = Shader{ .stage = c.VK_SHADER_STAGE_FRAGMENT_BIT, .glslFile = "
 pub const shadersToCompile: []const Shader = &.{ comp1, vert1, frag1, mesh1, frag2 };
 
 pub const computePass1: ShaderLayout = .{ .renderImg = renderImg1, .shaders = &.{comp1}, .clear = true }; // clear does not work for compute
-pub const graphicsPass1: ShaderLayout = .{ .renderImg = renderImg2, .shaders = &.{ vert1, frag1 }, .clear = false };
-pub const meshPass1: ShaderLayout = .{ .renderImg = renderImg3, .shaders = &.{ mesh1, frag2 }, .clear = false };
+pub const graphicsPass1: ShaderLayout = .{ .renderImg = renderImg1, .shaders = &.{ vert1, frag1 }, .clear = false };
+pub const meshPass1: ShaderLayout = .{ .renderImg = renderImg1, .shaders = &.{ mesh1, frag2 }, .clear = false };
 
 pub const renderSeq: []const ShaderLayout = &.{
-    computePass1,
     graphicsPass1,
     meshPass1,
+    computePass1,
 };

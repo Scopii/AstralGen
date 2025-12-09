@@ -34,7 +34,6 @@ pub const SwapchainManager = struct {
     alloc: Allocator,
     gpi: c.VkDevice,
     instance: c.VkInstance,
-    maxExtent: c.VkExtent2D = .{ .width = 0, .height = 0 },
     swapchains: SwapchainMap = .{},
     targets: std.BoundedArray(u8, MAX_WINDOWS) = .{},
 
@@ -102,20 +101,17 @@ pub const SwapchainManager = struct {
         self.swapchains.getPtr(@intCast(window.windowId)).active = false;
     }
 
-    pub fn updateMaxExtent(self: *SwapchainManager) void {
+    pub fn getMaxRenderExtent(self: *SwapchainManager, renderId: u8) c.VkExtent2D {
         var maxWidth: u32 = 0;
         var maxHeight: u32 = 0;
 
         for (self.swapchains.getElements()) |swapchain| {
-            // TODO: SHOULD BE ACTIVE WINDOWS NOT ALL!!!
-            maxWidth = @max(maxWidth, swapchain.extent.width);
-            maxHeight = @max(maxHeight, swapchain.extent.height);
+            if (swapchain.active == true and swapchain.renderId == renderId) {
+                maxWidth = @max(maxWidth, swapchain.extent.width);
+                maxHeight = @max(maxHeight, swapchain.extent.height);
+            }
         }
-        self.maxExtent = c.VkExtent2D{ .width = maxWidth, .height = maxHeight };
-    }
-
-    pub fn getMaxExtent(self: *SwapchainManager) c.VkExtent2D {
-        return self.maxExtent;
+        return c.VkExtent2D{ .width = maxWidth, .height = maxHeight };
     }
 
     pub fn removeSwapchain(self: *SwapchainManager, windows: []const *Window) void {

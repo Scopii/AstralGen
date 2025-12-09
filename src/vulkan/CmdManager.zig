@@ -11,6 +11,7 @@ const CreateMapArray = @import("../structures/MapArray.zig").CreateMapArray;
 const deviceAddress = @import("ResourceManager.zig").GpuBuffer.deviceAddress;
 const MAX_WINDOWS = @import("../config.zig").MAX_WINDOWS;
 const check = @import("error.zig").check;
+const config = @import("../config.zig");
 
 pub const CmdManager = struct {
     alloc: Allocator,
@@ -277,13 +278,40 @@ pub const CmdManager = struct {
 
         for (targets) |id| {
             const swapchain = swapchainMap.getPtrAtIndex(id);
-            copyImageToImage(
-                cmd,
-                renderImg.img,
-                .{ .width = renderImg.extent3d.width, .height = renderImg.extent3d.height },
-                swapchain.images[swapchain.curIndex],
-                swapchain.extent,
-            );
+
+            var srcOffsets: [2]c.VkOffset3D = undefined;
+            var dstOffsets: [2]c.VkOffset3D = undefined;
+
+            // Destination is ALWAYS the full window surface
+            dstOffsets[0] = .{ .x = 0, .y = 0, .z = 0 };
+            dstOffsets[1] = .{ .x = @intCast(swapchain.extent.width), .y = @intCast(swapchain.extent.height), .z = 1 };
+
+            if (config.RENDER_IMG_STRETCH) {
+                // STRETCH: Use full source image
+                srcOffsets[0] = .{ .x = 0, .y = 0, .z = 0 };
+                srcOffsets[1] = .{ .x = @intCast(renderImg.extent3d.width), .y = @intCast(renderImg.extent3d.height), .z = 1 };
+            } else {
+                // CROP / CENTER:
+                // We want a window-sized chunk from the CENTER of the Render Image.
+
+                const srcW = renderImg.extent3d.width;
+                const srcH = renderImg.extent3d.height;
+                const winW = swapchain.extent.width;
+                const winH = swapchain.extent.height;
+
+                // Math to find the start point (Top-Left) in the source image
+                // Use @divFloor or simple integer division
+                const startX: i32 = @intCast((srcW - winW) / 2);
+                const startY: i32 = @intCast((srcH - winH) / 2);
+
+                srcOffsets[0] = .{ .x = startX, .y = startY, .z = 0 };
+                srcOffsets[1] = .{ .x = startX + @as(i32, @intCast(winW)), .y = startY + @as(i32, @intCast(winH)), .z = 1 };
+
+                // Safety check: If Window is LARGER than Image (shouldn't happen with Auto-Resize),
+                // Vulkan Blit handles clamping, but logic might look weird (zoom in corner).
+            }
+
+            copyImageToImage(cmd, renderImg.img, srcOffsets, swapchain.images[swapchain.curIndex], dstOffsets);
         }
 
         for (targets, 0..targets.len) |id, i| {
@@ -408,29 +436,28 @@ fn createImageMemoryBarrier2(
     };
 }
 
-pub fn copyImageToImage(cmd: c.VkCommandBuffer, srcImg: c.VkImage, srcSize: c.VkExtent2D, dstImg: c.VkImage, dstSize: c.VkExtent2D) void {
+pub fn copyImageToImage(
+    cmd: c.VkCommandBuffer,
+    srcImg: c.VkImage,
+    srcOffsets: [2]c.VkOffset3D,
+    dstImg: c.VkImage,
+    dstOffsets: [2]c.VkOffset3D,
+) void {
     const blitRegion = c.VkImageBlit2{
         .sType = c.VK_STRUCTURE_TYPE_IMAGE_BLIT_2,
         .srcSubresource = createSubresourceLayers(c.VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1),
-        .srcOffsets = .{ .{ .x = 0, .y = 0, .z = 0 }, .{
-            .x = @intCast(srcSize.width),
-            .y = @intCast(srcSize.height),
-            .z = 1,
-        } },
+        .srcOffsets = srcOffsets, // Use passed offsets directly
         .dstSubresource = createSubresourceLayers(c.VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1),
-        .dstOffsets = .{ .{ .x = 0, .y = 0, .z = 0 }, .{
-            .x = @intCast(dstSize.width),
-            .y = @intCast(dstSize.height),
-            .z = 1,
-        } },
+        .dstOffsets = dstOffsets, // Use passed offsets directly
     };
+
     const blitInf = c.VkBlitImageInfo2{
         .sType = c.VK_STRUCTURE_TYPE_BLIT_IMAGE_INFO_2,
         .dstImage = dstImg,
         .dstImageLayout = c.VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
         .srcImage = srcImg,
         .srcImageLayout = c.VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-        .filter = c.VK_FILTER_LINEAR,
+        .filter = if (config.RENDER_IMG_STRETCH) c.VK_FILTER_LINEAR else c.VK_FILTER_NEAREST, // Linear for stretch, Nearest for pixel-perfect
         .regionCount = 1,
         .pRegions = &blitRegion,
     };
