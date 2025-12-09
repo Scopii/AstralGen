@@ -175,6 +175,6 @@ void main() {
         
         imageStore(globalImages[nonuniformEXT(imgIdx)], ivec2(gl_GlobalInvocationID.xy), mix(vec4(surfaceColor * lighting, 1.0), vec4(0.0, 0.0, 0.0, 1.0), march / MAX_DIST));
     } else {
-        imageStore(globalImages[nonuniformEXT(imgIdx)], ivec2(gl_GlobalInvocationID.xy), vec4(0.0, 0.0, 0.1, 1.0));
+        imageStore(globalImages[nonuniformEXT(imgIdx)], ivec2(gl_GlobalInvocationID.xy), vec4(0.1, 0.0, 0.15, 1.0));
     }
 }

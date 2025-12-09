@@ -75,7 +75,7 @@ pub const CmdManager = struct {
     ) !void {
         switch (renderType) {
             .compute => try recordCompute(cmd, renderImg, shaderObjects, pipeLayout, gpuAddress, pushConstants),
-            .graphics, .mesh => try recordGraphics(cmd, renderImg, shaderObjects, renderType, pipeLayout, pushConstants, shouldClear),
+            .graphics, .mesh => try recordGraphics(cmd, renderImg, shaderObjects, renderType, pipeLayout, gpuAddress, pushConstants, shouldClear),
             else => std.debug.print("Renderer: {s} has no Command Recording yet\n", .{@tagName(renderType)}),
         }
     }
@@ -125,6 +125,7 @@ pub const CmdManager = struct {
         shaderObjects: []const ShaderObject,
         renderType: RenderType,
         pipeLayout: c.VkPipelineLayout,
+        gpuAddress: deviceAddress,
         pushConstants: PushConstants,
         shouldClear: bool,
     ) !void {
@@ -211,6 +212,17 @@ pub const CmdManager = struct {
                 if (shaderObject.stage == stages[i]) shaders[i] = shaderObject.handle;
             }
         }
+
+        const bufferBindingInf = c.VkDescriptorBufferBindingInfoEXT{
+            .sType = c.VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT,
+            .address = gpuAddress,
+            .usage = c.VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT,
+        };
+        c.pfn_vkCmdBindDescriptorBuffersEXT.?(cmd, 1, &bufferBindingInf);
+
+        const bufferIndex: u32 = 0;
+        const descOffset: c.VkDeviceSize = 0;
+        c.pfn_vkCmdSetDescriptorBufferOffsetsEXT.?(cmd, c.VK_PIPELINE_BIND_POINT_GRAPHICS, pipeLayout, 0, 1, &bufferIndex, &descOffset);
 
         // Bind shader objects based on pipeline type
         switch (renderType) {
