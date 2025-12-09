@@ -10,10 +10,10 @@ pub const TimeManager = struct {
     deltaTime: i128 = 0,
 
     pub fn init() TimeManager {
-        const curentTime = std.time.nanoTimestamp();
+        const curTime = std.time.nanoTimestamp();
         return .{
-            .startup = curentTime,
-            .lastTime = curentTime,
+            .startup = curTime,
+            .lastTime = curTime,
         };
     }
 
@@ -24,12 +24,12 @@ pub const TimeManager = struct {
         self.runtime = self.lastTime - self.startup;
     }
 
-    pub fn convertTime(timeinNs: i128, unit: TimeUnit, comptime T: type) T {
+    pub fn convertTime(timeInNs: i128, unit: TimeUnit, comptime T: type) T {
         return switch (unit) {
-            .seconds => if (@typeInfo(T) == .float) @as(T, @floatFromInt(timeinNs)) / 1_000_000_000 else @intCast(@divTrunc(timeinNs, 1_000_000_000)),
-            .milli => if (@typeInfo(T) == .float) @as(T, @floatFromInt(timeinNs)) / 1_000_000 else @intCast(@divTrunc(timeinNs, 1_000_000)),
-            .micro => if (@typeInfo(T) == .float) @as(T, @floatFromInt(timeinNs)) / 1_000 else @intCast(@divTrunc(timeinNs, 1_000)),
-            .nano => if (@typeInfo(T) == .float) @as(T, @floatFromInt(timeinNs)) else @intCast(timeinNs),
+            .seconds => if (@typeInfo(T) == .float) @as(T, @floatFromInt(timeInNs)) / 1_000_000_000 else @intCast(@divTrunc(timeInNs, 1_000_000_000)),
+            .milli => if (@typeInfo(T) == .float) @as(T, @floatFromInt(timeInNs)) / 1_000_000 else @intCast(@divTrunc(timeInNs, 1_000_000)),
+            .micro => if (@typeInfo(T) == .float) @as(T, @floatFromInt(timeInNs)) / 1_000 else @intCast(@divTrunc(timeInNs, 1_000)),
+            .nano => if (@typeInfo(T) == .float) @as(T, @floatFromInt(timeInNs)) else @intCast(timeInNs),
         };
     }
 

@@ -1,9 +1,6 @@
 const std = @import("std");
 const c = @import("../c.zig");
 const Window = @import("Window.zig").Window;
-const Renderer = @import("../vulkan/Renderer.zig").Renderer;
-const Swapchain = @import("../vulkan/SwapchainManager.zig").Swapchain;
-const MemoryManger = @import("../core/MemoryManager.zig").MemoryManager;
 const CreateMapArray = @import("../structures/MapArray.zig").CreateMapArray;
 const MAX_WINDOWS = @import("../config.zig").MAX_WINDOWS;
 const SDL_KEY_MAX = @import("../core/EventManager.zig").SDL_KEY_MAX;
@@ -17,7 +14,7 @@ pub const WindowManager = struct {
     changedWindows: std.BoundedArray(*Window, MAX_WINDOWS) = .{},
     openWindows: u8 = 0,
     fullscreen: bool = false,
-    close: bool = false,
+    appExit: bool = false,
 
     inputEvents: std.BoundedArray(KeyEvent, 127) = .{},
     mouseMovements: std.BoundedArray(MouseMovement, 63) = .{},
@@ -61,7 +58,7 @@ pub const WindowManager = struct {
 
     pub fn cleanupWindows(self: *WindowManager) !void {
         for (self.changedWindows.slice()) |window| {
-            if (window.status == .needDelete) try self.destroyWindow(window.id);
+            if (window.status == .needDelete) try self.destroyWindow(window.windowId);
         }
         self.changedWindows.clear();
     }
@@ -185,7 +182,7 @@ pub const WindowManager = struct {
     pub fn processEvent(self: *WindowManager, event: *c.SDL_Event) !void {
         switch (event.type) {
             c.SDL_EVENT_QUIT => {
-                self.close = true;
+                self.appExit = true;
             },
             c.SDL_EVENT_WINDOW_FOCUS_LOST,
             c.SDL_EVENT_WINDOW_FOCUS_GAINED,

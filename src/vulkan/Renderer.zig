@@ -49,7 +49,7 @@ pub const Renderer = struct {
         for (0..renderImages.len) |i| renderImages[i] = null;
 
         for (config.renderSeq) |shaderLayout| {
-            const renderImage = shaderLayout.renderImage;
+            const renderImage = shaderLayout.renderImg;
 
             if (renderImage.id > RENDER_IMG_MAX - 1) {
                 std.debug.print("Renderer: RenderId Image ID cant be bigger than Max Windows\n", .{});
@@ -57,7 +57,7 @@ pub const Renderer = struct {
             }
 
             if (renderImages[renderImage.id] == null) {
-                const gpuImage = try resourceMan.createGpuImage(renderImage.dimensions, renderImage.imageFormat, renderImage.memoryUsage);
+                const gpuImage = try resourceMan.createGpuImage(renderImage.extent, renderImage.imgFormat, renderImage.memUsage);
                 renderImages[renderImage.id] = gpuImage;
                 std.debug.print("Renderer: RenderImage {} created\n", .{renderImage.id});
                 try resourceMan.updateImageDescriptor(gpuImage.view, renderImage.id);
@@ -173,7 +173,7 @@ pub const Renderer = struct {
         var touchedIndices: u64 = 0;
 
         for (0..config.renderSeq.len) |i| {
-            const renderImageId = config.renderSeq[i].renderImage.id;
+            const renderImageId = config.renderSeq[i].renderImg.id;
             const renderImagePtr = &self.renderImages[renderImageId].?;
 
             const pushConstants = PushConstants{

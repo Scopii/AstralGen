@@ -1,6 +1,6 @@
 pub const c = @import("c.zig");
 pub const std = @import("std");
-const KeyAssignments = @import("core/EventManager.zig").KeyAssignments;
+const KeyMapping = @import("core/EventManager.zig").KeyMapping;
 
 // Vulkan Validation Layers
 pub const DEBUG_MODE = true;
@@ -52,7 +52,7 @@ pub const AppEvent = enum {
 };
 
 // KeyMap
-pub const keyAssignments = [_]KeyAssignments{
+pub const keyMap = [_]KeyMapping{
     // Camera
     .{ .device = .keyboard, .state = .pressed, .cycle = .repeat, .key = c.SDL_SCANCODE_W, .appEvent = .camForward },
     .{ .device = .keyboard, .state = .pressed, .cycle = .repeat, .key = c.SDL_SCANCODE_S, .appEvent = .camBackward },
@@ -82,7 +82,7 @@ pub const Shader = struct {
 };
 
 pub const ShaderLayout = struct {
-    renderImage: RenderResource,
+    renderImg: RenderResource,
     shaders: []const Shader,
     clear: bool,
 };
@@ -90,14 +90,14 @@ pub const ShaderLayout = struct {
 pub const RenderType = enum { compute, graphics, mesh, taskMesh, vertOnly };
 pub const RenderResource = struct {
     id: u8,
-    dimensions: c.VkExtent3D,
-    imageFormat: c_uint,
-    memoryUsage: c_uint,
+    extent: c.VkExtent3D,
+    imgFormat: c_uint,
+    memUsage: c_uint,
 };
 
-pub const renderImage1 = RenderResource{ .id = 0, .dimensions = RENDER_IMG_EXTENT1, .imageFormat = RENDER_IMG_FORMAT, .memoryUsage = c.VMA_MEMORY_USAGE_GPU_ONLY };
-pub const renderImage2 = RenderResource{ .id = 1, .dimensions = RENDER_IMG_EXTENT2, .imageFormat = RENDER_IMG_FORMAT, .memoryUsage = c.VMA_MEMORY_USAGE_GPU_ONLY };
-pub const renderImage3 = RenderResource{ .id = 15, .dimensions = RENDER_IMG_EXTENT3, .imageFormat = RENDER_IMG_FORMAT, .memoryUsage = c.VMA_MEMORY_USAGE_GPU_ONLY };
+pub const renderImg1 = RenderResource{ .id = 0, .extent = RENDER_IMG_EXTENT1, .imgFormat = RENDER_IMG_FORMAT, .memUsage = c.VMA_MEMORY_USAGE_GPU_ONLY };
+pub const renderImg2 = RenderResource{ .id = 1, .extent = RENDER_IMG_EXTENT2, .imgFormat = RENDER_IMG_FORMAT, .memUsage = c.VMA_MEMORY_USAGE_GPU_ONLY };
+pub const renderImg3 = RenderResource{ .id = 15, .extent = RENDER_IMG_EXTENT3, .imgFormat = RENDER_IMG_FORMAT, .memUsage = c.VMA_MEMORY_USAGE_GPU_ONLY };
 
 // Render
 pub const comp1 = Shader{ .stage = c.VK_SHADER_STAGE_COMPUTE_BIT, .glslFile = "Compute.comp", .spvFile = "Compute.spv" };
@@ -108,9 +108,9 @@ pub const frag2 = Shader{ .stage = c.VK_SHADER_STAGE_FRAGMENT_BIT, .glslFile = "
 
 pub const shadersToCompile: []const Shader = &.{ comp1, vert1, frag1, mesh1, frag2 };
 
-pub const computePass1: ShaderLayout = .{ .renderImage = renderImage1, .shaders = &.{comp1}, .clear = true }; // clear does not work for compute
-pub const graphicsPass1: ShaderLayout = .{ .renderImage = renderImage2, .shaders = &.{ vert1, frag1 }, .clear = false };
-pub const meshPass1: ShaderLayout = .{ .renderImage = renderImage3, .shaders = &.{ mesh1, frag2 }, .clear = false };
+pub const computePass1: ShaderLayout = .{ .renderImg = renderImg1, .shaders = &.{comp1}, .clear = true }; // clear does not work for compute
+pub const graphicsPass1: ShaderLayout = .{ .renderImg = renderImg2, .shaders = &.{ vert1, frag1 }, .clear = false };
+pub const meshPass1: ShaderLayout = .{ .renderImg = renderImg3, .shaders = &.{ mesh1, frag2 }, .clear = false };
 
 pub const renderSeq: []const ShaderLayout = &.{
     computePass1,

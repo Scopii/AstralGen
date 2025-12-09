@@ -1,5 +1,3 @@
-const std = @import("std");
-
 pub const c_api = @cImport({
     @cInclude("vulkan/vulkan.h");
     @cInclude("SDL3/SDL.h");

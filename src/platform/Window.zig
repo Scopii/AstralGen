@@ -1,6 +1,4 @@
-const std = @import("std");
 const c = @import("../c.zig");
-const Swapchain = @import("../vulkan/SwapchainManager.zig").Swapchain;
 
 pub const Window = struct {
     pub const WindowStatus = enum {
@@ -16,9 +14,9 @@ pub const Window = struct {
     status: WindowStatus = .needCreation,
     renderId: u8,
     extent: c.VkExtent2D,
-    id: u32,
+    windowId: u32,
 
-    pub fn init(id: u32, sdlWindow: *c.SDL_Window, renderId: u8, extent: c.VkExtent2D) !Window {
-        return Window{ .handle = sdlWindow, .renderId = renderId, .extent = extent, .id = id };
+    pub fn init(windowId: u32, sdlWindow: *c.SDL_Window, renderId: u8, extent: c.VkExtent2D) !Window {
+        return Window{ .handle = sdlWindow, .renderId = renderId, .extent = extent, .windowId = windowId };
     }
 };

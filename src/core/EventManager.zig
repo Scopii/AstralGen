@@ -7,7 +7,7 @@ pub const KeyState = enum { pressed, released };
 pub const KeyEvent = struct { key: c_uint, event: KeyState };
 pub const MouseMovement = struct { xChange: f32, yChange: f32 };
 
-pub const KeyAssignments = struct {
+pub const KeyMapping = struct {
     device: enum { mouse, keyboard },
     state: KeyState,
     cycle: enum { oneTime, repeat },
@@ -49,7 +49,7 @@ pub const EventManager = struct {
     }
 
     pub fn getAppEvents(self: *EventManager) []AppEvent {
-        for (config.keyAssignments) |assignment| {
+        for (config.keyMap) |assignment| {
             const actualKey = switch (assignment.device) {
                 .keyboard => assignment.key,
                 .mouse => assignment.key + SDL_KEY_MAX,

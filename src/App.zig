@@ -11,7 +11,6 @@ const UiManager = @import("core/UiManager.zig").UiManager;
 const RNGenerator = @import("core/RNGenerator.zig").RNGenerator;
 const Camera = @import("core/Camera.zig").Camera;
 const zjobs = @import("zjobs");
-const CreateMapArray = @import("structures/MapArray.zig").CreateMapArray;
 const config = @import("config.zig");
 
 pub const App = struct {
@@ -80,9 +79,9 @@ pub const App = struct {
     }
 
     pub fn initWindows(self: *App) !void {
-        try self.windowMan.addWindow("Astral1", 1600, 900, config.renderImage1.id);
-        try self.windowMan.addWindow("Astral2", 16 * 70, 9 * 70, config.renderImage2.id);
-        try self.windowMan.addWindow("Astral3", 350, 350, config.renderImage3.id);
+        try self.windowMan.addWindow("Astral1", 1600, 900, config.renderImg1.id);
+        try self.windowMan.addWindow("Astral2", 16 * 70, 9 * 70, config.renderImg2.id);
+        try self.windowMan.addWindow("Astral3", 350, 350, config.renderImg3.id);
     }
 
     pub fn deinit(self: *App) void {
@@ -117,7 +116,7 @@ pub const App = struct {
             }
 
             // Close Or Idle
-            if (windowMan.close == true) return;
+            if (windowMan.appExit == true) return;
             if (windowMan.openWindows == 0) continue;
 
             // Update Time
@@ -151,10 +150,10 @@ pub const App = struct {
             if (config.SHADER_HOTLOAD == true) {
                 try self.fileMan.checkShaderUpdate();
 
-                for (0..self.fileMan.pipelineUpdateBools.len) |i| {
-                    if (self.fileMan.pipelineUpdateBools[i] == true) {
+                for (0..self.fileMan.layoutUpdateBools.len) |i| {
+                    if (self.fileMan.layoutUpdateBools[i] == true) {
                         try renderer.updatePipeline(i);
-                        self.fileMan.pipelineUpdateBools[i] = false;
+                        self.fileMan.layoutUpdateBools[i] = false;
                     }
                 }
             }

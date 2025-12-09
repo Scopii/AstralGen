@@ -2,20 +2,20 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 
 pub const MemoryManager = struct {
-    allocator: std.mem.Allocator,
+    alloc: std.mem.Allocator,
     arena: std.heap.ArenaAllocator, // adding FixedBufferAllocator?
 
     pub fn init(baseAllocator: Allocator) MemoryManager {
         const arena = std.heap.ArenaAllocator.init(baseAllocator);
 
         return .{
-            .allocator = baseAllocator,
+            .alloc = baseAllocator,
             .arena = arena,
         };
     }
 
     pub fn getAllocator(self: *MemoryManager) std.mem.Allocator {
-        return self.allocator;
+        return self.alloc;
     }
 
     pub fn getGlobalArena(self: *MemoryManager) std.mem.Allocator {
@@ -23,7 +23,7 @@ pub const MemoryManager = struct {
     }
 
     pub fn createArena(self: *MemoryManager) std.heap.ArenaAllocator {
-        return std.heap.ArenaAllocator.init(self.allocator);
+        return std.heap.ArenaAllocator.init(self.alloc);
     }
 
     pub fn resetArena(self: *MemoryManager) void {

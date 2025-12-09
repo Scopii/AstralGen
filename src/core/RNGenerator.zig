@@ -13,17 +13,17 @@ pub const RNGenerator = struct {
         };
     }
 
-    // integer of the specified type.
+    // integer of specified type.
     pub fn int(self: *RNGenerator, comptime T: type) T {
         return self.random.int(T);
     }
 
-    // integer within the given range (inclusive).
+    // integer within given range (inclusive).
     pub fn intRange(self: *RNGenerator, comptime T: type, min: T, max: T) T {
         return self.random.intRangeAtMost(T, min, max); // Use intRangeAtMost for inclusive
     }
 
-    // float of the specified type (0.0 <= x < 1.0).
+    // float of specified type (0.0 <= x < 1.0).
     pub fn float(self: *RNGenerator, comptime T: type) T {
         return self.random.float(T);
     }
@@ -33,13 +33,13 @@ pub const RNGenerator = struct {
         return self.random.boolean();
     }
 
-    // element from a slice.
+    // element from slice.
     pub fn choice(self: *RNGenerator, comptime T: type, items: []const T) T {
         const index = self.random.intRangeLessThan(usize, 0, items.len);
         return items[index];
     }
 
-    // fills a slice with random bytes
+    // fills slice with random bytes
     pub fn bytes(self: *RNGenerator, buf: []u8) void {
         self.random.bytes(buf);
     }

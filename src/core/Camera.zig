@@ -15,7 +15,6 @@ pub const Camera = struct {
     pitch: f32 = 0.0,
     yaw: f32 = 0.0,
 
-    // You can create a simple init function if needed
     pub fn init(cam: Camera) Camera {
         return cam;
     }

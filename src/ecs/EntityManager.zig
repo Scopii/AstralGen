@@ -1,5 +1,4 @@
 const std = @import("std");
-const zm = @import("zmath");
 const RNGenerator = @import("../core/RNGenerator.zig").RNGenerator;
 
 pub const EntityManager = struct {

@@ -93,11 +93,11 @@ pub const SwapchainManager = struct {
     }
 
     pub fn addActive(self: *SwapchainManager, window: *Window) !void {
-        self.swapchains.getPtr(@intCast(window.id)).active = true;
+        self.swapchains.getPtr(@intCast(window.windowId)).active = true;
     }
 
     pub fn removeActive(self: *SwapchainManager, window: *Window) void {
-        self.swapchains.getPtr(@intCast(window.id)).active = false;
+        self.swapchains.getPtr(@intCast(window.windowId)).active = false;
     }
 
     pub fn updateMaxExtent(self: *SwapchainManager) void {
@@ -119,7 +119,7 @@ pub const SwapchainManager = struct {
 
     pub fn removeSwapchain(self: *SwapchainManager, windows: []const *Window) void {
         for (windows) |window| {
-            const key = window.id;
+            const key = window.windowId;
 
             if (self.swapchains.isKeyValid(@intCast(key)) == true) {
                 self.destroySwapchain(self.swapchains.getPtr(@intCast(key)), .withSurface);
@@ -161,11 +161,11 @@ pub const SwapchainManager = struct {
 
                 var swapchain = try self.createInternalSwapchain(surfaceFormat, surface, extent, caps, null);
                 swapchain.renderId = w.renderId;
-                self.swapchains.set(@intCast(w.id), swapchain);
-                std.debug.print("Swapchain added to Window {}\n", .{w.id});
+                self.swapchains.set(@intCast(w.windowId), swapchain);
+                std.debug.print("Swapchain added to Window {}\n", .{w.windowId});
                 return;
             } else {
-                ptr = self.swapchains.getPtr(@intCast(w.id));
+                ptr = self.swapchains.getPtr(@intCast(w.windowId));
                 extent = w.extent;
                 std.debug.print("Swapchain recreated\n", .{});
             },

@@ -1,7 +1,6 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 const config = @import("../config.zig");
-const RenderType = @import("../config.zig").RenderType;
 
 pub const FileManager = struct {
     const stepCount = config.renderSeq.len;
@@ -10,37 +9,37 @@ pub const FileManager = struct {
     rootPath: []u8,
     shaderPath: []const u8,
     shaderOutputPath: []const u8,
-    pipelineTimeStamps: [stepCount]i128,
-    pipelineUpdateBools: [stepCount]bool = .{false} ** stepCount,
+    layoutTimeStamps: [stepCount]i128,
+    layoutUpdateBools: [stepCount]bool = .{false} ** stepCount,
 
     pub fn init(alloc: Allocator) !FileManager {
         // Assign paths
-        const rootPath = try resolveProjectRoot(alloc, config.rootPath);
-        std.debug.print("Root Path {s}\n", .{rootPath});
-        const shaderPath = try joinPath(alloc, rootPath, config.glslPath);
+        const root = try resolveProjectRoot(alloc, config.rootPath);
+        std.debug.print("Root Path {s}\n", .{root});
+        const shaderPath = try joinPath(alloc, root, config.glslPath);
         std.debug.print("Shader Path {s}\n", .{shaderPath});
-        const shaderOutputPath = try joinPath(alloc, rootPath, config.sprvPath);
+        const shaderOutputPath = try joinPath(alloc, root, config.sprvPath);
         std.debug.print("Shader Output Path {s}\n", .{shaderOutputPath});
         // Set defaults
-        const currentTime = std.time.nanoTimestamp();
-        const pipelineTimeStamps: [stepCount]i128 = .{currentTime} ** stepCount;
+        const curTime = std.time.nanoTimestamp();
+        const layoutTimeStamps: [stepCount]i128 = .{curTime} ** stepCount;
         // Compile on Startup if wanted
         if (config.SHADER_STARTUP_COMPILATION) {
             for (config.shadersToCompile) |shader| {
                 const filePath = try joinPath(alloc, shaderPath, shader.glslFile);
-                const shaderOutputName = try joinPath(alloc, shaderOutputPath, shader.spvFile);
-                try compileShader(alloc, filePath, shaderOutputName);
+                const outputName = try joinPath(alloc, shaderOutputPath, shader.spvFile);
+                try compileShader(alloc, filePath, outputName);
                 alloc.free(filePath);
-                alloc.free(shaderOutputName);
+                alloc.free(outputName);
             }
         }
 
         return .{
             .alloc = alloc,
-            .rootPath = rootPath,
+            .rootPath = root,
             .shaderPath = shaderPath,
             .shaderOutputPath = shaderOutputPath,
-            .pipelineTimeStamps = pipelineTimeStamps,
+            .layoutTimeStamps = layoutTimeStamps,
         };
     }
 
@@ -52,7 +51,7 @@ pub const FileManager = struct {
                 const filePath = try joinPath(alloc, self.shaderPath, shader.glslFile);
                 const newTimeStamp = try getFileTimeStamp(filePath);
 
-                if (self.pipelineTimeStamps[i] < newTimeStamp) {
+                if (self.layoutTimeStamps[i] < newTimeStamp) {
                     const shaderOutputPath = try joinPath(alloc, self.shaderOutputPath, shader.spvFile);
 
                     compileShader(alloc, filePath, shaderOutputPath) catch |err| {
@@ -60,8 +59,8 @@ pub const FileManager = struct {
                     };
 
                     alloc.free(shaderOutputPath);
-                    self.pipelineTimeStamps[i] = newTimeStamp;
-                    self.pipelineUpdateBools[i] = true;
+                    self.layoutTimeStamps[i] = newTimeStamp;
+                    self.layoutUpdateBools[i] = true;
                 }
                 alloc.free(filePath);
             }
