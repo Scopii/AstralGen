@@ -165,7 +165,8 @@ pub const Renderer = struct {
         if (try self.swapchainMan.updateTargets(frameInFlight, &self.context) == false) return;
 
         const cmd = try self.cmdMan.beginRecording(frameInFlight);
-        try self.recordCommands(cmd, cam, runtimeAsFloat);
+        try self.recordPasses(cmd, cam, runtimeAsFloat);
+        try self.recordBlits(cmd);
         try CmdManager.endRecording(cmd);
 
         const targets = self.swapchainMan.targets.slice();
@@ -175,9 +176,7 @@ pub const Renderer = struct {
         self.scheduler.nextFrame();
     }
 
-    fn recordCommands(self: *Renderer, cmd: c.VkCommandBuffer, cam: *Camera, runtimeAsFloat: f32) !void {
-        var touchedIndices: u64 = 0;
-
+    fn recordPasses(self: *Renderer, cmd: c.VkCommandBuffer, cam: *Camera, runtimeAsFloat: f32) !void {
         for (0..config.renderSeq.len) |i| {
             const renderImgId = config.renderSeq[i].renderImg.id;
             const renderImgPtr = &self.renderImages[renderImgId].?;
@@ -201,6 +200,15 @@ pub const Renderer = struct {
                 pushConstants,
                 config.renderSeq[i].clear,
             );
+        }
+    }
+
+    fn recordBlits(self: *Renderer, cmd: c.VkCommandBuffer) !void {
+        var touchedIndices: u64 = 0;
+
+        for (0..config.renderSeq.len) |i| {
+            const renderImgId = config.renderSeq[i].renderImg.id;
+            const renderImgPtr = &self.renderImages[renderImgId].?;
             // BLIT LOGIC
             var passTargets: [config.MAX_WINDOWS]u8 = undefined;
             const targets = self.swapchainMan.fillPassTargets(renderImgId, &passTargets);
