@@ -4,13 +4,13 @@ const KeyMapping = @import("core/EventManager.zig").KeyMapping;
 const ShaderStage = @import("vulkan/ShaderObject.zig").ShaderStage;
 
 // Vulkan Validation Layers
-pub const DEBUG_MODE = true;
+pub const DEBUG_MODE = false;
 pub const EXTRA_VALIDATION = false;
 pub const BEST_PRACTICES = false;
 
 // Shader Compilation
-pub const SHADER_HOTLOAD = true;
-pub const SHADER_STARTUP_COMPILATION = true;
+pub const SHADER_HOTLOAD = false;
+pub const SHADER_STARTUP_COMPILATION = false;
 
 // Dev Mode
 pub const CLOSE_WITH_CONSOLE = false;
@@ -24,9 +24,9 @@ pub const DISPLAY_MODE = c.VK_PRESENT_MODE_IMMEDIATE_KHR;
 pub const MAX_WINDOWS: u8 = 16;
 
 pub const RENDER_IMG_MAX = 64;
-pub const RENDER_IMG_AUTO_RESIZE = true;
 pub const RENDER_IMG_FORMAT = c.VK_FORMAT_R16G16B16A16_SFLOAT;
-pub const RENDER_IMG_STRETCH = true;
+pub const RENDER_IMG_AUTO_RESIZE = true;
+pub const RENDER_IMG_STRETCH = true; // Ignored on AUTO_RESIZE
 
 // Camera
 pub const CAM_SPEED = 0.00000001;

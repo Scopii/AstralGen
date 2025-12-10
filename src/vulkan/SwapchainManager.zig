@@ -80,12 +80,12 @@ pub const SwapchainManager = struct {
         return if (self.targets.len != 0) true else false;
     }
 
-    pub fn addActive(self: *SwapchainManager, window: *Window) !void {
-        self.swapchains.getPtr(@intCast(window.windowId)).active = true;
+    pub fn addActive(self: *SwapchainManager, windowId: u32) !void {
+        self.swapchains.getPtr(@intCast(windowId)).active = true;
     }
 
-    pub fn removeActive(self: *SwapchainManager, window: *Window) void {
-        self.swapchains.getPtr(@intCast(window.windowId)).active = false;
+    pub fn removeActive(self: *SwapchainManager, windowId: u32) void {
+        self.swapchains.getPtr(@intCast(windowId)).active = false;
     }
 
     pub fn getMaxRenderExtent(self: *SwapchainManager, renderId: u8) c.VkExtent2D {

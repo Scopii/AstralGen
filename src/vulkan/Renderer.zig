@@ -87,47 +87,39 @@ pub const Renderer = struct {
         self.context.deinit();
     }
 
-    pub fn update(self: *Renderer, windows: []*Window) !void {
+    pub fn update(self: *Renderer, winPtrs: []*Window) !void {
         // Handle window state changes...
-        for (windows) |windowPtr| {
-            if (windowPtr.status == .needDelete or windowPtr.status == .needUpdate or windowPtr.status == .needInactive) {
+        for (winPtrs) |winPtr| {
+            if (winPtr.status == .needDelete or winPtr.status == .needUpdate or winPtr.status == .needInactive) {
                 _ = c.vkDeviceWaitIdle(self.context.gpi);
                 break;
             }
         }
+        var dirtyRenderIds: [config.MAX_WINDOWS]bool = .{false} ** config.MAX_WINDOWS;
 
-        var dirtyRenderImgs: [config.MAX_WINDOWS]bool = .{false} ** config.MAX_WINDOWS;
-
-        for (windows) |winPtr| {
+        for (winPtrs) |winPtr| {
             switch (winPtr.status) {
-                .needUpdate => {
+                .needUpdate, .needCreation => {
                     try self.swapchainMan.createSwapchain(&self.context, .{ .window = winPtr });
                     winPtr.status = .active;
-                    dirtyRenderImgs[winPtr.renderId] = true;
+                    dirtyRenderIds[winPtr.renderId] = true;
                 },
                 .needActive => {
-                    try self.swapchainMan.addActive(winPtr);
+                    try self.swapchainMan.addActive(winPtr.windowId);
                     winPtr.status = .active;
                 },
                 .needInactive => {
-                    self.swapchainMan.removeActive(winPtr);
+                    self.swapchainMan.removeActive(winPtr.windowId);
                     winPtr.status = .inactive;
                 },
-                .needCreation => {
-                    try self.swapchainMan.createSwapchain(&self.context, .{ .window = winPtr });
-                    winPtr.status = .active;
-                    dirtyRenderImgs[winPtr.renderId] = true;
-                },
-                .needDelete => {
-                    self.swapchainMan.removeSwapchain(&.{winPtr});
-                },
+                .needDelete => self.swapchainMan.removeSwapchain(&.{winPtr}),
                 else => std.debug.print("Window State {s} cant be handled in Renderer\n", .{@tagName(winPtr.status)}),
             }
         }
 
         if (config.RENDER_IMG_AUTO_RESIZE == true) {
-            for (0..dirtyRenderImgs.len) |i| {
-                if (dirtyRenderImgs[i] == true and self.renderImages[i] != null) {
+            for (0..dirtyRenderIds.len) |i| {
+                if (dirtyRenderIds[i] == true and self.renderImages[i] != null) {
                     try self.updateRenderImage(@intCast(i));
                 }
             }
