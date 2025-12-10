@@ -75,8 +75,8 @@ pub const CmdManager = struct {
         shouldClear: bool,
     ) !void {
         switch (renderType) {
-            .compute => try recordCompute(cmd, renderImg, shaderObjects, pipeLayout, gpuAddress, pushConstants),
-            .graphics, .mesh, .taskMesh => try recordGraphics(cmd, renderImg, shaderObjects, renderType, pipeLayout, gpuAddress, pushConstants, shouldClear),
+            .computePass => try recordCompute(cmd, renderImg, shaderObjects, pipeLayout, gpuAddress, pushConstants),
+            .graphicsPass, .meshPass, .taskMeshPass => try recordGraphics(cmd, renderImg, shaderObjects, renderType, pipeLayout, gpuAddress, pushConstants, shouldClear),
             else => std.debug.print("Renderer: {s} has no Command Recording yet\n", .{@tagName(renderType)}),
         }
     }
@@ -102,7 +102,7 @@ pub const CmdManager = struct {
         createPipelineBarriers2(cmd, &.{barrier});
         renderImg.curLayout = c.VK_IMAGE_LAYOUT_GENERAL;
 
-        const stages = [_]ShaderStage{.computeBit};
+        const stages = [_]ShaderStage{.compute};
         c.pfn_vkCmdBindShadersEXT.?(cmd, 1, @ptrCast(&stages), &shaderObjects[0].handle);
 
         const bufferBindingInf = c.VkDescriptorBufferBindingInfoEXT{
@@ -186,7 +186,7 @@ pub const CmdManager = struct {
 
         c.vkCmdPushConstants(cmd, pipeLayout, c.VK_SHADER_STAGE_ALL, 0, @sizeOf(PushConstants), &pushConstants);
 
-        var stages = [_]ShaderStage{ .vertexBit, .tessControlBit, .tessEvalBit, .geometryBit, .taskBit, .meshBit, .fragBit };
+        var stages = [_]ShaderStage{ .vertex, .tessControl, .tessEval, .geometry, .task, .mesh, .frag };
         // bind ALL 7 stages to ensure clean state
         var shaders = [_]c.VkShaderEXT{ null, null, null, null, null, null, null };
         // Assign all stages to correct index
@@ -209,13 +209,13 @@ pub const CmdManager = struct {
 
         // Bind shader objects based on pipeline type
         switch (renderType) {
-            .graphics => {
+            .graphicsPass => {
                 c.pfn_vkCmdBindShadersEXT.?(cmd, 7, @ptrCast(&stages), &shaders);
                 c.pfn_vkCmdSetVertexInputEXT.?(cmd, 0, null, 0, null); // Set empty vertex input state
                 setGraphicsDynamicStates(cmd);
                 c.vkCmdDraw(cmd, 3, 1, 0, 0);
             },
-            .mesh, .taskMesh => {
+            .meshPass, .taskMeshPass => {
                 c.pfn_vkCmdBindShadersEXT.?(cmd, 7, @ptrCast(&stages), &shaders);
                 setGraphicsDynamicStates(cmd);
 

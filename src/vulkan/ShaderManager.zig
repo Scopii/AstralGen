@@ -99,26 +99,26 @@ fn checkShaderLayout(shaderLayout: ShaderLayout) !RenderType {
 
     for (shaderLayout.shaders) |shader| {
         const curIndex: i8 = switch (shader.stage) {
-            .computeBit => 0,
-            .vertexBit => 1,
-            .tessControlBit => 2,
-            .tessEvalBit => 3,
-            .geometryBit => 4,
-            .taskBit => 5,
-            .meshBit => 6,
-            .fragBit => 7,
+            .compute => 0,
+            .vertex => 1,
+            .tessControl => 2,
+            .tessEval => 3,
+            .geometry => 4,
+            .task => 5,
+            .mesh => 6,
+            .frag => 7,
         };
         if (curIndex <= prevIndex) return error.ShaderLayoutOrderInvalid;
         prevIndex = curIndex;
         shdr[@intCast(curIndex)] += 1;
     }
     switch (shaderLayout.shaders.len) {
-        1 => if (shdr[0] == 1) return .compute else if (shdr[1] == 1) return .vertOnly,
-        2 => if (shdr[6] == 1 and shdr[7] == 1) return .mesh,
-        3 => if (shdr[5] == 1 and shdr[6] == 1 and shdr[7] == 1) return .taskMesh,
+        1 => if (shdr[0] == 1) return .computePass else if (shdr[1] == 1) return .vertexPass,
+        2 => if (shdr[6] == 1 and shdr[7] == 1) return .meshPass,
+        3 => if (shdr[5] == 1 and shdr[6] == 1 and shdr[7] == 1) return .taskMeshPass,
         else => {},
     }
-    if (shdr[1] == 1 and shdr[2] <= 1 and shdr[3] <= 1 and shdr[4] <= 1 and shdr[5] == 0 and shdr[6] == 0 and shdr[7] == 1) return .graphics;
+    if (shdr[1] == 1 and shdr[2] <= 1 and shdr[3] <= 1 and shdr[4] <= 1 and shdr[5] == 0 and shdr[6] == 0 and shdr[7] == 1) return .graphicsPass;
     if (shdr[2] != shdr[3]) return error.ShaderLayoutTessellationMismatch;
     return error.ShaderLayoutInvalid;
 }
