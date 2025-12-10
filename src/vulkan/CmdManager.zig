@@ -280,27 +280,43 @@ pub const CmdManager = struct {
 
             srcImgPtr.curLayout = c.VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
 
-            // 3. CALCULATE BLIT OFFSETS (Centering)
+            // 3. CALCULATE BLIT OFFSETS
             var srcOffsets: [2]c.VkOffset3D = undefined;
             var dstOffsets: [2]c.VkOffset3D = undefined;
 
-            dstOffsets[0] = .{ .x = 0, .y = 0, .z = 0 };
-            dstOffsets[1] = .{ .x = @intCast(swapchain.extent.width), .y = @intCast(swapchain.extent.height), .z = 1 };
-
             if (config.RENDER_IMG_STRETCH) {
+                // Stretch: Source is full image, Dest is full window
                 srcOffsets[0] = .{ .x = 0, .y = 0, .z = 0 };
                 srcOffsets[1] = .{ .x = @intCast(srcImgPtr.extent3d.width), .y = @intCast(srcImgPtr.extent3d.height), .z = 1 };
+
+                dstOffsets[0] = .{ .x = 0, .y = 0, .z = 0 };
+                dstOffsets[1] = .{ .x = @intCast(swapchain.extent.width), .y = @intCast(swapchain.extent.height), .z = 1 };
             } else {
+                // No Stretch (Center / Crop)
                 const srcW: i32 = @intCast(srcImgPtr.extent3d.width);
                 const srcH: i32 = @intCast(srcImgPtr.extent3d.height);
                 const winW: i32 = @intCast(swapchain.extent.width);
                 const winH: i32 = @intCast(swapchain.extent.height);
 
-                // for Center
-                const startX = @divFloor(srcW - winW, 2);
-                const startY = @divFloor(srcH - winH, 2);
-                srcOffsets[0] = .{ .x = startX, .y = startY, .z = 0 };
-                srcOffsets[1] = .{ .x = startX + winW, .y = startY + winH, .z = 1 };
+                // Determine the size of the region to copy (the smaller of the two dimensions)
+                const blitW = @min(srcW, winW);
+                const blitH = @min(srcH, winH);
+
+                // Center the region on the SOURCE
+                // If Source < Window, this is 0. If Source > Window, this crops the center.
+                const srcX = @divFloor(srcW - blitW, 2);
+                const srcY = @divFloor(srcH - blitH, 2);
+
+                srcOffsets[0] = .{ .x = srcX, .y = srcY, .z = 0 };
+                srcOffsets[1] = .{ .x = srcX + blitW, .y = srcY + blitH, .z = 1 };
+
+                // Center the region on the DESTINATION
+                // If Window > Source, this centers the image on screen. If Window < Source, this is 0.
+                const dstX = @divFloor(winW - blitW, 2);
+                const dstY = @divFloor(winH - blitH, 2);
+
+                dstOffsets[0] = .{ .x = dstX, .y = dstY, .z = 0 };
+                dstOffsets[1] = .{ .x = dstX + blitW, .y = dstY + blitH, .z = 1 };
             }
             // 4. BLIT
             copyImageToImage(cmd, srcImgPtr.img, srcOffsets, swapchain.images[swapchain.curIndex], dstOffsets);
