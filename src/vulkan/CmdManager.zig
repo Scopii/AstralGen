@@ -5,6 +5,7 @@ const Context = @import("Context.zig").Context;
 const GpuImage = @import("ResourceManager.zig").GpuImage;
 const SwapchainManager = @import("SwapchainManager.zig");
 const ShaderObject = @import("ShaderObject.zig").ShaderObject;
+const ShaderStage = @import("ShaderObject.zig").ShaderStage;
 const RenderType = @import("../config.zig").RenderType;
 const PushConstants = @import("ShaderManager.zig").PushConstants;
 const CreateMapArray = @import("../structures/MapArray.zig").CreateMapArray;
@@ -101,8 +102,8 @@ pub const CmdManager = struct {
         createPipelineBarriers2(cmd, &.{barrier});
         renderImg.curLayout = c.VK_IMAGE_LAYOUT_GENERAL;
 
-        const stages = [_]c.VkShaderStageFlagBits{c.VK_SHADER_STAGE_COMPUTE_BIT};
-        c.pfn_vkCmdBindShadersEXT.?(cmd, 1, &stages, &shaderObjects[0].handle);
+        const stages = [_]ShaderStage{.computeBit};
+        c.pfn_vkCmdBindShadersEXT.?(cmd, 1, @ptrCast(&stages), &shaderObjects[0].handle);
 
         const bufferBindingInf = c.VkDescriptorBufferBindingInfoEXT{
             .sType = c.VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT,
@@ -185,25 +186,9 @@ pub const CmdManager = struct {
 
         c.vkCmdPushConstants(cmd, pipeLayout, c.VK_SHADER_STAGE_ALL, 0, @sizeOf(PushConstants), &pushConstants);
 
-        var stages = [_]c.VkShaderStageFlagBits{
-            c.VK_SHADER_STAGE_VERTEX_BIT,
-            c.VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT,
-            c.VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT,
-            c.VK_SHADER_STAGE_GEOMETRY_BIT,
-            c.VK_SHADER_STAGE_TASK_BIT_EXT,
-            c.VK_SHADER_STAGE_MESH_BIT_EXT,
-            c.VK_SHADER_STAGE_FRAGMENT_BIT,
-        };
+        var stages = [_]ShaderStage{ .vertexBit, .tessControlBit, .tessEvalBit, .geometryBit, .taskBit, .meshBit, .fragBit };
         // bind ALL 7 stages to ensure clean state
-        var shaders = [_]c.VkShaderEXT{
-            null, // Clear vertex shader for mesh
-            null, // No tessellation control
-            null, // No tessellation eval
-            null, // No geometry
-            null, // Task
-            null, // Mesh
-            null, // Frag
-        };
+        var shaders = [_]c.VkShaderEXT{ null, null, null, null, null, null, null };
         // Assign all stages to correct index
         for (shaderObjects) |shaderObject| {
             for (0..stages.len) |i| {
@@ -225,13 +210,13 @@ pub const CmdManager = struct {
         // Bind shader objects based on pipeline type
         switch (renderType) {
             .graphics => {
-                c.pfn_vkCmdBindShadersEXT.?(cmd, 7, &stages, &shaders);
+                c.pfn_vkCmdBindShadersEXT.?(cmd, 7, @ptrCast(&stages), &shaders);
                 c.pfn_vkCmdSetVertexInputEXT.?(cmd, 0, null, 0, null); // Set empty vertex input state
                 setGraphicsDynamicStates(cmd);
                 c.vkCmdDraw(cmd, 3, 1, 0, 0);
             },
             .mesh, .taskMesh => {
-                c.pfn_vkCmdBindShadersEXT.?(cmd, 7, &stages, &shaders);
+                c.pfn_vkCmdBindShadersEXT.?(cmd, 7, @ptrCast(&stages), &shaders);
                 setGraphicsDynamicStates(cmd);
 
                 // When using Task Shaders, these arguments now mean:

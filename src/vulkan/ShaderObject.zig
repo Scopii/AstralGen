@@ -7,9 +7,20 @@ const PushConstants = @import("ShaderManager.zig").PushConstants;
 const check = @import("error.zig").check;
 const resolveProjectRoot = @import("../core/FileManager.zig").resolveProjectRoot;
 
+pub const ShaderStage = enum(c.VkShaderStageFlagBits) {
+    computeBit = c.VK_SHADER_STAGE_COMPUTE_BIT,
+    vertexBit = c.VK_SHADER_STAGE_VERTEX_BIT,
+    tessControlBit = c.VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT,
+    tessEvalBit = c.VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT,
+    geometryBit = c.VK_SHADER_STAGE_GEOMETRY_BIT,
+    taskBit = c.VK_SHADER_STAGE_TASK_BIT_EXT,
+    meshBit = c.VK_SHADER_STAGE_MESH_BIT_EXT,
+    fragBit = c.VK_SHADER_STAGE_FRAGMENT_BIT,
+};
+
 pub const ShaderObject = struct {
     handle: c.VkShaderEXT,
-    stage: c.VkShaderStageFlagBits,
+    stage: ShaderStage,
 
     pub fn init(
         alloc: Allocator,
@@ -35,7 +46,7 @@ pub const ShaderObject = struct {
 
         // Set flags based on shader stage
         var flags: c.VkShaderCreateFlagsEXT = 0;
-        if (stage == c.VK_SHADER_STAGE_MESH_BIT_EXT and renderType == .mesh) {
+        if (stage == .meshBit and renderType == .mesh) {
             flags |= c.VK_SHADER_CREATE_NO_TASK_SHADER_BIT_EXT; // because task shader isnt used YET
         }
 
@@ -43,7 +54,7 @@ pub const ShaderObject = struct {
             .sType = c.VK_STRUCTURE_TYPE_SHADER_CREATE_INFO_EXT,
             .pNext = null,
             .flags = if (renderType == .compute) 0 else flags,
-            .stage = stage,
+            .stage = @intFromEnum(stage),
             .nextStage = nextStage,
             .codeType = c.VK_SHADER_CODE_TYPE_SPIRV_EXT,
             .codeSize = spvData.len,

@@ -8,6 +8,7 @@ const ShaderLayout = @import("../config.zig").ShaderLayout;
 const ResourceManager = @import("ResourceManager.zig").ResourceManager;
 const check = @import("error.zig").check;
 const ShaderObject = @import("ShaderObject.zig").ShaderObject;
+const ShaderStage = @import("ShaderObject.zig").ShaderStage;
 const ztracy = @import("ztracy");
 
 pub const PushConstants = extern struct {
@@ -98,15 +99,14 @@ fn checkShaderLayout(shaderLayout: ShaderLayout) !RenderType {
 
     for (shaderLayout.shaders) |shader| {
         const curIndex: i8 = switch (shader.stage) {
-            c.VK_SHADER_STAGE_COMPUTE_BIT => 0,
-            c.VK_SHADER_STAGE_VERTEX_BIT => 1,
-            c.VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT => 2,
-            c.VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT => 3,
-            c.VK_SHADER_STAGE_GEOMETRY_BIT => 4,
-            c.VK_SHADER_STAGE_TASK_BIT_EXT => 5,
-            c.VK_SHADER_STAGE_MESH_BIT_EXT => 6,
-            c.VK_SHADER_STAGE_FRAGMENT_BIT => 7,
-            else => return error.UnknownShaderStage,
+            .computeBit => 0,
+            .vertexBit => 1,
+            .tessControlBit => 2,
+            .tessEvalBit => 3,
+            .geometryBit => 4,
+            .taskBit => 5,
+            .meshBit => 6,
+            .fragBit => 7,
         };
         if (curIndex <= prevIndex) return error.ShaderLayoutOrderInvalid;
         prevIndex = curIndex;
@@ -133,7 +133,7 @@ fn setShaderLayout(alloc: Allocator, gpi: c.VkDevice, descLayout: c.VkDescriptor
 
     for (0..shaders.len) |i| {
         const shader = shaders[i];
-        const nextStage = if (i + 1 <= shaders.len - 1) shaders[i + 1].stage else 0;
+        const nextStage: c.VkShaderStageFlagBits = if (i + 1 <= shaders.len - 1) @intFromEnum(shaders[i + 1].stage) else 0;
         const shaderObj = try ShaderObject.init(alloc, gpi, shader, nextStage, descLayout, renderType);
 
         list.append(shaderObj) catch |err| {
@@ -145,8 +145,8 @@ fn setShaderLayout(alloc: Allocator, gpi: c.VkDevice, descLayout: c.VkDescriptor
     return list;
 }
 
-fn createPipelineLayout(gpi: c.VkDevice, descLayout: c.VkDescriptorSetLayout, stages: c.VkShaderStageFlags, size: u32) !c.VkPipelineLayout {
-    const pcRange = c.VkPushConstantRange{ .stageFlags = stages, .offset = 0, .size = size };
+fn createPipelineLayout(gpi: c.VkDevice, descLayout: c.VkDescriptorSetLayout, stageFlags: c.VkShaderStageFlags, size: u32) !c.VkPipelineLayout {
+    const pcRange = c.VkPushConstantRange{ .stageFlags = stageFlags, .offset = 0, .size = size };
     const pipeLayoutInf = c.VkPipelineLayoutCreateInfo{
         .sType = c.VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
         .setLayoutCount = if (descLayout != null) 1 else 0,
