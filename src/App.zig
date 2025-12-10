@@ -79,10 +79,10 @@ pub const App = struct {
     }
 
     pub fn initWindows(self: *App) !void {
-        try self.windowMan.addWindow("Astral4", 1800, 950, config.renderImg4.id);
-        try self.windowMan.addWindow("Astral1", 1600, 800, config.renderImg1.id);
-        try self.windowMan.addWindow("Astral2", 1200, 600, config.renderImg2.id);
-        try self.windowMan.addWindow("Astral3", 350, 350, config.renderImg3.id);
+        try self.windowMan.addWindow("Task", 16 * 52, 9 * 52, config.renderImg4.id, 120, 50);
+        try self.windowMan.addWindow("Mesh", 16 * 52, 9 * 52, config.renderImg3.id, 120, 550);
+        try self.windowMan.addWindow("Compute", 16 * 52, 9 * 52, config.renderImg1.id, 960, 50);
+        try self.windowMan.addWindow("Graphics", 16 * 52, 9 * 52, config.renderImg2.id, 960, 550);
     }
 
     pub fn deinit(self: *App) void {

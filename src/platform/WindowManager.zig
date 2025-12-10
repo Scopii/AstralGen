@@ -36,7 +36,7 @@ pub const WindowManager = struct {
         c.SDL_Quit();
     }
 
-    pub fn addWindow(self: *WindowManager, title: [*c]const u8, width: c_int, height: c_int, renderId: u8) !void {
+    pub fn addWindow(self: *WindowManager, title: [*c]const u8, width: c_int, height: c_int, renderId: u8, xPos: c_int, yPos: c_int) !void {
         const sdlHandle = c.SDL_CreateWindow(title, width, height, c.SDL_WINDOW_VULKAN | c.SDL_WINDOW_RESIZABLE) orelse {
             std.log.err("SDL_CreateWindow failed: {s}\n", .{c.SDL_GetError()});
             return error.WindowInitFailed;
@@ -44,6 +44,7 @@ pub const WindowManager = struct {
         const windowId = c.SDL_GetWindowID(sdlHandle);
         _ = c.SDL_SetWindowFullscreen(sdlHandle, false);
         _ = c.SDL_SetWindowRelativeMouseMode(sdlHandle, true);
+        _ = c.SDL_SetWindowPosition(sdlHandle, xPos, yPos);
 
         const window = try Window.init(windowId, sdlHandle, renderId, c.VkExtent2D{ .width = @intCast(width), .height = @intCast(height) });
         self.windows.set(@intCast(windowId), window);

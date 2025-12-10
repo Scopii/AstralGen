@@ -153,5 +153,5 @@ void main() {
         vec3 surfaceColor = vec3(hitObj.colorR, hitObj.colorG, hitObj.colorB);
 
        finalColor = mix(vec4(surfaceColor * lighting, 1.0), vec4(0.0, 0.0, 0.0, 1.0), march / MAX_DIST);
-   } else finalColor = vec4(0.1, 0.1, 0., 1.0);
+   } else finalColor = vec4(0.05, 0.04, 0.05, 1.0);
 }

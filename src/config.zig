@@ -26,7 +26,7 @@ pub const MAX_WINDOWS: u8 = 16;
 pub const RENDER_IMG_MAX = 64;
 pub const RENDER_IMG_AUTO_RESIZE = true;
 pub const RENDER_IMG_FORMAT = c.VK_FORMAT_R16G16B16A16_SFLOAT;
-pub const RENDER_IMG_STRETCH = false;
+pub const RENDER_IMG_STRETCH = true;
 
 // Camera
 pub const CAM_SPEED = 0.00000001;
