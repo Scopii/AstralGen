@@ -102,21 +102,11 @@ pub const CmdManager = struct {
         createPipelineBarriers2(cmd, &.{barrier});
         renderImg.curLayout = c.VK_IMAGE_LAYOUT_GENERAL;
 
-        const stages = [_]ShaderStage{.compute};
-        c.pfn_vkCmdBindShadersEXT.?(cmd, 1, @ptrCast(&stages), &shaderObjects[0].handle);
-
-        const bufferBindingInf = c.VkDescriptorBufferBindingInfoEXT{
-            .sType = c.VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT,
-            .address = gpuAddress,
-            .usage = c.VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT,
-        };
-        c.pfn_vkCmdBindDescriptorBuffersEXT.?(cmd, 1, &bufferBindingInf);
-
-        const bufferIndex: u32 = 0;
-        const descOffset: c.VkDeviceSize = 0;
-        c.pfn_vkCmdSetDescriptorBufferOffsetsEXT.?(cmd, c.VK_PIPELINE_BIND_POINT_COMPUTE, pipeLayout, 0, 1, &bufferIndex, &descOffset);
-
         c.vkCmdPushConstants(cmd, pipeLayout, c.VK_SHADER_STAGE_ALL, 0, @sizeOf(PushConstants), &pushConstants);
+        bindShaderStages(cmd, shaderObjects);
+        bindDescriptorBuffer(cmd, gpuAddress);
+        setDescriptorBufferOffset(cmd, c.VK_PIPELINE_BIND_POINT_COMPUTE, pipeLayout);
+
         c.vkCmdDispatch(cmd, (renderImg.extent3d.width + 7) / 8, (renderImg.extent3d.height + 7) / 8, 1);
     }
 
@@ -148,13 +138,11 @@ pub const CmdManager = struct {
             .extent = .{ .width = renderImg.extent3d.width, .height = renderImg.extent3d.height },
         };
 
-        const loadOp: c_uint = if (shouldClear) c.VK_ATTACHMENT_LOAD_OP_CLEAR else c.VK_ATTACHMENT_LOAD_OP_LOAD;
-
         const colorAttachInf = c.VkRenderingAttachmentInfo{
             .sType = c.VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
             .imageView = renderImg.view,
             .imageLayout = c.VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-            .loadOp = loadOp,
+            .loadOp = if (shouldClear) c.VK_ATTACHMENT_LOAD_OP_CLEAR else c.VK_ATTACHMENT_LOAD_OP_LOAD,
             .storeOp = c.VK_ATTACHMENT_STORE_OP_STORE,
             .clearValue = .{ .color = .{ .float32 = .{ 0.0, 0.0, 0.1, 1.0 } } },
         };
@@ -169,10 +157,8 @@ pub const CmdManager = struct {
             .pDepthAttachment = null,
             .pStencilAttachment = null,
         };
-
         c.vkCmdBeginRendering(cmd, &renderInf);
 
-        // Set dynamic viewport and scissor - WithCount versions for shader objects
         const viewport = c.VkViewport{
             .x = 0,
             .y = 0,
@@ -185,45 +171,17 @@ pub const CmdManager = struct {
         c.pfn_vkCmdSetScissorWithCount.?(cmd, 1, &scissor);
 
         c.vkCmdPushConstants(cmd, pipeLayout, c.VK_SHADER_STAGE_ALL, 0, @sizeOf(PushConstants), &pushConstants);
+        bindShaderStages(cmd, shaderObjects);
+        bindDescriptorBuffer(cmd, gpuAddress);
+        setDescriptorBufferOffset(cmd, c.VK_PIPELINE_BIND_POINT_GRAPHICS, pipeLayout);
+        setGraphicsDynamicStates(cmd);
 
-        var stages = [_]ShaderStage{ .vertex, .tessControl, .tessEval, .geometry, .task, .mesh, .frag };
-        // bind ALL 7 stages to ensure clean state
-        var shaders = [_]c.VkShaderEXT{ null, null, null, null, null, null, null };
-        // Assign all stages to correct index
-        for (shaderObjects) |shaderObject| {
-            for (0..stages.len) |i| {
-                if (shaderObject.stage == stages[i]) shaders[i] = shaderObject.handle;
-            }
-        }
-
-        const bufferBindingInf = c.VkDescriptorBufferBindingInfoEXT{
-            .sType = c.VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT,
-            .address = gpuAddress,
-            .usage = c.VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT,
-        };
-        c.pfn_vkCmdBindDescriptorBuffersEXT.?(cmd, 1, &bufferBindingInf);
-
-        const bufferIndex: u32 = 0;
-        const descOffset: c.VkDeviceSize = 0;
-        c.pfn_vkCmdSetDescriptorBufferOffsetsEXT.?(cmd, c.VK_PIPELINE_BIND_POINT_GRAPHICS, pipeLayout, 0, 1, &bufferIndex, &descOffset);
-
-        // Bind shader objects based on pipeline type
         switch (renderType) {
             .graphicsPass => {
-                c.pfn_vkCmdBindShadersEXT.?(cmd, 7, @ptrCast(&stages), &shaders);
-                c.pfn_vkCmdSetVertexInputEXT.?(cmd, 0, null, 0, null); // Set empty vertex input state
-                setGraphicsDynamicStates(cmd);
+                c.pfn_vkCmdSetVertexInputEXT.?(cmd, 0, null, 0, null); // Currently empty vertex input state
                 c.vkCmdDraw(cmd, 3, 1, 0, 0);
             },
-            .meshPass, .taskMeshPass => {
-                c.pfn_vkCmdBindShadersEXT.?(cmd, 7, @ptrCast(&stages), &shaders);
-                setGraphicsDynamicStates(cmd);
-
-                // When using Task Shaders, these arguments now mean:
-                // "How many TASK workgroups to launch"
-                // (The task shader then decides how many Mesh workgroups to launch)
-                c.pfn_vkCmdDrawMeshTasksEXT.?(cmd, 1, 1, 1);
-            },
+            .meshPass, .taskMeshPass => c.pfn_vkCmdDrawMeshTasksEXT.?(cmd, 1, 1, 1),
             else => return error.UnsupportedPipelineType,
         }
         c.vkCmdEndRendering(cmd);
@@ -236,7 +194,7 @@ pub const CmdManager = struct {
             c.VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT,
             0,
             c.VK_IMAGE_LAYOUT_UNDEFINED, // Not important what it was
-            c.VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, // Must be this for presentation
+            c.VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, // Must be SRC for presentation
             swapchain.images[swapchain.curIndex],
             createSubresourceRange(c.VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1),
         );
@@ -247,7 +205,7 @@ pub const CmdManager = struct {
         for (targets) |swapchainIndex| {
             const swapchain = swapchainMap.getPtrAtIndex(swapchainIndex);
             const imgID = swapchain.renderId;
-            // Safety
+
             if (renderImages[imgID] == null) {
                 std.debug.print("Error: Window wants RenderID {} but it is null\n", .{imgID});
                 continue;
@@ -326,6 +284,21 @@ pub const CmdManager = struct {
     }
 };
 
+fn bindDescriptorBuffer(cmd: c.VkCommandBuffer, gpuAddress: deviceAddress) void {
+    const bufferBindingInf = c.VkDescriptorBufferBindingInfoEXT{
+        .sType = c.VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT,
+        .address = gpuAddress,
+        .usage = c.VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT,
+    };
+    c.pfn_vkCmdBindDescriptorBuffersEXT.?(cmd, 1, &bufferBindingInf);
+}
+
+fn setDescriptorBufferOffset(cmd: c.VkCommandBuffer, bindPoint: c.VkPipelineBindPoint, pipeLayout: c.VkPipelineLayout) void {
+    const bufferIndex: u32 = 0;
+    const descOffset: c.VkDeviceSize = 0;
+    c.pfn_vkCmdSetDescriptorBufferOffsetsEXT.?(cmd, bindPoint, pipeLayout, 0, 1, &bufferIndex, &descOffset);
+}
+
 fn setGraphicsDynamicStates(cmd: c.VkCommandBuffer) void {
     c.pfn_vkCmdSetRasterizerDiscardEnable.?(cmd, c.VK_FALSE);
     c.pfn_vkCmdSetDepthBiasEnable.?(cmd, c.VK_FALSE);
@@ -381,6 +354,18 @@ fn createCmdPool(gpi: c.VkDevice, familyIndex: u32) !c.VkCommandPool {
     return pool;
 }
 
+fn bindShaderStages(cmd: c.VkCommandBuffer, shaderObjects: []const ShaderObject) void {
+    var stages = [_]ShaderStage{ .compute, .vertex, .tessControl, .tessEval, .geometry, .task, .mesh, .frag };
+    var shaders = [_]c.VkShaderEXT{ null, null, null, null, null, null, null, null }; // clean state
+    // Assign stages to correct index
+    for (shaderObjects) |shaderObject| {
+        for (0..stages.len) |i| {
+            if (shaderObject.stage == stages[i]) shaders[i] = shaderObject.handle;
+        }
+    }
+    c.pfn_vkCmdBindShadersEXT.?(cmd, 8, @ptrCast(&stages), &shaders);
+}
+
 fn createPipelineBarriers2(cmd: c.VkCommandBuffer, barriers: []const c.VkImageMemoryBarrier2) void {
     const depInf = c.VkDependencyInfo{
         .sType = c.VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
@@ -429,21 +414,14 @@ fn createImageMemoryBarrier2(
     };
 }
 
-pub fn copyImageToImage(
-    cmd: c.VkCommandBuffer,
-    srcImg: c.VkImage,
-    srcOffsets: [2]c.VkOffset3D,
-    dstImg: c.VkImage,
-    dstOffsets: [2]c.VkOffset3D,
-) void {
+pub fn copyImageToImage(cmd: c.VkCommandBuffer, srcImg: c.VkImage, srcOffsets: [2]c.VkOffset3D, dstImg: c.VkImage, dstOffsets: [2]c.VkOffset3D) void {
     const blitRegion = c.VkImageBlit2{
         .sType = c.VK_STRUCTURE_TYPE_IMAGE_BLIT_2,
         .srcSubresource = createSubresourceLayers(c.VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1),
-        .srcOffsets = srcOffsets, // Use passed offsets directly
+        .srcOffsets = srcOffsets,
         .dstSubresource = createSubresourceLayers(c.VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1),
-        .dstOffsets = dstOffsets, // Use passed offsets directly
+        .dstOffsets = dstOffsets,
     };
-
     const blitInf = c.VkBlitImageInfo2{
         .sType = c.VK_STRUCTURE_TYPE_BLIT_IMAGE_INFO_2,
         .dstImage = dstImg,
