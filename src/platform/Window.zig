@@ -1,17 +1,9 @@
 const c = @import("../c.zig");
 
 pub const Window = struct {
-    pub const WindowStatus = enum {
-        active,
-        inactive,
-        needCreation,
-        needUpdate,
-        needDelete,
-        needInactive,
-        needActive,
-    };
+    pub const WindowState = enum { active, inactive, needCreation, needUpdate, needDelete, needInactive, needActive };
     handle: *c.SDL_Window,
-    status: WindowStatus = .needCreation,
+    state: WindowState = .needCreation,
     renderId: u8,
     extent: c.VkExtent2D,
     windowId: u32,

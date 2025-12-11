@@ -134,7 +134,7 @@ pub const SwapchainManager = struct {
         var ptr: *Swapchain = undefined;
 
         switch (input) {
-            .window => |window| if (window.status == .needCreation) {
+            .window => |window| if (window.state == .needCreation) {
                 extent = window.extent;
                 const surface = try createSurface(window.handle, self.instance);
                 const caps = try getSurfaceCaps(gpu, surface);

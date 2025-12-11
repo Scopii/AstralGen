@@ -90,7 +90,7 @@ pub const Renderer = struct {
     pub fn update(self: *Renderer, winPtrs: []*Window) !void {
         // Handle window state changes...
         for (winPtrs) |winPtr| {
-            if (winPtr.status == .needDelete or winPtr.status == .needUpdate) {
+            if (winPtr.state == .needDelete or winPtr.state == .needUpdate) {
                 _ = c.vkDeviceWaitIdle(self.context.gpi);
                 break;
             }
@@ -98,18 +98,16 @@ pub const Renderer = struct {
         var dirtyRenderIds: [config.MAX_WINDOWS]bool = .{false} ** config.MAX_WINDOWS;
 
         for (winPtrs) |winPtr| {
-            switch (winPtr.status) {
+            switch (winPtr.state) {
                 .needUpdate, .needCreation => {
                     try self.swapchainMan.createSwapchain(&self.context, .{ .window = winPtr });
-                    winPtr.status = .active;
                     dirtyRenderIds[winPtr.renderId] = true;
                 },
                 .needActive, .needInactive => {
-                    self.swapchainMan.changeState(winPtr.windowId, if (winPtr.status == .needActive) .active else .inactive);
-                    winPtr.status = if (winPtr.status == .needActive) .active else .inactive;
+                    self.swapchainMan.changeState(winPtr.windowId, if (winPtr.state == .needActive) .active else .inactive);
                 },
                 .needDelete => self.swapchainMan.removeSwapchain(&.{winPtr}),
-                else => std.debug.print("Window State {s} not handled in Renderer\n", .{@tagName(winPtr.status)}),
+                else => std.debug.print("Window State {s} cant be handled in Renderer\n", .{@tagName(winPtr.state)}),
             }
         }
 

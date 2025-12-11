@@ -59,7 +59,13 @@ pub const WindowManager = struct {
 
     pub fn cleanupWindows(self: *WindowManager) void {
         for (self.changedWindows.slice()) |window| {
-            if (window.status == .needDelete) self.destroyWindow(window.windowId);
+            switch (window.state) {
+                .needDelete => self.destroyWindow(window.windowId),
+                .needUpdate, .needCreation => window.state = .active,
+                .needActive => window.state = .active,
+                .needInactive => window.state = .inactive,
+                else => std.debug.print("WindowManager: Window {} State {s} should not need cleanup\n", .{ window.windowId, @tagName(window.state) }),
+            }
         }
         self.changedWindows.clear();
     }
@@ -135,23 +141,23 @@ pub const WindowManager = struct {
                 return; // Should not append window changes
             },
             c.SDL_EVENT_WINDOW_CLOSE_REQUESTED => {
-                if (window.status == .active) self.openWindows -= 1;
-                window.status = .needDelete;
+                if (window.state == .active) self.openWindows -= 1;
+                window.state = .needDelete;
             },
             c.SDL_EVENT_WINDOW_MINIMIZED => {
                 self.openWindows -= 1;
-                window.status = .needInactive;
+                window.state = .needInactive;
             },
             c.SDL_EVENT_WINDOW_RESTORED => {
-                if (window.status == .active) return;
+                if (window.state == .active) return;
                 self.openWindows += 1;
-                window.status = .needActive;
+                window.state = .needActive;
             },
             c.SDL_EVENT_WINDOW_RESIZED => {
                 var newExtent: c.VkExtent2D = undefined;
                 _ = c.SDL_GetWindowSize(window.handle, @ptrCast(&newExtent.width), @ptrCast(&newExtent.height));
                 window.extent = newExtent;
-                window.status = .needUpdate;
+                window.state = .needUpdate;
             },
             else => {
                 std.debug.print("Window Event {} could not be processed! \n", .{event.type});
@@ -159,7 +165,7 @@ pub const WindowManager = struct {
             },
         }
         try self.changedWindows.append(window);
-        std.debug.print("Status of Window {} now {s}\n", .{ id, @tagName(window.status) });
+        std.debug.print("State of Window {} now {s}\n", .{ id, @tagName(window.state) });
     }
 
     pub fn processKeyEvent(self: *WindowManager, event: *c.SDL_Event) void {
