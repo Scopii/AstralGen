@@ -96,23 +96,23 @@ pub const RenderResource = struct {
 };
 
 // Render
-pub const comp1 = Shader{ .stage = .compute, .glslFile = "Compute.comp", .spvFile = "Compute.spv" };
+pub const comp1 = Shader{ .stage = .compute, .glslFile = "CompPass.comp", .spvFile = "comp1.spv" };
 pub const renderImg1 = RenderResource{ .id = 0, .extent = .{ .width = 500, .height = 500, .depth = 1 } };
 pub const computePass1: ShaderLayout = .{ .renderImg = renderImg1, .shaders = &.{comp1} }; // clear does not work for compute
 
-pub const vert1 = Shader{ .stage = .vertex, .glslFile = "Graphics.vert", .spvFile = "GraphicsVert.spv" };
-pub const frag1 = Shader{ .stage = .frag, .glslFile = "Graphics.frag", .spvFile = "GraphicsFrag.spv" };
+pub const vert1 = Shader{ .stage = .vertex, .glslFile = "GraphicsPass.vert", .spvFile = "vert1.spv" };
+pub const frag1 = Shader{ .stage = .frag, .glslFile = "GraphicsPass.frag", .spvFile = "frag1.spv" };
 pub const renderImg2 = RenderResource{ .id = 1, .extent = .{ .width = 300, .height = 300, .depth = 1 } };
 pub const graphicsPass1: ShaderLayout = .{ .renderImg = renderImg2, .shaders = &.{ vert1, frag1 } };
 
-pub const mesh1 = Shader{ .stage = .mesh, .glslFile = "Mesh.mesh", .spvFile = "MeshMesh.spv" };
-pub const frag2 = Shader{ .stage = .frag, .glslFile = "Mesh.frag", .spvFile = "MeshFrag.spv" };
+pub const mesh1 = Shader{ .stage = .mesh, .glslFile = "MeshPass.mesh", .spvFile = "mesh1.spv" };
+pub const frag2 = Shader{ .stage = .frag, .glslFile = "MeshPass.frag", .spvFile = "frag2.spv" };
 pub const renderImg3 = RenderResource{ .id = 15, .extent = .{ .width = 100, .height = 100, .depth = 1 } };
 pub const meshPass1: ShaderLayout = .{ .renderImg = renderImg3, .shaders = &.{ mesh1, frag2 } };
 
-pub const task1 = Shader{ .stage = .task, .glslFile = "TaskMesh.task", .spvFile = "TaskMeshTask.spv" };
-pub const mesh2 = Shader{ .stage = .mesh, .glslFile = "TaskMesh.mesh", .spvFile = "TaskMeshMesh.spv" };
-pub const frag3 = Shader{ .stage = .frag, .glslFile = "TaskMesh.frag", .spvFile = "TaskMeshFrag.spv" };
+pub const task1 = Shader{ .stage = .task, .glslFile = "TaskPass.task", .spvFile = "task1.spv" };
+pub const mesh2 = Shader{ .stage = .mesh, .glslFile = "TaskPass.mesh", .spvFile = "mesh2.spv" };
+pub const frag3 = Shader{ .stage = .frag, .glslFile = "TaskPass.frag", .spvFile = "frag3.spv" };
 pub const renderImg4 = RenderResource{ .id = 7, .extent = .{ .width = 1920, .height = 1080, .depth = 1 } };
 pub const taskMeshPass1: ShaderLayout = .{ .renderImg = renderImg4, .shaders = &.{ task1, mesh2, frag3 } };
 
