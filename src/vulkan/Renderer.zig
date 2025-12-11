@@ -90,7 +90,7 @@ pub const Renderer = struct {
     pub fn update(self: *Renderer, winPtrs: []*Window) !void {
         // Handle window state changes...
         for (winPtrs) |winPtr| {
-            if (winPtr.status == .needDelete or winPtr.status == .needUpdate or winPtr.status == .needInactive) {
+            if (winPtr.status == .needDelete or winPtr.status == .needUpdate) {
                 _ = c.vkDeviceWaitIdle(self.context.gpi);
                 break;
             }
@@ -104,16 +104,12 @@ pub const Renderer = struct {
                     winPtr.status = .active;
                     dirtyRenderIds[winPtr.renderId] = true;
                 },
-                .needActive => {
-                    try self.swapchainMan.addActive(winPtr.windowId);
-                    winPtr.status = .active;
-                },
-                .needInactive => {
-                    self.swapchainMan.removeActive(winPtr.windowId);
-                    winPtr.status = .inactive;
+                .needActive, .needInactive => {
+                    self.swapchainMan.changeState(winPtr.windowId, if (winPtr.status == .active) .active else .inactive);
+                    winPtr.status = if (winPtr.status == .active) .active else .inactive;
                 },
                 .needDelete => self.swapchainMan.removeSwapchain(&.{winPtr}),
-                else => std.debug.print("Window State {s} cant be handled in Renderer\n", .{@tagName(winPtr.status)}),
+                else => std.debug.print("Window State {s} not handled in Renderer\n", .{@tagName(winPtr.status)}),
             }
         }
 
@@ -194,7 +190,7 @@ pub const Renderer = struct {
         }
     }
 
-    fn queueSubmit(self: *Renderer, cmd: c.VkCommandBuffer, submitIds: []const u8, frameInFlight: u8) !void {
+    fn queueSubmit(self: *Renderer, cmd: c.VkCommandBuffer, submitIds: []const u32, frameInFlight: u8) !void {
         var waitInfos = try self.arenaAlloc.alloc(c.VkSemaphoreSubmitInfo, submitIds.len);
         for (submitIds, 0..) |id, i| {
             const swapchain = self.swapchainMan.swapchains.getAtIndex(id);
@@ -214,7 +210,7 @@ pub const Renderer = struct {
         try check(c.vkQueueSubmit2(self.context.graphicsQ, 1, &submitInf, null), "Failed main submission");
     }
 
-    fn present(self: *Renderer, presentIds: []const u8) !void {
+    fn present(self: *Renderer, presentIds: []const u32) !void {
         var swapchainHandles = try self.alloc.alloc(c.VkSwapchainKHR, presentIds.len);
         defer self.alloc.free(swapchainHandles);
         var imageIndices = try self.alloc.alloc(u32, presentIds.len);

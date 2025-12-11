@@ -243,7 +243,7 @@ pub const CmdManager = struct {
         createPipelineBarriers2(cmd, &.{barrier});
     }
 
-    pub fn recordSwapchainBlits(cmd: c.VkCommandBuffer, renderImages: []?GpuImage, targets: []const u8, swapchainMap: *SwapchainManager.SwapchainMap) !void {
+    pub fn recordSwapchainBlits(cmd: c.VkCommandBuffer, renderImages: []?GpuImage, targets: []const u32, swapchainMap: *SwapchainManager.SwapchainMap) !void {
         for (targets) |swapchainIndex| {
             const swapchain = swapchainMap.getPtrAtIndex(swapchainIndex);
             const imgID = swapchain.renderId;

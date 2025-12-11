@@ -113,7 +113,7 @@ pub const App = struct {
             // Process Window Changes
             if (windowMan.changedWindows.len > 0) {
                 try renderer.update(windowMan.changedWindows.slice());
-                try windowMan.cleanupWindows();
+                windowMan.cleanupWindows();
             }
 
             // Close Or Idle

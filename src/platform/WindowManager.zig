@@ -9,7 +9,7 @@ const KeyEvent = @import("../core/EventManager.zig").KeyEvent;
 const MouseMovement = @import("../core/EventManager.zig").MouseMovement;
 
 pub const WindowManager = struct {
-    windows: CreateMapArray(Window, MAX_WINDOWS, u8, MAX_WINDOWS, 0) = .{},
+    windows: CreateMapArray(Window, MAX_WINDOWS, u32, MAX_WINDOWS, 0) = .{},
     mainWindow: ?*Window = null,
     changedWindows: std.BoundedArray(*Window, MAX_WINDOWS) = .{},
     openWindows: u8 = 0,
@@ -47,8 +47,8 @@ pub const WindowManager = struct {
         _ = c.SDL_SetWindowPosition(sdlHandle, xPos, yPos);
 
         const window = try Window.init(windowId, sdlHandle, renderId, c.VkExtent2D{ .width = @intCast(width), .height = @intCast(height) });
-        self.windows.set(@intCast(windowId), window);
-        try self.changedWindows.append(self.windows.getPtr(@intCast(windowId)));
+        self.windows.set(windowId, window);
+        try self.changedWindows.append(self.windows.getPtr(windowId));
         self.openWindows += 1;
         std.debug.print("Window ID {} created to present Render ID {}\n", .{ windowId, renderId });
     }
@@ -57,9 +57,9 @@ pub const WindowManager = struct {
         _ = c.SDL_ShowSimpleMessageBox(c.SDL_MESSAGEBOX_ERROR, title.ptr, message.ptr, null);
     }
 
-    pub fn cleanupWindows(self: *WindowManager) !void {
+    pub fn cleanupWindows(self: *WindowManager) void {
         for (self.changedWindows.slice()) |window| {
-            if (window.status == .needDelete) try self.destroyWindow(window.windowId);
+            if (window.status == .needDelete) self.destroyWindow(window.windowId);
         }
         self.changedWindows.clear();
     }
@@ -75,10 +75,10 @@ pub const WindowManager = struct {
         }
     }
 
-    fn destroyWindow(self: *WindowManager, id: u32) !void {
-        const window = self.windows.get(@intCast(id));
+    fn destroyWindow(self: *WindowManager, windowId: u32) void {
+        const window = self.windows.get(windowId);
         c.SDL_DestroyWindow(window.handle);
-        self.windows.removeAtKey(@intCast(id));
+        self.windows.removeAtKey(windowId);
     }
 
     pub fn consumeKeyEvents(self: *WindowManager) []KeyEvent {
@@ -117,7 +117,7 @@ pub const WindowManager = struct {
 
     pub fn processWindowEvent(self: *WindowManager, event: *c.SDL_Event) !void {
         const id = event.window.windowID;
-        const window = self.windows.getPtr(@intCast(id));
+        const window = self.windows.getPtr(id);
 
         switch (event.type) {
             c.SDL_EVENT_WINDOW_FOCUS_LOST => {
@@ -127,7 +127,7 @@ pub const WindowManager = struct {
             },
             c.SDL_EVENT_WINDOW_FOCUS_GAINED => {
                 std.debug.print("Main Window Set\n", .{});
-                self.mainWindow = self.windows.getPtr(@intCast(event.window.windowID));
+                self.mainWindow = self.windows.getPtr(event.window.windowID);
                 return; // Should not append window changes
             },
             c.SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED => { // Ran for every pixel change if CPU isnt blocked
