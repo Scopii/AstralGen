@@ -105,8 +105,8 @@ pub const Renderer = struct {
                     dirtyRenderIds[winPtr.renderId] = true;
                 },
                 .needActive, .needInactive => {
-                    self.swapchainMan.changeState(winPtr.windowId, if (winPtr.status == .active) .active else .inactive);
-                    winPtr.status = if (winPtr.status == .active) .active else .inactive;
+                    self.swapchainMan.changeState(winPtr.windowId, if (winPtr.status == .needActive) .active else .inactive);
+                    winPtr.status = if (winPtr.status == .needActive) .active else .inactive;
                 },
                 .needDelete => self.swapchainMan.removeSwapchain(&.{winPtr}),
                 else => std.debug.print("Window State {s} not handled in Renderer\n", .{@tagName(winPtr.status)}),

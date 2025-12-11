@@ -4,13 +4,13 @@ const KeyMapping = @import("core/EventManager.zig").KeyMapping;
 const ShaderStage = @import("vulkan/ShaderObject.zig").ShaderStage;
 
 // Vulkan Validation Layers
-pub const DEBUG_MODE = false;
+pub const DEBUG_MODE = true;
 pub const EXTRA_VALIDATION = false;
 pub const BEST_PRACTICES = false;
 
 // Shader Compilation
-pub const SHADER_HOTLOAD = false;
-pub const SHADER_STARTUP_COMPILATION = false;
+pub const SHADER_HOTLOAD = true;
+pub const SHADER_STARTUP_COMPILATION = true;
 
 // Dev Mode
 pub const CLOSE_WITH_CONSOLE = false;
