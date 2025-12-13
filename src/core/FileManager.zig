@@ -25,13 +25,7 @@ pub const FileManager = struct {
         const layoutTimeStamps: [stepCount]i128 = .{curTime} ** stepCount;
         // Compile on Startup if wanted
         if (config.SHADER_STARTUP_COMPILATION) {
-            for (config.shadersToCompile) |shader| {
-                const filePath = try joinPath(alloc, shaderPath, shader.glslFile);
-                const outputName = try joinPath(alloc, shaderOutputPath, shader.spvFile);
-                try compileShader(alloc, filePath, outputName);
-                alloc.free(filePath);
-                alloc.free(outputName);
-            }
+            try compileAllShadersParallel(alloc, shaderPath, shaderOutputPath);
         }
 
         return .{
@@ -91,9 +85,47 @@ pub fn getFileTimeStamp(src: []const u8) !i128 {
     return ns; // return ns / 1_000_000 nanoseconds -> milliseconds
 }
 
-fn compileShader(alloc: Allocator, srcPath: []const u8, spvPath: []const u8) !void {
-    std.debug.print("Compiling {s} -> {s}", .{ srcPath, spvPath });
+fn threadCompile(src: []const u8, dst: []const u8) void {
+    // Use a thread-safe allocator for internal temporary strings (like formatted args)
+    // GeneralPurposeAllocator is slow for this. C allocator is best if available.
+    // Or just use page_allocator for temp storage.
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer _ = gpa.deinit();
+    const alloc = gpa.allocator();
 
+    compileShader(alloc, src, dst) catch |err| {
+        // Use a mutex if you want clean printing, otherwise output might mix
+        std.debug.print("Thread Compile Failed: {}\n", .{err});
+    };
+
+    // Free the path strings passed to this thread
+    // (We assume the caller allocated them using a global allocator for us to own)
+    std.heap.page_allocator.free(src);
+    std.heap.page_allocator.free(dst);
+}
+
+pub fn compileAllShadersParallel(
+    alloc: std.mem.Allocator,
+    absShaderPath: []const u8, // Pass the resolved source folder
+    absShaderOutputPath: []const u8, // Pass the resolved output folder
+) !void {
+    var threads = std.ArrayList(std.Thread).init(alloc);
+    defer threads.deinit();
+
+    for (config.shadersToCompile) |shader| {
+        const src = try joinPath(std.heap.page_allocator, absShaderPath, shader.glslFile);
+        const dst = try joinPath(std.heap.page_allocator, absShaderOutputPath, shader.spvFile);
+
+        const t = try std.Thread.spawn(.{}, threadCompile, .{ src, dst });
+        try threads.append(t);
+    }
+
+    for (threads.items) |t| {
+        t.join();
+    }
+}
+
+fn compileShader(alloc: Allocator, srcPath: []const u8, spvPath: []const u8) !void {
     var shaderFormat: u8 = 0;
     if (std.mem.endsWith(u8, srcPath, ".hlsl")) shaderFormat = 1;
     if (std.mem.endsWith(u8, srcPath, ".glsl")) shaderFormat = 2;
@@ -106,11 +138,12 @@ fn compileShader(alloc: Allocator, srcPath: []const u8, spvPath: []const u8) !vo
         2 => try compileShaderGLSL(alloc, srcPath, spvPath),
         3 => try compileShaderSLANG(alloc, srcPath, spvPath),
         else => {
-            std.debug.print("Could not find Shader Format!\n", .{});
+            std.debug.print("Could not find Shader Format for {s}!\n", .{srcPath});
             return error.ShaderCompilationFailed;
         },
     }
-    std.debug.print(" (DONE: {}ms)\n", .{std.time.milliTimestamp() - time1});
+    const duration = std.time.milliTimestamp() - time1;
+    std.debug.print("[{d}ms] Compiled {s} -> {s}\n", .{ duration, srcPath, spvPath });
 }
 
 fn compileShaderGLSL(alloc: Allocator, srcPath: []const u8, spvPath: []const u8) !void {
@@ -152,9 +185,6 @@ fn compileShaderSLANG(alloc: Allocator, srcPath: []const u8, spvPath: []const u8
     if (std.mem.endsWith(u8, srcPath, "frag.slang")) stage = "fragment";
     if (std.mem.endsWith(u8, srcPath, "mesh.slang")) stage = "mesh";
     if (std.mem.endsWith(u8, srcPath, "task.slang")) stage = "task";
-
-    const stageFlag = try std.fmt.allocPrint(alloc, "-fshader-stage={s}", .{stage});
-    defer alloc.free(stageFlag);
 
     const result = std.process.Child.run(.{
         .allocator = alloc,
