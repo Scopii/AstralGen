@@ -93,6 +93,7 @@ fn threadCompile(src: []const u8, dst: []const u8) void {
     defer _ = gpa.deinit();
     const alloc = gpa.allocator();
 
+    //transpileSlang(alloc, src, dst, "hlsl")
     compileShader(alloc, src, dst) catch |err| {
         // Use a mutex if you want clean printing, otherwise output might mix
         std.debug.print("Thread Compile Failed: {}\n", .{err});
@@ -215,6 +216,24 @@ fn compileShaderSLANG(alloc: Allocator, srcPath: []const u8, spvPath: []const u8
         return error.ShaderCompilationFailed;
     }
 }
+
+// fn transpileSlang(alloc: Allocator, srcPath: []const u8, dstPath: []const u8, format: []const u8) !void {
+//     // Format is "hlsl" or "glsl"
+//     const result = std.process.Child.run(.{
+//         .allocator = alloc,
+//         .argv = &[_][]const u8{ "slangc", srcPath, "-target", format, "-entry", "main", "-o", dstPath },
+//     }) catch |err| {
+//         std.debug.print("Failed to run SlangC: {}\n", .{err});
+//         return err;
+//     };
+//     defer alloc.free(result.stdout);
+//     defer alloc.free(result.stderr);
+
+//     if (result.term != .Exited or result.term.Exited != 0) {
+//         std.debug.print("Shader Compilation Failed:\n{s}\n", .{result.stderr});
+//         return error.ShaderTranspileFailed;
+//     }
+// }
 
 fn compileShaderHLSL(alloc: Allocator, srcPath: []const u8, spvPath: []const u8) !void {
     var profile: []const u8 = "cs_6_6"; // default compute
