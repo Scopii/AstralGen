@@ -1,11 +1,13 @@
 const std = @import("std");
 const RNGenerator = @import("../core/RNGenerator.zig").RNGenerator;
 
+const objCount = 3;
+
 pub const EntityManager = struct {
-    objects: [30]Object,
+    objects: [objCount]Object,
 
     pub fn init(rng: *RNGenerator) !EntityManager {
-        var objects: [30]Object = undefined;
+        var objects: [objCount]Object = undefined;
 
         for (0..objects.len) |i| {
             const id = rng.intRange(u32, 0, @typeInfo(Object.SDF).@"enum".fields.len - 1);
@@ -33,7 +35,7 @@ pub const EntityManager = struct {
     }
 };
 
-pub const Object = struct {
+pub const Object = extern struct {
     pub const SDF = enum(u32) { sphere, cube, box };
 
     posX: f32,
@@ -45,4 +47,9 @@ pub const Object = struct {
     colorG: f32,
     colorB: f32,
     sdfId: SDF,
+
+    _pad1: u32 = 0,
+    _pad2: u32 = 0,
+    _pad3: u32 = 0,
+    _pad4: u32 = 0,
 };

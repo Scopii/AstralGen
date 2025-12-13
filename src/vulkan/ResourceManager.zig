@@ -32,6 +32,8 @@ pub const ResourceManager = struct {
     imgDescBuffer: GpuBuffer,
     imgDescSize: u32,
 
+    bufferDescSize: u32,
+
     pub fn init(alloc: Allocator, context: *const Context) !ResourceManager {
         const gpi = context.gpi;
         const gpuAlloc = try VkAllocator.init(context.instance, context.gpi, context.gpu);
@@ -40,9 +42,13 @@ pub const ResourceManager = struct {
         var descBufferProps = c.VkPhysicalDeviceDescriptorBufferPropertiesEXT{ .sType = c.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_BUFFER_PROPERTIES_EXT };
         var physDevProps = c.VkPhysicalDeviceProperties2{ .sType = c.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2, .pNext = &descBufferProps };
         c.vkGetPhysicalDeviceProperties2(context.gpu, &physDevProps);
+
         const imgDescSize: u32 = @intCast(descBufferProps.storageImageDescriptorSize); // Whole gpu memory?
+        const bufferDescSize: u32 = @intCast(descBufferProps.storageBufferDescriptorSize);
         // Create descriptor set layout
-        const descLayout = try createDescriptorLayout(gpi, 0, c.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1024, c.VK_SHADER_STAGE_ALL);
+        const textureBinding = createDescriptorLayoutBinding(0, c.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1024, c.VK_SHADER_STAGE_ALL);
+        const objectBinding = createDescriptorLayoutBinding(1, c.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, c.VK_SHADER_STAGE_ALL);
+        const descLayout = try createDescriptorLayout(gpi, &.{ textureBinding, objectBinding });
         errdefer c.vkDestroyDescriptorSetLayout(gpi, descLayout, null);
         // Get the exact size required for this layout from the driver
         var layoutSize: c.VkDeviceSize = undefined;
@@ -57,6 +63,7 @@ pub const ResourceManager = struct {
             .gpu = context.gpu,
             .imgDescSize = imgDescSize,
             .imgDescBuffer = imgDescBuffer,
+            .bufferDescSize = bufferDescSize,
             .descLayout = descLayout,
         };
     }
@@ -95,10 +102,11 @@ pub const ResourceManager = struct {
     }
 
     pub fn updateImageDescriptor(self: *ResourceManager, imgView: c.VkImageView, index: u32) !void {
-        const gpi = self.gpi;
-        const vkAlloc = self.gpuAlloc.handle;
-        const imgDescSize = self.imgDescSize;
+        // 1. Get the Base Offset for Binding 0 (The Image Array)
+        var bindingBaseOffset: c.VkDeviceSize = 0;
+        c.pfn_vkGetDescriptorSetLayoutBindingOffsetEXT.?(self.gpi, self.descLayout, 0, &bindingBaseOffset);
 
+        // 2. Prepare Descriptor Info
         const imgInf = c.VkDescriptorImageInfo{ .sampler = null, .imageView = imgView, .imageLayout = c.VK_IMAGE_LAYOUT_GENERAL };
 
         const getInf = c.VkDescriptorGetInfoEXT{
@@ -107,17 +115,23 @@ pub const ResourceManager = struct {
             .data = .{ .pStorageImage = &imgInf },
         };
 
-        var descData: [32]u8 = undefined;
-        if (imgDescSize > descData.len) return error.DescriptorSizeTooLarge;
-        c.pfn_vkGetDescriptorEXT.?(gpi, &getInf, imgDescSize, &descData);
+        // 3. Get Descriptor Data
+        var descData: [64]u8 = undefined; // Use safe buffer size
+        if (self.imgDescSize > descData.len) return error.DescriptorSizeTooLarge;
+        c.pfn_vkGetDescriptorEXT.?(self.gpi, &getInf, self.imgDescSize, &descData);
 
+        // 4. Calculate Final Offset
+        // Base Offset of the Array + (Index * Size of one Element)
+        const finalOffset = bindingBaseOffset + (index * self.imgDescSize);
+
+        // 5. Write to Memory
         var allocVmaInf: c.VmaAllocationInfo = undefined;
-        c.vmaGetAllocationInfo(vkAlloc, self.imgDescBuffer.allocation, &allocVmaInf);
+        c.vmaGetAllocationInfo(self.gpuAlloc.handle, self.imgDescBuffer.allocation, &allocVmaInf);
 
-        const offset = index * imgDescSize;
         const mappedData = @as([*]u8, @ptrCast(allocVmaInf.pMappedData));
-        const destPtr = mappedData + offset;
-        @memcpy(destPtr[0..imgDescSize], descData[0..imgDescSize]);
+        const destPtr = mappedData + finalOffset;
+
+        @memcpy(destPtr[0..self.imgDescSize], descData[0..self.imgDescSize]);
     }
 
     const Object = @import("../ecs/EntityManager.zig").Object;
@@ -134,10 +148,48 @@ pub const ResourceManager = struct {
         if (@intFromPtr(allocVmaInf.pMappedData) % alignment != 0) {
             return error.ImproperAlignment;
         }
+
         const dataPtr: [*]Object = @ptrCast(@alignCast(allocVmaInf.pMappedData));
         @memcpy(dataPtr[0..objects.len], objects);
 
         return buffer;
+    }
+
+    pub fn updateObjectBufferDescriptor(self: *ResourceManager, buffer: GpuBuffer) !void {
+        // 1. Get the offset where Binding 1 lives in the descriptor buffer
+        var offset: c.VkDeviceSize = 0;
+        c.pfn_vkGetDescriptorSetLayoutBindingOffsetEXT.?(self.gpi, self.descLayout, 1, &offset);
+
+        // 2. Prepare the descriptor info
+        const addressInf = c.VkDescriptorAddressInfoEXT{
+            .sType = c.VK_STRUCTURE_TYPE_DESCRIPTOR_ADDRESS_INFO_EXT,
+            .address = buffer.gpuAddress,
+            .range = buffer.size,
+            .format = c.VK_FORMAT_UNDEFINED,
+        };
+
+        const getInf = c.VkDescriptorGetInfoEXT{
+            .sType = c.VK_STRUCTURE_TYPE_DESCRIPTOR_GET_INFO_EXT,
+            .type = c.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+            .data = .{ .pStorageBuffer = &addressInf },
+        };
+
+        // 3. Get the descriptor data from the driver
+        // Note: Storage Buffers might have a different descriptor size than Images.
+        // Ideally query 'storageBufferDescriptorSize', but usually they are both ~16 bytes.
+        // For safety, use a buffer large enough (e.g., 64 bytes).
+        var descData: [64]u8 = undefined;
+        c.pfn_vkGetDescriptorEXT.?(self.gpi, &getInf, self.bufferDescSize, &descData);
+
+        // 4. Write it to the mapped memory
+        var allocVmaInf: c.VmaAllocationInfo = undefined;
+        c.vmaGetAllocationInfo(self.gpuAlloc.handle, self.imgDescBuffer.allocation, &allocVmaInf);
+
+        const mappedData = @as([*]u8, @ptrCast(allocVmaInf.pMappedData));
+        const destPtr = mappedData + offset;
+
+        // Copy the descriptor size (usually 16 bytes for buffers)
+        @memcpy(destPtr[0..self.bufferDescSize], descData[0..self.bufferDescSize]);
     }
 
     pub fn updateGpuBuffer(self: *const ResourceManager, bufRef: GpuBuffer, data: []const u8, offset: c.VkDeviceSize) !void {
@@ -177,19 +229,33 @@ fn createDefinedBuffer(vma: c.VmaAllocator, gpi: c.VkDevice, size: c.VkDeviceSiz
     return createBuffer(vma, gpi, size, data, bufferUsage, memUsage, memFlags);
 }
 
-fn createDescriptorLayout(gpi: c.VkDevice, binding: u32, descType: c.VkDescriptorType, count: u32, stageFlags: c.VkShaderStageFlags) !c.VkDescriptorSetLayout {
-    const layoutBinding = c.VkDescriptorSetLayoutBinding{
+fn createDescriptorLayoutBinding(binding: u32, descType: c.VkDescriptorType, count: u32, stageFlags: c.VkShaderStageFlags) c.VkDescriptorSetLayoutBinding {
+    return c.VkDescriptorSetLayoutBinding{
         .binding = binding,
         .descriptorType = descType,
         .descriptorCount = count,
         .stageFlags = stageFlags,
         .pImmutableSamplers = null,
     };
+}
+
+fn createDescriptorLayout(gpi: c.VkDevice, layoutBindings: []const c.VkDescriptorSetLayoutBinding) !c.VkDescriptorSetLayout {
+    // 1. Binding Flags
+    // Binding 0 (Images): Needs PARTIALLY_BOUND because the array is 1024 but we only use a few.
+    // Binding 1 (Buffer): Needs 0.
+    const bindingFlags = [_]c.VkDescriptorBindingFlags{ c.VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT, 0 };
+
+    const bindingFlagsInf = c.VkDescriptorSetLayoutBindingFlagsCreateInfo{
+        .sType = c.VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO,
+        .bindingCount = bindingFlags.len,
+        .pBindingFlags = &bindingFlags,
+    };
     const layoutInf = c.VkDescriptorSetLayoutCreateInfo{
         .sType = c.VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-        .bindingCount = 1,
-        .pBindings = &layoutBinding,
-        .flags = c.VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT, // Required for descriptor buffers
+        .pNext = &bindingFlagsInf,
+        .bindingCount = @intCast(layoutBindings.len),
+        .pBindings = layoutBindings.ptr,
+        .flags = c.VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT,
     };
     var layout: c.VkDescriptorSetLayout = undefined;
     try check(c.vkCreateDescriptorSetLayout(gpi, &layoutInf, null, &layout), "Failed to create descriptor set layout");

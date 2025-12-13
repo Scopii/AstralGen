@@ -43,5 +43,6 @@ pub var pfn_vkCmdBindDescriptorBuffersEXT: c_api.PFN_vkCmdBindDescriptorBuffersE
 pub var pfn_vkCmdSetDescriptorBufferOffsetsEXT: c_api.PFN_vkCmdSetDescriptorBufferOffsetsEXT = null;
 pub var pfn_vkGetDescriptorEXT: c_api.PFN_vkGetDescriptorEXT = null;
 pub var pfn_vkGetDescriptorSetLayoutSizeEXT: c_api.PFN_vkGetDescriptorSetLayoutSizeEXT = null;
+pub var pfn_vkGetDescriptorSetLayoutBindingOffsetEXT: c_api.PFN_vkGetDescriptorSetLayoutBindingOffsetEXT = null;
 
 pub usingnamespace c_api;

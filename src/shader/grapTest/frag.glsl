@@ -4,43 +4,32 @@
 #extension GL_EXT_scalar_block_layout : require
 #extension GL_EXT_nonuniform_qualifier : require
 
-layout(location = 0) out vec4 finalColor;
+layout(location = 0) out vec4 finalColor; // Output
 
-// Descriptors
-layout(set = 0, binding = 0, rgba16f) uniform image2D globalImages[];
-// Buffer reference raw data
+layout(set = 0, binding = 0, rgba16f) uniform image2D globalImages[]; // Descriptor Layout 1
 
-// Fixed struct with proper alignment
 struct Object {
-    float posX;     // offset 0
-    float posY;     // offset 4  
-    float posZ;     // offset 8
-    float size;     // offset 12
-    float colorR;   // offset 16
-    float colorG;   // offset 20
-    float colorB;   // offset 24
-    uint sdfId;     // offset 28
+    float posX; float posY; float posZ; float size;     
+    float colorR; float colorG; float colorB; uint sdfId;     
+    vec4 padding2;
 };
-
-layout(buffer_reference, std430) restrict buffer ObjectBuffer {
+layout(set = 0, binding = 1, std430) readonly buffer ObjectBuffer { // Descriptor Layout 2
     Object objects[];
-};
+} objectBuffer;
 
 // Push Constant
-layout(push_constant, std430) restrict uniform PushConstants {
-    vec4 camPosAndFov; // Last Float is Fov
+layout(push_constant, std430) uniform PushConstants {
+    vec4 camPosAndFov;
     vec4 camDir;
     float runtime;
     uint dataCount;
-    ObjectBuffer objectData; 
     uint outputImageIndex;
-} pushConstants;
+} pc;
 
 // Marching constants
 const int MAX_STEPS = 512;
 const float MIN_DIST = 0.001;
 const float MAX_DIST = 200.0;
-
 // Other Constants
 const float EPSILON = 0.001;
 
@@ -48,37 +37,32 @@ const float EPSILON = 0.001;
 float sdSphere(vec3 pos, float radius) { 
     return length(pos) - radius; 
 }
-
 float sdBox(vec3 p, vec3 b) {
     vec3 q = abs(p) - b;
     return length(max(q, 0.0)) + min(max(q.x, max(q.y, q.z)), 0.0);
 }
-
 float sdTorus(vec3 p, vec2 t) {
     vec2 q = vec2(length(p.xz) - t.x, p.y);
     return length(q) - t.y;
 }
-
 float sdCylinder(vec3 p, vec2 h) {
     vec2 d = abs(vec2(length(p.xz), p.y)) - h;
     return min(max(d.x, d.y), 0.0) + length(max(d, 0.0));
 }
-
-// Operations
+// Ray March Operations
 vec3 opRep(vec3 pos, vec3 spacing) { 
     return mod(pos + 0.5 * spacing, spacing) - 0.5 * spacing; 
 }
 
-int closestObjectIndex = -1;
+int closestObjectIndex = -1; //Global state for coloring
 
 float map(vec3 pos) {
     float closestDist = MAX_DIST;
-    for (int i = 0; i < pushConstants.dataCount; i++) {
-        Object obj = pushConstants.objectData.objects[i];
-        
-        // Create position vector from individual components
+
+    // Loop Over Object Buffer
+    for (int i = 0; i < pc.dataCount; i++) {
+        Object obj = objectBuffer.objects[i]; 
         vec3 objPos = vec3(obj.posX, obj.posY, obj.posZ);
-        vec3 objColor = vec3(obj.colorR, obj.colorG, obj.colorB);
         
         float dist;
         if (obj.sdfId == 0) {
@@ -97,7 +81,7 @@ float map(vec3 pos) {
     return closestDist;
 }
 
-// Functions
+// Normal Functions
 vec3 getNormal(vec3 pos) {
     vec3 n = vec3(
         map(pos + vec3(EPSILON, 0, 0)) - map(pos - vec3(EPSILON, 0, 0)),
@@ -107,32 +91,27 @@ vec3 getNormal(vec3 pos) {
     return normalize(n);
 }
 
-// MAIN PROGRAM
+// SHADER
 void main() {
-   // 1. Get the specific image ID
-   uint imgIdx = pushConstants.outputImageIndex; 
-   // 2. Get dimensions of THIS specific image
-   vec2 imageDims = vec2(imageSize(globalImages[nonuniformEXT(imgIdx)]));
-
-   vec2 uv = (gl_FragCoord.xy / imageDims) * 2.0 - 1.0;
-
-   // Camera basis vectors
-    vec3 camForward = normalize(pushConstants.camDir.xyz);
+    uint renderImgIdx = pc.outputImageIndex; 
+    vec2 renderDimensions = vec2(imageSize(globalImages[nonuniformEXT(renderImgIdx)]));
+    vec2 uv = (gl_FragCoord.xy / renderDimensions) * 2.0 - 1.0;
+   
+    vec3 camForward = normalize(pc.camDir.xyz);
     vec3 camRight = normalize(cross(vec3(0, 1, 0), camForward));
     vec3 camUp = normalize(cross(camForward, camRight));
 
-    float focalLength = 1.0 / tan(radians(pushConstants.camPosAndFov.w * 0.5));
-    float aspectRatio = imageDims.x / imageDims.y;
-    // Ray direction
-    vec3 rayDir = normalize(uv.x * camRight * aspectRatio - uv.y * camUp + focalLength * camForward);
+    float focalLength = 1.0 / tan(radians(pc.camPosAndFov.w * 0.5));
+    float aspectRatio = renderDimensions.x / renderDimensions.y;
+    vec3 rayDirection = normalize(uv.x * camRight * aspectRatio - uv.y * camUp + focalLength * camForward);
     
+    // Raymarching
     float march = 0.0;
     bool hit = false;
-    vec3 pos;
+    vec3 pos = vec3(0, 0, 0);
     
     for(int step = 0; step < MAX_STEPS; step++) {
-        pos = pushConstants.camPosAndFov.xyz + rayDir * march;
-
+        pos = pc.camPosAndFov.xyz + rayDirection * march;
         float closest = map(pos);
 
         if(closest < MIN_DIST) {
@@ -143,15 +122,15 @@ void main() {
         if(march > MAX_DIST) break;
     }
    
-   if(hit) {
+    // Output
+    if(hit) {
        vec3 normal = getNormal(pos);
-        vec3 lightDir = normalize(vec3(1.0, 1.0, -1.0));
-        float lighting = max(dot(normal, lightDir), 0.1);
-        
-        // Use object's color
-        Object hitObj = pushConstants.objectData.objects[closestObjectIndex];
-        vec3 surfaceColor = vec3(hitObj.colorR, hitObj.colorG, hitObj.colorB);
+        vec3 lightDirection = normalize(vec3(1.0, 1.0, -1.0));
+        float lighting = max(dot(normal, lightDirection), 0.1);
 
-       finalColor = mix(vec4(surfaceColor * lighting, 1.0), vec4(0.0, 0.0, 0.0, 1.0), march / MAX_DIST);
-   } else finalColor = vec4(0.1, 0.0, 0.0, 1.0);
+        Object hitObj = objectBuffer.objects[closestObjectIndex];
+        vec3 objColor = vec3(hitObj.colorR, hitObj.colorG, hitObj.colorB);
+
+       finalColor = mix(vec4(objColor * lighting, 1.0), vec4(0.0, 0.0, 0.0, 1.0), march / MAX_DIST);
+    } else finalColor = vec4(0.1, 0.0, 0.0, 1.0);
 }

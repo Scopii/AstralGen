@@ -31,6 +31,7 @@ pub const Renderer = struct {
     scheduler: Scheduler,
     renderImages: [RENDER_IMG_MAX]?GpuImage,
     gpuObjects: GpuBuffer = undefined,
+    objectCount: u32,
 
     pub fn init(memoryMan: *MemoryManager, objects: []Object) !Renderer {
         const alloc = memoryMan.getAllocator();
@@ -61,6 +62,9 @@ pub const Renderer = struct {
             }
         }
 
+        const gpuObjects = try resourceMan.createGpuBuffer(objects);
+        try resourceMan.updateObjectBufferDescriptor(gpuObjects);
+
         return .{
             .alloc = alloc,
             .arenaAlloc = memoryMan.getGlobalArena(),
@@ -71,7 +75,8 @@ pub const Renderer = struct {
             .scheduler = scheduler,
             .renderImages = renderImages,
             .swapchainMan = swapchainMan,
-            .gpuObjects = try resourceMan.createGpuBuffer(objects),
+            .gpuObjects = gpuObjects,
+            .objectCount = @intCast(objects.len),
         };
     }
 
@@ -169,9 +174,8 @@ pub const Renderer = struct {
             const pushConstants = PushConstants{
                 .camPosAndFov = cam.getPosAndFov(),
                 .camDir = cam.getForward(),
-                .dataAddress = self.gpuObjects.gpuAddress,
                 .runtime = runtimeAsFloat,
-                .dataCount = @intCast(self.gpuObjects.size / @sizeOf(Object)),
+                .dataCount = self.objectCount,
                 .renderImgIndex = renderImgId,
             };
 

@@ -297,15 +297,24 @@ fn createGPI(alloc: Allocator, gpu: c.VkPhysicalDevice, families: QueueFamilies)
         .descriptorBuffer = c.VK_TRUE,
     };
 
+    var vk11Features = c.VkPhysicalDeviceVulkan11Features{
+        .sType = c.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES,
+        .pNext = &descBufferFeatures,
+        .shaderDrawParameters = c.VK_TRUE,
+    };
+
     const vk12Features = c.VkPhysicalDeviceVulkan12Features{
         .sType = c.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
         .bufferDeviceAddress = c.VK_TRUE,
         .descriptorIndexing = c.VK_TRUE,
+        .descriptorBindingStorageImageUpdateAfterBind = c.VK_TRUE,
+        .descriptorBindingSampledImageUpdateAfterBind = c.VK_TRUE,
+        .descriptorBindingPartiallyBound = c.VK_TRUE,
         .timelineSemaphore = c.VK_TRUE,
         .runtimeDescriptorArray = c.VK_TRUE,
         .shaderStorageImageArrayNonUniformIndexing = c.VK_TRUE,
         .shaderSampledImageArrayNonUniformIndexing = c.VK_TRUE,
-        .pNext = &descBufferFeatures,
+        .pNext = &vk11Features,
     };
 
     const vk13Features = c.VkPhysicalDeviceVulkan13Features{
@@ -375,6 +384,7 @@ fn createGPI(alloc: Allocator, gpu: c.VkPhysicalDevice, families: QueueFamilies)
     try loadVkProc(gpi, &c.pfn_vkCmdSetDescriptorBufferOffsetsEXT, "vkCmdSetDescriptorBufferOffsetsEXT");
     try loadVkProc(gpi, &c.pfn_vkGetDescriptorEXT, "vkGetDescriptorEXT");
     try loadVkProc(gpi, &c.pfn_vkGetDescriptorSetLayoutSizeEXT, "vkGetDescriptorSetLayoutSizeEXT");
+    try loadVkProc(gpi, &c.pfn_vkGetDescriptorSetLayoutBindingOffsetEXT, "vkGetDescriptorSetLayoutBindingOffsetEXT");
 
     return gpi;
 }
