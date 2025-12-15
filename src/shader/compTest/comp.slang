@@ -97,8 +97,8 @@ void main(uint3 id : SV_DispatchThreadID) {
     float2 uv = (float2(id.xy) / float2(renderWidth, renderHeight)) * 2.0 - 1.0;
 
     float3 camForward = normalize(pc.camDir.xyz);
-    float3 camRight = normalize(cross(float3(0, 1, 0), camForward));
-    float3 camUp = normalize(cross(camForward, camRight));
+    float3 camRight = normalize(cross(camForward, float3(0, 1, 0)));
+    float3 camUp = normalize(cross(camRight, camForward));
 
     float focalLength = 1.0 / tan(radians(pc.camPosAndFov.w * 0.5));
     float aspectRatio = float(renderWidth) / float(renderHeight);

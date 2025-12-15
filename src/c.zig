@@ -24,6 +24,7 @@ pub var pfn_vkCmdSetDepthWriteEnable: c_api.PFN_vkCmdSetDepthWriteEnable = null;
 pub var pfn_vkCmdSetDepthBoundsTestEnable: c_api.PFN_vkCmdSetDepthBoundsTestEnable = null;
 pub var pfn_vkCmdSetStencilTestEnable: c_api.PFN_vkCmdSetStencilTestEnable = null;
 pub var pfn_vkCmdSetColorBlendEnableEXT: c_api.PFN_vkCmdSetColorBlendEnableEXT = null;
+pub var pfn_vkCmdSetColorBlendEquationEXT: c_api.PFN_vkCmdSetColorBlendEquationEXT = null;
 pub var pfn_vkCmdSetColorWriteMaskEXT: c_api.PFN_vkCmdSetColorWriteMaskEXT = null;
 pub var pfn_vkCmdSetPrimitiveTopology: c_api.PFN_vkCmdSetPrimitiveTopology = null;
 pub var pfn_vkCmdSetPrimitiveRestartEnable: c_api.PFN_vkCmdSetPrimitiveRestartEnable = null;

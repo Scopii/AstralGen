@@ -33,5 +33,5 @@ void main(
     verts[2].pos = float4(float3(-1.0, 3.0, 0.0) + posOffset, 1.0);
     verts[2].color = float3(0.0, 0.0, 1.0); // Blue
 
-    tris[0] = uint3(0, 1, 2);
+    tris[0] = uint3(0, 2, 1);
 }

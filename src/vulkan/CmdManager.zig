@@ -312,16 +312,30 @@ fn setGraphicsDynamicStates(cmd: c.VkCommandBuffer) void {
     c.pfn_vkCmdSetAlphaToOneEnableEXT.?(cmd, c.VK_FALSE);
     c.pfn_vkCmdSetAlphaToCoverageEnableEXT.?(cmd, c.VK_FALSE);
     c.pfn_vkCmdSetLogicOpEnableEXT.?(cmd, c.VK_FALSE);
-    c.pfn_vkCmdSetCullMode.?(cmd, c.VK_CULL_MODE_NONE);
+    c.pfn_vkCmdSetCullMode.?(cmd, c.VK_CULL_MODE_FRONT_BIT); // CULL_MODE_BACK_BIT looking inside the grid
     c.pfn_vkCmdSetFrontFace.?(cmd, c.VK_FRONT_FACE_CLOCKWISE);
     c.pfn_vkCmdSetDepthTestEnable.?(cmd, c.VK_FALSE);
     c.pfn_vkCmdSetDepthWriteEnable.?(cmd, c.VK_FALSE);
     c.pfn_vkCmdSetDepthBoundsTestEnable.?(cmd, c.VK_FALSE);
     c.pfn_vkCmdSetStencilTestEnable.?(cmd, c.VK_FALSE);
 
-    const colorBlendEnable = c.VK_FALSE;
+    const colorBlendEnable = c.VK_TRUE; 
     const colorBlendAttachments = [_]c.VkBool32{colorBlendEnable};
     c.pfn_vkCmdSetColorBlendEnableEXT.?(cmd, 0, 1, &colorBlendAttachments);
+
+    // 2. SET BLEND EQUATION (Standard Transparency)
+    const blendEquation = c.VkColorBlendEquationEXT{
+        .srcColorBlendFactor = c.VK_BLEND_FACTOR_SRC_ALPHA, // Take Shader Alpha
+        .dstColorBlendFactor = c.VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA, // Take 1-Alpha from Background
+        .colorBlendOp = c.VK_BLEND_OP_ADD, // Add them
+        .srcAlphaBlendFactor = c.VK_BLEND_FACTOR_ONE,
+        .dstAlphaBlendFactor = c.VK_BLEND_FACTOR_ZERO,
+        .alphaBlendOp = c.VK_BLEND_OP_ADD,
+    };
+    const equations = [_]c.VkColorBlendEquationEXT{blendEquation};
+
+    // You need to call this to configure the math!
+    c.pfn_vkCmdSetColorBlendEquationEXT.?(cmd, 0, 1, &equations);
 
     const colorWriteMask = c.VK_COLOR_COMPONENT_R_BIT | c.VK_COLOR_COMPONENT_G_BIT | c.VK_COLOR_COMPONENT_B_BIT | c.VK_COLOR_COMPONENT_A_BIT;
     const colorWriteMasks = [_]c.VkColorComponentFlags{colorWriteMask};

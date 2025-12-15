@@ -177,6 +177,7 @@ pub const Renderer = struct {
                 .runtime = runtimeAsFloat,
                 .dataCount = self.objectCount,
                 .renderImgIndex = renderImgId,
+                .viewProj = cam.getViewProj(),
             };
 
             try CmdManager.recordPass(

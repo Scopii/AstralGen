@@ -361,6 +361,7 @@ fn createGPI(alloc: Allocator, gpu: c.VkPhysicalDevice, families: QueueFamilies)
     try loadVkProc(gpi, &c.pfn_vkCmdSetDepthBoundsTestEnable, "vkCmdSetDepthBoundsTestEnable");
     try loadVkProc(gpi, &c.pfn_vkCmdSetStencilTestEnable, "vkCmdSetStencilTestEnable");
     try loadVkProc(gpi, &c.pfn_vkCmdSetColorBlendEnableEXT, "vkCmdSetColorBlendEnableEXT");
+    try loadVkProc(gpi, &c.pfn_vkCmdSetColorBlendEquationEXT, "vkCmdSetColorBlendEquationEXT");
     try loadVkProc(gpi, &c.pfn_vkCmdSetColorWriteMaskEXT, "vkCmdSetColorWriteMaskEXT");
     try loadVkProc(gpi, &c.pfn_vkCmdSetPrimitiveTopology, "vkCmdSetPrimitiveTopology");
     try loadVkProc(gpi, &c.pfn_vkCmdSetPrimitiveRestartEnable, "vkCmdSetPrimitiveRestartEnable");

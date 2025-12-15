@@ -92,8 +92,8 @@ float4 main(float4 pixelPos: SV_Position) : SV_Target {
     float2 uv = (pixelPos.xy / renderDimensions) * 2.0 - 1.0;
 
     float3 camForward = normalize(pc.camDir.xyz);
-    float3 camRight = normalize(cross(float3(0, 1, 0), camForward));
-    float3 camUp = normalize(cross(camForward, camRight));
+    float3 camRight = normalize(cross(camForward, float3(0, 1, 0)));
+    float3 camUp = normalize(cross(camRight, camForward));
 
     float focalLength = 1.0 / tan(radians(pc.camPosAndFov.w * 0.5));
     float aspectRatio = renderDimensions.x / renderDimensions.y;

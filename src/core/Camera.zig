@@ -20,7 +20,7 @@ pub const Camera = struct {
     }
 
     pub fn rotate(self: *Camera, x: f32, y: f32) void {
-        self.yaw += x * config.CAM_SENS; // Horizontal mouse movement affects yaw
+        self.yaw -= x * config.CAM_SENS; // Horizontal mouse movement affects yaw
         self.pitch -= y * config.CAM_SENS; // Vertical mouse movement affect pitch
         // Clamp pitch for gimbal lock
         self.pitch = std.math.clamp(self.pitch, -M_PI * 0.48, M_PI * 0.48);
@@ -34,19 +34,19 @@ pub const Camera = struct {
         return zm.normalize3(zm.f32x4(@cos(self.pitch) * @sin(self.yaw), @sin(self.pitch), @cos(self.pitch) * @cos(self.yaw), 0));
     }
 
-    pub fn moveLeft(self: *Camera, dt: f64) void {
+    pub fn moveRight(self: *Camera, dt: f64) void {
         const forward = self.getForward();
-        const right = zm.normalize3(zm.cross3(self.up, forward));
+        const right = zm.normalize3(zm.cross3(forward, self.up));
         const speed = @as(f32, @floatCast(config.CAM_SPEED * dt));
-        const movement = right * zm.splat(zm.Vec, -speed);
+        const movement = right * zm.splat(zm.Vec, speed);
         self.pos = self.pos + movement;
     }
 
-    pub fn moveRight(self: *Camera, dt: f64) void {
+    pub fn moveLeft(self: *Camera, dt: f64) void {
         const forward = self.getForward();
-        const right = zm.normalize3(zm.cross3(self.up, forward));
+        const right = zm.normalize3(zm.cross3(forward, self.up));
         const speed = @as(f32, @floatCast(config.CAM_SPEED * dt));
-        const movement = right * zm.splat(zm.Vec, speed);
+        const movement = right * zm.splat(zm.Vec, -speed);
         self.pos = self.pos + movement;
     }
 
@@ -76,13 +76,22 @@ pub const Camera = struct {
         self.pos = self.pos + movement;
     }
 
-    pub fn getView(self: *const Camera) zm.Mat {
-        const target = self.pos + self.getForward();
-        return zm.lookAtRh(self.pos, target, self.up);
+    pub fn getProjection(self: *const Camera) zm.Mat {
+        var proj = zm.perspectiveFovRh(self.fov * (std.math.pi / 180.0), self.aspectRatio, self.near, self.far);
+        proj[1][1] *= -1.0;
+        return proj;
     }
 
-    pub fn getProjection(self: *const Camera) zm.Mat {
-        return zm.perspectiveFovRh(self.fov * (M_PI / 180.0), self.aspectRatio, self.near, self.far);
+    // Add this helper function to simplify your Renderer code
+    pub fn getViewProj(self: *Camera) zm.Mat {
+        const view = self.getView();
+        const proj = self.getProjection();
+        return zm.mul(view, proj);
+    }
+
+    pub fn getView(self: *Camera) zm.Mat {
+        const target = self.pos + self.getForward();
+        return zm.lookAtRh(self.pos, target, self.up);
     }
 
     pub fn getPos(self: *const Camera) [3]f32 {

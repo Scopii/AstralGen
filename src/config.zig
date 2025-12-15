@@ -116,20 +116,34 @@ pub const frag3 = Shader{ .stage = .frag, .glslFile = "taskTest/frag.slang", .sp
 pub const renderImg4 = RenderResource{ .id = 7, .extent = .{ .width = 1920, .height = 1080, .depth = 1 } };
 pub const taskMeshPass1: ShaderLayout = .{ .renderImg = renderImg4, .shaders = &.{ task1, mesh2, frag3 } };
 
+pub const task2 = Shader{ .stage = .task, .glslFile = "gridTest/task.slang", .spvFile = "task2.spv" };
+pub const mesh3 = Shader{ .stage = .mesh, .glslFile = "gridTest/mesh.slang", .spvFile = "mesh3.spv" };
+pub const frag4 = Shader{ .stage = .frag, .glslFile = "gridTest/frag.slang", .spvFile = "frag4.spv" };
+pub const renderImg5 = RenderResource{ .id = 7, .extent = .{ .width = 1920, .height = 1080, .depth = 1 } };
+pub const gridTest: ShaderLayout = .{ .renderImg = renderImg4, .shaders = &.{ task2, mesh3, frag4 }, .clear = true };
+
 pub const renderSeq: []const ShaderLayout = &.{
+    computePass1,
     graphicsPass1,
     meshPass1,
-    computePass1,
     taskMeshPass1,
+    gridTest,
 };
 
 pub const shadersToCompile: []const Shader = &.{
     comp1,
+
     vert1,
     frag1,
+
     mesh1,
     frag2,
+
     task1,
     mesh2,
     frag3,
+
+    task2,
+    mesh3,
+    frag4,
 };

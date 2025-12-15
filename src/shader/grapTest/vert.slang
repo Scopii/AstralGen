@@ -6,9 +6,9 @@ struct VSOutput {
 
 // (CCW winding: Bottom-Left, Bottom-Right, Top-Left)
 static const float2 positions[3] = {
-    float2(-1, -1), 
-    float2(3, -1), 
-    float2(-1, 3)
+    float2(-1, -1),
+    float2(-1, 3),
+    float2(3, -1)
 };
 
 [shader("vertex")]
