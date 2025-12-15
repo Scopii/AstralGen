@@ -1,7 +1,7 @@
 const std = @import("std");
 const RNGenerator = @import("../core/RNGenerator.zig").RNGenerator;
 
-const objCount = 3;
+const objCount = 30;
 
 pub const EntityManager = struct {
     objects: [objCount]Object,

@@ -52,6 +52,31 @@ pub const SwapchainManager = struct {
         }
     }
 
+    pub fn present(self: *SwapchainManager, presentIds: []const u32, presentQueue: c.VkQueue) !void {
+        var swapchainHandles: [config.MAX_WINDOWS]c.VkSwapchainKHR = undefined;
+        var imageIndices: [config.MAX_WINDOWS]u32 = undefined;
+        var waitSems: [config.MAX_WINDOWS]c.VkSemaphore = undefined;
+
+        for (presentIds, 0..) |id, i| {
+            const swapchain = self.swapchains.getAtIndex(id);
+            swapchainHandles[i] = swapchain.handle;
+            imageIndices[i] = swapchain.curIndex;
+            waitSems[i] = swapchain.renderDoneSems[swapchain.curIndex];
+        }
+        const presentInf = c.VkPresentInfoKHR{
+            .sType = c.VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
+            .waitSemaphoreCount = @intCast(presentIds.len),
+            .pWaitSemaphores = &waitSems,
+            .swapchainCount = @intCast(presentIds.len),
+            .pSwapchains = &swapchainHandles,
+            .pImageIndices = &imageIndices,
+        };
+        const result = c.vkQueuePresentKHR(presentQueue, &presentInf);
+        if (result != c.VK_SUCCESS and result != c.VK_ERROR_OUT_OF_DATE_KHR and result != c.VK_SUBOPTIMAL_KHR) {
+            try check(result, "Failed to present swapchain image");
+        }
+    }
+
     pub fn updateTargets(self: *SwapchainManager, frameInFlight: u8, context: *Context) !bool {
         self.targets.clear();
         const gpi = self.gpi;

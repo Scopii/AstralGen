@@ -162,7 +162,7 @@ pub const Renderer = struct {
 
         const targets = self.swapchainMan.targets.slice();
         try self.queueSubmit(cmd, targets, frameInFlight);
-        try self.present(targets);
+        try self.swapchainMan.present(targets, self.context.presentQ);
 
         self.scheduler.nextFrame();
     }
@@ -211,30 +211,6 @@ pub const Renderer = struct {
         const cmdSubmitInf = createCmdSubmitInfo(cmd);
         const submitInf = createSubmitInfo(waitInfos, &cmdSubmitInf, signalInfos);
         try check(c.vkQueueSubmit2(self.context.graphicsQ, 1, &submitInf, null), "Failed main submission");
-    }
-
-    fn present(self: *Renderer, presentIds: []const u32) !void {
-        var swapchainHandles = try self.alloc.alloc(c.VkSwapchainKHR, presentIds.len);
-        defer self.alloc.free(swapchainHandles);
-        var imageIndices = try self.alloc.alloc(u32, presentIds.len);
-        defer self.alloc.free(imageIndices);
-        // BINARY semaphores that vkQueuePresentKHR will wait on.
-        var presentWaitSems = try self.alloc.alloc(c.VkSemaphore, presentIds.len);
-        defer self.alloc.free(presentWaitSems);
-
-        for (presentIds, 0..) |id, i| {
-            const swapchain = self.swapchainMan.swapchains.getAtIndex(id);
-            swapchainHandles[i] = swapchain.handle;
-            imageIndices[i] = swapchain.curIndex;
-            // Get the specific binary semaphore for the image we just rendered to.
-            presentWaitSems[i] = swapchain.renderDoneSems[swapchain.curIndex];
-        }
-        const presentInf = createPresentInfo(presentWaitSems, swapchainHandles, imageIndices);
-
-        const result = c.vkQueuePresentKHR(self.context.presentQ, &presentInf);
-        if (result != c.VK_SUCCESS and result != c.VK_ERROR_OUT_OF_DATE_KHR and result != c.VK_SUBOPTIMAL_KHR) {
-            try check(result, "Failed to present swapchain image");
-        }
     }
 };
 
