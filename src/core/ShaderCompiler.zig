@@ -2,7 +2,7 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 const config = @import("../config.zig");
 
-pub const FileManager = struct {
+pub const ShaderCompiler = struct {
     const stepCount = config.renderSeq.len;
 
     alloc: Allocator,
@@ -12,7 +12,7 @@ pub const FileManager = struct {
     layoutTimeStamps: [stepCount]i128,
     layoutUpdateBools: [stepCount]bool = .{false} ** stepCount,
 
-    pub fn init(alloc: Allocator) !FileManager {
+    pub fn init(alloc: Allocator) !ShaderCompiler {
         // Assign paths
         const root = try resolveProjectRoot(alloc, config.rootPath);
         std.debug.print("Root Path {s}\n", .{root});
@@ -37,7 +37,7 @@ pub const FileManager = struct {
         };
     }
 
-    pub fn checkShaderUpdate(self: *FileManager) !void {
+    pub fn checkShaderUpdate(self: *ShaderCompiler) !void {
         const alloc = self.alloc;
         // Check all ShaderInfos and compile if needed
         for (config.renderSeq, 0..) |shaderLayout, i| {
@@ -61,7 +61,7 @@ pub const FileManager = struct {
         }
     }
 
-    pub fn deinit(self: *FileManager) void {
+    pub fn deinit(self: *ShaderCompiler) void {
         self.alloc.free(self.rootPath);
         self.alloc.free(self.shaderPath);
         self.alloc.free(self.shaderOutputPath);
@@ -86,44 +86,29 @@ pub fn getFileTimeStamp(src: []const u8) !i128 {
 }
 
 fn threadCompile(src: []const u8, dst: []const u8) void {
-    // Use a thread-safe allocator for internal temporary strings (like formatted args)
-    // GeneralPurposeAllocator is slow for this. C allocator is best if available.
-    // Or just use page_allocator for temp storage.
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){}; // Thread Save
     defer _ = gpa.deinit();
     const alloc = gpa.allocator();
 
     //transpileSlang(alloc, src, dst, "hlsl")
     compileShader(alloc, src, dst) catch |err| {
-        // Use a mutex if you want clean printing, otherwise output might mix
         std.debug.print("Thread Compile Failed: {}\n", .{err});
     };
-
-    // Free the path strings passed to this thread
-    // (We assume the caller allocated them using a global allocator for us to own)
     std.heap.page_allocator.free(src);
     std.heap.page_allocator.free(dst);
 }
 
-pub fn compileAllShadersParallel(
-    alloc: std.mem.Allocator,
-    absShaderPath: []const u8, // Pass the resolved source folder
-    absShaderOutputPath: []const u8, // Pass the resolved output folder
-) !void {
+pub fn compileAllShadersParallel(alloc: std.mem.Allocator, absShaderPath: []const u8, absShaderOutputPath: []const u8) !void {
     var threads = std.ArrayList(std.Thread).init(alloc);
     defer threads.deinit();
 
     for (config.shadersToCompile) |shader| {
         const src = try joinPath(std.heap.page_allocator, absShaderPath, shader.glslFile);
         const dst = try joinPath(std.heap.page_allocator, absShaderOutputPath, shader.spvFile);
-
         const t = try std.Thread.spawn(.{}, threadCompile, .{ src, dst });
         try threads.append(t);
     }
-
-    for (threads.items) |t| {
-        t.join();
-    }
+    for (threads.items) |thread| thread.join();
 }
 
 fn compileShader(alloc: Allocator, srcPath: []const u8, spvPath: []const u8) !void {
@@ -132,22 +117,21 @@ fn compileShader(alloc: Allocator, srcPath: []const u8, spvPath: []const u8) !vo
     if (std.mem.endsWith(u8, srcPath, ".glsl")) shaderFormat = 2;
     if (std.mem.endsWith(u8, srcPath, ".slang")) shaderFormat = 3;
 
-    const time1 = std.time.milliTimestamp();
+    const timeBefore = std.time.milliTimestamp();
 
     switch (shaderFormat) {
-        1 => try compileShaderHLSL(alloc, srcPath, spvPath),
-        2 => try compileShaderGLSL(alloc, srcPath, spvPath),
-        3 => try compileShaderSLANG(alloc, srcPath, spvPath),
+        1 => try compileHLSL(alloc, srcPath, spvPath),
+        2 => try compileGLSL(alloc, srcPath, spvPath),
+        3 => try compileSLANG(alloc, srcPath, spvPath),
         else => {
             std.debug.print("Could not find Shader Format for {s}!\n", .{srcPath});
             return error.ShaderCompilationFailed;
         },
     }
-    const duration = std.time.milliTimestamp() - time1;
-    std.debug.print("[{d}ms] Compiled {s} -> {s}\n", .{ duration, srcPath, spvPath });
+    std.debug.print("[{d}ms] Compiled {s} -> {s}\n", .{ std.time.milliTimestamp() - timeBefore, srcPath, spvPath });
 }
 
-fn compileShaderGLSL(alloc: Allocator, srcPath: []const u8, spvPath: []const u8) !void {
+fn compileGLSL(alloc: Allocator, srcPath: []const u8, spvPath: []const u8) !void {
     var stage: []const u8 = "compute";
     if (std.mem.endsWith(u8, srcPath, "vert.glsl")) stage = "vertex";
     if (std.mem.endsWith(u8, srcPath, "frag.glsl")) stage = "fragment";
@@ -159,14 +143,7 @@ fn compileShaderGLSL(alloc: Allocator, srcPath: []const u8, spvPath: []const u8)
 
     const result = std.process.Child.run(.{
         .allocator = alloc,
-        .argv = &[_][]const u8{
-            "glslc",
-            "--target-env=vulkan1.3",
-            stageFlag,
-            srcPath,
-            "-o",
-            spvPath,
-        },
+        .argv = &[_][]const u8{ "glslc", "--target-env=vulkan1.3", stageFlag, srcPath, "-o", spvPath },
     }) catch |err| {
         std.debug.print("Failed to run GLSLC: {}\n", .{err});
         return err;
@@ -180,7 +157,7 @@ fn compileShaderGLSL(alloc: Allocator, srcPath: []const u8, spvPath: []const u8)
     }
 }
 
-fn compileShaderSLANG(alloc: Allocator, srcPath: []const u8, spvPath: []const u8) !void {
+fn compileSLANG(alloc: Allocator, srcPath: []const u8, spvPath: []const u8) !void {
     var stage: []const u8 = "compute"; // default
     if (std.mem.endsWith(u8, srcPath, "vert.slang")) stage = "vertex";
     if (std.mem.endsWith(u8, srcPath, "frag.slang")) stage = "fragment";
@@ -235,7 +212,7 @@ fn compileShaderSLANG(alloc: Allocator, srcPath: []const u8, spvPath: []const u8
 //     }
 // }
 
-fn compileShaderHLSL(alloc: Allocator, srcPath: []const u8, spvPath: []const u8) !void {
+fn compileHLSL(alloc: Allocator, srcPath: []const u8, spvPath: []const u8) !void {
     var profile: []const u8 = "cs_6_6"; // default compute
     if (std.mem.endsWith(u8, srcPath, "vert.hlsl")) profile = "vs_6_6";
     if (std.mem.endsWith(u8, srcPath, "frag.hlsl")) profile = "ps_6_6";

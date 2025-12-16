@@ -5,7 +5,7 @@ const config = @import("../config.zig");
 const RenderType = @import("../config.zig").RenderType;
 const PushConstants = @import("ShaderManager.zig").PushConstants;
 const check = @import("error.zig").check;
-const resolveProjectRoot = @import("../core/FileManager.zig").resolveProjectRoot;
+const resolveProjectRoot = @import("../core/ShaderCompiler.zig").resolveProjectRoot;
 
 pub const ShaderStage = enum(c.VkShaderStageFlagBits) {
     compute = c.VK_SHADER_STAGE_COMPUTE_BIT,
