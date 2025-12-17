@@ -6,8 +6,11 @@ const Context = @import("Context.zig").Context;
 const RenderType = @import("../config.zig").RenderType;
 const ShaderLayout = @import("../config.zig").ShaderLayout;
 const ResourceManager = @import("ResourceManager.zig").ResourceManager;
+const CreateMapArray = @import("../structures/MapArray.zig").CreateMapArray;
+const LoadedShader = @import("../core/ShaderCompiler.zig").LoadedShader;
 const check = @import("error.zig").check;
 const ShaderObject = @import("ShaderObject.zig").ShaderObject;
+const ShaderObject2 = @import("ShaderObject.zig").ShaderObject2;
 const ShaderStage = @import("ShaderObject.zig").ShaderStage;
 const ztracy = @import("ztracy");
 
@@ -30,6 +33,8 @@ pub const ShaderManager = struct {
     shaderObjects: [seqLen]std.ArrayList(ShaderObject),
     renderTypes: [seqLen]RenderType,
     gpi: c.VkDevice,
+
+    shaders: CreateMapArray(ShaderObject2, config.SHADER_MAX, u32, config.SHADER_MAX, 0) = .{},
 
     pub fn init(alloc: Allocator, context: *const Context, resourceManager: *const ResourceManager) !ShaderManager {
         const gpi = context.gpi;
@@ -64,6 +69,21 @@ pub const ShaderManager = struct {
         };
     }
 
+    pub fn createShaders(self: *ShaderManager, loadedShaders: []LoadedShader) !void {
+        for (loadedShaders) |loadedShader| {
+            const shaderObj = try ShaderObject2.init(self.gpi, loadedShader, self.descLayout);
+            self.shaders.set(loadedShader.id, shaderObj);
+        }
+    }
+
+    pub fn getShaders(self: *ShaderManager, shaderIds: []const u8) [8]ShaderObject2 {
+        var shaders: [8]ShaderObject2 = undefined;
+        for (0..shaderIds.len) |i| {
+            shaders[i] = self.shaders.get(shaderIds[i]);
+        }
+        return shaders;
+    }
+
     pub fn getRenderType(self: *ShaderManager, seqIndex: usize) RenderType {
         return self.renderTypes[seqIndex];
     }
@@ -90,24 +110,30 @@ pub const ShaderManager = struct {
             for (shaderObjList.items) |*shaderObj| shaderObj.deinit(gpi);
             shaderObjList.deinit();
         }
+
+        for (self.shaders.getElements()) |*shader| {
+            shader.deinit(self.gpi);
+        }
+
         c.vkDestroyPipelineLayout(gpi, self.pipeLayout, null);
     }
 };
 
 fn checkShaderLayout(shaderLayout: ShaderLayout) !RenderType {
-    var shdr: [8]u8 = .{0} ** 8;
+    var shdr: [9]u8 = .{0} ** 9;
     var prevIndex: i8 = -1;
 
     for (shaderLayout.shaders) |shader| {
-        const curIndex: i8 = switch (shader.stage) {
+        const curIndex: i8 = switch (shader.shaderType) {
             .compute => 0,
-            .vertex => 1,
-            .tessControl => 2,
-            .tessEval => 3,
-            .geometry => 4,
+            .vert => 1,
+            // .tessControl => 2,
+            // .tessEval => 3,
+            // .geometry => 4,
             .task => 5,
             .mesh => 6,
             .frag => 7,
+            .meshNoTask => 6, // NOT CHECKED YET
         };
         if (curIndex <= prevIndex) return error.ShaderLayoutOrderInvalid;
         prevIndex = curIndex;
@@ -134,8 +160,7 @@ fn setShaderLayout(alloc: Allocator, gpi: c.VkDevice, descLayout: c.VkDescriptor
 
     for (0..shaders.len) |i| {
         const shader = shaders[i];
-        const nextStage: c.VkShaderStageFlagBits = if (i + 1 <= shaders.len - 1) @intFromEnum(shaders[i + 1].stage) else 0;
-        const shaderObj = try ShaderObject.init(alloc, gpi, shader, nextStage, descLayout, renderType);
+        var shaderObj = try ShaderObject.init(alloc, gpi, shader, descLayout, renderType);
 
         list.append(shaderObj) catch |err| {
             shaderObj.deinit(gpi);

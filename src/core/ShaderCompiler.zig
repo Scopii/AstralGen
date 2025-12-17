@@ -1,6 +1,16 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 const config = @import("../config.zig");
+const ShaderStage = @import("../vulkan/ShaderObject.zig").ShaderStage;
+
+const alignedShader = []align(@alignOf(u32)) u8;
+
+pub const LoadedShader = struct {
+    id: u32,
+    shaderType: config.ShaderType,
+    data: alignedShader,
+    timeStamp: i128,
+};
 
 pub const ShaderCompiler = struct {
     const stepCount = config.renderSeq.len;
@@ -11,6 +21,8 @@ pub const ShaderCompiler = struct {
     shaderOutputPath: []const u8,
     layoutTimeStamps: [stepCount]i128,
     layoutUpdateBools: [stepCount]bool = .{false} ** stepCount,
+
+    loadedShaders: std.ArrayList(LoadedShader),
 
     pub fn init(alloc: Allocator) !ShaderCompiler {
         // Assign paths
@@ -24,9 +36,6 @@ pub const ShaderCompiler = struct {
         const curTime = std.time.nanoTimestamp();
         const layoutTimeStamps: [stepCount]i128 = .{curTime} ** stepCount;
         // Compile on Startup if wanted
-        if (config.SHADER_STARTUP_COMPILATION) {
-            try compileAllShadersParallel(alloc, shaderPath, shaderOutputPath);
-        }
 
         return .{
             .alloc = alloc,
@@ -34,7 +43,33 @@ pub const ShaderCompiler = struct {
             .shaderPath = shaderPath,
             .shaderOutputPath = shaderOutputPath,
             .layoutTimeStamps = layoutTimeStamps,
+
+            .loadedShaders = std.ArrayList(LoadedShader).init(alloc),
         };
+    }
+
+    pub fn pullShaders(self: *ShaderCompiler) []LoadedShader {
+        return self.loadedShaders.items;
+    }
+
+    pub fn loadShaders(self: *ShaderCompiler, shaders: []const config.ShaderConfig) !void {
+        const alloc = self.alloc;
+        try compileShadersParallel(alloc, self.shaderPath, self.shaderOutputPath, shaders);
+        const curTime = std.time.nanoTimestamp();
+
+        for (shaders) |shader| {
+            const spvPath = try joinPath(alloc, self.shaderOutputPath, shader.spvFile);
+            defer alloc.free(spvPath);
+            const data = try loadShader(alloc, spvPath);
+            try self.loadedShaders.append(LoadedShader{ .id = shader.id, .timeStamp = curTime, .data = data, .shaderType = shader.shaderType });
+        }
+    }
+
+    pub fn freeShaders(self: *ShaderCompiler) void {
+        for (self.loadedShaders.items) |*loadedShader| {
+            self.alloc.free(loadedShader.data);
+        }
+        self.loadedShaders.clearRetainingCapacity();
     }
 
     pub fn checkShaderUpdate(self: *ShaderCompiler) !void {
@@ -65,8 +100,23 @@ pub const ShaderCompiler = struct {
         self.alloc.free(self.rootPath);
         self.alloc.free(self.shaderPath);
         self.alloc.free(self.shaderOutputPath);
+        self.loadedShaders.deinit();
     }
 };
+
+fn loadShader(alloc: Allocator, spvPath: []const u8) !alignedShader {
+    std.debug.print("Laoding Shader {s}\n", .{spvPath});
+    const file = std.fs.cwd().openFile(spvPath, .{}) catch |err| {
+        std.debug.print("Shader Load Failed {s}\n", .{spvPath});
+        return err;
+    };
+    defer file.close();
+
+    const size = try file.getEndPos();
+    const data = try alloc.alignedAlloc(u8, @alignOf(u32), size);
+    _ = try file.readAll(data);
+    return data;
+}
 
 pub fn resolveProjectRoot(alloc: Allocator, relativePath: []const u8) ![]u8 {
     const exeDir = try std.fs.selfExeDirPathAlloc(alloc);
@@ -98,11 +148,11 @@ fn threadCompile(src: []const u8, dst: []const u8) void {
     std.heap.page_allocator.free(dst);
 }
 
-pub fn compileAllShadersParallel(alloc: std.mem.Allocator, absShaderPath: []const u8, absShaderOutputPath: []const u8) !void {
+pub fn compileShadersParallel(alloc: std.mem.Allocator, absShaderPath: []const u8, absShaderOutputPath: []const u8, shaders: []const config.ShaderConfig) !void {
     var threads = std.ArrayList(std.Thread).init(alloc);
     defer threads.deinit();
 
-    for (config.shadersToCompile) |shader| {
+    for (shaders) |shader| {
         const src = try joinPath(std.heap.page_allocator, absShaderPath, shader.glslFile);
         const dst = try joinPath(std.heap.page_allocator, absShaderOutputPath, shader.spvFile);
         const t = try std.Thread.spawn(.{}, threadCompile, .{ src, dst });
@@ -216,8 +266,8 @@ fn compileHLSL(alloc: Allocator, srcPath: []const u8, spvPath: []const u8) !void
     var profile: []const u8 = "cs_6_6"; // default compute
     if (std.mem.endsWith(u8, srcPath, "vert.hlsl")) profile = "vs_6_6";
     if (std.mem.endsWith(u8, srcPath, "frag.hlsl")) profile = "ps_6_6";
-    if (std.mem.endsWith(u8, srcPath, "mesh.hlsl")) profile = "ms_6_6"; // Mesh shader 6.5
-    if (std.mem.endsWith(u8, srcPath, "task.hlsl")) profile = "as_6_6"; // Amplification (Task) shader
+    if (std.mem.endsWith(u8, srcPath, "mesh.hlsl")) profile = "ms_6_6";
+    if (std.mem.endsWith(u8, srcPath, "task.hlsl")) profile = "as_6_6";
 
     const result = std.process.Child.run(.{
         .allocator = alloc,

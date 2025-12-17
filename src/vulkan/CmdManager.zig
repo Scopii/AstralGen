@@ -4,7 +4,7 @@ const Allocator = std.mem.Allocator;
 const Context = @import("Context.zig").Context;
 const GpuImage = @import("ResourceManager.zig").GpuImage;
 const SwapchainManager = @import("SwapchainManager.zig");
-const ShaderObject = @import("ShaderObject.zig").ShaderObject;
+const ShaderObject = @import("ShaderObject.zig").ShaderObject2;
 const ShaderStage = @import("ShaderObject.zig").ShaderStage;
 const RenderType = @import("../config.zig").RenderType;
 const PushConstants = @import("ShaderManager.zig").PushConstants;
@@ -319,7 +319,7 @@ fn setGraphicsDynamicStates(cmd: c.VkCommandBuffer) void {
     c.pfn_vkCmdSetDepthBoundsTestEnable.?(cmd, c.VK_FALSE);
     c.pfn_vkCmdSetStencilTestEnable.?(cmd, c.VK_FALSE);
 
-    const colorBlendEnable = c.VK_TRUE; 
+    const colorBlendEnable = c.VK_TRUE;
     const colorBlendAttachments = [_]c.VkBool32{colorBlendEnable};
     c.pfn_vkCmdSetColorBlendEnableEXT.?(cmd, 0, 1, &colorBlendAttachments);
 

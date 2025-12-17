@@ -4,6 +4,7 @@ const Allocator = std.mem.Allocator;
 const config = @import("../config.zig");
 const RenderType = @import("../config.zig").RenderType;
 const PushConstants = @import("ShaderManager.zig").PushConstants;
+const LoadedShader = @import("../core/ShaderCompiler.zig").LoadedShader;
 const check = @import("error.zig").check;
 const resolveProjectRoot = @import("../core/ShaderCompiler.zig").resolveProjectRoot;
 
@@ -22,15 +23,8 @@ pub const ShaderObject = struct {
     handle: c.VkShaderEXT,
     stage: ShaderStage,
 
-    pub fn init(
-        alloc: Allocator,
-        gpi: c.VkDevice,
-        shader: config.Shader,
-        nextStage: c.VkShaderStageFlagBits,
-        descLayout: c.VkDescriptorSetLayout,
-        renderType: RenderType,
-    ) !ShaderObject {
-        const stage = shader.stage;
+    pub fn init(alloc: Allocator, gpi: c.VkDevice, shader: config.ShaderConfig, descLayout: c.VkDescriptorSetLayout, renderType: RenderType) !ShaderObject {
+        const shaderType = shader.shaderType;
         const spvFile = shader.spvFile;
 
         const rootPath = try resolveProjectRoot(alloc, config.rootPath);
@@ -46,15 +40,39 @@ pub const ShaderObject = struct {
 
         // Set flags based on shader stage
         var flags: c.VkShaderCreateFlagsEXT = 0;
-        if (stage == .mesh and renderType == .meshPass) {
-            flags |= c.VK_SHADER_CREATE_NO_TASK_SHADER_BIT_EXT; // because task shader isnt used YET
+        if (shaderType == .mesh and renderType == .meshPass) {
+            flags |= c.VK_SHADER_CREATE_NO_TASK_SHADER_BIT_EXT;
         }
+
+        const nextStage: c.VkShaderStageFlagBits = switch (shaderType) {
+            .compute => 0,
+            .vert => c.VK_SHADER_STAGE_FRAGMENT_BIT,
+            // .tessControl => return error.ShaderStageNotSetup,
+            // .tessEval => return error.ShaderStageNotSetup,
+            // .geometry => return error.ShaderStageNotSetup,
+            .task => c.VK_SHADER_STAGE_MESH_BIT_EXT,
+            .mesh => c.VK_SHADER_STAGE_FRAGMENT_BIT,
+            .meshNoTask => c.VK_SHADER_STAGE_FRAGMENT_BIT,
+            .frag => 0,
+        };
+
+        const actualStage: ShaderStage = switch (shaderType) {
+            .compute => .compute,
+            .vert => .vertex,
+            // tessControl = c.VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT,
+            // tessEval = c.VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT,
+            // geometry = c.VK_SHADER_STAGE_GEOMETRY_BIT,
+            .task => .task,
+            .mesh => .mesh,
+            .frag => .frag,
+            .meshNoTask => .mesh,
+        };
 
         const shaderInf = c.VkShaderCreateInfoEXT{
             .sType = c.VK_STRUCTURE_TYPE_SHADER_CREATE_INFO_EXT,
             .pNext = null,
             .flags = if (renderType == .computePass) 0 else flags,
-            .stage = @intFromEnum(stage),
+            .stage = @intFromEnum(actualStage),
             .nextStage = nextStage,
             .codeType = c.VK_SHADER_CODE_TYPE_SPIRV_EXT,
             .codeSize = spvData.len,
@@ -75,11 +93,79 @@ pub const ShaderObject = struct {
 
         return .{
             .handle = shaderObj,
-            .stage = stage,
+            .stage = actualStage,
         };
     }
 
-    pub fn deinit(self: ShaderObject, gpi: c.VkDevice) void {
+    pub fn deinit(self: *ShaderObject, gpi: c.VkDevice) void {
+        c.pfn_vkDestroyShaderEXT.?(gpi, self.handle, null);
+    }
+};
+
+pub const ShaderObject2 = struct {
+    handle: c.VkShaderEXT,
+    stage: ShaderStage,
+
+    pub fn init(gpi: c.VkDevice, shader: LoadedShader, descLayout: c.VkDescriptorSetLayout) !ShaderObject2 {
+        const shaderType = shader.shaderType;
+        // Set flags based on shader stage
+        var flags: c.VkShaderCreateFlagsEXT = 0;
+        if (shaderType == .meshNoTask) flags |= c.VK_SHADER_CREATE_NO_TASK_SHADER_BIT_EXT;
+
+        const nextStage: c.VkShaderStageFlagBits = switch (shaderType) {
+            .compute => 0,
+            .vert => c.VK_SHADER_STAGE_FRAGMENT_BIT,
+            // .tessControl => return error.ShaderStageNotSetup,
+            // .tessEval => return error.ShaderStageNotSetup,
+            // .geometry => return error.ShaderStageNotSetup,
+            .task => c.VK_SHADER_STAGE_MESH_BIT_EXT,
+            .mesh => c.VK_SHADER_STAGE_FRAGMENT_BIT,
+            .meshNoTask => c.VK_SHADER_STAGE_FRAGMENT_BIT,
+            .frag => 0,
+        };
+
+        const actualStage: ShaderStage = switch (shaderType) {
+            .compute => .compute,
+            .vert => .vertex,
+            // tessControl = c.VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT,
+            // tessEval = c.VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT,
+            // geometry = c.VK_SHADER_STAGE_GEOMETRY_BIT,
+            .task => .task,
+            .mesh => .mesh,
+            .frag => .frag,
+            .meshNoTask => .mesh,
+        };
+
+        const shaderInf = c.VkShaderCreateInfoEXT{
+            .sType = c.VK_STRUCTURE_TYPE_SHADER_CREATE_INFO_EXT,
+            .pNext = null,
+            .flags = flags,
+            .stage = @intFromEnum(actualStage),
+            .nextStage = nextStage,
+            .codeType = c.VK_SHADER_CODE_TYPE_SPIRV_EXT,
+            .codeSize = shader.data.len,
+            .pCode = shader.data.ptr,
+            .pName = "main",
+            .setLayoutCount = if (descLayout != null) @as(u32, 1) else 0,
+            .pSetLayouts = if (descLayout != null) &descLayout else null,
+            .pushConstantRangeCount = 1,
+            .pPushConstantRanges = &c.VkPushConstantRange{
+                .stageFlags = c.VK_SHADER_STAGE_ALL,
+                .offset = 0,
+                .size = @sizeOf(PushConstants),
+            },
+            .pSpecializationInfo = null,
+        };
+        var shaderObj: c.VkShaderEXT = undefined;
+        try check(c.pfn_vkCreateShadersEXT.?(gpi, 1, &shaderInf, null, &shaderObj), "Failed to create graphics ShaderObject");
+
+        return .{
+            .handle = shaderObj,
+            .stage = actualStage,
+        };
+    }
+
+    pub fn deinit(self: *ShaderObject2, gpi: c.VkDevice) void {
         c.pfn_vkDestroyShaderEXT.?(gpi, self.handle, null);
     }
 };

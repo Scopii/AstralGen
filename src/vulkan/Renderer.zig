@@ -5,6 +5,7 @@ const Context = @import("Context.zig").Context;
 const Camera = @import("../core/Camera.zig").Camera;
 const Scheduler = @import("Scheduler.zig").Scheduler;
 const Window = @import("../platform/Window.zig").Window;
+const LoadedShader = @import("../core/ShaderCompiler.zig").LoadedShader;
 const CmdManager = @import("CmdManager.zig").CmdManager;
 const ShaderManager = @import("ShaderManager.zig").ShaderManager;
 const SwapchainManager = @import("SwapchainManager.zig").SwapchainManager;
@@ -17,9 +18,16 @@ const MemoryManager = @import("../core/MemoryManager.zig").MemoryManager;
 const Object = @import("../ecs/EntityManager.zig").Object;
 const check = @import("error.zig").check;
 const createInstance = @import("Context.zig").createInstance;
+const ShaderObject2 = @import("ShaderObject.zig").ShaderObject2;
 
 const Allocator = std.mem.Allocator;
 const RENDER_IMG_MAX = config.RENDER_IMG_MAX;
+
+const Pass = struct {
+    renderType: config.RenderType,
+    renderImg: config.RenderResource,
+    shaderIds: []const u8,
+};
 
 pub const Renderer = struct {
     alloc: Allocator,
@@ -33,6 +41,7 @@ pub const Renderer = struct {
     renderImages: [RENDER_IMG_MAX]?GpuImage,
     gpuObjects: GpuBuffer = undefined,
     objectCount: u32,
+    passes: std.ArrayList(Pass),
 
     pub fn init(memoryMan: *MemoryManager, objects: []Object) !Renderer {
         const alloc = memoryMan.getAllocator();
@@ -78,6 +87,7 @@ pub const Renderer = struct {
             .swapchainMan = swapchainMan,
             .gpuObjects = gpuObjects,
             .objectCount = @intCast(objects.len),
+            .passes = std.ArrayList(Pass).init(alloc),
         };
     }
 
@@ -91,6 +101,7 @@ pub const Renderer = struct {
         self.resourceMan.destroyGpuBuffer(self.gpuObjects);
         self.resourceMan.deinit();
         self.context.deinit();
+        self.passes.deinit();
     }
 
     pub fn updateWindowState(self: *Renderer, winPtrs: []*Window) !void {
@@ -145,6 +156,19 @@ pub const Renderer = struct {
         }
     }
 
+    pub fn addPasses(self: *Renderer, passConfigs: []const config.PassConfig) !void {
+        for (passConfigs) |passConfig| {
+            const shaderArray = self.shaderMan.getShaders(passConfig.shaderIds);
+            const validShaders = shaderArray[0..passConfig.shaderIds.len];
+
+            const renderType = checkShaderLayout(validShaders) catch |err| {
+                std.debug.print("Pass {} Shader Layout invalid", .{err});
+                return error.PassInvalid;
+            };
+            try self.passes.append(Pass{ .renderType = renderType, .renderImg = passConfig.renderImg, .shaderIds = passConfig.shaderIds });
+        }
+    }
+
     pub fn updateShaderLayout(self: *Renderer, index: usize) !void {
         _ = c.vkDeviceWaitIdle(self.context.gpi);
         try self.shaderMan.updateShaderLayout(index);
@@ -157,7 +181,7 @@ pub const Renderer = struct {
         if (try self.swapchainMan.updateTargets(frameInFlight, &self.context) == false) return;
 
         const cmd = try self.cmdMan.beginRecording(frameInFlight);
-        try self.recordPasses(cmd, cam, runtimeAsFloat);
+        try self.recordPasses2(cmd, cam, runtimeAsFloat);
         try CmdManager.recordSwapchainBlits(cmd, &self.renderImages, self.swapchainMan.targets.slice(), &self.swapchainMan.swapchains);
         try CmdManager.endRecording(cmd);
 
@@ -194,6 +218,43 @@ pub const Renderer = struct {
         }
     }
 
+    fn recordPasses2(self: *Renderer, cmd: c.VkCommandBuffer, cam: *Camera, runtimeAsFloat: f32) !void {
+        //std.debug.print("passes.items {}\n", .{self.passes.items.len});
+
+        for (self.passes.items) |pass| {
+            const renderImgId = pass.renderImg.id;
+
+            const pushConstants = PushConstants{
+                .camPosAndFov = cam.getPosAndFov(),
+                .camDir = cam.getForward(),
+                .runtime = runtimeAsFloat,
+                .dataCount = self.objectCount,
+                .renderImgIndex = renderImgId,
+                .viewProj = cam.getViewProj(),
+            };
+
+            //std.debug.print("shader count {}\n", .{self.shaderMan.getShaders(pass.shaderIds).len});
+
+            const shaderArray = self.shaderMan.getShaders(pass.shaderIds);
+            const validShaders = shaderArray[0..pass.shaderIds.len];
+
+            try CmdManager.recordPass(
+                cmd,
+                &self.renderImages[renderImgId].?,
+                validShaders,
+                pass.renderType,
+                self.shaderMan.pipeLayout,
+                self.resourceMan.imgDescBuffer.gpuAddress,
+                pushConstants,
+                false, // CLEAR???
+            );
+        }
+    }
+
+    pub fn addShaders(self: *Renderer, loadedShaders: []LoadedShader) !void {
+        try self.shaderMan.createShaders(loadedShaders);
+    }
+
     fn queueSubmit(self: *Renderer, cmd: c.VkCommandBuffer, submitIds: []const u32, frameInFlight: u8) !void {
         var waitInfos: [config.MAX_WINDOWS]c.VkSemaphoreSubmitInfo = undefined;
         for (submitIds, 0..) |id, i| {
@@ -225,4 +286,35 @@ pub const Renderer = struct {
 
 fn createSemaphoreSubmitInfo(semaphore: c.VkSemaphore, stageMask: u64, value: u64) c.VkSemaphoreSubmitInfo {
     return .{ .sType = c.VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO, .semaphore = semaphore, .stageMask = stageMask, .value = value };
+}
+
+fn checkShaderLayout(shaders: []const ShaderObject2) !config.RenderType {
+    var shdr: [9]u8 = .{0} ** 9;
+    var prevIndex: i8 = -1;
+
+    for (shaders) |shader| {
+        const curIndex: i8 = switch (shader.stage) {
+            .compute => 0,
+            .vertex => 1,
+            .tessControl => 2,
+            .tessEval => 3,
+            .geometry => 4,
+            .task => 5,
+            .mesh => 6,
+            //.meshNoTask => 6, // LAYOUT NOT CHECKED YET
+            .frag => 7,
+        };
+        if (curIndex <= prevIndex) return error.ShaderLayoutOrderInvalid; // IS WRONG? <= -> < ???
+        prevIndex = curIndex;
+        shdr[@intCast(curIndex)] += 1;
+    }
+    switch (shaders.len) {
+        1 => if (shdr[0] == 1) return .computePass else if (shdr[1] == 1) return .vertexPass,
+        2 => if (shdr[6] == 1 and shdr[7] == 1) return .meshPass,
+        3 => if (shdr[5] == 1 and shdr[6] == 1 and shdr[7] == 1) return .taskMeshPass,
+        else => {},
+    }
+    if (shdr[1] == 1 and shdr[2] <= 1 and shdr[3] <= 1 and shdr[4] <= 1 and shdr[5] == 0 and shdr[6] == 0 and shdr[7] == 1) return .graphicsPass;
+    if (shdr[2] != shdr[3]) return error.ShaderLayoutTessellationMismatch;
+    return error.ShaderLayoutInvalid;
 }

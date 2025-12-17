@@ -21,7 +21,7 @@ pub const App = struct {
     timeMan: TimeManager,
     cam: Camera,
     eventMan: EventManager,
-    fileMan: ShaderCompiler,
+    shaderCompiler: ShaderCompiler,
     ecs: EntityManager,
     rng: RNGenerator,
 
@@ -32,12 +32,16 @@ pub const App = struct {
         };
         errdefer windowMan.deinit();
 
-        var fileMan = ShaderCompiler.init(memoryMan.getAllocator()) catch |err| {
+        var shaderCompiler = ShaderCompiler.init(memoryMan.getAllocator()) catch |err| {
             windowMan.showErrorBox("Astral App Error", "File Manager could not launch");
             std.debug.print("Err {}\n", .{err});
             return error.ShaderCompilerFailed;
         };
-        errdefer fileMan.deinit();
+        errdefer shaderCompiler.deinit();
+
+        if (config.SHADER_STARTUP_COMPILATION) {
+            try shaderCompiler.loadShaders(config.shadersToCompile);
+        }
 
         // var uiMan = UiManager.init(memoryMan.getAllocator()) catch |err| {
         //     windowMan.showErrorBox("Astral App Error", "UI Manager could not launch");
@@ -64,6 +68,11 @@ pub const App = struct {
         };
         errdefer renderer.deinit();
 
+        try renderer.addShaders(shaderCompiler.pullShaders());
+        shaderCompiler.freeShaders();
+
+        try renderer.addPasses(config.renderSeq2);
+
         return .{
             .cam = Camera.init(.{}),
             .timeMan = TimeManager.init(),
@@ -72,7 +81,7 @@ pub const App = struct {
             .windowMan = windowMan,
             //.uiMan = uiMan,
             .renderer = renderer,
-            .fileMan = fileMan,
+            .shaderCompiler = shaderCompiler,
             .ecs = ecs,
             .rng = rng,
         };
@@ -87,7 +96,7 @@ pub const App = struct {
 
     pub fn deinit(self: *App) void {
         self.renderer.deinit();
-        self.fileMan.deinit();
+        self.shaderCompiler.deinit();
         self.windowMan.deinit();
         self.memoryMan.deinit();
     }
@@ -149,12 +158,12 @@ pub const App = struct {
 
             // Shader Hotloading
             if (config.SHADER_HOTLOAD == true) {
-                try self.fileMan.checkShaderUpdate();
+                try self.shaderCompiler.checkShaderUpdate();
 
-                for (0..self.fileMan.layoutUpdateBools.len) |i| {
-                    if (self.fileMan.layoutUpdateBools[i] == true) {
+                for (0..self.shaderCompiler.layoutUpdateBools.len) |i| {
+                    if (self.shaderCompiler.layoutUpdateBools[i] == true) {
                         try renderer.updateShaderLayout(i);
-                        self.fileMan.layoutUpdateBools[i] = false;
+                        self.shaderCompiler.layoutUpdateBools[i] = false;
                     }
                 }
             }
