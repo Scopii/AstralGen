@@ -10,10 +10,10 @@ const CmdManager = @import("CmdManager.zig").CmdManager;
 const ShaderManager = @import("ShaderManager.zig").ShaderManager;
 const SwapchainManager = @import("SwapchainManager.zig").SwapchainManager;
 const Swapchain = @import("SwapchainManager.zig").Swapchain;
-const PushConstants = @import("ShaderManager.zig").PushConstants;
-const GpuImage = @import("ResourceManager.zig").GpuImage;
-const GpuBuffer = @import("ResourceManager.zig").GpuBuffer;
-const ResourceManager = @import("ResourceManager.zig").ResourceManager;
+const PushConstants = @import("resources/ResourceManager.zig").PushConstants;
+const GpuImage = @import("resources/ResourceManager.zig").GpuImage;
+const GpuBuffer = @import("resources/ResourceManager.zig").GpuBuffer;
+const ResourceManager = @import("resources/ResourceManager.zig").ResourceManager;
 const MemoryManager = @import("../core/MemoryManager.zig").MemoryManager;
 const Object = @import("../ecs/EntityManager.zig").Object;
 const check = @import("error.zig").check;
@@ -169,7 +169,7 @@ pub const Renderer = struct {
         if (try self.swapchainMan.updateTargets(frameInFlight, &self.context) == false) return;
 
         const cmd = try self.cmdMan.beginRecording(frameInFlight);
-        try self.recordPasses2(cmd, cam, runtimeAsFloat);
+        try self.recordPasses(cmd, cam, runtimeAsFloat);
         try CmdManager.recordSwapchainBlits(cmd, &self.resourceMan.renderImages, self.swapchainMan.targets.slice(), &self.swapchainMan.swapchains);
         try CmdManager.endRecording(cmd);
 
@@ -180,7 +180,7 @@ pub const Renderer = struct {
         self.scheduler.nextFrame();
     }
 
-    fn recordPasses2(self: *Renderer, cmd: vk.VkCommandBuffer, cam: *Camera, runtimeAsFloat: f32) !void {
+    fn recordPasses(self: *Renderer, cmd: vk.VkCommandBuffer, cam: *Camera, runtimeAsFloat: f32) !void {
         for (self.passes.items) |pass| {
             const renderImgId = pass.renderImg.id;
 
@@ -201,7 +201,7 @@ pub const Renderer = struct {
                 self.resourceMan.getRenderImgPtr(renderImgId),
                 validShaders,
                 pass.renderType,
-                self.shaderMan.pipeLayout,
+                self.resourceMan.pipeLayout,
                 self.resourceMan.imgDescBuffer.gpuAddress,
                 pushConstants,
                 pass.clear,

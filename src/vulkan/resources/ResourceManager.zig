@@ -1,11 +1,12 @@
 const std = @import("std");
-const vk = @import("../modules/vk.zig").c;
-const vkFn = @import("../modules/vk.zig");
+const vk = @import("../../modules/vk.zig").c;
+const vkFn = @import("../../modules/vk.zig");
 const Allocator = std.mem.Allocator;
-const Context = @import("Context.zig").Context;
-const VkAllocator = @import("vma.zig").VkAllocator;
-const check = @import("error.zig").check;
-const config = @import("../config.zig");
+const Context = @import("../Context.zig").Context;
+const VkAllocator = @import("../vma.zig").VkAllocator;
+const check = @import("../error.zig").check;
+const config = @import("../../config.zig");
+const Object = @import("../../ecs/EntityManager.zig").Object;
 const RENDER_IMG_MAX = config.RENDER_IMG_MAX;
 
 pub const GpuImage = struct {
@@ -26,11 +27,23 @@ pub const GpuBuffer = struct {
     count: u32 = 0,
 };
 
+pub const PushConstants = extern struct {
+    camPosAndFov: [4]f32,
+    camDir: [4]f32,
+    runtime: f32,
+    dataCount: u32,
+    renderImgIndex: u32,
+    padding: u32 = 0,
+    viewProj: [4][4]f32,
+};
+
 pub const ResourceManager = struct {
     cpuAlloc: Allocator,
     gpuAlloc: VkAllocator,
     gpi: vk.VkDevice,
     gpu: vk.VkPhysicalDevice,
+
+    pipeLayout: vk.VkPipelineLayout,
 
     renderImages: [RENDER_IMG_MAX]?GpuImage = .{null} ** RENDER_IMG_MAX,
     gpuObjects: GpuBuffer = undefined,
@@ -72,6 +85,7 @@ pub const ResourceManager = struct {
             .imgDescBuffer = imgDescBuffer,
             .bufferDescSize = bufferDescSize,
             .descLayout = descLayout,
+            .pipeLayout = try createPipelineLayout(gpi, descLayout, vk.VK_SHADER_STAGE_ALL, @sizeOf(PushConstants)),
         };
     }
 
@@ -81,6 +95,7 @@ pub const ResourceManager = struct {
         vk.vmaDestroyBuffer(self.gpuAlloc.handle, self.imgDescBuffer.buffer, self.imgDescBuffer.allocation);
         vk.vkDestroyDescriptorSetLayout(self.gpi, self.descLayout, null);
         self.gpuAlloc.deinit();
+        vk.vkDestroyPipelineLayout(self.gpi, self.pipeLayout, null);
     }
 
     pub fn getRenderImg(self: *ResourceManager, renderId: u8) ?GpuImage {
@@ -150,8 +165,6 @@ pub const ResourceManager = struct {
 
         @memcpy(destPtr[0..self.imgDescSize], descData[0..self.imgDescSize]);
     }
-
-    const Object = @import("../ecs/EntityManager.zig").Object;
 
     pub fn createGpuBuffer(self: *ResourceManager, objects: []Object) !void {
         const bufferSize = objects.len * @sizeOf(Object);
@@ -345,4 +358,18 @@ fn createAllocatedImageViewInf(format: vk.VkFormat, image: vk.VkImage, aspectFla
             .aspectMask = aspectFlags,
         },
     };
+}
+
+fn createPipelineLayout(gpi: vk.VkDevice, descLayout: vk.VkDescriptorSetLayout, stageFlags: vk.VkShaderStageFlags, size: u32) !vk.VkPipelineLayout {
+    const pcRange = vk.VkPushConstantRange{ .stageFlags = stageFlags, .offset = 0, .size = size };
+    const pipeLayoutInf = vk.VkPipelineLayoutCreateInfo{
+        .sType = vk.VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+        .setLayoutCount = if (descLayout != null) 1 else 0,
+        .pSetLayouts = if (descLayout != null) &descLayout else null,
+        .pushConstantRangeCount = if (size > 0) 1 else 0,
+        .pPushConstantRanges = if (size > 0) &pcRange else null,
+    };
+    var layout: vk.VkPipelineLayout = undefined;
+    try check(vk.vkCreatePipelineLayout(gpi, &pipeLayoutInf, null, &layout), "Failed to create pipeline layout");
+    return layout;
 }
