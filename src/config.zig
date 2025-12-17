@@ -148,5 +148,5 @@ pub const renderSeq2: []const PassConfig = &.{
     pass2,
     pass3,
     pass4,
-
+    pass5,
 };

@@ -29,16 +29,16 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .link_libc = true,
     });
-    
+
     exe.root_module.addImport("c", c_module);
 
-    // Vulkan setup
-    // const vulkan_zig_dep = b.dependency("vulkan_zig", .{
-    //     .registry = b.path("vk.xml"),
-    //     .target = target,
-    //     .optimize = optimize,
-    // });
-    // exe.root_module.addImport("vulkan-zig", vulkan_zig_dep.module("vulkan-zig"));
+    //Vulkan setup
+    const vulkan_zig_dep = b.dependency("vulkan_zig", .{
+        .registry = b.path("vk.xml"),
+        .target = target,
+        .optimize = optimize,
+    });
+    exe.root_module.addImport("vulkan-zig", vulkan_zig_dep.module("vulkan-zig"));
 
     // Windows Exe Metadata
     exe.addObjectFile(b.path("AstralGen.res"));
@@ -61,18 +61,18 @@ pub fn build(b: *std.Build) void {
     // GameDev Libs:
 
     // Tracy
-    // const options = .{
-    //     .enable_ztracy = b.option(bool, "enable_ztracy", "Enable Tracy profile markers") orelse false,
-    //     .enable_fibers = b.option(bool, "enable_fibers", "Enable Tracy fiber support") orelse false,
-    //     .on_demand = b.option(bool, "on_demand", "Build tracy with TRACY_ON_DEMAND") orelse false,
-    // };
-    // const ztracy = b.dependency("ztracy", .{
-    //     .enable_ztracy = options.enable_ztracy,
-    //     .enable_fibers = options.enable_fibers,
-    //     .on_demand = options.on_demand,
-    // });
-    // exe.root_module.addImport("ztracy", ztracy.module("root"));
-    // exe.linkLibrary(ztracy.artifact("tracy"));
+    const options = .{
+        .enable_ztracy = b.option(bool, "enable_ztracy", "Enable Tracy profile markers") orelse false,
+        .enable_fibers = b.option(bool, "enable_fibers", "Enable Tracy fiber support") orelse false,
+        .on_demand = b.option(bool, "on_demand", "Build tracy with TRACY_ON_DEMAND") orelse false,
+    };
+    const ztracy = b.dependency("ztracy", .{
+        .enable_ztracy = options.enable_ztracy,
+        .enable_fibers = options.enable_fibers,
+        .on_demand = options.on_demand,
+    });
+    exe.root_module.addImport("ztracy", ztracy.module("root"));
+    exe.linkLibrary(ztracy.artifact("tracy"));
 
     const zjobs_dep = b.dependency("zjobs", .{ .target = target, .optimize = optimize });
     exe.root_module.addImport("zjobs", zjobs_dep.module("root"));
