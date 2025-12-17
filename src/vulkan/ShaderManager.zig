@@ -20,12 +20,10 @@ pub const ShaderManager = struct {
     shaders: CreateMapArray(ShaderObject, config.SHADER_MAX, u32, config.SHADER_MAX, 0) = .{},
 
     pub fn init(alloc: Allocator, context: *const Context, resourceManager: *const ResourceManager) !ShaderManager {
-        const gpi = context.gpi;
-
         return .{
             .alloc = alloc,
             .descLayout = resourceManager.descLayout,
-            .gpi = gpi,
+            .gpi = context.gpi,
         };
     }
 

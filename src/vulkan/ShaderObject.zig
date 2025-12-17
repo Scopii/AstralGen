@@ -26,7 +26,7 @@ pub const ShaderObject = struct {
 
     pub fn init(gpi: vk.VkDevice, shader: LoadedShader, descLayout: vk.VkDescriptorSetLayout) !ShaderObject {
         const shaderType = shader.shaderConfig.shaderType;
-        // Set flags based on shader stage
+
         var flags: vk.VkShaderCreateFlagsEXT = 0;
         if (shaderType == .meshNoTask) flags |= vk.VK_SHADER_CREATE_NO_TASK_SHADER_BIT_EXT;
 
@@ -87,17 +87,3 @@ pub const ShaderObject = struct {
         vkFn.vkDestroyShaderEXT.?(gpi, self.handle, null);
     }
 };
-
-fn loadShader(alloc: Allocator, spvPath: []const u8) ![]align(@alignOf(u32)) u8 {
-    std.debug.print("Shader Loaded {s}\n", .{spvPath});
-    const file = std.fs.cwd().openFile(spvPath, .{}) catch |err| {
-        std.debug.print("Shader Load Failed {s}\n", .{spvPath});
-        return err;
-    };
-    defer file.close();
-
-    const size = try file.getEndPos();
-    const data = try alloc.alignedAlloc(u8, @alignOf(u32), size);
-    _ = try file.readAll(data);
-    return data;
-}
