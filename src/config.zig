@@ -1,4 +1,4 @@
-pub const c = @import("c.zig");
+const c = @import("c");
 pub const std = @import("std");
 const KeyMapping = @import("core/EventManager.zig").KeyMapping;
 const ShaderStage = @import("vulkan/ShaderObject.zig").ShaderStage;

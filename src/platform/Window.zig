@@ -1,4 +1,4 @@
-const c = @import("../c.zig");
+const c = @import("c");
 
 pub const Window = struct {
     pub const WindowState = enum { active, inactive, needCreation, needUpdate, needDelete, needInactive, needActive };

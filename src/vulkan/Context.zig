@@ -1,5 +1,5 @@
 const std = @import("std");
-const c = @import("../c.zig");
+const c = @import("c");
 const Allocator = std.mem.Allocator;
 const check = @import("error.zig").check;
 const config = @import("../config.zig");

@@ -1,5 +1,5 @@
 const std = @import("std");
-const c = @import("../c.zig");
+const c = @import("c");
 
 pub fn check(result: c.VkResult, comptime msg: []const u8) !void {
     if (result == c.VK_SUCCESS) return;

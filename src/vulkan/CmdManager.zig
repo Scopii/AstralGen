@@ -1,5 +1,5 @@
 const std = @import("std");
-const c = @import("../c.zig");
+const c = @import("c");
 const Allocator = std.mem.Allocator;
 const Context = @import("Context.zig").Context;
 const GpuImage = @import("ResourceManager.zig").GpuImage;

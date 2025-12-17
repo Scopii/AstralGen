@@ -5,6 +5,11 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
+    const c_module = b.addModule("c", .{
+        .root_source_file = b.path("src/c.zig"),
+    });
+    c_module.addIncludePath(b.path("include"));
+
     const exe = b.addExecutable(.{
         .name = "AstralGen",
         .root_source_file = b.path("src/main.zig"),
@@ -12,6 +17,8 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .link_libc = true,
     });
+
+    exe.root_module.addImport("c", c_module);
 
     // Vulkan setup
     const vulkan_zig_dep = b.dependency("vulkan_zig", .{
@@ -24,10 +31,15 @@ pub fn build(b: *std.Build) void {
     // Windows Exe Metadata
     exe.addObjectFile(b.path("AstralGen.res"));
 
+    exe.addCSourceFile(.{
+        .file = b.path("src/vulkan/vmaLink.cpp"),
+        .flags = &.{"-std=c++17"}, // VMA usually requires C++17 or newer features enabled
+    });
+
     exe.addIncludePath(b.path("include"));
 
     // Compile VMA's implementation by treating its header as a C source file.
-    exe.addCSourceFile(.{ .file = b.path("src/vulkan/vmaLink.cpp") });
+    // exe.addCSourceFile(.{ .file = b.path("src/vulkan/vmaLink.cpp") });
     exe.linkLibCpp();
 
     exe.addLibraryPath(b.path("libs/SDL3"));

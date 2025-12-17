@@ -1,5 +1,5 @@
 const std = @import("std");
-const c = @import("../c.zig");
+const c = @import("c");
 const config = @import("../config.zig");
 const Context = @import("Context.zig").Context;
 const Camera = @import("../core/Camera.zig").Camera;
@@ -269,7 +269,7 @@ fn checkShaderLayout(shaders: []const ShaderObject) !config.RenderType {
             //.meshNoTask => 6, // LAYOUT NOT CHECKED YET
             .frag => 7,
         };
-        if (curIndex <= prevIndex) return error.ShaderLayoutOrderInvalid; // IS WRONG? <= -> < ???
+        if (curIndex < prevIndex) return error.ShaderLayoutOrderInvalid; // IS WRONG? <= -> < ???
         prevIndex = curIndex;
         shdr[@intCast(curIndex)] += 1;
     }

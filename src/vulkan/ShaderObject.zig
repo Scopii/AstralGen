@@ -1,5 +1,5 @@
 const std = @import("std");
-const c = @import("../c.zig");
+const c = @import("c");
 const Allocator = std.mem.Allocator;
 const config = @import("../config.zig");
 const RenderType = @import("../config.zig").RenderType;
