@@ -23,7 +23,7 @@ pub fn build(b: *std.Build) void {
     exe.linkLibC();
 
     exe.addCSourceFile(.{
-        .file = b.path("src/vulkan/vmaLink.cpp"),
+        .file = b.path("src/modules/vmaLink.cpp"),
         .flags = &.{"-std=c++17"}, //"-O3", "-g0"
     });
     exe.addIncludePath(b.path("include"));
