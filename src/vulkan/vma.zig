@@ -1,4 +1,4 @@
-const vk = @import("vk").vk;
+const vk = @import("../modules/vk.zig").c;
 const check = @import("error.zig").check;
 
 pub const VkAllocator = struct {

@@ -1,5 +1,5 @@
 const std = @import("std");
-const vk = @import("vk").vk;
+const vk = @import("../modules/vk.zig").c;
 const Allocator = std.mem.Allocator;
 const config = @import("../config.zig");
 const Context = @import("Context.zig").Context;

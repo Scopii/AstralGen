@@ -1,5 +1,5 @@
-const sdl = @import("sdl").c;
-const vk = @import("vk").vk;
+const sdl = @import("../modules/sdl.zig").c;
+const vk = @import("../modules/vk.zig").c;
 
 pub const Window = struct {
     pub const WindowState = enum { active, inactive, needCreation, needUpdate, needDelete, needInactive, needActive };

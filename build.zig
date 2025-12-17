@@ -1,19 +1,26 @@
 const std = @import("std");
-const config = @import("src/config.zig");
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const sdl_module = b.addModule("sdl", .{
-        .root_source_file = b.path("src/modules/sdl.zig"),
+    const c_module = b.addModule("c", .{
+        .root_source_file = b.path("src/modules/c.zig"),
     });
-    sdl_module.addIncludePath(b.path("include"));
+    c_module.addIncludePath(b.path("include"));
 
-    const vk_module = b.addModule("vk", .{
-        .root_source_file = b.path("src/modules/vk.zig"),
+    const vma_lib = b.addStaticLibrary(.{
+        .name = "vma_lib",
+        .target = target,
+        .optimize = .ReleaseFast,
     });
-    vk_module.addIncludePath(b.path("include"));
+
+    vma_lib.addCSourceFile(.{
+        .file = b.path("src/vulkan/vmaLink.cpp"),
+        .flags = &.{"-std=c++17"}, // No need for -g0/-O3 ReleaseFast handles it
+    });
+    vma_lib.addIncludePath(b.path("include"));
+    vma_lib.linkLibCpp();
 
     const exe = b.addExecutable(.{
         .name = "AstralGen",
@@ -22,28 +29,21 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .link_libc = true,
     });
-
-    exe.root_module.addImport("sdl", sdl_module);
-    exe.root_module.addImport("vk", vk_module);
+    
+    exe.root_module.addImport("c", c_module);
 
     // Vulkan setup
-    const vulkan_zig_dep = b.dependency("vulkan_zig", .{
-        .registry = b.path("vk.xml"),
-        .target = target,
-        .optimize = optimize,
-    });
-    exe.root_module.addImport("vulkan-zig", vulkan_zig_dep.module("vulkan-zig"));
+    // const vulkan_zig_dep = b.dependency("vulkan_zig", .{
+    //     .registry = b.path("vk.xml"),
+    //     .target = target,
+    //     .optimize = optimize,
+    // });
+    // exe.root_module.addImport("vulkan-zig", vulkan_zig_dep.module("vulkan-zig"));
 
     // Windows Exe Metadata
     exe.addObjectFile(b.path("AstralGen.res"));
 
-    exe.addCSourceFile(.{
-        .file = b.path("src/vulkan/vmaLink.cpp"),
-        .flags = &.{"-std=c++17"},
-    });
-
-    exe.addIncludePath(b.path("include"));
-    exe.linkLibCpp();
+    exe.linkLibrary(vma_lib);
 
     exe.addLibraryPath(b.path("libs/SDL3"));
     exe.linkSystemLibrary("SDL3");
@@ -61,30 +61,18 @@ pub fn build(b: *std.Build) void {
     // GameDev Libs:
 
     // Tracy
-    const options = .{
-        .enable_ztracy = b.option(
-            bool,
-            "enable_ztracy",
-            "Enable Tracy profile markers",
-        ) orelse false,
-        .enable_fibers = b.option(
-            bool,
-            "enable_fibers",
-            "Enable Tracy fiber support",
-        ) orelse false,
-        .on_demand = b.option(
-            bool,
-            "on_demand",
-            "Build tracy with TRACY_ON_DEMAND",
-        ) orelse false,
-    };
-    const ztracy = b.dependency("ztracy", .{
-        .enable_ztracy = options.enable_ztracy,
-        .enable_fibers = options.enable_fibers,
-        .on_demand = options.on_demand,
-    });
-    exe.root_module.addImport("ztracy", ztracy.module("root"));
-    exe.linkLibrary(ztracy.artifact("tracy"));
+    // const options = .{
+    //     .enable_ztracy = b.option(bool, "enable_ztracy", "Enable Tracy profile markers") orelse false,
+    //     .enable_fibers = b.option(bool, "enable_fibers", "Enable Tracy fiber support") orelse false,
+    //     .on_demand = b.option(bool, "on_demand", "Build tracy with TRACY_ON_DEMAND") orelse false,
+    // };
+    // const ztracy = b.dependency("ztracy", .{
+    //     .enable_ztracy = options.enable_ztracy,
+    //     .enable_fibers = options.enable_fibers,
+    //     .on_demand = options.on_demand,
+    // });
+    // exe.root_module.addImport("ztracy", ztracy.module("root"));
+    // exe.linkLibrary(ztracy.artifact("tracy"));
 
     const zjobs_dep = b.dependency("zjobs", .{ .target = target, .optimize = optimize });
     exe.root_module.addImport("zjobs", zjobs_dep.module("root"));

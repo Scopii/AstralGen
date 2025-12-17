@@ -1,5 +1,5 @@
 const std = @import("std");
-const vk = @import("vk").vk;
+const vk = @import("../modules/vk.zig").c;
 const Context = @import("Context.zig").Context;
 const check = @import("error.zig").check;
 const MAX_IN_FLIGHT = @import("../config.zig").MAX_IN_FLIGHT;

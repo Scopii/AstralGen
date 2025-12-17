@@ -1,5 +1,5 @@
-const vk = @import("vk").vk;
-const sdl = @import("sdl").c;
+const vk = @import("modules/vk.zig").c;
+const sdl = @import("modules/sdl.zig").c;
 pub const std = @import("std");
 const KeyMapping = @import("core/EventManager.zig").KeyMapping;
 const ShaderStage = @import("vulkan/ShaderObject.zig").ShaderStage;
@@ -148,5 +148,5 @@ pub const renderSeq2: []const PassConfig = &.{
     pass2,
     pass3,
     pass4,
-    pass5,
+
 };
