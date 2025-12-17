@@ -45,7 +45,13 @@ pub const ShaderManager = struct {
     pub fn createShaders(self: *ShaderManager, loadedShaders: []LoadedShader) !void {
         for (loadedShaders) |loadedShader| {
             const shaderObj = try ShaderObject.init(self.gpi, loadedShader, self.descLayout);
-            self.shaders.set(loadedShader.id, shaderObj);
+            const id = loadedShader.shaderConfig.id;
+
+            if (self.shaders.isKeyUsed(id) == true) {
+                self.shaders.getPtr(id).*.deinit(self.gpi);
+                std.debug.print("Shader {} Updated\n", .{id});
+            } else std.debug.print("Shader {} Created\n", .{id});
+            self.shaders.set(id, shaderObj);
         }
     }
 

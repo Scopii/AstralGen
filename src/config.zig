@@ -10,7 +10,7 @@ pub const EXTRA_VALIDATION = false;
 pub const BEST_PRACTICES = false;
 
 // Shader Compilation
-pub const SHADER_HOTLOAD = false;
+pub const SHADER_HOTLOAD = true;
 pub const SHADER_STARTUP_COMPILATION = true;
 pub const SHADER_MAX = 100;
 

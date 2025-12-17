@@ -1,15 +1,15 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 const config = @import("../config.zig");
+const ShaderConfig = @import("../config.zig").ShaderConfig;
 const ShaderStage = @import("../vulkan/ShaderObject.zig").ShaderStage;
 
 const alignedShader = []align(@alignOf(u32)) u8;
 
 pub const LoadedShader = struct {
-    id: u32,
-    shaderType: config.ShaderType,
     data: alignedShader,
     timeStamp: i128,
+    shaderConfig: ShaderConfig,
 };
 
 pub const ShaderCompiler = struct {
@@ -17,7 +17,8 @@ pub const ShaderCompiler = struct {
     rootPath: []u8,
     shaderPath: []const u8,
     shaderOutputPath: []const u8,
-    loadedShaders: std.array_list.Managed(LoadedShader),
+    freshShaders: std.array_list.Managed(LoadedShader),
+    allShaders: std.array_list.Managed(LoadedShader),
 
     pub fn init(alloc: Allocator) !ShaderCompiler {
         // Assign paths
@@ -33,65 +34,69 @@ pub const ShaderCompiler = struct {
             .rootPath = root,
             .shaderPath = shaderPath,
             .shaderOutputPath = shaderOutputPath,
-            .loadedShaders = std.array_list.Managed(LoadedShader).init(alloc),
+            .freshShaders = std.array_list.Managed(LoadedShader).init(alloc),
+            .allShaders = std.array_list.Managed(LoadedShader).init(alloc),
         };
-    }
-
-    pub fn pullShaders(self: *ShaderCompiler) []LoadedShader {
-        return self.loadedShaders.items;
-    }
-
-    pub fn loadShaders(self: *ShaderCompiler, shaders: []const config.ShaderConfig) !void {
-        const alloc = self.alloc;
-        try compileShadersParallel(alloc, self.shaderPath, self.shaderOutputPath, shaders);
-        const curTime = std.time.nanoTimestamp();
-
-        for (shaders) |shader| {
-            const spvPath = try joinPath(alloc, self.shaderOutputPath, shader.spvFile);
-            defer alloc.free(spvPath);
-            const data = try loadShader(alloc, spvPath);
-            try self.loadedShaders.append(LoadedShader{ .id = shader.id, .timeStamp = curTime, .data = data, .shaderType = shader.shaderType });
-        }
-    }
-
-    pub fn freeShaders(self: *ShaderCompiler) void {
-        for (self.loadedShaders.items) |*loadedShader| {
-            self.alloc.free(loadedShader.data);
-        }
-        self.loadedShaders.clearRetainingCapacity();
-    }
-
-    pub fn checkShaderUpdate(_: *ShaderCompiler) !void {
-        // NEEDS - REIMPLEMENTATION
-
-        // const alloc = self.alloc;
-        // Check all ShaderInfos and compile if needed
-        // for (config.renderSeq, 0..) |shaderLayout, i| {
-        //     for (shaderLayout.shaders) |shader| {
-        //         const filePath = try joinPath(alloc, self.shaderPath, shader.glslFile);
-        //         const newTimeStamp = try getFileTimeStamp(filePath);
-
-        //         if (self.layoutTimeStamps[i] < newTimeStamp) {
-        //             const shaderOutputPath = try joinPath(alloc, self.shaderOutputPath, shader.spvFile);
-
-        //             compileShader(alloc, filePath, shaderOutputPath) catch |err| {
-        //                 std.debug.print("Tried updating Shader but compilation failed {}\n", .{err});
-        //             };
-
-        //             alloc.free(shaderOutputPath);
-        //             self.layoutTimeStamps[i] = newTimeStamp;
-        //             self.layoutUpdateBools[i] = true;
-        //         }
-        //         alloc.free(filePath);
-        //     }
-        // }
     }
 
     pub fn deinit(self: *ShaderCompiler) void {
         self.alloc.free(self.rootPath);
         self.alloc.free(self.shaderPath);
         self.alloc.free(self.shaderOutputPath);
-        self.loadedShaders.deinit();
+        self.freshShaders.deinit();
+        self.allShaders.deinit();
+    }
+
+    pub fn pullFreshShaders(self: *ShaderCompiler) []LoadedShader {
+        return self.freshShaders.items;
+    }
+
+    pub fn loadShaders(self: *ShaderCompiler, shaderConfigs: []const ShaderConfig) !void {
+        const alloc = self.alloc;
+        try compileShadersParallel(alloc, self.shaderPath, self.shaderOutputPath, shaderConfigs);
+        const curTime = std.time.nanoTimestamp();
+
+        for (shaderConfigs) |shaderConfig| {
+            const spvPath = try joinPath(alloc, self.shaderOutputPath, shaderConfig.spvFile);
+            defer alloc.free(spvPath);
+            const data = try loadShader(alloc, spvPath);
+            const newShader = LoadedShader{ .shaderConfig = shaderConfig, .timeStamp = curTime, .data = data };
+            try self.freshShaders.append(newShader);
+            try self.allShaders.append(newShader);
+        }
+    }
+
+    pub fn freeFreshShaders(self: *ShaderCompiler) void {
+        for (self.freshShaders.items) |*loadedShader| {
+            self.alloc.free(loadedShader.data);
+        }
+        self.freshShaders.clearRetainingCapacity();
+    }
+
+    pub fn checkShaderUpdates(self: *ShaderCompiler) !void {
+        const alloc = self.alloc;
+
+        for (self.allShaders.items) |*loadedShader| {
+            const filePath = try joinPath(alloc, self.shaderPath, loadedShader.shaderConfig.glslFile);
+            defer alloc.free(filePath);
+            const newTimeStamp = try getFileTimeStamp(filePath);
+
+            if (loadedShader.timeStamp < newTimeStamp) {
+                const shaderOutputPath = try joinPath(alloc, self.shaderOutputPath, loadedShader.shaderConfig.spvFile);
+                defer alloc.free(shaderOutputPath);
+
+                compileShader(alloc, filePath, shaderOutputPath) catch |err| {
+                    std.debug.print("Tried updating Shader but compilation failed {}\n", .{err});
+                };
+
+                const data = try loadShader(alloc, shaderOutputPath);
+                loadedShader.data = data;
+                loadedShader.timeStamp = newTimeStamp;
+
+                try self.freshShaders.append(loadedShader.*);
+                std.debug.print("Hotloaded: {s}\n", .{loadedShader.shaderConfig.glslFile});
+            }
+        }
     }
 };
 
@@ -100,10 +105,8 @@ fn loadShader(alloc: Allocator, spvPath: []const u8) !alignedShader {
     defer file.close();
 
     const size = try file.getEndPos();
-
-    const word_count = std.math.divCeil(usize, size, 4) catch unreachable;
-
-    const words = try alloc.alloc(u32, word_count);
+    const wordCount = std.math.divCeil(usize, size, 4) catch unreachable;
+    const words = try alloc.alloc(u32, wordCount);
     errdefer alloc.free(words);
 
     const bytes = std.mem.sliceAsBytes(words);
@@ -142,7 +145,7 @@ fn threadCompile(src: []const u8, dst: []const u8) void {
     std.heap.page_allocator.free(dst);
 }
 
-pub fn compileShadersParallel(alloc: std.mem.Allocator, absShaderPath: []const u8, absShaderOutputPath: []const u8, shaders: []const config.ShaderConfig) !void {
+pub fn compileShadersParallel(alloc: std.mem.Allocator, absShaderPath: []const u8, absShaderOutputPath: []const u8, shaders: []const ShaderConfig) !void {
     var threads = std.array_list.Managed(std.Thread).init(alloc);
     defer threads.deinit();
 

@@ -68,8 +68,8 @@ pub const App = struct {
         };
         errdefer renderer.deinit();
 
-        try renderer.addShaders(shaderCompiler.pullShaders());
-        shaderCompiler.freeShaders();
+        try renderer.addShaders(shaderCompiler.pullFreshShaders());
+        shaderCompiler.freeFreshShaders();
 
         try renderer.addPasses(config.renderSeq2);
 
@@ -158,7 +158,9 @@ pub const App = struct {
 
             // Shader Hotloading
             if (config.SHADER_HOTLOAD == true) {
-                // NEEDS - REIMPLEMENTATION
+                try self.shaderCompiler.checkShaderUpdates();
+                try renderer.addShaders(self.shaderCompiler.pullFreshShaders());
+                self.shaderCompiler.freeFreshShaders();
             }
 
             // Draw and reset Frame Arena

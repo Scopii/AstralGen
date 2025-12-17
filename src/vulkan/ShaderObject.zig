@@ -25,7 +25,7 @@ pub const ShaderObject = struct {
     stage: ShaderStage,
 
     pub fn init(gpi: vk.VkDevice, shader: LoadedShader, descLayout: vk.VkDescriptorSetLayout) !ShaderObject {
-        const shaderType = shader.shaderType;
+        const shaderType = shader.shaderConfig.shaderType;
         // Set flags based on shader stage
         var flags: vk.VkShaderCreateFlagsEXT = 0;
         if (shaderType == .meshNoTask) flags |= vk.VK_SHADER_CREATE_NO_TASK_SHADER_BIT_EXT;
