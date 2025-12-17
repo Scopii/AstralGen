@@ -18,7 +18,7 @@ const MemoryManager = @import("../core/MemoryManager.zig").MemoryManager;
 const Object = @import("../ecs/EntityManager.zig").Object;
 const check = @import("error.zig").check;
 const createInstance = @import("Context.zig").createInstance;
-const ShaderObject2 = @import("ShaderObject.zig").ShaderObject2;
+const ShaderObject = @import("ShaderObject.zig").ShaderObject;
 
 const Allocator = std.mem.Allocator;
 const RENDER_IMG_MAX = config.RENDER_IMG_MAX;
@@ -38,7 +38,7 @@ pub const Renderer = struct {
     swapchainMan: SwapchainManager,
     cmdMan: CmdManager,
     scheduler: Scheduler,
-    renderImages: [RENDER_IMG_MAX]?GpuImage,
+    renderImages: [RENDER_IMG_MAX]?GpuImage = .{null} ** RENDER_IMG_MAX,
     gpuObjects: GpuBuffer = undefined,
     objectCount: u32,
     passes: std.ArrayList(Pass),
@@ -53,25 +53,6 @@ pub const Renderer = struct {
         const shaderMan = try ShaderManager.init(alloc, &context, &resourceMan);
         const swapchainMan = try SwapchainManager.init(alloc, &context);
 
-        var renderImages: [RENDER_IMG_MAX]?GpuImage = undefined;
-        for (0..renderImages.len) |i| renderImages[i] = null;
-
-        for (config.renderSeq) |shaderLayout| {
-            const renderImg = shaderLayout.renderImg;
-
-            if (renderImg.id > RENDER_IMG_MAX - 1) {
-                std.debug.print("Renderer: RenderId Image ID cant be bigger than Max Windows\n", .{});
-                return error.RenderImageIdOutOfBounds;
-            }
-
-            if (renderImages[renderImg.id] == null) {
-                const gpuImg = try resourceMan.createGpuImage(renderImg.extent, renderImg.imgFormat, renderImg.memUsage);
-                renderImages[renderImg.id] = gpuImg;
-                std.debug.print("Renderer: RenderImage {} created\n", .{renderImg.id});
-                try resourceMan.updateImageDescriptor(gpuImg.view, renderImg.id);
-            }
-        }
-
         const gpuObjects = try resourceMan.createGpuBuffer(objects);
         try resourceMan.updateObjectBufferDescriptor(gpuObjects);
 
@@ -83,7 +64,6 @@ pub const Renderer = struct {
             .shaderMan = shaderMan,
             .cmdMan = cmdMan,
             .scheduler = scheduler,
-            .renderImages = renderImages,
             .swapchainMan = swapchainMan,
             .gpuObjects = gpuObjects,
             .objectCount = @intCast(objects.len),
@@ -165,7 +145,22 @@ pub const Renderer = struct {
                 std.debug.print("Pass {} Shader Layout invalid", .{err});
                 return error.PassInvalid;
             };
+            try self.createRenderImage(passConfig.renderImg);
             try self.passes.append(Pass{ .renderType = renderType, .renderImg = passConfig.renderImg, .shaderIds = passConfig.shaderIds });
+        }
+    }
+
+    pub fn createRenderImage(self: *Renderer, renderImg: config.RenderResource) !void {
+        if (renderImg.id > RENDER_IMG_MAX - 1) {
+            std.debug.print("Renderer: RenderId Image ID cant be bigger than Max Windows\n", .{});
+            return error.RenderImageIdOutOfBounds;
+        }
+
+        if (self.renderImages[renderImg.id] == null) {
+            const gpuImg = try self.resourceMan.createGpuImage(renderImg.extent, renderImg.imgFormat, renderImg.memUsage);
+            self.renderImages[renderImg.id] = gpuImg;
+            std.debug.print("Renderer: RenderImage {} created\n", .{renderImg.id});
+            try self.resourceMan.updateImageDescriptor(gpuImg.view, renderImg.id);
         }
     }
 
@@ -192,35 +187,7 @@ pub const Renderer = struct {
         self.scheduler.nextFrame();
     }
 
-    fn recordPasses(self: *Renderer, cmd: c.VkCommandBuffer, cam: *Camera, runtimeAsFloat: f32) !void {
-        for (0..config.renderSeq.len) |i| {
-            const renderImgId = config.renderSeq[i].renderImg.id;
-
-            const pushConstants = PushConstants{
-                .camPosAndFov = cam.getPosAndFov(),
-                .camDir = cam.getForward(),
-                .runtime = runtimeAsFloat,
-                .dataCount = self.objectCount,
-                .renderImgIndex = renderImgId,
-                .viewProj = cam.getViewProj(),
-            };
-
-            try CmdManager.recordPass(
-                cmd,
-                &self.renderImages[renderImgId].?,
-                self.shaderMan.shaderObjects[i].items,
-                self.shaderMan.getRenderType(i),
-                self.shaderMan.pipeLayout,
-                self.resourceMan.imgDescBuffer.gpuAddress,
-                pushConstants,
-                config.renderSeq[i].clear,
-            );
-        }
-    }
-
     fn recordPasses2(self: *Renderer, cmd: c.VkCommandBuffer, cam: *Camera, runtimeAsFloat: f32) !void {
-        //std.debug.print("passes.items {}\n", .{self.passes.items.len});
-
         for (self.passes.items) |pass| {
             const renderImgId = pass.renderImg.id;
 
@@ -232,8 +199,6 @@ pub const Renderer = struct {
                 .renderImgIndex = renderImgId,
                 .viewProj = cam.getViewProj(),
             };
-
-            //std.debug.print("shader count {}\n", .{self.shaderMan.getShaders(pass.shaderIds).len});
 
             const shaderArray = self.shaderMan.getShaders(pass.shaderIds);
             const validShaders = shaderArray[0..pass.shaderIds.len];
@@ -288,7 +253,7 @@ fn createSemaphoreSubmitInfo(semaphore: c.VkSemaphore, stageMask: u64, value: u6
     return .{ .sType = c.VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO, .semaphore = semaphore, .stageMask = stageMask, .value = value };
 }
 
-fn checkShaderLayout(shaders: []const ShaderObject2) !config.RenderType {
+fn checkShaderLayout(shaders: []const ShaderObject) !config.RenderType {
     var shdr: [9]u8 = .{0} ** 9;
     var prevIndex: i8 = -1;
 

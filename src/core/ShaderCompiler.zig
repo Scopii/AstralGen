@@ -13,15 +13,10 @@ pub const LoadedShader = struct {
 };
 
 pub const ShaderCompiler = struct {
-    const stepCount = config.renderSeq.len;
-
     alloc: Allocator,
     rootPath: []u8,
     shaderPath: []const u8,
     shaderOutputPath: []const u8,
-    layoutTimeStamps: [stepCount]i128,
-    layoutUpdateBools: [stepCount]bool = .{false} ** stepCount,
-
     loadedShaders: std.ArrayList(LoadedShader),
 
     pub fn init(alloc: Allocator) !ShaderCompiler {
@@ -32,18 +27,12 @@ pub const ShaderCompiler = struct {
         std.debug.print("Shader Path {s}\n", .{shaderPath});
         const shaderOutputPath = try joinPath(alloc, root, config.sprvPath);
         std.debug.print("Shader Output Path {s}\n", .{shaderOutputPath});
-        // Set defaults
-        const curTime = std.time.nanoTimestamp();
-        const layoutTimeStamps: [stepCount]i128 = .{curTime} ** stepCount;
-        // Compile on Startup if wanted
 
         return .{
             .alloc = alloc,
             .rootPath = root,
             .shaderPath = shaderPath,
             .shaderOutputPath = shaderOutputPath,
-            .layoutTimeStamps = layoutTimeStamps,
-
             .loadedShaders = std.ArrayList(LoadedShader).init(alloc),
         };
     }
@@ -72,28 +61,30 @@ pub const ShaderCompiler = struct {
         self.loadedShaders.clearRetainingCapacity();
     }
 
-    pub fn checkShaderUpdate(self: *ShaderCompiler) !void {
-        const alloc = self.alloc;
+    pub fn checkShaderUpdate(_: *ShaderCompiler) !void {
+        // NEEDS - REIMPLEMENTATION
+
+        // const alloc = self.alloc;
         // Check all ShaderInfos and compile if needed
-        for (config.renderSeq, 0..) |shaderLayout, i| {
-            for (shaderLayout.shaders) |shader| {
-                const filePath = try joinPath(alloc, self.shaderPath, shader.glslFile);
-                const newTimeStamp = try getFileTimeStamp(filePath);
+        // for (config.renderSeq, 0..) |shaderLayout, i| {
+        //     for (shaderLayout.shaders) |shader| {
+        //         const filePath = try joinPath(alloc, self.shaderPath, shader.glslFile);
+        //         const newTimeStamp = try getFileTimeStamp(filePath);
 
-                if (self.layoutTimeStamps[i] < newTimeStamp) {
-                    const shaderOutputPath = try joinPath(alloc, self.shaderOutputPath, shader.spvFile);
+        //         if (self.layoutTimeStamps[i] < newTimeStamp) {
+        //             const shaderOutputPath = try joinPath(alloc, self.shaderOutputPath, shader.spvFile);
 
-                    compileShader(alloc, filePath, shaderOutputPath) catch |err| {
-                        std.debug.print("Tried updating Shader but compilation failed {}\n", .{err});
-                    };
+        //             compileShader(alloc, filePath, shaderOutputPath) catch |err| {
+        //                 std.debug.print("Tried updating Shader but compilation failed {}\n", .{err});
+        //             };
 
-                    alloc.free(shaderOutputPath);
-                    self.layoutTimeStamps[i] = newTimeStamp;
-                    self.layoutUpdateBools[i] = true;
-                }
-                alloc.free(filePath);
-            }
-        }
+        //             alloc.free(shaderOutputPath);
+        //             self.layoutTimeStamps[i] = newTimeStamp;
+        //             self.layoutUpdateBools[i] = true;
+        //         }
+        //         alloc.free(filePath);
+        //     }
+        // }
     }
 
     pub fn deinit(self: *ShaderCompiler) void {

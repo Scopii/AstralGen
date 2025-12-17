@@ -158,14 +158,7 @@ pub const App = struct {
 
             // Shader Hotloading
             if (config.SHADER_HOTLOAD == true) {
-                try self.shaderCompiler.checkShaderUpdate();
-
-                for (0..self.shaderCompiler.layoutUpdateBools.len) |i| {
-                    if (self.shaderCompiler.layoutUpdateBools[i] == true) {
-                        try renderer.updateShaderLayout(i);
-                        self.shaderCompiler.layoutUpdateBools[i] = false;
-                    }
-                }
+                // NEEDS - REIMPLEMENTATION
             }
 
             // Draw and reset Frame Arena
