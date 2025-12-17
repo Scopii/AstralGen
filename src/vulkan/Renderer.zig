@@ -27,6 +27,7 @@ const Pass = struct {
     renderType: config.RenderType,
     renderImg: config.RenderResource,
     shaderIds: []const u8,
+    clear: bool,
 };
 
 pub const Renderer = struct {
@@ -38,9 +39,6 @@ pub const Renderer = struct {
     swapchainMan: SwapchainManager,
     cmdMan: CmdManager,
     scheduler: Scheduler,
-    renderImages: [RENDER_IMG_MAX]?GpuImage = .{null} ** RENDER_IMG_MAX,
-    gpuObjects: GpuBuffer = undefined,
-    objectCount: u32,
     passes: std.array_list.Managed(Pass),
 
     pub fn init(memoryMan: *MemoryManager, objects: []Object) !Renderer {
@@ -53,8 +51,8 @@ pub const Renderer = struct {
         const shaderMan = try ShaderManager.init(alloc, &context, &resourceMan);
         const swapchainMan = try SwapchainManager.init(alloc, &context);
 
-        const gpuObjects = try resourceMan.createGpuBuffer(objects);
-        try resourceMan.updateObjectBufferDescriptor(gpuObjects);
+        try resourceMan.createGpuBuffer(objects);
+        try resourceMan.updateObjectBufferDescriptor();
 
         return .{
             .alloc = alloc,
@@ -65,20 +63,16 @@ pub const Renderer = struct {
             .cmdMan = cmdMan,
             .scheduler = scheduler,
             .swapchainMan = swapchainMan,
-            .gpuObjects = gpuObjects,
-            .objectCount = @intCast(objects.len),
             .passes = std.array_list.Managed(Pass).init(alloc),
         };
     }
 
     pub fn deinit(self: *Renderer) void {
         _ = vk.vkDeviceWaitIdle(self.context.gpi);
-        for (self.renderImages) |renderImg| if (renderImg != null) self.resourceMan.destroyGpuImage(renderImg.?);
         self.scheduler.deinit();
         self.cmdMan.deinit();
         self.swapchainMan.deinit();
         self.shaderMan.deinit();
-        self.resourceMan.destroyGpuBuffer(self.gpuObjects);
         self.resourceMan.deinit();
         self.context.deinit();
         self.passes.deinit();
@@ -110,7 +104,7 @@ pub const Renderer = struct {
 
         if (config.RENDER_IMG_AUTO_RESIZE == true) {
             for (0..dirtyRenderIds.len) |i| {
-                if (dirtyRenderIds[i] == true and self.renderImages[i] != null) {
+                if (dirtyRenderIds[i] == true and self.resourceMan.getRenderImg(@intCast(i)) != null) {
                     try self.updateRenderImage(@intCast(i));
                 }
             }
@@ -118,19 +112,17 @@ pub const Renderer = struct {
     }
 
     pub fn updateRenderImage(self: *Renderer, renderId: u8) !void {
-        const renderImg = self.renderImages[renderId].?;
-
         const new = self.swapchainMan.getMaxRenderExtent(renderId);
-        const old = renderImg.extent3d;
+        const old = self.resourceMan.getRenderImg(renderId).?.extent3d;
 
         if (new.height != 0 or new.width != 0) {
             if (new.width != old.width or new.height != old.height) {
-                self.resourceMan.destroyGpuImage(renderImg);
+                self.resourceMan.destroyGpuImageById(renderId);
 
                 const newExtent = vk.VkExtent3D{ .width = new.width, .height = new.height, .depth = 1 };
-                self.renderImages[renderId] = try self.resourceMan.createGpuImage(newExtent, config.RENDER_IMG_FORMAT, vk.VMA_MEMORY_USAGE_GPU_ONLY);
+                try self.resourceMan.createGpuImage(renderId, newExtent, config.RENDER_IMG_FORMAT, vk.VMA_MEMORY_USAGE_GPU_ONLY);
 
-                try self.resourceMan.updateImageDescriptor(self.renderImages[renderId].?.view, renderId);
+                try self.resourceMan.updateImageDescriptor(renderId);
                 std.debug.print("RenderImage recreated {}x{} to {}x{}\n", .{ old.width, old.height, new.width, new.height });
             }
         }
@@ -146,21 +138,22 @@ pub const Renderer = struct {
                 return error.PassInvalid;
             };
             try self.createRenderImage(passConfig.renderImg);
-            try self.passes.append(Pass{ .renderType = renderType, .renderImg = passConfig.renderImg, .shaderIds = passConfig.shaderIds });
+            try self.passes.append(.{ .renderType = renderType, .renderImg = passConfig.renderImg, .shaderIds = passConfig.shaderIds, .clear = passConfig.clear });
         }
     }
 
-    pub fn createRenderImage(self: *Renderer, renderImg: config.RenderResource) !void {
-        if (renderImg.id > RENDER_IMG_MAX - 1) {
+    pub fn createRenderImage(self: *Renderer, renderRes: config.RenderResource) !void {
+        if (renderRes.id > RENDER_IMG_MAX - 1) {
             std.debug.print("Renderer: RenderId Image ID cant be bigger than Max Windows\n", .{});
             return error.RenderImageIdOutOfBounds;
         }
 
-        if (self.renderImages[renderImg.id] == null) {
-            const gpuImg = try self.resourceMan.createGpuImage(renderImg.extent, renderImg.imgFormat, renderImg.memUsage);
-            self.renderImages[renderImg.id] = gpuImg;
-            std.debug.print("Renderer: RenderImage {} created\n", .{renderImg.id});
-            try self.resourceMan.updateImageDescriptor(gpuImg.view, renderImg.id);
+        const renderImg = self.resourceMan.getRenderImg(renderRes.id);
+
+        if (renderImg == null) {
+            try self.resourceMan.createGpuImage(renderRes.id, renderRes.extent, renderRes.imgFormat, renderRes.memUsage);
+            std.debug.print("Renderer: RenderImage {} created\n", .{renderRes.id});
+            try self.resourceMan.updateImageDescriptor(renderRes.id);
         }
     }
 
@@ -177,7 +170,7 @@ pub const Renderer = struct {
 
         const cmd = try self.cmdMan.beginRecording(frameInFlight);
         try self.recordPasses2(cmd, cam, runtimeAsFloat);
-        try CmdManager.recordSwapchainBlits(cmd, &self.renderImages, self.swapchainMan.targets.slice(), &self.swapchainMan.swapchains);
+        try CmdManager.recordSwapchainBlits(cmd, &self.resourceMan.renderImages, self.swapchainMan.targets.slice(), &self.swapchainMan.swapchains);
         try CmdManager.endRecording(cmd);
 
         const targets = self.swapchainMan.targets.slice();
@@ -195,7 +188,7 @@ pub const Renderer = struct {
                 .camPosAndFov = cam.getPosAndFov(),
                 .camDir = cam.getForward(),
                 .runtime = runtimeAsFloat,
-                .dataCount = self.objectCount,
+                .dataCount = self.resourceMan.getGpuObjects().count,
                 .renderImgIndex = renderImgId,
                 .viewProj = cam.getViewProj(),
             };
@@ -205,13 +198,13 @@ pub const Renderer = struct {
 
             try CmdManager.recordPass(
                 cmd,
-                &self.renderImages[renderImgId].?,
+                self.resourceMan.getRenderImgPtr(renderImgId),
                 validShaders,
                 pass.renderType,
                 self.shaderMan.pipeLayout,
                 self.resourceMan.imgDescBuffer.gpuAddress,
                 pushConstants,
-                false, // CLEAR???
+                pass.clear,
             );
         }
     }

@@ -5,6 +5,8 @@ const Allocator = std.mem.Allocator;
 const Context = @import("Context.zig").Context;
 const VkAllocator = @import("vma.zig").VkAllocator;
 const check = @import("error.zig").check;
+const config = @import("../config.zig");
+const RENDER_IMG_MAX = config.RENDER_IMG_MAX;
 
 pub const GpuImage = struct {
     allocation: vk.VmaAllocation,
@@ -21,6 +23,7 @@ pub const GpuBuffer = struct {
     buffer: vk.VkBuffer,
     gpuAddress: deviceAddress,
     size: vk.VkDeviceSize,
+    count: u32 = 0,
 };
 
 pub const ResourceManager = struct {
@@ -28,6 +31,9 @@ pub const ResourceManager = struct {
     gpuAlloc: VkAllocator,
     gpi: vk.VkDevice,
     gpu: vk.VkPhysicalDevice,
+
+    renderImages: [RENDER_IMG_MAX]?GpuImage = .{null} ** RENDER_IMG_MAX,
+    gpuObjects: GpuBuffer = undefined,
 
     descLayout: vk.VkDescriptorSetLayout,
     imgDescBuffer: GpuBuffer,
@@ -70,12 +76,26 @@ pub const ResourceManager = struct {
     }
 
     pub fn deinit(self: *ResourceManager) void {
+        self.destroyGpuBuffer(self.gpuObjects);
+        for (self.renderImages) |renderImg| if (renderImg != null) self.destroyGpuImageNoId(renderImg.?);
         vk.vmaDestroyBuffer(self.gpuAlloc.handle, self.imgDescBuffer.buffer, self.imgDescBuffer.allocation);
         vk.vkDestroyDescriptorSetLayout(self.gpi, self.descLayout, null);
         self.gpuAlloc.deinit();
     }
 
-    pub fn createGpuImage(self: *const ResourceManager, extent: vk.VkExtent3D, format: vk.VkFormat, usage: vk.VmaMemoryUsage) !GpuImage {
+    pub fn getRenderImg(self: *ResourceManager, renderId: u8) ?GpuImage {
+        return self.renderImages[renderId];
+    }
+
+    pub fn getGpuObjects(self: *ResourceManager) GpuBuffer {
+        return self.gpuObjects;
+    }
+
+    pub fn getRenderImgPtr(self: *ResourceManager, renderId: u8) *GpuImage {
+        return &self.renderImages[renderId].?;
+    }
+
+    pub fn createGpuImage(self: *ResourceManager, renderId: u8, extent: vk.VkExtent3D, format: vk.VkFormat, usage: vk.VmaMemoryUsage) !void {
         // Extending Flags as Parameters later
         const drawImgUsages = vk.VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
             vk.VK_IMAGE_USAGE_TRANSFER_DST_BIT |
@@ -93,16 +113,12 @@ pub const ResourceManager = struct {
         const renderViewInf = createAllocatedImageViewInf(format, img, vk.VK_IMAGE_ASPECT_COLOR_BIT);
         try check(vk.vkCreateImageView(self.gpi, &renderViewInf, null, &view), "Could not create Render Image View");
 
-        return .{
-            .allocation = allocation,
-            .img = img,
-            .view = view,
-            .extent3d = extent,
-            .format = format,
-        };
+        self.renderImages[renderId] = GpuImage{ .allocation = allocation, .img = img, .view = view, .extent3d = extent, .format = format };
     }
 
-    pub fn updateImageDescriptor(self: *ResourceManager, imgView: vk.VkImageView, index: u32) !void {
+    pub fn updateImageDescriptor(self: *ResourceManager, index: u32) !void {
+        const imgView = self.renderImages[index].?.view;
+
         // 1. Get the Base Offset for Binding 0 (The Image Array)
         var bindingBaseOffset: vk.VkDeviceSize = 0;
         vkFn.vkGetDescriptorSetLayoutBindingOffsetEXT.?(self.gpi, self.descLayout, 0, &bindingBaseOffset);
@@ -137,10 +153,10 @@ pub const ResourceManager = struct {
 
     const Object = @import("../ecs/EntityManager.zig").Object;
 
-    pub fn createGpuBuffer(self: *const ResourceManager, objects: []Object) !GpuBuffer {
+    pub fn createGpuBuffer(self: *ResourceManager, objects: []Object) !void {
         const bufferSize = objects.len * @sizeOf(Object);
 
-        const buffer = try createDefinedBuffer(self.gpuAlloc.handle, self.gpi, bufferSize, null, .testBuffer);
+        var buffer = try createDefinedBuffer(self.gpuAlloc.handle, self.gpi, bufferSize, null, .testBuffer);
         var allocVmaInf: vk.VmaAllocationInfo = undefined;
         vk.vmaGetAllocationInfo(self.gpuAlloc.handle, buffer.allocation, &allocVmaInf);
 
@@ -153,10 +169,12 @@ pub const ResourceManager = struct {
         const dataPtr: [*]Object = @ptrCast(@alignCast(allocVmaInf.pMappedData));
         @memcpy(dataPtr[0..objects.len], objects);
 
-        return buffer;
+        buffer.count = @intCast(objects.len);
+        self.gpuObjects = buffer;
     }
 
-    pub fn updateObjectBufferDescriptor(self: *ResourceManager, buffer: GpuBuffer) !void {
+    pub fn updateObjectBufferDescriptor(self: *ResourceManager) !void {
+        const buffer = self.gpuObjects;
         // 1. Get the offset where Binding 1 lives in the descriptor buffer
         var offset: vk.VkDeviceSize = 0;
         vkFn.vkGetDescriptorSetLayoutBindingOffsetEXT.?(self.gpi, self.descLayout, 1, &offset);
@@ -206,7 +224,13 @@ pub const ResourceManager = struct {
         vk.vmaDestroyBuffer(self.gpuAlloc.handle, bufRef.buffer, bufRef.allocation);
     }
 
-    pub fn destroyGpuImage(self: *const ResourceManager, gpuImg: GpuImage) void {
+    pub fn destroyGpuImageById(self: *const ResourceManager, renderId: u8) void {
+        const gpuImg = self.renderImages[renderId].?;
+        vk.vkDestroyImageView(self.gpi, gpuImg.view, null);
+        vk.vmaDestroyImage(self.gpuAlloc.handle, gpuImg.img, gpuImg.allocation);
+    }
+
+    pub fn destroyGpuImageNoId(self: *const ResourceManager, gpuImg: GpuImage) void {
         vk.vkDestroyImageView(self.gpi, gpuImg.view, null);
         vk.vmaDestroyImage(self.gpuAlloc.handle, gpuImg.img, gpuImg.allocation);
     }
