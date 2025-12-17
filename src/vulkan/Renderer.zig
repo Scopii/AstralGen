@@ -1,5 +1,5 @@
 const std = @import("std");
-const c = @import("c");
+const vk = @import("vk").vk;
 const config = @import("../config.zig");
 const Context = @import("Context.zig").Context;
 const Camera = @import("../core/Camera.zig").Camera;
@@ -72,7 +72,7 @@ pub const Renderer = struct {
     }
 
     pub fn deinit(self: *Renderer) void {
-        _ = c.vkDeviceWaitIdle(self.context.gpi);
+        _ = vk.vkDeviceWaitIdle(self.context.gpi);
         for (self.renderImages) |renderImg| if (renderImg != null) self.resourceMan.destroyGpuImage(renderImg.?);
         self.scheduler.deinit();
         self.cmdMan.deinit();
@@ -88,7 +88,7 @@ pub const Renderer = struct {
         // Handle window state changes...
         for (winPtrs) |winPtr| {
             if (winPtr.state == .needDelete or winPtr.state == .needUpdate) {
-                _ = c.vkDeviceWaitIdle(self.context.gpi);
+                _ = vk.vkDeviceWaitIdle(self.context.gpi);
                 break;
             }
         }
@@ -127,8 +127,8 @@ pub const Renderer = struct {
             if (new.width != old.width or new.height != old.height) {
                 self.resourceMan.destroyGpuImage(renderImg);
 
-                const newExtent = c.VkExtent3D{ .width = new.width, .height = new.height, .depth = 1 };
-                self.renderImages[renderId] = try self.resourceMan.createGpuImage(newExtent, config.RENDER_IMG_FORMAT, c.VMA_MEMORY_USAGE_GPU_ONLY);
+                const newExtent = vk.VkExtent3D{ .width = new.width, .height = new.height, .depth = 1 };
+                self.renderImages[renderId] = try self.resourceMan.createGpuImage(newExtent, config.RENDER_IMG_FORMAT, vk.VMA_MEMORY_USAGE_GPU_ONLY);
 
                 try self.resourceMan.updateImageDescriptor(self.renderImages[renderId].?.view, renderId);
                 std.debug.print("RenderImage recreated {}x{} to {}x{}\n", .{ old.width, old.height, new.width, new.height });
@@ -165,7 +165,7 @@ pub const Renderer = struct {
     }
 
     pub fn updateShaderLayout(self: *Renderer, index: usize) !void {
-        _ = c.vkDeviceWaitIdle(self.context.gpi);
+        _ = vk.vkDeviceWaitIdle(self.context.gpi);
         try self.shaderMan.updateShaderLayout(index);
     }
 
@@ -187,7 +187,7 @@ pub const Renderer = struct {
         self.scheduler.nextFrame();
     }
 
-    fn recordPasses2(self: *Renderer, cmd: c.VkCommandBuffer, cam: *Camera, runtimeAsFloat: f32) !void {
+    fn recordPasses2(self: *Renderer, cmd: vk.VkCommandBuffer, cam: *Camera, runtimeAsFloat: f32) !void {
         for (self.passes.items) |pass| {
             const renderImgId = pass.renderImg.id;
 
@@ -220,24 +220,24 @@ pub const Renderer = struct {
         try self.shaderMan.createShaders(loadedShaders);
     }
 
-    fn queueSubmit(self: *Renderer, cmd: c.VkCommandBuffer, submitIds: []const u32, frameInFlight: u8) !void {
-        var waitInfos: [config.MAX_WINDOWS]c.VkSemaphoreSubmitInfo = undefined;
+    fn queueSubmit(self: *Renderer, cmd: vk.VkCommandBuffer, submitIds: []const u32, frameInFlight: u8) !void {
+        var waitInfos: [config.MAX_WINDOWS]vk.VkSemaphoreSubmitInfo = undefined;
         for (submitIds, 0..) |id, i| {
             const swapchain = self.swapchainMan.swapchains.getAtIndex(id);
-            waitInfos[i] = createSemaphoreSubmitInfo(swapchain.imgRdySems[frameInFlight], c.VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, 0);
+            waitInfos[i] = createSemaphoreSubmitInfo(swapchain.imgRdySems[frameInFlight], vk.VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, 0);
         }
 
-        var signalInfos: [config.MAX_WINDOWS + 1]c.VkSemaphoreSubmitInfo = undefined;
+        var signalInfos: [config.MAX_WINDOWS + 1]vk.VkSemaphoreSubmitInfo = undefined;
         for (submitIds, 0..) |id, i| {
             const swapchain = self.swapchainMan.swapchains.getAtIndex(id);
-            signalInfos[i] = createSemaphoreSubmitInfo(swapchain.renderDoneSems[swapchain.curIndex], c.VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, 0);
+            signalInfos[i] = createSemaphoreSubmitInfo(swapchain.renderDoneSems[swapchain.curIndex], vk.VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, 0);
         }
         // Signal CPU Timeline
-        signalInfos[submitIds.len] = createSemaphoreSubmitInfo(self.scheduler.cpuSyncTimeline, c.VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, self.scheduler.totalFrames + 1);
+        signalInfos[submitIds.len] = createSemaphoreSubmitInfo(self.scheduler.cpuSyncTimeline, vk.VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, self.scheduler.totalFrames + 1);
 
-        const cmdSubmitInf = c.VkCommandBufferSubmitInfo{ .sType = c.VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO, .commandBuffer = cmd };
-        const submitInf = c.VkSubmitInfo2{
-            .sType = c.VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
+        const cmdSubmitInf = vk.VkCommandBufferSubmitInfo{ .sType = vk.VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO, .commandBuffer = cmd };
+        const submitInf = vk.VkSubmitInfo2{
+            .sType = vk.VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
             .waitSemaphoreInfoCount = @intCast(submitIds.len),
             .pWaitSemaphoreInfos = &waitInfos,
             .commandBufferInfoCount = 1,
@@ -245,12 +245,12 @@ pub const Renderer = struct {
             .signalSemaphoreInfoCount = @intCast(submitIds.len + 1), // Swapchains + 1 Timeline
             .pSignalSemaphoreInfos = &signalInfos,
         };
-        try check(c.vkQueueSubmit2(self.context.graphicsQ, 1, &submitInf, null), "Failed main submission");
+        try check(vk.vkQueueSubmit2(self.context.graphicsQ, 1, &submitInf, null), "Failed main submission");
     }
 };
 
-fn createSemaphoreSubmitInfo(semaphore: c.VkSemaphore, stageMask: u64, value: u64) c.VkSemaphoreSubmitInfo {
-    return .{ .sType = c.VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO, .semaphore = semaphore, .stageMask = stageMask, .value = value };
+fn createSemaphoreSubmitInfo(semaphore: vk.VkSemaphore, stageMask: u64, value: u64) vk.VkSemaphoreSubmitInfo {
+    return .{ .sType = vk.VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO, .semaphore = semaphore, .stageMask = stageMask, .value = value };
 }
 
 fn checkShaderLayout(shaders: []const ShaderObject) !config.RenderType {

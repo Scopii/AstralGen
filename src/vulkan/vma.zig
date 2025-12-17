@@ -1,29 +1,29 @@
-const c = @import("c");
+const vk = @import("vk").vk;
 const check = @import("error.zig").check;
 
 pub const VkAllocator = struct {
-    handle: c.VmaAllocator,
+    handle: vk.VmaAllocator,
 
-    pub fn init(instance: c.VkInstance, gpi: c.VkDevice, gpu: c.VkPhysicalDevice) !VkAllocator {
-        const vulkanFunctions = c.VmaVulkanFunctions{
-            .vkGetInstanceProcAddr = c.vkGetInstanceProcAddr,
-            .vkGetDeviceProcAddr = c.vkGetDeviceProcAddr,
+    pub fn init(instance: vk.VkInstance, gpi: vk.VkDevice, gpu: vk.VkPhysicalDevice) !VkAllocator {
+        const vulkanFunctions = vk.VmaVulkanFunctions{
+            .vkGetInstanceProcAddr = vk.vkGetInstanceProcAddr,
+            .vkGetDeviceProcAddr = vk.vkGetDeviceProcAddr,
         };
 
-        const createInf = c.VmaAllocatorCreateInfo{
+        const createInf = vk.VmaAllocatorCreateInfo{
             .physicalDevice = gpu,
             .device = gpi,
             .instance = instance,
-            .flags = c.VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT,
+            .flags = vk.VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT,
             .pVulkanFunctions = &vulkanFunctions, // Passing the Function Pointers
         };
 
-        var vmaAlloc: c.VmaAllocator = undefined;
-        try check(c.vmaCreateAllocator(&createInf, &vmaAlloc), "Failed to create VMA allocator");
+        var vmaAlloc: vk.VmaAllocator = undefined;
+        try check(vk.vmaCreateAllocator(&createInf, &vmaAlloc), "Failed to create VMA allocator");
         return VkAllocator{ .handle = vmaAlloc };
     }
 
     pub fn deinit(self: *VkAllocator) void {
-        c.vmaDestroyAllocator(self.handle);
+        vk.vmaDestroyAllocator(self.handle);
     }
 };

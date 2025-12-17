@@ -1,5 +1,5 @@
 const std = @import("std");
-const c = @import("c");
+const vk = @import("vk").vk;
 const Allocator = std.mem.Allocator;
 const config = @import("../config.zig");
 const Context = @import("Context.zig").Context;
@@ -25,14 +25,14 @@ pub const PushConstants = extern struct {
 
 pub const ShaderManager = struct {
     alloc: Allocator,
-    descLayout: c.VkDescriptorSetLayout,
-    pipeLayout: c.VkPipelineLayout,
-    gpi: c.VkDevice,
+    descLayout: vk.VkDescriptorSetLayout,
+    pipeLayout: vk.VkPipelineLayout,
+    gpi: vk.VkDevice,
     shaders: CreateMapArray(ShaderObject, config.SHADER_MAX, u32, config.SHADER_MAX, 0) = .{},
 
     pub fn init(alloc: Allocator, context: *const Context, resourceManager: *const ResourceManager) !ShaderManager {
         const gpi = context.gpi;
-        const pipeLayout = try createPipelineLayout(gpi, resourceManager.descLayout, c.VK_SHADER_STAGE_ALL, @sizeOf(PushConstants));
+        const pipeLayout = try createPipelineLayout(gpi, resourceManager.descLayout, vk.VK_SHADER_STAGE_ALL, @sizeOf(PushConstants));
 
         return .{
             .alloc = alloc,
@@ -62,20 +62,20 @@ pub const ShaderManager = struct {
         for (self.shaders.getElements()) |*shader| {
             shader.deinit(self.gpi);
         }
-        c.vkDestroyPipelineLayout(gpi, self.pipeLayout, null);
+        vk.vkDestroyPipelineLayout(gpi, self.pipeLayout, null);
     }
 };
 
-fn createPipelineLayout(gpi: c.VkDevice, descLayout: c.VkDescriptorSetLayout, stageFlags: c.VkShaderStageFlags, size: u32) !c.VkPipelineLayout {
-    const pcRange = c.VkPushConstantRange{ .stageFlags = stageFlags, .offset = 0, .size = size };
-    const pipeLayoutInf = c.VkPipelineLayoutCreateInfo{
-        .sType = c.VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+fn createPipelineLayout(gpi: vk.VkDevice, descLayout: vk.VkDescriptorSetLayout, stageFlags: vk.VkShaderStageFlags, size: u32) !vk.VkPipelineLayout {
+    const pcRange = vk.VkPushConstantRange{ .stageFlags = stageFlags, .offset = 0, .size = size };
+    const pipeLayoutInf = vk.VkPipelineLayoutCreateInfo{
+        .sType = vk.VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
         .setLayoutCount = if (descLayout != null) 1 else 0,
         .pSetLayouts = if (descLayout != null) &descLayout else null,
         .pushConstantRangeCount = if (size > 0) 1 else 0,
         .pPushConstantRanges = if (size > 0) &pcRange else null,
     };
-    var layout: c.VkPipelineLayout = undefined;
-    try check(c.vkCreatePipelineLayout(gpi, &pipeLayoutInf, null, &layout), "Failed to create pipeline layout");
+    var layout: vk.VkPipelineLayout = undefined;
+    try check(vk.vkCreatePipelineLayout(gpi, &pipeLayoutInf, null, &layout), "Failed to create pipeline layout");
     return layout;
 }

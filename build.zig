@@ -5,10 +5,15 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const c_module = b.addModule("c", .{
-        .root_source_file = b.path("src/c.zig"),
+    const sdl_module = b.addModule("sdl", .{
+        .root_source_file = b.path("src/modules/sdl.zig"),
     });
-    c_module.addIncludePath(b.path("include"));
+    sdl_module.addIncludePath(b.path("include"));
+
+    const vk_module = b.addModule("vk", .{
+        .root_source_file = b.path("src/modules/vk.zig"),
+    });
+    vk_module.addIncludePath(b.path("include"));
 
     const exe = b.addExecutable(.{
         .name = "AstralGen",
@@ -18,7 +23,8 @@ pub fn build(b: *std.Build) void {
         .link_libc = true,
     });
 
-    exe.root_module.addImport("c", c_module);
+    exe.root_module.addImport("sdl", sdl_module);
+    exe.root_module.addImport("vk", vk_module);
 
     // Vulkan setup
     const vulkan_zig_dep = b.dependency("vulkan_zig", .{
@@ -26,20 +32,17 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
-    exe.root_module.addImport("vulkan", vulkan_zig_dep.module("vulkan-zig"));
+    exe.root_module.addImport("vulkan-zig", vulkan_zig_dep.module("vulkan-zig"));
 
     // Windows Exe Metadata
     exe.addObjectFile(b.path("AstralGen.res"));
 
     exe.addCSourceFile(.{
         .file = b.path("src/vulkan/vmaLink.cpp"),
-        .flags = &.{"-std=c++17"}, // VMA usually requires C++17 or newer features enabled
+        .flags = &.{"-std=c++17"},
     });
 
     exe.addIncludePath(b.path("include"));
-
-    // Compile VMA's implementation by treating its header as a C source file.
-    // exe.addCSourceFile(.{ .file = b.path("src/vulkan/vmaLink.cpp") });
     exe.linkLibCpp();
 
     exe.addLibraryPath(b.path("libs/SDL3"));

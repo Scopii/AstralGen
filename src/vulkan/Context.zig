@@ -1,5 +1,7 @@
 const std = @import("std");
-const c = @import("c");
+const vk = @import("vk").vk;
+const vkFn = @import("vk").vkFn;
+const sdl = @import("sdl").c;
 const Allocator = std.mem.Allocator;
 const check = @import("error.zig").check;
 const config = @import("../config.zig");
@@ -11,22 +13,22 @@ pub const QueueFamilies = struct {
 
 pub const Context = struct {
     alloc: Allocator,
-    instance: c.VkInstance,
-    gpu: c.VkPhysicalDevice,
+    instance: vk.VkInstance,
+    gpu: vk.VkPhysicalDevice,
     families: QueueFamilies,
-    gpi: c.VkDevice,
-    graphicsQ: c.VkQueue,
-    presentQ: c.VkQueue,
+    gpi: vk.VkDevice,
+    graphicsQ: vk.VkQueue,
+    presentQ: vk.VkQueue,
 
-    pub fn init(alloc: Allocator, instance: c.VkInstance) !Context {
+    pub fn init(alloc: Allocator, instance: vk.VkInstance) !Context {
         const gpu = try pickGPU(alloc, instance);
         const families = try checkGPUfamilies(alloc, gpu);
         const gpi = try createGPI(alloc, gpu, families);
 
-        var graphicsQ: c.VkQueue = undefined;
-        c.vkGetDeviceQueue(gpi, families.graphics, 0, &graphicsQ);
-        var presentQ: c.VkQueue = undefined;
-        c.vkGetDeviceQueue(gpi, families.present, 0, &presentQ);
+        var graphicsQ: vk.VkQueue = undefined;
+        vk.vkGetDeviceQueue(gpi, families.graphics, 0, &graphicsQ);
+        var presentQ: vk.VkQueue = undefined;
+        vk.vkGetDeviceQueue(gpi, families.present, 0, &presentQ);
 
         return .{
             .alloc = alloc,
@@ -40,30 +42,30 @@ pub const Context = struct {
     }
 
     pub fn deinit(self: *const Context) void {
-        c.vkDestroyDevice(self.gpi, null);
-        c.vkDestroyInstance(self.instance, null);
+        vk.vkDestroyDevice(self.gpi, null);
+        vk.vkDestroyInstance(self.instance, null);
     }
 
-    fn pickPresentMode(self: *const Context) !c.VkPresentModeKHR {
+    fn pickPresentMode(self: *const Context) !vk.VkPresentModeKHR {
         const gpu = self.gpu;
         const surface = self.surface;
 
         var modeCount: u32 = 0;
-        try check(c.vkGetPhysicalDeviceSurfacePresentModesKHR(gpu, surface, &modeCount, null), "Failed to get present mode count");
-        if (modeCount == 0) return c.VK_PRESENT_MODE_FIFO_KHR; // FIFO is always supported
+        try check(vk.vkGetPhysicalDeviceSurfacePresentModesKHR(gpu, surface, &modeCount, null), "Failed to get present mode count");
+        if (modeCount == 0) return vk.VK_PRESENT_MODE_FIFO_KHR; // FIFO is always supported
 
-        const modes = try self.alloc.alloc(c.VkPresentModeKHR, modeCount);
+        const modes = try self.alloc.alloc(vk.VkPresentModeKHR, modeCount);
         defer self.alloc.free(modes);
 
-        try check(c.vkGetPhysicalDeviceSurfacePresentModesKHR(gpu, surface, &modeCount, modes.ptr), "Failed to get present modes");
+        try check(vk.vkGetPhysicalDeviceSurfacePresentModesKHR(gpu, surface, &modeCount, modes.ptr), "Failed to get present modes");
         // Prefer mailbox (triple buffering), then immediate, fallback to FIFO
-        for (modes) |mode| if (mode == c.VK_PRESENT_MODE_MAILBOX_KHR) return mode;
-        for (modes) |mode| if (mode == c.VK_PRESENT_MODE_IMMEDIATE_KHR) return mode;
-        return c.VK_PRESENT_MODE_FIFO_KHR;
+        for (modes) |mode| if (mode == vk.VK_PRESENT_MODE_MAILBOX_KHR) return mode;
+        for (modes) |mode| if (mode == vk.VK_PRESENT_MODE_IMMEDIATE_KHR) return mode;
+        return vk.VK_PRESENT_MODE_FIFO_KHR;
     }
 };
 
-pub fn createInstance(alloc: Allocator) !c.VkInstance {
+pub fn createInstance(alloc: Allocator) !vk.VkInstance {
     var extensions = std.ArrayList([*c]const u8).init(alloc);
     defer extensions.deinit();
     var layers = std.ArrayList([*c]const u8).init(alloc);
@@ -71,7 +73,7 @@ pub fn createInstance(alloc: Allocator) !c.VkInstance {
 
     // get required extensions
     var extCount: u32 = 0;
-    const reqExtensions = c.SDL_Vulkan_GetInstanceExtensions(&extCount);
+    const reqExtensions = sdl.SDL_Vulkan_GetInstanceExtensions(&extCount);
     for (0..extCount) |i| try extensions.append(reqExtensions[i]);
 
     if (config.DEBUG_MODE) {
@@ -81,21 +83,21 @@ pub fn createInstance(alloc: Allocator) !c.VkInstance {
     }
 
     var extraValidationFeatures = switch (config.BEST_PRACTICES) {
-        true => if (config.EXTRA_VALIDATION == true) [_]c.VkValidationFeatureEnableEXT{
-            c.VK_VALIDATION_FEATURE_ENABLE_BEST_PRACTICES_EXT,
-            c.VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT,
-            c.VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_RESERVE_BINDING_SLOT_EXT,
-            c.VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT,
-        } else [_]c.VkValidationFeatureEnableEXT{c.VK_VALIDATION_FEATURE_ENABLE_BEST_PRACTICES_EXT},
-        false => [_]c.VkValidationFeatureEnableEXT{
-            c.VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT,
-            c.VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_RESERVE_BINDING_SLOT_EXT,
-            c.VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT,
+        true => if (config.EXTRA_VALIDATION == true) [_]vk.VkValidationFeatureEnableEXT{
+            vk.VK_VALIDATION_FEATURE_ENABLE_BEST_PRACTICES_EXT,
+            vk.VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT,
+            vk.VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_RESERVE_BINDING_SLOT_EXT,
+            vk.VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT,
+        } else [_]vk.VkValidationFeatureEnableEXT{vk.VK_VALIDATION_FEATURE_ENABLE_BEST_PRACTICES_EXT},
+        false => [_]vk.VkValidationFeatureEnableEXT{
+            vk.VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT,
+            vk.VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_RESERVE_BINDING_SLOT_EXT,
+            vk.VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT,
         },
     };
 
-    var extraValidationExtensions = c.VkValidationFeaturesEXT{
-        .sType = c.VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT,
+    var extraValidationExtensions = vk.VkValidationFeaturesEXT{
+        .sType = vk.VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT,
         .pNext = null,
         .enabledValidationFeatureCount = extraValidationFeatures.len,
         .pEnabledValidationFeatures = &extraValidationFeatures,
@@ -105,18 +107,18 @@ pub fn createInstance(alloc: Allocator) !c.VkInstance {
 
     std.debug.print("Instance Extensions {}\n", .{extensions.items.len});
 
-    const appInf = c.VkApplicationInfo{
-        .sType = c.VK_STRUCTURE_TYPE_APPLICATION_INFO,
+    const appInf = vk.VkApplicationInfo{
+        .sType = vk.VK_STRUCTURE_TYPE_APPLICATION_INFO,
         .pNext = null,
         .pApplicationName = "AstralGen",
-        .applicationVersion = c.VK_MAKE_VERSION(1, 0, 0),
+        .applicationVersion = vk.VK_MAKE_VERSION(1, 0, 0),
         .pEngineName = "AstralEngine",
-        .engineVersion = c.VK_MAKE_VERSION(1, 0, 0),
-        .apiVersion = c.VK_API_VERSION_1_3,
+        .engineVersion = vk.VK_MAKE_VERSION(1, 0, 0),
+        .apiVersion = vk.VK_API_VERSION_1_3,
     };
 
-    const instanceInf = c.VkInstanceCreateInfo{
-        .sType = c.VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
+    const instanceInf = vk.VkInstanceCreateInfo{
+        .sType = vk.VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
         .pNext = if (config.EXTRA_VALIDATION or config.BEST_PRACTICES) @ptrCast(&extraValidationExtensions) else null,
         .flags = 0,
         .pApplicationInfo = &appInf,
@@ -126,23 +128,23 @@ pub fn createInstance(alloc: Allocator) !c.VkInstance {
         .ppEnabledExtensionNames = extensions.items.ptr,
     };
 
-    var instance: c.VkInstance = undefined;
-    try check(c.vkCreateInstance(&instanceInf, null, &instance), "Unable to create Vulkan instance!");
+    var instance: vk.VkInstance = undefined;
+    try check(vk.vkCreateInstance(&instanceInf, null, &instance), "Unable to create Vulkan instance!");
     return instance;
 }
 
 // DEVICE //
 
-fn pickGPU(alloc: Allocator, instance: c.VkInstance) !c.VkPhysicalDevice {
+fn pickGPU(alloc: Allocator, instance: vk.VkInstance) !vk.VkPhysicalDevice {
     var gpuCount: u32 = 0;
-    try check(c.vkEnumeratePhysicalDevices(instance, &gpuCount, null), "Failed to enumerate GPUs");
+    try check(vk.vkEnumeratePhysicalDevices(instance, &gpuCount, null), "Failed to enumerate GPUs");
     if (gpuCount == 0) return error.NoDevice;
 
-    const gpus = try alloc.alloc(c.VkPhysicalDevice, gpuCount);
+    const gpus = try alloc.alloc(vk.VkPhysicalDevice, gpuCount);
     defer alloc.free(gpus);
-    try check(c.vkEnumeratePhysicalDevices(instance, &gpuCount, gpus.ptr), "Failed to get GPUs");
+    try check(vk.vkEnumeratePhysicalDevices(instance, &gpuCount, gpus.ptr), "Failed to get GPUs");
 
-    var chosen: ?c.VkPhysicalDevice = null;
+    var chosen: ?vk.VkPhysicalDevice = null;
     for (gpus) |gpu| {
         if (checkGPU(gpu) and try checkGPUfeatures(alloc, gpu)) {
             chosen = gpu;
@@ -156,27 +158,27 @@ fn pickGPU(alloc: Allocator, instance: c.VkInstance) !c.VkPhysicalDevice {
     return chosen.?;
 }
 
-pub fn checkGPU(gpu: c.VkPhysicalDevice) bool {
-    var properties: c.VkPhysicalDeviceProperties = undefined;
-    c.vkGetPhysicalDeviceProperties(gpu, &properties);
-    var features: c.VkPhysicalDeviceFeatures = undefined;
-    c.vkGetPhysicalDeviceFeatures(gpu, &features);
+pub fn checkGPU(gpu: vk.VkPhysicalDevice) bool {
+    var properties: vk.VkPhysicalDeviceProperties = undefined;
+    vk.vkGetPhysicalDeviceProperties(gpu, &properties);
+    var features: vk.VkPhysicalDeviceFeatures = undefined;
+    vk.vkGetPhysicalDeviceFeatures(gpu, &features);
 
     std.debug.print("Testing: {s}\n", .{properties.deviceName});
-    if (properties.deviceType != c.VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) {
+    if (properties.deviceType != vk.VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) {
         std.debug.print("Device not discrete GPU\n", .{});
         return false;
     }
     return true;
 }
 
-fn checkGPUfeatures(alloc: Allocator, gpu: c.VkPhysicalDevice) !bool {
+fn checkGPUfeatures(alloc: Allocator, gpu: vk.VkPhysicalDevice) !bool {
     var extensions: u32 = 0;
-    try check(c.vkEnumerateDeviceExtensionProperties(gpu, null, &extensions, null), "Failed to enumerate device extensions");
+    try check(vk.vkEnumerateDeviceExtensionProperties(gpu, null, &extensions, null), "Failed to enumerate device extensions");
 
-    const supported = try alloc.alloc(c.VkExtensionProperties, extensions);
+    const supported = try alloc.alloc(vk.VkExtensionProperties, extensions);
     defer alloc.free(supported);
-    try check(c.vkEnumerateDeviceExtensionProperties(gpu, null, &extensions, supported.ptr), "Failed to get device extensions");
+    try check(vk.vkEnumerateDeviceExtensionProperties(gpu, null, &extensions, supported.ptr), "Failed to get device extensions");
 
     const required = [_][]const u8{"VK_KHR_swapchain"};
     var matched: u32 = 0;
@@ -195,35 +197,35 @@ fn checkGPUfeatures(alloc: Allocator, gpu: c.VkPhysicalDevice) !bool {
     return matched == required.len;
 }
 
-fn findFamily(families: []const c.VkQueueFamilyProperties) ?u32 {
+fn findFamily(families: []const vk.VkQueueFamilyProperties) ?u32 {
     for (families, 0..) |family, i| {
-        if (family.queueCount > 0 and (family.queueFlags & c.VK_QUEUE_GRAPHICS_BIT != 0) and (family.queueFlags & c.VK_QUEUE_COMPUTE_BIT != 0)) return @intCast(i);
+        if (family.queueCount > 0 and (family.queueFlags & vk.VK_QUEUE_GRAPHICS_BIT != 0) and (family.queueFlags & vk.VK_QUEUE_COMPUTE_BIT != 0)) return @intCast(i);
     }
     return null;
 }
 
 // Not in use because using the same Family because most Graphics Queues support Presentation and this avoids creating a Surface for setup
-fn findPresentFamily(families: []const c.VkQueueFamilyProperties, gpu: c.VkPhysicalDevice) !?u32 {
+fn findPresentFamily(families: []const vk.VkQueueFamilyProperties, gpu: vk.VkPhysicalDevice) !?u32 {
     for (families, 0..) |family, i| {
-        var presentSupport: c.VkBool32 = c.VK_FALSE;
-        try check(c.vkGetPhysicalDeviceSurfaceSupportKHR(gpu, @intCast(i), null, &presentSupport), "Failed to get present support");
-        if (presentSupport == c.VK_TRUE and family.queueCount != 0) return @intCast(i);
+        var presentSupport: vk.VkBool32 = vk.VK_FALSE;
+        try check(vk.vkGetPhysicalDeviceSurfaceSupportKHR(gpu, @intCast(i), null, &presentSupport), "Failed to get present support");
+        if (presentSupport == vk.VK_TRUE and family.queueCount != 0) return @intCast(i);
     }
     return null;
 }
 
-fn checkGPUfamilies(alloc: Allocator, gpu: c.VkPhysicalDevice) !QueueFamilies {
+fn checkGPUfamilies(alloc: Allocator, gpu: vk.VkPhysicalDevice) !QueueFamilies {
     var familyCount: u32 = 0;
-    c.vkGetPhysicalDeviceQueueFamilyProperties(gpu, &familyCount, null);
+    vk.vkGetPhysicalDeviceQueueFamilyProperties(gpu, &familyCount, null);
 
-    const families = try alloc.alloc(c.VkQueueFamilyProperties, familyCount);
+    const families = try alloc.alloc(vk.VkQueueFamilyProperties, familyCount);
     defer alloc.free(families);
-    c.vkGetPhysicalDeviceQueueFamilyProperties(gpu, &familyCount, families.ptr);
+    vk.vkGetPhysicalDeviceQueueFamilyProperties(gpu, &familyCount, families.ptr);
 
     for (families, 0..) |family, i| {
-        const hasGraphics = (family.queueFlags & c.VK_QUEUE_GRAPHICS_BIT) != 0;
-        //var hasPresent: c.VkBool32 = c.VK_FALSE;
-        //c.vkGetPhysicalDeviceSurfaceSupportKHR(gpu, @intCast(i), surface, &hasPresent);
+        const hasGraphics = (family.queueFlags & vk.VK_QUEUE_GRAPHICS_BIT) != 0;
+        //var hasPresent: vk.VkBool32 = vk.VK_FALSE;
+        //vk.vkGetPhysicalDeviceSurfaceSupportKHR(gpu, @intCast(i), surface, &hasPresent);
         if (hasGraphics == true) {
             return QueueFamilies{ .graphics = @intCast(i), .present = @intCast(i) };
         }
@@ -231,13 +233,13 @@ fn checkGPUfamilies(alloc: Allocator, gpu: c.VkPhysicalDevice) !QueueFamilies {
     return error.NoSuitableQueueFamily;
 }
 
-fn createGPI(alloc: Allocator, gpu: c.VkPhysicalDevice, families: QueueFamilies) !c.VkDevice {
+fn createGPI(alloc: Allocator, gpu: vk.VkPhysicalDevice, families: QueueFamilies) !vk.VkDevice {
     var priority: f32 = 1.0;
-    var queueInfos = std.ArrayList(c.VkDeviceQueueCreateInfo).init(alloc);
+    var queueInfos = std.ArrayList(vk.VkDeviceQueueCreateInfo).init(alloc);
     defer queueInfos.deinit();
 
-    const graphicsInf = c.VkDeviceQueueCreateInfo{
-        .sType = c.VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
+    const graphicsInf = vk.VkDeviceQueueCreateInfo{
+        .sType = vk.VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
         .queueFamilyIndex = families.graphics,
         .queueCount = 1,
         .pQueuePriorities = &priority,
@@ -245,8 +247,8 @@ fn createGPI(alloc: Allocator, gpu: c.VkPhysicalDevice, families: QueueFamilies)
     try queueInfos.append(graphicsInf);
 
     if (families.graphics != families.present) {
-        const presentInf = c.VkDeviceQueueCreateInfo{
-            .sType = c.VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
+        const presentInf = vk.VkDeviceQueueCreateInfo{
+            .sType = vk.VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
             .queueFamilyIndex = families.present,
             .queueCount = 1,
             .pQueuePriorities = &priority,
@@ -254,74 +256,74 @@ fn createGPI(alloc: Allocator, gpu: c.VkPhysicalDevice, families: QueueFamilies)
         try queueInfos.append(presentInf);
     }
 
-    var features: c.VkPhysicalDeviceFeatures = undefined;
-    c.vkGetPhysicalDeviceFeatures(gpu, &features);
+    var features: vk.VkPhysicalDeviceFeatures = undefined;
+    vk.vkGetPhysicalDeviceFeatures(gpu, &features);
 
-    var dynamicState3Features = c.VkPhysicalDeviceExtendedDynamicState3FeaturesEXT{
-        .sType = c.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_3_FEATURES_EXT,
+    var dynamicState3Features = vk.VkPhysicalDeviceExtendedDynamicState3FeaturesEXT{
+        .sType = vk.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_3_FEATURES_EXT,
         .pNext = null,
-        .extendedDynamicState3ColorBlendEnable = c.VK_TRUE,
-        .extendedDynamicState3ColorWriteMask = c.VK_TRUE,
+        .extendedDynamicState3ColorBlendEnable = vk.VK_TRUE,
+        .extendedDynamicState3ColorWriteMask = vk.VK_TRUE,
     };
 
-    var dynamicState2Features = c.VkPhysicalDeviceExtendedDynamicState2FeaturesEXT{
-        .sType = c.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_2_FEATURES_EXT,
+    var dynamicState2Features = vk.VkPhysicalDeviceExtendedDynamicState2FeaturesEXT{
+        .sType = vk.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_2_FEATURES_EXT,
         .pNext = &dynamicState3Features,
-        .extendedDynamicState2 = c.VK_TRUE,
-        .extendedDynamicState2LogicOp = c.VK_TRUE,
-        .extendedDynamicState2PatchControlPoints = c.VK_TRUE,
+        .extendedDynamicState2 = vk.VK_TRUE,
+        .extendedDynamicState2LogicOp = vk.VK_TRUE,
+        .extendedDynamicState2PatchControlPoints = vk.VK_TRUE,
     };
 
-    var dynamicStateFeatures = c.VkPhysicalDeviceExtendedDynamicStateFeaturesEXT{
-        .sType = c.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_FEATURES_EXT,
+    var dynamicStateFeatures = vk.VkPhysicalDeviceExtendedDynamicStateFeaturesEXT{
+        .sType = vk.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_FEATURES_EXT,
         .pNext = &dynamicState2Features,
-        .extendedDynamicState = c.VK_TRUE,
+        .extendedDynamicState = vk.VK_TRUE,
     };
 
-    var shaderObjFeatures = c.VkPhysicalDeviceShaderObjectFeaturesEXT{
-        .sType = c.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_OBJECT_FEATURES_EXT,
+    var shaderObjFeatures = vk.VkPhysicalDeviceShaderObjectFeaturesEXT{
+        .sType = vk.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_OBJECT_FEATURES_EXT,
         .pNext = &dynamicStateFeatures,
-        .shaderObject = c.VK_TRUE,
+        .shaderObject = vk.VK_TRUE,
     };
 
-    var meshShaderFeatures = c.VkPhysicalDeviceMeshShaderFeaturesEXT{
-        .sType = c.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_EXT,
+    var meshShaderFeatures = vk.VkPhysicalDeviceMeshShaderFeaturesEXT{
+        .sType = vk.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_EXT,
         .pNext = &shaderObjFeatures,
-        .taskShader = c.VK_TRUE,
-        .meshShader = c.VK_TRUE,
+        .taskShader = vk.VK_TRUE,
+        .meshShader = vk.VK_TRUE,
     };
 
-    var descBufferFeatures = c.VkPhysicalDeviceDescriptorBufferFeaturesEXT{
-        .sType = c.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_BUFFER_FEATURES_EXT,
+    var descBufferFeatures = vk.VkPhysicalDeviceDescriptorBufferFeaturesEXT{
+        .sType = vk.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_BUFFER_FEATURES_EXT,
         .pNext = &meshShaderFeatures,
-        .descriptorBuffer = c.VK_TRUE,
+        .descriptorBuffer = vk.VK_TRUE,
     };
 
-    var vk11Features = c.VkPhysicalDeviceVulkan11Features{
-        .sType = c.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES,
+    var vk11Features = vk.VkPhysicalDeviceVulkan11Features{
+        .sType = vk.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES,
         .pNext = &descBufferFeatures,
-        .shaderDrawParameters = c.VK_TRUE,
+        .shaderDrawParameters = vk.VK_TRUE,
     };
 
-    const vk12Features = c.VkPhysicalDeviceVulkan12Features{
-        .sType = c.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
-        .bufferDeviceAddress = c.VK_TRUE,
-        .descriptorIndexing = c.VK_TRUE,
-        .descriptorBindingStorageImageUpdateAfterBind = c.VK_TRUE,
-        .descriptorBindingSampledImageUpdateAfterBind = c.VK_TRUE,
-        .descriptorBindingPartiallyBound = c.VK_TRUE,
-        .timelineSemaphore = c.VK_TRUE,
-        .runtimeDescriptorArray = c.VK_TRUE,
-        .shaderStorageImageArrayNonUniformIndexing = c.VK_TRUE,
-        .shaderSampledImageArrayNonUniformIndexing = c.VK_TRUE,
+    const vk12Features = vk.VkPhysicalDeviceVulkan12Features{
+        .sType = vk.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
+        .bufferDeviceAddress = vk.VK_TRUE,
+        .descriptorIndexing = vk.VK_TRUE,
+        .descriptorBindingStorageImageUpdateAfterBind = vk.VK_TRUE,
+        .descriptorBindingSampledImageUpdateAfterBind = vk.VK_TRUE,
+        .descriptorBindingPartiallyBound = vk.VK_TRUE,
+        .timelineSemaphore = vk.VK_TRUE,
+        .runtimeDescriptorArray = vk.VK_TRUE,
+        .shaderStorageImageArrayNonUniformIndexing = vk.VK_TRUE,
+        .shaderSampledImageArrayNonUniformIndexing = vk.VK_TRUE,
         .pNext = &vk11Features,
     };
 
-    const vk13Features = c.VkPhysicalDeviceVulkan13Features{
-        .sType = c.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
-        .dynamicRendering = c.VK_TRUE,
-        .synchronization2 = c.VK_TRUE,
-        .maintenance4 = c.VK_TRUE,
+    const vk13Features = vk.VkPhysicalDeviceVulkan13Features{
+        .sType = vk.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
+        .dynamicRendering = vk.VK_TRUE,
+        .synchronization2 = vk.VK_TRUE,
+        .maintenance4 = vk.VK_TRUE,
         .pNext = @constCast(@ptrCast(&vk12Features)),
     };
 
@@ -335,8 +337,8 @@ fn createGPI(alloc: Allocator, gpu: c.VkPhysicalDevice, families: QueueFamilies)
         "VK_EXT_extended_dynamic_state3",
     };
 
-    const createInf = c.VkDeviceCreateInfo{
-        .sType = c.VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
+    const createInf = vk.VkDeviceCreateInfo{
+        .sType = vk.VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
         .pNext = &vk13Features,
         .pQueueCreateInfos = queueInfos.items.ptr,
         .queueCreateInfoCount = @intCast(queueInfos.items.len),
@@ -347,52 +349,52 @@ fn createGPI(alloc: Allocator, gpu: c.VkPhysicalDevice, families: QueueFamilies)
         .ppEnabledLayerNames = null,
     };
     std.debug.print("Queues: {}\n", .{queueInfos.items.len});
-    var gpi: c.VkDevice = undefined;
-    try check(c.vkCreateDevice(gpu, &createInf, null, &gpi), "Unable to create Vulkan device!");
+    var gpi: vk.VkDevice = undefined;
+    try check(vk.vkCreateDevice(gpu, &createInf, null, &gpi), "Unable to create Vulkan device!");
 
     // Mesh Shader Draw Function
-    try loadVkProc(gpi, &c.pfn_vkCmdDrawMeshTasksEXT, "vkCmdDrawMeshTasksEXT");
+    try loadVkProc(gpi, &vkFn.vkCmdDrawMeshTasksEXT, "vkCmdDrawMeshTasksEXT");
     // additional dynamic state function pointers
-    try loadVkProc(gpi, &c.pfn_vkCmdSetRasterizerDiscardEnable, "vkCmdSetRasterizerDiscardEnable");
-    try loadVkProc(gpi, &c.pfn_vkCmdSetCullMode, "vkCmdSetCullMode");
-    try loadVkProc(gpi, &c.pfn_vkCmdSetFrontFace, "vkCmdSetFrontFace");
-    try loadVkProc(gpi, &c.pfn_vkCmdSetDepthTestEnable, "vkCmdSetDepthTestEnable");
-    try loadVkProc(gpi, &c.pfn_vkCmdSetDepthWriteEnable, "vkCmdSetDepthWriteEnable");
-    try loadVkProc(gpi, &c.pfn_vkCmdSetDepthBoundsTestEnable, "vkCmdSetDepthBoundsTestEnable");
-    try loadVkProc(gpi, &c.pfn_vkCmdSetStencilTestEnable, "vkCmdSetStencilTestEnable");
-    try loadVkProc(gpi, &c.pfn_vkCmdSetColorBlendEnableEXT, "vkCmdSetColorBlendEnableEXT");
-    try loadVkProc(gpi, &c.pfn_vkCmdSetColorBlendEquationEXT, "vkCmdSetColorBlendEquationEXT");
-    try loadVkProc(gpi, &c.pfn_vkCmdSetColorWriteMaskEXT, "vkCmdSetColorWriteMaskEXT");
-    try loadVkProc(gpi, &c.pfn_vkCmdSetPrimitiveTopology, "vkCmdSetPrimitiveTopology");
-    try loadVkProc(gpi, &c.pfn_vkCmdSetPrimitiveRestartEnable, "vkCmdSetPrimitiveRestartEnable");
-    try loadVkProc(gpi, &c.pfn_vkCmdSetDepthBiasEnable, "vkCmdSetDepthBiasEnable");
-    try loadVkProc(gpi, &c.pfn_vkCmdSetPolygonModeEXT, "vkCmdSetPolygonModeEXT");
-    try loadVkProc(gpi, &c.pfn_vkCmdSetRasterizationSamplesEXT, "vkCmdSetRasterizationSamplesEXT");
-    try loadVkProc(gpi, &c.pfn_vkCmdSetSampleMaskEXT, "vkCmdSetSampleMaskEXT");
-    try loadVkProc(gpi, &c.pfn_vkCmdSetDepthClampEnableEXT, "vkCmdSetDepthClampEnableEXT");
-    try loadVkProc(gpi, &c.pfn_vkCmdSetAlphaToOneEnableEXT, "vkCmdSetAlphaToOneEnableEXT");
-    try loadVkProc(gpi, &c.pfn_vkCmdSetAlphaToCoverageEnableEXT, "vkCmdSetAlphaToCoverageEnableEXT");
-    try loadVkProc(gpi, &c.pfn_vkCmdSetLogicOpEnableEXT, "vkCmdSetLogicOpEnableEXT");
-    try loadVkProc(gpi, &c.pfn_vkCmdSetViewportWithCount, "vkCmdSetViewportWithCount");
-    try loadVkProc(gpi, &c.pfn_vkCmdSetScissorWithCount, "vkCmdSetScissorWithCount");
+    try loadVkProc(gpi, &vkFn.vkCmdSetRasterizerDiscardEnable, "vkCmdSetRasterizerDiscardEnable");
+    try loadVkProc(gpi, &vkFn.vkCmdSetCullMode, "vkCmdSetCullMode");
+    try loadVkProc(gpi, &vkFn.vkCmdSetFrontFace, "vkCmdSetFrontFace");
+    try loadVkProc(gpi, &vkFn.vkCmdSetDepthTestEnable, "vkCmdSetDepthTestEnable");
+    try loadVkProc(gpi, &vkFn.vkCmdSetDepthWriteEnable, "vkCmdSetDepthWriteEnable");
+    try loadVkProc(gpi, &vkFn.vkCmdSetDepthBoundsTestEnable, "vkCmdSetDepthBoundsTestEnable");
+    try loadVkProc(gpi, &vkFn.vkCmdSetStencilTestEnable, "vkCmdSetStencilTestEnable");
+    try loadVkProc(gpi, &vkFn.vkCmdSetColorBlendEnableEXT, "vkCmdSetColorBlendEnableEXT");
+    try loadVkProc(gpi, &vkFn.vkCmdSetColorBlendEquationEXT, "vkCmdSetColorBlendEquationEXT");
+    try loadVkProc(gpi, &vkFn.vkCmdSetColorWriteMaskEXT, "vkCmdSetColorWriteMaskEXT");
+    try loadVkProc(gpi, &vkFn.vkCmdSetPrimitiveTopology, "vkCmdSetPrimitiveTopology");
+    try loadVkProc(gpi, &vkFn.vkCmdSetPrimitiveRestartEnable, "vkCmdSetPrimitiveRestartEnable");
+    try loadVkProc(gpi, &vkFn.vkCmdSetDepthBiasEnable, "vkCmdSetDepthBiasEnable");
+    try loadVkProc(gpi, &vkFn.vkCmdSetPolygonModeEXT, "vkCmdSetPolygonModeEXT");
+    try loadVkProc(gpi, &vkFn.vkCmdSetRasterizationSamplesEXT, "vkCmdSetRasterizationSamplesEXT");
+    try loadVkProc(gpi, &vkFn.vkCmdSetSampleMaskEXT, "vkCmdSetSampleMaskEXT");
+    try loadVkProc(gpi, &vkFn.vkCmdSetDepthClampEnableEXT, "vkCmdSetDepthClampEnableEXT");
+    try loadVkProc(gpi, &vkFn.vkCmdSetAlphaToOneEnableEXT, "vkCmdSetAlphaToOneEnableEXT");
+    try loadVkProc(gpi, &vkFn.vkCmdSetAlphaToCoverageEnableEXT, "vkCmdSetAlphaToCoverageEnableEXT");
+    try loadVkProc(gpi, &vkFn.vkCmdSetLogicOpEnableEXT, "vkCmdSetLogicOpEnableEXT");
+    try loadVkProc(gpi, &vkFn.vkCmdSetViewportWithCount, "vkCmdSetViewportWithCount");
+    try loadVkProc(gpi, &vkFn.vkCmdSetScissorWithCount, "vkCmdSetScissorWithCount");
     // Import Shader Object Functions
-    try loadVkProc(gpi, &c.pfn_vkCreateShadersEXT, "vkCreateShadersEXT");
-    try loadVkProc(gpi, &c.pfn_vkDestroyShaderEXT, "vkDestroyShaderEXT");
-    try loadVkProc(gpi, &c.pfn_vkCmdBindShadersEXT, "vkCmdBindShadersEXT");
-    try loadVkProc(gpi, &c.pfn_vkCmdSetVertexInputEXT, "vkCmdSetVertexInputEXT");
+    try loadVkProc(gpi, &vkFn.vkCreateShadersEXT, "vkCreateShadersEXT");
+    try loadVkProc(gpi, &vkFn.vkDestroyShaderEXT, "vkDestroyShaderEXT");
+    try loadVkProc(gpi, &vkFn.vkCmdBindShadersEXT, "vkCmdBindShadersEXT");
+    try loadVkProc(gpi, &vkFn.vkCmdSetVertexInputEXT, "vkCmdSetVertexInputEXT");
     // Import Descriptor Buffer Functions
-    try loadVkProc(gpi, &c.pfn_vkCmdBindDescriptorBuffersEXT, "vkCmdBindDescriptorBuffersEXT");
-    try loadVkProc(gpi, &c.pfn_vkCmdSetDescriptorBufferOffsetsEXT, "vkCmdSetDescriptorBufferOffsetsEXT");
-    try loadVkProc(gpi, &c.pfn_vkGetDescriptorEXT, "vkGetDescriptorEXT");
-    try loadVkProc(gpi, &c.pfn_vkGetDescriptorSetLayoutSizeEXT, "vkGetDescriptorSetLayoutSizeEXT");
-    try loadVkProc(gpi, &c.pfn_vkGetDescriptorSetLayoutBindingOffsetEXT, "vkGetDescriptorSetLayoutBindingOffsetEXT");
+    try loadVkProc(gpi, &vkFn.vkCmdBindDescriptorBuffersEXT, "vkCmdBindDescriptorBuffersEXT");
+    try loadVkProc(gpi, &vkFn.vkCmdSetDescriptorBufferOffsetsEXT, "vkCmdSetDescriptorBufferOffsetsEXT");
+    try loadVkProc(gpi, &vkFn.vkGetDescriptorEXT, "vkGetDescriptorEXT");
+    try loadVkProc(gpi, &vkFn.vkGetDescriptorSetLayoutSizeEXT, "vkGetDescriptorSetLayoutSizeEXT");
+    try loadVkProc(gpi, &vkFn.vkGetDescriptorSetLayoutBindingOffsetEXT, "vkGetDescriptorSetLayoutBindingOffsetEXT");
 
     return gpi;
 }
 
 // Handle can be instance or device
 pub fn loadVkProc(handle: anytype, comptime functionPtr: anytype, comptime name: []const u8) !void {
-    const proc = c.vkGetDeviceProcAddr(handle, name.ptr);
+    const proc = vk.vkGetDeviceProcAddr(handle, name.ptr);
     functionPtr.* = if (proc) |p| @ptrCast(p) else null;
     if (functionPtr.* == null) {
         std.log.err("{s} Could not be loaded\n", .{name});

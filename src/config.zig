@@ -1,4 +1,5 @@
-const c = @import("c");
+const vk = @import("vk").vk;
+const sdl = @import("sdl").c;
 pub const std = @import("std");
 const KeyMapping = @import("core/EventManager.zig").KeyMapping;
 const ShaderStage = @import("vulkan/ShaderObject.zig").ShaderStage;
@@ -21,11 +22,11 @@ pub const KEY_EVENT_INFO = false;
 // Rendering, Swapchains and Windows
 pub const MAX_IN_FLIGHT: u8 = 2; // (Frames)
 pub const DESIRED_SWAPCHAIN_IMAGES: u8 = 3;
-pub const DISPLAY_MODE = c.VK_PRESENT_MODE_IMMEDIATE_KHR;
+pub const DISPLAY_MODE = vk.VK_PRESENT_MODE_IMMEDIATE_KHR;
 pub const MAX_WINDOWS: u8 = 16;
 
 pub const RENDER_IMG_MAX = 64;
-pub const RENDER_IMG_FORMAT = c.VK_FORMAT_R16G16B16A16_SFLOAT;
+pub const RENDER_IMG_FORMAT = vk.VK_FORMAT_R16G16B16A16_SFLOAT;
 pub const RENDER_IMG_AUTO_RESIZE = true;
 pub const RENDER_IMG_STRETCH = true; // Ignored on AUTO_RESIZE
 
@@ -54,20 +55,20 @@ pub const AppEvent = enum {
 // KeyMap
 pub const keyMap = [_]KeyMapping{
     // Camera
-    .{ .device = .keyboard, .state = .pressed, .cycle = .repeat, .key = c.SDL_SCANCODE_W, .appEvent = .camForward },
-    .{ .device = .keyboard, .state = .pressed, .cycle = .repeat, .key = c.SDL_SCANCODE_S, .appEvent = .camBackward },
-    .{ .device = .keyboard, .state = .pressed, .cycle = .repeat, .key = c.SDL_SCANCODE_A, .appEvent = .camLeft },
-    .{ .device = .keyboard, .state = .pressed, .cycle = .repeat, .key = c.SDL_SCANCODE_D, .appEvent = .camRight },
-    .{ .device = .keyboard, .state = .pressed, .cycle = .repeat, .key = c.SDL_SCANCODE_Q, .appEvent = .camUp },
-    .{ .device = .keyboard, .state = .pressed, .cycle = .repeat, .key = c.SDL_SCANCODE_E, .appEvent = .camDown },
-    .{ .device = .keyboard, .state = .pressed, .cycle = .repeat, .key = c.SDL_SCANCODE_DOWN, .appEvent = .camFovIncrease },
-    .{ .device = .keyboard, .state = .pressed, .cycle = .repeat, .key = c.SDL_SCANCODE_UP, .appEvent = .camFovDecrease },
+    .{ .device = .keyboard, .state = .pressed, .cycle = .repeat, .key = sdl.SDL_SCANCODE_W, .appEvent = .camForward },
+    .{ .device = .keyboard, .state = .pressed, .cycle = .repeat, .key = sdl.SDL_SCANCODE_S, .appEvent = .camBackward },
+    .{ .device = .keyboard, .state = .pressed, .cycle = .repeat, .key = sdl.SDL_SCANCODE_A, .appEvent = .camLeft },
+    .{ .device = .keyboard, .state = .pressed, .cycle = .repeat, .key = sdl.SDL_SCANCODE_D, .appEvent = .camRight },
+    .{ .device = .keyboard, .state = .pressed, .cycle = .repeat, .key = sdl.SDL_SCANCODE_Q, .appEvent = .camUp },
+    .{ .device = .keyboard, .state = .pressed, .cycle = .repeat, .key = sdl.SDL_SCANCODE_E, .appEvent = .camDown },
+    .{ .device = .keyboard, .state = .pressed, .cycle = .repeat, .key = sdl.SDL_SCANCODE_DOWN, .appEvent = .camFovIncrease },
+    .{ .device = .keyboard, .state = .pressed, .cycle = .repeat, .key = sdl.SDL_SCANCODE_UP, .appEvent = .camFovDecrease },
     // App Control
-    .{ .device = .keyboard, .state = .pressed, .cycle = .oneTime, .key = c.SDL_SCANCODE_ESCAPE, .appEvent = .closeApp },
-    .{ .device = .keyboard, .state = .pressed, .cycle = .oneTime, .key = c.SDL_SCANCODE_R, .appEvent = .restartApp },
-    .{ .device = .keyboard, .state = .pressed, .cycle = .oneTime, .key = c.SDL_SCANCODE_LCTRL, .appEvent = .toggleFullscreen },
+    .{ .device = .keyboard, .state = .pressed, .cycle = .oneTime, .key = sdl.SDL_SCANCODE_ESCAPE, .appEvent = .closeApp },
+    .{ .device = .keyboard, .state = .pressed, .cycle = .oneTime, .key = sdl.SDL_SCANCODE_R, .appEvent = .restartApp },
+    .{ .device = .keyboard, .state = .pressed, .cycle = .oneTime, .key = sdl.SDL_SCANCODE_LCTRL, .appEvent = .toggleFullscreen },
     // Mouse
-    .{ .device = .mouse, .state = .pressed, .cycle = .repeat, .key = c.SDL_BUTTON_LEFT, .appEvent = .camForward },
+    .{ .device = .mouse, .state = .pressed, .cycle = .repeat, .key = sdl.SDL_BUTTON_LEFT, .appEvent = .camForward },
 };
 
 // Paths
@@ -102,9 +103,9 @@ pub const RenderType = enum { computePass, graphicsPass, meshPass, taskMeshPass,
 
 pub const RenderResource = struct {
     id: u8,
-    extent: c.VkExtent3D,
+    extent: vk.VkExtent3D,
     imgFormat: c_uint = RENDER_IMG_FORMAT,
-    memUsage: c_uint = c.VMA_MEMORY_USAGE_GPU_ONLY,
+    memUsage: c_uint = vk.VMA_MEMORY_USAGE_GPU_ONLY,
 };
 
 pub const PassConfig = struct {
