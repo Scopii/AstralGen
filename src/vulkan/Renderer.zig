@@ -104,7 +104,7 @@ pub const Renderer = struct {
 
         if (config.RENDER_IMG_AUTO_RESIZE == true) {
             for (0..dirtyRenderIds.len) |i| {
-                if (dirtyRenderIds[i] == true and self.resourceMan.getRenderImg(@intCast(i)) != null) {
+                if (dirtyRenderIds[i] == true and self.resourceMan.gpuImgIdUsed(@intCast(i)) != false) {
                     try self.updateRenderImage(@intCast(i));
                 }
             }
@@ -113,11 +113,11 @@ pub const Renderer = struct {
 
     pub fn updateRenderImage(self: *Renderer, renderId: u8) !void {
         const new = self.swapchainMan.getMaxRenderExtent(renderId);
-        const old = self.resourceMan.getRenderImg(renderId).?.extent3d;
+        const old = self.resourceMan.getRenderImg(renderId).extent3d;
 
         if (new.height != 0 or new.width != 0) {
             if (new.width != old.width or new.height != old.height) {
-                self.resourceMan.destroyGpuImageById(renderId);
+                self.resourceMan.destroyGpuImage(renderId);
 
                 const newExtent = vk.VkExtent3D{ .width = new.width, .height = new.height, .depth = 1 };
                 try self.resourceMan.createGpuImage(renderId, newExtent, config.RENDER_IMG_FORMAT, vk.VMA_MEMORY_USAGE_GPU_ONLY);
@@ -148,9 +148,9 @@ pub const Renderer = struct {
             return error.RenderImageIdOutOfBounds;
         }
 
-        const renderImg = self.resourceMan.getRenderImg(renderRes.id);
+        const imgUsed = self.resourceMan.gpuImgIdUsed(renderRes.id);
 
-        if (renderImg == null) {
+        if (imgUsed == false) {
             try self.resourceMan.createGpuImage(renderRes.id, renderRes.extent, renderRes.imgFormat, renderRes.memUsage);
             std.debug.print("Renderer: RenderImage {} created\n", .{renderRes.id});
             try self.resourceMan.updateImageDescriptor(renderRes.id);
@@ -170,7 +170,9 @@ pub const Renderer = struct {
 
         const cmd = try self.cmdMan.beginRecording(frameInFlight);
         try self.recordPasses(cmd, cam, runtimeAsFloat);
-        try CmdManager.recordSwapchainBlits(cmd, &self.resourceMan.renderImages, self.swapchainMan.targets.slice(), &self.swapchainMan.swapchains);
+
+        const imgMap = self.resourceMan.getImageMapPtr();
+        try CmdManager.recordSwapchainBlits(cmd, imgMap, self.swapchainMan.targets.slice(), &self.swapchainMan.swapchains);
         try CmdManager.endRecording(cmd);
 
         const targets = self.swapchainMan.targets.slice();

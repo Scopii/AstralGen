@@ -3,7 +3,8 @@ const vk = @import("../modules/vk.zig").c;
 const vkFn = @import("../modules/vk.zig");
 const Allocator = std.mem.Allocator;
 const Context = @import("Context.zig").Context;
-const GpuImage = @import("resources/ResourceManager.zig").GpuImage;
+const GpuImage = @import("resources/ImageManager.zig").GpuImage;
+const ImageMap = @import("resources/ImageManager.zig").ImageMap;
 const SwapchainManager = @import("SwapchainManager.zig");
 const ShaderObject = @import("ShaderObject.zig").ShaderObject;
 const ShaderStage = @import("ShaderObject.zig").ShaderStage;
@@ -202,16 +203,16 @@ pub const CmdManager = struct {
         createPipelineBarriers2(cmd, &.{barrier});
     }
 
-    pub fn recordSwapchainBlits(cmd: vk.VkCommandBuffer, renderImages: []?GpuImage, targets: []const u32, swapchainMap: *SwapchainManager.SwapchainMap) !void {
+    pub fn recordSwapchainBlits(cmd: vk.VkCommandBuffer, gpuImages: *ImageMap, targets: []const u32, swapchainMap: *SwapchainManager.SwapchainMap) !void {
         for (targets) |swapchainIndex| {
             const swapchain = swapchainMap.getPtrAtIndex(swapchainIndex);
             const imgID = swapchain.renderId;
 
-            if (renderImages[imgID] == null) {
+            if (gpuImages.isKeyUsed(imgID) == false) {
                 std.debug.print("Error: Window wants RenderID {} but it is null\n", .{imgID});
                 continue;
             }
-            var srcImgPtr = &renderImages[imgID].?;
+            var srcImgPtr = gpuImages.getPtr(imgID);
 
             // 1. BARRIER: Transition Source Image (Color/General -> Transfer Src)
             const srcBarrier = createImageMemoryBarrier2(
