@@ -2,6 +2,7 @@ const std = @import("std");
 const AppEvent = config.AppEvent;
 const config = @import("../config.zig");
 const CreateMapArray = @import("../structures/MapArray.zig").CreateMapArray;
+const FixedList = @import("../structures/FixedList.zig").FixedList;
 
 pub const KeyState = enum { pressed, released };
 pub const KeyEvent = struct { key: c_uint, event: KeyState };
@@ -20,7 +21,7 @@ pub const SDL_MOUSE_MAX = 24;
 
 pub const EventManager = struct {
     keyStates: CreateMapArray(KeyState, SDL_KEY_MAX + SDL_MOUSE_MAX, c_uint, SDL_KEY_MAX + SDL_MOUSE_MAX, 0) = .{}, // 512 SDL Keys, 24 for Mouse
-    appEvents: std.BoundedArray(AppEvent, 127) = .{},
+    appEvents: FixedList(AppEvent, 127) = .{},
     mouseMoveX: f32 = 0,
     mouseMoveY: f32 = 0,
 

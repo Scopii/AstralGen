@@ -9,41 +9,35 @@ pub fn build(b: *std.Build) void {
     });
     c_module.addIncludePath(b.path("include"));
 
-    const vma_lib = b.addStaticLibrary(.{
-        .name = "vma_lib",
-        .target = target,
-        .optimize = .ReleaseFast,
-    });
-
-    vma_lib.addCSourceFile(.{
-        .file = b.path("src/vulkan/vmaLink.cpp"),
-        .flags = &.{"-std=c++17"}, // No need for -g0/-O3 ReleaseFast handles it
-    });
-    vma_lib.addIncludePath(b.path("include"));
-    vma_lib.linkLibCpp();
-
     const exe = b.addExecutable(.{
         .name = "AstralGen",
-        .root_source_file = b.path("src/main.zig"),
-        .target = target,
-        .optimize = optimize,
-        .link_libc = true,
+        .root_module = b.createModule(.{ // this line was added
+            .root_source_file = b.path("src/main.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
     });
 
     exe.root_module.addImport("c", c_module);
+    exe.linkLibCpp();
+    exe.linkLibC();
+
+    exe.addCSourceFile(.{
+        .file = b.path("src/vulkan/vmaLink.cpp"),
+        .flags = &.{"-std=c++17"}, //"-O3", "-g0"
+    });
+    exe.addIncludePath(b.path("include"));
 
     //Vulkan setup
-    const vulkan_zig_dep = b.dependency("vulkan_zig", .{
-        .registry = b.path("vk.xml"),
-        .target = target,
-        .optimize = optimize,
-    });
-    exe.root_module.addImport("vulkan-zig", vulkan_zig_dep.module("vulkan-zig"));
+    // const vulkan_zig_dep = b.dependency("vulkan_zig", .{
+    //     .registry = b.path("vk.xml"),
+    //     .target = target,
+    //     .optimize = optimize,
+    // });
+    // exe.root_module.addImport("vulkan-zig", vulkan_zig_dep.module("vulkan-zig"));
 
     // Windows Exe Metadata
     exe.addObjectFile(b.path("AstralGen.res"));
-
-    exe.linkLibrary(vma_lib);
 
     exe.addLibraryPath(b.path("libs/SDL3"));
     exe.linkSystemLibrary("SDL3");
@@ -55,8 +49,6 @@ pub fn build(b: *std.Build) void {
     } else {
         exe.linkSystemLibrary("vulkan");
     }
-
-    exe.linkLibC();
 
     // GameDev Libs:
 
@@ -105,9 +97,10 @@ pub fn build(b: *std.Build) void {
     run_step.dependOn(&run_cmd.step);
 
     const exe_unit_tests = b.addTest(.{
-        .root_module = exe.root_module,
-        .target = target,
-        .optimize = optimize,
+        .root_module = b.createModule(.{
+            .target = target,
+            .optimize = optimize,
+        }),
     });
 
     const run_exe_unit_tests = b.addRunArtifact(exe_unit_tests);

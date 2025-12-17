@@ -5,19 +5,20 @@ const Window = @import("Window.zig").Window;
 const KeyEvent = @import("../core/EventManager.zig").KeyEvent;
 const MouseMovement = @import("../core/EventManager.zig").MouseMovement;
 const CreateMapArray = @import("../structures/MapArray.zig").CreateMapArray;
+const FixedList = @import("../structures/FixedList.zig").FixedList;
 const MAX_WINDOWS = @import("../config.zig").MAX_WINDOWS;
 const SDL_KEY_MAX = @import("../core/EventManager.zig").SDL_KEY_MAX;
 
 pub const WindowManager = struct {
     windows: CreateMapArray(Window, MAX_WINDOWS, u32, MAX_WINDOWS, 0) = .{},
     mainWindow: ?*Window = null,
-    changedWindows: std.BoundedArray(*Window, MAX_WINDOWS) = .{},
+    changedWindows: FixedList(*Window, MAX_WINDOWS) = .{},
     openWindows: u8 = 0,
     fullscreen: bool = false,
     appExit: bool = false,
 
-    inputEvents: std.BoundedArray(KeyEvent, 127) = .{},
-    mouseMovements: std.BoundedArray(MouseMovement, 63) = .{},
+    inputEvents: FixedList(KeyEvent, 127) = .{},
+    mouseMovements: FixedList(MouseMovement, 63) = .{},
 
     pub fn init() !WindowManager {
         if (sdl.SDL_Init(sdl.SDL_INIT_VIDEO) != true) {

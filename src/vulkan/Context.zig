@@ -66,9 +66,9 @@ pub const Context = struct {
 };
 
 pub fn createInstance(alloc: Allocator) !vk.VkInstance {
-    var extensions = std.ArrayList([*c]const u8).init(alloc);
+    var extensions = std.array_list.Managed([*c]const u8).init(alloc);
     defer extensions.deinit();
-    var layers = std.ArrayList([*c]const u8).init(alloc);
+    var layers = std.array_list.Managed([*c]const u8).init(alloc);
     defer layers.deinit();
 
     // get required extensions
@@ -235,7 +235,7 @@ fn checkGPUfamilies(alloc: Allocator, gpu: vk.VkPhysicalDevice) !QueueFamilies {
 
 fn createGPI(alloc: Allocator, gpu: vk.VkPhysicalDevice, families: QueueFamilies) !vk.VkDevice {
     var priority: f32 = 1.0;
-    var queueInfos = std.ArrayList(vk.VkDeviceQueueCreateInfo).init(alloc);
+    var queueInfos = std.array_list.Managed(vk.VkDeviceQueueCreateInfo).init(alloc);
     defer queueInfos.deinit();
 
     const graphicsInf = vk.VkDeviceQueueCreateInfo{
@@ -324,7 +324,7 @@ fn createGPI(alloc: Allocator, gpu: vk.VkPhysicalDevice, families: QueueFamilies
         .dynamicRendering = vk.VK_TRUE,
         .synchronization2 = vk.VK_TRUE,
         .maintenance4 = vk.VK_TRUE,
-        .pNext = @constCast(@ptrCast(&vk12Features)),
+        .pNext = @ptrCast(@constCast(&vk12Features)),
     };
 
     const gpuExtensions = [_][*c]const u8{

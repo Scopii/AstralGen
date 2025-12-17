@@ -6,33 +6,33 @@
 
     .dependencies = .{
         //Vulkan
-        .vulkan_headers = .{
-            .url = "https://github.com/KhronosGroup/Vulkan-Headers/archive/2e0a6e699e35c9609bde2ca4abb0d380c0378639.tar.gz",
-            .hash = "N-V-__8AACJA9gH2PXN1QZ9vF1oi8qUvJMRdX8ZZRTA5lova",
-        },
-        .vulkan_zig = .{
-            .url = "https://github.com/Snektron/vulkan-zig/archive/9b4090c852760ce3210562f62ffaf301479c38ba.tar.gz",
-            .hash = "vulkan-0.0.0-r7Ytx2dUAwDhoUvuIqliqPUbyDZZi0bl_CQIwspUpHs_",
-        },
+        // .vulkan_headers = .{
+        //     .url = "https://github.com/KhronosGroup/Vulkan-Headers/archive/2e0a6e699e35c9609bde2ca4abb0d380c0378639.tar.gz",
+        //     .hash = "N-V-__8AACJA9gH2PXN1QZ9vF1oi8qUvJMRdX8ZZRTA5lova",
+        // },
+        // .vulkan_zig = .{
+        //     .url = "https://github.com/Snektron/vulkan-zig/archive/9b4090c852760ce3210562f62ffaf301479c38ba.tar.gz",
+        //     .hash = "vulkan-0.0.0-r7Ytx2dUAwDhoUvuIqliqPUbyDZZi0bl_CQIwspUpHs_",
+        // },
         //Multithreading
         .zjobs = .{
-            .url = "https://github.com/zig-gamedev/zjobs/archive/dfdb734e8084f7dc5010a4ded30bc8e04b6d4393.tar.gz",
-            .hash = "zjobs-0.3.0-dev-59uaZmTQAABLe7t30aW2PD5P3VxjWbAoL1XXnhgs2Ymd",
+            .url = "https://github.com/zig-gamedev/zjobs/archive/2c202f7358923004ee57c3de0303da4853255bf2.tar.gz",
+            .hash = "zjobs-0.3.0-dev-59uaZnLQAADzoTY5yTgmOT1rrD86fMTQmPvj4ksZl-XK",
         },
         //Pools
         .zpool = .{
-            .url = "https://github.com/zig-gamedev/zpool/archive/4c850e222e1ba507b45d7bab8cac83bdd74cacd6.tar.gz",
-            .hash = "zpool-0.11.0-dev-bG692aVDAQBCKslGROl47fqnnp7HFYV8fI-8z3wY06xx",
+            .url = "https://github.com/zig-gamedev/zpool/archive/2ebe5b065d19989a0c5b4f06227c524c8404c516.tar.gz",
+            .hash = "zpool-0.11.0-dev-bG692YNDAQAyX1pDZKrJrDmorwVqVNTZbbH-zpoDQO-N",
         },
         //Game related Math
         .zmath = .{
-            .url = "https://github.com/zig-gamedev/zmath/archive/05799b336d4eb315cd5a5e5693a5704ba01db36c.tar.gz",
-            .hash = "zmath-0.11.0-dev-wjwivdErAwA9JvOksjectxgnDUZumDR1V9DwKy5UeTOT",
+            .url = "https://github.com/zig-gamedev/zmath/archive/3a5955b2b72cd081563fbb084eff05bffd1e3fbb.tar.gz",
+            .hash = "zmath-0.11.0-dev-wjwivdMsAwD-xaLj76YHUq3t9JDH-X16xuMTmnDzqbu2",
         },
         //CPU Profiling
         .ztracy = .{
-            .url = "https://github.com/zig-gamedev/ztracy/archive/be3d003f29d59d72e68e493ab531374ab474a795.tar.gz",
-            .hash = "ztracy-0.14.0-dev-zHJSq1oQFwCAq2LhbqsBUmZAipMzsD8UfKL5Etc_OJMb",
+            .url = "https://github.com/zig-gamedev/ztracy/archive/e7b401dea9ce006f8b236e3a2ca1a9f3d5c3e896.tar.gz",
+            .hash = "ztracy-0.14.0-dev-zHJSq78GGQC904aYvBPn6OOvRVOq_opAwDfeHZdvQyej",
         },
     },
 

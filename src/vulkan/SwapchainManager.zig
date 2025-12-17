@@ -6,6 +6,7 @@ const Context = @import("Context.zig").Context;
 const Window = @import("../platform/Window.zig").Window;
 const QueueFamilies = @import("Context.zig").QueueFamilies;
 const CreateMapArray = @import("../structures/MapArray.zig").CreateMapArray;
+const FixedList = @import("../structures/FixedList.zig").FixedList;
 const check = @import("error.zig").check;
 const createSemaphore = @import("Scheduler.zig").createSemaphore;
 
@@ -37,7 +38,7 @@ pub const SwapchainManager = struct {
     gpi: vk.VkDevice,
     instance: vk.VkInstance,
     swapchains: SwapchainMap = .{},
-    targets: std.BoundedArray(u32, MAX_WINDOWS) = .{},
+    targets: FixedList(u32, MAX_WINDOWS) = .{},
 
     pub fn init(alloc: Allocator, context: *const Context) !SwapchainManager {
         return .{

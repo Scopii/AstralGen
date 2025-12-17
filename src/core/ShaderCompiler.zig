@@ -17,7 +17,7 @@ pub const ShaderCompiler = struct {
     rootPath: []u8,
     shaderPath: []const u8,
     shaderOutputPath: []const u8,
-    loadedShaders: std.ArrayList(LoadedShader),
+    loadedShaders: std.array_list.Managed(LoadedShader),
 
     pub fn init(alloc: Allocator) !ShaderCompiler {
         // Assign paths
@@ -33,7 +33,7 @@ pub const ShaderCompiler = struct {
             .rootPath = root,
             .shaderPath = shaderPath,
             .shaderOutputPath = shaderOutputPath,
-            .loadedShaders = std.ArrayList(LoadedShader).init(alloc),
+            .loadedShaders = std.array_list.Managed(LoadedShader).init(alloc),
         };
     }
 
@@ -96,17 +96,20 @@ pub const ShaderCompiler = struct {
 };
 
 fn loadShader(alloc: Allocator, spvPath: []const u8) !alignedShader {
-    std.debug.print("Laoding Shader {s}\n", .{spvPath});
-    const file = std.fs.cwd().openFile(spvPath, .{}) catch |err| {
-        std.debug.print("Shader Load Failed {s}\n", .{spvPath});
-        return err;
-    };
+    const file = try std.fs.cwd().openFile(spvPath, .{});
     defer file.close();
 
     const size = try file.getEndPos();
-    const data = try alloc.alignedAlloc(u8, @alignOf(u32), size);
-    _ = try file.readAll(data);
-    return data;
+
+    const word_count = std.math.divCeil(usize, size, 4) catch unreachable;
+
+    const words = try alloc.alloc(u32, word_count);
+    errdefer alloc.free(words);
+
+    const bytes = std.mem.sliceAsBytes(words);
+    _ = try file.readAll(bytes[0..size]);
+
+    return bytes[0..size];
 }
 
 pub fn resolveProjectRoot(alloc: Allocator, relativePath: []const u8) ![]u8 {
@@ -140,7 +143,7 @@ fn threadCompile(src: []const u8, dst: []const u8) void {
 }
 
 pub fn compileShadersParallel(alloc: std.mem.Allocator, absShaderPath: []const u8, absShaderOutputPath: []const u8, shaders: []const config.ShaderConfig) !void {
-    var threads = std.ArrayList(std.Thread).init(alloc);
+    var threads = std.array_list.Managed(std.Thread).init(alloc);
     defer threads.deinit();
 
     for (shaders) |shader| {

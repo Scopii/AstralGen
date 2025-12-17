@@ -41,7 +41,7 @@ pub const Renderer = struct {
     renderImages: [RENDER_IMG_MAX]?GpuImage = .{null} ** RENDER_IMG_MAX,
     gpuObjects: GpuBuffer = undefined,
     objectCount: u32,
-    passes: std.ArrayList(Pass),
+    passes: std.array_list.Managed(Pass),
 
     pub fn init(memoryMan: *MemoryManager, objects: []Object) !Renderer {
         const alloc = memoryMan.getAllocator();
@@ -67,7 +67,7 @@ pub const Renderer = struct {
             .swapchainMan = swapchainMan,
             .gpuObjects = gpuObjects,
             .objectCount = @intCast(objects.len),
-            .passes = std.ArrayList(Pass).init(alloc),
+            .passes = std.array_list.Managed(Pass).init(alloc),
         };
     }
 
