@@ -33,7 +33,13 @@ pub const GpuAllocator = struct {
         const memUsage = vk.VMA_MEMORY_USAGE_CPU_TO_GPU;
         const memFlags = vk.VMA_ALLOCATION_CREATE_MAPPED_BIT;
         const gpuBuffer = try self.allocBuffer(size, null, bufferUsage, memUsage, memFlags);
-        return DescriptorBuffer{ .allocation = gpuBuffer.allocation, .buffer = gpuBuffer.buffer, .gpuAddress = gpuBuffer.gpuAddress, .size = gpuBuffer.size };
+
+        return DescriptorBuffer{
+            .allocation = gpuBuffer.allocation,
+            .allocInf = gpuBuffer.allocInf,
+            .buffer = gpuBuffer.buffer,
+            .gpuAddress = gpuBuffer.gpuAddress,
+        };
     }
 
     pub fn allocDefinedBuffer(self: *const GpuAllocator, size: vk.VkDeviceSize, data: ?[]const u8, bufferType: enum { storage, uniform, testBuffer }) !GpuBuffer {
@@ -79,8 +85,8 @@ pub const GpuAllocator = struct {
         return GpuBuffer{
             .buffer = buffer,
             .allocation = allocation,
+            .allocInf = allocVmaInf,
             .gpuAddress = deviceAddress,
-            .size = size,
         };
     }
 

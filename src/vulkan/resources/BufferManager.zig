@@ -11,9 +11,9 @@ const Object = @import("../../ecs/EntityManager.zig").Object;
 pub const GpuBuffer = struct {
     pub const deviceAddress = u64;
     allocation: vk.VmaAllocation,
+    allocInf: vk.VmaAllocationInfo,
     buffer: vk.VkBuffer,
     gpuAddress: deviceAddress,
-    size: vk.VkDeviceSize,
     count: u32 = 0,
 };
 
@@ -26,7 +26,7 @@ pub const BufferManager = struct {
     gpuBuffers: BufferMap = .{},
 
     pub fn init(cpuAlloc: Allocator, gpuAlloc: GpuAllocator) BufferManager {
-        return .{ .cpuAlloc = cpuAlloc, .gpuAlloc = gpuAlloc};
+        return .{ .cpuAlloc = cpuAlloc, .gpuAlloc = gpuAlloc };
     }
 
     pub fn deinit(self: *BufferManager) void {
@@ -42,14 +42,14 @@ pub const BufferManager = struct {
         const bufferSize = objects.len * @sizeOf(Object);
 
         var buffer = try self.gpuAlloc.allocDefinedBuffer(bufferSize, null, .testBuffer); // CURRENTLY FIXED TEST BUFFER!
-        const allocVmaInf = self.gpuAlloc.getAllocationInfo(buffer.allocation);
+        const pMappedData = buffer.allocInf.pMappedData;
 
         // Check Alignemnt naively (Doesnt catch everything)
         const alignment = @alignOf(Object);
-        if (@intFromPtr(allocVmaInf.pMappedData) % alignment != 0) {
+        if (@intFromPtr(pMappedData) % alignment != 0) {
             return error.ImproperAlignment;
         }
-        const dataPtr: [*]Object = @ptrCast(@alignCast(allocVmaInf.pMappedData));
+        const dataPtr: [*]Object = @ptrCast(@alignCast(pMappedData));
         @memcpy(dataPtr[0..objects.len], objects);
 
         buffer.count = @intCast(objects.len);

@@ -23,9 +23,9 @@ pub const PushConstants = extern struct {
 pub const DescriptorBuffer = struct {
     pub const deviceAddress = u64;
     allocation: vk.VmaAllocation,
+    allocInf: vk.VmaAllocationInfo,
     buffer: vk.VkBuffer,
     gpuAddress: deviceAddress,
-    size: vk.VkDeviceSize,
 };
 
 pub const DescriptorManager = struct {
@@ -90,7 +90,7 @@ pub const DescriptorManager = struct {
         const addressInf = vk.VkDescriptorAddressInfoEXT{
             .sType = vk.VK_STRUCTURE_TYPE_DESCRIPTOR_ADDRESS_INFO_EXT,
             .address = gpuBuffer.gpuAddress,
-            .range = gpuBuffer.size,
+            .range = gpuBuffer.allocInf.size,
             .format = vk.VK_FORMAT_UNDEFINED,
         };
         const getInf = vk.VkDescriptorGetInfoEXT{
@@ -110,11 +110,8 @@ pub const DescriptorManager = struct {
         var bindingOffset: vk.VkDeviceSize = 0;
         vkFn.vkGetDescriptorSetLayoutBindingOffsetEXT.?(self.gpi, self.descLayout, binding, &bindingOffset);
 
-        const allocVmaInf = self.gpuAlloc.getAllocationInfo(self.descBuffer.allocation);
-        // Base Offset of the Array + (Index * Size of one Element)
-        const finalOffset = bindingOffset + (buffId * descriptorSize);
-
-        const mappedData = @as([*]u8, @ptrCast(allocVmaInf.pMappedData));
+        const mappedData = @as([*]u8, @ptrCast(self.descBuffer.allocInf.pMappedData));
+        const finalOffset = bindingOffset + (buffId * descriptorSize); // Base Offset of the Array + (Index * Size of one Element)
         const destPtr = mappedData + finalOffset;
         @memcpy(destPtr[0..descriptorSize], descData[0..descriptorSize]);
     }
