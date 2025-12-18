@@ -5,21 +5,14 @@ const Allocator = std.mem.Allocator;
 const Context = @import("../Context.zig").Context;
 const GpuImage = @import("ImageManager.zig").GpuImage;
 const ImageManager = @import("ImageManager.zig").ImageManager;
+const GpuBuffer = @import("BufferManager.zig").GpuBuffer;
+const BufferManager = @import("BufferManager.zig").BufferManager;
 const ImageMap = @import("ImageManager.zig").ImageMap;
 const VkAllocator = @import("../vma.zig").VkAllocator;
 const check = @import("../error.zig").check;
 const config = @import("../../config.zig");
 const Object = @import("../../ecs/EntityManager.zig").Object;
 const RENDER_IMG_MAX = config.RENDER_IMG_MAX;
-
-pub const GpuBuffer = struct {
-    pub const deviceAddress = u64;
-    allocation: vk.VmaAllocation,
-    buffer: vk.VkBuffer,
-    gpuAddress: deviceAddress,
-    size: vk.VkDeviceSize,
-    count: u32 = 0,
-};
 
 pub const PushConstants = extern struct {
     camPosAndFov: [4]f32,
@@ -39,6 +32,7 @@ pub const ResourceManager = struct {
     pipeLayout: vk.VkPipelineLayout,
 
     imgMan: ImageManager,
+    bufferMan: BufferManager,
 
     gpuObjects: GpuBuffer = undefined,
 
@@ -54,6 +48,7 @@ pub const ResourceManager = struct {
         const gpuAlloc = try VkAllocator.init(context.instance, context.gpi, context.gpu);
 
         const imgMan = ImageManager.init(alloc, gpuAlloc, gpi, gpu);
+        const bufferMan = BufferManager.init(alloc, gpuAlloc, gpi, gpu);
 
         // Query descriptor buffer properties
         var descBufferProps = vk.VkPhysicalDeviceDescriptorBufferPropertiesEXT{ .sType = vk.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_BUFFER_PROPERTIES_EXT };
@@ -84,6 +79,7 @@ pub const ResourceManager = struct {
             .descLayout = descLayout,
             .pipeLayout = try createPipelineLayout(gpi, descLayout, vk.VK_SHADER_STAGE_ALL, @sizeOf(PushConstants)),
             .imgMan = imgMan,
+            .bufferMan = bufferMan,
         };
     }
 

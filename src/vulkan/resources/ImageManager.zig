@@ -16,7 +16,7 @@ pub const GpuImage = struct {
     curLayout: u32 = vk.VK_IMAGE_LAYOUT_UNDEFINED,
 };
 
-pub const ImageMap = CreateMapArray(GpuImage, 100, u32, 100, 0);
+pub const ImageMap = CreateMapArray(GpuImage, 100, u32, 100, 0); // 100 Fixed Images
 
 pub const ImageManager = struct {
     cpuAlloc: Allocator,
@@ -24,7 +24,7 @@ pub const ImageManager = struct {
     gpi: vk.VkDevice,
     gpu: vk.VkPhysicalDevice,
 
-    gpuImages: ImageMap = .{}, // 100 Fixed Images
+    gpuImages: ImageMap = .{},
 
     pub fn init(cpuAlloc: Allocator, gpuAlloc: VkAllocator, gpi: vk.VkDevice, gpu: vk.VkPhysicalDevice) ImageManager {
         return .{ .cpuAlloc = cpuAlloc, .gpuAlloc = gpuAlloc, .gpi = gpi, .gpu = gpu };
