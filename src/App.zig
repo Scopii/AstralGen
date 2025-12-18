@@ -61,7 +61,7 @@ pub const App = struct {
         };
         errdefer ecs.deinit();
 
-        var renderer = Renderer.init(memoryMan, ecs.getObjects()) catch |err| {
+        var renderer = Renderer.init(memoryMan) catch |err| {
             windowMan.showErrorBox("Astral App Error", "Renderer could not launch");
             std.debug.print("Err {}\n", .{err});
             return error.RendererManagerFailed;
@@ -72,6 +72,7 @@ pub const App = struct {
         shaderCompiler.freeFreshShaders();
 
         try renderer.addPasses(config.renderSeq2);
+        try renderer.createGpuBuffer(0, ecs.getObjects());
 
         return .{
             .cam = Camera.init(.{}),

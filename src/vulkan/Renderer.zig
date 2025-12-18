@@ -41,7 +41,7 @@ pub const Renderer = struct {
     scheduler: Scheduler,
     passes: std.array_list.Managed(Pass),
 
-    pub fn init(memoryMan: *MemoryManager, objects: []Object) !Renderer {
+    pub fn init(memoryMan: *MemoryManager) !Renderer {
         const alloc = memoryMan.getAllocator();
         const instance = try createInstance(alloc);
         const context = try Context.init(alloc, instance);
@@ -50,9 +50,6 @@ pub const Renderer = struct {
         const scheduler = try Scheduler.init(&context, config.MAX_IN_FLIGHT);
         const shaderMan = try ShaderManager.init(alloc, &context, &resourceMan);
         const swapchainMan = try SwapchainManager.init(alloc, &context);
-
-        try resourceMan.createGpuBuffer(0, objects);
-        try resourceMan.updateObjectBufferDescriptor(0);
 
         return .{
             .alloc = alloc,
@@ -104,7 +101,7 @@ pub const Renderer = struct {
 
         if (config.RENDER_IMG_AUTO_RESIZE == true) {
             for (0..dirtyRenderIds.len) |i| {
-                if (dirtyRenderIds[i] == true and self.resourceMan.gpuImgIdUsed(@intCast(i)) != false) {
+                if (dirtyRenderIds[i] == true and self.resourceMan.isGpuImageIdUsed(@intCast(i)) != false) {
                     try self.updateRenderImage(@intCast(i));
                 }
             }
@@ -113,7 +110,8 @@ pub const Renderer = struct {
 
     pub fn updateRenderImage(self: *Renderer, renderId: u8) !void {
         const new = self.swapchainMan.getMaxRenderExtent(renderId);
-        const old = self.resourceMan.getRenderImg(renderId).extent3d;
+        const gpuImg = try self.resourceMan.getGpuImage(renderId);
+        const old = gpuImg.extent3d;
 
         if (new.height != 0 or new.width != 0) {
             if (new.width != old.width or new.height != old.height) {
@@ -121,8 +119,6 @@ pub const Renderer = struct {
 
                 const newExtent = vk.VkExtent3D{ .width = new.width, .height = new.height, .depth = 1 };
                 try self.resourceMan.createGpuImage(renderId, newExtent, config.RENDER_IMG_FORMAT, vk.VMA_MEMORY_USAGE_GPU_ONLY);
-
-                try self.resourceMan.updateImageDescriptor(renderId);
                 std.debug.print("RenderImage recreated {}x{} to {}x{}\n", .{ old.width, old.height, new.width, new.height });
             }
         }
@@ -142,18 +138,21 @@ pub const Renderer = struct {
         }
     }
 
+    pub fn createGpuBuffer(self: *Renderer, buffId: u8, objects: []Object) !void { // SHOULD LATER TAKE CONFIG
+        try self.resourceMan.createGpuBuffer(buffId, objects);
+    }
+
     pub fn createRenderImage(self: *Renderer, renderRes: config.RenderResource) !void {
         if (renderRes.id > RENDER_IMG_MAX - 1) {
             std.debug.print("Renderer: RenderId Image ID cant be bigger than Max Windows\n", .{});
             return error.RenderImageIdOutOfBounds;
         }
 
-        const imgUsed = self.resourceMan.gpuImgIdUsed(renderRes.id);
+        const imgUsed = self.resourceMan.isGpuImageIdUsed(renderRes.id);
 
         if (imgUsed == false) {
             try self.resourceMan.createGpuImage(renderRes.id, renderRes.extent, renderRes.imgFormat, renderRes.memUsage);
             std.debug.print("Renderer: RenderImage {} created\n", .{renderRes.id});
-            try self.resourceMan.updateImageDescriptor(renderRes.id);
         }
     }
 
@@ -171,7 +170,7 @@ pub const Renderer = struct {
         const cmd = try self.cmdMan.beginRecording(frameInFlight);
         try self.recordPasses(cmd, cam, runtimeAsFloat);
 
-        const imgMap = self.resourceMan.getImageMapPtr();
+        const imgMap = self.resourceMan.getGpuImageMapPtr();
         try CmdManager.recordSwapchainBlits(cmd, imgMap, self.swapchainMan.targets.slice(), &self.swapchainMan.swapchains);
         try CmdManager.endRecording(cmd);
 
@@ -202,7 +201,7 @@ pub const Renderer = struct {
 
             try CmdManager.recordPass(
                 cmd,
-                self.resourceMan.getRenderImgPtr(renderImgId),
+                self.resourceMan.getGpuImagePtr(renderImgId),
                 validShaders,
                 pass.renderType,
                 self.resourceMan.descMan.pipeLayout,
