@@ -61,14 +61,15 @@ pub const BufferManager = struct {
         self.gpuBuffers.set(buffId, buffer);
     }
 
-    pub fn updateGpuBuffer(self: *const BufferManager, gpuBuffer: GpuBuffer, data: []const u8, offset: vk.VkDeviceSize) !void {
-        if (offset + data.len > gpuBuffer.size) return error.BufferOverflow;
+    // DOES NOT WORK, WILL CRASH
+    // pub fn updateGpuBuffer(self: *const BufferManager, gpuBuffer: GpuBuffer, data: []const u8, offset: vk.VkDeviceSize) !void {
+    //     if (offset + data.len > gpuBuffer.size) return error.BufferOverflow;
 
-        var allocVmaInf: vk.VmaAllocationInfo = undefined;
-        vk.vmaGetAllocationInfo(self.gpuAlloc.handle, gpuBuffer.allocation, &allocVmaInf);
-        const mappedPtr = @as([*]u8, @ptrCast(allocVmaInf.pMappedData));
-        @memcpy(mappedPtr[offset .. offset + data.len], data);
-    }
+    //     var allocVmaInf: vk.VmaAllocationInfo = undefined;
+    //     vk.vmaGetAllocationInfo(self.gpuAlloc.handle, gpuBuffer.allocation, &allocVmaInf);
+    //     const mappedPtr = @as([*]u8, @ptrCast(allocVmaInf.pMappedData));
+    //     @memcpy(mappedPtr[offset .. offset + data.len], data);
+    // }
 
     pub fn destroyGpuBuffer(self: *const BufferManager, gpuBuffer: GpuBuffer) void {
         vk.vmaDestroyBuffer(self.gpuAlloc.handle, gpuBuffer.buffer, gpuBuffer.allocation);

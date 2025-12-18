@@ -83,7 +83,7 @@ pub const ResourceManager = struct {
 
     pub fn updateObjectBufferDescriptor(self: *ResourceManager, buffId: u8) !void {
         const gpuBuffer = try self.bufferMan.getGpuBuffer(buffId);
-        try self.descMan.updateObjectBufferDescriptor(gpuBuffer);
+        try self.descMan.updateObjectBufferDescriptor(gpuBuffer, buffId);
     }
 
     pub fn destroyGpuImage(self: *ResourceManager, renderId: u8) void {

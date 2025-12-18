@@ -53,7 +53,7 @@ pub const DescriptorManager = struct {
         var layoutSize: vk.VkDeviceSize = undefined;
         vkFn.vkGetDescriptorSetLayoutSizeEXT.?(gpi, descLayout, &layoutSize);
 
-        const descBuffer = try createDescriptorBuffer(gpuAlloc.handle, gpi, layoutSize, null);
+        const descBuffer = try createDescriptorBuffer(gpuAlloc.handle, gpi, layoutSize);
 
         return .{
             .cpuAlloc = cpuAlloc,
@@ -68,12 +68,15 @@ pub const DescriptorManager = struct {
     }
 
     pub fn updateImageDescriptor(self: *DescriptorManager, gpuImgView: vk.VkImageView, renderId: u8) !void {
-        // 1. Get the Base Offset for Binding 0 (The Image Array)
+        // Get the Base Offset for Binding 0 (The Image Array)
         var bindingBaseOffset: vk.VkDeviceSize = 0;
         vkFn.vkGetDescriptorSetLayoutBindingOffsetEXT.?(self.gpi, self.descLayout, 0, &bindingBaseOffset);
 
-        // 2. Prepare Descriptor Info
-        const imgInf = vk.VkDescriptorImageInfo{ .sampler = null, .imageView = gpuImgView, .imageLayout = vk.VK_IMAGE_LAYOUT_GENERAL };
+        const imgInf = vk.VkDescriptorImageInfo{
+            .sampler = null,
+            .imageView = gpuImgView,
+            .imageLayout = vk.VK_IMAGE_LAYOUT_GENERAL,
+        };
 
         const getInf = vk.VkDescriptorGetInfoEXT{
             .sType = vk.VK_STRUCTURE_TYPE_DESCRIPTOR_GET_INFO_EXT,
@@ -81,17 +84,15 @@ pub const DescriptorManager = struct {
             .data = .{ .pStorageImage = &imgInf },
         };
 
-        // 3. Get Descriptor Data
-        var descData: [64]u8 = undefined; // Use safe buffer size
+        // Get Descriptor Data
+        var descData: [64]u8 = undefined; // safe buffer size
         const descriptorSize = self.descBufferProps.storageImageDescriptorSize;
         if (descriptorSize > descData.len) return error.DescriptorSizeTooLarge;
         vkFn.vkGetDescriptorEXT.?(self.gpi, &getInf, descriptorSize, &descData);
 
-        // 4. Calculate Final Offset
         // Base Offset of the Array + (Index * Size of one Element)
         const finalOffset = bindingBaseOffset + (renderId * descriptorSize);
 
-        // 5. Write to Memory
         var allocVmaInf: vk.VmaAllocationInfo = undefined;
         vk.vmaGetAllocationInfo(self.gpuAlloc.handle, self.descBuffer.allocation, &allocVmaInf);
 
@@ -101,12 +102,10 @@ pub const DescriptorManager = struct {
         @memcpy(destPtr[0..descriptorSize], descData[0..descriptorSize]);
     }
 
-    pub fn updateObjectBufferDescriptor(self: *DescriptorManager, gpuBuffer: GpuBuffer) !void {
-        // 1. Get the offset where Binding 1 lives in the descriptor buffer
-        var offset: vk.VkDeviceSize = 0;
-        vkFn.vkGetDescriptorSetLayoutBindingOffsetEXT.?(self.gpi, self.descLayout, 1, &offset);
+    pub fn updateObjectBufferDescriptor(self: *DescriptorManager, gpuBuffer: GpuBuffer, buffId: u8) !void {
+        var bindingOffset: vk.VkDeviceSize = 0;
+        vkFn.vkGetDescriptorSetLayoutBindingOffsetEXT.?(self.gpi, self.descLayout, 1, &bindingOffset);
 
-        // 2. Prepare the descriptor info
         const addressInf = vk.VkDescriptorAddressInfoEXT{
             .sType = vk.VK_STRUCTURE_TYPE_DESCRIPTOR_ADDRESS_INFO_EXT,
             .address = gpuBuffer.gpuAddress,
@@ -120,22 +119,21 @@ pub const DescriptorManager = struct {
             .data = .{ .pStorageBuffer = &addressInf },
         };
 
-        // 3. Get the descriptor data from the driver. CHANGE TO USING QUEURING VALUES?
-        // Note: Storage Buffers might have a different descriptor size than Images.
-        // Ideally query 'storageBufferDescriptorSize', but usually they are both ~16 bytes.
-        // For safety, use a buffer large enough (e.g., 64 bytes).
-        var descData: [64]u8 = undefined;
+        // Get Descriptor Data
+        var descData: [64]u8 = undefined; // safe buffer size
         const descriptorSize = self.descBufferProps.storageBufferDescriptorSize;
+        if (descriptorSize > descData.len) return error.DescriptorSizeTooLarge;
         vkFn.vkGetDescriptorEXT.?(self.gpi, &getInf, descriptorSize, &descData);
 
-        // 4. Write it to the mapped memory
+        // Base Offset of the Array + (Index * Size of one Element)
+        const finalOffset = bindingOffset + (buffId * descriptorSize);
+
         var allocVmaInf: vk.VmaAllocationInfo = undefined;
         vk.vmaGetAllocationInfo(self.gpuAlloc.handle, self.descBuffer.allocation, &allocVmaInf);
 
         const mappedData = @as([*]u8, @ptrCast(allocVmaInf.pMappedData));
-        const destPtr = mappedData + offset;
+        const destPtr = mappedData + finalOffset;
 
-        // Copy the descriptor size (usually 16 bytes for buffers)
         @memcpy(destPtr[0..descriptorSize], descData[0..descriptorSize]);
     }
 
@@ -146,15 +144,15 @@ pub const DescriptorManager = struct {
     }
 };
 
-fn createDescriptorBuffer(vma: vk.VmaAllocator, gpi: vk.VkDevice, size: vk.VkDeviceSize, data: ?[]const u8) !DescriptorBuffer { // Needs Data?
+fn createDescriptorBuffer(vma: vk.VmaAllocator, gpi: vk.VkDevice, size: vk.VkDeviceSize) !DescriptorBuffer { // Needs Data?
     const bufferUsage = vk.VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT | vk.VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
     const memUsage = vk.VMA_MEMORY_USAGE_CPU_TO_GPU;
     const memFlags = vk.VMA_ALLOCATION_CREATE_MAPPED_BIT;
-    return createBuffer(vma, gpi, size, data, bufferUsage, memUsage, memFlags);
+    return createBuffer(vma, gpi, size, bufferUsage, memUsage, memFlags);
 }
 
 // FUNCTION IS DOUBLE, HERE AND IN RESOURCE MANAGER
-fn createBuffer(vma: vk.VmaAllocator, gpi: vk.VkDevice, size: vk.VkDeviceSize, data: ?[]const u8, bufferUsage: vk.VkBufferUsageFlags, memUsage: vk.VmaMemoryUsage, memFlags: vk.VmaAllocationCreateFlags) !DescriptorBuffer {
+fn createBuffer(vma: vk.VmaAllocator, gpi: vk.VkDevice, size: vk.VkDeviceSize, bufferUsage: vk.VkBufferUsageFlags, memUsage: vk.VmaMemoryUsage, memFlags: vk.VmaAllocationCreateFlags) !DescriptorBuffer {
     const bufferInf = vk.VkBufferCreateInfo{
         .sType = vk.VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
         .size = size,
@@ -169,12 +167,6 @@ fn createBuffer(vma: vk.VmaAllocator, gpi: vk.VkDevice, size: vk.VkDeviceSize, d
 
     const addressInf = vk.VkBufferDeviceAddressInfo{ .sType = vk.VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO, .buffer = buffer };
     const deviceAddress = vk.vkGetBufferDeviceAddress(gpi, &addressInf);
-
-    // Initialize with data if provided
-    if (data) |initData| {
-        const mappedPtr = @as([*]u8, @ptrCast(allocVmaInf.pMappedData));
-        @memcpy(mappedPtr[0..initData.len], initData);
-    }
 
     return .{
         .buffer = buffer,
