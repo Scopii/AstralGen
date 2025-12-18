@@ -22,7 +22,7 @@ pub const ShaderManager = struct {
     pub fn init(alloc: Allocator, context: *const Context, resourceManager: *const ResourceManager) !ShaderManager {
         return .{
             .alloc = alloc,
-            .descLayout = resourceManager.descLayout,
+            .descLayout = resourceManager.descMan.descLayout,
             .gpi = context.gpi,
         };
     }

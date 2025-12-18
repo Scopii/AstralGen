@@ -10,7 +10,7 @@ const CmdManager = @import("CmdManager.zig").CmdManager;
 const ShaderManager = @import("ShaderManager.zig").ShaderManager;
 const SwapchainManager = @import("SwapchainManager.zig").SwapchainManager;
 const Swapchain = @import("SwapchainManager.zig").Swapchain;
-const PushConstants = @import("resources/ResourceManager.zig").PushConstants;
+const PushConstants = @import("resources/DescriptorManager.zig").PushConstants;
 const GpuImage = @import("resources/ResourceManager.zig").GpuImage;
 const GpuBuffer = @import("resources/ResourceManager.zig").GpuBuffer;
 const ResourceManager = @import("resources/ResourceManager.zig").ResourceManager;
@@ -51,8 +51,8 @@ pub const Renderer = struct {
         const shaderMan = try ShaderManager.init(alloc, &context, &resourceMan);
         const swapchainMan = try SwapchainManager.init(alloc, &context);
 
-        try resourceMan.createGpuBuffer(objects);
-        try resourceMan.updateObjectBufferDescriptor();
+        try resourceMan.createGpuBuffer(0, objects);
+        try resourceMan.updateObjectBufferDescriptor(0);
 
         return .{
             .alloc = alloc,
@@ -186,11 +186,13 @@ pub const Renderer = struct {
         for (self.passes.items) |pass| {
             const renderImgId = pass.renderImg.id;
 
+            const gpuBuffer = try self.resourceMan.getGpuBuffer(0);
+
             const pushConstants = PushConstants{
                 .camPosAndFov = cam.getPosAndFov(),
                 .camDir = cam.getForward(),
                 .runtime = runtimeAsFloat,
-                .dataCount = self.resourceMan.getGpuObjects().count,
+                .dataCount = gpuBuffer.count,
                 .renderImgIndex = renderImgId,
                 .viewProj = cam.getViewProj(),
             };
@@ -203,8 +205,8 @@ pub const Renderer = struct {
                 self.resourceMan.getRenderImgPtr(renderImgId),
                 validShaders,
                 pass.renderType,
-                self.resourceMan.pipeLayout,
-                self.resourceMan.imgDescBuffer.gpuAddress,
+                self.resourceMan.descMan.pipeLayout,
+                self.resourceMan.descMan.descBuffer.gpuAddress,
                 pushConstants,
                 pass.clear,
             );
