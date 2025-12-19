@@ -25,7 +25,8 @@ pub const DESIRED_SWAPCHAIN_IMAGES: u8 = 3;
 pub const DISPLAY_MODE = vk.VK_PRESENT_MODE_IMMEDIATE_KHR;
 pub const MAX_WINDOWS: u8 = 16;
 
-pub const RENDER_IMG_MAX = 64;
+pub const GPU_IMG_MAX = 64;
+pub const GPU_BUF_MAX = 16;
 pub const RENDER_IMG_FORMAT = vk.VK_FORMAT_R16G16B16A16_SFLOAT;
 pub const RENDER_IMG_AUTO_RESIZE = true;
 pub const RENDER_IMG_STRETCH = true; // Ignored on AUTO_RESIZE

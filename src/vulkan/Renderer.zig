@@ -21,7 +21,7 @@ const createInstance = @import("Context.zig").createInstance;
 const ShaderObject = @import("ShaderObject.zig").ShaderObject;
 
 const Allocator = std.mem.Allocator;
-const RENDER_IMG_MAX = config.RENDER_IMG_MAX;
+const RENDER_IMG_MAX = config.GPU_IMG_MAX;
 
 const Pass = struct {
     renderType: config.RenderType,

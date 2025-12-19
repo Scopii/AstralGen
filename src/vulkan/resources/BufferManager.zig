@@ -7,6 +7,7 @@ const GpuAllocator = @import("GpuAllocator.zig").GpuAllocator;
 const check = @import("../error.zig").check;
 const CreateMapArray = @import("../../structures/MapArray.zig").CreateMapArray;
 const Object = @import("../../ecs/EntityManager.zig").Object;
+const config = @import("../../config.zig");
 
 pub const GpuBuffer = struct {
     pub const deviceAddress = u64;
@@ -17,7 +18,7 @@ pub const GpuBuffer = struct {
     count: u32 = 0,
 };
 
-pub const BufferMap = CreateMapArray(GpuBuffer, 100, u32, 100, 0); // 100 Fixed Buffers
+pub const BufferMap = CreateMapArray(GpuBuffer, config.GPU_BUF_MAX, u32, config.GPU_BUF_MAX, 0); // 100 Fixed Buffers
 
 pub const BufferManager = struct {
     cpuAlloc: Allocator,
@@ -40,7 +41,6 @@ pub const BufferManager = struct {
 
     pub fn createGpuBuffer(self: *BufferManager, buffId: u8, objects: []Object) !void {
         const bufferSize = objects.len * @sizeOf(Object);
-
         var buffer = try self.gpuAlloc.allocDefinedBuffer(bufferSize, null, .testBuffer); // CURRENTLY FIXED TEST BUFFER!
         const pMappedData = buffer.allocInf.pMappedData;
 

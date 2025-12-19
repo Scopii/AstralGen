@@ -6,6 +6,7 @@ const Context = @import("../Context.zig").Context;
 const GpuAllocator = @import("GpuAllocator.zig").GpuAllocator;
 const check = @import("../error.zig").check;
 const CreateMapArray = @import("../../structures/MapArray.zig").CreateMapArray;
+const config = @import("../../config.zig");
 
 pub const GpuImage = struct {
     allocation: vk.VmaAllocation,
@@ -16,7 +17,7 @@ pub const GpuImage = struct {
     curLayout: u32 = vk.VK_IMAGE_LAYOUT_UNDEFINED,
 };
 
-pub const ImageMap = CreateMapArray(GpuImage, 100, u32, 100, 0); // 100 Fixed Images
+pub const ImageMap = CreateMapArray(GpuImage, config.GPU_IMG_MAX, u32, config.GPU_IMG_MAX, 0); // 100 Fixed Images
 
 pub const ImageManager = struct {
     cpuAlloc: Allocator,
@@ -32,30 +33,30 @@ pub const ImageManager = struct {
         for (self.gpuImages.getElements()) |gpuImg| self.destroyGpuImageDirect(gpuImg);
     }
 
-    pub fn createGpuImage(self: *ImageManager, renderId: u8, extent: vk.VkExtent3D, format: vk.VkFormat, usage: vk.VmaMemoryUsage) !void {
+    pub fn createGpuImage(self: *ImageManager, imgId: u8, extent: vk.VkExtent3D, format: vk.VkFormat, usage: vk.VmaMemoryUsage) !void {
         const gpuImage = try self.gpuAlloc.allocGpuImage(extent, format, usage);
-        self.gpuImages.set(renderId, gpuImage);
+        self.gpuImages.set(imgId, gpuImage);
     }
 
     pub fn getGpuImageMapPtr(self: *ImageManager) *ImageMap {
         return &self.gpuImages;
     }
 
-    pub fn isGpuImageIdUsed(self: *ImageManager, renderId: u8) bool {
-        return self.gpuImages.isKeyUsed(renderId);
+    pub fn isGpuImageIdUsed(self: *ImageManager, imgId: u8) bool {
+        return self.gpuImages.isKeyUsed(imgId);
     }
 
-    pub fn getGpuImage(self: *ImageManager, renderId: u8) !GpuImage {
-        if (self.gpuImages.isKeyUsed(renderId) == false) return error.GpuImageIdNotUsed;
-        return self.gpuImages.get(renderId);
+    pub fn getGpuImage(self: *ImageManager, imgId: u8) !GpuImage {
+        if (self.gpuImages.isKeyUsed(imgId) == false) return error.GpuImageIdNotUsed;
+        return self.gpuImages.get(imgId);
     }
 
-    pub fn getGpuImagePtr(self: *ImageManager, renderId: u8) *GpuImage {
-        return self.gpuImages.getPtr(renderId);
+    pub fn getGpuImagePtr(self: *ImageManager, imgId: u8) *GpuImage {
+        return self.gpuImages.getPtr(imgId);
     }
 
-    pub fn destroyGpuImage(self: *ImageManager, renderId: u8) void {
-        const gpuImg = self.gpuImages.get(renderId);
+    pub fn destroyGpuImage(self: *ImageManager, imgId: u8) void {
+        const gpuImg = self.gpuImages.get(imgId);
         self.gpuAlloc.freeGpuImage(gpuImg);
     }
 

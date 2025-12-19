@@ -13,7 +13,7 @@ const GpuAllocator = @import("GpuAllocator.zig").GpuAllocator;
 const check = @import("../error.zig").check;
 const config = @import("../../config.zig");
 const Object = @import("../../ecs/EntityManager.zig").Object;
-const RENDER_IMG_MAX = config.RENDER_IMG_MAX;
+const RENDER_IMG_MAX = config.GPU_IMG_MAX;
 
 pub const ResourceManager = struct {
     cpuAlloc: Allocator,
@@ -52,26 +52,26 @@ pub const ResourceManager = struct {
         return try self.bufferMan.getGpuBuffer(buffId);
     }
 
-    pub fn getGpuImage(self: *ResourceManager, renderId: u8) !GpuImage {
-        return try self.imgMan.getGpuImage(renderId);
+    pub fn getGpuImage(self: *ResourceManager, imgId: u8) !GpuImage {
+        return try self.imgMan.getGpuImage(imgId);
     }
 
-    pub fn getGpuImagePtr(self: *ResourceManager, renderId: u8) *GpuImage {
-        return self.imgMan.getGpuImagePtr(renderId);
+    pub fn getGpuImagePtr(self: *ResourceManager, imgId: u8) *GpuImage {
+        return self.imgMan.getGpuImagePtr(imgId);
     }
 
     pub fn getGpuImageMapPtr(self: *ResourceManager) *ImageMap {
         return self.imgMan.getGpuImageMapPtr();
     }
 
-    pub fn isGpuImageIdUsed(self: *ResourceManager, renderId: u8) bool {
-        return self.imgMan.isGpuImageIdUsed(renderId);
+    pub fn isGpuImageIdUsed(self: *ResourceManager, imgId: u8) bool {
+        return self.imgMan.isGpuImageIdUsed(imgId);
     }
 
-    pub fn createGpuImage(self: *ResourceManager, renderId: u8, extent: vk.VkExtent3D, format: vk.VkFormat, usage: vk.VmaMemoryUsage) !void {
-        try self.imgMan.createGpuImage(renderId, extent, format, usage);
-        const gpuImg = try self.imgMan.getGpuImage(renderId);
-        try self.descMan.updateImageDescriptor(gpuImg.view, renderId);
+    pub fn createGpuImage(self: *ResourceManager, imgId: u8, extent: vk.VkExtent3D, format: vk.VkFormat, usage: vk.VmaMemoryUsage) !void {
+        try self.imgMan.createGpuImage(imgId, extent, format, usage);
+        const gpuImg = try self.imgMan.getGpuImage(imgId);
+        try self.descMan.updateImageDescriptor(gpuImg.view, imgId);
     }
 
     pub fn createGpuBuffer(self: *ResourceManager, buffId: u8, objects: []Object) !void {
@@ -80,7 +80,7 @@ pub const ResourceManager = struct {
         try self.descMan.updateBufferDescriptor(gpuBuffer, buffId);
     }
 
-    pub fn destroyGpuImage(self: *ResourceManager, renderId: u8) void {
-        self.imgMan.destroyGpuImage(renderId);
+    pub fn destroyGpuImage(self: *ResourceManager, imgId: u8) void {
+        self.imgMan.destroyGpuImage(imgId);
     }
 };

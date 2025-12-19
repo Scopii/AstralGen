@@ -72,7 +72,7 @@ pub const DescriptorManager = struct {
         vk.vkDestroyPipelineLayout(self.gpi, self.pipeLayout, null);
     }
 
-    pub fn updateImageDescriptor(self: *DescriptorManager, gpuImgView: vk.VkImageView, renderId: u8) !void {
+    pub fn updateImageDescriptor(self: *DescriptorManager, gpuImgView: vk.VkImageView, imgId: u8) !void {
         const imgInf = vk.VkDescriptorImageInfo{
             .sampler = null,
             .imageView = gpuImgView,
@@ -83,7 +83,7 @@ pub const DescriptorManager = struct {
             .type = vk.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
             .data = .{ .pStorageImage = &imgInf },
         };
-        try self.updateDescriptor(&getInf, 0, self.descBufferProps.storageImageDescriptorSize, renderId);
+        try self.updateDescriptor(&getInf, 0, self.descBufferProps.storageImageDescriptorSize, imgId);
     }
 
     pub fn updateBufferDescriptor(self: *DescriptorManager, gpuBuffer: GpuBuffer, buffId: u8) !void {

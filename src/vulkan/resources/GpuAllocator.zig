@@ -14,18 +14,16 @@ pub const GpuAllocator = struct {
             .vkGetInstanceProcAddr = vk.vkGetInstanceProcAddr,
             .vkGetDeviceProcAddr = vk.vkGetDeviceProcAddr,
         };
-
         const createInf = vk.VmaAllocatorCreateInfo{
             .physicalDevice = gpu,
             .device = gpi,
             .instance = instance,
             .flags = vk.VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT,
-            .pVulkanFunctions = &vulkanFunctions, // Passing the Function Pointers
+            .pVulkanFunctions = &vulkanFunctions, // Passing Function Pointers
         };
-
         var vmaAlloc: vk.VmaAllocator = undefined;
-        try check(vk.vmaCreateAllocator(&createInf, &vmaAlloc), "Failed to create VMA allocator");
-        return GpuAllocator{ .handle = vmaAlloc, .gpi = gpi };
+        try check(vk.vmaCreateAllocator(&createInf, &vmaAlloc), "Failed to create VMA/Gpu allocator");
+        return .{ .handle = vmaAlloc, .gpi = gpi };
     }
 
     pub fn allocDescriptorBuffer(self: *const GpuAllocator, size: vk.VkDeviceSize) !DescriptorBuffer {
@@ -33,13 +31,7 @@ pub const GpuAllocator = struct {
         const memUsage = vk.VMA_MEMORY_USAGE_CPU_TO_GPU;
         const memFlags = vk.VMA_ALLOCATION_CREATE_MAPPED_BIT;
         const gpuBuffer = try self.allocBuffer(size, null, bufferUsage, memUsage, memFlags);
-
-        return DescriptorBuffer{
-            .allocation = gpuBuffer.allocation,
-            .allocInf = gpuBuffer.allocInf,
-            .buffer = gpuBuffer.buffer,
-            .gpuAddress = gpuBuffer.gpuAddress,
-        };
+        return .{ .allocation = gpuBuffer.allocation, .allocInf = gpuBuffer.allocInf, .buffer = gpuBuffer.buffer, .gpuAddress = gpuBuffer.gpuAddress };
     }
 
     pub fn allocDefinedBuffer(self: *const GpuAllocator, size: vk.VkDeviceSize, data: ?[]const u8, bufferType: enum { storage, uniform, testBuffer }) !GpuBuffer {
@@ -70,23 +62,21 @@ pub const GpuAllocator = struct {
         var buffer: vk.VkBuffer = undefined;
         var allocation: vk.VmaAllocation = undefined;
         var allocVmaInf: vk.VmaAllocationInfo = undefined;
-        const allocInf = vk.VmaAllocationCreateInfo{ .usage = memUsage, .flags = memFlags };
-        try check(vk.vmaCreateBuffer(self.handle, &bufferInf, &allocInf, &buffer, &allocation, &allocVmaInf), "Failed to create buffer reference buffer");
+        const allocCreateInf = vk.VmaAllocationCreateInfo{ .usage = memUsage, .flags = memFlags };
+        try check(vk.vmaCreateBuffer(self.handle, &bufferInf, &allocCreateInf, &buffer, &allocation, &allocVmaInf), "Failed to create Gpu Buffer");
 
         const addressInf = vk.VkBufferDeviceAddressInfo{ .sType = vk.VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO, .buffer = buffer };
-        const deviceAddress = vk.vkGetBufferDeviceAddress(self.gpi, &addressInf);
-
         // Init with data if given
         if (data) |initData| {
             const mappedPtr = @as([*]u8, @ptrCast(allocVmaInf.pMappedData));
             @memcpy(mappedPtr[0..initData.len], initData);
         }
 
-        return GpuBuffer{
+        return .{
             .buffer = buffer,
             .allocation = allocation,
             .allocInf = allocVmaInf,
-            .gpuAddress = deviceAddress,
+            .gpuAddress = vk.vkGetBufferDeviceAddress(self.gpi, &addressInf),
         };
     }
 
@@ -98,15 +88,15 @@ pub const GpuAllocator = struct {
             vk.VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 
         // Allocation from GPU local memory
-        const imgInf = createAllocatedImageInf(format, drawImgUsages, extent);
-        const imgAllocInf = vk.VmaAllocationCreateInfo{ .usage = usage, .requiredFlags = vk.VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT };
-
         var img: vk.VkImage = undefined;
         var allocation: vk.VmaAllocation = undefined;
-        var view: vk.VkImageView = undefined;
+        const imgInf = createAllocatedImageInf(format, drawImgUsages, extent);
+        const imgAllocInf = vk.VmaAllocationCreateInfo{ .usage = usage, .requiredFlags = vk.VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT };
         try check(vk.vmaCreateImage(self.handle, &imgInf, &imgAllocInf, &img, &allocation, null), "Could not create Render Image");
-        const renderViewInf = createAllocatedImageViewInf(format, img, vk.VK_IMAGE_ASPECT_COLOR_BIT);
-        try check(vk.vkCreateImageView(self.gpi, &renderViewInf, null, &view), "Could not create Render Image View");
+
+        var view: vk.VkImageView = undefined;
+        const viewInf = createAllocatedImageViewInf(format, img, vk.VK_IMAGE_ASPECT_COLOR_BIT);
+        try check(vk.vkCreateImageView(self.gpi, &viewInf, null, &view), "Could not create Render Image View");
 
         return .{
             .allocation = allocation,
