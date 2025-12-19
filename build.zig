@@ -77,28 +77,28 @@ pub fn build(b: *std.Build) void {
 
     const no_bin = b.option(bool, "no-bin", "Skip binary creation for type checking") orelse false;
 
-    if (no_bin == false) {
-        b.installArtifact(exe);
-    }
-
     if (target.result.os.tag == .windows) {
         b.installFile("libs/SDL3/SDL3.dll", "bin/SDL3.dll");
     }
 
-    // Create Shader directory if needed
-    std.fs.cwd().makePath("zig-out/shader") catch |err| {
-        std.debug.print("Failed to create directory '{s}': {}\n", .{ "zig-out/shader", err });
-    };
+    if (no_bin == false) {
+        b.installArtifact(exe);
 
-    const run_cmd = b.addRunArtifact(exe);
-    run_cmd.step.dependOn(b.getInstallStep());
+        // Create Shader directory if needed
+        std.fs.cwd().makePath("zig-out/shader") catch |err| {
+            std.debug.print("Failed to create directory '{s}': {}\n", .{ "zig-out/shader", err });
+        };
 
-    if (b.args) |args| {
-        run_cmd.addArgs(args);
+        const run_cmd = b.addRunArtifact(exe);
+        run_cmd.step.dependOn(b.getInstallStep());
+
+        if (b.args) |args| {
+            run_cmd.addArgs(args);
+        }
+
+        const run_step = b.step("run", "Run the app");
+        run_step.dependOn(&run_cmd.step);
     }
-
-    const run_step = b.step("run", "Run the app");
-    run_step.dependOn(&run_cmd.step);
 
     const exe_unit_tests = b.addTest(.{
         .root_module = b.createModule(.{
