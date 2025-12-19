@@ -12,7 +12,7 @@ pub const ShaderManager = struct {
     alloc: Allocator,
     descLayout: vk.VkDescriptorSetLayout,
     gpi: vk.VkDevice,
-    shaders: CreateMapArray(ShaderObject, shaderCon.SHADER_MAX, u32, shaderCon.SHADER_MAX, 0) = .{},
+    shaders: CreateMapArray(ShaderObject, shaderCon.SHADER_MAX, u8, shaderCon.SHADER_MAX, 0) = .{},
 
     pub fn init(alloc: Allocator, context: *const Context, resourceManager: *const ResourceManager) !ShaderManager {
         return .{
@@ -27,6 +27,10 @@ pub const ShaderManager = struct {
         for (self.shaders.getElements()) |*shader| {
             shader.deinit(gpi);
         }
+    }
+
+    pub fn isShaderIdUsed(self: *ShaderManager, shaderId: u8) bool {
+        return self.shaders.isKeyUsed(shaderId);
     }
 
     pub fn createShaders(self: *ShaderManager, loadedShaders: []LoadedShader) !void {

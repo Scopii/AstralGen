@@ -11,7 +11,7 @@ pub const sprvPath: []const u8 = "/zig-out/shader";
 pub const ShaderType = enum { compute, vert, frag, task, mesh, meshNoTask };
 
 pub const ShaderInfo = struct {
-    id: u32,
+    id: u8,
     shaderType: ShaderType,
     timeStamp: i128 = 0,
     glslFile: []const u8,

@@ -26,8 +26,10 @@ pub const GpuBufferInfo = struct {
     buffUsage: BufferUsage,
 };
 
-pub const gpuBuf1: GpuBufferInfo = .{ .buffId = 0, .length = 1000, .dataType = Object, .memUsage = .CpuWriteOptimal, .buffUsage = .Storage };
-pub const gpuBufInfos: []const GpuBufferInfo = &.{gpuBuf1};
+pub const BufferRegistry = struct {
+    pub const objectBuffer = GpuBufferInfo{ .buffId = 0, .length = 1000, .dataType = Object, .memUsage = .CpuWriteOptimal, .buffUsage = .Storage };
+    pub const gridBuffer = GpuBufferInfo{ .buffId = 1, .length = 100, .dataType = Object, .memUsage = .CpuWriteOptimal, .buffUsage = .Storage };
+};
 
 pub const GpuImageInfo = struct {
     id: u8,

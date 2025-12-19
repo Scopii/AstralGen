@@ -72,8 +72,9 @@ pub const App = struct {
         shaderCompiler.freeFreshShaders();
 
         try renderer.addPasses(renderCon.renderSequence);
-        try renderer.createGpuBuffers(renderCon.gpuBufInfos);
-        try renderer.updateGpuBuffer(0, ecs.getObjects());
+        try renderer.createGpuBuffer(renderCon.BufferRegistry.objectBuffer);
+        try renderer.createGpuBuffer(renderCon.BufferRegistry.gridBuffer);
+        try renderer.updateGpuBuffer(renderCon.BufferRegistry.objectBuffer, ecs.getObjects());
 
         return .{
             .cam = Camera.init(.{}),
@@ -123,7 +124,7 @@ pub const App = struct {
 
             // Process Window Changes
             if (windowMan.changedWindows.len > 0) {
-                try renderer.updateWindowState(windowMan.changedWindows.slice());
+                try renderer.updateWindowState(windowMan.getChangedWindows());
                 windowMan.cleanupWindows();
             }
 

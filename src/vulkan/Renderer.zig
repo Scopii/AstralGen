@@ -135,12 +135,12 @@ pub const Renderer = struct {
         }
     }
 
-    pub fn createGpuBuffers(self: *Renderer, comptime gpuBufConfigs: []const renderCon.GpuBufferInfo) !void {
+    pub fn createGpuBuffer(self: *Renderer, comptime gpuBufConfigs: renderCon.GpuBufferInfo) !void {
         try self.resourceMan.createGpuBuffer(gpuBufConfigs);
     }
 
-    pub fn updateGpuBuffer(self: *Renderer, buffId: u8, objects: []Object) !void { // SHOULD LATER TAKE CONFIG
-        try self.resourceMan.updateGpuBuffer(buffId, objects);
+    pub fn updateGpuBuffer(self: *Renderer, comptime gpuBufConfigs: renderCon.GpuBufferInfo, objects: []Object) !void { // SHOULD LATER TAKE CONFIG
+        try self.resourceMan.updateGpuBuffer(gpuBufConfigs, objects);
     }
 
     pub fn createRenderImage(self: *Renderer, renderRes: renderCon.GpuImageInfo) !void {
@@ -155,11 +155,6 @@ pub const Renderer = struct {
             try self.resourceMan.createGpuImage(renderRes.id, renderRes.extent, renderRes.imgFormat, renderRes.memUsage);
             std.debug.print("Renderer: RenderImage {} created\n", .{renderRes.id});
         }
-    }
-
-    pub fn updateShaderLayout(self: *Renderer, index: usize) !void {
-        _ = vk.vkDeviceWaitIdle(self.context.gpi);
-        try self.shaderMan.updateShaderLayout(index);
     }
 
     pub fn draw(self: *Renderer, cam: *Camera, runtimeAsFloat: f32) !void {
@@ -214,6 +209,12 @@ pub const Renderer = struct {
     }
 
     pub fn addShaders(self: *Renderer, loadedShaders: []LoadedShader) !void {
+        for (loadedShaders) |loadedShader| {
+            if (self.shaderMan.isShaderIdUsed(loadedShader.shaderConfig.id) == true) {
+                _ = vk.vkDeviceWaitIdle(self.context.gpi);
+                break;
+            }
+        }
         try self.shaderMan.createShaders(loadedShaders);
     }
 

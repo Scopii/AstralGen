@@ -58,6 +58,10 @@ pub const WindowManager = struct {
         _ = sdl.SDL_ShowSimpleMessageBox(sdl.SDL_MESSAGEBOX_ERROR, title.ptr, message.ptr, null);
     }
 
+    pub fn getChangedWindows(self: *WindowManager) []*Window {
+        return self.changedWindows.slice();
+    }
+
     pub fn cleanupWindows(self: *WindowManager) void {
         for (self.changedWindows.slice()) |window| {
             switch (window.state) {

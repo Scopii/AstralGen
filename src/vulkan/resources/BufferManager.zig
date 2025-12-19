@@ -41,18 +41,19 @@ pub const BufferManager = struct {
         self.gpuBuffers.set(gpuBufConfigs.buffId, buffer);
     }
 
-    pub fn updateGpuBuffer(self: *BufferManager, buffId: u8, objects: []Object) !void {
+    pub fn updateGpuBuffer(self: *BufferManager, comptime gpuBufConfig: renderCon.GpuBufferInfo, data: []const gpuBufConfig.dataType) !void {
+        const buffId = gpuBufConfig.buffId;
         var buffer = try self.getGpuBuffer(buffId);
         const pMappedData = buffer.allocInf.pMappedData;
         // Check Alignemnt naively (Doesnt catch everything)
-        const alignment = @alignOf(Object);
+        const alignment = @alignOf(gpuBufConfig.dataType);
         if (@intFromPtr(pMappedData) % alignment != 0) {
             return error.ImproperAlignment;
         }
-        const dataPtr: [*]Object = @ptrCast(@alignCast(pMappedData));
-        @memcpy(dataPtr[0..objects.len], objects);
+        const dataPtr: [*]gpuBufConfig.dataType = @ptrCast(@alignCast(pMappedData));
+        @memcpy(dataPtr[0..data.len], data);
 
-        buffer.count = @intCast(objects.len);
+        buffer.count = @intCast(data.len);
         self.gpuBuffers.set(buffId, buffer);
     }
 

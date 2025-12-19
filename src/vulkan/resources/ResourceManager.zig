@@ -71,17 +71,15 @@ pub const ResourceManager = struct {
         try self.descMan.updateImageDescriptor(gpuImg.view, imgId);
     }
 
-    pub fn createGpuBuffer(self: *ResourceManager, comptime gpuBufConfigs: []const renderCon.GpuBufferInfo) !void {
-        inline for (gpuBufConfigs) |gpuBufConfig| {
-            const buffId = gpuBufConfig.buffId;
-            try self.bufferMan.createGpuBuffer(gpuBufConfig);
-            const gpuBuffer = try self.bufferMan.getGpuBuffer(buffId);
-            try self.descMan.updateBufferDescriptor(gpuBuffer, buffId);
-        }
+    pub fn createGpuBuffer(self: *ResourceManager, comptime gpuBufConfig: renderCon.GpuBufferInfo) !void {
+        const buffId = gpuBufConfig.buffId;
+        try self.bufferMan.createGpuBuffer(gpuBufConfig);
+        const gpuBuffer = try self.bufferMan.getGpuBuffer(buffId);
+        try self.descMan.updateBufferDescriptor(gpuBuffer, buffId);
     }
 
-    pub fn updateGpuBuffer(self: *ResourceManager, buffId: u8, objects: []Object) !void {
-        try self.bufferMan.updateGpuBuffer(buffId, objects);
+    pub fn updateGpuBuffer(self: *ResourceManager, comptime gpuBufConfig: renderCon.GpuBufferInfo, objects: []Object) !void {
+        try self.bufferMan.updateGpuBuffer(gpuBufConfig, objects);
     }
 
     pub fn destroyGpuImage(self: *ResourceManager, imgId: u8) void {
