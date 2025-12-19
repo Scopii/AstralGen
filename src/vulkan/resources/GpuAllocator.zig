@@ -2,6 +2,7 @@ const vk = @import("../../modules/vk.zig").c;
 const DescriptorBuffer = @import("DescriptorManager.zig").DescriptorBuffer;
 const GpuBuffer = @import("BufferManager.zig").GpuBuffer;
 const GpuImage = @import("ImageManager.zig").GpuImage;
+const GpuBufferConfig = @import("../../config.zig").GpuBufferConfig;
 
 const check = @import("../error.zig").check;
 
@@ -30,29 +31,42 @@ pub const GpuAllocator = struct {
         const bufferUsage = vk.VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT | vk.VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
         const memUsage = vk.VMA_MEMORY_USAGE_CPU_TO_GPU;
         const memFlags = vk.VMA_ALLOCATION_CREATE_MAPPED_BIT;
-        const gpuBuffer = try self.allocBuffer(size, null, bufferUsage, memUsage, memFlags);
+        const gpuBuffer = try self.allocBuffer(size, bufferUsage, memUsage, memFlags);
         return .{ .allocation = gpuBuffer.allocation, .allocInf = gpuBuffer.allocInf, .buffer = gpuBuffer.buffer, .gpuAddress = gpuBuffer.gpuAddress };
     }
 
-    pub fn allocDefinedBuffer(self: *const GpuAllocator, size: vk.VkDeviceSize, data: ?[]const u8, bufferType: enum { storage, uniform, testBuffer }) !GpuBuffer {
-        const bufferUsage: u32 = switch (bufferType) {
-            .storage, .testBuffer => vk.VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | vk.VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | vk.VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-            .uniform => vk.VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | vk.VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+    pub fn allocDefinedBuffer(self: *const GpuAllocator, comptime gpuBufConfigs: GpuBufferConfig) !GpuBuffer {
+        const bufferByteSize = gpuBufConfigs.length * @sizeOf(gpuBufConfigs.dataType);
+
+        var bufferUsage: vk.VkBufferUsageFlags = switch (gpuBufConfigs.bufferType) {
+            .Storage => vk.VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+            .Uniform => vk.VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+            .Index => vk.VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+            .Vertex => vk.VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+            .Staging => vk.VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
         };
-        const memUsage: u32 = switch (bufferType) {
-            .storage => vk.VMA_MEMORY_USAGE_GPU_ONLY,
-            .uniform, .testBuffer => vk.VMA_MEMORY_USAGE_CPU_TO_GPU,
+
+        if (gpuBufConfigs.bufferType != .Staging) {
+            bufferUsage |= vk.VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+            bufferUsage |= vk.VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+        }
+
+        const memUsage: vk.VmaMemoryUsage = switch (gpuBufConfigs.memory) {
+            .GpuOptimal => vk.VMA_MEMORY_USAGE_GPU_ONLY,
+            .CpuWriteOptimal => vk.VMA_MEMORY_USAGE_CPU_TO_GPU,
+            .CpuReadOptimal => vk.VMA_MEMORY_USAGE_GPU_TO_CPU,
         };
-        const memFlags: u32 = switch (bufferType) {
-            .uniform,
-            => vk.VMA_ALLOCATION_CREATE_MAPPED_BIT,
-            .testBuffer => vk.VMA_ALLOCATION_CREATE_MAPPED_BIT | vk.VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT,
-            .storage => 0, // Storage buffers should not be mapped!
+
+        var memFlags: vk.VmaAllocationCreateFlags = switch (gpuBufConfigs.memory) {
+            .GpuOptimal => 0,
+            .CpuWriteOptimal, .CpuReadOptimal => vk.VMA_ALLOCATION_CREATE_MAPPED_BIT,
         };
-        return try self.allocBuffer(size, data, bufferUsage, memUsage, memFlags);
+        if (gpuBufConfigs.bufferType == .Staging) memFlags |= vk.VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+
+        return try self.allocBuffer(bufferByteSize, bufferUsage, memUsage, memFlags);
     }
 
-    pub fn allocBuffer(self: *const GpuAllocator, size: vk.VkDeviceSize, data: ?[]const u8, bufferUsage: vk.VkBufferUsageFlags, memUsage: vk.VmaMemoryUsage, memFlags: vk.VmaAllocationCreateFlags) !GpuBuffer {
+    pub fn allocBuffer(self: *const GpuAllocator, size: vk.VkDeviceSize, bufferUsage: vk.VkBufferUsageFlags, memUsage: vk.VmaMemoryUsage, memFlags: vk.VmaAllocationCreateFlags) !GpuBuffer {
         const bufferInf = vk.VkBufferCreateInfo{
             .sType = vk.VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
             .size = size,
@@ -66,11 +80,6 @@ pub const GpuAllocator = struct {
         try check(vk.vmaCreateBuffer(self.handle, &bufferInf, &allocCreateInf, &buffer, &allocation, &allocVmaInf), "Failed to create Gpu Buffer");
 
         const addressInf = vk.VkBufferDeviceAddressInfo{ .sType = vk.VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO, .buffer = buffer };
-        // Init with data if given
-        if (data) |initData| {
-            const mappedPtr = @as([*]u8, @ptrCast(allocVmaInf.pMappedData));
-            @memcpy(mappedPtr[0..initData.len], initData);
-        }
 
         return .{
             .buffer = buffer,

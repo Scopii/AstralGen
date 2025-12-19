@@ -39,11 +39,14 @@ pub const BufferManager = struct {
         return self.gpuBuffers.get(buffId);
     }
 
-    pub fn createGpuBuffer(self: *BufferManager, buffId: u8, objects: []Object) !void {
-        const bufferSize = objects.len * @sizeOf(Object);
-        var buffer = try self.gpuAlloc.allocDefinedBuffer(bufferSize, null, .testBuffer); // CURRENTLY FIXED TEST BUFFER!
-        const pMappedData = buffer.allocInf.pMappedData;
+    pub fn createGpuBuffer(self: *BufferManager, comptime gpuBufConfigs: config.GpuBufferConfig) !void {
+        const buffer = try self.gpuAlloc.allocDefinedBuffer(gpuBufConfigs);
+        self.gpuBuffers.set(gpuBufConfigs.buffId, buffer);
+    }
 
+    pub fn updateGpuBuffer(self: *BufferManager, buffId: u8, objects: []Object) !void {
+        var buffer = try self.getGpuBuffer(buffId);
+        const pMappedData = buffer.allocInf.pMappedData;
         // Check Alignemnt naively (Doesnt catch everything)
         const alignment = @alignOf(Object);
         if (@intFromPtr(pMappedData) % alignment != 0) {

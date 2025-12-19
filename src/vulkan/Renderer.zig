@@ -138,8 +138,12 @@ pub const Renderer = struct {
         }
     }
 
-    pub fn createGpuBuffer(self: *Renderer, buffId: u8, objects: []Object) !void { // SHOULD LATER TAKE CONFIG
-        try self.resourceMan.createGpuBuffer(buffId, objects);
+    pub fn createGpuBuffers(self: *Renderer, comptime gpuBufConfigs: []const config.GpuBufferConfig) !void {
+        try self.resourceMan.createGpuBuffer(gpuBufConfigs);
+    }
+
+    pub fn updateGpuBuffer(self: *Renderer, buffId: u8, objects: []Object) !void { // SHOULD LATER TAKE CONFIG
+        try self.resourceMan.updateGpuBuffer(buffId, objects);
     }
 
     pub fn createRenderImage(self: *Renderer, renderRes: config.GpuImageConfig) !void {

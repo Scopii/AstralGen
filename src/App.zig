@@ -7,6 +7,7 @@ const EventManager = @import("core/EventManager.zig").EventManager;
 const TimeManager = @import("core/TimeManager.zig").TimeManager;
 const ShaderCompiler = @import("core/ShaderCompiler.zig").ShaderCompiler;
 const EntityManager = @import("ecs/EntityManager.zig").EntityManager;
+const Object = @import("ecs/EntityManager.zig").Object;
 const UiManager = @import("core/UiManager.zig").UiManager;
 const RNGenerator = @import("core/RNGenerator.zig").RNGenerator;
 const Camera = @import("core/Camera.zig").Camera;
@@ -72,7 +73,8 @@ pub const App = struct {
         shaderCompiler.freeFreshShaders();
 
         try renderer.addPasses(config.renderSeq2);
-        try renderer.createGpuBuffer(0, ecs.getObjects());
+        try renderer.createGpuBuffers(config.gpuBufConfigs);
+        try renderer.updateGpuBuffer(0, ecs.getObjects());
 
         return .{
             .cam = Camera.init(.{}),

@@ -3,6 +3,7 @@ const sdl = @import("modules/sdl.zig").c;
 pub const std = @import("std");
 const KeyMapping = @import("core/EventManager.zig").KeyMapping;
 const ShaderStage = @import("vulkan/ShaderObject.zig").ShaderStage;
+const Object = @import("ecs/EntityManager.zig").Object;
 
 // Vulkan Validation Layers
 pub const DEBUG_MODE = true;
@@ -97,25 +98,29 @@ pub const ShaderConfig = struct {
 pub const RenderType = enum { computePass, graphicsPass, meshPass, taskMeshPass, vertexPass };
 
 pub const GpuBufferConfig = struct {
-    pub const BufferType = enum {
+    pub const BufferType = enum(vk.VkBufferUsageFlags) {
         Storage, // STORAGE_BUFFER
         Uniform, // UNIFORM_BUFFER
         Index, // INDEX_BUFFER
         Vertex, // VERTEX_BUFFER
         Staging, // TRANSFER_SRC
     };
-
     pub const MemoryType = enum {
         GpuOptimal, // Fastest (needs Staging Buffer Updates)
         CpuWriteOptimal, // Slower (CPU writes, GPU reads)
         CpuReadOptimal, // Very Slow (GPU writes, CPU reads)
     };
 
-    id: u8,
-    size: u64,
-    type: BufferType,
+    buffId: u8,
+    length: u64,
+    dataType: type,
     memory: MemoryType,
+    bufferType: BufferType,
 };
+
+pub const gpuBuf1: GpuBufferConfig = .{ .buffId = 0, .length = 1000, .dataType = Object, .memory = .CpuWriteOptimal, .bufferType = .Storage };
+
+pub const gpuBufConfigs: []const GpuBufferConfig = &.{gpuBuf1};
 
 pub const GpuImageConfig = struct {
     id: u8,
