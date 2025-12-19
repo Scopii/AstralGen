@@ -18,7 +18,7 @@ pub const GpuBuffer = struct {
     count: u32 = 0,
 };
 
-pub const BufferMap = CreateMapArray(GpuBuffer, config.GPU_BUF_MAX, u32, config.GPU_BUF_MAX, 0); // 100 Fixed Buffers
+pub const BufferMap = CreateMapArray(GpuBuffer, config.GPU_BUF_MAX, u32, config.GPU_BUF_MAX, 0);
 
 pub const BufferManager = struct {
     cpuAlloc: Allocator,

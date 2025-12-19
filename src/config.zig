@@ -94,15 +94,30 @@ pub const ShaderConfig = struct {
     spvFile: []const u8,
 };
 
-pub const ShaderLayout = struct {
-    renderImg: RenderResource,
-    shaders: []const ShaderConfig,
-    clear: bool = false,
-};
-
 pub const RenderType = enum { computePass, graphicsPass, meshPass, taskMeshPass, vertexPass };
 
-pub const RenderResource = struct {
+pub const GpuBufferConfig = struct {
+    pub const BufferType = enum {
+        Storage, // STORAGE_BUFFER
+        Uniform, // UNIFORM_BUFFER
+        Index, // INDEX_BUFFER
+        Vertex, // VERTEX_BUFFER
+        Staging, // TRANSFER_SRC
+    };
+
+    pub const MemoryType = enum {
+        GpuOptimal, // Fastest (needs Staging Buffer Updates)
+        CpuWriteOptimal, // Slower (CPU writes, GPU reads)
+        CpuReadOptimal, // Very Slow (GPU writes, CPU reads)
+    };
+
+    id: u8,
+    size: u64,
+    type: BufferType,
+    memory: MemoryType,
+};
+
+pub const GpuImageConfig = struct {
     id: u8,
     extent: vk.VkExtent3D,
     imgFormat: c_uint = RENDER_IMG_FORMAT,
@@ -110,44 +125,38 @@ pub const RenderResource = struct {
 };
 
 pub const PassConfig = struct {
-    renderImg: RenderResource,
+    renderImg: GpuImageConfig,
     shaderIds: []const u8,
     clear: bool = false,
 };
 
 // Render
 pub const comp1 = ShaderConfig{ .id = 0, .shaderType = .compute, .glslFile = "compTest/comp.slang", .spvFile = "comp1.spv" };
-pub const renderImg1 = RenderResource{ .id = 0, .extent = .{ .width = 500, .height = 500, .depth = 1 } };
+pub const renderImg1 = GpuImageConfig{ .id = 0, .extent = .{ .width = 500, .height = 500, .depth = 1 } };
 pub const pass1: PassConfig = .{ .renderImg = renderImg1, .shaderIds = &.{comp1.id} }; // clear does not work for compute
 
 pub const vert1 = ShaderConfig{ .id = 1, .shaderType = .vert, .glslFile = "grapTest/vert.slang", .spvFile = "vert1.spv" };
 pub const frag1 = ShaderConfig{ .id = 2, .shaderType = .frag, .glslFile = "grapTest/frag.slang", .spvFile = "frag1.spv" };
-pub const renderImg2 = RenderResource{ .id = 1, .extent = .{ .width = 300, .height = 300, .depth = 1 } };
+pub const renderImg2 = GpuImageConfig{ .id = 1, .extent = .{ .width = 300, .height = 300, .depth = 1 } };
 pub const pass2: PassConfig = .{ .renderImg = renderImg2, .shaderIds = &.{ vert1.id, frag1.id } };
 
 pub const mesh1 = ShaderConfig{ .id = 3, .shaderType = .meshNoTask, .glslFile = "meshTest/mesh.slang", .spvFile = "mesh1.spv" };
 pub const frag2 = ShaderConfig{ .id = 4, .shaderType = .frag, .glslFile = "meshTest/frag.slang", .spvFile = "frag2.spv" };
-pub const renderImg3 = RenderResource{ .id = 15, .extent = .{ .width = 100, .height = 100, .depth = 1 } };
+pub const renderImg3 = GpuImageConfig{ .id = 15, .extent = .{ .width = 100, .height = 100, .depth = 1 } };
 pub const pass3: PassConfig = .{ .renderImg = renderImg3, .shaderIds = &.{ mesh1.id, frag2.id } };
 
 pub const task1 = ShaderConfig{ .id = 5, .shaderType = .task, .glslFile = "taskTest/task.slang", .spvFile = "task1.spv" };
 pub const mesh2 = ShaderConfig{ .id = 6, .shaderType = .mesh, .glslFile = "taskTest/mesh.slang", .spvFile = "mesh2.spv" };
 pub const frag3 = ShaderConfig{ .id = 7, .shaderType = .frag, .glslFile = "taskTest/frag.slang", .spvFile = "frag3.spv" };
-pub const renderImg4 = RenderResource{ .id = 7, .extent = .{ .width = 1920, .height = 1080, .depth = 1 } };
+pub const renderImg4 = GpuImageConfig{ .id = 7, .extent = .{ .width = 1920, .height = 1080, .depth = 1 } };
 pub const pass4: PassConfig = .{ .renderImg = renderImg4, .shaderIds = &.{ task1.id, mesh2.id, frag3.id } };
 
 pub const task2 = ShaderConfig{ .id = 8, .shaderType = .task, .glslFile = "gridTest/task.slang", .spvFile = "task2.spv" };
 pub const mesh3 = ShaderConfig{ .id = 9, .shaderType = .mesh, .glslFile = "gridTest/mesh.slang", .spvFile = "mesh3.spv" };
 pub const frag4 = ShaderConfig{ .id = 10, .shaderType = .frag, .glslFile = "gridTest/frag.slang", .spvFile = "frag4.spv" };
-pub const renderImg5 = RenderResource{ .id = 7, .extent = .{ .width = 1920, .height = 1080, .depth = 1 } };
+pub const renderImg5 = GpuImageConfig{ .id = 7, .extent = .{ .width = 1920, .height = 1080, .depth = 1 } };
 pub const pass5: PassConfig = .{ .renderImg = renderImg4, .shaderIds = &.{ task2.id, mesh3.id, frag4.id }, .clear = true };
 
 pub const shadersToCompile: []const ShaderConfig = &.{ comp1, vert1, frag1, mesh1, frag2, task1, mesh2, frag3, task2, mesh3, frag4 };
 
-pub const renderSeq2: []const PassConfig = &.{
-    pass1,
-    pass2,
-    pass3,
-    pass4,
-    pass5,
-};
+pub const renderSeq2: []const PassConfig = &.{ pass1, pass2, pass3, pass4, pass5 };

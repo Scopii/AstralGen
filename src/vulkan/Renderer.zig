@@ -25,7 +25,7 @@ const RENDER_IMG_MAX = config.GPU_IMG_MAX;
 
 const Pass = struct {
     renderType: config.RenderType,
-    renderImg: config.RenderResource,
+    renderImg: config.GpuImageConfig,
     shaderIds: []const u8,
     clear: bool,
 };
@@ -142,7 +142,7 @@ pub const Renderer = struct {
         try self.resourceMan.createGpuBuffer(buffId, objects);
     }
 
-    pub fn createRenderImage(self: *Renderer, renderRes: config.RenderResource) !void {
+    pub fn createRenderImage(self: *Renderer, renderRes: config.GpuImageConfig) !void {
         if (renderRes.id > RENDER_IMG_MAX - 1) {
             std.debug.print("Renderer: RenderId Image ID cant be bigger than Max Windows\n", .{});
             return error.RenderImageIdOutOfBounds;

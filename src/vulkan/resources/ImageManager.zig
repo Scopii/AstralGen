@@ -17,7 +17,7 @@ pub const GpuImage = struct {
     curLayout: u32 = vk.VK_IMAGE_LAYOUT_UNDEFINED,
 };
 
-pub const ImageMap = CreateMapArray(GpuImage, config.GPU_IMG_MAX, u32, config.GPU_IMG_MAX, 0); // 100 Fixed Images
+pub const ImageMap = CreateMapArray(GpuImage, config.GPU_IMG_MAX, u32, config.GPU_IMG_MAX, 0);
 
 pub const ImageManager = struct {
     cpuAlloc: Allocator,
