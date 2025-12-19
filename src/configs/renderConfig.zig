@@ -17,19 +17,8 @@ pub const RENDER_IMG_STRETCH = true; // Ignored on AUTO_RESIZE
 pub const RenderType = enum { computePass, graphicsPass, meshPass, taskMeshPass, vertexPass };
 
 pub const GpuBufferInfo = struct {
-    pub const BufferUsage = enum(vk.VkBufferUsageFlags) {
-        Storage, // STORAGE_BUFFER
-        Uniform, // UNIFORM_BUFFER
-        Index, // INDEX_BUFFER
-        Vertex, // VERTEX_BUFFER
-        Staging, // TRANSFER_SRC
-    };
-    pub const MemoryUsage = enum {
-        GpuOptimal, // Fastest (needs Staging Buffer Updates)
-        CpuWriteOptimal, // Slower (CPU writes, GPU reads)
-        CpuReadOptimal, // Very Slow (GPU writes, CPU reads)
-    };
-
+    pub const BufferUsage = enum(vk.VkBufferUsageFlags) { Storage, Uniform, Index, Vertex, Staging };
+    pub const MemoryUsage = enum { GpuOptimal, CpuWriteOptimal, CpuReadOptimal };
     buffId: u8,
     length: u64,
     dataType: type,
@@ -69,4 +58,4 @@ pub const pass4: passInfo = .{ .renderImg = renderImg4, .shaderIds = &.{ sc.t4Ta
 pub const renderImg5 = GpuImageInfo{ .id = 7, .extent = .{ .width = 1920, .height = 1080, .depth = 1 } };
 pub const pass5: passInfo = .{ .renderImg = renderImg4, .shaderIds = &.{ sc.gridTask.id, sc.gridMesh.id, sc.gridFrag.id }, .clear = true };
 
-pub const renderSeq2: []const passInfo = &.{ pass1, pass2, pass3, pass4, pass5 };
+pub const renderSequence: []const passInfo = &.{ pass1, pass2, pass3, pass4, pass5 };

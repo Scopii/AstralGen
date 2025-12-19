@@ -71,7 +71,7 @@ pub const App = struct {
         try renderer.addShaders(shaderCompiler.pullFreshShaders());
         shaderCompiler.freeFreshShaders();
 
-        try renderer.addPasses(renderCon.renderSeq2);
+        try renderer.addPasses(renderCon.renderSequence);
         try renderer.createGpuBuffers(renderCon.gpuBufInfos);
         try renderer.updateGpuBuffer(0, ecs.getObjects());
 

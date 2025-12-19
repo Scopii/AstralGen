@@ -75,7 +75,11 @@ pub fn build(b: *std.Build) void {
     const zpool_dep = b.dependency("zpool", .{ .target = target, .optimize = optimize });
     exe.root_module.addImport("zpool", zpool_dep.module("root"));
 
-    b.installArtifact(exe);
+    const no_bin = b.option(bool, "no-bin", "Skip binary creation for type checking") orelse false;
+
+    if (no_bin == false) {
+        b.installArtifact(exe);
+    }
 
     if (target.result.os.tag == .windows) {
         b.installFile("libs/SDL3/SDL3.dll", "bin/SDL3.dll");

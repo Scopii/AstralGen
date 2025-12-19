@@ -38,28 +38,23 @@ pub const DescriptorManager = struct {
     pipeLayout: vk.VkPipelineLayout,
 
     pub fn init(cpuAlloc: Allocator, gpuAlloc: GpuAllocator, gpi: vk.VkDevice, gpu: vk.VkPhysicalDevice) !DescriptorManager {
-        // Query descriptor buffer properties
-        const descBufferProps = getDescriptorBufferProperties(gpu);
         // Create Descriptor Layout
         const textureBinding = createDescriptorLayoutBinding(0, vk.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, GPU_IMG_MAX, vk.VK_SHADER_STAGE_ALL);
         const objectBinding = createDescriptorLayoutBinding(1, vk.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, vk.VK_SHADER_STAGE_ALL); // only one needed
         const descLayout = try createDescriptorLayout(gpi, &.{ textureBinding, objectBinding });
         errdefer vk.vkDestroyDescriptorSetLayout(gpi, descLayout, null);
-
-        // Get the exact size for this layout from the driver
+        // Get exact size for this layout from the driver
         var layoutSize: vk.VkDeviceSize = undefined;
         vkFn.vkGetDescriptorSetLayoutSizeEXT.?(gpi, descLayout, &layoutSize);
-
-        const descBuffer = try gpuAlloc.allocDescriptorBuffer(layoutSize);
 
         return .{
             .cpuAlloc = cpuAlloc,
             .gpuAlloc = gpuAlloc,
             .gpi = gpi,
             .gpu = gpu,
-            .descBufferProps = descBufferProps,
+            .descBufferProps = getDescriptorBufferProperties(gpu),
             .descLayout = descLayout,
-            .descBuffer = descBuffer,
+            .descBuffer = try gpuAlloc.allocDescriptorBuffer(layoutSize),
             .pipeLayout = try createPipelineLayout(gpi, descLayout, vk.VK_SHADER_STAGE_ALL, @sizeOf(PushConstants)),
         };
     }
@@ -133,7 +128,6 @@ fn getDescriptorBufferProperties(gpu: vk.VkPhysicalDevice) vk.VkPhysicalDeviceDe
 }
 
 fn createDescriptorLayout(gpi: vk.VkDevice, layoutBindings: []const vk.VkDescriptorSetLayoutBinding) !vk.VkDescriptorSetLayout {
-    // 1. Binding Flags
     // Binding 0 (Images): Needs PARTIALLY_BOUND because the array is 1024 but we only use a few.
     // Binding 1 (Buffer): Needs 0.
     const bindingFlags = [_]vk.VkDescriptorBindingFlags{ vk.VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT, 0 };
