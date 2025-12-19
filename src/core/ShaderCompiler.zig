@@ -1,15 +1,15 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
-const config = @import("../config.zig");
-const ShaderConfig = @import("../config.zig").ShaderConfig;
+const shaderCon = @import("../configs/shaderConfig.zig");
 const ShaderStage = @import("../vulkan/ShaderObject.zig").ShaderStage;
+const ShaderInfo = shaderCon.ShaderInfo;
 
 const alignedShader = []align(@alignOf(u32)) u8;
 
 pub const LoadedShader = struct {
     data: alignedShader,
     timeStamp: i128,
-    shaderConfig: ShaderConfig,
+    shaderConfig: ShaderInfo,
 };
 
 pub const ShaderCompiler = struct {
@@ -22,11 +22,11 @@ pub const ShaderCompiler = struct {
 
     pub fn init(alloc: Allocator) !ShaderCompiler {
         // Assign paths
-        const root = try resolveProjectRoot(alloc, config.rootPath);
+        const root = try resolveProjectRoot(alloc, shaderCon.rootPath);
         std.debug.print("Root Path {s}\n", .{root});
-        const shaderPath = try joinPath(alloc, root, config.glslPath);
+        const shaderPath = try joinPath(alloc, root, shaderCon.glslPath);
         std.debug.print("Shader Path {s}\n", .{shaderPath});
-        const shaderOutputPath = try joinPath(alloc, root, config.sprvPath);
+        const shaderOutputPath = try joinPath(alloc, root, shaderCon.sprvPath);
         std.debug.print("Shader Output Path {s}\n", .{shaderOutputPath});
 
         return .{
@@ -51,7 +51,7 @@ pub const ShaderCompiler = struct {
         return self.freshShaders.items;
     }
 
-    pub fn loadShaders(self: *ShaderCompiler, shaderConfigs: []const ShaderConfig) !void {
+    pub fn loadShaders(self: *ShaderCompiler, shaderConfigs: []const ShaderInfo) !void {
         const alloc = self.alloc;
         try compileShadersParallel(alloc, self.shaderPath, self.shaderOutputPath, shaderConfigs);
         const curTime = std.time.nanoTimestamp();
@@ -145,7 +145,7 @@ fn threadCompile(src: []const u8, dst: []const u8) void {
     std.heap.page_allocator.free(dst);
 }
 
-pub fn compileShadersParallel(alloc: std.mem.Allocator, absShaderPath: []const u8, absShaderOutputPath: []const u8, shaders: []const ShaderConfig) !void {
+pub fn compileShadersParallel(alloc: std.mem.Allocator, absShaderPath: []const u8, absShaderOutputPath: []const u8, shaders: []const ShaderInfo) !void {
     var threads = std.array_list.Managed(std.Thread).init(alloc);
     defer threads.deinit();
 

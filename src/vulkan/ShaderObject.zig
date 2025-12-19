@@ -1,13 +1,9 @@
 const std = @import("std");
 const vk = @import("../modules/vk.zig").c;
 const vkFn = @import("../modules/vk.zig");
-const Allocator = std.mem.Allocator;
-const config = @import("../config.zig");
-const RenderType = @import("../config.zig").RenderType;
 const PushConstants = @import("resources/DescriptorManager.zig").PushConstants;
 const LoadedShader = @import("../core/ShaderCompiler.zig").LoadedShader;
-const check = @import("error.zig").check;
-const resolveProjectRoot = @import("../core/ShaderCompiler.zig").resolveProjectRoot;
+const check = @import("ErrorHelpers.zig").check;
 
 pub const ShaderStage = enum(vk.VkShaderStageFlagBits) {
     compute = vk.VK_SHADER_STAGE_COMPUTE_BIT,

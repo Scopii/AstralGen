@@ -1,13 +1,10 @@
 const std = @import("std");
 const vk = @import("../../modules/vk.zig").c;
-const vkFn = @import("../../modules/vk.zig");
 const Allocator = std.mem.Allocator;
-const Context = @import("../Context.zig").Context;
 const GpuAllocator = @import("GpuAllocator.zig").GpuAllocator;
-const check = @import("../error.zig").check;
-const CreateMapArray = @import("../../structures/MapArray.zig").CreateMapArray;
 const Object = @import("../../ecs/EntityManager.zig").Object;
-const config = @import("../../config.zig");
+const renderCon = @import("../../configs/renderConfig.zig");
+const CreateMapArray = @import("../../structures/MapArray.zig").CreateMapArray;
 
 pub const GpuBuffer = struct {
     pub const deviceAddress = u64;
@@ -18,9 +15,9 @@ pub const GpuBuffer = struct {
     count: u32 = 0,
 };
 
-pub const BufferMap = CreateMapArray(GpuBuffer, config.GPU_BUF_MAX, u32, config.GPU_BUF_MAX, 0);
-
 pub const BufferManager = struct {
+    pub const BufferMap = CreateMapArray(GpuBuffer, renderCon.GPU_BUF_MAX, u32, renderCon.GPU_BUF_MAX, 0);
+
     cpuAlloc: Allocator,
     gpuAlloc: GpuAllocator, //deinit() in ResourceManager
 
@@ -39,7 +36,7 @@ pub const BufferManager = struct {
         return self.gpuBuffers.get(buffId);
     }
 
-    pub fn createGpuBuffer(self: *BufferManager, comptime gpuBufConfigs: config.GpuBufferConfig) !void {
+    pub fn createGpuBuffer(self: *BufferManager, comptime gpuBufConfigs: renderCon.GpuBufferInfo) !void {
         const buffer = try self.gpuAlloc.allocDefinedBuffer(gpuBufConfigs);
         self.gpuBuffers.set(gpuBufConfigs.buffId, buffer);
     }

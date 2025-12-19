@@ -6,10 +6,9 @@ pub const RNGenerator = struct {
 
     pub fn init(comptime PrngType: type, seed: u64) RNGenerator {
         var prng = PrngType.init(seed); // Create instance
-        const zigRandInterface = prng.random(); // Use .random() method
         return .{
             .prng = prng,
-            .random = zigRandInterface,
+            .random = prng.random(),
         };
     }
 

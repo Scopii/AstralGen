@@ -3,8 +3,8 @@ const vk = @import("../modules/vk.zig").c;
 const vkFn = @import("../modules/vk.zig");
 const sdl = @import("../modules/sdl.zig").c;
 const Allocator = std.mem.Allocator;
-const check = @import("error.zig").check;
-const config = @import("../config.zig");
+const check = @import("ErrorHelpers.zig").check;
+const appCon = @import("../configs/appConfig.zig");
 
 pub const QueueFamilies = struct {
     graphics: u32,
@@ -76,14 +76,14 @@ pub fn createInstance(alloc: Allocator) !vk.VkInstance {
     const reqExtensions = sdl.SDL_Vulkan_GetInstanceExtensions(&extCount);
     for (0..extCount) |i| try extensions.append(reqExtensions[i]);
 
-    if (config.DEBUG_MODE) {
+    if (appCon.DEBUG_MODE) {
         try extensions.append("VK_EXT_debug_utils");
         try layers.append("VK_LAYER_KHRONOS_validation");
         try layers.append("VK_LAYER_KHRONOS_synchronization2");
     }
 
-    var extraValidationFeatures = switch (config.BEST_PRACTICES) {
-        true => if (config.EXTRA_VALIDATION == true) [_]vk.VkValidationFeatureEnableEXT{
+    var extraValidationFeatures = switch (appCon.BEST_PRACTICES) {
+        true => if (appCon.EXTRA_VALIDATION == true) [_]vk.VkValidationFeatureEnableEXT{
             vk.VK_VALIDATION_FEATURE_ENABLE_BEST_PRACTICES_EXT,
             vk.VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT,
             vk.VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_RESERVE_BINDING_SLOT_EXT,
@@ -119,7 +119,7 @@ pub fn createInstance(alloc: Allocator) !vk.VkInstance {
 
     const instanceInf = vk.VkInstanceCreateInfo{
         .sType = vk.VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
-        .pNext = if (config.EXTRA_VALIDATION or config.BEST_PRACTICES) @ptrCast(&extraValidationExtensions) else null,
+        .pNext = if (appCon.EXTRA_VALIDATION or appCon.BEST_PRACTICES) @ptrCast(&extraValidationExtensions) else null,
         .flags = 0,
         .pApplicationInfo = &appInf,
         .enabledLayerCount = @intCast(layers.items.len),

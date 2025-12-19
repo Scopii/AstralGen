@@ -1,7 +1,6 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 const zm = @import("zmath");
-const config = @import("../config.zig");
 const CreateMapArray = @import("../structures/MapArray.zig").CreateMapArray;
 
 pub const Alignment = enum { left, right, top, bot, center, topRight, topLeft, botRight, botLeft, none };
@@ -34,12 +33,12 @@ pub const Container = struct {
         };
     }
 
-    pub fn addNode(self: *Container, nodeID: u32) !void {
-        try self.nodeIDs.append(nodeID);
-    }
-
     pub fn deinit(self: *Container) void {
         self.nodeIDs.deinit();
+    }
+
+    pub fn addNode(self: *Container, nodeID: u32) !void {
+        try self.nodeIDs.append(nodeID);
     }
 };
 

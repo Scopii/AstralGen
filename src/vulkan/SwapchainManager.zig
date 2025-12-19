@@ -4,17 +4,16 @@ const sdl = @import("../modules/sdl.zig").c;
 const Allocator = std.mem.Allocator;
 const Context = @import("Context.zig").Context;
 const Window = @import("../platform/Window.zig").Window;
-const QueueFamilies = @import("Context.zig").QueueFamilies;
 const CreateMapArray = @import("../structures/MapArray.zig").CreateMapArray;
 const FixedList = @import("../structures/FixedList.zig").FixedList;
-const check = @import("error.zig").check;
+const check = @import("ErrorHelpers.zig").check;
 const createSemaphore = @import("Scheduler.zig").createSemaphore;
 
-const config = @import("../config.zig");
-const MAX_IN_FLIGHT = config.MAX_IN_FLIGHT;
-const MAX_WINDOWS = config.MAX_WINDOWS;
-const DESIRED_SWAPCHAIN_IMAGES = config.DESIRED_SWAPCHAIN_IMAGES;
-const DISPLAY_MODE = config.DISPLAY_MODE;
+const renderCon = @import("../configs/renderConfig.zig");
+const MAX_IN_FLIGHT = renderCon.MAX_IN_FLIGHT;
+const MAX_WINDOWS = renderCon.MAX_WINDOWS;
+const DESIRED_SWAPCHAIN_IMAGES = renderCon.DESIRED_SWAPCHAIN_IMAGES;
+const DISPLAY_MODE = renderCon.DISPLAY_MODE;
 
 pub const Swapchain = struct {
     const SwapchainState = enum { active, inactive };
@@ -55,9 +54,9 @@ pub const SwapchainManager = struct {
     }
 
     pub fn present(self: *SwapchainManager, presentIds: []const u32, presentQueue: vk.VkQueue) !void {
-        var swapchainHandles: [config.MAX_WINDOWS]vk.VkSwapchainKHR = undefined;
-        var imageIndices: [config.MAX_WINDOWS]u32 = undefined;
-        var waitSems: [config.MAX_WINDOWS]vk.VkSemaphore = undefined;
+        var swapchainHandles: [renderCon.MAX_WINDOWS]vk.VkSwapchainKHR = undefined;
+        var imageIndices: [renderCon.MAX_WINDOWS]u32 = undefined;
+        var waitSems: [renderCon.MAX_WINDOWS]vk.VkSemaphore = undefined;
 
         for (presentIds, 0..) |id, i| {
             const swapchain = self.swapchains.getAtIndex(id);
@@ -139,19 +138,19 @@ pub const SwapchainManager = struct {
         }
     }
 
-    fn destroySwapchain(self: *SwapchainManager, sc: *Swapchain, deleteMode: enum { withSurface, withoutSurface }) void {
+    fn destroySwapchain(self: *SwapchainManager, sweapchain: *Swapchain, deleteMode: enum { withSurface, withoutSurface }) void {
         const gpi = self.gpi;
 
-        for (sc.views) |view| vk.vkDestroyImageView(gpi, view, null);
-        for (sc.imgRdySems) |sem| vk.vkDestroySemaphore(gpi, sem, null);
-        for (sc.renderDoneSems) |sem| vk.vkDestroySemaphore(gpi, sem, null);
-        vk.vkDestroySwapchainKHR(gpi, sc.handle, null);
-        if (deleteMode == .withSurface) vk.vkDestroySurfaceKHR(self.instance, sc.surface, null);
+        for (sweapchain.views) |view| vk.vkDestroyImageView(gpi, view, null);
+        for (sweapchain.imgRdySems) |sem| vk.vkDestroySemaphore(gpi, sem, null);
+        for (sweapchain.renderDoneSems) |sem| vk.vkDestroySemaphore(gpi, sem, null);
+        vk.vkDestroySwapchainKHR(gpi, sweapchain.handle, null);
+        if (deleteMode == .withSurface) vk.vkDestroySurfaceKHR(self.instance, sweapchain.surface, null);
 
-        self.alloc.free(sc.images);
-        self.alloc.free(sc.views);
-        self.alloc.free(sc.imgRdySems);
-        self.alloc.free(sc.renderDoneSems);
+        self.alloc.free(sweapchain.images);
+        self.alloc.free(sweapchain.views);
+        self.alloc.free(sweapchain.imgRdySems);
+        self.alloc.free(sweapchain.renderDoneSems);
     }
 
     pub fn createSwapchain(self: *SwapchainManager, context: *const Context, input: union(enum) { window: *Window, id: u32 }) !void {

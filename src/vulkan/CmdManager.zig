@@ -8,13 +8,14 @@ const ImageMap = @import("resources/ImageManager.zig").ImageMap;
 const SwapchainManager = @import("SwapchainManager.zig");
 const ShaderObject = @import("ShaderObject.zig").ShaderObject;
 const ShaderStage = @import("ShaderObject.zig").ShaderStage;
-const RenderType = @import("../config.zig").RenderType;
 const PushConstants = @import("resources/DescriptorManager.zig").PushConstants;
+const renderCon = @import("../configs/renderConfig.zig");
+const RenderType = renderCon.RenderType;
+const MAX_WINDOWS = renderCon.MAX_WINDOWS;
+const RENDER_IMG_STRETCH = renderCon.RENDER_IMG_STRETCH;
 const CreateMapArray = @import("../structures/MapArray.zig").CreateMapArray;
 const deviceAddress = @import("resources/BufferManager.zig").GpuBuffer.deviceAddress;
-const MAX_WINDOWS = @import("../config.zig").MAX_WINDOWS;
-const check = @import("error.zig").check;
-const config = @import("../config.zig");
+const check = @import("ErrorHelpers.zig").check;
 
 pub const CmdManager = struct {
     alloc: Allocator,
@@ -23,7 +24,7 @@ pub const CmdManager = struct {
     cmds: []vk.VkCommandBuffer,
     blitBarriers: [MAX_WINDOWS + 1]vk.VkImageMemoryBarrier2 = undefined,
 
-    pub fn init(alloc: Allocator, context: *const @import("Context.zig").Context, maxInFlight: u32) !CmdManager {
+    pub fn init(alloc: Allocator, context: *const Context, maxInFlight: u32) !CmdManager {
         const gpi = context.gpi;
         const pool = try createCmdPool(gpi, context.families.graphics);
 
@@ -244,7 +245,7 @@ pub const CmdManager = struct {
             var srcOffsets: [2]vk.VkOffset3D = undefined;
             var dstOffsets: [2]vk.VkOffset3D = undefined;
 
-            if (config.RENDER_IMG_STRETCH) {
+            if (RENDER_IMG_STRETCH) {
                 // Stretch: Source is full image, Dest is full window
                 srcOffsets[0] = .{ .x = 0, .y = 0, .z = 0 };
                 srcOffsets[1] = .{ .x = @intCast(srcImgPtr.extent3d.width), .y = @intCast(srcImgPtr.extent3d.height), .z = 1 };
@@ -444,7 +445,7 @@ pub fn copyImageToImage(cmd: vk.VkCommandBuffer, srcImg: vk.VkImage, srcOffsets:
         .dstImageLayout = vk.VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
         .srcImage = srcImg,
         .srcImageLayout = vk.VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-        .filter = if (config.RENDER_IMG_STRETCH) vk.VK_FILTER_LINEAR else vk.VK_FILTER_NEAREST, // Linear for stretch, Nearest for pixel-perfect
+        .filter = if (RENDER_IMG_STRETCH) vk.VK_FILTER_LINEAR else vk.VK_FILTER_NEAREST, // Linear for stretch, Nearest for pixel-perfect
         .regionCount = 1,
         .pRegions = &blitRegion,
     };

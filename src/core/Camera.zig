@@ -1,13 +1,13 @@
 const std = @import("std");
 const zm = @import("zmath");
-const config = @import("../config.zig");
+const inputCon = @import("../configs/inputConfig.zig");
 
 const M_PI = 3.14159; //3.1415927
 const TWO_PI = 2 * M_PI;
 
 pub const Camera = struct {
     pos: zm.Vec = zm.f32x4(0, 0, -5, 0),
-    fov: f32 = config.CAM_INIT_FOV,
+    fov: f32 = inputCon.CAM_INIT_FOV,
     aspectRatio: f32 = 16.0 / 9.0,
     near: f32 = 0.1,
     far: f32 = 100.0,
@@ -19,9 +19,11 @@ pub const Camera = struct {
         return cam;
     }
 
+    pub fn deinit() void {}
+
     pub fn rotate(self: *Camera, x: f32, y: f32) void {
-        self.yaw -= x * config.CAM_SENS; // Horizontal mouse movement affects yaw
-        self.pitch -= y * config.CAM_SENS; // Vertical mouse movement affect pitch
+        self.yaw -= x * inputCon.CAM_SENS; // Horizontal mouse movement affects yaw
+        self.pitch -= y * inputCon.CAM_SENS; // Vertical mouse movement affect pitch
         // Clamp pitch for gimbal lock
         self.pitch = std.math.clamp(self.pitch, -M_PI * 0.48, M_PI * 0.48);
         // Wrap yaw around 2π
@@ -37,7 +39,7 @@ pub const Camera = struct {
     pub fn moveRight(self: *Camera, dt: f64) void {
         const forward = self.getForward();
         const right = zm.normalize3(zm.cross3(forward, self.up));
-        const speed = @as(f32, @floatCast(config.CAM_SPEED * dt));
+        const speed = @as(f32, @floatCast(inputCon.CAM_SPEED * dt));
         const movement = right * zm.splat(zm.Vec, speed);
         self.pos = self.pos + movement;
     }
@@ -45,33 +47,33 @@ pub const Camera = struct {
     pub fn moveLeft(self: *Camera, dt: f64) void {
         const forward = self.getForward();
         const right = zm.normalize3(zm.cross3(forward, self.up));
-        const speed = @as(f32, @floatCast(config.CAM_SPEED * dt));
+        const speed = @as(f32, @floatCast(inputCon.CAM_SPEED * dt));
         const movement = right * zm.splat(zm.Vec, -speed);
         self.pos = self.pos + movement;
     }
 
     pub fn moveUp(self: *Camera, dt: f64) void {
-        const speed = @as(f32, @floatCast(config.CAM_SPEED * dt));
+        const speed = @as(f32, @floatCast(inputCon.CAM_SPEED * dt));
         const movement = self.up * zm.splat(zm.Vec, speed);
         self.pos = self.pos + movement;
     }
 
     pub fn moveDown(self: *Camera, dt: f64) void {
-        const speed = @as(f32, @floatCast(config.CAM_SPEED * dt));
+        const speed = @as(f32, @floatCast(inputCon.CAM_SPEED * dt));
         const movement = self.up * zm.splat(zm.Vec, -speed);
         self.pos = self.pos + movement;
     }
 
     pub fn moveForward(self: *Camera, dt: f64) void {
         const forward = self.getForward();
-        const speed = @as(f32, @floatCast(config.CAM_SPEED * dt));
+        const speed = @as(f32, @floatCast(inputCon.CAM_SPEED * dt));
         const movement = forward * zm.splat(zm.Vec, speed);
         self.pos = self.pos + movement;
     }
 
     pub fn moveBackward(self: *Camera, dt: f64) void {
         const forward = self.getForward();
-        const speed = @as(f32, @floatCast(config.CAM_SPEED * dt));
+        const speed = @as(f32, @floatCast(inputCon.CAM_SPEED * dt));
         const movement = forward * zm.splat(zm.Vec, -speed);
         self.pos = self.pos + movement;
     }
@@ -99,12 +101,12 @@ pub const Camera = struct {
     }
 
     pub fn increaseFov(self: *Camera, dt: f64) void {
-        if (self.fov < 140) self.fov += @floatCast(config.CAM_FOV_CHANGE * dt);
+        if (self.fov < 140) self.fov += @floatCast(inputCon.CAM_FOV_CHANGE * dt);
         std.debug.print("Increase Fov to {}\n", .{@as(u32, @intFromFloat(self.fov))});
     }
 
     pub fn decreaseFov(self: *Camera, dt: f64) void {
-        if (self.fov > 40) self.fov -= @floatCast(config.CAM_FOV_CHANGE * dt);
+        if (self.fov > 40) self.fov -= @floatCast(inputCon.CAM_FOV_CHANGE * dt);
         std.debug.print("Decreased Fov to {}\n", .{@as(u32, @intFromFloat(self.fov))});
     }
 
@@ -115,6 +117,4 @@ pub const Camera = struct {
     pub fn debug(self: *Camera) void {
         std.debug.print("{}\n", .{self});
     }
-
-    pub fn deinit() void {}
 };

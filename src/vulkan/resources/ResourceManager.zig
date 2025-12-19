@@ -1,6 +1,5 @@
 const std = @import("std");
 const vk = @import("../../modules/vk.zig").c;
-const vkFn = @import("../../modules/vk.zig");
 const Allocator = std.mem.Allocator;
 const Context = @import("../Context.zig").Context;
 const GpuImage = @import("ImageManager.zig").GpuImage;
@@ -10,10 +9,8 @@ const BufferManager = @import("BufferManager.zig").BufferManager;
 const DescriptorManager = @import("DescriptorManager.zig").DescriptorManager;
 const ImageMap = @import("ImageManager.zig").ImageMap;
 const GpuAllocator = @import("GpuAllocator.zig").GpuAllocator;
-const check = @import("../error.zig").check;
-const config = @import("../../config.zig");
 const Object = @import("../../ecs/EntityManager.zig").Object;
-const RENDER_IMG_MAX = config.GPU_IMG_MAX;
+const renderCon = @import("../../configs/renderConfig.zig");
 
 pub const ResourceManager = struct {
     cpuAlloc: Allocator,
@@ -74,7 +71,7 @@ pub const ResourceManager = struct {
         try self.descMan.updateImageDescriptor(gpuImg.view, imgId);
     }
 
-    pub fn createGpuBuffer(self: *ResourceManager, comptime gpuBufConfigs: []const config.GpuBufferConfig) !void {
+    pub fn createGpuBuffer(self: *ResourceManager, comptime gpuBufConfigs: []const renderCon.GpuBufferInfo) !void {
         inline for (gpuBufConfigs) |gpuBufConfig| {
             const buffId = gpuBufConfig.buffId;
             try self.bufferMan.createGpuBuffer(gpuBufConfig);

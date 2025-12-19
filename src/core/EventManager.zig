@@ -1,8 +1,9 @@
 const std = @import("std");
-const AppEvent = config.AppEvent;
-const config = @import("../config.zig");
 const CreateMapArray = @import("../structures/MapArray.zig").CreateMapArray;
 const FixedList = @import("../structures/FixedList.zig").FixedList;
+
+const inputCon = @import("../configs/inputConfig.zig");
+const AppEvent = @import("../configs/appConfig.zig").AppEvent;
 
 pub const KeyState = enum { pressed, released };
 pub const KeyEvent = struct { key: c_uint, event: KeyState };
@@ -33,9 +34,9 @@ pub const EventManager = struct {
             }
             self.keyStates.set(keyEvent.key, if (keyEvent.event == .pressed) .pressed else .released);
 
-            if (config.KEY_EVENT_INFO == true) std.debug.print("Key {} pressed \n", .{keyEvent.key});
+            if (inputCon.KEY_EVENT_INFO == true) std.debug.print("Key {} pressed \n", .{keyEvent.key});
         }
-        if (config.KEY_EVENT_INFO == true) std.debug.print("KeyStates {}\n", .{self.keyStates.count});
+        if (inputCon.KEY_EVENT_INFO == true) std.debug.print("KeyStates {}\n", .{self.keyStates.count});
     }
 
     pub fn mapMouseMovements(self: *EventManager, movements: []MouseMovement) void {
@@ -43,14 +44,14 @@ pub const EventManager = struct {
             self.mouseMoveX += movement.xChange;
             self.mouseMoveY += movement.yChange;
 
-            if (config.MOUSE_MOVEMENT_INFO == true) std.debug.print("Mouse Moved x:{} y:{}\n", .{ movement.xChange, movement.yChange });
+            if (inputCon.MOUSE_MOVEMENT_INFO == true) std.debug.print("Mouse Moved x:{} y:{}\n", .{ movement.xChange, movement.yChange });
         }
-        if (config.MOUSE_MOVEMENT_INFO == true)
+        if (inputCon.MOUSE_MOVEMENT_INFO == true)
             std.debug.print("Mouse Total Movement x:{} y:{}, processed {} movements\n", .{ self.mouseMoveX, self.mouseMoveY, movements.len });
     }
 
     pub fn getAppEvents(self: *EventManager) []AppEvent {
-        for (config.keyMap) |assignment| {
+        for (inputCon.keyMap) |assignment| {
             const actualKey = switch (assignment.device) {
                 .keyboard => assignment.key,
                 .mouse => assignment.key + SDL_KEY_MAX,

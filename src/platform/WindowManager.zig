@@ -6,7 +6,7 @@ const KeyEvent = @import("../core/EventManager.zig").KeyEvent;
 const MouseMovement = @import("../core/EventManager.zig").MouseMovement;
 const CreateMapArray = @import("../structures/MapArray.zig").CreateMapArray;
 const FixedList = @import("../structures/FixedList.zig").FixedList;
-const MAX_WINDOWS = @import("../config.zig").MAX_WINDOWS;
+const MAX_WINDOWS = @import("../configs/renderConfig.zig").MAX_WINDOWS;
 const SDL_KEY_MAX = @import("../core/EventManager.zig").SDL_KEY_MAX;
 
 pub const WindowManager = struct {

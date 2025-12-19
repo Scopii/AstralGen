@@ -1,6 +1,5 @@
 const std = @import("std");
 const vk = @import("../modules/vk.zig").c;
-const config = @import("../config.zig");
 const Context = @import("Context.zig").Context;
 const Camera = @import("../core/Camera.zig").Camera;
 const Scheduler = @import("Scheduler.zig").Scheduler;
@@ -9,23 +8,21 @@ const LoadedShader = @import("../core/ShaderCompiler.zig").LoadedShader;
 const CmdManager = @import("CmdManager.zig").CmdManager;
 const ShaderManager = @import("ShaderManager.zig").ShaderManager;
 const SwapchainManager = @import("SwapchainManager.zig").SwapchainManager;
-const Swapchain = @import("SwapchainManager.zig").Swapchain;
 const PushConstants = @import("resources/DescriptorManager.zig").PushConstants;
-const GpuImage = @import("resources/ResourceManager.zig").GpuImage;
-const GpuBuffer = @import("resources/ResourceManager.zig").GpuBuffer;
 const ResourceManager = @import("resources/ResourceManager.zig").ResourceManager;
 const MemoryManager = @import("../core/MemoryManager.zig").MemoryManager;
 const Object = @import("../ecs/EntityManager.zig").Object;
-const check = @import("error.zig").check;
+const check = @import("ErrorHelpers.zig").check;
 const createInstance = @import("Context.zig").createInstance;
 const ShaderObject = @import("ShaderObject.zig").ShaderObject;
 
 const Allocator = std.mem.Allocator;
-const RENDER_IMG_MAX = config.GPU_IMG_MAX;
+const renderCon = @import("../configs/renderConfig.zig");
+const RENDER_IMG_MAX = renderCon.GPU_IMG_MAX;
 
 const Pass = struct {
-    renderType: config.RenderType,
-    renderImg: config.GpuImageConfig,
+    renderType: renderCon.RenderType,
+    renderImgInf: renderCon.GpuImageInfo,
     shaderIds: []const u8,
     clear: bool,
 };
@@ -46,8 +43,8 @@ pub const Renderer = struct {
         const instance = try createInstance(alloc);
         const context = try Context.init(alloc, instance);
         var resourceMan = try ResourceManager.init(alloc, &context);
-        const cmdMan = try CmdManager.init(alloc, &context, config.MAX_IN_FLIGHT);
-        const scheduler = try Scheduler.init(&context, config.MAX_IN_FLIGHT);
+        const cmdMan = try CmdManager.init(alloc, &context, renderCon.MAX_IN_FLIGHT);
+        const scheduler = try Scheduler.init(&context, renderCon.MAX_IN_FLIGHT);
         const shaderMan = try ShaderManager.init(alloc, &context, &resourceMan);
         const swapchainMan = try SwapchainManager.init(alloc, &context);
 
@@ -83,7 +80,7 @@ pub const Renderer = struct {
                 break;
             }
         }
-        var dirtyRenderIds: [config.MAX_WINDOWS]bool = .{false} ** config.MAX_WINDOWS;
+        var dirtyRenderIds: [renderCon.MAX_WINDOWS]bool = .{false} ** renderCon.MAX_WINDOWS;
 
         for (winPtrs) |winPtr| {
             switch (winPtr.state) {
@@ -99,7 +96,7 @@ pub const Renderer = struct {
             }
         }
 
-        if (config.RENDER_IMG_AUTO_RESIZE == true) {
+        if (renderCon.RENDER_IMG_AUTO_RESIZE == true) {
             for (0..dirtyRenderIds.len) |i| {
                 if (dirtyRenderIds[i] == true and self.resourceMan.isGpuImageIdUsed(@intCast(i)) != false) {
                     try self.updateRenderImage(@intCast(i));
@@ -118,13 +115,13 @@ pub const Renderer = struct {
                 self.resourceMan.destroyGpuImage(renderId);
 
                 const newExtent = vk.VkExtent3D{ .width = new.width, .height = new.height, .depth = 1 };
-                try self.resourceMan.createGpuImage(renderId, newExtent, config.RENDER_IMG_FORMAT, vk.VMA_MEMORY_USAGE_GPU_ONLY);
+                try self.resourceMan.createGpuImage(renderId, newExtent, renderCon.RENDER_IMG_FORMAT, vk.VMA_MEMORY_USAGE_GPU_ONLY);
                 std.debug.print("RenderImage recreated {}x{} to {}x{}\n", .{ old.width, old.height, new.width, new.height });
             }
         }
     }
 
-    pub fn addPasses(self: *Renderer, passConfigs: []const config.PassConfig) !void {
+    pub fn addPasses(self: *Renderer, passConfigs: []const renderCon.passInfo) !void {
         for (passConfigs) |passConfig| {
             const shaderArray = self.shaderMan.getShaders(passConfig.shaderIds);
             const validShaders = shaderArray[0..passConfig.shaderIds.len];
@@ -134,11 +131,11 @@ pub const Renderer = struct {
                 return error.PassInvalid;
             };
             try self.createRenderImage(passConfig.renderImg);
-            try self.passes.append(.{ .renderType = renderType, .renderImg = passConfig.renderImg, .shaderIds = passConfig.shaderIds, .clear = passConfig.clear });
+            try self.passes.append(.{ .renderType = renderType, .renderImgInf = passConfig.renderImg, .shaderIds = passConfig.shaderIds, .clear = passConfig.clear });
         }
     }
 
-    pub fn createGpuBuffers(self: *Renderer, comptime gpuBufConfigs: []const config.GpuBufferConfig) !void {
+    pub fn createGpuBuffers(self: *Renderer, comptime gpuBufConfigs: []const renderCon.GpuBufferInfo) !void {
         try self.resourceMan.createGpuBuffer(gpuBufConfigs);
     }
 
@@ -146,7 +143,7 @@ pub const Renderer = struct {
         try self.resourceMan.updateGpuBuffer(buffId, objects);
     }
 
-    pub fn createRenderImage(self: *Renderer, renderRes: config.GpuImageConfig) !void {
+    pub fn createRenderImage(self: *Renderer, renderRes: renderCon.GpuImageInfo) !void {
         if (renderRes.id > RENDER_IMG_MAX - 1) {
             std.debug.print("Renderer: RenderId Image ID cant be bigger than Max Windows\n", .{});
             return error.RenderImageIdOutOfBounds;
@@ -187,7 +184,7 @@ pub const Renderer = struct {
 
     fn recordPasses(self: *Renderer, cmd: vk.VkCommandBuffer, cam: *Camera, runtimeAsFloat: f32) !void {
         for (self.passes.items) |pass| {
-            const renderImgId = pass.renderImg.id;
+            const renderImgId = pass.renderImgInf.id;
 
             const gpuBuffer = try self.resourceMan.getGpuBuffer(0);
 
@@ -221,13 +218,13 @@ pub const Renderer = struct {
     }
 
     fn queueSubmit(self: *Renderer, cmd: vk.VkCommandBuffer, submitIds: []const u32, frameInFlight: u8) !void {
-        var waitInfos: [config.MAX_WINDOWS]vk.VkSemaphoreSubmitInfo = undefined;
+        var waitInfos: [renderCon.MAX_WINDOWS]vk.VkSemaphoreSubmitInfo = undefined;
         for (submitIds, 0..) |id, i| {
             const swapchain = self.swapchainMan.swapchains.getAtIndex(id);
             waitInfos[i] = createSemaphoreSubmitInfo(swapchain.imgRdySems[frameInFlight], vk.VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, 0);
         }
 
-        var signalInfos: [config.MAX_WINDOWS + 1]vk.VkSemaphoreSubmitInfo = undefined;
+        var signalInfos: [renderCon.MAX_WINDOWS + 1]vk.VkSemaphoreSubmitInfo = undefined;
         for (submitIds, 0..) |id, i| {
             const swapchain = self.swapchainMan.swapchains.getAtIndex(id);
             signalInfos[i] = createSemaphoreSubmitInfo(swapchain.renderDoneSems[swapchain.curIndex], vk.VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, 0);
@@ -253,7 +250,7 @@ fn createSemaphoreSubmitInfo(semaphore: vk.VkSemaphore, stageMask: u64, value: u
     return .{ .sType = vk.VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO, .semaphore = semaphore, .stageMask = stageMask, .value = value };
 }
 
-fn checkShaderLayout(shaders: []const ShaderObject) !config.RenderType {
+fn checkShaderLayout(shaders: []const ShaderObject) !renderCon.RenderType {
     var shdr: [9]u8 = .{0} ** 9;
     var prevIndex: i8 = -1;
 

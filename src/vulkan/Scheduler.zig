@@ -1,8 +1,7 @@
 const std = @import("std");
 const vk = @import("../modules/vk.zig").c;
 const Context = @import("Context.zig").Context;
-const check = @import("error.zig").check;
-const MAX_IN_FLIGHT = @import("../config.zig").MAX_IN_FLIGHT;
+const check = @import("ErrorHelpers.zig").check;
 
 pub const Scheduler = struct {
     gpi: vk.VkDevice,

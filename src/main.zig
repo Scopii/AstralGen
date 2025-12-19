@@ -1,7 +1,7 @@
 const std = @import("std");
 const App = @import("App.zig").App;
 const MemoryManager = @import("core/MemoryManager.zig").MemoryManager;
-const CLOSE_WITH_CONSOLE = @import("config.zig").CLOSE_WITH_CONSOLE;
+const CLOSE_WITH_CONSOLE = @import("configs/appConfig.zig").CLOSE_WITH_CONSOLE;
 
 pub fn main() void {
     std.debug.print("AstralGen Started\n", .{});
@@ -35,5 +35,5 @@ pub fn main() void {
         return;
     };
 
-    std.debug.print("AstralGen Closed Properly\n", .{});
+    std.debug.print("AstralGen Closed\n", .{});
 }

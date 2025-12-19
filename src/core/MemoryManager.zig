@@ -6,12 +6,14 @@ pub const MemoryManager = struct {
     arena: std.heap.ArenaAllocator, // adding FixedBufferAllocator?
 
     pub fn init(baseAllocator: Allocator) MemoryManager {
-        const arena = std.heap.ArenaAllocator.init(baseAllocator);
-
         return .{
             .alloc = baseAllocator,
-            .arena = arena,
+            .arena = std.heap.ArenaAllocator.init(baseAllocator),
         };
+    }
+
+    pub fn deinit(self: *MemoryManager) void {
+        self.arena.deinit();
     }
 
     pub fn getAllocator(self: *MemoryManager) std.mem.Allocator {
@@ -28,9 +30,5 @@ pub const MemoryManager = struct {
 
     pub fn resetArena(self: *MemoryManager) void {
         _ = self.arena.reset(.free_all);
-    }
-
-    pub fn deinit(self: *MemoryManager) void {
-        self.arena.deinit();
     }
 };

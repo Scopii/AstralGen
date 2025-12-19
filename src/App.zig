@@ -7,12 +7,11 @@ const EventManager = @import("core/EventManager.zig").EventManager;
 const TimeManager = @import("core/TimeManager.zig").TimeManager;
 const ShaderCompiler = @import("core/ShaderCompiler.zig").ShaderCompiler;
 const EntityManager = @import("ecs/EntityManager.zig").EntityManager;
-const Object = @import("ecs/EntityManager.zig").Object;
 const UiManager = @import("core/UiManager.zig").UiManager;
 const RNGenerator = @import("core/RNGenerator.zig").RNGenerator;
 const Camera = @import("core/Camera.zig").Camera;
-const zjobs = @import("zjobs");
-const config = @import("config.zig");
+const shaderCon = @import("configs/shaderConfig.zig");
+const renderCon = @import("configs/renderConfig.zig");
 
 pub const App = struct {
     memoryMan: *MemoryManager,
@@ -40,8 +39,8 @@ pub const App = struct {
         };
         errdefer shaderCompiler.deinit();
 
-        if (config.SHADER_STARTUP_COMPILATION) {
-            try shaderCompiler.loadShaders(config.shadersToCompile);
+        if (shaderCon.SHADER_STARTUP_COMPILATION) {
+            try shaderCompiler.loadShaders(shaderCon.shadersToCompile);
         }
 
         // var uiMan = UiManager.init(memoryMan.getAllocator()) catch |err| {
@@ -72,8 +71,8 @@ pub const App = struct {
         try renderer.addShaders(shaderCompiler.pullFreshShaders());
         shaderCompiler.freeFreshShaders();
 
-        try renderer.addPasses(config.renderSeq2);
-        try renderer.createGpuBuffers(config.gpuBufConfigs);
+        try renderer.addPasses(renderCon.renderSeq2);
+        try renderer.createGpuBuffers(renderCon.gpuBufInfos);
         try renderer.updateGpuBuffer(0, ecs.getObjects());
 
         return .{
@@ -90,18 +89,18 @@ pub const App = struct {
         };
     }
 
-    pub fn initWindows(self: *App) !void {
-        try self.windowMan.addWindow("Task", 16 * 52, 9 * 52, config.renderImg4.id, 120, 50);
-        try self.windowMan.addWindow("Mesh", 16 * 52, 9 * 52, config.renderImg3.id, 120, 550);
-        try self.windowMan.addWindow("Compute", 16 * 52, 9 * 52, config.renderImg1.id, 960, 50);
-        try self.windowMan.addWindow("Graphics", 16 * 52, 9 * 52, config.renderImg2.id, 960, 550);
-    }
-
     pub fn deinit(self: *App) void {
         self.renderer.deinit();
         self.shaderCompiler.deinit();
         self.windowMan.deinit();
         self.memoryMan.deinit();
+    }
+
+    pub fn initWindows(self: *App) !void {
+        try self.windowMan.addWindow("Task", 16 * 52, 9 * 52, renderCon.renderImg4.id, 120, 50);
+        try self.windowMan.addWindow("Mesh", 16 * 52, 9 * 52, renderCon.renderImg3.id, 120, 550);
+        try self.windowMan.addWindow("Compute", 16 * 52, 9 * 52, renderCon.renderImg1.id, 960, 50);
+        try self.windowMan.addWindow("Graphics", 16 * 52, 9 * 52, renderCon.renderImg2.id, 960, 550);
     }
 
     pub fn run(self: *App) !void {
@@ -160,7 +159,7 @@ pub const App = struct {
             eventMan.clearAppEvents();
 
             // Shader Hotloading
-            if (config.SHADER_HOTLOAD == true) {
+            if (shaderCon.SHADER_HOTLOAD == true) {
                 try self.shaderCompiler.checkShaderUpdates();
                 try renderer.addShaders(self.shaderCompiler.pullFreshShaders());
                 self.shaderCompiler.freeFreshShaders();

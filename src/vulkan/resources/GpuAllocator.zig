@@ -2,9 +2,8 @@ const vk = @import("../../modules/vk.zig").c;
 const DescriptorBuffer = @import("DescriptorManager.zig").DescriptorBuffer;
 const GpuBuffer = @import("BufferManager.zig").GpuBuffer;
 const GpuImage = @import("ImageManager.zig").GpuImage;
-const GpuBufferConfig = @import("../../config.zig").GpuBufferConfig;
-
-const check = @import("../error.zig").check;
+const GpuBufferInfo = @import("../../configs/renderConfig.zig").GpuBufferInfo;
+const check = @import("../ErrorHelpers.zig").check;
 
 pub const GpuAllocator = struct {
     handle: vk.VmaAllocator,
@@ -27,6 +26,10 @@ pub const GpuAllocator = struct {
         return .{ .handle = vmaAlloc, .gpi = gpi };
     }
 
+    pub fn deinit(self: *const GpuAllocator) void {
+        vk.vmaDestroyAllocator(self.handle);
+    }
+
     pub fn allocDescriptorBuffer(self: *const GpuAllocator, size: vk.VkDeviceSize) !DescriptorBuffer {
         const bufferUsage = vk.VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT | vk.VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
         const memUsage = vk.VMA_MEMORY_USAGE_CPU_TO_GPU;
@@ -35,10 +38,10 @@ pub const GpuAllocator = struct {
         return .{ .allocation = gpuBuffer.allocation, .allocInf = gpuBuffer.allocInf, .buffer = gpuBuffer.buffer, .gpuAddress = gpuBuffer.gpuAddress };
     }
 
-    pub fn allocDefinedBuffer(self: *const GpuAllocator, comptime gpuBufConfigs: GpuBufferConfig) !GpuBuffer {
+    pub fn allocDefinedBuffer(self: *const GpuAllocator, comptime gpuBufConfigs: GpuBufferInfo) !GpuBuffer {
         const bufferByteSize = gpuBufConfigs.length * @sizeOf(gpuBufConfigs.dataType);
 
-        var bufferUsage: vk.VkBufferUsageFlags = switch (gpuBufConfigs.bufferType) {
+        var bufferUsage: vk.VkBufferUsageFlags = switch (gpuBufConfigs.buffUsage) {
             .Storage => vk.VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
             .Uniform => vk.VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
             .Index => vk.VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
@@ -46,22 +49,22 @@ pub const GpuAllocator = struct {
             .Staging => vk.VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
         };
 
-        if (gpuBufConfigs.bufferType != .Staging) {
+        if (gpuBufConfigs.buffUsage != .Staging) {
             bufferUsage |= vk.VK_BUFFER_USAGE_TRANSFER_DST_BIT;
             bufferUsage |= vk.VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
         }
 
-        const memUsage: vk.VmaMemoryUsage = switch (gpuBufConfigs.memory) {
+        const memUsage: vk.VmaMemoryUsage = switch (gpuBufConfigs.memUsage) {
             .GpuOptimal => vk.VMA_MEMORY_USAGE_GPU_ONLY,
             .CpuWriteOptimal => vk.VMA_MEMORY_USAGE_CPU_TO_GPU,
             .CpuReadOptimal => vk.VMA_MEMORY_USAGE_GPU_TO_CPU,
         };
 
-        var memFlags: vk.VmaAllocationCreateFlags = switch (gpuBufConfigs.memory) {
+        var memFlags: vk.VmaAllocationCreateFlags = switch (gpuBufConfigs.memUsage) {
             .GpuOptimal => 0,
             .CpuWriteOptimal, .CpuReadOptimal => vk.VMA_ALLOCATION_CREATE_MAPPED_BIT,
         };
-        if (gpuBufConfigs.bufferType == .Staging) memFlags |= vk.VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+        if (gpuBufConfigs.buffUsage == .Staging) memFlags |= vk.VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
 
         return try self.allocBuffer(bufferByteSize, bufferUsage, memUsage, memFlags);
     }
@@ -129,10 +132,6 @@ pub const GpuAllocator = struct {
     pub fn freeGpuImage(self: *const GpuAllocator, gpuImg: GpuImage) void {
         vk.vkDestroyImageView(self.gpi, gpuImg.view, null);
         vk.vmaDestroyImage(self.handle, gpuImg.img, gpuImg.allocation);
-    }
-
-    pub fn deinit(self: *const GpuAllocator) void {
-        vk.vmaDestroyAllocator(self.handle);
     }
 };
 

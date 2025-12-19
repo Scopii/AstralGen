@@ -2,13 +2,11 @@ const std = @import("std");
 const vk = @import("../../modules/vk.zig").c;
 const vkFn = @import("../../modules/vk.zig");
 const Allocator = std.mem.Allocator;
-const Context = @import("../Context.zig").Context;
 const GpuAllocator = @import("GpuAllocator.zig").GpuAllocator;
 const GpuBuffer = @import("BufferManager.zig").GpuBuffer;
 const GpuImage = @import("ImageManager.zig").GpuImage;
-const check = @import("../error.zig").check;
-const CreateMapArray = @import("../../structures/MapArray.zig").CreateMapArray;
-const Object = @import("../../ecs/EntityManager.zig").Object;
+const check = @import("../ErrorHelpers.zig").check;
+const GPU_IMG_MAX = @import("../../configs/renderConfig.zig").GPU_IMG_MAX;
 
 pub const PushConstants = extern struct {
     camPosAndFov: [4]f32,
@@ -43,8 +41,8 @@ pub const DescriptorManager = struct {
         // Query descriptor buffer properties
         const descBufferProps = getDescriptorBufferProperties(gpu);
         // Create Descriptor Layout
-        const textureBinding = createDescriptorLayoutBinding(0, vk.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1024, vk.VK_SHADER_STAGE_ALL);
-        const objectBinding = createDescriptorLayoutBinding(1, vk.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, vk.VK_SHADER_STAGE_ALL);
+        const textureBinding = createDescriptorLayoutBinding(0, vk.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, GPU_IMG_MAX, vk.VK_SHADER_STAGE_ALL);
+        const objectBinding = createDescriptorLayoutBinding(1, vk.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, vk.VK_SHADER_STAGE_ALL); // only one needed
         const descLayout = try createDescriptorLayout(gpi, &.{ textureBinding, objectBinding });
         errdefer vk.vkDestroyDescriptorSetLayout(gpi, descLayout, null);
 
