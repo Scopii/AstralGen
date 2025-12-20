@@ -30,7 +30,7 @@ pub const ImageManager = struct {
         for (self.gpuImages.getElements()) |gpuImg| self.destroyGpuImageDirect(gpuImg);
     }
 
-    pub fn createGpuImage(self: *ImageManager, imgId: u8, extent: vk.VkExtent3D, format: vk.VkFormat, usage: renderCon.MemUsage) !void {
+    pub fn createGpuImage(self: *ImageManager, imgId: u32, extent: vk.VkExtent3D, format: vk.VkFormat, usage: renderCon.MemUsage) !void {
         const gpuImage = try self.gpuAlloc.allocGpuImage(extent, format, usage);
         self.gpuImages.set(imgId, gpuImage);
     }
@@ -39,20 +39,20 @@ pub const ImageManager = struct {
         return &self.gpuImages;
     }
 
-    pub fn isGpuImageIdUsed(self: *ImageManager, imgId: u8) bool {
+    pub fn isGpuImageIdUsed(self: *ImageManager, imgId: u32) bool {
         return self.gpuImages.isKeyUsed(imgId);
     }
 
-    pub fn getGpuImage(self: *ImageManager, imgId: u8) !GpuImage {
+    pub fn getGpuImage(self: *ImageManager, imgId: u32) !GpuImage {
         if (self.gpuImages.isKeyUsed(imgId) == false) return error.GpuImageIdNotUsed;
         return self.gpuImages.get(imgId);
     }
 
-    pub fn getGpuImagePtr(self: *ImageManager, imgId: u8) *GpuImage {
+    pub fn getGpuImagePtr(self: *ImageManager, imgId: u32) *GpuImage {
         return self.gpuImages.getPtr(imgId);
     }
 
-    pub fn destroyGpuImage(self: *ImageManager, imgId: u8) void {
+    pub fn destroyGpuImage(self: *ImageManager, imgId: u32) void {
         const gpuImg = self.gpuImages.get(imgId);
         self.gpuAlloc.freeGpuImage(gpuImg);
     }

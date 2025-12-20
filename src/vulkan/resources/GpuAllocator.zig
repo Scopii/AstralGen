@@ -40,12 +40,12 @@ pub const GpuAllocator = struct {
         return .{ .allocation = gpuBuffer.allocation, .allocInf = gpuBuffer.allocInf, .buffer = gpuBuffer.buffer, .gpuAddress = gpuBuffer.gpuAddress };
     }
 
-    pub fn allocDefinedBuffer(self: *const GpuAllocator, comptime bindingInfo: BindingInfo) !GpuBuffer {
-        if (bindingInfo.dataType == null) {
-            std.debug.print("Binding Info has no Type to create Buffer\n", .{});
+    pub fn allocDefinedBuffer(self: *const GpuAllocator, bindingInfo: BindingInfo) !GpuBuffer {
+        if (bindingInfo.elementSize == 0) {
+            std.debug.print("Binding Info has invalid element size\n", .{});
             return error.AllocDefinedBufferFailed;
         }
-        const bufferByteSize = bindingInfo.length * @sizeOf(bindingInfo.dataType.?);
+        const bufferByteSize = @as(vk.VkDeviceSize, bindingInfo.length) * bindingInfo.elementSize;
 
         var bufferUsage: vk.VkBufferUsageFlags = switch (bindingInfo.buffUsage) {
             .Storage => vk.VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
@@ -55,7 +55,7 @@ pub const GpuAllocator = struct {
             .Staging => vk.VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
             .None => {
                 std.debug.print("Binding has no Buffer Usage to create Buffer", .{});
-                error.AllocDefinedBufferFailed;
+                return error.AllocDefinedBufferFailed;
             },
         };
 

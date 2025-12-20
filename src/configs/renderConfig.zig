@@ -1,6 +1,7 @@
 const vk = @import("../modules/vk.zig").c;
 const Object = @import("../ecs/EntityManager.zig").Object;
 const sc = @import("shaderConfig.zig");
+const ShaderStage = @import("../vulkan/ShaderObject.zig").ShaderStage;
 
 // Rendering, Swapchains and Windows
 pub const MAX_IN_FLIGHT: u8 = 2; // (Frames)
@@ -15,46 +16,6 @@ pub const RENDER_IMG_STRETCH = true; // Ignored on AUTO_RESIZE
 
 pub const RenderType = enum { computePass, graphicsPass, meshPass, taskMeshPass, vertexPass };
 
-pub const GpuBufferInfo = struct {
-    binding: u8,
-    length: u32,
-    dataType: type,
-    memUsage: enum { GpuOptimal, CpuWriteOptimal, CpuReadOptimal },
-    buffUsage: enum { Storage, Uniform, Index, Vertex, Staging },
-};
-
-pub const GpuImageInfo = struct {
-    id: u8,
-    extent: vk.VkExtent3D,
-    imgFormat: c_uint = RENDER_IMG_FORMAT,
-    memUsage: c_uint = vk.VMA_MEMORY_USAGE_GPU_ONLY,
-};
-
-pub const BufferRegistry = struct {
-    // Reserved Global Images
-    pub const GlobalImages = struct {
-        pub const binding: u32 = 0;
-        pub const count: u32 = 64;
-        pub const kind = .Image;
-    };
-
-    pub const objectBuffer = GpuBufferInfo{
-        .binding = 1,
-        .length = 1000,
-        .dataType = Object,
-        .memUsage = .CpuWriteOptimal,
-        .buffUsage = .Storage,
-    };
-    pub const objectBuffer2 = GpuBufferInfo{
-        .binding = 2,
-        .length = 1000,
-        .dataType = Object,
-        .memUsage = .CpuWriteOptimal,
-        .buffUsage = .Storage,
-    };
-};
-pub const GPU_BUF_COUNT = @typeInfo(BufferRegistry).@"struct".decls.len;
-
 pub const PassInfo = struct {
     renderImg: ResourceInfo,
     shaderIds: []const u8,
@@ -62,17 +23,11 @@ pub const PassInfo = struct {
 };
 // Render
 
-// pub const renderImg1 = GpuImageInfo{ .id = 0, .extent = .{ .width = 500, .height = 500, .depth = 1 } };
-// pub const renderImg2 = GpuImageInfo{ .id = 1, .extent = .{ .width = 300, .height = 300, .depth = 1 } };
-// pub const renderImg3 = GpuImageInfo{ .id = 15, .extent = .{ .width = 100, .height = 100, .depth = 1 } };
-// pub const renderImg4 = GpuImageInfo{ .id = 7, .extent = .{ .width = 1920, .height = 1080, .depth = 1 } };
-// pub const renderImg5 = GpuImageInfo{ .id = 7, .extent = .{ .width = 1920, .height = 1080, .depth = 1 } };
-
 pub const MemUsage = enum { GpuOptimal, CpuWriteOptimal, CpuReadOptimal };
 
 pub const ResourceInfo = struct {
     binding: u8,
-    resourceId: u8,
+    resourceId: u32,
     resourceType: enum { Image, Data },
 
     //Image Specific
@@ -92,36 +47,16 @@ pub const BindingInfo = struct {
 
     //Buffer specific
     buffUsage: enum { Storage, Uniform, Index, Vertex, Staging, None } = .None,
-    dataType: ?type = null,
+    elementSize: u64 = 0,
 };
 
-pub const ResourceRegistry = struct {
-    pub const textureBinding = BindingInfo{
-        .binding = 0,
-        .length = GPU_IMG_MAX,
-        .memUsage = .CpuWriteOptimal,
-        .bindingType = .Image,
-    };
+pub const textureBinding = BindingInfo{ .binding = 0, .length = GPU_IMG_MAX, .memUsage = .CpuWriteOptimal, .bindingType = .Image };
+pub const objectBinding = BindingInfo{ .binding = 1, .length = 1000, .memUsage = .CpuWriteOptimal, .bindingType = .Buffer, .buffUsage = .Storage, .elementSize = @sizeOf(Object) };
+pub const objectBinding2 = BindingInfo{ .binding = 2, .length = 100, .memUsage = .CpuWriteOptimal, .bindingType = .Buffer, .buffUsage = .Storage, .elementSize = @sizeOf(Object) };
+pub const resourceRegistry: []const BindingInfo = &.{ textureBinding, objectBinding, objectBinding2 };
 
-    pub const objectBuffer = BindingInfo{
-        .binding = 1,
-        .length = 1000,
-        .memUsage = .CpuWriteOptimal,
-        .bindingType = .Buffer,
-        .buffUsage = .Storage,
-        .dataType = Object,
-    };
-
-    pub const objectBuffer2 = BindingInfo{
-        .binding = 2,
-        .length = 100,
-        .memUsage = .CpuWriteOptimal,
-        .bindingType = .Buffer,
-        .buffUsage = .Storage,
-        .dataType = Object,
-    };
-};
-pub const GPU_BINDING_COUNT = @typeInfo(BufferRegistry).@"struct".decls.len;
+//pub const GPU_BINDING_COUNT = resourceRegistry.len;
+pub const GPU_BUF_COUNT = 2; // SHOULD BE DYNAMICALLY DONE! NEEDED FOR BUFFER MANAGER
 
 pub const imgResource1 = ResourceInfo{ .binding = 0, .resourceId = 50, .resourceType = .Image, .memUsage = .GpuOptimal, .extent = .{ .width = 500, .height = 500, .depth = 1 } };
 pub const imgResource2 = ResourceInfo{ .binding = 0, .resourceId = 51, .resourceType = .Image, .memUsage = .GpuOptimal, .extent = .{ .width = 300, .height = 300, .depth = 1 } };

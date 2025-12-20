@@ -80,13 +80,16 @@ pub const Renderer = struct {
                 break;
             }
         }
-        var dirtyRenderIds: [renderCon.GPU_IMG_MAX]bool = .{false} ** renderCon.GPU_IMG_MAX;
 
-        for (winPtrs) |winPtr| {
+        var dirtyRenderIds: [renderCon.MAX_WINDOWS]?u32 = .{null} ** renderCon.MAX_WINDOWS;
+
+        for (0..winPtrs.len) |i| {
+            const winPtr = winPtrs[i];
+
             switch (winPtr.state) {
                 .needUpdate, .needCreation => {
                     try self.swapchainMan.createSwapchain(&self.context, .{ .window = winPtr });
-                    dirtyRenderIds[winPtr.renderId] = true;
+                    dirtyRenderIds[i] = winPtr.renderId;
                 },
                 .needActive, .needInactive => {
                     self.swapchainMan.changeState(winPtr.windowId, if (winPtr.state == .needActive) .active else .inactive);
@@ -98,14 +101,17 @@ pub const Renderer = struct {
 
         if (renderCon.RENDER_IMG_AUTO_RESIZE == true) {
             for (0..dirtyRenderIds.len) |i| {
-                if (dirtyRenderIds[i] == true and self.resourceMan.isGpuImageIdUsed(@intCast(i)) != false) {
-                    try self.updateRenderImage(@intCast(i));
+                if (dirtyRenderIds[i] == null) break;
+                const renderId = dirtyRenderIds[i].?;
+
+                if (self.resourceMan.isGpuImageIdUsed(renderId) != false) {
+                    try self.updateRenderImage(renderId);
                 }
             }
         }
     }
 
-    pub fn updateRenderImage(self: *Renderer, renderId: u8) !void {
+    pub fn updateRenderImage(self: *Renderer, renderId: u32) !void {
         const new = self.swapchainMan.getMaxRenderExtent(renderId);
         const gpuImg = try self.resourceMan.getGpuImage(renderId);
         const old = gpuImg.extent3d;
@@ -116,7 +122,7 @@ pub const Renderer = struct {
 
                 const newExtent = vk.VkExtent3D{ .width = new.width, .height = new.height, .depth = 1 };
                 try self.resourceMan.createGpuImage(renderId, newExtent, renderCon.RENDER_IMG_FORMAT, .GpuOptimal);
-                std.debug.print("RenderImage recreated {}x{} to {}x{}\n", .{ old.width, old.height, new.width, new.height });
+                std.debug.print("Render Image ID {} recreated {}x{} to {}x{}\n", .{ renderId, old.width, old.height, new.width, new.height });
             }
         }
     }
@@ -135,11 +141,11 @@ pub const Renderer = struct {
         }
     }
 
-    pub fn createGpuBuffer(self: *Renderer, comptime bindingInfo: renderCon.BindingInfo) !void {
+    pub fn createGpuBuffer(self: *Renderer, bindingInfo: renderCon.BindingInfo) !void {
         try self.resourceMan.createGpuBuffer(bindingInfo);
     }
 
-    pub fn updateGpuBuffer(self: *Renderer, comptime bindingInfo: renderCon.BindingInfo, objects: []Object) !void { // SHOULD LATER TAKE CONFIG
+    pub fn updateGpuBuffer(self: *Renderer, bindingInfo: renderCon.BindingInfo, objects: []Object) !void { // SHOULD LATER TAKE CONFIG
         try self.resourceMan.updateGpuBuffer(bindingInfo, objects);
     }
 

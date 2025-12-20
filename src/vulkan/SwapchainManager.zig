@@ -111,7 +111,7 @@ pub const SwapchainManager = struct {
         self.swapchains.getPtr(windowId).state = state;
     }
 
-    pub fn getMaxRenderExtent(self: *SwapchainManager, renderId: u8) vk.VkExtent2D {
+    pub fn getMaxRenderExtent(self: *SwapchainManager, renderId: u32) vk.VkExtent2D {
         var maxWidth: u32 = 0;
         var maxHeight: u32 = 0;
 

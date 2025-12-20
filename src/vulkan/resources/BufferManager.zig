@@ -31,17 +31,17 @@ pub const BufferManager = struct {
         for (self.gpuBuffers.getElements()) |gpuBuffer| self.destroyGpuBuffer(gpuBuffer);
     }
 
-    pub fn getGpuBuffer(self: *BufferManager, buffId: u8) !GpuBuffer {
+    pub fn getGpuBuffer(self: *BufferManager, buffId: u32) !GpuBuffer {
         if (self.gpuBuffers.isKeyUsed(buffId) == false) return error.GpuBufferDoesNotExist;
         return self.gpuBuffers.get(buffId);
     }
 
-    pub fn createGpuBuffer(self: *BufferManager, comptime bindingInfo: renderCon.BindingInfo) !void {
+    pub fn createGpuBuffer(self: *BufferManager, bindingInfo: renderCon.BindingInfo) !void {
         const buffer = try self.gpuAlloc.allocDefinedBuffer(bindingInfo);
         self.gpuBuffers.set(bindingInfo.binding, buffer);
     }
 
-    pub fn updateGpuBuffer(self: *BufferManager, comptime bindingInfo: renderCon.BindingInfo, data: []const bindingInfo.dataType.?) !void {
+    pub fn updateGpuBufferOLD(self: *BufferManager, bindingInfo: renderCon.BindingInfo, data: []const bindingInfo.dataType.?) !void {
         const buffId = bindingInfo.binding;
         var buffer = try self.getGpuBuffer(buffId);
         const pMappedData = buffer.allocInf.pMappedData;
@@ -53,6 +53,30 @@ pub const BufferManager = struct {
         const dataPtr: [*]bindingInfo.dataType.? = @ptrCast(@alignCast(pMappedData));
         @memcpy(dataPtr[0..data.len], data);
 
+        buffer.count = @intCast(data.len);
+        self.gpuBuffers.set(buffId, buffer);
+    }
+
+    pub fn updateGpuBuffer(self: *BufferManager, bindingInfo: renderCon.BindingInfo, data: anytype) !void {
+        const T = std.meta.Child(@TypeOf(data));
+        if (@sizeOf(T) != bindingInfo.elementSize) {
+            std.debug.print("Error: Size mismatch! Config expects {} bytes, Data is {} bytes\n", .{ bindingInfo.elementSize, @sizeOf(T) });
+            return error.TypeMismatch;
+        }
+
+        const buffId = bindingInfo.binding;
+        var buffer = try self.getGpuBuffer(buffId);
+        const pMappedData = buffer.allocInf.pMappedData;
+
+        // Simple alignment check
+        const alignment = @alignOf(T);
+        if (@intFromPtr(pMappedData) % alignment != 0) {
+            return error.ImproperAlignment;
+        }
+        // Copy
+        const dataPtr: [*]T = @ptrCast(@alignCast(pMappedData));
+        @memcpy(dataPtr[0..data.len], data);
+        // Update
         buffer.count = @intCast(data.len);
         self.gpuBuffers.set(buffId, buffer);
     }

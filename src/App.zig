@@ -74,10 +74,10 @@ pub const App = struct {
         // RENDERING SET UP
         try renderer.addPasses(renderCon.renderSequence);
 
-        try renderer.createGpuBuffer(renderCon.ResourceRegistry.objectBuffer);
-        try renderer.createGpuBuffer(renderCon.ResourceRegistry.objectBuffer2);
+        try renderer.createGpuBuffer(renderCon.objectBinding);
+        try renderer.createGpuBuffer(renderCon.objectBinding2);
 
-        try renderer.updateGpuBuffer(renderCon.ResourceRegistry.objectBuffer, ecs.getObjects());
+        try renderer.updateGpuBuffer(renderCon.objectBinding, ecs.getObjects());
 
         return .{
             .cam = Camera.init(.{}),
