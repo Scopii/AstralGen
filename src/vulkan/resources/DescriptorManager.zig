@@ -6,7 +6,9 @@ const GpuAllocator = @import("GpuAllocator.zig").GpuAllocator;
 const GpuBuffer = @import("BufferManager.zig").GpuBuffer;
 const GpuImage = @import("ImageManager.zig").GpuImage;
 const check = @import("../ErrorHelpers.zig").check;
-const GPU_IMG_MAX = @import("../../configs/renderConfig.zig").GPU_IMG_MAX;
+const renderCon = @import("../../configs/renderConfig.zig");
+const GPU_IMG_MAX = renderCon.GPU_IMG_MAX;
+const GPU_BUF_COUNT = renderCon.GPU_BUF_COUNT;
 
 pub const PushConstants = extern struct {
     camPosAndFov: [4]f32,
@@ -40,8 +42,19 @@ pub const DescriptorManager = struct {
     pub fn init(cpuAlloc: Allocator, gpuAlloc: GpuAllocator, gpi: vk.VkDevice, gpu: vk.VkPhysicalDevice) !DescriptorManager {
         // Create Descriptor Layout
         const textureBinding = createDescriptorLayoutBinding(0, vk.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, GPU_IMG_MAX, vk.VK_SHADER_STAGE_ALL);
-        const objectBinding = createDescriptorLayoutBinding(1, vk.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, vk.VK_SHADER_STAGE_ALL); // only one needed
+        const objectBinding = createDescriptorLayoutBinding(1, vk.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, GPU_BUF_COUNT, vk.VK_SHADER_STAGE_ALL); // only one needed
         const descLayout = try createDescriptorLayout(gpi, &.{ textureBinding, objectBinding });
+
+        // var bindings: [renderCon.GPU_BUF_COUNT + 1]vk.VkDescriptorSetLayoutBinding = undefined;
+        // bindings[0] = textureBinding;
+
+        // for (renderCon.descriptorBindings) |descBinding| {
+        //     const buffId = descBinding.buffId;
+        //     if (buffId == 0) return error.DescriptorBinding0ReservedForTextures;
+        //     bindings[buffId] = createDescriptorLayoutBinding(buffId, vk.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, descBinding.length, vk.VK_SHADER_STAGE_ALL); // only one needed
+        // }
+        // const descLayout = try createDescriptorLayout(gpi, &bindings);
+
         errdefer vk.vkDestroyDescriptorSetLayout(gpi, descLayout, null);
         // Get exact size for this layout from the driver
         var layoutSize: vk.VkDeviceSize = undefined;

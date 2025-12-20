@@ -16,7 +16,7 @@ pub const GpuBuffer = struct {
 };
 
 pub const BufferManager = struct {
-    pub const BufferMap = CreateMapArray(GpuBuffer, renderCon.GPU_BUF_MAX, u32, renderCon.GPU_BUF_MAX, 0);
+    pub const BufferMap = CreateMapArray(GpuBuffer, renderCon.GPU_BUF_COUNT, u32, renderCon.GPU_BUF_COUNT, 0);
 
     cpuAlloc: Allocator,
     gpuAlloc: GpuAllocator, //deinit() in ResourceManager
@@ -38,11 +38,11 @@ pub const BufferManager = struct {
 
     pub fn createGpuBuffer(self: *BufferManager, comptime gpuBufConfigs: renderCon.GpuBufferInfo) !void {
         const buffer = try self.gpuAlloc.allocDefinedBuffer(gpuBufConfigs);
-        self.gpuBuffers.set(gpuBufConfigs.buffId, buffer);
+        self.gpuBuffers.set(gpuBufConfigs.descBinding.buffId, buffer);
     }
 
     pub fn updateGpuBuffer(self: *BufferManager, comptime gpuBufConfig: renderCon.GpuBufferInfo, data: []const gpuBufConfig.dataType) !void {
-        const buffId = gpuBufConfig.buffId;
+        const buffId = gpuBufConfig.descBinding.buffId;
         var buffer = try self.getGpuBuffer(buffId);
         const pMappedData = buffer.allocInf.pMappedData;
         // Check Alignemnt naively (Doesnt catch everything)

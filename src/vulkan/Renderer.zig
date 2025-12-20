@@ -181,7 +181,7 @@ pub const Renderer = struct {
         for (self.passes.items) |pass| {
             const renderImgId = pass.renderImgInf.id;
 
-            const gpuBuffer = try self.resourceMan.getGpuBuffer(0);
+            const gpuBuffer = try self.resourceMan.getGpuBuffer(0); // HARD CODED CURRENTLY
 
             const pushConstants = PushConstants{
                 .camPosAndFov = cam.getPosAndFov(),

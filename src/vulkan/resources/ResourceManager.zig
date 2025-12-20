@@ -72,7 +72,7 @@ pub const ResourceManager = struct {
     }
 
     pub fn createGpuBuffer(self: *ResourceManager, comptime gpuBufConfig: renderCon.GpuBufferInfo) !void {
-        const buffId = gpuBufConfig.buffId;
+        const buffId = gpuBufConfig.descBinding.buffId;
         try self.bufferMan.createGpuBuffer(gpuBufConfig);
         const gpuBuffer = try self.bufferMan.getGpuBuffer(buffId);
         try self.descMan.updateBufferDescriptor(gpuBuffer, buffId);

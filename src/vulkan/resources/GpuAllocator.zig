@@ -39,7 +39,7 @@ pub const GpuAllocator = struct {
     }
 
     pub fn allocDefinedBuffer(self: *const GpuAllocator, comptime gpuBufConfigs: GpuBufferInfo) !GpuBuffer {
-        const bufferByteSize = gpuBufConfigs.length * @sizeOf(gpuBufConfigs.dataType);
+        const bufferByteSize = gpuBufConfigs.descBinding.length * @sizeOf(gpuBufConfigs.dataType);
 
         var bufferUsage: vk.VkBufferUsageFlags = switch (gpuBufConfigs.buffUsage) {
             .Storage => vk.VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,

@@ -9,7 +9,6 @@ pub const DISPLAY_MODE = vk.VK_PRESENT_MODE_IMMEDIATE_KHR;
 pub const MAX_WINDOWS: u8 = 16;
 
 pub const GPU_IMG_MAX = 64;
-pub const GPU_BUF_MAX = 16;
 pub const RENDER_IMG_FORMAT = vk.VK_FORMAT_R16G16B16A16_SFLOAT;
 pub const RENDER_IMG_AUTO_RESIZE = true;
 pub const RENDER_IMG_STRETCH = true; // Ignored on AUTO_RESIZE
@@ -19,17 +18,22 @@ pub const RenderType = enum { computePass, graphicsPass, meshPass, taskMeshPass,
 pub const GpuBufferInfo = struct {
     pub const BufferUsage = enum(vk.VkBufferUsageFlags) { Storage, Uniform, Index, Vertex, Staging };
     pub const MemoryUsage = enum { GpuOptimal, CpuWriteOptimal, CpuReadOptimal };
-    buffId: u8,
-    length: u64,
+    pub const DescriptorBinding = struct { buffId: u8, length: u32 };
+    descBinding: DescriptorBinding,
     dataType: type,
     memUsage: MemoryUsage,
     buffUsage: BufferUsage,
 };
 
+pub const objectBinding: GpuBufferInfo.DescriptorBinding = .{ .buffId = 0, .length = 1000 };
+pub const gridBinding: GpuBufferInfo.DescriptorBinding = .{ .buffId = 1, .length = 100 };
+pub const descriptorBindings: []const GpuBufferInfo.DescriptorBinding = &.{ objectBinding, gridBinding };
+
 pub const BufferRegistry = struct {
-    pub const objectBuffer = GpuBufferInfo{ .buffId = 0, .length = 1000, .dataType = Object, .memUsage = .CpuWriteOptimal, .buffUsage = .Storage };
-    pub const gridBuffer = GpuBufferInfo{ .buffId = 1, .length = 100, .dataType = Object, .memUsage = .CpuWriteOptimal, .buffUsage = .Storage };
+    pub const objectBuffer = GpuBufferInfo{ .descBinding = objectBinding, .dataType = Object, .memUsage = .CpuWriteOptimal, .buffUsage = .Storage };
+    pub const gridBuffer = GpuBufferInfo{ .descBinding = gridBinding, .dataType = Object, .memUsage = .CpuWriteOptimal, .buffUsage = .Storage };
 };
+pub const GPU_BUF_COUNT = @typeInfo(BufferRegistry).@"struct".decls.len;
 
 pub const GpuImageInfo = struct {
     id: u8,
