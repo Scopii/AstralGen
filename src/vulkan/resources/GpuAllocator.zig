@@ -1,8 +1,10 @@
 const vk = @import("../../modules/vk.zig").c;
+const std = @import("std");
 const DescriptorBuffer = @import("DescriptorManager.zig").DescriptorBuffer;
 const GpuBuffer = @import("BufferManager.zig").GpuBuffer;
 const GpuImage = @import("ImageManager.zig").GpuImage;
-const GpuBufferInfo = @import("../../configs/renderConfig.zig").GpuBufferInfo;
+const BindingInfo = @import("../../configs/renderConfig.zig").BindingInfo;
+const renderCon = @import("../../configs/renderConfig.zig");
 const check = @import("../ErrorHelpers.zig").check;
 
 pub const GpuAllocator = struct {
@@ -38,33 +40,41 @@ pub const GpuAllocator = struct {
         return .{ .allocation = gpuBuffer.allocation, .allocInf = gpuBuffer.allocInf, .buffer = gpuBuffer.buffer, .gpuAddress = gpuBuffer.gpuAddress };
     }
 
-    pub fn allocDefinedBuffer(self: *const GpuAllocator, comptime gpuBufConfigs: GpuBufferInfo) !GpuBuffer {
-        const bufferByteSize = gpuBufConfigs.descBinding.length * @sizeOf(gpuBufConfigs.dataType);
+    pub fn allocDefinedBuffer(self: *const GpuAllocator, comptime bindingInfo: BindingInfo) !GpuBuffer {
+        if (bindingInfo.dataType == null) {
+            std.debug.print("Binding Info has no Type to create Buffer\n", .{});
+            return error.AllocDefinedBufferFailed;
+        }
+        const bufferByteSize = bindingInfo.length * @sizeOf(bindingInfo.dataType.?);
 
-        var bufferUsage: vk.VkBufferUsageFlags = switch (gpuBufConfigs.buffUsage) {
+        var bufferUsage: vk.VkBufferUsageFlags = switch (bindingInfo.buffUsage) {
             .Storage => vk.VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
             .Uniform => vk.VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
             .Index => vk.VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
             .Vertex => vk.VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
             .Staging => vk.VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+            .None => {
+                std.debug.print("Binding has no Buffer Usage to create Buffer", .{});
+                error.AllocDefinedBufferFailed;
+            },
         };
 
-        if (gpuBufConfigs.buffUsage != .Staging) {
+        if (bindingInfo.buffUsage != .Staging) {
             bufferUsage |= vk.VK_BUFFER_USAGE_TRANSFER_DST_BIT;
             bufferUsage |= vk.VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
         }
 
-        const memUsage: vk.VmaMemoryUsage = switch (gpuBufConfigs.memUsage) {
+        const memUsage: vk.VmaMemoryUsage = switch (bindingInfo.memUsage) {
             .GpuOptimal => vk.VMA_MEMORY_USAGE_GPU_ONLY,
             .CpuWriteOptimal => vk.VMA_MEMORY_USAGE_CPU_TO_GPU,
             .CpuReadOptimal => vk.VMA_MEMORY_USAGE_GPU_TO_CPU,
         };
 
-        var memFlags: vk.VmaAllocationCreateFlags = switch (gpuBufConfigs.memUsage) {
+        var memFlags: vk.VmaAllocationCreateFlags = switch (bindingInfo.memUsage) {
             .GpuOptimal => 0,
             .CpuWriteOptimal, .CpuReadOptimal => vk.VMA_ALLOCATION_CREATE_MAPPED_BIT,
         };
-        if (gpuBufConfigs.buffUsage == .Staging) memFlags |= vk.VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+        if (bindingInfo.buffUsage == .Staging) memFlags |= vk.VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
 
         return try self.allocBuffer(bufferByteSize, bufferUsage, memUsage, memFlags);
     }
@@ -92,7 +102,13 @@ pub const GpuAllocator = struct {
         };
     }
 
-    pub fn allocGpuImage(self: *GpuAllocator, extent: vk.VkExtent3D, format: vk.VkFormat, usage: vk.VmaMemoryUsage) !GpuImage {
+    pub fn allocGpuImage(self: *GpuAllocator, extent: vk.VkExtent3D, format: vk.VkFormat, memUsage: renderCon.MemUsage) !GpuImage {
+        const mappedMemUsage: vk.VmaMemoryUsage = switch (memUsage) {
+            .GpuOptimal => vk.VMA_MEMORY_USAGE_GPU_ONLY,
+            .CpuWriteOptimal => vk.VMA_MEMORY_USAGE_CPU_TO_GPU,
+            .CpuReadOptimal => vk.VMA_MEMORY_USAGE_GPU_TO_CPU,
+        };
+
         // Extending Flags as Parameters later!
         const drawImgUsages = vk.VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
             vk.VK_IMAGE_USAGE_TRANSFER_DST_BIT |
@@ -103,7 +119,7 @@ pub const GpuAllocator = struct {
         var img: vk.VkImage = undefined;
         var allocation: vk.VmaAllocation = undefined;
         const imgInf = createAllocatedImageInf(format, drawImgUsages, extent);
-        const imgAllocInf = vk.VmaAllocationCreateInfo{ .usage = usage, .requiredFlags = vk.VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT };
+        const imgAllocInf = vk.VmaAllocationCreateInfo{ .usage = mappedMemUsage, .requiredFlags = vk.VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT };
         try check(vk.vmaCreateImage(self.handle, &imgInf, &imgAllocInf, &img, &allocation, null), "Could not create Render Image");
 
         var view: vk.VkImageView = undefined;

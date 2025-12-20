@@ -16,24 +16,12 @@ pub const RENDER_IMG_STRETCH = true; // Ignored on AUTO_RESIZE
 pub const RenderType = enum { computePass, graphicsPass, meshPass, taskMeshPass, vertexPass };
 
 pub const GpuBufferInfo = struct {
-    pub const BufferUsage = enum(vk.VkBufferUsageFlags) { Storage, Uniform, Index, Vertex, Staging };
-    pub const MemoryUsage = enum { GpuOptimal, CpuWriteOptimal, CpuReadOptimal };
-    pub const DescriptorBinding = struct { buffId: u8, length: u32 };
-    descBinding: DescriptorBinding,
+    binding: u8,
+    length: u32,
     dataType: type,
-    memUsage: MemoryUsage,
-    buffUsage: BufferUsage,
+    memUsage: enum { GpuOptimal, CpuWriteOptimal, CpuReadOptimal },
+    buffUsage: enum { Storage, Uniform, Index, Vertex, Staging },
 };
-
-pub const objectBinding: GpuBufferInfo.DescriptorBinding = .{ .buffId = 0, .length = 1000 };
-pub const gridBinding: GpuBufferInfo.DescriptorBinding = .{ .buffId = 1, .length = 100 };
-pub const descriptorBindings: []const GpuBufferInfo.DescriptorBinding = &.{ objectBinding, gridBinding };
-
-pub const BufferRegistry = struct {
-    pub const objectBuffer = GpuBufferInfo{ .descBinding = objectBinding, .dataType = Object, .memUsage = .CpuWriteOptimal, .buffUsage = .Storage };
-    pub const gridBuffer = GpuBufferInfo{ .descBinding = gridBinding, .dataType = Object, .memUsage = .CpuWriteOptimal, .buffUsage = .Storage };
-};
-pub const GPU_BUF_COUNT = @typeInfo(BufferRegistry).@"struct".decls.len;
 
 pub const GpuImageInfo = struct {
     id: u8,
@@ -42,26 +30,109 @@ pub const GpuImageInfo = struct {
     memUsage: c_uint = vk.VMA_MEMORY_USAGE_GPU_ONLY,
 };
 
-pub const passInfo = struct {
-    renderImg: GpuImageInfo,
+pub const BufferRegistry = struct {
+    // Reserved Global Images
+    pub const GlobalImages = struct {
+        pub const binding: u32 = 0;
+        pub const count: u32 = 64;
+        pub const kind = .Image;
+    };
+
+    pub const objectBuffer = GpuBufferInfo{
+        .binding = 1,
+        .length = 1000,
+        .dataType = Object,
+        .memUsage = .CpuWriteOptimal,
+        .buffUsage = .Storage,
+    };
+    pub const objectBuffer2 = GpuBufferInfo{
+        .binding = 2,
+        .length = 1000,
+        .dataType = Object,
+        .memUsage = .CpuWriteOptimal,
+        .buffUsage = .Storage,
+    };
+};
+pub const GPU_BUF_COUNT = @typeInfo(BufferRegistry).@"struct".decls.len;
+
+pub const PassInfo = struct {
+    renderImg: ResourceInfo,
     shaderIds: []const u8,
     clear: bool = false,
 };
-
 // Render
-pub const renderImg1 = GpuImageInfo{ .id = 0, .extent = .{ .width = 500, .height = 500, .depth = 1 } };
-pub const pass1: passInfo = .{ .renderImg = renderImg1, .shaderIds = &.{sc.t1Comp.id} }; // clear does not work for compute
 
-pub const renderImg2 = GpuImageInfo{ .id = 1, .extent = .{ .width = 300, .height = 300, .depth = 1 } };
-pub const pass2: passInfo = .{ .renderImg = renderImg2, .shaderIds = &.{ sc.t2Vert.id, sc.t2Frag.id } };
+// pub const renderImg1 = GpuImageInfo{ .id = 0, .extent = .{ .width = 500, .height = 500, .depth = 1 } };
+// pub const renderImg2 = GpuImageInfo{ .id = 1, .extent = .{ .width = 300, .height = 300, .depth = 1 } };
+// pub const renderImg3 = GpuImageInfo{ .id = 15, .extent = .{ .width = 100, .height = 100, .depth = 1 } };
+// pub const renderImg4 = GpuImageInfo{ .id = 7, .extent = .{ .width = 1920, .height = 1080, .depth = 1 } };
+// pub const renderImg5 = GpuImageInfo{ .id = 7, .extent = .{ .width = 1920, .height = 1080, .depth = 1 } };
 
-pub const renderImg3 = GpuImageInfo{ .id = 15, .extent = .{ .width = 100, .height = 100, .depth = 1 } };
-pub const pass3: passInfo = .{ .renderImg = renderImg3, .shaderIds = &.{ sc.t3Mesh.id, sc.t3Frag.id } };
+pub const MemUsage = enum { GpuOptimal, CpuWriteOptimal, CpuReadOptimal };
 
-pub const renderImg4 = GpuImageInfo{ .id = 7, .extent = .{ .width = 1920, .height = 1080, .depth = 1 } };
-pub const pass4: passInfo = .{ .renderImg = renderImg4, .shaderIds = &.{ sc.t4Task.id, sc.t4Mesh.id, sc.t4Frag.id } };
+pub const ResourceInfo = struct {
+    binding: u8,
+    resourceId: u8,
+    resourceType: enum { Image, Data },
 
-pub const renderImg5 = GpuImageInfo{ .id = 7, .extent = .{ .width = 1920, .height = 1080, .depth = 1 } };
-pub const pass5: passInfo = .{ .renderImg = renderImg4, .shaderIds = &.{ sc.gridTask.id, sc.gridMesh.id, sc.gridFrag.id }, .clear = true };
+    //Image Specific
+    extent: vk.VkExtent3D,
+    imgFormat: c_uint = RENDER_IMG_FORMAT,
+    memUsage: MemUsage,
 
-pub const renderSequence: []const passInfo = &.{ pass1, pass2, pass3, pass4, pass5 };
+    //Buffer Specific
+    //bufferData: type,
+};
+
+pub const BindingInfo = struct {
+    binding: u8,
+    length: u32,
+    bindingType: enum { Image, Buffer },
+    memUsage: MemUsage,
+
+    //Buffer specific
+    buffUsage: enum { Storage, Uniform, Index, Vertex, Staging, None } = .None,
+    dataType: ?type = null,
+};
+
+pub const ResourceRegistry = struct {
+    pub const textureBinding = BindingInfo{
+        .binding = 0,
+        .length = GPU_IMG_MAX,
+        .memUsage = .CpuWriteOptimal,
+        .bindingType = .Image,
+    };
+
+    pub const objectBuffer = BindingInfo{
+        .binding = 1,
+        .length = 1000,
+        .memUsage = .CpuWriteOptimal,
+        .bindingType = .Buffer,
+        .buffUsage = .Storage,
+        .dataType = Object,
+    };
+
+    pub const objectBuffer2 = BindingInfo{
+        .binding = 2,
+        .length = 100,
+        .memUsage = .CpuWriteOptimal,
+        .bindingType = .Buffer,
+        .buffUsage = .Storage,
+        .dataType = Object,
+    };
+};
+pub const GPU_BINDING_COUNT = @typeInfo(BufferRegistry).@"struct".decls.len;
+
+pub const imgResource1 = ResourceInfo{ .binding = 0, .resourceId = 50, .resourceType = .Image, .memUsage = .GpuOptimal, .extent = .{ .width = 500, .height = 500, .depth = 1 } };
+pub const imgResource2 = ResourceInfo{ .binding = 0, .resourceId = 51, .resourceType = .Image, .memUsage = .GpuOptimal, .extent = .{ .width = 300, .height = 300, .depth = 1 } };
+pub const imgResource3 = ResourceInfo{ .binding = 0, .resourceId = 52, .resourceType = .Image, .memUsage = .GpuOptimal, .extent = .{ .width = 100, .height = 100, .depth = 1 } };
+pub const imgResource4 = ResourceInfo{ .binding = 0, .resourceId = 53, .resourceType = .Image, .memUsage = .GpuOptimal, .extent = .{ .width = 1920, .height = 1080, .depth = 1 } };
+pub const imgResource5 = ResourceInfo{ .binding = 0, .resourceId = 54, .resourceType = .Image, .memUsage = .GpuOptimal, .extent = .{ .width = 1920, .height = 1080, .depth = 1 } };
+
+pub const pass1: PassInfo = .{ .renderImg = imgResource1, .shaderIds = &.{sc.t1Comp.id} }; // clear does not work for compute
+pub const pass2: PassInfo = .{ .renderImg = imgResource2, .shaderIds = &.{ sc.t2Vert.id, sc.t2Frag.id } };
+pub const pass3: PassInfo = .{ .renderImg = imgResource3, .shaderIds = &.{ sc.t3Mesh.id, sc.t3Frag.id } };
+pub const pass4: PassInfo = .{ .renderImg = imgResource4, .shaderIds = &.{ sc.t4Task.id, sc.t4Mesh.id, sc.t4Frag.id } };
+pub const pass5: PassInfo = .{ .renderImg = imgResource4, .shaderIds = &.{ sc.gridTask.id, sc.gridMesh.id, sc.gridFrag.id }, .clear = true };
+
+pub const renderSequence: []const PassInfo = &.{ pass1, pass2, pass3, pass4, pass5 };

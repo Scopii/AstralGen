@@ -36,21 +36,21 @@ pub const BufferManager = struct {
         return self.gpuBuffers.get(buffId);
     }
 
-    pub fn createGpuBuffer(self: *BufferManager, comptime gpuBufConfigs: renderCon.GpuBufferInfo) !void {
-        const buffer = try self.gpuAlloc.allocDefinedBuffer(gpuBufConfigs);
-        self.gpuBuffers.set(gpuBufConfigs.descBinding.buffId, buffer);
+    pub fn createGpuBuffer(self: *BufferManager, comptime bindingInfo: renderCon.BindingInfo) !void {
+        const buffer = try self.gpuAlloc.allocDefinedBuffer(bindingInfo);
+        self.gpuBuffers.set(bindingInfo.binding, buffer);
     }
 
-    pub fn updateGpuBuffer(self: *BufferManager, comptime gpuBufConfig: renderCon.GpuBufferInfo, data: []const gpuBufConfig.dataType) !void {
-        const buffId = gpuBufConfig.descBinding.buffId;
+    pub fn updateGpuBuffer(self: *BufferManager, comptime bindingInfo: renderCon.BindingInfo, data: []const bindingInfo.dataType.?) !void {
+        const buffId = bindingInfo.binding;
         var buffer = try self.getGpuBuffer(buffId);
         const pMappedData = buffer.allocInf.pMappedData;
         // Check Alignemnt naively (Doesnt catch everything)
-        const alignment = @alignOf(gpuBufConfig.dataType);
+        const alignment = @alignOf(bindingInfo.dataType.?);
         if (@intFromPtr(pMappedData) % alignment != 0) {
             return error.ImproperAlignment;
         }
-        const dataPtr: [*]gpuBufConfig.dataType = @ptrCast(@alignCast(pMappedData));
+        const dataPtr: [*]bindingInfo.dataType.? = @ptrCast(@alignCast(pMappedData));
         @memcpy(dataPtr[0..data.len], data);
 
         buffer.count = @intCast(data.len);

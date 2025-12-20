@@ -30,7 +30,7 @@ pub const ImageManager = struct {
         for (self.gpuImages.getElements()) |gpuImg| self.destroyGpuImageDirect(gpuImg);
     }
 
-    pub fn createGpuImage(self: *ImageManager, imgId: u8, extent: vk.VkExtent3D, format: vk.VkFormat, usage: vk.VmaMemoryUsage) !void {
+    pub fn createGpuImage(self: *ImageManager, imgId: u8, extent: vk.VkExtent3D, format: vk.VkFormat, usage: renderCon.MemUsage) !void {
         const gpuImage = try self.gpuAlloc.allocGpuImage(extent, format, usage);
         self.gpuImages.set(imgId, gpuImage);
     }

@@ -71,10 +71,13 @@ pub const App = struct {
         try renderer.addShaders(shaderCompiler.pullFreshShaders());
         shaderCompiler.freeFreshShaders();
 
+        // RENDERING SET UP
         try renderer.addPasses(renderCon.renderSequence);
-        try renderer.createGpuBuffer(renderCon.BufferRegistry.objectBuffer);
-        try renderer.createGpuBuffer(renderCon.BufferRegistry.gridBuffer);
-        try renderer.updateGpuBuffer(renderCon.BufferRegistry.objectBuffer, ecs.getObjects());
+
+        try renderer.createGpuBuffer(renderCon.ResourceRegistry.objectBuffer);
+        try renderer.createGpuBuffer(renderCon.ResourceRegistry.objectBuffer2);
+
+        try renderer.updateGpuBuffer(renderCon.ResourceRegistry.objectBuffer, ecs.getObjects());
 
         return .{
             .cam = Camera.init(.{}),
@@ -98,10 +101,10 @@ pub const App = struct {
     }
 
     pub fn initWindows(self: *App) !void {
-        try self.windowMan.addWindow("Task", 16 * 52, 9 * 52, renderCon.renderImg4.id, 120, 50);
-        try self.windowMan.addWindow("Mesh", 16 * 52, 9 * 52, renderCon.renderImg3.id, 120, 550);
-        try self.windowMan.addWindow("Compute", 16 * 52, 9 * 52, renderCon.renderImg1.id, 960, 50);
-        try self.windowMan.addWindow("Graphics", 16 * 52, 9 * 52, renderCon.renderImg2.id, 960, 550);
+        try self.windowMan.addWindow("Task", 16 * 52, 9 * 52, renderCon.imgResource4.resourceId, 120, 50);
+        try self.windowMan.addWindow("Mesh", 16 * 52, 9 * 52, renderCon.imgResource3.resourceId, 120, 550);
+        try self.windowMan.addWindow("Compute", 16 * 52, 9 * 52, renderCon.imgResource1.resourceId, 960, 50);
+        try self.windowMan.addWindow("Graphics", 16 * 52, 9 * 52, renderCon.imgResource2.resourceId, 960, 550);
     }
 
     pub fn run(self: *App) !void {

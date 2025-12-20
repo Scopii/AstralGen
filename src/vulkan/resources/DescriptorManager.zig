@@ -41,19 +41,16 @@ pub const DescriptorManager = struct {
 
     pub fn init(cpuAlloc: Allocator, gpuAlloc: GpuAllocator, gpi: vk.VkDevice, gpu: vk.VkPhysicalDevice) !DescriptorManager {
         // Create Descriptor Layout
-        const textureBinding = createDescriptorLayoutBinding(0, vk.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, GPU_IMG_MAX, vk.VK_SHADER_STAGE_ALL);
-        const objectBinding = createDescriptorLayoutBinding(1, vk.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, GPU_BUF_COUNT, vk.VK_SHADER_STAGE_ALL); // only one needed
-        const descLayout = try createDescriptorLayout(gpi, &.{ textureBinding, objectBinding });
+        const textureBinding = renderCon.ResourceRegistry.textureBinding;
+        const textures = createDescriptorLayoutBinding(textureBinding.binding, vk.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, textureBinding.length, vk.VK_SHADER_STAGE_ALL);
 
-        // var bindings: [renderCon.GPU_BUF_COUNT + 1]vk.VkDescriptorSetLayoutBinding = undefined;
-        // bindings[0] = textureBinding;
+        const objectBinding = renderCon.ResourceRegistry.objectBuffer;
+        const objects = createDescriptorLayoutBinding(objectBinding.binding, vk.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, vk.VK_SHADER_STAGE_ALL); // only one needed
 
-        // for (renderCon.descriptorBindings) |descBinding| {
-        //     const buffId = descBinding.buffId;
-        //     if (buffId == 0) return error.DescriptorBinding0ReservedForTextures;
-        //     bindings[buffId] = createDescriptorLayoutBinding(buffId, vk.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, descBinding.length, vk.VK_SHADER_STAGE_ALL); // only one needed
-        // }
-        // const descLayout = try createDescriptorLayout(gpi, &bindings);
+        const objectBindings2 = renderCon.ResourceRegistry.objectBuffer2;
+        const objects2 = createDescriptorLayoutBinding(objectBindings2.binding, vk.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, vk.VK_SHADER_STAGE_ALL); // only one needed
+
+        const descLayout = try createDescriptorLayout(gpi, &.{ textures, objects, objects2 });
 
         errdefer vk.vkDestroyDescriptorSetLayout(gpi, descLayout, null);
         // Get exact size for this layout from the driver
@@ -89,10 +86,10 @@ pub const DescriptorManager = struct {
             .type = vk.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
             .data = .{ .pStorageImage = &imgInf },
         };
-        try self.updateDescriptor(&getInf, 0, self.descBufferProps.storageImageDescriptorSize, imgId);
+        try self.updateDescriptor(&getInf, 0, imgId, self.descBufferProps.storageImageDescriptorSize);
     }
 
-    pub fn updateBufferDescriptor(self: *DescriptorManager, gpuBuffer: GpuBuffer, buffId: u8) !void {
+    pub fn updateBufferDescriptor(self: *DescriptorManager, gpuBuffer: GpuBuffer, binding: u8, arrayIndex: u32) !void {
         const addressInf = vk.VkDescriptorAddressInfoEXT{
             .sType = vk.VK_STRUCTURE_TYPE_DESCRIPTOR_ADDRESS_INFO_EXT,
             .address = gpuBuffer.gpuAddress,
@@ -104,10 +101,10 @@ pub const DescriptorManager = struct {
             .type = vk.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
             .data = .{ .pStorageBuffer = &addressInf },
         };
-        try self.updateDescriptor(&getInf, 1, self.descBufferProps.storageBufferDescriptorSize, buffId);
+        try self.updateDescriptor(&getInf, binding, arrayIndex, self.descBufferProps.storageBufferDescriptorSize);
     }
 
-    pub fn updateDescriptor(self: *DescriptorManager, getInf: *const vk.VkDescriptorGetInfoEXT, binding: u32, descriptorSize: usize, buffId: u8) !void {
+    pub fn updateDescriptor(self: *DescriptorManager, getInf: *const vk.VkDescriptorGetInfoEXT, binding: u32, arrayIndex: u32, descriptorSize: usize) !void {
         // Get Descriptor Data
         var descData: [64]u8 = undefined; // safe buffer size
         if (descriptorSize > descData.len) return error.DescriptorSizeTooLarge;
@@ -117,7 +114,7 @@ pub const DescriptorManager = struct {
         vkFn.vkGetDescriptorSetLayoutBindingOffsetEXT.?(self.gpi, self.descLayout, binding, &bindingOffset);
 
         const mappedData = @as([*]u8, @ptrCast(self.descBuffer.allocInf.pMappedData));
-        const finalOffset = bindingOffset + (buffId * descriptorSize); // Base Offset of the Array + (Index * Size of one Element)
+        const finalOffset = bindingOffset + (arrayIndex * descriptorSize); // Base Offset of the Array + (Index * Size of one Element)
         const destPtr = mappedData + finalOffset;
         @memcpy(destPtr[0..descriptorSize], descData[0..descriptorSize]);
     }
@@ -143,7 +140,9 @@ fn getDescriptorBufferProperties(gpu: vk.VkPhysicalDevice) vk.VkPhysicalDeviceDe
 fn createDescriptorLayout(gpi: vk.VkDevice, layoutBindings: []const vk.VkDescriptorSetLayoutBinding) !vk.VkDescriptorSetLayout {
     // Binding 0 (Images): Needs PARTIALLY_BOUND because the array is 1024 but we only use a few.
     // Binding 1 (Buffer): Needs 0.
-    const bindingFlags = [_]vk.VkDescriptorBindingFlags{ vk.VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT, 0 };
+
+    // NEEEEEEEEED TO BE SET CORRECTLYY!!!!
+    const bindingFlags: [renderCon.GPU_BUF_COUNT]vk.VkDescriptorBindingFlags = .{ vk.VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT , 0, 0 };
 
     const bindingFlagsInf = vk.VkDescriptorSetLayoutBindingFlagsCreateInfo{
         .sType = vk.VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO,
