@@ -7,10 +7,13 @@ const ImageManager = @import("ImageManager.zig").ImageManager;
 const GpuBuffer = @import("BufferManager.zig").GpuBuffer;
 const BufferManager = @import("BufferManager.zig").BufferManager;
 const DescriptorManager = @import("DescriptorManager.zig").DescriptorManager;
-const ImageMap = @import("ImageManager.zig").ImageMap;
 const GpuAllocator = @import("GpuAllocator.zig").GpuAllocator;
 const Object = @import("../../ecs/EntityManager.zig").Object;
 const rc = @import("../../configs/renderConfig.zig");
+const CreateMapArray = @import("../../structures/MapArray.zig").CreateMapArray;
+
+pub const ImageMap = CreateMapArray(GpuImage, rc.GPU_IMG_MAX, u32, rc.GPU_IMG_MAX, 0);
+pub const BufferMap = CreateMapArray(GpuBuffer, rc.GPU_BUF_MAX, u32, rc.GPU_BUF_MAX, 0);
 
 pub const ResourceManager = struct {
     cpuAlloc: Allocator,
@@ -18,9 +21,12 @@ pub const ResourceManager = struct {
     gpi: vk.VkDevice,
     gpu: vk.VkPhysicalDevice,
 
-    imgMan: ImageManager,
-    bufferMan: BufferManager,
+    resourceTypes: [rc.GPU_RESOURCE_MAX]enum { Image, Buffer, None } = .{.None} ** rc.GPU_RESOURCE_MAX,
+    gpuBuffers: BufferMap = .{},
+    gpuImages: ImageMap = .{},
+
     descMan: DescriptorManager,
+    bufferMan: BufferManager,
 
     pub fn init(alloc: Allocator, context: *const Context) !ResourceManager {
         const gpi = context.gpi;
@@ -32,14 +38,13 @@ pub const ResourceManager = struct {
             .gpuAlloc = gpuAlloc,
             .gpi = gpi,
             .gpu = gpu,
-            .imgMan = ImageManager.init(alloc, gpuAlloc),
             .bufferMan = BufferManager.init(alloc, gpuAlloc),
             .descMan = try DescriptorManager.init(alloc, gpuAlloc, gpi, gpu),
         };
     }
 
     pub fn deinit(self: *ResourceManager) void {
-        self.imgMan.deinit();
+        for (self.gpuImages.getElements()) |gpuImg| self.destroyGpuImageDirect(gpuImg);
         self.descMan.deinit();
         self.bufferMan.deinit();
         self.gpuAlloc.deinit();
@@ -50,24 +55,25 @@ pub const ResourceManager = struct {
     }
 
     pub fn getGpuImage(self: *ResourceManager, resourceId: u32) !GpuImage {
-        return try self.imgMan.getGpuImage(resourceId);
+        if (self.gpuImages.isKeyUsed(resourceId) == false) return error.GpuImageIdNotUsed;
+        return self.gpuImages.get(resourceId);
     }
 
     pub fn getGpuImagePtr(self: *ResourceManager, resourceId: u32) *GpuImage {
-        return self.imgMan.getGpuImagePtr(resourceId);
+        return self.gpuImages.getPtr(resourceId);
     }
 
     pub fn getGpuImageMapPtr(self: *ResourceManager) *ImageMap {
-        return self.imgMan.getGpuImageMapPtr();
+        return &self.gpuImages;
     }
 
     pub fn isGpuImageIdUsed(self: *ResourceManager, resourceId: u32) bool {
-        return self.imgMan.isGpuImageIdUsed(resourceId);
+        return self.gpuImages.isKeyUsed(resourceId);
     }
 
     pub fn createGpuImage(self: *ResourceManager, imageSchema: rc.GpuResource.ImageInfo) !void {
-        try self.imgMan.createGpuImage(imageSchema);
-        const gpuImg = try self.imgMan.getGpuImage(imageSchema.resourceId);
+        const gpuImg = try self.gpuAlloc.allocGpuImage(imageSchema.extent, imageSchema.imgFormat, imageSchema.memUsage);
+        self.gpuImages.set(imageSchema.resourceId, gpuImg);
         try self.descMan.updateImageDescriptor(gpuImg.view, imageSchema.resourceId);
     }
 
@@ -83,10 +89,10 @@ pub const ResourceManager = struct {
     }
 
     pub fn createGpuBuffer(self: *ResourceManager, bindingInf: rc.GpuResource.BufferInf) !void {
-        const buffId = bindingInf.binding;
+        const resourceId = bindingInf.binding;
         try self.bufferMan.createGpuBuffer(bindingInf);
-        const gpuBuffer = try self.bufferMan.getGpuBuffer(buffId);
-        try self.descMan.updateBufferDescriptor(gpuBuffer, buffId, 0);
+        const gpuBuffer = try self.bufferMan.getGpuBuffer(resourceId);
+        try self.descMan.updateBufferDescriptor(gpuBuffer, resourceId, 0);
     }
 
     pub fn updateGpuImage(self: *ResourceManager, imgInf: rc.GpuResource.ImageInfo) !void {
@@ -111,6 +117,11 @@ pub const ResourceManager = struct {
     // }
 
     pub fn destroyGpuImage(self: *ResourceManager, resourceId: u32) void {
-        self.imgMan.destroyGpuImage(resourceId);
+        const gpuImg = self.gpuImages.get(resourceId);
+        self.gpuAlloc.freeGpuImage(gpuImg);
+    }
+
+    fn destroyGpuImageDirect(self: *ResourceManager, gpuImg: GpuImage) void {
+        self.gpuAlloc.freeGpuImage(gpuImg);
     }
 };
