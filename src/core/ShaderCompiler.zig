@@ -4,10 +4,10 @@ const shaderCon = @import("../configs/shaderConfig.zig");
 const ShaderStage = @import("../vulkan/ShaderObject.zig").ShaderStage;
 const ShaderInfo = shaderCon.ShaderInfo;
 
-const alignedShader = []align(@alignOf(u32)) u8;
-
 pub const LoadedShader = struct {
-    data: alignedShader,
+    const alignedShader = []align(@alignOf(u32)) u8;
+
+    data: []align(@alignOf(u32)) u8,
     timeStamp: i128,
     shaderConfig: ShaderInfo,
 };
@@ -100,7 +100,7 @@ pub const ShaderCompiler = struct {
     }
 };
 
-fn loadShader(alloc: Allocator, spvPath: []const u8) !alignedShader {
+fn loadShader(alloc: Allocator, spvPath: []const u8) !LoadedShader.alignedShader {
     const file = try std.fs.cwd().openFile(spvPath, .{});
     defer file.close();
 

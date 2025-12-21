@@ -7,10 +7,10 @@ const GpuImage = @import("resources/ResourceManager.zig").GpuImage;
 const ImageMap = @import("resources/ResourceManager.zig").ImageMap;
 const SwapchainManager = @import("SwapchainManager.zig");
 const ShaderObject = @import("ShaderObject.zig").ShaderObject;
-const ShaderStage = @import("ShaderObject.zig").ShaderStage;
 const PushConstants = @import("resources/DescriptorManager.zig").PushConstants;
 const renderCon = @import("../configs/renderConfig.zig");
 const RenderType = renderCon.RenderType;
+const sc = @import("../configs/shaderConfig.zig");
 const MAX_WINDOWS = renderCon.MAX_WINDOWS;
 const RENDER_IMG_STRETCH = renderCon.RENDER_IMG_STRETCH;
 const CreateMapArray = @import("../structures/MapArray.zig").CreateMapArray;
@@ -372,15 +372,29 @@ fn createCmdPool(gpi: vk.VkDevice, familyIndex: u32) !vk.VkCommandPool {
 }
 
 fn bindShaderStages(cmd: vk.VkCommandBuffer, shaderObjects: []const ShaderObject) void {
-    var stages = [_]ShaderStage{ .compute, .vertex, .tessControl, .tessEval, .geometry, .task, .mesh, .frag };
-    var shaders = [_]vk.VkShaderEXT{ null, null, null, null, null, null, null, null }; // clean state
-    // Assign stages to correct index
-    for (shaderObjects) |shaderObject| {
-        for (0..stages.len) |i| {
-            if (shaderObject.stage == stages[i]) shaders[i] = shaderObject.handle;
+    const allStages = [_]vk.VkShaderStageFlagBits{
+        vk.VK_SHADER_STAGE_VERTEX_BIT,
+        vk.VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT,
+        vk.VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT,
+        vk.VK_SHADER_STAGE_GEOMETRY_BIT,
+        vk.VK_SHADER_STAGE_FRAGMENT_BIT,
+        vk.VK_SHADER_STAGE_COMPUTE_BIT,
+        vk.VK_SHADER_STAGE_TASK_BIT_EXT,
+        vk.VK_SHADER_STAGE_MESH_BIT_EXT,
+    };
+    var handles: [8]vk.VkShaderEXT = .{null} ** 8;
+
+    for (shaderObjects) |shader| {
+        const activeStageBit = sc.getShaderBit(shader.stage);
+
+        for (0..8) |i| {
+            if (allStages[i] == activeStageBit) {
+                handles[i] = shader.handle;
+                break;
+            }
         }
     }
-    vkFn.vkCmdBindShadersEXT.?(cmd, 8, @ptrCast(&stages), &shaders);
+    vkFn.vkCmdBindShadersEXT.?(cmd, 8, &allStages, &handles);
 }
 
 fn createPipelineBarriers2(cmd: vk.VkCommandBuffer, barriers: []const vk.VkImageMemoryBarrier2) void {

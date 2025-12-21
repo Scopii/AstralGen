@@ -252,13 +252,13 @@ fn checkShaderLayout(shaders: []const ShaderObject) !rc.RenderType {
     for (shaders) |shader| {
         const curIndex: i8 = switch (shader.stage) {
             .compute => 0,
-            .vertex => 1,
+            .vert => 1,
             .tessControl => 2,
             .tessEval => 3,
             .geometry => 4,
             .task => 5,
             .mesh => 6,
-            //.meshNoTask => 6, // LAYOUT NOT CHECKED YET
+            .meshNoTask => 6, // LAYOUT NOT CHECKED YET
             .frag => 7,
         };
         if (curIndex < prevIndex) return error.ShaderLayoutOrderInvalid;
