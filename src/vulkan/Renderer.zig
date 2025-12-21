@@ -115,8 +115,9 @@ pub const Renderer = struct {
         if (new.height != 0 or new.width != 0) {
             if (new.width != old.width or new.height != old.height) {
                 const newExtent = vk.VkExtent3D{ .width = new.width, .height = new.height, .depth = 1 };
-                const imgSchema = rc.GpuResource.ImageInfo{ .binding = rc.RENDER_IMG_BINDING, .resourceId = renderId, .memUsage = .GpuOptimal, .extent = newExtent };
-                try self.resourceMan.updateGpuImage(imgSchema);
+                const imgInf = rc.GpuResource.ImageInfo{ .binding = rc.RENDER_IMG_BINDING, .resourceId = renderId, .memUsage = .GpuOptimal, .extent = newExtent };
+                self.resourceMan.destroyGpuResource(renderId);
+                try self.resourceMan.createGpuResource(.{ .image = imgInf });
                 std.debug.print("Render Image ID {} recreated {}x{} to {}x{}\n", .{ renderId, old.width, old.height, new.width, new.height });
             }
         }

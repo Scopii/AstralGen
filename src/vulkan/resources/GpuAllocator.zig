@@ -1,8 +1,8 @@
 const vk = @import("../../modules/vk.zig").c;
 const std = @import("std");
 const DescriptorBuffer = @import("DescriptorManager.zig").DescriptorBuffer;
-const GpuBuffer = @import("BufferManager.zig").GpuBuffer;
-const GpuImage = @import("ImageManager.zig").GpuImage;
+const GpuBuffer = @import("ResourceManager.zig").GpuBuffer;
+const GpuImage = @import("ResourceManager.zig").GpuImage;
 const rc = @import("../../configs/renderConfig.zig");
 const check = @import("../ErrorHelpers.zig").check;
 

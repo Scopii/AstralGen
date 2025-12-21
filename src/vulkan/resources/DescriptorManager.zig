@@ -3,8 +3,8 @@ const vk = @import("../../modules/vk.zig").c;
 const vkFn = @import("../../modules/vk.zig");
 const Allocator = std.mem.Allocator;
 const GpuAllocator = @import("GpuAllocator.zig").GpuAllocator;
-const GpuBuffer = @import("BufferManager.zig").GpuBuffer;
-const GpuImage = @import("ImageManager.zig").GpuImage;
+const GpuBuffer = @import("ResourceManager.zig").GpuBuffer;
+const GpuImage = @import("ResourceManager.zig").GpuImage;
 const check = @import("../ErrorHelpers.zig").check;
 const rc = @import("../../configs/renderConfig.zig");
 
