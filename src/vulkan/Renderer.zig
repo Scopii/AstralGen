@@ -197,7 +197,7 @@ pub const Renderer = struct {
 
     pub fn addShaders(self: *Renderer, loadedShaders: []LoadedShader) !void {
         for (loadedShaders) |loadedShader| {
-            if (self.shaderMan.isShaderIdUsed(loadedShader.shaderConfig.id) == true) {
+            if (self.shaderMan.isShaderIdUsed(loadedShader.shaderInf.id) == true) {
                 _ = vk.vkDeviceWaitIdle(self.context.gpi);
                 break;
             }

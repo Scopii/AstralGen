@@ -1,15 +1,13 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
-const shaderCon = @import("../configs/shaderConfig.zig");
-const ShaderStage = @import("../vulkan/ShaderObject.zig").ShaderStage;
-const ShaderInfo = shaderCon.ShaderInfo;
+const sc = @import("../configs/shaderConfig.zig");
+const ShaderInfo = sc.ShaderInfo;
 
 pub const LoadedShader = struct {
     const alignedShader = []align(@alignOf(u32)) u8;
-
     data: []align(@alignOf(u32)) u8,
     timeStamp: i128,
-    shaderConfig: ShaderInfo,
+    shaderInf: ShaderInfo,
 };
 
 pub const ShaderCompiler = struct {
@@ -22,11 +20,11 @@ pub const ShaderCompiler = struct {
 
     pub fn init(alloc: Allocator) !ShaderCompiler {
         // Assign paths
-        const root = try resolveProjectRoot(alloc, shaderCon.rootPath);
+        const root = try resolveProjectRoot(alloc, sc.rootPath);
         std.debug.print("Root Path {s}\n", .{root});
-        const shaderPath = try joinPath(alloc, root, shaderCon.glslPath);
+        const shaderPath = try joinPath(alloc, root, sc.glslPath);
         std.debug.print("Shader Path {s}\n", .{shaderPath});
-        const shaderOutputPath = try joinPath(alloc, root, shaderCon.sprvPath);
+        const shaderOutputPath = try joinPath(alloc, root, sc.sprvPath);
         std.debug.print("Shader Output Path {s}\n", .{shaderOutputPath});
 
         return .{
@@ -60,7 +58,7 @@ pub const ShaderCompiler = struct {
             const spvPath = try joinPath(alloc, self.shaderOutputPath, shaderConfig.spvFile);
             defer alloc.free(spvPath);
             const data = try loadShader(alloc, spvPath);
-            const newShader = LoadedShader{ .shaderConfig = shaderConfig, .timeStamp = curTime, .data = data };
+            const newShader = LoadedShader{ .shaderInf = shaderConfig, .timeStamp = curTime, .data = data };
             try self.freshShaders.append(newShader);
             try self.allShaders.append(newShader);
         }
@@ -77,12 +75,12 @@ pub const ShaderCompiler = struct {
         const alloc = self.alloc;
 
         for (self.allShaders.items) |*loadedShader| {
-            const filePath = try joinPath(alloc, self.shaderPath, loadedShader.shaderConfig.glslFile);
+            const filePath = try joinPath(alloc, self.shaderPath, loadedShader.shaderInf.glslFile);
             defer alloc.free(filePath);
             const newTimeStamp = try getFileTimeStamp(filePath);
 
             if (loadedShader.timeStamp < newTimeStamp) {
-                const shaderOutputPath = try joinPath(alloc, self.shaderOutputPath, loadedShader.shaderConfig.spvFile);
+                const shaderOutputPath = try joinPath(alloc, self.shaderOutputPath, loadedShader.shaderInf.spvFile);
                 defer alloc.free(shaderOutputPath);
 
                 compileShader(alloc, filePath, shaderOutputPath) catch |err| {
@@ -94,7 +92,7 @@ pub const ShaderCompiler = struct {
                 loadedShader.timeStamp = newTimeStamp;
 
                 try self.freshShaders.append(loadedShader.*);
-                std.debug.print("Hotloaded: {s}\n", .{loadedShader.shaderConfig.glslFile});
+                std.debug.print("Hotloaded: {s}\n", .{loadedShader.shaderInf.glslFile});
             }
         }
     }

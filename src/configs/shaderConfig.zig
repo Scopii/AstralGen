@@ -8,6 +8,8 @@ pub const rootPath: []const u8 = "../..";
 pub const glslPath: []const u8 = "/src/shader";
 pub const sprvPath: []const u8 = "/zig-out/shader";
 
+pub const ShaderStage = enum(vk.VkShaderStageFlagBits) { compute, vert, tessControl, tessEval, geometry, task, mesh, meshNoTask, frag };
+
 pub fn getShaderBit(stageEnum: ShaderStage) vk.VkShaderStageFlagBits {
     return switch (stageEnum) {
         .compute => vk.VK_SHADER_STAGE_COMPUTE_BIT,
@@ -21,12 +23,10 @@ pub fn getShaderBit(stageEnum: ShaderStage) vk.VkShaderStageFlagBits {
         .frag => vk.VK_SHADER_STAGE_FRAGMENT_BIT,
     };
 }
-pub const ShaderStage = enum(vk.VkShaderStageFlagBits) { compute, vert, tessControl, tessEval, geometry, task, mesh, meshNoTask, frag };
 
 pub const ShaderInfo = struct {
     id: u8,
     shaderType: ShaderStage,
-    timeStamp: i128 = 0,
     glslFile: []const u8,
     spvFile: []const u8,
 };
