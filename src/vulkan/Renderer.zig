@@ -19,13 +19,6 @@ const ShaderObject = @import("ShaderObject.zig").ShaderObject;
 const Allocator = std.mem.Allocator;
 const rc = @import("../configs/renderConfig.zig");
 
-const Pass = struct {
-    renderType: rc.RenderType,
-    renderImgId: u32,
-    shaderIds: []const u8,
-    clear: bool,
-};
-
 pub const Renderer = struct {
     alloc: Allocator,
     arenaAlloc: Allocator,
@@ -35,7 +28,7 @@ pub const Renderer = struct {
     swapchainMan: SwapchainManager,
     cmdMan: CmdManager,
     scheduler: Scheduler,
-    passes: std.array_list.Managed(Pass),
+    passes: std.array_list.Managed(rc.Pass),
 
     pub fn init(memoryMan: *MemoryManager) !Renderer {
         const alloc = memoryMan.getAllocator();
@@ -56,7 +49,7 @@ pub const Renderer = struct {
             .cmdMan = cmdMan,
             .scheduler = scheduler,
             .swapchainMan = swapchainMan,
-            .passes = std.array_list.Managed(Pass).init(alloc),
+            .passes = std.array_list.Managed(rc.Pass).init(alloc),
         };
     }
 
@@ -123,8 +116,8 @@ pub const Renderer = struct {
         }
     }
 
-    pub fn addPasses(self: *Renderer, passInfos: []const rc.PassInfo) !void {
-        for (passInfos) |passInf| {
+    pub fn addPasses(self: *Renderer, passes: []const rc.Pass) !void {
+        for (passes) |passInf| {
             const shaderArray = self.shaderMan.getShaders(passInf.shaderIds);
             const validShaders = shaderArray[0..passInf.shaderIds.len];
 
@@ -245,7 +238,7 @@ fn createSemaphoreSubmitInfo(semaphore: vk.VkSemaphore, stageMask: u64, value: u
     return .{ .sType = vk.VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO, .semaphore = semaphore, .stageMask = stageMask, .value = value };
 }
 
-fn checkShaderLayout(shaders: []const ShaderObject) !rc.RenderType {
+fn checkShaderLayout(shaders: []const ShaderObject) !rc.Pass.RenderType {
     var shdr: [9]u8 = .{0} ** 9;
     var prevIndex: i8 = -1;
 

@@ -18,9 +18,16 @@ pub const RENDER_IMG_FORMAT = vk.VK_FORMAT_R16G16B16A16_SFLOAT;
 pub const RENDER_IMG_AUTO_RESIZE = true;
 pub const RENDER_IMG_STRETCH = true; // Ignored on AUTO_RESIZE
 
-pub const RenderType = enum { computePass, graphicsPass, meshPass, taskMeshPass, vertexPass };
-
-pub const PassInfo = struct {
+pub const Pass = struct {
+    pub const RenderType = enum {
+        computePass,
+        graphicsPass,
+        meshPass,
+        taskMeshPass,
+        vertexPass,
+        empty,
+    };
+    renderType: RenderType = .empty,
     renderImgId: u32,
     shaderIds: []const u8,
     clear: bool = false,
@@ -74,10 +81,10 @@ pub const img5 = GpuResource{ .image = .{ .binding = 0, .resourceId = 54, .memUs
 pub const buff1 = GpuResource{ .buffer = .{ .binding = 1, .elementSize = @sizeOf(Object), .length = 1000, .memUsage = .CpuWriteOptimal, .buffUsage = .Storage } };
 pub const buff2 = GpuResource{ .buffer = .{ .binding = 2, .elementSize = @sizeOf(Object), .length = 100, .memUsage = .CpuWriteOptimal, .buffUsage = .Storage } };
 
-pub const pass1: PassInfo = .{ .renderImgId = img1.image.resourceId, .shaderIds = &.{sc.t1Comp.id} }; // clear does not work for compute
-pub const pass2: PassInfo = .{ .renderImgId = img2.image.resourceId, .shaderIds = &.{ sc.t2Vert.id, sc.t2Frag.id } };
-pub const pass3: PassInfo = .{ .renderImgId = img3.image.resourceId, .shaderIds = &.{ sc.t3Mesh.id, sc.t3Frag.id } };
-pub const pass4: PassInfo = .{ .renderImgId = img4.image.resourceId, .shaderIds = &.{ sc.t4Task.id, sc.t4Mesh.id, sc.t4Frag.id } };
-pub const pass5: PassInfo = .{ .renderImgId = img4.image.resourceId, .shaderIds = &.{ sc.gridTask.id, sc.gridMesh.id, sc.gridFrag.id }, .clear = true };
+pub const pass1: Pass = .{ .renderImgId = img1.image.resourceId, .shaderIds = &.{sc.t1Comp.id} }; // clear does not work for compute
+pub const pass2: Pass = .{ .renderImgId = img2.image.resourceId, .shaderIds = &.{ sc.t2Vert.id, sc.t2Frag.id } };
+pub const pass3: Pass = .{ .renderImgId = img3.image.resourceId, .shaderIds = &.{ sc.t3Mesh.id, sc.t3Frag.id } };
+pub const pass4: Pass = .{ .renderImgId = img4.image.resourceId, .shaderIds = &.{ sc.t4Task.id, sc.t4Mesh.id, sc.t4Frag.id } };
+pub const pass5: Pass = .{ .renderImgId = img4.image.resourceId, .shaderIds = &.{ sc.gridTask.id, sc.gridMesh.id, sc.gridFrag.id }, .clear = true };
 
-pub const renderSequence: []const PassInfo = &.{ pass1, pass2, pass3, pass4, pass5 };
+pub const renderSequence: []const Pass = &.{ pass1, pass2, pass3, pass4, pass5 };
