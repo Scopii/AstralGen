@@ -44,6 +44,14 @@ pub const ResourceManager = struct {
         self.gpuAlloc.deinit();
     }
 
+    pub fn getGpuResourcePtr(self: *ResourceManager, resourceId: u32) !union(enum) { image: *GpuImage, buffer: *GpuBuffer } {
+        switch (self.resourceTypes[resourceId]) {
+            .Image => return .{ .image = self.gpuImages.getPtr(resourceId) },
+            .Buffer => return .{ .buffer = self.gpuBuffers.getPtr(resourceId) },
+            .None => return error.ResourceNotFound,
+        }
+    }
+
     pub fn getGpuBuffer(self: *ResourceManager, resourceId: u32) !GpuBuffer {
         if (self.resourceTypes[resourceId] == .None) return error.ResourceIdEmpty;
         if (self.resourceTypes[resourceId] != .Buffer) return error.ResourceIdNotBuffer;
