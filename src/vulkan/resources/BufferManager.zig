@@ -36,12 +36,12 @@ pub const BufferManager = struct {
         return self.gpuBuffers.get(buffId);
     }
 
-    pub fn createGpuBuffer(self: *BufferManager, bindingInf: rc.ResourceSchema.BufferResource) !void {
+    pub fn createGpuBuffer(self: *BufferManager, bindingInf: rc.GpuResource.BufferInf) !void {
         const buffer = try self.gpuAlloc.allocDefinedBuffer(bindingInf);
         self.gpuBuffers.set(bindingInf.binding, buffer);
     }
 
-    pub fn updateGpuBuffer(self: *BufferManager, bindingInf: rc.ResourceSchema.BufferResource, data: anytype) !void {
+    pub fn updateGpuBuffer(self: *BufferManager, bindingInf: rc.GpuResource.BufferInf, data: anytype) !void {
         const T = std.meta.Child(@TypeOf(data));
         if (@sizeOf(T) != bindingInf.elementSize) {
             std.debug.print("Error: Size mismatch! Config expects {} bytes, Data is {} bytes\n", .{ bindingInf.elementSize, @sizeOf(T) });

@@ -39,7 +39,7 @@ pub const GpuAllocator = struct {
         return .{ .allocation = gpuBuffer.allocation, .allocInf = gpuBuffer.allocInf, .buffer = gpuBuffer.buffer, .gpuAddress = gpuBuffer.gpuAddress };
     }
 
-    pub fn allocDefinedBuffer(self: *const GpuAllocator, bindingInf: rc.ResourceSchema.BufferResource) !GpuBuffer {
+    pub fn allocDefinedBuffer(self: *const GpuAllocator, bindingInf: rc.GpuResource.BufferInf) !GpuBuffer {
         if (bindingInf.elementSize == 0) {
             std.debug.print("Binding Info has invalid element size\n", .{});
             return error.AllocDefinedBufferFailed;

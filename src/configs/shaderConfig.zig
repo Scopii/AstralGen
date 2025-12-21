@@ -2,7 +2,6 @@
 pub const SHADER_HOTLOAD = true;
 pub const SHADER_STARTUP_COMPILATION = true;
 pub const SHADER_MAX = 100;
-
 // Paths
 pub const rootPath: []const u8 = "../..";
 pub const glslPath: []const u8 = "/src/shader";

@@ -115,52 +115,39 @@ pub const Renderer = struct {
         if (new.height != 0 or new.width != 0) {
             if (new.width != old.width or new.height != old.height) {
                 const newExtent = vk.VkExtent3D{ .width = new.width, .height = new.height, .depth = 1 };
-                const imgSchema = rc.ResourceSchema.ImageResource{ .binding = rc.RENDER_IMG_BINDING, .resourceId = renderId, .memUsage = .GpuOptimal, .extent = newExtent };
+                const imgSchema = rc.GpuResource.ImageInfo{ .binding = rc.RENDER_IMG_BINDING, .resourceId = renderId, .memUsage = .GpuOptimal, .extent = newExtent };
                 try self.resourceMan.updateGpuImage(imgSchema);
                 std.debug.print("Render Image ID {} recreated {}x{} to {}x{}\n", .{ renderId, old.width, old.height, new.width, new.height });
             }
         }
     }
 
-    pub fn addPasses(self: *Renderer, passConfigs: []const rc.PassInfo) !void {
-        for (passConfigs) |passConfig| {
-            const shaderArray = self.shaderMan.getShaders(passConfig.shaderIds);
-            const validShaders = shaderArray[0..passConfig.shaderIds.len];
+    pub fn addPasses(self: *Renderer, passInfos: []const rc.PassInfo) !void {
+        for (passInfos) |passInf| {
+            const shaderArray = self.shaderMan.getShaders(passInf.shaderIds);
+            const validShaders = shaderArray[0..passInf.shaderIds.len];
 
             const renderType = checkShaderLayout(validShaders) catch |err| {
                 std.debug.print("Pass {} Shader Layout invalid", .{err});
                 return error.PassInvalid;
             };
-            try self.passes.append(.{ .renderType = renderType, .renderImgId = passConfig.renderImgId, .shaderIds = passConfig.shaderIds, .clear = passConfig.clear });
+            try self.passes.append(.{ .renderType = renderType, .renderImgId = passInf.renderImgId, .shaderIds = passInf.shaderIds, .clear = passInf.clear });
         }
     }
 
-    pub fn createRenderImage(self: *Renderer, renderImgSchema: rc.ImageResource) !void {
-        if (renderImgSchema.resourceId > rc.GPU_IMG_MAX - 1) {
-            std.debug.print("Renderer: RenderId Image ID cant be bigger than Max Gpu Images\n", .{});
-            return error.RenderImageIdOutOfBounds;
-        }
-        const imgUsed = self.resourceMan.isGpuImageIdUsed(renderImgSchema.resourceId);
-
-        if (imgUsed == false) {
-            try self.resourceMan.createGpuImage(renderImgSchema);
-            std.debug.print("Renderer: RenderImage {} created\n", .{renderImgSchema.resourceId});
-        }
-    }
-
-    pub fn createGpuResource(self: *Renderer, bindingInfo: rc.ResourceSchema) !void {
-        try self.resourceMan.createGpuResource(bindingInfo);
+    pub fn createGpuResource(self: *Renderer, bindingInf: rc.GpuResource) !void {
+        try self.resourceMan.createGpuResource(bindingInf);
     }
 
     // pub fn updateGpuResource(self: *Renderer, bindingInfo: rc.ResourceSchema, data: anytype) !void {
     //     try self.resourceMan.updateGpuResource(bindingInfo, data);
     // }
 
-    pub fn updateGpuImage(self: *Renderer, imgInf: rc.ResourceSchema.ImageResource) !void {
+    pub fn updateGpuImage(self: *Renderer, imgInf: rc.GpuResource.ImageInfo) !void {
         try self.resourceMan.updateGpuImage(imgInf);
     }
 
-    pub fn updateGpuBuffer(self: *Renderer, buffInf: rc.ResourceSchema.BufferResource, data: anytype) !void {
+    pub fn updateGpuBuffer(self: *Renderer, buffInf: rc.GpuResource.BufferInf, data: anytype) !void {
         try self.resourceMan.updateGpuBuffer(buffInf, data);
     }
 
@@ -187,7 +174,6 @@ pub const Renderer = struct {
     fn recordPasses(self: *Renderer, cmd: vk.VkCommandBuffer, cam: *Camera, runtimeAsFloat: f32) !void {
         for (self.passes.items) |pass| {
             const renderImgId = pass.renderImgId;
-
             const gpuBuffer = try self.resourceMan.getGpuBuffer(1); // HARD CODED CURRENTLY
 
             const pushConstants = PushConstants{
@@ -274,7 +260,7 @@ fn checkShaderLayout(shaders: []const ShaderObject) !rc.RenderType {
             //.meshNoTask => 6, // LAYOUT NOT CHECKED YET
             .frag => 7,
         };
-        if (curIndex < prevIndex) return error.ShaderLayoutOrderInvalid; // IS WRONG? <= -> < ???
+        if (curIndex < prevIndex) return error.ShaderLayoutOrderInvalid;
         prevIndex = curIndex;
         shdr[@intCast(curIndex)] += 1;
     }

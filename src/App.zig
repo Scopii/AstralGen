@@ -62,16 +62,16 @@ pub const App = struct {
         shaderCompiler.freeFreshShaders();
 
         // RENDERING SET UP
-        try renderer.createGpuResource(rc.buffer1);
-        try renderer.createGpuResource(rc.buffer2);
+        try renderer.createGpuResource(rc.buff1);
+        try renderer.createGpuResource(rc.buff2);
 
-        try renderer.updateGpuBuffer(rc.buffer1.buffer, ecs.getObjects());
+        try renderer.updateGpuBuffer(rc.buff1.buffer, ecs.getObjects());
 
-        try renderer.createGpuResource(rc.imgResource1);
-        try renderer.createGpuResource(rc.imgResource2);
-        try renderer.createGpuResource(rc.imgResource3);
-        try renderer.createGpuResource(rc.imgResource4);
-        try renderer.createGpuResource(rc.imgResource5);
+        try renderer.createGpuResource(rc.img1);
+        try renderer.createGpuResource(rc.img2);
+        try renderer.createGpuResource(rc.img3);
+        try renderer.createGpuResource(rc.img4);
+        try renderer.createGpuResource(rc.img5);
 
         try renderer.addPasses(rc.renderSequence);
 
@@ -96,10 +96,10 @@ pub const App = struct {
     }
 
     pub fn initWindows(self: *App) !void {
-        try self.windowMan.addWindow("Task", 16 * 52, 9 * 52, rc.imgResource4.image.resourceId, 120, 50);
-        try self.windowMan.addWindow("Mesh", 16 * 52, 9 * 52, rc.imgResource3.image.resourceId, 120, 550);
-        try self.windowMan.addWindow("Compute", 16 * 52, 9 * 52, rc.imgResource1.image.resourceId, 960, 50);
-        try self.windowMan.addWindow("Graphics", 16 * 52, 9 * 52, rc.imgResource2.image.resourceId, 960, 550);
+        try self.windowMan.addWindow("Task", 16 * 52, 9 * 52, rc.img4.image.resourceId, 120, 50);
+        try self.windowMan.addWindow("Mesh", 16 * 52, 9 * 52, rc.img3.image.resourceId, 120, 550);
+        try self.windowMan.addWindow("Compute", 16 * 52, 9 * 52, rc.img1.image.resourceId, 960, 50);
+        try self.windowMan.addWindow("Graphics", 16 * 52, 9 * 52, rc.img2.image.resourceId, 960, 550);
     }
 
     pub fn run(self: *App) !void {

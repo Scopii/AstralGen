@@ -65,13 +65,13 @@ pub const ResourceManager = struct {
         return self.imgMan.isGpuImageIdUsed(resourceId);
     }
 
-    pub fn createGpuImage(self: *ResourceManager, imageSchema: rc.ResourceSchema.ImageResource) !void {
+    pub fn createGpuImage(self: *ResourceManager, imageSchema: rc.GpuResource.ImageInfo) !void {
         try self.imgMan.createGpuImage(imageSchema);
         const gpuImg = try self.imgMan.getGpuImage(imageSchema.resourceId);
         try self.descMan.updateImageDescriptor(gpuImg.view, imageSchema.resourceId);
     }
 
-    pub fn createGpuResource(self: *ResourceManager, resourceSchema: rc.ResourceSchema) !void {
+    pub fn createGpuResource(self: *ResourceManager, resourceSchema: rc.GpuResource) !void {
         switch (resourceSchema) {
             .image => |image| {
                 try self.createGpuImage(image);
@@ -82,19 +82,19 @@ pub const ResourceManager = struct {
         }
     }
 
-    pub fn createGpuBuffer(self: *ResourceManager, bindingInf: rc.ResourceSchema.BufferResource) !void {
+    pub fn createGpuBuffer(self: *ResourceManager, bindingInf: rc.GpuResource.BufferInf) !void {
         const buffId = bindingInf.binding;
         try self.bufferMan.createGpuBuffer(bindingInf);
         const gpuBuffer = try self.bufferMan.getGpuBuffer(buffId);
         try self.descMan.updateBufferDescriptor(gpuBuffer, buffId, 0);
     }
 
-    pub fn updateGpuImage(self: *ResourceManager, imgInf: rc.ResourceSchema.ImageResource) !void {
+    pub fn updateGpuImage(self: *ResourceManager, imgInf: rc.GpuResource.ImageInfo) !void {
         self.destroyGpuImage(imgInf.resourceId);
         try self.createGpuImage(imgInf);
     }
 
-    pub fn updateGpuBuffer(self: *ResourceManager, buffInf: rc.ResourceSchema.BufferResource, data: anytype) !void {
+    pub fn updateGpuBuffer(self: *ResourceManager, buffInf: rc.GpuResource.BufferInf, data: anytype) !void {
         try self.bufferMan.updateGpuBuffer(buffInf, data);
     }
 
