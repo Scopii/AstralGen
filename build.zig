@@ -4,6 +4,8 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
+    const check = b.step("check", "check everything");
+
     const c_module = b.addModule("c", .{
         .root_source_file = b.path("src/modules/c.zig"),
     });
@@ -17,6 +19,8 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
         }),
     });
+
+    check.dependOn(&exe.step);
 
     exe.root_module.addImport("c", c_module);
     exe.linkLibCpp();
@@ -75,30 +79,26 @@ pub fn build(b: *std.Build) void {
     const zpool_dep = b.dependency("zpool", .{ .target = target, .optimize = optimize });
     exe.root_module.addImport("zpool", zpool_dep.module("root"));
 
-    const no_bin = b.option(bool, "no-bin", "Skip binary creation for type checking") orelse false;
-
     if (target.result.os.tag == .windows) {
         b.installFile("libs/SDL3/SDL3.dll", "bin/SDL3.dll");
     }
 
-    if (no_bin == false) {
-        b.installArtifact(exe);
+    b.installArtifact(exe);
 
-        // Create Shader directory if needed
-        std.fs.cwd().makePath("zig-out/shader") catch |err| {
-            std.debug.print("Failed to create directory '{s}': {}\n", .{ "zig-out/shader", err });
-        };
+    // Create Shader directory if needed
+    std.fs.cwd().makePath("zig-out/shader") catch |err| {
+        std.debug.print("Failed to create directory '{s}': {}\n", .{ "zig-out/shader", err });
+    };
 
-        const run_cmd = b.addRunArtifact(exe);
-        run_cmd.step.dependOn(b.getInstallStep());
+    const run_cmd = b.addRunArtifact(exe);
+    run_cmd.step.dependOn(b.getInstallStep());
 
-        if (b.args) |args| {
-            run_cmd.addArgs(args);
-        }
-
-        const run_step = b.step("run", "Run the app");
-        run_step.dependOn(&run_cmd.step);
+    if (b.args) |args| {
+        run_cmd.addArgs(args);
     }
+
+    const run_step = b.step("run", "Run the app");
+    run_step.dependOn(&run_cmd.step);
 
     const exe_unit_tests = b.addTest(.{
         .root_module = b.createModule(.{
