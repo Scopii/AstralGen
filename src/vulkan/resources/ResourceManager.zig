@@ -26,7 +26,6 @@ pub const ResourceManager = struct {
     gpuImages: ImageMap = .{},
 
     descMan: DescriptorManager,
-    bufferMan: BufferManager,
 
     pub fn init(alloc: Allocator, context: *const Context) !ResourceManager {
         const gpi = context.gpi;
@@ -38,20 +37,26 @@ pub const ResourceManager = struct {
             .gpuAlloc = gpuAlloc,
             .gpi = gpi,
             .gpu = gpu,
-            .bufferMan = BufferManager.init(alloc, gpuAlloc),
             .descMan = try DescriptorManager.init(alloc, gpuAlloc, gpi, gpu),
         };
     }
 
     pub fn deinit(self: *ResourceManager) void {
-        for (self.gpuImages.getElements()) |gpuImg| self.destroyGpuImageDirect(gpuImg);
+        while (self.gpuImages.getCount() > 0) {
+            const key = self.gpuImages.getKeyFromIndex(0);
+            self.destroyGpuImage(key);
+        }
+        while (self.gpuBuffers.getCount() > 0) {
+            const key = self.gpuBuffers.getKeyFromIndex(0);
+            self.destroyGpuBuffer(key);
+        }
         self.descMan.deinit();
-        self.bufferMan.deinit();
         self.gpuAlloc.deinit();
     }
 
     pub fn getGpuBuffer(self: *ResourceManager, resourceId: u32) !GpuBuffer {
-        return try self.bufferMan.getGpuBuffer(resourceId);
+        if (self.gpuBuffers.isKeyUsed(resourceId) == false) return error.GpuBufferDoesNotExist;
+        return self.gpuBuffers.get(resourceId);
     }
 
     pub fn getGpuImage(self: *ResourceManager, resourceId: u32) !GpuImage {
@@ -71,10 +76,11 @@ pub const ResourceManager = struct {
         return self.gpuImages.isKeyUsed(resourceId);
     }
 
-    pub fn createGpuImage(self: *ResourceManager, imageSchema: rc.GpuResource.ImageInfo) !void {
-        const gpuImg = try self.gpuAlloc.allocGpuImage(imageSchema.extent, imageSchema.imgFormat, imageSchema.memUsage);
-        self.gpuImages.set(imageSchema.resourceId, gpuImg);
-        try self.descMan.updateImageDescriptor(gpuImg.view, imageSchema.resourceId);
+    pub fn createGpuImage(self: *ResourceManager, image: rc.GpuResource.ImageInfo) !void {
+        const gpuImg = try self.gpuAlloc.allocGpuImage(image.extent, image.imgFormat, image.memUsage);
+        self.gpuImages.set(image.resourceId, gpuImg);
+        try self.descMan.updateImageDescriptor(gpuImg.view, image.resourceId);
+        self.resourceTypes[image.resourceId] = .Image;
     }
 
     pub fn createGpuResource(self: *ResourceManager, resourceSchema: rc.GpuResource) !void {
@@ -90,9 +96,10 @@ pub const ResourceManager = struct {
 
     pub fn createGpuBuffer(self: *ResourceManager, bindingInf: rc.GpuResource.BufferInf) !void {
         const resourceId = bindingInf.binding;
-        try self.bufferMan.createGpuBuffer(bindingInf);
-        const gpuBuffer = try self.bufferMan.getGpuBuffer(resourceId);
-        try self.descMan.updateBufferDescriptor(gpuBuffer, resourceId, 0);
+        const buffer = try self.gpuAlloc.allocDefinedBuffer(bindingInf);
+        self.gpuBuffers.set(bindingInf.binding, buffer);
+        try self.descMan.updateBufferDescriptor(buffer, resourceId, 0);
+        self.resourceTypes[resourceId] = .Buffer;
     }
 
     pub fn updateGpuImage(self: *ResourceManager, imgInf: rc.GpuResource.ImageInfo) !void {
@@ -101,27 +108,42 @@ pub const ResourceManager = struct {
     }
 
     pub fn updateGpuBuffer(self: *ResourceManager, buffInf: rc.GpuResource.BufferInf, data: anytype) !void {
-        try self.bufferMan.updateGpuBuffer(buffInf, data);
+        const T = std.meta.Child(@TypeOf(data));
+        if (@sizeOf(T) != buffInf.elementSize) {
+            std.debug.print("Error: Size mismatch! Config expects {} bytes, Data is {} bytes\n", .{ buffInf.elementSize, @sizeOf(T) });
+            return error.TypeMismatch;
+        }
+        const buffId = buffInf.binding;
+        var buffer = try self.getGpuBuffer(buffId);
+        const pMappedData = buffer.allocInf.pMappedData;
+        // Simple alignment check
+        const alignment = @alignOf(T);
+        if (@intFromPtr(pMappedData) % alignment != 0) {
+            return error.ImproperAlignment;
+        }
+        // Copy
+        const dataPtr: [*]T = @ptrCast(@alignCast(pMappedData));
+        @memcpy(dataPtr[0..data.len], data);
+        // Update
+        buffer.count = @intCast(data.len);
+        self.gpuBuffers.set(buffId, buffer);
     }
-
-    // pub fn updateGpuResource(self: *ResourceManager, resourceSchema: rc.ResourceSchema, data: anytype) !void {
-    //     switch (resourceSchema) {
-    //         .image => |imgInf| {
-    //             self.destroyGpuImage(imgInf.resourceId);
-    //             try self.createGpuImage(imgInf);
-    //         },
-    //         .buffer => |bufferInf| {
-    //             try self.bufferMan.updateGpuBuffer(bufferInf, data);
-    //         },
-    //     }
-    // }
 
     pub fn destroyGpuImage(self: *ResourceManager, resourceId: u32) void {
-        const gpuImg = self.gpuImages.get(resourceId);
-        self.gpuAlloc.freeGpuImage(gpuImg);
+        if (self.gpuImages.isKeyUsed(resourceId) == true) {
+            const gpuImg = self.gpuImages.get(resourceId);
+            self.gpuAlloc.freeGpuImage(gpuImg);
+            self.gpuImages.removeAtKey(resourceId);
+            self.resourceTypes[resourceId] = .None;
+        }
     }
 
-    fn destroyGpuImageDirect(self: *ResourceManager, gpuImg: GpuImage) void {
-        self.gpuAlloc.freeGpuImage(gpuImg);
+    pub fn destroyGpuBuffer(self: *ResourceManager, resourceId: u32) void {
+        if (self.gpuBuffers.isKeyUsed(resourceId)) {
+            const gpuBuffer = self.gpuBuffers.get(resourceId);
+            self.gpuAlloc.freeGpuBuffer(gpuBuffer.buffer, gpuBuffer.allocation);
+            self.gpuBuffers.removeAtKey(resourceId);
+            self.resourceTypes[resourceId] = .None;
+        }
     }
 };
