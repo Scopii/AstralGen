@@ -3,7 +3,7 @@ const vk = @import("../../modules/vk.zig").c;
 const Allocator = std.mem.Allocator;
 const GpuAllocator = @import("GpuAllocator.zig").GpuAllocator;
 const Object = @import("../../ecs/EntityManager.zig").Object;
-const renderCon = @import("../../configs/renderConfig.zig");
+const rc = @import("../../configs/renderConfig.zig");
 const CreateMapArray = @import("../../structures/MapArray.zig").CreateMapArray;
 
 pub const GpuBuffer = struct {
@@ -16,7 +16,7 @@ pub const GpuBuffer = struct {
 };
 
 pub const BufferManager = struct {
-    pub const BufferMap = CreateMapArray(GpuBuffer, renderCon.GPU_BUF_COUNT, u32, renderCon.GPU_BUF_COUNT, 0);
+    pub const BufferMap = CreateMapArray(GpuBuffer, rc.GPU_BUF_MAX, u32, rc.GPU_BUF_MAX, 0);
 
     cpuAlloc: Allocator,
     gpuAlloc: GpuAllocator, //deinit() in ResourceManager
@@ -36,38 +36,20 @@ pub const BufferManager = struct {
         return self.gpuBuffers.get(buffId);
     }
 
-    pub fn createGpuBuffer(self: *BufferManager, bindingInfo: renderCon.BindingInfo) !void {
-        const buffer = try self.gpuAlloc.allocDefinedBuffer(bindingInfo);
-        self.gpuBuffers.set(bindingInfo.binding, buffer);
+    pub fn createGpuBuffer(self: *BufferManager, bindingInf: rc.ResourceSchema.BufferResource) !void {
+        const buffer = try self.gpuAlloc.allocDefinedBuffer(bindingInf);
+        self.gpuBuffers.set(bindingInf.binding, buffer);
     }
 
-    pub fn updateGpuBufferOLD(self: *BufferManager, bindingInfo: renderCon.BindingInfo, data: []const bindingInfo.dataType.?) !void {
-        const buffId = bindingInfo.binding;
-        var buffer = try self.getGpuBuffer(buffId);
-        const pMappedData = buffer.allocInf.pMappedData;
-        // Check Alignemnt naively (Doesnt catch everything)
-        const alignment = @alignOf(bindingInfo.dataType.?);
-        if (@intFromPtr(pMappedData) % alignment != 0) {
-            return error.ImproperAlignment;
-        }
-        const dataPtr: [*]bindingInfo.dataType.? = @ptrCast(@alignCast(pMappedData));
-        @memcpy(dataPtr[0..data.len], data);
-
-        buffer.count = @intCast(data.len);
-        self.gpuBuffers.set(buffId, buffer);
-    }
-
-    pub fn updateGpuBuffer(self: *BufferManager, bindingInfo: renderCon.BindingInfo, data: anytype) !void {
+    pub fn updateGpuBuffer(self: *BufferManager, bindingInf: rc.ResourceSchema.BufferResource, data: anytype) !void {
         const T = std.meta.Child(@TypeOf(data));
-        if (@sizeOf(T) != bindingInfo.elementSize) {
-            std.debug.print("Error: Size mismatch! Config expects {} bytes, Data is {} bytes\n", .{ bindingInfo.elementSize, @sizeOf(T) });
+        if (@sizeOf(T) != bindingInf.elementSize) {
+            std.debug.print("Error: Size mismatch! Config expects {} bytes, Data is {} bytes\n", .{ bindingInf.elementSize, @sizeOf(T) });
             return error.TypeMismatch;
         }
-
-        const buffId = bindingInfo.binding;
+        const buffId = bindingInf.binding;
         var buffer = try self.getGpuBuffer(buffId);
         const pMappedData = buffer.allocInf.pMappedData;
-
         // Simple alignment check
         const alignment = @alignOf(T);
         if (@intFromPtr(pMappedData) % alignment != 0) {

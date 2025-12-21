@@ -8,12 +8,7 @@ const CreateMapArray = @import("../structures/MapArray.zig").CreateMapArray;
 const FixedList = @import("../structures/FixedList.zig").FixedList;
 const check = @import("ErrorHelpers.zig").check;
 const createSemaphore = @import("Scheduler.zig").createSemaphore;
-
-const renderCon = @import("../configs/renderConfig.zig");
-const MAX_IN_FLIGHT = renderCon.MAX_IN_FLIGHT;
-const MAX_WINDOWS = renderCon.MAX_WINDOWS;
-const DESIRED_SWAPCHAIN_IMAGES = renderCon.DESIRED_SWAPCHAIN_IMAGES;
-const DISPLAY_MODE = renderCon.DISPLAY_MODE;
+const rc = @import("../configs/renderConfig.zig");
 
 pub const Swapchain = struct {
     const SwapchainState = enum { active, inactive };
@@ -30,14 +25,14 @@ pub const Swapchain = struct {
     state: SwapchainState = .active,
 };
 
-pub const SwapchainMap = CreateMapArray(Swapchain, MAX_WINDOWS, u32, MAX_WINDOWS, 0);
+pub const SwapchainMap = CreateMapArray(Swapchain, rc.MAX_WINDOWS, u32, rc.MAX_WINDOWS, 0);
 
 pub const SwapchainManager = struct {
     alloc: Allocator,
     gpi: vk.VkDevice,
     instance: vk.VkInstance,
     swapchains: SwapchainMap = .{},
-    targets: FixedList(u32, MAX_WINDOWS) = .{},
+    targets: FixedList(u32, rc.MAX_WINDOWS) = .{},
 
     pub fn init(alloc: Allocator, context: *const Context) !SwapchainManager {
         return .{
@@ -54,9 +49,9 @@ pub const SwapchainManager = struct {
     }
 
     pub fn present(self: *SwapchainManager, presentIds: []const u32, presentQueue: vk.VkQueue) !void {
-        var swapchainHandles: [renderCon.MAX_WINDOWS]vk.VkSwapchainKHR = undefined;
-        var imageIndices: [renderCon.MAX_WINDOWS]u32 = undefined;
-        var waitSems: [renderCon.MAX_WINDOWS]vk.VkSemaphore = undefined;
+        var swapchainHandles: [rc.MAX_WINDOWS]vk.VkSwapchainKHR = undefined;
+        var imageIndices: [rc.MAX_WINDOWS]u32 = undefined;
+        var waitSems: [rc.MAX_WINDOWS]vk.VkSemaphore = undefined;
 
         for (presentIds, 0..) |id, i| {
             const swapchain = self.swapchains.getAtIndex(id);
@@ -201,15 +196,15 @@ pub const SwapchainManager = struct {
     ) !Swapchain {
         const alloc = self.alloc;
         const gpi = self.gpi;
-        const mode = DISPLAY_MODE; //try context.pickPresentMode();
+        const mode = rc.DISPLAY_MODE; //try context.pickPresentMode();
         const realExtent = pickExtent(&caps, extent);
 
-        var desiredImgCount: u32 = DESIRED_SWAPCHAIN_IMAGES;
+        var desiredImgCount: u32 = rc.DESIRED_SWAPCHAIN_IMAGES;
         if (caps.maxImageCount < desiredImgCount) {
-            std.debug.print("Swapchain does not support {} Images({}-{}), using {}\n", .{ DESIRED_SWAPCHAIN_IMAGES, caps.minImageCount, caps.maxImageCount, caps.maxImageCount });
+            std.debug.print("Swapchain does not support {} Images({}-{}), using {}\n", .{ rc.DESIRED_SWAPCHAIN_IMAGES, caps.minImageCount, caps.maxImageCount, caps.maxImageCount });
             desiredImgCount = caps.maxImageCount;
-        } else if (DESIRED_SWAPCHAIN_IMAGES < caps.minImageCount) {
-            std.debug.print("Swapchain does not support {} Images ({}-{}), using {}\n", .{ DESIRED_SWAPCHAIN_IMAGES, caps.minImageCount, caps.maxImageCount, caps.minImageCount });
+        } else if (rc.DESIRED_SWAPCHAIN_IMAGES < caps.minImageCount) {
+            std.debug.print("Swapchain does not support {} Images ({}-{}), using {}\n", .{ rc.DESIRED_SWAPCHAIN_IMAGES, caps.minImageCount, caps.maxImageCount, caps.minImageCount });
             desiredImgCount = caps.minImageCount;
         }
 
@@ -261,9 +256,9 @@ pub const SwapchainManager = struct {
             try check(vk.vkCreateImageView(gpi, &imgViewInf, null, &views[i]), "Failed to create image view");
         }
 
-        const imgRdySems = try alloc.alloc(vk.VkSemaphore, MAX_IN_FLIGHT);
+        const imgRdySems = try alloc.alloc(vk.VkSemaphore, rc.MAX_IN_FLIGHT);
         errdefer alloc.free(imgRdySems);
-        for (0..MAX_IN_FLIGHT) |i| imgRdySems[i] = try createSemaphore(gpi);
+        for (0..rc.MAX_IN_FLIGHT) |i| imgRdySems[i] = try createSemaphore(gpi);
 
         const renderDoneSems = try alloc.alloc(vk.VkSemaphore, realImgCount);
         errdefer alloc.free(renderDoneSems);

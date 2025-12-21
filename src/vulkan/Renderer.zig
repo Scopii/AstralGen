@@ -17,12 +17,11 @@ const createInstance = @import("Context.zig").createInstance;
 const ShaderObject = @import("ShaderObject.zig").ShaderObject;
 
 const Allocator = std.mem.Allocator;
-const renderCon = @import("../configs/renderConfig.zig");
-const RENDER_IMG_MAX = renderCon.GPU_IMG_MAX;
+const rc = @import("../configs/renderConfig.zig");
 
 const Pass = struct {
-    renderType: renderCon.RenderType,
-    renderImgInf: renderCon.ResourceInfo,
+    renderType: rc.RenderType,
+    renderImgId: u32,
     shaderIds: []const u8,
     clear: bool,
 };
@@ -43,8 +42,8 @@ pub const Renderer = struct {
         const instance = try createInstance(alloc);
         const context = try Context.init(alloc, instance);
         const resourceMan = try ResourceManager.init(alloc, &context);
-        const cmdMan = try CmdManager.init(alloc, &context, renderCon.MAX_IN_FLIGHT);
-        const scheduler = try Scheduler.init(&context, renderCon.MAX_IN_FLIGHT);
+        const cmdMan = try CmdManager.init(alloc, &context, rc.MAX_IN_FLIGHT);
+        const scheduler = try Scheduler.init(&context, rc.MAX_IN_FLIGHT);
         const shaderMan = try ShaderManager.init(alloc, &context, &resourceMan);
         const swapchainMan = try SwapchainManager.init(alloc, &context);
 
@@ -80,8 +79,7 @@ pub const Renderer = struct {
                 break;
             }
         }
-
-        var dirtyRenderIds: [renderCon.MAX_WINDOWS]?u32 = .{null} ** renderCon.MAX_WINDOWS;
+        var dirtyRenderIds: [rc.MAX_WINDOWS]?u32 = .{null} ** rc.MAX_WINDOWS;
 
         for (0..winPtrs.len) |i| {
             const winPtr = winPtrs[i];
@@ -99,14 +97,12 @@ pub const Renderer = struct {
             }
         }
 
-        if (renderCon.RENDER_IMG_AUTO_RESIZE == true) {
+        if (rc.RENDER_IMG_AUTO_RESIZE == true) {
             for (0..dirtyRenderIds.len) |i| {
                 if (dirtyRenderIds[i] == null) break;
-                const renderId = dirtyRenderIds[i].?;
 
-                if (self.resourceMan.isGpuImageIdUsed(renderId) != false) {
-                    try self.updateRenderImage(renderId);
-                }
+                const renderId = dirtyRenderIds[i].?;
+                if (self.resourceMan.isGpuImageIdUsed(renderId) != false) try self.updateRenderImage(renderId);
             }
         }
     }
@@ -118,16 +114,15 @@ pub const Renderer = struct {
 
         if (new.height != 0 or new.width != 0) {
             if (new.width != old.width or new.height != old.height) {
-                self.resourceMan.destroyGpuImage(renderId);
-
                 const newExtent = vk.VkExtent3D{ .width = new.width, .height = new.height, .depth = 1 };
-                try self.resourceMan.createGpuImage(renderId, newExtent, renderCon.RENDER_IMG_FORMAT, .GpuOptimal);
+                const imgSchema = rc.ResourceSchema.ImageResource{ .binding = rc.RENDER_IMG_BINDING, .resourceId = renderId, .memUsage = .GpuOptimal, .extent = newExtent };
+                try self.resourceMan.updateGpuImage(imgSchema);
                 std.debug.print("Render Image ID {} recreated {}x{} to {}x{}\n", .{ renderId, old.width, old.height, new.width, new.height });
             }
         }
     }
 
-    pub fn addPasses(self: *Renderer, passConfigs: []const renderCon.PassInfo) !void {
+    pub fn addPasses(self: *Renderer, passConfigs: []const rc.PassInfo) !void {
         for (passConfigs) |passConfig| {
             const shaderArray = self.shaderMan.getShaders(passConfig.shaderIds);
             const validShaders = shaderArray[0..passConfig.shaderIds.len];
@@ -136,31 +131,37 @@ pub const Renderer = struct {
                 std.debug.print("Pass {} Shader Layout invalid", .{err});
                 return error.PassInvalid;
             };
-            try self.createRenderImage(passConfig.renderImg);
-            try self.passes.append(.{ .renderType = renderType, .renderImgInf = passConfig.renderImg, .shaderIds = passConfig.shaderIds, .clear = passConfig.clear });
+            try self.passes.append(.{ .renderType = renderType, .renderImgId = passConfig.renderImgId, .shaderIds = passConfig.shaderIds, .clear = passConfig.clear });
         }
     }
 
-    pub fn createGpuBuffer(self: *Renderer, bindingInfo: renderCon.BindingInfo) !void {
-        try self.resourceMan.createGpuBuffer(bindingInfo);
-    }
-
-    pub fn updateGpuBuffer(self: *Renderer, bindingInfo: renderCon.BindingInfo, objects: []Object) !void { // SHOULD LATER TAKE CONFIG
-        try self.resourceMan.updateGpuBuffer(bindingInfo, objects);
-    }
-
-    pub fn createRenderImage(self: *Renderer, renderRes: renderCon.ResourceInfo) !void {
-        if (renderRes.resourceId > RENDER_IMG_MAX - 1) {
-            std.debug.print("Renderer: RenderId Image ID cant be bigger than Max Windows\n", .{});
+    pub fn createRenderImage(self: *Renderer, renderImgSchema: rc.ImageResource) !void {
+        if (renderImgSchema.resourceId > rc.GPU_IMG_MAX - 1) {
+            std.debug.print("Renderer: RenderId Image ID cant be bigger than Max Gpu Images\n", .{});
             return error.RenderImageIdOutOfBounds;
         }
-
-        const imgUsed = self.resourceMan.isGpuImageIdUsed(renderRes.resourceId);
+        const imgUsed = self.resourceMan.isGpuImageIdUsed(renderImgSchema.resourceId);
 
         if (imgUsed == false) {
-            try self.resourceMan.createGpuImage(renderRes.resourceId, renderRes.extent, renderRes.imgFormat, renderRes.memUsage);
-            std.debug.print("Renderer: RenderImage {} created\n", .{renderRes.resourceId});
+            try self.resourceMan.createGpuImage(renderImgSchema);
+            std.debug.print("Renderer: RenderImage {} created\n", .{renderImgSchema.resourceId});
         }
+    }
+
+    pub fn createGpuResource(self: *Renderer, bindingInfo: rc.ResourceSchema) !void {
+        try self.resourceMan.createGpuResource(bindingInfo);
+    }
+
+    // pub fn updateGpuResource(self: *Renderer, bindingInfo: rc.ResourceSchema, data: anytype) !void {
+    //     try self.resourceMan.updateGpuResource(bindingInfo, data);
+    // }
+
+    pub fn updateGpuImage(self: *Renderer, imgInf: rc.ResourceSchema.ImageResource) !void {
+        try self.resourceMan.updateGpuImage(imgInf);
+    }
+
+    pub fn updateGpuBuffer(self: *Renderer, buffInf: rc.ResourceSchema.BufferResource, data: anytype) !void {
+        try self.resourceMan.updateGpuBuffer(buffInf, data);
     }
 
     pub fn draw(self: *Renderer, cam: *Camera, runtimeAsFloat: f32) !void {
@@ -185,7 +186,7 @@ pub const Renderer = struct {
 
     fn recordPasses(self: *Renderer, cmd: vk.VkCommandBuffer, cam: *Camera, runtimeAsFloat: f32) !void {
         for (self.passes.items) |pass| {
-            const renderImgId = pass.renderImgInf.resourceId;
+            const renderImgId = pass.renderImgId;
 
             const gpuBuffer = try self.resourceMan.getGpuBuffer(1); // HARD CODED CURRENTLY
 
@@ -225,13 +226,13 @@ pub const Renderer = struct {
     }
 
     fn queueSubmit(self: *Renderer, cmd: vk.VkCommandBuffer, submitIds: []const u32, frameInFlight: u8) !void {
-        var waitInfos: [renderCon.MAX_WINDOWS]vk.VkSemaphoreSubmitInfo = undefined;
+        var waitInfos: [rc.MAX_WINDOWS]vk.VkSemaphoreSubmitInfo = undefined;
         for (submitIds, 0..) |id, i| {
             const swapchain = self.swapchainMan.swapchains.getAtIndex(id);
             waitInfos[i] = createSemaphoreSubmitInfo(swapchain.imgRdySems[frameInFlight], vk.VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, 0);
         }
 
-        var signalInfos: [renderCon.MAX_WINDOWS + 1]vk.VkSemaphoreSubmitInfo = undefined;
+        var signalInfos: [rc.MAX_WINDOWS + 1]vk.VkSemaphoreSubmitInfo = undefined;
         for (submitIds, 0..) |id, i| {
             const swapchain = self.swapchainMan.swapchains.getAtIndex(id);
             signalInfos[i] = createSemaphoreSubmitInfo(swapchain.renderDoneSems[swapchain.curIndex], vk.VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, 0);
@@ -257,7 +258,7 @@ fn createSemaphoreSubmitInfo(semaphore: vk.VkSemaphore, stageMask: u64, value: u
     return .{ .sType = vk.VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO, .semaphore = semaphore, .stageMask = stageMask, .value = value };
 }
 
-fn checkShaderLayout(shaders: []const ShaderObject) !renderCon.RenderType {
+fn checkShaderLayout(shaders: []const ShaderObject) !rc.RenderType {
     var shdr: [9]u8 = .{0} ** 9;
     var prevIndex: i8 = -1;
 

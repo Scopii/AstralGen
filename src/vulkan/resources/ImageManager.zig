@@ -2,7 +2,7 @@ const std = @import("std");
 const vk = @import("../../modules/vk.zig").c;
 const Allocator = std.mem.Allocator;
 const GpuAllocator = @import("GpuAllocator.zig").GpuAllocator;
-const renderCon = @import("../../configs/renderConfig.zig");
+const rc = @import("../../configs/renderConfig.zig");
 const CreateMapArray = @import("../../structures/MapArray.zig").CreateMapArray;
 
 pub const GpuImage = struct {
@@ -14,7 +14,7 @@ pub const GpuImage = struct {
     curLayout: u32 = vk.VK_IMAGE_LAYOUT_UNDEFINED,
 };
 
-pub const ImageMap = CreateMapArray(GpuImage, renderCon.GPU_IMG_MAX, u32, renderCon.GPU_IMG_MAX, 0);
+pub const ImageMap = CreateMapArray(GpuImage, rc.GPU_IMG_MAX, u32, rc.GPU_IMG_MAX, 0);
 
 pub const ImageManager = struct {
     cpuAlloc: Allocator,
@@ -30,9 +30,9 @@ pub const ImageManager = struct {
         for (self.gpuImages.getElements()) |gpuImg| self.destroyGpuImageDirect(gpuImg);
     }
 
-    pub fn createGpuImage(self: *ImageManager, imgId: u32, extent: vk.VkExtent3D, format: vk.VkFormat, usage: renderCon.MemUsage) !void {
-        const gpuImage = try self.gpuAlloc.allocGpuImage(extent, format, usage);
-        self.gpuImages.set(imgId, gpuImage);
+    pub fn createGpuImage(self: *ImageManager, imageSchema: rc.ResourceSchema.ImageResource) !void {
+        const gpuImage = try self.gpuAlloc.allocGpuImage(imageSchema.extent, imageSchema.imgFormat, imageSchema.memUsage);
+        self.gpuImages.set(imageSchema.resourceId, gpuImage);
     }
 
     pub fn getGpuImageMapPtr(self: *ImageManager) *ImageMap {

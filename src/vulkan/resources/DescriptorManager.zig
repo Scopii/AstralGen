@@ -6,9 +6,7 @@ const GpuAllocator = @import("GpuAllocator.zig").GpuAllocator;
 const GpuBuffer = @import("BufferManager.zig").GpuBuffer;
 const GpuImage = @import("ImageManager.zig").GpuImage;
 const check = @import("../ErrorHelpers.zig").check;
-const renderCon = @import("../../configs/renderConfig.zig");
-const GPU_IMG_MAX = renderCon.GPU_IMG_MAX;
-const GPU_BUF_COUNT = renderCon.GPU_BUF_COUNT;
+const rc = @import("../../configs/renderConfig.zig");
 
 pub const PushConstants = extern struct {
     camPosAndFov: [4]f32,
@@ -40,19 +38,20 @@ pub const DescriptorManager = struct {
     pipeLayout: vk.VkPipelineLayout,
 
     pub fn init(cpuAlloc: Allocator, gpuAlloc: GpuAllocator, gpi: vk.VkDevice, gpu: vk.VkPhysicalDevice) !DescriptorManager {
-        // Create Descriptor Layout
-
-        var bindings: [renderCon.resourceRegistry.len]vk.VkDescriptorSetLayoutBinding = undefined;
+        // Create Descriptor Layouts
+        var bindings: [rc.resourceRegistry.len]vk.VkDescriptorSetLayoutBinding = undefined;
         for (0..bindings.len) |i| {
-            const bindingInf = renderCon.resourceRegistry[i];
-            const layoutCount = if (bindingInf.bindingType == .Buffer) 1 else bindingInf.length;
-            const layoutType: c_uint = if (bindingInf.bindingType == .Buffer) vk.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER else vk.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-            bindings[i] = createDescriptorLayoutBinding(bindingInf.binding, layoutType, layoutCount, vk.VK_SHADER_STAGE_ALL);
+            switch (rc.resourceRegistry[i]) {
+                .imageArrayBinding => |imgArray| {
+                    bindings[i] = createDescriptorLayoutBinding(imgArray.binding, vk.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, imgArray.arrayLength, vk.VK_SHADER_STAGE_ALL);
+                },
+                .bufferBinding => |buffer| {
+                    bindings[i] = createDescriptorLayoutBinding(buffer.binding, vk.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, vk.VK_SHADER_STAGE_ALL);
+                },
+            }
         }
-
         const descLayout = try createDescriptorLayout(gpi, &bindings);
         errdefer vk.vkDestroyDescriptorSetLayout(gpi, descLayout, null);
-
         // Get exact size for this layout from the driver
         var layoutSize: vk.VkDeviceSize = undefined;
         vkFn.vkGetDescriptorSetLayoutSizeEXT.?(gpi, descLayout, &layoutSize);
@@ -104,19 +103,19 @@ pub const DescriptorManager = struct {
         try self.updateDescriptor(&getInf, binding, arrayIndex, self.descBufferProps.storageBufferDescriptorSize);
     }
 
-    pub fn updateDescriptor(self: *DescriptorManager, getInf: *const vk.VkDescriptorGetInfoEXT, binding: u32, arrayIndex: u32, descriptorSize: usize) !void {
+    pub fn updateDescriptor(self: *DescriptorManager, descGetInf: *const vk.VkDescriptorGetInfoEXT, binding: u32, arrayIndex: u32, descSize: usize) !void {
         // Get Descriptor Data
         var descData: [64]u8 = undefined; // safe buffer size
-        if (descriptorSize > descData.len) return error.DescriptorSizeTooLarge;
-        vkFn.vkGetDescriptorEXT.?(self.gpi, getInf, descriptorSize, &descData);
+        if (descSize > descData.len) return error.DescriptorSizeTooLarge;
+        vkFn.vkGetDescriptorEXT.?(self.gpi, descGetInf, descSize, &descData);
 
         var bindingOffset: vk.VkDeviceSize = 0;
         vkFn.vkGetDescriptorSetLayoutBindingOffsetEXT.?(self.gpi, self.descLayout, binding, &bindingOffset);
 
         const mappedData = @as([*]u8, @ptrCast(self.descBuffer.allocInf.pMappedData));
-        const finalOffset = bindingOffset + (arrayIndex * descriptorSize); // Base Offset of the Array + (Index * Size of one Element)
+        const finalOffset = bindingOffset + (arrayIndex * descSize); // Base Offset of the Array + (Index * Size of one Element)
         const destPtr = mappedData + finalOffset;
-        @memcpy(destPtr[0..descriptorSize], descData[0..descriptorSize]);
+        @memcpy(destPtr[0..descSize], descData[0..descSize]);
     }
 };
 
@@ -138,15 +137,15 @@ fn getDescriptorBufferProperties(gpu: vk.VkPhysicalDevice) vk.VkPhysicalDeviceDe
 }
 
 fn createDescriptorLayout(gpi: vk.VkDevice, layoutBindings: []const vk.VkDescriptorSetLayoutBinding) !vk.VkDescriptorSetLayout {
-    var bindingFlags: [renderCon.resourceRegistry.len]vk.VkDescriptorBindingFlags = .{ vk.VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT, 0, 0 };
+    var bindingFlags: [rc.resourceRegistry.len]vk.VkDescriptorBindingFlags = undefined;
+
     for (0..layoutBindings.len) |i| {
         if (layoutBindings[i].descriptorType == vk.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE) {
-            bindingFlags[i] = vk.VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT | vk.VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT;
+            bindingFlags[i] = vk.VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT;
         } else {
             bindingFlags[i] = 0;
         }
     }
-
     const bindingFlagsInf = vk.VkDescriptorSetLayoutBindingFlagsCreateInfo{
         .sType = vk.VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO,
         .bindingCount = bindingFlags.len,

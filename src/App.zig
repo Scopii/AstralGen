@@ -11,12 +11,11 @@ const UiManager = @import("core/UiManager.zig").UiManager;
 const RNGenerator = @import("core/RNGenerator.zig").RNGenerator;
 const Camera = @import("core/Camera.zig").Camera;
 const shaderCon = @import("configs/shaderConfig.zig");
-const renderCon = @import("configs/renderConfig.zig");
+const rc = @import("configs/renderConfig.zig");
 
 pub const App = struct {
     memoryMan: *MemoryManager,
     windowMan: WindowManager,
-    //uiMan: UiManager,
     renderer: Renderer,
     timeMan: TimeManager,
     cam: Camera,
@@ -43,15 +42,6 @@ pub const App = struct {
             try shaderCompiler.loadShaders(shaderCon.shadersToCompile);
         }
 
-        // var uiMan = UiManager.init(memoryMan.getAllocator()) catch |err| {
-        //     windowMan.showErrorBox("Astral App Error", "UI Manager could not launch");
-        //     std.debug.print("Err {}\n", .{err});
-        //     return error.UiManagerFailed;
-        // };
-        // try uiMan.startUi();
-        // uiMan.calculateUi();
-        //errdefer uiMan.deinit();
-
         var rng = RNGenerator.init(std.Random.Xoshiro256, 1000);
 
         var ecs = EntityManager.init(&rng) catch |err| {
@@ -72,12 +62,18 @@ pub const App = struct {
         shaderCompiler.freeFreshShaders();
 
         // RENDERING SET UP
-        try renderer.addPasses(renderCon.renderSequence);
+        try renderer.createGpuResource(rc.buffer1);
+        try renderer.createGpuResource(rc.buffer2);
 
-        try renderer.createGpuBuffer(renderCon.objectBinding);
-        try renderer.createGpuBuffer(renderCon.objectBinding2);
+        try renderer.updateGpuBuffer(rc.buffer1.buffer, ecs.getObjects());
 
-        try renderer.updateGpuBuffer(renderCon.objectBinding, ecs.getObjects());
+        try renderer.createGpuResource(rc.imgResource1);
+        try renderer.createGpuResource(rc.imgResource2);
+        try renderer.createGpuResource(rc.imgResource3);
+        try renderer.createGpuResource(rc.imgResource4);
+        try renderer.createGpuResource(rc.imgResource5);
+
+        try renderer.addPasses(rc.renderSequence);
 
         return .{
             .cam = Camera.init(.{}),
@@ -85,7 +81,6 @@ pub const App = struct {
             .eventMan = EventManager{},
             .memoryMan = memoryMan,
             .windowMan = windowMan,
-            //.uiMan = uiMan,
             .renderer = renderer,
             .shaderCompiler = shaderCompiler,
             .ecs = ecs,
@@ -101,10 +96,10 @@ pub const App = struct {
     }
 
     pub fn initWindows(self: *App) !void {
-        try self.windowMan.addWindow("Task", 16 * 52, 9 * 52, renderCon.imgResource4.resourceId, 120, 50);
-        try self.windowMan.addWindow("Mesh", 16 * 52, 9 * 52, renderCon.imgResource3.resourceId, 120, 550);
-        try self.windowMan.addWindow("Compute", 16 * 52, 9 * 52, renderCon.imgResource1.resourceId, 960, 50);
-        try self.windowMan.addWindow("Graphics", 16 * 52, 9 * 52, renderCon.imgResource2.resourceId, 960, 550);
+        try self.windowMan.addWindow("Task", 16 * 52, 9 * 52, rc.imgResource4.image.resourceId, 120, 50);
+        try self.windowMan.addWindow("Mesh", 16 * 52, 9 * 52, rc.imgResource3.image.resourceId, 120, 550);
+        try self.windowMan.addWindow("Compute", 16 * 52, 9 * 52, rc.imgResource1.image.resourceId, 960, 50);
+        try self.windowMan.addWindow("Graphics", 16 * 52, 9 * 52, rc.imgResource2.image.resourceId, 960, 550);
     }
 
     pub fn run(self: *App) !void {

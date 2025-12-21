@@ -10,7 +10,7 @@ const DescriptorManager = @import("DescriptorManager.zig").DescriptorManager;
 const ImageMap = @import("ImageManager.zig").ImageMap;
 const GpuAllocator = @import("GpuAllocator.zig").GpuAllocator;
 const Object = @import("../../ecs/EntityManager.zig").Object;
-const renderCon = @import("../../configs/renderConfig.zig");
+const rc = @import("../../configs/renderConfig.zig");
 
 pub const ResourceManager = struct {
     cpuAlloc: Allocator,
@@ -22,15 +22,10 @@ pub const ResourceManager = struct {
     bufferMan: BufferManager,
     descMan: DescriptorManager,
 
-    pub fn init(
-        alloc: Allocator,
-        context: *const Context,
-    ) !ResourceManager {
+    pub fn init(alloc: Allocator, context: *const Context) !ResourceManager {
         const gpi = context.gpi;
         const gpu = context.gpu;
         const gpuAlloc = try GpuAllocator.init(context.instance, context.gpi, context.gpu);
-
-        //const resourceRegistry: renderCon.ResourceRegistry;
 
         return .{
             .cpuAlloc = alloc,
@@ -70,22 +65,50 @@ pub const ResourceManager = struct {
         return self.imgMan.isGpuImageIdUsed(resourceId);
     }
 
-    pub fn createGpuImage(self: *ResourceManager, resourceId: u32, extent: vk.VkExtent3D, format: vk.VkFormat, usage: renderCon.MemUsage) !void {
-        try self.imgMan.createGpuImage(resourceId, extent, format, usage);
-        const gpuImg = try self.imgMan.getGpuImage(resourceId);
-        try self.descMan.updateImageDescriptor(gpuImg.view, resourceId);
+    pub fn createGpuImage(self: *ResourceManager, imageSchema: rc.ResourceSchema.ImageResource) !void {
+        try self.imgMan.createGpuImage(imageSchema);
+        const gpuImg = try self.imgMan.getGpuImage(imageSchema.resourceId);
+        try self.descMan.updateImageDescriptor(gpuImg.view, imageSchema.resourceId);
     }
 
-    pub fn createGpuBuffer(self: *ResourceManager, bindingInfo: renderCon.BindingInfo) !void {
-        const buffId = bindingInfo.binding;
-        try self.bufferMan.createGpuBuffer(bindingInfo);
+    pub fn createGpuResource(self: *ResourceManager, resourceSchema: rc.ResourceSchema) !void {
+        switch (resourceSchema) {
+            .image => |image| {
+                try self.createGpuImage(image);
+            },
+            .buffer => |buffer| {
+                try self.createGpuBuffer(buffer);
+            },
+        }
+    }
+
+    pub fn createGpuBuffer(self: *ResourceManager, bindingInf: rc.ResourceSchema.BufferResource) !void {
+        const buffId = bindingInf.binding;
+        try self.bufferMan.createGpuBuffer(bindingInf);
         const gpuBuffer = try self.bufferMan.getGpuBuffer(buffId);
         try self.descMan.updateBufferDescriptor(gpuBuffer, buffId, 0);
     }
 
-    pub fn updateGpuBuffer(self: *ResourceManager, bindingInfo: renderCon.BindingInfo, objects: []Object) !void {
-        try self.bufferMan.updateGpuBuffer(bindingInfo, objects);
+    pub fn updateGpuImage(self: *ResourceManager, imgInf: rc.ResourceSchema.ImageResource) !void {
+        self.destroyGpuImage(imgInf.resourceId);
+        try self.createGpuImage(imgInf);
     }
+
+    pub fn updateGpuBuffer(self: *ResourceManager, buffInf: rc.ResourceSchema.BufferResource, data: anytype) !void {
+        try self.bufferMan.updateGpuBuffer(buffInf, data);
+    }
+
+    // pub fn updateGpuResource(self: *ResourceManager, resourceSchema: rc.ResourceSchema, data: anytype) !void {
+    //     switch (resourceSchema) {
+    //         .image => |imgInf| {
+    //             self.destroyGpuImage(imgInf.resourceId);
+    //             try self.createGpuImage(imgInf);
+    //         },
+    //         .buffer => |bufferInf| {
+    //             try self.bufferMan.updateGpuBuffer(bufferInf, data);
+    //         },
+    //     }
+    // }
 
     pub fn destroyGpuImage(self: *ResourceManager, resourceId: u32) void {
         self.imgMan.destroyGpuImage(resourceId);
