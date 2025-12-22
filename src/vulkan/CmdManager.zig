@@ -93,10 +93,10 @@ pub const CmdManager = struct {
         pushConstants: PushConstants,
     ) !void {
         const barrier = createImageMemoryBarrier2(
-            vk.VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
-            vk.VK_ACCESS_2_MEMORY_WRITE_BIT | vk.VK_ACCESS_2_MEMORY_READ_BIT,
-            vk.VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-            vk.VK_ACCESS_2_SHADER_WRITE_BIT,
+            PipeStage.ALL_COMMANDS,
+            PipeAccess.MEMORY_WRITE | PipeAccess.MEMORY_READ,
+            PipeStage.COMPUTE,
+            PipeAccess.SHADER_WRITE,
             renderImg.curLayout,
             vk.VK_IMAGE_LAYOUT_GENERAL,
             renderImg.img,
@@ -124,9 +124,9 @@ pub const CmdManager = struct {
         shouldClear: bool,
     ) !void {
         const barrier = createImageMemoryBarrier2(
-            vk.VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
-            vk.VK_ACCESS_2_MEMORY_WRITE_BIT | vk.VK_ACCESS_2_MEMORY_READ_BIT,
-            vk.VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+            PipeStage.ALL_COMMANDS,
+            PipeAccess.MEMORY_WRITE | PipeAccess.MEMORY_READ,
+            PipeStage.COLOR_ATTACHMENT,
             vk.VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
             renderImg.curLayout,
             vk.VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
@@ -217,10 +217,10 @@ pub const CmdManager = struct {
 
             // 1. BARRIER: Transition Source Image (Color/General -> Transfer Src)
             const srcBarrier = createImageMemoryBarrier2(
-                vk.VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
-                vk.VK_ACCESS_2_MEMORY_WRITE_BIT,
-                vk.VK_PIPELINE_STAGE_2_TRANSFER_BIT,
-                vk.VK_ACCESS_2_TRANSFER_READ_BIT,
+                PipeStage.ALL_COMMANDS,
+                PipeAccess.MEMORY_WRITE,
+                PipeStage.TRANSFER,
+                PipeAccess.TRANSFER_READ,
                 srcImgPtr.curLayout,
                 vk.VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                 srcImgPtr.img,
@@ -228,10 +228,10 @@ pub const CmdManager = struct {
             );
             // 2. BARRIER: Transition Dest Swapchain (Undefined -> Transfer Dst)
             const dstBarrier = createImageMemoryBarrier2(
-                vk.VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
-                0,
-                vk.VK_PIPELINE_STAGE_2_TRANSFER_BIT,
-                vk.VK_ACCESS_2_TRANSFER_WRITE_BIT,
+                PipeStage.TOP_OF_PIPE,
+                PipeAccess.NONE,
+                PipeStage.TRANSFER,
+                PipeAccess.TRANSFER_WRITE,
                 vk.VK_IMAGE_LAYOUT_UNDEFINED,
                 vk.VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                 swapchain.images[swapchain.curIndex],
@@ -241,51 +241,52 @@ pub const CmdManager = struct {
 
             srcImgPtr.curLayout = vk.VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
 
-            // 3. CALCULATE BLIT OFFSETS
-            var srcOffsets: [2]vk.VkOffset3D = undefined;
-            var dstOffsets: [2]vk.VkOffset3D = undefined;
-
-            if (RENDER_IMG_STRETCH) {
-                // Stretch: Source is full image, Dest is full window
-                srcOffsets[0] = .{ .x = 0, .y = 0, .z = 0 };
-                srcOffsets[1] = .{ .x = @intCast(srcImgPtr.extent3d.width), .y = @intCast(srcImgPtr.extent3d.height), .z = 1 };
-
-                dstOffsets[0] = .{ .x = 0, .y = 0, .z = 0 };
-                dstOffsets[1] = .{ .x = @intCast(swapchain.extent.width), .y = @intCast(swapchain.extent.height), .z = 1 };
-            } else {
-                // No Stretch (Center / Crop)
-                const srcW: i32 = @intCast(srcImgPtr.extent3d.width);
-                const srcH: i32 = @intCast(srcImgPtr.extent3d.height);
-                const winW: i32 = @intCast(swapchain.extent.width);
-                const winH: i32 = @intCast(swapchain.extent.height);
-
-                // Determine the size of the region to copy (the smaller of the two dimensions)
-                const blitW = @min(srcW, winW);
-                const blitH = @min(srcH, winH);
-
-                // Center the region on the SOURCE
-                // If Source < Window, this is 0. If Source > Window, this crops the center.
-                const srcX = @divFloor(srcW - blitW, 2);
-                const srcY = @divFloor(srcH - blitH, 2);
-
-                srcOffsets[0] = .{ .x = srcX, .y = srcY, .z = 0 };
-                srcOffsets[1] = .{ .x = srcX + blitW, .y = srcY + blitH, .z = 1 };
-
-                // Center the region on the DESTINATION
-                // If Window > Source, this centers the image on screen. If Window < Source, this is 0.
-                const dstX = @divFloor(winW - blitW, 2);
-                const dstY = @divFloor(winH - blitH, 2);
-
-                dstOffsets[0] = .{ .x = dstX, .y = dstY, .z = 0 };
-                dstOffsets[1] = .{ .x = dstX + blitW, .y = dstY + blitH, .z = 1 };
-            }
+            const blitOffsets = calculateBlitOffsets(srcImgPtr.extent3d, .{ .height = swapchain.extent.height, .width = swapchain.extent.width, .depth = 1 }, RENDER_IMG_STRETCH);
             // 4. BLIT
-            copyImageToImage(cmd, srcImgPtr.img, srcOffsets, swapchain.images[swapchain.curIndex], dstOffsets);
+            copyImageToImage(cmd, srcImgPtr.img, blitOffsets.srcOffsets, swapchain.images[swapchain.curIndex], blitOffsets.dstOffsets);
             // 5. Transition Dest Swapchain to Present
             transitionToPresent(cmd, swapchain);
         }
     }
 };
+
+fn calculateBlitOffsets(srcImgExtent: vk.VkExtent3D, dstImgExtent: vk.VkExtent3D, stretch: bool) struct { srcOffsets: [2]vk.VkOffset3D, dstOffsets: [2]vk.VkOffset3D } {
+    // 3. CALCULATE BLIT OFFSETS
+    var srcOffsets: [2]vk.VkOffset3D = undefined;
+    var dstOffsets: [2]vk.VkOffset3D = undefined;
+
+    if (stretch == true) {
+        // Stretch: Source is full image, Dest is full window
+        srcOffsets[0] = .{ .x = 0, .y = 0, .z = 0 };
+        srcOffsets[1] = .{ .x = @intCast(srcImgExtent.width), .y = @intCast(srcImgExtent.height), .z = 1 };
+        dstOffsets[0] = .{ .x = 0, .y = 0, .z = 0 };
+        dstOffsets[1] = .{ .x = @intCast(dstImgExtent.width), .y = @intCast(dstImgExtent.height), .z = 1 };
+    } else {
+        // No Stretch (Center / Crop)
+        const srcW: i32 = @intCast(srcImgExtent.width);
+        const srcH: i32 = @intCast(srcImgExtent.height);
+        const winW: i32 = @intCast(dstImgExtent.width);
+        const winH: i32 = @intCast(dstImgExtent.height);
+        // Determine the size of the region to copy (smaller of the two dimensions)
+        const blitW = @min(srcW, winW);
+        const blitH = @min(srcH, winH);
+
+        // Center the region on the SOURCE
+        // If Source < Window, this is 0. If Source > Window, this crops the center.
+        const srcX = @divFloor(srcW - blitW, 2);
+        const srcY = @divFloor(srcH - blitH, 2);
+        srcOffsets[0] = .{ .x = srcX, .y = srcY, .z = 0 };
+        srcOffsets[1] = .{ .x = srcX + blitW, .y = srcY + blitH, .z = 1 };
+
+        // Center the region on the DESTINATION
+        // If Window > Source, this centers the image on screen. If Window < Source, this is 0.
+        const dstX = @divFloor(winW - blitW, 2);
+        const dstY = @divFloor(winH - blitH, 2);
+        dstOffsets[0] = .{ .x = dstX, .y = dstY, .z = 0 };
+        dstOffsets[1] = .{ .x = dstX + blitW, .y = dstY + blitH, .z = 1 };
+    }
+    return .{ .srcOffsets = srcOffsets, .dstOffsets = dstOffsets };
+}
 
 fn bindDescriptorBuffer(cmd: vk.VkCommandBuffer, gpuAddress: deviceAddress) void {
     const bufferBindingInf = vk.VkDescriptorBufferBindingInfoEXT{
@@ -419,6 +420,32 @@ fn createSubresourceRange(mask: u32, mipLevel: u32, levelCount: u32, arrayLayer:
 fn createSubresourceLayers(mask: u32, mipLevel: u32, arrayLayer: u32, layerCount: u32) vk.VkImageSubresourceLayers {
     return vk.VkImageSubresourceLayers{ .aspectMask = mask, .mipLevel = mipLevel, .baseArrayLayer = arrayLayer, .layerCount = layerCount };
 }
+
+pub const PipeStage = struct {
+    pub const TOP_OF_PIPE = vk.VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT;
+    pub const COMPUTE = vk.VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+    pub const VERTEX_SHADER = vk.VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT;
+    pub const TASK_SHADER = vk.VK_PIPELINE_STAGE_2_TASK_SHADER_BIT_EXT;
+    pub const MESH_SHADER = vk.VK_PIPELINE_STAGE_2_MESH_SHADER_BIT_EXT;
+    pub const FRAGMENT_SHADER = vk.VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
+    pub const COLOR_ATTACHMENT = vk.VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
+    pub const TRANSFER = vk.VK_PIPELINE_STAGE_2_TRANSFER_BIT;
+    pub const ALL_COMMANDS = vk.VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
+    //.. more exist
+};
+
+pub const PipeAccess = struct {
+    pub const NONE = 0;
+    pub const SHADER_READ = vk.VK_ACCESS_2_SHADER_STORAGE_READ_BIT;
+    pub const SHADER_WRITE = vk.VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT;
+    pub const COLOR_ATTACHMENT_WRITE = vk.VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
+    pub const COLOR_ATTACHMENT_READ = vk.VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT;
+    pub const TRANSFER_WRITE = vk.VK_ACCESS_2_TRANSFER_WRITE_BIT;
+    pub const TRANSFER_READ = vk.VK_ACCESS_2_TRANSFER_READ_BIT;
+    pub const MEMORY_READ = vk.VK_ACCESS_2_MEMORY_READ_BIT;
+    pub const MEMORY_WRITE = vk.VK_ACCESS_2_MEMORY_WRITE_BIT;
+    //.. more exist
+};
 
 fn createImageMemoryBarrier2(
     srcStage: u64,

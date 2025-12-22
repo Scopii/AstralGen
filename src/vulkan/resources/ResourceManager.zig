@@ -84,10 +84,11 @@ pub const ResourceManager = struct {
     }
 
     fn createGpuImage(self: *ResourceManager, image: rc.GpuResource.ImageInfo) !void {
+        const resourceId = image.resourceId;
         const gpuImg = try self.gpuAlloc.allocGpuImage(image.extent, image.imgFormat, image.memUsage);
-        self.gpuImages.set(image.resourceId, gpuImg);
-        try self.descMan.updateImageDescriptor(gpuImg.view, image.resourceId);
-        self.resourceTypes[image.resourceId] = .Image;
+        self.gpuImages.set(resourceId, gpuImg);
+        try self.descMan.updateImageDescriptor(gpuImg.view, resourceId);
+        self.resourceTypes[resourceId] = .Image;
     }
 
     fn createGpuBuffer(self: *ResourceManager, bindingInf: rc.GpuResource.BufferInf) !void {
