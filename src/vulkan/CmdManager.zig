@@ -22,23 +22,17 @@ pub const CmdManager = struct {
     gpi: vk.VkDevice,
     pool: vk.VkCommandPool,
     cmds: []vk.VkCommandBuffer,
+    pipeLayout: vk.VkPipelineLayout,
     blitBarriers: [MAX_WINDOWS + 1]vk.VkImageMemoryBarrier2 = undefined,
 
-    pub fn init(alloc: Allocator, context: *const Context, maxInFlight: u32) !CmdManager {
+    pub fn init(alloc: Allocator, context: *const Context, maxInFlight: u32, pipeLayout: vk.VkPipelineLayout) !CmdManager {
         const gpi = context.gpi;
         const pool = try createCmdPool(gpi, context.families.graphics);
 
         const cmds = try alloc.alloc(vk.VkCommandBuffer, maxInFlight);
-        for (0..maxInFlight) |i| {
-            cmds[i] = try createCmd(gpi, pool, vk.VK_COMMAND_BUFFER_LEVEL_PRIMARY);
-        }
+        for (0..maxInFlight) |i| cmds[i] = try createCmd(gpi, pool, vk.VK_COMMAND_BUFFER_LEVEL_PRIMARY);
 
-        return .{
-            .alloc = alloc,
-            .gpi = gpi,
-            .pool = pool,
-            .cmds = cmds,
-        };
+        return .{ .alloc = alloc, .gpi = gpi, .pool = pool, .cmds = cmds, .pipeLayout = pipeLayout };
     }
 
     pub fn deinit(self: *CmdManager) void {
@@ -68,30 +62,25 @@ pub const CmdManager = struct {
     }
 
     pub fn recordPass(
+        self: *CmdManager,
         cmd: vk.VkCommandBuffer,
         renderImg: *GpuImage,
-        shaderObjects: []const ShaderObject,
+        shaders: []const ShaderObject,
         renderType: RenderType,
-        pipeLayout: vk.VkPipelineLayout,
         gpuAddress: deviceAddress,
-        pushConstants: PushConstants,
-        shouldClear: bool,
+        constants: PushConstants,
+        clear: bool,
     ) !void {
         switch (renderType) {
-            .computePass => try recordCompute(cmd, renderImg, shaderObjects, pipeLayout, gpuAddress, pushConstants),
-            .graphicsPass, .meshPass, .taskMeshPass => try recordGraphics(cmd, renderImg, shaderObjects, renderType, pipeLayout, gpuAddress, pushConstants, shouldClear),
+            .computePass => try self.recordCompute(cmd, renderImg, shaders, gpuAddress, constants),
+            .graphicsPass, .meshPass, .taskMeshPass => try self.recordGraphics(cmd, renderImg, shaders, renderType, gpuAddress, constants, clear),
             else => std.debug.print("Renderer: {s} has no Command Recording yet\n", .{@tagName(renderType)}),
         }
     }
 
-    pub fn recordCompute(
-        cmd: vk.VkCommandBuffer,
-        renderImg: *GpuImage,
-        shaderObjects: []const ShaderObject,
-        pipeLayout: vk.VkPipelineLayout,
-        gpuAddress: deviceAddress,
-        pushConstants: PushConstants,
-    ) !void {
+    pub fn recordCompute(self: *CmdManager, cmd: vk.VkCommandBuffer, renderImg: *GpuImage, shaders: []const ShaderObject, gpuAddress: deviceAddress, constants: PushConstants) !void {
+        const pipeLayout = self.pipeLayout;
+
         const barrier = createImageMemoryBarrier2(
             PipeStage.ALL_COMMANDS,
             PipeAccess.MEMORY_WRITE | PipeAccess.MEMORY_READ,
@@ -100,13 +89,12 @@ pub const CmdManager = struct {
             renderImg.curLayout,
             vk.VK_IMAGE_LAYOUT_GENERAL,
             renderImg.img,
-            createSubresourceRange(vk.VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1),
         );
         createPipelineBarriers2(cmd, &.{barrier});
         renderImg.curLayout = vk.VK_IMAGE_LAYOUT_GENERAL;
 
-        vk.vkCmdPushConstants(cmd, pipeLayout, vk.VK_SHADER_STAGE_ALL, 0, @sizeOf(PushConstants), &pushConstants);
-        bindShaderStages(cmd, shaderObjects);
+        vk.vkCmdPushConstants(cmd, pipeLayout, vk.VK_SHADER_STAGE_ALL, 0, @sizeOf(PushConstants), &constants);
+        bindShaderStages(cmd, shaders);
         bindDescriptorBuffer(cmd, gpuAddress);
         setDescriptorBufferOffset(cmd, vk.VK_PIPELINE_BIND_POINT_COMPUTE, pipeLayout);
 
@@ -114,15 +102,17 @@ pub const CmdManager = struct {
     }
 
     pub fn recordGraphics(
+        self: *CmdManager,
         cmd: vk.VkCommandBuffer,
         renderImg: *GpuImage,
-        shaderObjects: []const ShaderObject,
+        shaders: []const ShaderObject,
         renderType: RenderType,
-        pipeLayout: vk.VkPipelineLayout,
         gpuAddress: deviceAddress,
-        pushConstants: PushConstants,
-        shouldClear: bool,
+        constants: PushConstants,
+        clear: bool,
     ) !void {
+        const pipeLayout = self.pipeLayout;
+
         const barrier = createImageMemoryBarrier2(
             PipeStage.ALL_COMMANDS,
             PipeAccess.MEMORY_WRITE | PipeAccess.MEMORY_READ,
@@ -131,53 +121,15 @@ pub const CmdManager = struct {
             renderImg.curLayout,
             vk.VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
             renderImg.img,
-            createSubresourceRange(vk.VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1),
         );
         createPipelineBarriers2(cmd, &.{barrier});
         renderImg.curLayout = vk.VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
-        const scissor = vk.VkRect2D{
-            .offset = .{ .x = 0, .y = 0 },
-            .extent = .{ .width = renderImg.extent3d.width, .height = renderImg.extent3d.height },
-        };
-
-        const colorAttachInf = vk.VkRenderingAttachmentInfo{
-            .sType = vk.VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-            .imageView = renderImg.view,
-            .imageLayout = vk.VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-            .loadOp = if (shouldClear) vk.VK_ATTACHMENT_LOAD_OP_CLEAR else vk.VK_ATTACHMENT_LOAD_OP_LOAD,
-            .storeOp = vk.VK_ATTACHMENT_STORE_OP_STORE,
-            .clearValue = .{ .color = .{ .float32 = .{ 0.0, 0.0, 0.1, 1.0 } } },
-        };
-
-        const renderInf = vk.VkRenderingInfo{
-            .sType = vk.VK_STRUCTURE_TYPE_RENDERING_INFO,
-            .flags = 0,
-            .renderArea = scissor,
-            .layerCount = 1,
-            .colorAttachmentCount = 1,
-            .pColorAttachments = &colorAttachInf,
-            .pDepthAttachment = null,
-            .pStencilAttachment = null,
-        };
-        vk.vkCmdBeginRendering(cmd, &renderInf);
-
-        const viewport = vk.VkViewport{
-            .x = 0,
-            .y = 0,
-            .width = @floatFromInt(renderImg.extent3d.width),
-            .height = @floatFromInt(renderImg.extent3d.height),
-            .minDepth = 0.0,
-            .maxDepth = 1.0,
-        };
-        vkFn.vkCmdSetViewportWithCount.?(cmd, 1, &viewport);
-        vkFn.vkCmdSetScissorWithCount.?(cmd, 1, &scissor);
-
-        vk.vkCmdPushConstants(cmd, pipeLayout, vk.VK_SHADER_STAGE_ALL, 0, @sizeOf(PushConstants), &pushConstants);
-        bindShaderStages(cmd, shaderObjects);
+        vk.vkCmdPushConstants(cmd, pipeLayout, vk.VK_SHADER_STAGE_ALL, 0, @sizeOf(PushConstants), &constants);
+        bindShaderStages(cmd, shaders);
         bindDescriptorBuffer(cmd, gpuAddress);
         setDescriptorBufferOffset(cmd, vk.VK_PIPELINE_BIND_POINT_GRAPHICS, pipeLayout);
-        setGraphicsDynamicStates(cmd);
+        setGraphicsDynamicStates(cmd, renderImg, clear);
 
         switch (renderType) {
             .graphicsPass => {
@@ -192,14 +144,13 @@ pub const CmdManager = struct {
 
     pub fn transitionToPresent(cmd: vk.VkCommandBuffer, swapchain: *SwapchainManager.Swapchain) void {
         const barrier = createImageMemoryBarrier2(
-            vk.VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
-            0,
-            vk.VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT,
-            0,
+            PipeStage.TOP_OF_PIPE,
+            PipeAccess.NONE,
+            PipeStage.BOTTOM_OF_PIPE,
+            PipeAccess.NONE,
             vk.VK_IMAGE_LAYOUT_UNDEFINED, // Not important what it was
             vk.VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, // Must be SRC for presentation
             swapchain.images[swapchain.curIndex],
-            createSubresourceRange(vk.VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1),
         );
         createPipelineBarriers2(cmd, &.{barrier});
     }
@@ -224,7 +175,6 @@ pub const CmdManager = struct {
                 srcImgPtr.curLayout,
                 vk.VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                 srcImgPtr.img,
-                createSubresourceRange(vk.VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1),
             );
             // 2. BARRIER: Transition Dest Swapchain (Undefined -> Transfer Dst)
             const dstBarrier = createImageMemoryBarrier2(
@@ -235,7 +185,6 @@ pub const CmdManager = struct {
                 vk.VK_IMAGE_LAYOUT_UNDEFINED,
                 vk.VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                 swapchain.images[swapchain.curIndex],
-                createSubresourceRange(vk.VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1),
             );
             createPipelineBarriers2(cmd, &.{ srcBarrier, dstBarrier });
 
@@ -303,7 +252,44 @@ fn setDescriptorBufferOffset(cmd: vk.VkCommandBuffer, bindPoint: vk.VkPipelineBi
     vkFn.vkCmdSetDescriptorBufferOffsetsEXT.?(cmd, bindPoint, pipeLayout, 0, 1, &bufferIndex, &descOffset);
 }
 
-fn setGraphicsDynamicStates(cmd: vk.VkCommandBuffer) void {
+fn setGraphicsDynamicStates(cmd: vk.VkCommandBuffer, renderImg: *GpuImage, clear: bool) void {
+    const scissor = vk.VkRect2D{
+        .offset = .{ .x = 0, .y = 0 },
+        .extent = .{ .width = renderImg.extent3d.width, .height = renderImg.extent3d.height },
+    };
+
+    const colorAttachInf = vk.VkRenderingAttachmentInfo{
+        .sType = vk.VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+        .imageView = renderImg.view,
+        .imageLayout = vk.VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+        .loadOp = if (clear) vk.VK_ATTACHMENT_LOAD_OP_CLEAR else vk.VK_ATTACHMENT_LOAD_OP_LOAD,
+        .storeOp = vk.VK_ATTACHMENT_STORE_OP_STORE,
+        .clearValue = .{ .color = .{ .float32 = .{ 0.0, 0.0, 0.1, 1.0 } } },
+    };
+
+    const renderInf = vk.VkRenderingInfo{
+        .sType = vk.VK_STRUCTURE_TYPE_RENDERING_INFO,
+        .flags = 0,
+        .renderArea = scissor,
+        .layerCount = 1,
+        .colorAttachmentCount = 1,
+        .pColorAttachments = &colorAttachInf,
+        .pDepthAttachment = null,
+        .pStencilAttachment = null,
+    };
+    vk.vkCmdBeginRendering(cmd, &renderInf);
+
+    const viewport = vk.VkViewport{
+        .x = 0,
+        .y = 0,
+        .width = @floatFromInt(renderImg.extent3d.width),
+        .height = @floatFromInt(renderImg.extent3d.height),
+        .minDepth = 0.0,
+        .maxDepth = 1.0,
+    };
+    vkFn.vkCmdSetViewportWithCount.?(cmd, 1, &viewport);
+    vkFn.vkCmdSetScissorWithCount.?(cmd, 1, &scissor);
+
     vkFn.vkCmdSetRasterizerDiscardEnable.?(cmd, vk.VK_FALSE);
     vkFn.vkCmdSetDepthBiasEnable.?(cmd, vk.VK_FALSE);
     vkFn.vkCmdSetPolygonModeEXT.?(cmd, vk.VK_POLYGON_MODE_FILL);
@@ -327,7 +313,6 @@ fn setGraphicsDynamicStates(cmd: vk.VkCommandBuffer) void {
     const colorBlendAttachments = [_]vk.VkBool32{colorBlendEnable};
     vkFn.vkCmdSetColorBlendEnableEXT.?(cmd, 0, 1, &colorBlendAttachments);
 
-    // 2. SET BLEND EQUATION (Standard Transparency)
     const blendEquation = vk.VkColorBlendEquationEXT{
         .srcColorBlendFactor = vk.VK_BLEND_FACTOR_SRC_ALPHA, // Take Shader Alpha
         .dstColorBlendFactor = vk.VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA, // Take 1-Alpha from Background
@@ -338,7 +323,6 @@ fn setGraphicsDynamicStates(cmd: vk.VkCommandBuffer) void {
     };
     const equations = [_]vk.VkColorBlendEquationEXT{blendEquation};
 
-    // You need to call this to configure the math!
     vkFn.vkCmdSetColorBlendEquationEXT.?(cmd, 0, 1, &equations);
 
     const colorWriteMask = vk.VK_COLOR_COMPONENT_R_BIT | vk.VK_COLOR_COMPONENT_G_BIT | vk.VK_COLOR_COMPONENT_B_BIT | vk.VK_COLOR_COMPONENT_A_BIT;
@@ -408,13 +392,7 @@ fn createPipelineBarriers2(cmd: vk.VkCommandBuffer, barriers: []const vk.VkImage
 }
 
 fn createSubresourceRange(mask: u32, mipLevel: u32, levelCount: u32, arrayLayer: u32, layerCount: u32) vk.VkImageSubresourceRange {
-    return vk.VkImageSubresourceRange{
-        .aspectMask = mask,
-        .baseMipLevel = mipLevel,
-        .levelCount = levelCount,
-        .baseArrayLayer = arrayLayer,
-        .layerCount = layerCount,
-    };
+    return vk.VkImageSubresourceRange{ .aspectMask = mask, .baseMipLevel = mipLevel, .levelCount = levelCount, .baseArrayLayer = arrayLayer, .layerCount = layerCount };
 }
 
 fn createSubresourceLayers(mask: u32, mipLevel: u32, arrayLayer: u32, layerCount: u32) vk.VkImageSubresourceLayers {
@@ -431,6 +409,7 @@ pub const PipeStage = struct {
     pub const COLOR_ATTACHMENT = vk.VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
     pub const TRANSFER = vk.VK_PIPELINE_STAGE_2_TRANSFER_BIT;
     pub const ALL_COMMANDS = vk.VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
+    pub const BOTTOM_OF_PIPE = vk.VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT;
     //.. more exist
 };
 
@@ -447,16 +426,7 @@ pub const PipeAccess = struct {
     //.. more exist
 };
 
-fn createImageMemoryBarrier2(
-    srcStage: u64,
-    srcAccess: u64,
-    dstStage: u64,
-    dstAccess: u64,
-    oldLayout: u32,
-    newLayout: u32,
-    img: vk.VkImage,
-    subResRange: vk.VkImageSubresourceRange,
-) vk.VkImageMemoryBarrier2 {
+fn createImageMemoryBarrier2(srcStage: u64, srcAccess: u64, dstStage: u64, dstAccess: u64, oldLayout: u32, newLayout: u32, img: vk.VkImage) vk.VkImageMemoryBarrier2 {
     return vk.VkImageMemoryBarrier2{
         .sType = vk.VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
         .srcStageMask = srcStage,
@@ -468,7 +438,7 @@ fn createImageMemoryBarrier2(
         .srcQueueFamilyIndex = vk.VK_QUEUE_FAMILY_IGNORED,
         .dstQueueFamilyIndex = vk.VK_QUEUE_FAMILY_IGNORED,
         .image = img,
-        .subresourceRange = subResRange,
+        .subresourceRange = createSubresourceRange(vk.VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1),
     };
 }
 

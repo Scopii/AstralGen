@@ -35,7 +35,7 @@ pub const Renderer = struct {
         const instance = try createInstance(alloc);
         const context = try Context.init(alloc, instance);
         const resourceMan = try ResourceManager.init(alloc, &context);
-        const cmdMan = try CmdManager.init(alloc, &context, rc.MAX_IN_FLIGHT);
+        const cmdMan = try CmdManager.init(alloc, &context, rc.MAX_IN_FLIGHT, resourceMan.descMan.pipeLayout);
         const scheduler = try Scheduler.init(&context, rc.MAX_IN_FLIGHT);
         const shaderMan = try ShaderManager.init(alloc, &context, &resourceMan);
         const swapchainMan = try SwapchainManager.init(alloc, &context);
@@ -107,7 +107,6 @@ pub const Renderer = struct {
 
         if (new.height != 0 or new.width != 0) {
             if (new.width != old.width or new.height != old.height) {
-                
                 const newExtent = vk.VkExtent3D{ .width = new.width, .height = new.height, .depth = 1 };
                 const imgInf = rc.GpuResource.ImageInfo{ .binding = rc.RENDER_IMG_BINDING, .resourceId = renderId, .memUsage = .GpuOptimal, .extent = newExtent };
                 self.resourceMan.destroyGpuResource(renderId);
@@ -183,12 +182,11 @@ pub const Renderer = struct {
             const shaderArray = self.shaderMan.getShaders(pass.shaderIds);
             const validShaders = shaderArray[0..pass.shaderIds.len];
 
-            try CmdManager.recordPass(
+            try self.cmdMan.recordPass(
                 cmd,
                 self.resourceMan.getGpuImagePtr(renderImgId),
                 validShaders,
                 pass.renderType,
-                self.resourceMan.descMan.pipeLayout,
                 self.resourceMan.descMan.descBuffer.gpuAddress,
                 pushConstants,
                 pass.clear,
