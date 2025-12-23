@@ -3,8 +3,7 @@ const vk = @import("../../modules/vk.zig").c;
 const vkFn = @import("../../modules/vk.zig");
 const Allocator = std.mem.Allocator;
 const GpuAllocator = @import("GpuAllocator.zig").GpuAllocator;
-const GpuBuffer = @import("ResourceManager.zig").GpuBuffer;
-const GpuImage = @import("ResourceManager.zig").GpuImage;
+const Resource = @import("ResourceManager.zig").Resource;
 const check = @import("../ErrorHelpers.zig").check;
 const rc = @import("../../configs/renderConfig.zig");
 
@@ -19,11 +18,10 @@ pub const PushConstants = extern struct {
 };
 
 pub const DescriptorBuffer = struct {
-    pub const deviceAddress = u64;
     allocation: vk.VmaAllocation,
     allocInf: vk.VmaAllocationInfo,
     buffer: vk.VkBuffer,
-    gpuAddress: deviceAddress,
+    gpuAddress: u64,
 };
 
 pub const DescriptorManager = struct {
@@ -39,9 +37,9 @@ pub const DescriptorManager = struct {
 
     pub fn init(cpuAlloc: Allocator, gpuAlloc: GpuAllocator, gpi: vk.VkDevice, gpu: vk.VkPhysicalDevice) !DescriptorManager {
         // Create Descriptor Layouts
-        var bindings: [rc.resourceRegistry.len]vk.VkDescriptorSetLayoutBinding = undefined;
+        var bindings: [rc.bindingRegistry.len]vk.VkDescriptorSetLayoutBinding = undefined;
         for (0..bindings.len) |i| {
-            switch (rc.resourceRegistry[i]) {
+            switch (rc.bindingRegistry[i]) {
                 .imageArrayBinding => |imgArray| {
                     bindings[i] = createDescriptorLayoutBinding(imgArray.binding, vk.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, imgArray.arrayLength, vk.VK_SHADER_STAGE_ALL);
                 },
@@ -74,7 +72,7 @@ pub const DescriptorManager = struct {
         vk.vkDestroyPipelineLayout(self.gpi, self.pipeLayout, null);
     }
 
-    pub fn updateImageDescriptor(self: *DescriptorManager, gpuImgView: vk.VkImageView, imgId: u32) !void {
+    pub fn updateImageDescriptor(self: *DescriptorManager, gpuImgView: vk.VkImageView, binding: u8, arrayIndex: u32) !void {
         const imgInf = vk.VkDescriptorImageInfo{
             .sampler = null,
             .imageView = gpuImgView,
@@ -85,10 +83,10 @@ pub const DescriptorManager = struct {
             .type = vk.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
             .data = .{ .pStorageImage = &imgInf },
         };
-        try self.updateDescriptor(&getInf, 0, imgId, self.descBufferProps.storageImageDescriptorSize);
+        try self.updateDescriptor(&getInf, binding, arrayIndex, self.descBufferProps.storageImageDescriptorSize);
     }
 
-    pub fn updateBufferDescriptor(self: *DescriptorManager, gpuBuffer: GpuBuffer, binding: u8, arrayIndex: u32) !void {
+    pub fn updateBufferDescriptor(self: *DescriptorManager, gpuBuffer: Resource.GpuBuffer, binding: u8, arrayIndex: u32) !void {
         const addressInf = vk.VkDescriptorAddressInfoEXT{
             .sType = vk.VK_STRUCTURE_TYPE_DESCRIPTOR_ADDRESS_INFO_EXT,
             .address = gpuBuffer.gpuAddress,
@@ -137,7 +135,7 @@ fn getDescriptorBufferProperties(gpu: vk.VkPhysicalDevice) vk.VkPhysicalDeviceDe
 }
 
 fn createDescriptorLayout(gpi: vk.VkDevice, layoutBindings: []const vk.VkDescriptorSetLayoutBinding) !vk.VkDescriptorSetLayout {
-    var bindingFlags: [rc.resourceRegistry.len]vk.VkDescriptorBindingFlags = undefined;
+    var bindingFlags: [rc.bindingRegistry.len]vk.VkDescriptorBindingFlags = undefined;
 
     for (0..layoutBindings.len) |i| {
         if (layoutBindings[i].descriptorType == vk.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE) {

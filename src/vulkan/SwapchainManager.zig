@@ -21,7 +21,7 @@ pub const Swapchain = struct {
     imgRdySems: []vk.VkSemaphore, // indexed by max-in-flight.
     renderDoneSems: []vk.VkSemaphore, // indexed by swapchain images
     surfaceFormat: vk.VkSurfaceFormatKHR,
-    renderId: u8,
+    renderId: u32,
     state: SwapchainState = .active,
 };
 
@@ -191,7 +191,7 @@ pub const SwapchainManager = struct {
         surface: vk.VkSurfaceKHR,
         extent: vk.VkExtent2D,
         caps: vk.VkSurfaceCapabilitiesKHR,
-        renderId: u8,
+        renderId: u32,
         oldHandle: ?vk.VkSwapchainKHR,
     ) !Swapchain {
         const alloc = self.alloc;

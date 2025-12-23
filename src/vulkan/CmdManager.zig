@@ -3,8 +3,8 @@ const vk = @import("../modules/vk.zig").c;
 const vkFn = @import("../modules/vk.zig");
 const Allocator = std.mem.Allocator;
 const Context = @import("Context.zig").Context;
-const GpuImage = @import("resources/ResourceManager.zig").GpuImage;
-const ImageMap = @import("resources/ResourceManager.zig").ImageMap;
+const GpuImage = @import("resources/ResourceManager.zig").Resource.GpuImage;
+const ResourceManager = @import("resources/ResourceManager.zig").ResourceManager;
 const SwapchainManager = @import("SwapchainManager.zig");
 const ShaderObject = @import("ShaderObject.zig").ShaderObject;
 const PushConstants = @import("resources/DescriptorManager.zig").PushConstants;
@@ -14,7 +14,6 @@ const sc = @import("../configs/shaderConfig.zig");
 const MAX_WINDOWS = rc.MAX_WINDOWS;
 const RENDER_IMG_STRETCH = rc.RENDER_IMG_STRETCH;
 const CreateMapArray = @import("../structures/MapArray.zig").CreateMapArray;
-const deviceAddress = @import("resources/ResourceManager.zig").GpuBuffer.deviceAddress;
 const check = @import("ErrorHelpers.zig").check;
 
 pub const CmdManager = struct {
@@ -67,7 +66,7 @@ pub const CmdManager = struct {
         renderImg: *GpuImage,
         shaders: []const ShaderObject,
         renderType: RenderType,
-        gpuAddress: deviceAddress,
+        gpuAddress: u64,
         constants: PushConstants,
         clear: bool,
     ) !void {
@@ -78,7 +77,7 @@ pub const CmdManager = struct {
         }
     }
 
-    pub fn recordCompute(self: *CmdManager, cmd: vk.VkCommandBuffer, renderImg: *GpuImage, shaders: []const ShaderObject, gpuAddress: deviceAddress, constants: PushConstants) !void {
+    pub fn recordCompute(self: *CmdManager, cmd: vk.VkCommandBuffer, renderImg: *GpuImage, shaders: []const ShaderObject, gpuAddress: u64, constants: PushConstants) !void {
         const pipeLayout = self.pipeLayout;
 
         const barrier = createImageMemoryBarrier2(
@@ -107,7 +106,7 @@ pub const CmdManager = struct {
         renderImg: *GpuImage,
         shaders: []const ShaderObject,
         renderType: RenderType,
-        gpuAddress: deviceAddress,
+        gpuAddress: u64,
         constants: PushConstants,
         clear: bool,
     ) !void {
@@ -143,28 +142,29 @@ pub const CmdManager = struct {
     }
 
     pub fn transitionToPresent(cmd: vk.VkCommandBuffer, swapchain: *SwapchainManager.Swapchain) void {
+        // DOESNT HANDLE EDGECASE WHERE BLIT WASNT DONE BECAUSE NO WINDOW SHOWED THE RENDER
         const barrier = createImageMemoryBarrier2(
-            PipeStage.TOP_OF_PIPE,
+            PipeStage.TOP_OF_PIPE, 
+            PipeAccess.NONE, 
+            PipeStage.BOTTOM_OF_PIPE, // Nothing on GPU needs to wait (Presentation engine waits via Semaphore)
             PipeAccess.NONE,
-            PipeStage.BOTTOM_OF_PIPE,
-            PipeAccess.NONE,
-            vk.VK_IMAGE_LAYOUT_UNDEFINED, // Not important what it was
-            vk.VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, // Must be SRC for presentation
+            vk.VK_IMAGE_LAYOUT_UNDEFINED, // PROBABLY TRANSFER_DST but maybe not
+            vk.VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
             swapchain.images[swapchain.curIndex],
-        );
+        ); // THESE BARRIERS ARE CURRENTLY EXTRA SAVE
         createPipelineBarriers2(cmd, &.{barrier});
     }
 
-    pub fn recordSwapchainBlits(cmd: vk.VkCommandBuffer, gpuImages: *ImageMap, targets: []const u32, swapchainMap: *SwapchainManager.SwapchainMap) !void {
+    pub fn recordSwapchainBlits(cmd: vk.VkCommandBuffer, resMan: *ResourceManager, targets: []const u32, swapchainMap: *SwapchainManager.SwapchainMap) !void {
         for (targets) |swapchainIndex| {
             const swapchain = swapchainMap.getPtrAtIndex(swapchainIndex);
             const imgID = swapchain.renderId;
 
-            if (gpuImages.isKeyUsed(imgID) == false) {
+            if (resMan.isGpuResourceIdUsed(imgID) == false) {
                 std.debug.print("Error: Window wants RenderID {} but it is null\n", .{imgID});
                 continue;
             }
-            var srcImgPtr = gpuImages.getPtr(imgID);
+            var srcImgPtr = try resMan.getValidatedGpuResourcePtr(imgID, .gpuImg);
 
             // 1. BARRIER: Transition Source Image (Color/General -> Transfer Src)
             const srcBarrier = createImageMemoryBarrier2(
@@ -237,7 +237,7 @@ fn calculateBlitOffsets(srcImgExtent: vk.VkExtent3D, dstImgExtent: vk.VkExtent3D
     return .{ .srcOffsets = srcOffsets, .dstOffsets = dstOffsets };
 }
 
-fn bindDescriptorBuffer(cmd: vk.VkCommandBuffer, gpuAddress: deviceAddress) void {
+fn bindDescriptorBuffer(cmd: vk.VkCommandBuffer, gpuAddress: u64) void {
     const bufferBindingInf = vk.VkDescriptorBufferBindingInfoEXT{
         .sType = vk.VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT,
         .address = gpuAddress,

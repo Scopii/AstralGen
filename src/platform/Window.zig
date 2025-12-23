@@ -5,7 +5,7 @@ pub const Window = struct {
     pub const WindowState = enum { active, inactive, needCreation, needUpdate, needDelete, needInactive, needActive };
     handle: *sdl.SDL_Window,
     state: WindowState = .needCreation,
-    renderId: u8,
+    renderId: u32,
     extent: vk.VkExtent2D,
     windowId: u32,
 

@@ -65,7 +65,7 @@ pub const App = struct {
         try renderer.createGpuResource(rc.buff1);
         try renderer.createGpuResource(rc.buff2);
 
-        try renderer.updateGpuBuffer(rc.buff1.buffer, ecs.getObjects());
+        try renderer.updateGpuResource(rc.buff1, ecs.getObjects());
 
         try renderer.createGpuResource(rc.img1);
         try renderer.createGpuResource(rc.img2);
@@ -96,10 +96,10 @@ pub const App = struct {
     }
 
     pub fn initWindows(self: *App) !void {
-        try self.windowMan.addWindow("Task", 16 * 52, 9 * 52, rc.img4.image.resourceId, 120, 50);
-        try self.windowMan.addWindow("Mesh", 16 * 52, 9 * 52, rc.img3.image.resourceId, 120, 550);
-        try self.windowMan.addWindow("Compute", 16 * 52, 9 * 52, rc.img1.image.resourceId, 960, 50);
-        try self.windowMan.addWindow("Graphics", 16 * 52, 9 * 52, rc.img2.image.resourceId, 960, 550);
+        try self.windowMan.addWindow("Task", 16 * 52, 9 * 52, rc.img4.gpuId, 120, 50);
+        try self.windowMan.addWindow("Mesh", 16 * 52, 9 * 52, rc.img3.gpuId, 120, 550);
+        try self.windowMan.addWindow("Compute", 16 * 52, 9 * 52, rc.img1.gpuId, 960, 50);
+        try self.windowMan.addWindow("Graphics", 16 * 52, 9 * 52, rc.img2.gpuId, 960, 550);
     }
 
     pub fn run(self: *App) !void {

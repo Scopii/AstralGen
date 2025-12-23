@@ -15,6 +15,7 @@ const Object = @import("../ecs/EntityManager.zig").Object;
 const check = @import("ErrorHelpers.zig").check;
 const createInstance = @import("Context.zig").createInstance;
 const ShaderObject = @import("ShaderObject.zig").ShaderObject;
+const Resource = @import("resources/ResourceManager.zig").Resource;
 
 const Allocator = std.mem.Allocator;
 const rc = @import("../configs/renderConfig.zig");
@@ -94,24 +95,32 @@ pub const Renderer = struct {
             for (0..dirtyRenderIds.len) |i| {
                 if (dirtyRenderIds[i] == null) break;
 
-                const renderId = dirtyRenderIds[i].?;
-                if (self.resourceMan.isGpuImageIdUsed(renderId) != false) try self.updateRenderImage(renderId);
+                const gpuId = dirtyRenderIds[i].?;
+                const resource = try self.resourceMan.getGpuResourcePtr(gpuId);
+                switch (resource.resourceType) {
+                    .gpuImg => |renderImg| try self.updateRenderImage(gpuId, renderImg),
+                    else => std.debug.print("Warning: updateRenderImage failed, renderID: {} is not an Image", .{gpuId}),
+                }
             }
         }
     }
 
-    pub fn updateRenderImage(self: *Renderer, renderId: u32) !void {
-        const new = self.swapchainMan.getMaxRenderExtent(renderId);
-        const gpuImg = try self.resourceMan.getGpuImage(renderId);
-        const old = gpuImg.extent3d;
+    pub fn updateRenderImage(self: *Renderer, gpuId: u32, img: Resource.GpuImage) !void {
+        const old = img.extent3d;
+        const new = self.swapchainMan.getMaxRenderExtent(gpuId);
 
         if (new.height != 0 or new.width != 0) {
             if (new.width != old.width or new.height != old.height) {
-                const newExtent = vk.VkExtent3D{ .width = new.width, .height = new.height, .depth = 1 };
-                const imgInf = rc.GpuResource.ImageInfo{ .binding = rc.RENDER_IMG_BINDING, .resourceId = renderId, .memUsage = .GpuOptimal, .extent = newExtent };
-                self.resourceMan.destroyGpuResource(renderId);
-                try self.resourceMan.createGpuResource(.{ .image = imgInf });
-                std.debug.print("Render Image ID {} recreated {}x{} to {}x{}\n", .{ renderId, old.width, old.height, new.width, new.height });
+                const extent = vk.VkExtent3D{ .width = new.width, .height = new.height, .depth = 1 };
+                const newImg = rc.ResourceInfo{
+                    .gpuId = gpuId,
+                    .binding = rc.RENDER_IMG_BINDING,
+                    .memUsage = .GpuOptimal,
+                    .info = .{ .imgInf = .{ .extent = extent, .arrayIndex = img.arrayIndex } },
+                };
+                self.resourceMan.destroyGpuResource(gpuId);
+                try self.resourceMan.createGpuResource(newImg);
+                std.debug.print("Render Image ID {} recreated {}x{} to {}x{}\n", .{ gpuId, old.width, old.height, new.width, new.height });
             }
         }
     }
@@ -129,20 +138,12 @@ pub const Renderer = struct {
         }
     }
 
-    pub fn createGpuResource(self: *Renderer, bindingInf: rc.GpuResource) !void {
-        try self.resourceMan.createGpuResource(bindingInf);
+    pub fn createGpuResource(self: *Renderer, resourceInf: rc.ResourceInfo) !void {
+        try self.resourceMan.createGpuResource(resourceInf);
     }
 
-    // pub fn updateGpuResource(self: *Renderer, bindingInfo: rc.ResourceSchema, data: anytype) !void {
-    //     try self.resourceMan.updateGpuResource(bindingInfo, data);
-    // }
-
-    pub fn updateGpuImage(self: *Renderer, imgInf: rc.GpuResource.ImageInfo) !void {
-        try self.resourceMan.updateGpuImage(imgInf);
-    }
-
-    pub fn updateGpuBuffer(self: *Renderer, buffInf: rc.GpuResource.BufferInf, data: anytype) !void {
-        try self.resourceMan.updateGpuBuffer(buffInf, data);
+    pub fn updateGpuResource(self: *Renderer, resourceInf: rc.ResourceInfo, data: anytype) !void {
+        try self.resourceMan.updateGpuResource(resourceInf, data);
     }
 
     pub fn draw(self: *Renderer, cam: *Camera, runtimeAsFloat: f32) !void {
@@ -154,8 +155,7 @@ pub const Renderer = struct {
         const cmd = try self.cmdMan.beginRecording(frameInFlight);
         try self.recordPasses(cmd, cam, runtimeAsFloat);
 
-        const imgMap = self.resourceMan.getGpuImageMapPtr();
-        try CmdManager.recordSwapchainBlits(cmd, imgMap, self.swapchainMan.targets.slice(), &self.swapchainMan.swapchains);
+        try CmdManager.recordSwapchainBlits(cmd, &self.resourceMan, self.swapchainMan.targets.slice(), &self.swapchainMan.swapchains);
         try CmdManager.endRecording(cmd);
 
         const targets = self.swapchainMan.targets.slice();
@@ -168,29 +168,27 @@ pub const Renderer = struct {
     fn recordPasses(self: *Renderer, cmd: vk.VkCommandBuffer, cam: *Camera, runtimeAsFloat: f32) !void {
         for (self.passes.items) |pass| {
             const renderImgId = pass.renderImgId;
-            const gpuBuffer = try self.resourceMan.getGpuBuffer(1); // HARD CODED CURRENTLY
+
+            const gpuResource = try self.resourceMan.getGpuResourcePtr(1); // HARD CODED CURRENTLY
+            
+            const gpuBufferCount: u32 = switch (gpuResource.resourceType) {
+                .gpuBuf => |buf| buf.count,
+                else => return error.ObjectBufferIsNotGpuBuffer,
+            };
+            const renderImg = try self.resourceMan.getValidatedGpuResourcePtr(renderImgId, .gpuImg);
 
             const pushConstants = PushConstants{
                 .camPosAndFov = cam.getPosAndFov(),
                 .camDir = cam.getForward(),
                 .runtime = runtimeAsFloat,
-                .dataCount = gpuBuffer.count,
-                .renderImgIndex = renderImgId,
+                .dataCount = gpuBufferCount,
+                .renderImgIndex = renderImg.arrayIndex,
                 .viewProj = cam.getViewProj(),
             };
-
             const shaderArray = self.shaderMan.getShaders(pass.shaderIds);
             const validShaders = shaderArray[0..pass.shaderIds.len];
 
-            try self.cmdMan.recordPass(
-                cmd,
-                self.resourceMan.getGpuImagePtr(renderImgId),
-                validShaders,
-                pass.renderType,
-                self.resourceMan.descMan.descBuffer.gpuAddress,
-                pushConstants,
-                pass.clear,
-            );
+            try self.cmdMan.recordPass(cmd, renderImg, validShaders, pass.renderType, self.resourceMan.descMan.descBuffer.gpuAddress, pushConstants, pass.clear);
         }
     }
 
@@ -208,7 +206,7 @@ pub const Renderer = struct {
         var waitInfos: [rc.MAX_WINDOWS]vk.VkSemaphoreSubmitInfo = undefined;
         for (submitIds, 0..) |id, i| {
             const swapchain = self.swapchainMan.swapchains.getAtIndex(id);
-            waitInfos[i] = createSemaphoreSubmitInfo(swapchain.imgRdySems[frameInFlight], vk.VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, 0);
+            waitInfos[i] = createSemaphoreSubmitInfo(swapchain.imgRdySems[frameInFlight], vk.VK_PIPELINE_STAGE_2_TRANSFER_BIT, 0);
         }
 
         var signalInfos: [rc.MAX_WINDOWS + 1]vk.VkSemaphoreSubmitInfo = undefined;
