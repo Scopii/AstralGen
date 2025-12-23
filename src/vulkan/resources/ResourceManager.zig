@@ -69,11 +69,33 @@ pub const ResourceManager = struct {
         return self.resources.getPtr(gpuId);
     }
 
+    pub fn getImagePtr(self: *ResourceManager, gpuId: u32) !*Resource.GpuImage {
+        const resource = try self.getResourcePtr(gpuId);
+        switch (resource.resourceType) {
+            .gpuImg => |*gpuImg| return gpuImg,
+            else => {
+                std.debug.print("Warning: Tried getting GPU Image but Resource {} is not an Image\n", .{gpuId});
+                return error.WrongResourceType;
+            },
+        }
+    }
+
+    pub fn getBufferPtr(self: *ResourceManager, gpuId: u32) !*Resource.GpuBuffer {
+        const resource = try self.getResourcePtr(gpuId);
+        switch (resource.resourceType) {
+            .gpuBuf => |*gpuBuf| return gpuBuf,
+            else => {
+                std.debug.print("Warning: Tried getting GPU Buffer but Resource {} is not an Buffer\n", .{gpuId});
+                return error.WrongResourceType;
+            },
+        }
+    }
+
     pub fn isResourceIdUsed(self: *ResourceManager, gpuId: u32) bool {
         return self.resources.isKeyUsed(gpuId);
     }
 
-    pub fn getValidatedGpuResourcePtr(self: *ResourceManager, gpuId: u32, comptime expectedTag: std.meta.Tag(Resource.ResourceUnion)) !*std.meta.TagPayload(Resource.ResourceUnion, expectedTag) {
+    fn getValidResourcePtr(self: *ResourceManager, gpuId: u32, comptime expectedTag: std.meta.Tag(Resource.ResourceUnion)) !*std.meta.TagPayload(Resource.ResourceUnion, expectedTag) {
         if (!self.resources.isKeyUsed(gpuId)) return error.ResourceIdEmpty;
 
         const resource = self.resources.getPtr(gpuId);

@@ -91,7 +91,7 @@ pub fn createInstance(alloc: Allocator) !vk.VkInstance {
         } else [_]vk.VkValidationFeatureEnableEXT{vk.VK_VALIDATION_FEATURE_ENABLE_BEST_PRACTICES_EXT},
         false => [_]vk.VkValidationFeatureEnableEXT{
             vk.VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT,
-            vk.VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_RESERVE_BINDING_SLOT_EXT,
+            vk.VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_RESERVE_BINDING_SLOT_EXT, // ?? Needs Descriptor ?
             vk.VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT,
         },
     };

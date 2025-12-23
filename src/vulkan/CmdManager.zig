@@ -140,7 +140,7 @@ pub const CmdManager = struct {
                 std.debug.print("Error: Window wants RenderID {} but it is null\n", .{imgID});
                 continue;
             }
-            var srcImgPtr = try resMan.getValidatedGpuResourcePtr(imgID, .gpuImg);
+            var srcImgPtr = try resMan.getImagePtr(imgID);
 
             // 1. BARRIER: Transition Source Image (Color/General -> Transfer Src)
             const srcBarrier = createImageMemoryBarrier2(

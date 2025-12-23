@@ -28,7 +28,7 @@ pub const Pass = struct {
         empty,
     };
     passType: PassType = .empty,
-    passImgId: u32,
+    imgId: u32,
     shaderIds: []const u8,
     clear: bool = false,
 };
@@ -82,10 +82,10 @@ pub const img5 = ResourceInfo{ .gpuId = 54, .binding = 0, .memUsage = .GpuOptima
 pub const buff1 = ResourceInfo{ .gpuId = 1, .binding = 1, .memUsage = .CpuWriteOptimal, .info = .{ .bufInf = .{ .bufUsage = .Storage, .length = 1000, .sizeOfElement = @sizeOf(Object) } } };
 pub const buff2 = ResourceInfo{ .gpuId = 0, .binding = 2, .memUsage = .CpuWriteOptimal, .info = .{ .bufInf = .{ .bufUsage = .Storage, .length = 100, .sizeOfElement = @sizeOf(Object) } } };
 
-pub const pass1: Pass = .{ .passImgId = img1.gpuId, .shaderIds = &.{sc.t1Comp.id} }; // clear does not work for compute
-pub const pass2: Pass = .{ .passImgId = img2.gpuId, .shaderIds = &.{ sc.t2Vert.id, sc.t2Frag.id } };
-pub const pass3: Pass = .{ .passImgId = img3.gpuId, .shaderIds = &.{ sc.t3Mesh.id, sc.t3Frag.id } };
-pub const pass4: Pass = .{ .passImgId = img4.gpuId, .shaderIds = &.{ sc.t4Task.id, sc.t4Mesh.id, sc.t4Frag.id } };
-pub const pass5: Pass = .{ .passImgId = img4.gpuId, .shaderIds = &.{ sc.gridTask.id, sc.gridMesh.id, sc.gridFrag.id }, .clear = true };
+pub const pass1: Pass = .{ .imgId = img1.gpuId, .shaderIds = &.{sc.t1Comp.id} }; // clear does not work for compute
+pub const pass2: Pass = .{ .imgId = img2.gpuId, .shaderIds = &.{ sc.t2Vert.id, sc.t2Frag.id } };
+pub const pass3: Pass = .{ .imgId = img3.gpuId, .shaderIds = &.{ sc.t3Mesh.id, sc.t3Frag.id } };
+pub const pass4: Pass = .{ .imgId = img4.gpuId, .shaderIds = &.{ sc.t4Task.id, sc.t4Mesh.id, sc.t4Frag.id } };
+pub const pass5: Pass = .{ .imgId = img4.gpuId, .shaderIds = &.{ sc.gridTask.id, sc.gridMesh.id, sc.gridFrag.id }, .clear = true };
 
 pub const renderSequence: []const Pass = &.{ pass1, pass2, pass3, pass4, pass5 };

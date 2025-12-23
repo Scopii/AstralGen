@@ -134,7 +134,7 @@ pub const Renderer = struct {
                 std.debug.print("Pass {} Shader Layout invalid", .{err});
                 return error.PassInvalid;
             };
-            try self.passes.append(.{ .passType = passType, .passImgId = passInf.passImgId, .shaderIds = passInf.shaderIds, .clear = passInf.clear });
+            try self.passes.append(.{ .passType = passType, .imgId = passInf.imgId, .shaderIds = passInf.shaderIds, .clear = passInf.clear });
         }
     }
 
@@ -167,19 +167,15 @@ pub const Renderer = struct {
 
     fn recordPasses(self: *Renderer, cmd: vk.VkCommandBuffer, cam: *Camera, runtimeAsFloat: f32) !void {
         for (self.passes.items) |pass| {
-            const gpuResource = try self.resourceMan.getResourcePtr(1); // HARD CODED CURRENTLY
 
-            const gpuBufferCount: u32 = switch (gpuResource.resourceType) {
-                .gpuBuf => |buf| buf.count,
-                else => return error.ObjectBufferIsNotGpuBuffer,
-            };
-            const passImg = try self.resourceMan.getValidatedGpuResourcePtr(pass.passImgId, .gpuImg);
+            const objectBuf = try self.resourceMan.getBufferPtr(1);
+            const passImg = try self.resourceMan.getImagePtr(pass.imgId);
 
             const pushConstants = PushConstants{
                 .camPosAndFov = cam.getPosAndFov(),
                 .camDir = cam.getForward(),
                 .runtime = runtimeAsFloat,
-                .dataCount = gpuBufferCount,
+                .dataCount = objectBuf.count,
                 .passImgIndex = passImg.arrayIndex,
                 .viewProj = cam.getViewProj(),
             };
