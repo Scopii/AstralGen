@@ -110,6 +110,8 @@ pub const App = struct {
         const timeMan = &self.timeMan;
         const cam = &self.cam;
 
+        var firstFrame = true;
+
         // Main loop
         while (true) {
             // Poll Inputs
@@ -150,7 +152,10 @@ pub const App = struct {
                     .camRight => cam.moveRight(dt),
                     .camFovIncrease => cam.increaseFov(dt),
                     .camFovDecrease => cam.decreaseFov(dt),
-                    .closeApp => return,
+                    .closeApp => {
+                        windowMan.hideAllWindows();
+                        return;
+                    },
                     .restartApp => {},
                     .toggleFullscreen => windowMan.toggleMainFullscreen(),
                 }
@@ -164,6 +169,8 @@ pub const App = struct {
                 self.shaderCompiler.freeFreshShaders();
             }
 
+            if (firstFrame) windowMan.showAllWindows();
+
             // Draw and reset Frame Arena
             renderer.draw(cam, runTime) catch |err| {
                 std.log.err("Error in renderer.draw(): {}", .{err});
@@ -171,7 +178,10 @@ pub const App = struct {
             };
             defer memoryMan.*.resetArena();
 
-            windowMan.resetMainWindowOpacity();
+            if (firstFrame) {
+                windowMan.showOpacityAllWindows();
+                firstFrame = false;
+            }
         }
     }
 };

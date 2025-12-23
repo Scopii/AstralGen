@@ -37,15 +37,50 @@ pub const WindowManager = struct {
         sdl.SDL_Quit();
     }
 
-    pub fn addWindow(self: *WindowManager, title: [*c]const u8, width: c_int, height: c_int, renderId: u8, xPos: c_int, yPos: c_int) !void {
-        const sdlHandle = sdl.SDL_CreateWindow(title, width, height, sdl.SDL_WINDOW_VULKAN | sdl.SDL_WINDOW_RESIZABLE) orelse {
-            std.log.err("SDL_CreateWindow failed: {s}\n", .{sdl.SDL_GetError()});
+    pub fn showAllWindows(self: *WindowManager) void {
+        const windows = self.windows.getElements();
+        for (windows) |*win| {
+            _ = sdl.SDL_ShowWindow(win.handle);
+        }
+    }
+
+    pub fn hideAllWindows(self: *WindowManager) void {
+        const windows = self.windows.getElements();
+        for (windows) |*win| {
+            _ = sdl.SDL_HideWindow(win.handle);
+        }
+    }
+
+    pub fn showOpacityAllWindows(self: *WindowManager) void {
+        const windows = self.windows.getElements();
+        for (windows) |*win| {
+            _ = sdl.SDL_SetWindowOpacity(win.handle, 1.0);
+        }
+    }
+
+    pub fn addWindow(self: *WindowManager, title: [*c]const u8, width: c_int, height: c_int, renderId: u32, xPos: c_int, yPos: c_int) !void {
+        const props = sdl.SDL_CreateProperties();
+        if (props == 0) {
+            std.log.err("SDL_CreateProperties failed: {s}\n", .{sdl.SDL_GetError()});
+            return error.WindowInitFailed;
+        }
+        defer sdl.SDL_DestroyProperties(props);
+
+        const flags = sdl.SDL_WINDOW_VULKAN | sdl.SDL_WINDOW_RESIZABLE | sdl.SDL_WINDOW_HIDDEN;
+        _ = sdl.SDL_SetNumberProperty(props, sdl.SDL_PROP_WINDOW_CREATE_FLAGS_NUMBER, @intCast(flags));
+        _ = sdl.SDL_SetNumberProperty(props, sdl.SDL_PROP_WINDOW_CREATE_X_NUMBER, @intCast(xPos));
+        _ = sdl.SDL_SetNumberProperty(props, sdl.SDL_PROP_WINDOW_CREATE_Y_NUMBER, @intCast(yPos));
+        _ = sdl.SDL_SetNumberProperty(props, sdl.SDL_PROP_WINDOW_CREATE_WIDTH_NUMBER, @intCast(width));
+        _ = sdl.SDL_SetNumberProperty(props, sdl.SDL_PROP_WINDOW_CREATE_HEIGHT_NUMBER, @intCast(height));
+        _ = sdl.SDL_SetStringProperty(props, sdl.SDL_PROP_WINDOW_CREATE_TITLE_STRING, title);
+
+        const sdlHandle = sdl.SDL_CreateWindowWithProperties(props) orelse {
+            std.log.err("SDL_CreateWindowWithProperties failed: {s}\n", .{sdl.SDL_GetError()});
             return error.WindowInitFailed;
         };
-        const windowId = sdl.SDL_GetWindowID(sdlHandle);
-        _ = sdl.SDL_SetWindowFullscreen(sdlHandle, false);
+        _ = sdl.SDL_SetWindowOpacity(sdlHandle, 0.0);
         _ = sdl.SDL_SetWindowRelativeMouseMode(sdlHandle, true);
-        _ = sdl.SDL_SetWindowPosition(sdlHandle, xPos, yPos);
+        const windowId = sdl.SDL_GetWindowID(sdlHandle);
 
         const window = try Window.init(windowId, sdlHandle, renderId, vk.VkExtent2D{ .width = @intCast(width), .height = @intCast(height) });
         self.windows.set(windowId, window);
@@ -104,7 +139,7 @@ pub const WindowManager = struct {
     pub fn resetMainWindowOpacity(self: *WindowManager) void {
         if (self.mainWindow) |window| {
             const sdlHandle = window.*.handle;
-            _ = sdl.SDL_SetWindowOpacity(sdlHandle, 1.0);
+            if (sdl.SDL_GetWindowOpacity(sdlHandle) == 0) _ = sdl.SDL_SetWindowOpacity(sdlHandle, 1.0);
         }
     }
 
@@ -123,6 +158,7 @@ pub const WindowManager = struct {
                 _ = sdl.SDL_SetWindowFullscreen(sdlHandle, false);
                 self.fullscreen = false;
             }
+            _ = sdl.SDL_SetWindowOpacity(sdlHandle, 1.0);
         }
     }
 

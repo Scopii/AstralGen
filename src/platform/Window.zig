@@ -9,7 +9,7 @@ pub const Window = struct {
     extent: vk.VkExtent2D,
     windowId: u32,
 
-    pub fn init(windowId: u32, sdlWindow: *sdl.SDL_Window, renderId: u8, extent: vk.VkExtent2D) !Window {
+    pub fn init(windowId: u32, sdlWindow: *sdl.SDL_Window, renderId: u32, extent: vk.VkExtent2D) !Window {
         return Window{ .handle = sdlWindow, .renderId = renderId, .extent = extent, .windowId = windowId };
     }
 };
