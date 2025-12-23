@@ -58,18 +58,18 @@ pub const ResourceManager = struct {
 
     pub fn deinit(self: *ResourceManager) void {
         while (self.resources.getCount() > 0) {
-            self.destroyGpuResource(self.resources.getKeyFromIndex(0));
+            self.destroyResource(self.resources.getKeyFromIndex(0));
         }
         self.descMan.deinit();
         self.gpuAlloc.deinit();
     }
 
-    pub fn getGpuResourcePtr(self: *ResourceManager, gpuId: u32) !*Resource {
+    pub fn getResourcePtr(self: *ResourceManager, gpuId: u32) !*Resource {
         if (self.resources.isKeyUsed(gpuId) == false) return error.ResourceIdEmpty;
         return self.resources.getPtr(gpuId);
     }
 
-    pub fn isGpuResourceIdUsed(self: *ResourceManager, gpuId: u32) bool {
+    pub fn isResourceIdUsed(self: *ResourceManager, gpuId: u32) bool {
         return self.resources.isKeyUsed(gpuId);
     }
 
@@ -82,7 +82,7 @@ pub const ResourceManager = struct {
         } else return error.ResourceValidationFailed;
     }
 
-    pub fn createGpuResource(self: *ResourceManager, resInf: rc.ResourceInfo) !void {
+    pub fn createResource(self: *ResourceManager, resInf: rc.ResourceInfo) !void {
         switch (resInf.info) {
             .imgInf => |imgInf| {
                 const img = try self.gpuAlloc.allocGpuImage(imgInf.extent, imgInf.imgFormat, resInf.memUsage, imgInf.arrayIndex);
@@ -98,20 +98,20 @@ pub const ResourceManager = struct {
         std.debug.print("Gpu Resource created with {s} gpuId {} binding {}\n", .{ @tagName(resInf.info), resInf.gpuId, resInf.binding });
     }
 
-    pub fn updateGpuResource(self: *ResourceManager, resource: rc.ResourceInfo, data: anytype) !void {
+    pub fn updateResource(self: *ResourceManager, resource: rc.ResourceInfo, data: anytype) !void {
         switch (resource.info) {
             .imgInf => |_| {},
-            .bufInf => |bufInf| try self.updateGpuBuffer(bufInf, data, resource.gpuId),
+            .bufInf => |bufInf| try self.updateBuffer(bufInf, data, resource.gpuId),
         }
     }
 
-    pub fn updateGpuBuffer(self: *ResourceManager, bufInf: rc.ResourceInfo.BufInf, data: anytype, gpuId: u32) !void {
+    pub fn updateBuffer(self: *ResourceManager, bufInf: rc.ResourceInfo.BufInf, data: anytype, gpuId: u32) !void {
         const T = std.meta.Child(@TypeOf(data));
         if (@sizeOf(T) != bufInf.sizeOfElement) {
             std.debug.print("Error: Size mismatch! Config expects {} bytes, Data is {} bytes\n", .{ bufInf.sizeOfElement, @sizeOf(T) });
             return error.TypeMismatch;
         }
-        var resource = try self.getGpuResourcePtr(gpuId);
+        var resource = try self.getResourcePtr(gpuId);
 
         switch (resource.resourceType) {
             .gpuBuf => |*buffer| {
@@ -132,7 +132,7 @@ pub const ResourceManager = struct {
         }
     }
 
-    pub fn destroyGpuResource(self: *ResourceManager, gpuId: u32) void {
+    pub fn destroyResource(self: *ResourceManager, gpuId: u32) void {
         if (self.resources.isKeyUsed(gpuId) != true) {
             std.debug.print("Warning: Tried to destroy empty Resource ID {}\n", .{gpuId});
             return;

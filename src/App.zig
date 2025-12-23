@@ -62,16 +62,16 @@ pub const App = struct {
         shaderCompiler.freeFreshShaders();
 
         // RENDERING SET UP
-        try renderer.createGpuResource(rc.buff1);
-        try renderer.createGpuResource(rc.buff2);
+        try renderer.createResource(rc.buff1);
+        try renderer.createResource(rc.buff2);
 
-        try renderer.updateGpuResource(rc.buff1, ecs.getObjects());
+        try renderer.updateResource(rc.buff1, ecs.getObjects());
 
-        try renderer.createGpuResource(rc.img1);
-        try renderer.createGpuResource(rc.img2);
-        try renderer.createGpuResource(rc.img3);
-        try renderer.createGpuResource(rc.img4);
-        try renderer.createGpuResource(rc.img5);
+        try renderer.createResource(rc.img1);
+        try renderer.createResource(rc.img2);
+        try renderer.createResource(rc.img3);
+        try renderer.createResource(rc.img4);
+        try renderer.createResource(rc.img5);
 
         try renderer.addPasses(rc.renderSequence);
 

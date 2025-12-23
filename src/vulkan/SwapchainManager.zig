@@ -21,7 +21,7 @@ pub const Swapchain = struct {
     imgRdySems: []vk.VkSemaphore, // indexed by max-in-flight.
     renderDoneSems: []vk.VkSemaphore, // indexed by swapchain images
     surfaceFormat: vk.VkSurfaceFormatKHR,
-    renderId: u32,
+    passImgId: u32,
     state: SwapchainState = .active,
 };
 
@@ -106,12 +106,12 @@ pub const SwapchainManager = struct {
         self.swapchains.getPtr(windowId).state = state;
     }
 
-    pub fn getMaxRenderExtent(self: *SwapchainManager, renderId: u32) vk.VkExtent2D {
+    pub fn getMaxRenderExtent(self: *SwapchainManager, passImgId: u32) vk.VkExtent2D {
         var maxWidth: u32 = 0;
         var maxHeight: u32 = 0;
 
         for (self.swapchains.getElements()) |swapchain| {
-            if (swapchain.state == .active and swapchain.renderId == renderId) {
+            if (swapchain.state == .active and swapchain.passImgId == passImgId) {
                 maxWidth = @max(maxWidth, swapchain.extent.width);
                 maxHeight = @max(maxHeight, swapchain.extent.height);
             }
@@ -161,7 +161,7 @@ pub const SwapchainManager = struct {
                 const caps = try getSurfaceCaps(gpu, surface);
                 const surfaceFormat = try pickSurfaceFormat(alloc, gpu, surface);
 
-                const swapchain = try self.createInternalSwapchain(surfaceFormat, surface, extent, caps, window.renderId, null);
+                const swapchain = try self.createInternalSwapchain(surfaceFormat, surface, extent, caps, window.passImgId, null);
                 self.swapchains.set(window.windowId, swapchain);
                 std.debug.print("Swapchain added to Window {}\n", .{window.windowId});
                 return;
@@ -180,7 +180,7 @@ pub const SwapchainManager = struct {
         const surface = ptr.surface;
         const caps = try getSurfaceCaps(gpu, surface);
         const surfaceFormat = try pickSurfaceFormat(alloc, gpu, surface);
-        const swapchain = try self.createInternalSwapchain(surfaceFormat, surface, extent, caps, ptr.renderId, ptr.handle);
+        const swapchain = try self.createInternalSwapchain(surfaceFormat, surface, extent, caps, ptr.passImgId, ptr.handle);
         self.destroySwapchain(ptr, .withoutSurface);
         ptr.* = swapchain;
     }
@@ -191,7 +191,7 @@ pub const SwapchainManager = struct {
         surface: vk.VkSurfaceKHR,
         extent: vk.VkExtent2D,
         caps: vk.VkSurfaceCapabilitiesKHR,
-        renderId: u32,
+        passImgId: u32,
         oldHandle: ?vk.VkSwapchainKHR,
     ) !Swapchain {
         const alloc = self.alloc;
@@ -273,7 +273,7 @@ pub const SwapchainManager = struct {
             .views = views,
             .imgRdySems = imgRdySems,
             .renderDoneSems = renderDoneSems,
-            .renderId = renderId,
+            .passImgId = passImgId,
         };
     }
 };

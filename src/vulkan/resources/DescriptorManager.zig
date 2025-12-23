@@ -12,7 +12,7 @@ pub const PushConstants = extern struct {
     camDir: [4]f32,
     runtime: f32,
     dataCount: u32,
-    renderImgIndex: u32,
+    passImgIndex: u32,
     padding: u32 = 0,
     viewProj: [4][4]f32,
 };

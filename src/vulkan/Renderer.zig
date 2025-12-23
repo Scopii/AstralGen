@@ -36,7 +36,7 @@ pub const Renderer = struct {
         const instance = try createInstance(alloc);
         const context = try Context.init(alloc, instance);
         const resourceMan = try ResourceManager.init(alloc, &context);
-        const cmdMan = try CmdManager.init(alloc, &context, rc.MAX_IN_FLIGHT, resourceMan.descMan.pipeLayout);
+        const cmdMan = try CmdManager.init(alloc, &context, rc.MAX_IN_FLIGHT, &resourceMan);
         const scheduler = try Scheduler.init(&context, rc.MAX_IN_FLIGHT);
         const shaderMan = try ShaderManager.init(alloc, &context, &resourceMan);
         const swapchainMan = try SwapchainManager.init(alloc, &context);
@@ -73,7 +73,7 @@ pub const Renderer = struct {
                 break;
             }
         }
-        var dirtyRenderIds: [rc.MAX_WINDOWS]?u32 = .{null} ** rc.MAX_WINDOWS;
+        var dirtyPassImgIds: [rc.MAX_WINDOWS]?u32 = .{null} ** rc.MAX_WINDOWS;
 
         for (0..winPtrs.len) |i| {
             const winPtr = winPtrs[i];
@@ -81,7 +81,7 @@ pub const Renderer = struct {
             switch (winPtr.state) {
                 .needUpdate, .needCreation => {
                     try self.swapchainMan.createSwapchain(&self.context, .{ .window = winPtr });
-                    dirtyRenderIds[i] = winPtr.renderId;
+                    dirtyPassImgIds[i] = winPtr.passImgId;
                 },
                 .needActive, .needInactive => {
                     self.swapchainMan.changeState(winPtr.windowId, if (winPtr.state == .needActive) .active else .inactive);
@@ -92,20 +92,20 @@ pub const Renderer = struct {
         }
 
         if (rc.RENDER_IMG_AUTO_RESIZE == true) {
-            for (0..dirtyRenderIds.len) |i| {
-                if (dirtyRenderIds[i] == null) break;
+            for (0..dirtyPassImgIds.len) |i| {
+                if (dirtyPassImgIds[i] == null) break;
 
-                const gpuId = dirtyRenderIds[i].?;
-                const resource = try self.resourceMan.getGpuResourcePtr(gpuId);
+                const gpuId = dirtyPassImgIds[i].?;
+                const resource = try self.resourceMan.getResourcePtr(gpuId);
                 switch (resource.resourceType) {
-                    .gpuImg => |renderImg| try self.updateRenderImage(gpuId, renderImg),
+                    .gpuImg => |passImg| try self.updatePassImage(gpuId, passImg),
                     else => std.debug.print("Warning: updateRenderImage failed, renderID: {} is not an Image", .{gpuId}),
                 }
             }
         }
     }
 
-    pub fn updateRenderImage(self: *Renderer, gpuId: u32, img: Resource.GpuImage) !void {
+    pub fn updatePassImage(self: *Renderer, gpuId: u32, img: Resource.GpuImage) !void {
         const old = img.extent3d;
         const new = self.swapchainMan.getMaxRenderExtent(gpuId);
 
@@ -118,8 +118,8 @@ pub const Renderer = struct {
                     .memUsage = .GpuOptimal,
                     .info = .{ .imgInf = .{ .extent = extent, .arrayIndex = img.arrayIndex } },
                 };
-                self.resourceMan.destroyGpuResource(gpuId);
-                try self.resourceMan.createGpuResource(newImg);
+                self.resourceMan.destroyResource(gpuId);
+                try self.resourceMan.createResource(newImg);
                 std.debug.print("Render Image ID {} recreated {}x{} to {}x{}\n", .{ gpuId, old.width, old.height, new.width, new.height });
             }
         }
@@ -130,20 +130,20 @@ pub const Renderer = struct {
             const shaderArray = self.shaderMan.getShaders(passInf.shaderIds);
             const validShaders = shaderArray[0..passInf.shaderIds.len];
 
-            const renderType = checkShaderLayout(validShaders) catch |err| {
+            const passType = checkShaderLayout(validShaders) catch |err| {
                 std.debug.print("Pass {} Shader Layout invalid", .{err});
                 return error.PassInvalid;
             };
-            try self.passes.append(.{ .renderType = renderType, .renderImgId = passInf.renderImgId, .shaderIds = passInf.shaderIds, .clear = passInf.clear });
+            try self.passes.append(.{ .passType = passType, .passImgId = passInf.passImgId, .shaderIds = passInf.shaderIds, .clear = passInf.clear });
         }
     }
 
-    pub fn createGpuResource(self: *Renderer, resourceInf: rc.ResourceInfo) !void {
-        try self.resourceMan.createGpuResource(resourceInf);
+    pub fn createResource(self: *Renderer, resourceInf: rc.ResourceInfo) !void {
+        try self.resourceMan.createResource(resourceInf);
     }
 
-    pub fn updateGpuResource(self: *Renderer, resourceInf: rc.ResourceInfo, data: anytype) !void {
-        try self.resourceMan.updateGpuResource(resourceInf, data);
+    pub fn updateResource(self: *Renderer, resourceInf: rc.ResourceInfo, data: anytype) !void {
+        try self.resourceMan.updateResource(resourceInf, data);
     }
 
     pub fn draw(self: *Renderer, cam: *Camera, runtimeAsFloat: f32) !void {
@@ -167,28 +167,25 @@ pub const Renderer = struct {
 
     fn recordPasses(self: *Renderer, cmd: vk.VkCommandBuffer, cam: *Camera, runtimeAsFloat: f32) !void {
         for (self.passes.items) |pass| {
-            const renderImgId = pass.renderImgId;
+            const gpuResource = try self.resourceMan.getResourcePtr(1); // HARD CODED CURRENTLY
 
-            const gpuResource = try self.resourceMan.getGpuResourcePtr(1); // HARD CODED CURRENTLY
-            
             const gpuBufferCount: u32 = switch (gpuResource.resourceType) {
                 .gpuBuf => |buf| buf.count,
                 else => return error.ObjectBufferIsNotGpuBuffer,
             };
-            const renderImg = try self.resourceMan.getValidatedGpuResourcePtr(renderImgId, .gpuImg);
+            const passImg = try self.resourceMan.getValidatedGpuResourcePtr(pass.passImgId, .gpuImg);
 
             const pushConstants = PushConstants{
                 .camPosAndFov = cam.getPosAndFov(),
                 .camDir = cam.getForward(),
                 .runtime = runtimeAsFloat,
                 .dataCount = gpuBufferCount,
-                .renderImgIndex = renderImg.arrayIndex,
+                .passImgIndex = passImg.arrayIndex,
                 .viewProj = cam.getViewProj(),
             };
             const shaderArray = self.shaderMan.getShaders(pass.shaderIds);
             const validShaders = shaderArray[0..pass.shaderIds.len];
-
-            try self.cmdMan.recordPass(cmd, renderImg, validShaders, pass.renderType, self.resourceMan.descMan.descBuffer.gpuAddress, pushConstants, pass.clear);
+            try self.cmdMan.recordPass(cmd, passImg, validShaders, pass.passType, pushConstants, pass.clear);
         }
     }
 
@@ -235,7 +232,7 @@ fn createSemaphoreSubmitInfo(semaphore: vk.VkSemaphore, stageMask: u64, value: u
     return .{ .sType = vk.VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO, .semaphore = semaphore, .stageMask = stageMask, .value = value };
 }
 
-fn checkShaderLayout(shaders: []const ShaderObject) !rc.Pass.RenderType {
+fn checkShaderLayout(shaders: []const ShaderObject) !rc.Pass.PassType {
     var shdr: [9]u8 = .{0} ** 9;
     var prevIndex: i8 = -1;
 

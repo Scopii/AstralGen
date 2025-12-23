@@ -9,7 +9,7 @@ const SwapchainManager = @import("SwapchainManager.zig");
 const ShaderObject = @import("ShaderObject.zig").ShaderObject;
 const PushConstants = @import("resources/DescriptorManager.zig").PushConstants;
 const rc = @import("../configs/renderConfig.zig");
-const RenderType = rc.Pass.RenderType;
+const RenderType = rc.Pass.PassType;
 const sc = @import("../configs/shaderConfig.zig");
 const MAX_WINDOWS = rc.MAX_WINDOWS;
 const RENDER_IMG_STRETCH = rc.RENDER_IMG_STRETCH;
@@ -22,16 +22,24 @@ pub const CmdManager = struct {
     pool: vk.VkCommandPool,
     cmds: []vk.VkCommandBuffer,
     pipeLayout: vk.VkPipelineLayout,
+    descLayoutAddress: u64,
     blitBarriers: [MAX_WINDOWS + 1]vk.VkImageMemoryBarrier2 = undefined,
 
-    pub fn init(alloc: Allocator, context: *const Context, maxInFlight: u32, pipeLayout: vk.VkPipelineLayout) !CmdManager {
+    pub fn init(alloc: Allocator, context: *const Context, maxInFlight: u32, resMan: *const ResourceManager) !CmdManager {
         const gpi = context.gpi;
         const pool = try createCmdPool(gpi, context.families.graphics);
 
         const cmds = try alloc.alloc(vk.VkCommandBuffer, maxInFlight);
         for (0..maxInFlight) |i| cmds[i] = try createCmd(gpi, pool, vk.VK_COMMAND_BUFFER_LEVEL_PRIMARY);
 
-        return .{ .alloc = alloc, .gpi = gpi, .pool = pool, .cmds = cmds, .pipeLayout = pipeLayout };
+        return .{
+            .alloc = alloc,
+            .gpi = gpi,
+            .pool = pool,
+            .cmds = cmds,
+            .pipeLayout = resMan.descMan.pipeLayout,
+            .descLayoutAddress = resMan.descMan.descBuffer.gpuAddress,
+        };
     }
 
     pub fn deinit(self: *CmdManager) void {
@@ -60,24 +68,15 @@ pub const CmdManager = struct {
         return self.cmds[frameInFlight];
     }
 
-    pub fn recordPass(
-        self: *CmdManager,
-        cmd: vk.VkCommandBuffer,
-        renderImg: *GpuImage,
-        shaders: []const ShaderObject,
-        renderType: RenderType,
-        gpuAddress: u64,
-        constants: PushConstants,
-        clear: bool,
-    ) !void {
-        switch (renderType) {
-            .computePass => try self.recordCompute(cmd, renderImg, shaders, gpuAddress, constants),
-            .graphicsPass, .meshPass, .taskMeshPass => try self.recordGraphics(cmd, renderImg, shaders, renderType, gpuAddress, constants, clear),
-            else => std.debug.print("Renderer: {s} has no Command Recording yet\n", .{@tagName(renderType)}),
+    pub fn recordPass(self: *CmdManager, cmd: vk.VkCommandBuffer, passImg: *GpuImage, shaders: []const ShaderObject, passType: RenderType, constants: PushConstants, clear: bool) !void {
+        switch (passType) {
+            .computePass => try self.recordCompute(cmd, passImg, shaders, constants),
+            .graphicsPass, .meshPass, .taskMeshPass => try self.recordGraphics(cmd, passImg, shaders, passType, constants, clear),
+            else => std.debug.print("Renderer: {s} has no Command Recording yet\n", .{@tagName(passType)}),
         }
     }
 
-    pub fn recordCompute(self: *CmdManager, cmd: vk.VkCommandBuffer, renderImg: *GpuImage, shaders: []const ShaderObject, gpuAddress: u64, constants: PushConstants) !void {
+    pub fn recordCompute(self: *CmdManager, cmd: vk.VkCommandBuffer, passImg: *GpuImage, shaders: []const ShaderObject, pcs: PushConstants) !void {
         const pipeLayout = self.pipeLayout;
 
         const barrier = createImageMemoryBarrier2(
@@ -85,31 +84,22 @@ pub const CmdManager = struct {
             PipeAccess.MEMORY_WRITE | PipeAccess.MEMORY_READ,
             PipeStage.COMPUTE,
             PipeAccess.SHADER_WRITE,
-            renderImg.curLayout,
+            passImg.curLayout,
             vk.VK_IMAGE_LAYOUT_GENERAL,
-            renderImg.img,
+            passImg.img,
         );
         createPipelineBarriers2(cmd, &.{barrier});
-        renderImg.curLayout = vk.VK_IMAGE_LAYOUT_GENERAL;
+        passImg.curLayout = vk.VK_IMAGE_LAYOUT_GENERAL;
 
-        vk.vkCmdPushConstants(cmd, pipeLayout, vk.VK_SHADER_STAGE_ALL, 0, @sizeOf(PushConstants), &constants);
+        vk.vkCmdPushConstants(cmd, pipeLayout, vk.VK_SHADER_STAGE_ALL, 0, @sizeOf(PushConstants), &pcs);
         bindShaderStages(cmd, shaders);
-        bindDescriptorBuffer(cmd, gpuAddress);
+        bindDescriptorBuffer(cmd, self.descLayoutAddress);
         setDescriptorBufferOffset(cmd, vk.VK_PIPELINE_BIND_POINT_COMPUTE, pipeLayout);
 
-        vk.vkCmdDispatch(cmd, (renderImg.extent3d.width + 7) / 8, (renderImg.extent3d.height + 7) / 8, 1);
+        vk.vkCmdDispatch(cmd, (passImg.extent3d.width + 7) / 8, (passImg.extent3d.height + 7) / 8, 1);
     }
 
-    pub fn recordGraphics(
-        self: *CmdManager,
-        cmd: vk.VkCommandBuffer,
-        renderImg: *GpuImage,
-        shaders: []const ShaderObject,
-        renderType: RenderType,
-        gpuAddress: u64,
-        constants: PushConstants,
-        clear: bool,
-    ) !void {
+    pub fn recordGraphics(self: *CmdManager, cmd: vk.VkCommandBuffer, passImg: *GpuImage, shaders: []const ShaderObject, passType: RenderType, pcs: PushConstants, clear: bool) !void {
         const pipeLayout = self.pipeLayout;
 
         const barrier = createImageMemoryBarrier2(
@@ -117,20 +107,20 @@ pub const CmdManager = struct {
             PipeAccess.MEMORY_WRITE | PipeAccess.MEMORY_READ,
             PipeStage.COLOR_ATTACHMENT,
             vk.VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
-            renderImg.curLayout,
+            passImg.curLayout,
             vk.VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-            renderImg.img,
+            passImg.img,
         );
         createPipelineBarriers2(cmd, &.{barrier});
-        renderImg.curLayout = vk.VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        passImg.curLayout = vk.VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
-        vk.vkCmdPushConstants(cmd, pipeLayout, vk.VK_SHADER_STAGE_ALL, 0, @sizeOf(PushConstants), &constants);
+        vk.vkCmdPushConstants(cmd, pipeLayout, vk.VK_SHADER_STAGE_ALL, 0, @sizeOf(PushConstants), &pcs);
         bindShaderStages(cmd, shaders);
-        bindDescriptorBuffer(cmd, gpuAddress);
+        bindDescriptorBuffer(cmd, self.descLayoutAddress);
         setDescriptorBufferOffset(cmd, vk.VK_PIPELINE_BIND_POINT_GRAPHICS, pipeLayout);
-        setGraphicsDynamicStates(cmd, renderImg, clear);
+        setGraphicsDynamicStates(cmd, passImg, clear);
 
-        switch (renderType) {
+        switch (passType) {
             .graphicsPass => {
                 vkFn.vkCmdSetVertexInputEXT.?(cmd, 0, null, 0, null); // Currently empty vertex input state
                 vk.vkCmdDraw(cmd, 3, 1, 0, 0);
@@ -141,26 +131,12 @@ pub const CmdManager = struct {
         vk.vkCmdEndRendering(cmd);
     }
 
-    pub fn transitionToPresent(cmd: vk.VkCommandBuffer, swapchain: *SwapchainManager.Swapchain) void {
-        // DOESNT HANDLE EDGECASE WHERE BLIT WASNT DONE BECAUSE NO WINDOW SHOWED THE RENDER
-        const barrier = createImageMemoryBarrier2(
-            PipeStage.TOP_OF_PIPE, 
-            PipeAccess.NONE, 
-            PipeStage.BOTTOM_OF_PIPE, // Nothing on GPU needs to wait (Presentation engine waits via Semaphore)
-            PipeAccess.NONE,
-            vk.VK_IMAGE_LAYOUT_UNDEFINED, // PROBABLY TRANSFER_DST but maybe not
-            vk.VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-            swapchain.images[swapchain.curIndex],
-        ); // THESE BARRIERS ARE CURRENTLY EXTRA SAVE
-        createPipelineBarriers2(cmd, &.{barrier});
-    }
-
     pub fn recordSwapchainBlits(cmd: vk.VkCommandBuffer, resMan: *ResourceManager, targets: []const u32, swapchainMap: *SwapchainManager.SwapchainMap) !void {
         for (targets) |swapchainIndex| {
             const swapchain = swapchainMap.getPtrAtIndex(swapchainIndex);
-            const imgID = swapchain.renderId;
+            const imgID = swapchain.passImgId;
 
-            if (resMan.isGpuResourceIdUsed(imgID) == false) {
+            if (resMan.isResourceIdUsed(imgID) == false) {
                 std.debug.print("Error: Window wants RenderID {} but it is null\n", .{imgID});
                 continue;
             }
@@ -198,6 +174,20 @@ pub const CmdManager = struct {
         }
     }
 };
+
+fn transitionToPresent(cmd: vk.VkCommandBuffer, swapchain: *SwapchainManager.Swapchain) void {
+    // DOESNT HANDLE EDGECASE WHERE BLIT WASNT DONE BECAUSE NO WINDOW SHOWED THE RENDER
+    const barrier = createImageMemoryBarrier2(
+        PipeStage.TOP_OF_PIPE,
+        PipeAccess.NONE,
+        PipeStage.BOTTOM_OF_PIPE, // Nothing on GPU needs to wait (Presentation engine waits via Semaphore)
+        PipeAccess.NONE,
+        vk.VK_IMAGE_LAYOUT_UNDEFINED, // PROBABLY TRANSFER_DST but maybe not
+        vk.VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+        swapchain.images[swapchain.curIndex],
+    ); // THESE BARRIERS ARE CURRENTLY EXTRA SAVE
+    createPipelineBarriers2(cmd, &.{barrier});
+}
 
 fn calculateBlitOffsets(srcImgExtent: vk.VkExtent3D, dstImgExtent: vk.VkExtent3D, stretch: bool) struct { srcOffsets: [2]vk.VkOffset3D, dstOffsets: [2]vk.VkOffset3D } {
     // 3. CALCULATE BLIT OFFSETS
