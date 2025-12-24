@@ -73,7 +73,7 @@ pub const App = struct {
         try renderer.createResource(rc.img4);
         try renderer.createResource(rc.img5);
 
-        try renderer.addPasses(rc.renderSequence);
+        try renderer.createPass(rc.renderSequence);
 
         return .{
             .cam = Camera.init(.{}),

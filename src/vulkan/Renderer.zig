@@ -11,11 +11,11 @@ const SwapchainManager = @import("SwapchainManager.zig").SwapchainManager;
 const PushConstants = @import("resources/DescriptorManager.zig").PushConstants;
 const ResourceManager = @import("resources/ResourceManager.zig").ResourceManager;
 const MemoryManager = @import("../core/MemoryManager.zig").MemoryManager;
-const Object = @import("../ecs/EntityManager.zig").Object;
 const check = @import("ErrorHelpers.zig").check;
 const createInstance = @import("Context.zig").createInstance;
 const ShaderObject = @import("ShaderObject.zig").ShaderObject;
 const Resource = @import("resources/ResourceManager.zig").Resource;
+const RenderGraph = @import("RenderGraph.zig").RenderGraph;
 
 const Allocator = std.mem.Allocator;
 const rc = @import("../configs/renderConfig.zig");
@@ -25,6 +25,7 @@ pub const Renderer = struct {
     arenaAlloc: Allocator,
     context: Context,
     resourceMan: ResourceManager,
+    renderGraph: RenderGraph,
     shaderMan: ShaderManager,
     swapchainMan: SwapchainManager,
     cmdMan: CmdManager,
@@ -35,7 +36,8 @@ pub const Renderer = struct {
         const alloc = memoryMan.getAllocator();
         const instance = try createInstance(alloc);
         const context = try Context.init(alloc, instance);
-        const resourceMan = try ResourceManager.init(alloc, &context);
+        var resourceMan = try ResourceManager.init(alloc, &context);
+        const renderGraph = RenderGraph.init(alloc, &resourceMan);
         const cmdMan = try CmdManager.init(alloc, &context, rc.MAX_IN_FLIGHT, &resourceMan);
         const scheduler = try Scheduler.init(&context, rc.MAX_IN_FLIGHT);
         const shaderMan = try ShaderManager.init(alloc, &context, &resourceMan);
@@ -46,6 +48,7 @@ pub const Renderer = struct {
             .arenaAlloc = memoryMan.getGlobalArena(),
             .context = context,
             .resourceMan = resourceMan,
+            .renderGraph = renderGraph,
             .shaderMan = shaderMan,
             .cmdMan = cmdMan,
             .scheduler = scheduler,
@@ -61,6 +64,7 @@ pub const Renderer = struct {
         self.swapchainMan.deinit();
         self.shaderMan.deinit();
         self.resourceMan.deinit();
+        self.renderGraph.deinit();
         self.context.deinit();
         self.passes.deinit();
     }
@@ -87,7 +91,7 @@ pub const Renderer = struct {
                     self.swapchainMan.changeState(winPtr.windowId, if (winPtr.state == .needActive) .active else .inactive);
                 },
                 .needDelete => self.swapchainMan.removeSwapchain(&.{winPtr}),
-                else => std.debug.print("Window State {s} cant be handled in Renderer\n", .{@tagName(winPtr.state)}),
+                else => std.debug.print("Warning: Window State {s} cant be handled in Renderer\n", .{@tagName(winPtr.state)}),
             }
         }
 
@@ -119,31 +123,25 @@ pub const Renderer = struct {
                     .info = .{ .imgInf = .{ .extent = extent, .arrayIndex = img.arrayIndex } },
                 };
                 self.resourceMan.destroyResource(gpuId);
+                self.renderGraph.resetResourceState(gpuId);
                 try self.resourceMan.createResource(newImg);
                 std.debug.print("Render Image ID {} recreated {}x{} to {}x{}\n", .{ gpuId, old.width, old.height, new.width, new.height });
             }
         }
     }
 
-    pub fn addPasses(self: *Renderer, passes: []const rc.Pass) !void {
-        for (passes) |passInf| {
-            const shaderArray = self.shaderMan.getShaders(passInf.shaderIds);
-            const validShaders = shaderArray[0..passInf.shaderIds.len];
+    pub fn createPass(self: *Renderer, passes: []const rc.Pass) !void {
+        for (passes) |pass| {
+            const shaderArray = self.shaderMan.getShaders(pass.shaderIds);
+            const validShaders = shaderArray[0..pass.shaderIds.len];
 
             const passType = checkShaderLayout(validShaders) catch |err| {
                 std.debug.print("Pass {} Shader Layout invalid", .{err});
                 return error.PassInvalid;
             };
-            try self.passes.append(.{ .passType = passType, .imgId = passInf.imgId, .shaderIds = passInf.shaderIds, .clear = passInf.clear });
+            try self.passes.append(.{ .passType = passType, .imgId = pass.imgId, .shaderIds = pass.shaderIds, .clear = pass.clear, .resUsage = pass.resUsage });
         }
-    }
-
-    pub fn createResource(self: *Renderer, resourceInf: rc.ResourceInfo) !void {
-        try self.resourceMan.createResource(resourceInf);
-    }
-
-    pub fn updateResource(self: *Renderer, resourceInf: rc.ResourceInfo, data: anytype) !void {
-        try self.resourceMan.updateResource(resourceInf, data);
+        self.renderGraph.addPasses(passes);
     }
 
     pub fn draw(self: *Renderer, cam: *Camera, runtimeAsFloat: f32) !void {
@@ -154,8 +152,7 @@ pub const Renderer = struct {
 
         const cmd = try self.cmdMan.beginRecording(frameInFlight);
         try self.recordPasses(cmd, cam, runtimeAsFloat);
-
-        try CmdManager.recordSwapchainBlits(cmd, &self.resourceMan, self.swapchainMan.targets.slice(), &self.swapchainMan.swapchains);
+        try self.renderGraph.recordSwapchainBlits(cmd, self.swapchainMan.targets.slice(), &self.swapchainMan.swapchains, &self.resourceMan);
         try CmdManager.endRecording(cmd);
 
         const targets = self.swapchainMan.targets.slice();
@@ -167,11 +164,12 @@ pub const Renderer = struct {
 
     fn recordPasses(self: *Renderer, cmd: vk.VkCommandBuffer, cam: *Camera, runtimeAsFloat: f32) !void {
         for (self.passes.items) |pass| {
+            try self.renderGraph.recordPassBarriers(cmd, pass, &self.resourceMan);
 
             const objectBuf = try self.resourceMan.getBufferPtr(1);
             const passImg = try self.resourceMan.getImagePtr(pass.imgId);
 
-            const pushConstants = PushConstants{
+            const pcs = PushConstants{
                 .camPosAndFov = cam.getPosAndFov(),
                 .camDir = cam.getForward(),
                 .runtime = runtimeAsFloat,
@@ -181,18 +179,9 @@ pub const Renderer = struct {
             };
             const shaderArray = self.shaderMan.getShaders(pass.shaderIds);
             const validShaders = shaderArray[0..pass.shaderIds.len];
-            try self.cmdMan.recordPass(cmd, passImg, validShaders, pass.passType, pushConstants, pass.clear);
-        }
-    }
 
-    pub fn addShaders(self: *Renderer, loadedShaders: []LoadedShader) !void {
-        for (loadedShaders) |loadedShader| {
-            if (self.shaderMan.isShaderIdUsed(loadedShader.shaderInf.id) == true) {
-                _ = vk.vkDeviceWaitIdle(self.context.gpi);
-                break;
-            }
+            try self.renderGraph.recordPass(cmd, pass, pcs, validShaders, &self.resourceMan);
         }
-        try self.shaderMan.createShaders(loadedShaders);
     }
 
     fn queueSubmit(self: *Renderer, cmd: vk.VkCommandBuffer, submitIds: []const u32, frameInFlight: u8) !void {
@@ -221,6 +210,24 @@ pub const Renderer = struct {
             .pSignalSemaphoreInfos = &signalInfos,
         };
         try check(vk.vkQueueSubmit2(self.context.graphicsQ, 1, &submitInf, null), "Failed main submission");
+    }
+
+    pub fn addShaders(self: *Renderer, loadedShaders: []LoadedShader) !void {
+        for (loadedShaders) |loadedShader| {
+            if (self.shaderMan.isShaderIdUsed(loadedShader.shaderInf.id) == true) {
+                _ = vk.vkDeviceWaitIdle(self.context.gpi);
+                break;
+            }
+        }
+        try self.shaderMan.createShaders(loadedShaders);
+    }
+
+    pub fn createResource(self: *Renderer, resourceInf: rc.ResourceInfo) !void {
+        try self.resourceMan.createResource(resourceInf);
+    }
+
+    pub fn updateResource(self: *Renderer, resourceInf: rc.ResourceInfo, data: anytype) !void {
+        try self.resourceMan.updateResource(resourceInf, data);
     }
 };
 

@@ -1,7 +1,9 @@
 const vk = @import("../modules/vk.zig").c;
 const Object = @import("../ecs/EntityManager.zig").Object;
 const sc = @import("shaderConfig.zig");
-const ShaderStage = @import("../vulkan/ShaderObject.zig").ShaderStage;
+const PipeAccess = @import("../vulkan/RenderGraph.zig").PipeAccess;
+const PipeStage = @import("../vulkan/RenderGraph.zig").PipeStage;
+const ImageLayout = @import("../vulkan/RenderGraph.zig").ImageLayout;
 
 // Rendering, Swapchains and Windows
 pub const MAX_IN_FLIGHT: u8 = 2; // (Frames)
@@ -27,13 +29,19 @@ pub const Pass = struct {
         vertexPass,
         empty,
     };
+    pub const ResourceUsage = struct {
+        id: u32,
+        stage: vk.VkPipelineStageFlagBits2 = PipeStage.TOP_OF_PIPE,
+        access: vk.VkAccessFlagBits2 = PipeAccess.NONE,
+        layout: vk.VkImageLayout = ImageLayout.GENERAL,
+    };
     passType: PassType = .empty,
+    //inputIDs: []const u32,
+    resUsage: []const ResourceUsage,
     imgId: u32,
     shaderIds: []const u8,
     clear: bool = false,
 };
-
-pub const ResourceState = struct { layout: vk.VkImageLayout, access: vk.VkAccessFlags, stage: vk.VkPipelineStageFlags }; // PREPARED FOR RENDER GRAPH
 
 pub const ResourceInfo = struct {
     gpuId: u32,
@@ -82,10 +90,44 @@ pub const img5 = ResourceInfo{ .gpuId = 54, .binding = 0, .memUsage = .GpuOptima
 pub const buff1 = ResourceInfo{ .gpuId = 1, .binding = 1, .memUsage = .CpuWriteOptimal, .info = .{ .bufInf = .{ .bufUsage = .Storage, .length = 1000, .sizeOfElement = @sizeOf(Object) } } };
 pub const buff2 = ResourceInfo{ .gpuId = 0, .binding = 2, .memUsage = .CpuWriteOptimal, .info = .{ .bufInf = .{ .bufUsage = .Storage, .length = 100, .sizeOfElement = @sizeOf(Object) } } };
 
-pub const pass1: Pass = .{ .imgId = img1.gpuId, .shaderIds = &.{sc.t1Comp.id} }; // clear does not work for compute
-pub const pass2: Pass = .{ .imgId = img2.gpuId, .shaderIds = &.{ sc.t2Vert.id, sc.t2Frag.id } };
-pub const pass3: Pass = .{ .imgId = img3.gpuId, .shaderIds = &.{ sc.t3Mesh.id, sc.t3Frag.id } };
-pub const pass4: Pass = .{ .imgId = img4.gpuId, .shaderIds = &.{ sc.t4Task.id, sc.t4Mesh.id, sc.t4Frag.id } };
-pub const pass5: Pass = .{ .imgId = img4.gpuId, .shaderIds = &.{ sc.gridTask.id, sc.gridMesh.id, sc.gridFrag.id }, .clear = true };
+pub const computeTest: Pass = .{
+    .resUsage = &.{
+        .{ .id = img1.gpuId, .stage = PipeStage.COMPUTE, .access = PipeAccess.SHADER_WRITE, .layout = ImageLayout.GENERAL }, // SHADER_READ TOO?
+    },
+    .imgId = img1.gpuId,
+    .shaderIds = &.{sc.t1Comp.id},
+};
 
-pub const renderSequence: []const Pass = &.{ pass1, pass2, pass3, pass4, pass5 };
+pub const graphicsTest: Pass = .{
+    .resUsage = &.{
+        .{ .id = img2.gpuId, .stage = PipeStage.COLOR_ATTACHMENT, .access = PipeAccess.COLOR_ATTACHMENT_WRITE, .layout = ImageLayout.COLOR_ATTACHMENT },
+    },
+    .imgId = img2.gpuId,
+    .shaderIds = &.{ sc.t2Vert.id, sc.t2Frag.id },
+};
+
+pub const meshTest: Pass = .{
+    .resUsage = &.{
+        .{ .id = img3.gpuId, .stage = PipeStage.COLOR_ATTACHMENT, .access = PipeAccess.COLOR_ATTACHMENT_WRITE, .layout = ImageLayout.COLOR_ATTACHMENT },
+    },
+    .imgId = img3.gpuId,
+    .shaderIds = &.{ sc.t3Mesh.id, sc.t3Frag.id },
+};
+
+pub const taskTest: Pass = .{
+    .resUsage = &.{
+        .{ .id = img4.gpuId, .stage = PipeStage.COLOR_ATTACHMENT, .access = PipeAccess.COLOR_ATTACHMENT_WRITE, .layout = ImageLayout.COLOR_ATTACHMENT },
+    },
+    .imgId = img4.gpuId,
+    .shaderIds = &.{ sc.t4Task.id, sc.t4Mesh.id, sc.t4Frag.id },
+};
+
+pub const gridTest: Pass = .{
+    .resUsage = &.{
+        .{ .id = img4.gpuId, .stage = PipeStage.COLOR_ATTACHMENT, .access = PipeAccess.COLOR_ATTACHMENT_WRITE, .layout = ImageLayout.COLOR_ATTACHMENT },
+    },
+    .imgId = img4.gpuId,
+    .shaderIds = &.{ sc.gridTask.id, sc.gridMesh.id, sc.gridFrag.id },
+};
+
+pub const renderSequence: []const Pass = &.{ computeTest, graphicsTest, meshTest, taskTest, gridTest };
