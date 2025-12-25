@@ -141,7 +141,6 @@ pub const Renderer = struct {
             };
             try self.passes.append(.{ .passType = passType, .shaderIds = pass.shaderIds, .clear = pass.clear, .resUsage = pass.resUsage });
         }
-        self.renderGraph.addPasses(passes);
     }
 
     pub fn draw(self: *Renderer, cam: *Camera, runtimeAsFloat: f32) !void {

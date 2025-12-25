@@ -72,25 +72,22 @@ pub const RenderGraph = struct {
         self.tempBarriers.deinit();
     }
 
-    pub fn addPasses(self: *RenderGraph, passes: []const rc.Pass) void {
-        for (passes) |pass| {
-            for (pass.resUsage) |resUsage| {
-                self.resourceStates.set(resUsage.id, .{});
-            }
-        }
-    }
-
     pub fn recordPassBarriers(self: *RenderGraph, cmd: vk.VkCommandBuffer, pass: rc.Pass, resMan: *ResourceManager) !void {
         for (pass.resUsage) |resUsage| {
+            // CHECK IF RESOURCE IS ALREADY SET
+            if (!self.resourceStates.isKeyUsed(resUsage.id)) {
+                self.resourceStates.set(resUsage.id, .{});
+            }
+
             const state = self.resourceStates.get(resUsage.id);
             const neededState = ResourceState{ .stage = resUsage.stage, .access = resUsage.access, .layout = resUsage.layout };
 
-            if (state.stage != neededState.stage or neededState.access != neededState.access or neededState.layout != neededState.layout) {
+            if (state.stage != neededState.stage or state.access != neededState.access or state.layout != neededState.layout) {
                 const resource = try resMan.getResourcePtr(resUsage.id);
 
                 switch (resource.resourceType) {
                     .gpuImg => |*gpuImg| {
-                        const barrier = createImageMemoryBarrier2NEW(state, neededState, gpuImg.img);
+                        const barrier = createImageBarrier(state, neededState, gpuImg.img);
                         try self.tempBarriers.append(barrier);
                         self.updateResourceState(resUsage);
                     },
@@ -138,33 +135,30 @@ pub const RenderGraph = struct {
     }
 
     pub fn recordSwapchainBlits(self: *RenderGraph, cmd: vk.VkCommandBuffer, targets: []const u32, swapchainMap: *SwapchainManager.SwapchainMap, resMan: *ResourceManager) !void {
+        // Render Image and Swapchain Preperations
         for (targets) |swapchainIndex| {
             const swapchain = swapchainMap.getPtrAtIndex(swapchainIndex);
             const imgId = swapchain.passImgId;
-
-            if (resMan.isResourceIdUsed(imgId) == false) {
-                std.debug.print("Error: Window wants RenderID {} but it is null\n", .{imgId});
-                continue;
-            }
             const srcImgPtr = try resMan.getImagePtr(imgId);
+
             const imgState = self.resourceStates.get(imgId);
             const neededImgState = ResourceState{ .stage = PipeStage.TRANSFER, .access = PipeAccess.TRANSFER_READ, .layout = ImageLayout.TRANSFER_SRC };
 
             if (imgState.stage != neededImgState.stage or imgState.access != neededImgState.access or imgState.layout != neededImgState.layout) {
                 // Transition Source Image (Color/General -> Transfer Src)
-                const renderImgBarrier = createImageMemoryBarrier2NEW(imgState, neededImgState, srcImgPtr.img);
-                try self.tempBarriers.append(renderImgBarrier);
+                const imgBarrier = createImageBarrier(imgState, neededImgState, srcImgPtr.img);
+                try self.tempBarriers.append(imgBarrier);
                 self.resourceStates.set(imgId, neededImgState);
             }
             // Transition Destination Swapchain (Undefined -> Transfer Dst)
             const swapchainState = ResourceState{ .stage = PipeStage.TOP_OF_PIPE, .access = PipeAccess.NONE, .layout = ImageLayout.UNDEFINED }; // SHOULD THIS BE UNDEFINED?
-            const neededState = ResourceState{ .stage = PipeStage.TRANSFER, .access = PipeAccess.TRANSFER_WRITE, .layout = ImageLayout.UNDEFINED }; // SHOULD THIS BE UNDEFINED?
-            const swapchainBarrier = createImageMemoryBarrier2NEW(swapchainState, neededState, swapchain.images[swapchain.curIndex]);
+            const neededState = ResourceState{ .stage = PipeStage.TRANSFER, .access = PipeAccess.TRANSFER_WRITE, .layout = ImageLayout.TRANSFER_DST }; // SHOULD THIS BE UNDEFINED?
+            const swapchainBarrier = createImageBarrier(swapchainState, neededState, swapchain.images[swapchain.curIndex]);
             try self.tempBarriers.append(swapchainBarrier); // Managed by Swapchain, needs no State Update
         }
         self.bakeBarriers(cmd);
 
-        // BLITS
+        // Blits
         for (targets) |swapchainIndex| {
             const swapchain = swapchainMap.getPtrAtIndex(swapchainIndex);
             const renderImgPtr = try resMan.getImagePtr(swapchain.passImgId);
@@ -178,7 +172,7 @@ pub const RenderGraph = struct {
             const swapchain = swapchainMap.getPtrAtIndex(swapchainIndex);
             const swapchainState = ResourceState{ .stage = PipeStage.TOP_OF_PIPE, .access = PipeAccess.NONE, .layout = ImageLayout.TRANSFER_DST }; // EDGE CASE: Probably Transfer?!
             const neededState = ResourceState{ .stage = PipeStage.BOTTOM_OF_PIPE, .access = PipeAccess.NONE, .layout = ImageLayout.PRESENT_SRC };
-            const barrier = createImageMemoryBarrier2NEW(swapchainState, neededState, swapchain.images[swapchain.curIndex]);
+            const barrier = createImageBarrier(swapchainState, neededState, swapchain.images[swapchain.curIndex]);
             try self.tempBarriers.append(barrier);
         }
         self.bakeBarriers(cmd);
@@ -198,7 +192,7 @@ pub const RenderGraph = struct {
     }
 };
 
-fn createImageMemoryBarrier2NEW(curState: ResourceState, newState: ResourceState, img: vk.VkImage) vk.VkImageMemoryBarrier2 {
+fn createImageBarrier(curState: ResourceState, newState: ResourceState, img: vk.VkImage) vk.VkImageMemoryBarrier2 {
     return vk.VkImageMemoryBarrier2{
         .sType = vk.VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
         .srcStageMask = curState.stage,
@@ -214,7 +208,7 @@ fn createImageMemoryBarrier2NEW(curState: ResourceState, newState: ResourceState
     };
 }
 
-fn createBufferMemoryBarrier2(srcStage: u64, srcAccess: u64, dstStage: u64, dstAccess: u64, buffer: vk.VkBuffer) vk.VkBufferMemoryBarrier2 {
+fn createBufferBarrier(srcStage: u64, srcAccess: u64, dstStage: u64, dstAccess: u64, buffer: vk.VkBuffer) vk.VkBufferMemoryBarrier2 {
     return vk.VkBufferMemoryBarrier2{
         .sType = vk.VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
         .srcStageMask = srcStage,

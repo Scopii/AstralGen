@@ -121,28 +121,29 @@ pub const gridTest: Pass = .{
         .{ .id = img4.gpuId, .stage = PipeStage.COLOR_ATTACHMENT, .access = PipeAccess.COLOR_ATTACHMENT_WRITE, .layout = ImageLayout.COLOR_ATTACHMENT },
     },
     .shaderIds = &.{ sc.gridTask.id, sc.gridMesh.id, sc.gridFrag.id },
+    .clear = true,
 };
 
-pub const gridTest2: Pass = .{
-    .resUsage = &.{
-        .{ .id = img3.gpuId, .stage = PipeStage.COLOR_ATTACHMENT, .access = PipeAccess.COLOR_ATTACHMENT_WRITE, .layout = ImageLayout.COLOR_ATTACHMENT },
-    },
-    .shaderIds = &.{ sc.gridTask.id, sc.gridMesh.id, sc.gridFrag.id },
-};
+// pub const gridTest2: Pass = .{
+//     .resUsage = &.{
+//         .{ .id = img3.gpuId, .stage = PipeStage.COLOR_ATTACHMENT, .access = PipeAccess.COLOR_ATTACHMENT_WRITE, .layout = ImageLayout.COLOR_ATTACHMENT },
+//     },
+//     .shaderIds = &.{ sc.gridTask.id, sc.gridMesh.id, sc.gridFrag.id },
+// };
 
-pub const gridTest3: Pass = .{
-    .resUsage = &.{
-        .{ .id = img2.gpuId, .stage = PipeStage.COLOR_ATTACHMENT, .access = PipeAccess.COLOR_ATTACHMENT_WRITE, .layout = ImageLayout.COLOR_ATTACHMENT },
-    },
-    .shaderIds = &.{ sc.gridTask.id, sc.gridMesh.id, sc.gridFrag.id },
-};
+// pub const gridTest3: Pass = .{
+//     .resUsage = &.{
+//         .{ .id = img2.gpuId, .stage = PipeStage.COLOR_ATTACHMENT, .access = PipeAccess.COLOR_ATTACHMENT_WRITE, .layout = ImageLayout.COLOR_ATTACHMENT },
+//     },
+//     .shaderIds = &.{ sc.gridTask.id, sc.gridMesh.id, sc.gridFrag.id },
+// };
 
-pub const gridTest4: Pass = .{
-    .resUsage = &.{
-        .{ .id = img1.gpuId, .stage = PipeStage.COLOR_ATTACHMENT, .access = PipeAccess.COLOR_ATTACHMENT_WRITE, .layout = ImageLayout.COLOR_ATTACHMENT },
-    },
-    .shaderIds = &.{ sc.gridTask.id, sc.gridMesh.id, sc.gridFrag.id },
-};
+// pub const gridTest4: Pass = .{
+//     .resUsage = &.{
+//         .{ .id = img1.gpuId, .stage = PipeStage.COLOR_ATTACHMENT, .access = PipeAccess.COLOR_ATTACHMENT_WRITE, .layout = ImageLayout.COLOR_ATTACHMENT },
+//     },
+//     .shaderIds = &.{ sc.gridTask.id, sc.gridMesh.id, sc.gridFrag.id },
+// };
 
 // pub const renderSequence: []const Pass = &.{ gridTest, gridTest2, gridTest3, gridTest4 };
 pub const renderSequence: []const Pass = &.{ computeTest, graphicsTest, meshTest, taskTest, gridTest };
