@@ -21,58 +21,36 @@ pub const RENDER_IMG_AUTO_RESIZE = true;
 pub const RENDER_IMG_STRETCH = true; // Ignored on AUTO_RESIZE
 
 pub const Pass = struct {
-    pub const PassType = enum {
-        computePass,
-        graphicsPass,
-        meshPass,
-        taskMeshPass,
-        vertexPass,
-        empty,
-    };
-    pub const RenderAttachment = struct { id: u32, rendertype: enum { Color, Depth } };
-    pub const ResourceUsage = struct {
-        id: u32,
-        stage: vk.VkPipelineStageFlagBits2 = PipeStage.TOP_OF_PIPE,
-        access: vk.VkAccessFlagBits2 = PipeAccess.NONE,
-        layout: vk.VkImageLayout = ImageLayout.GENERAL,
-    };
     passType: PassType = .empty,
     attachments: []const RenderAttachment,
     resUsage: []const ResourceUsage,
     shaderIds: []const u8,
     clear: bool = false,
+
+    pub const PassType = enum { computePass, graphicsPass, meshPass, taskMeshPass, vertexPass, empty };
+    pub const RenderAttachment = struct { id: u32, rendertype: enum { Color, Depth, Stencil } };
+    pub const ResourceUsage = struct {
+        id: u32,
+        stage: PipeStage = .TopOfPipe,
+        access: PipeAccess = .None,
+        layout: ImageLayout = .General,
+    };
 };
 
 pub const ResourceInfo = struct {
     gpuId: u32,
     binding: u8,
     memUsage: MemUsage,
+    info: union(enum) { imgInf: ImgInf, bufInf: BufInf },
 
-    info: union(enum) {
-        imgInf: ImgInf,
-        bufInf: BufInf,
-    },
-    pub const ImgInf = struct {
-        extent: vk.VkExtent3D,
-        imgFormat: c_uint = RENDER_IMG_FORMAT,
-        arrayIndex: u32,
-    };
-    pub const BufInf = struct {
-        sizeOfElement: u64 = 0,
-        length: u32,
-        bufUsage: enum { Storage, Uniform, Index, Vertex, Staging },
-    };
+    pub const ImgInf = struct { extent: vk.VkExtent3D, imgFormat: c_uint = RENDER_IMG_FORMAT, arrayIndex: u32 };
+    pub const BufInf = struct { sizeOfElement: u64 = 0, length: u32, bufUsage: enum { Storage, Uniform, Index, Vertex, Staging } };
     pub const MemUsage = enum { GpuOptimal, CpuWriteOptimal, CpuReadOptimal };
 };
 
 pub const DescBinding = union(enum) {
-    pub const ImageArrayBinding = struct {
-        binding: u32,
-        arrayLength: u32,
-    };
-    pub const BufferBinding = struct {
-        binding: u32,
-    };
+    pub const ImageArrayBinding = struct { binding: u32, arrayLength: u32 };
+    pub const BufferBinding = struct { binding: u32 };
     imageArrayBinding: ImageArrayBinding,
     bufferBinding: BufferBinding,
 };
@@ -95,7 +73,7 @@ pub const computeTest: Pass = .{
         .{ .id = img1.gpuId, .rendertype = .Color },
     },
     .resUsage = &.{
-        .{ .id = img1.gpuId, .stage = PipeStage.COMPUTE, .access = PipeAccess.SHADER_WRITE, .layout = ImageLayout.GENERAL }, // SHADER_READ TOO?
+        .{ .id = img1.gpuId, .stage = .Compute, .access = .ShaderWrite, .layout = .General }, // SHADER_READ TOO?
     },
     .shaderIds = &.{sc.t1Comp.id},
 };
@@ -105,7 +83,7 @@ pub const graphicsTest: Pass = .{
         .{ .id = img2.gpuId, .rendertype = .Color },
     },
     .resUsage = &.{
-        .{ .id = img2.gpuId, .stage = PipeStage.COLOR_ATTACHMENT, .access = PipeAccess.COLOR_ATTACHMENT_WRITE, .layout = ImageLayout.COLOR_ATTACHMENT },
+        .{ .id = img2.gpuId, .stage = .ColorAtt, .access = .ColorAttWrite, .layout = .ColorAtt },
     },
     .shaderIds = &.{ sc.t2Vert.id, sc.t2Frag.id },
 };
@@ -115,7 +93,7 @@ pub const meshTest: Pass = .{
         .{ .id = img3.gpuId, .rendertype = .Color },
     },
     .resUsage = &.{
-        .{ .id = img3.gpuId, .stage = PipeStage.COLOR_ATTACHMENT, .access = PipeAccess.COLOR_ATTACHMENT_WRITE, .layout = ImageLayout.COLOR_ATTACHMENT },
+        .{ .id = img3.gpuId, .stage = .ColorAtt, .access = .ColorAttWrite, .layout = .ColorAtt },
     },
     .shaderIds = &.{ sc.t3Mesh.id, sc.t3Frag.id },
 };
@@ -125,7 +103,7 @@ pub const taskTest: Pass = .{
         .{ .id = img4.gpuId, .rendertype = .Color },
     },
     .resUsage = &.{
-        .{ .id = img4.gpuId, .stage = PipeStage.COLOR_ATTACHMENT, .access = PipeAccess.COLOR_ATTACHMENT_WRITE, .layout = ImageLayout.COLOR_ATTACHMENT },
+        .{ .id = img4.gpuId, .stage = .ColorAtt, .access = .ColorAttWrite, .layout = .ColorAtt },
     },
     .shaderIds = &.{ sc.t4Task.id, sc.t4Mesh.id, sc.t4Frag.id },
 };
@@ -135,32 +113,10 @@ pub const gridTest: Pass = .{
         .{ .id = img4.gpuId, .rendertype = .Color },
     },
     .resUsage = &.{
-        .{ .id = img4.gpuId, .stage = PipeStage.COLOR_ATTACHMENT, .access = PipeAccess.COLOR_ATTACHMENT_WRITE, .layout = ImageLayout.COLOR_ATTACHMENT },
+        .{ .id = img4.gpuId, .stage = .ColorAtt, .access = .ColorAttWrite, .layout = .ColorAtt },
     },
     .shaderIds = &.{ sc.gridTask.id, sc.gridMesh.id, sc.gridFrag.id },
     .clear = true,
 };
 
-// pub const gridTest2: Pass = .{
-//     .resUsage = &.{
-//         .{ .id = img3.gpuId, .stage = PipeStage.COLOR_ATTACHMENT, .access = PipeAccess.COLOR_ATTACHMENT_WRITE, .layout = ImageLayout.COLOR_ATTACHMENT },
-//     },
-//     .shaderIds = &.{ sc.gridTask.id, sc.gridMesh.id, sc.gridFrag.id },
-// };
-
-// pub const gridTest3: Pass = .{
-//     .resUsage = &.{
-//         .{ .id = img2.gpuId, .stage = PipeStage.COLOR_ATTACHMENT, .access = PipeAccess.COLOR_ATTACHMENT_WRITE, .layout = ImageLayout.COLOR_ATTACHMENT },
-//     },
-//     .shaderIds = &.{ sc.gridTask.id, sc.gridMesh.id, sc.gridFrag.id },
-// };
-
-// pub const gridTest4: Pass = .{
-//     .resUsage = &.{
-//         .{ .id = img1.gpuId, .stage = PipeStage.COLOR_ATTACHMENT, .access = PipeAccess.COLOR_ATTACHMENT_WRITE, .layout = ImageLayout.COLOR_ATTACHMENT },
-//     },
-//     .shaderIds = &.{ sc.gridTask.id, sc.gridMesh.id, sc.gridFrag.id },
-// };
-
-// pub const renderSequence: []const Pass = &.{ gridTest, gridTest2, gridTest3, gridTest4 };
 pub const renderSequence: []const Pass = &.{ computeTest, graphicsTest, meshTest, taskTest, gridTest };

@@ -11,47 +11,51 @@ const sc = @import("../configs/shaderConfig.zig");
 const GpuImage = @import("resources/ResourceManager.zig").Resource.GpuImage;
 const SwapchainManager = @import("SwapchainManager.zig");
 
-pub const ImageLayout = struct {
-    pub const UNDEFINED = vk.VK_IMAGE_LAYOUT_UNDEFINED;
-    pub const GENERAL = vk.VK_IMAGE_LAYOUT_GENERAL;
-    pub const COLOR_ATTACHMENT = vk.VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-    pub const TRANSFER_SRC = vk.VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-    pub const TRANSFER_DST = vk.VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-    pub const PRESENT_SRC = vk.VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+pub const ImageLayout = enum(vk.VkImageLayout) {
+    Undefined = vk.VK_IMAGE_LAYOUT_UNDEFINED,
+    General = vk.VK_IMAGE_LAYOUT_GENERAL,
+    ColorAtt = vk.VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+    TransferSrc = vk.VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+    TransferDst = vk.VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+    PresentSrc = vk.VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
     //.. more exist
 };
 
-pub const PipeStage = struct {
-    pub const TOP_OF_PIPE = vk.VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT;
-    pub const COMPUTE = vk.VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
-    pub const VERTEX_SHADER = vk.VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT;
-    pub const TASK_SHADER = vk.VK_PIPELINE_STAGE_2_TASK_SHADER_BIT_EXT;
-    pub const MESH_SHADER = vk.VK_PIPELINE_STAGE_2_MESH_SHADER_BIT_EXT;
-    pub const FRAGMENT_SHADER = vk.VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
-    pub const COLOR_ATTACHMENT = vk.VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
-    pub const TRANSFER = vk.VK_PIPELINE_STAGE_2_TRANSFER_BIT;
-    pub const ALL_COMMANDS = vk.VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
-    pub const BOTTOM_OF_PIPE = vk.VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT;
+pub const PipeStage = enum(vk.VkPipelineStageFlagBits2) {
+    TopOfPipe = vk.VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
+    Compute = vk.VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+    VertShader = vk.VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT,
+    TaskShader = vk.VK_PIPELINE_STAGE_2_TASK_SHADER_BIT_EXT,
+    MeshShader = vk.VK_PIPELINE_STAGE_2_MESH_SHADER_BIT_EXT,
+    FragShader = vk.VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+    ColorAtt = vk.VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+    Transfer = vk.VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+    AllCmds = vk.VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+    BotOfPipe = vk.VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT,
     //.. more exist
 };
 
-pub const PipeAccess = struct {
-    pub const NONE = 0;
-    pub const SHADER_READ = vk.VK_ACCESS_2_SHADER_STORAGE_READ_BIT;
-    pub const SHADER_WRITE = vk.VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT;
-    pub const COLOR_ATTACHMENT_WRITE = vk.VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
-    pub const COLOR_ATTACHMENT_READ = vk.VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT;
-    pub const TRANSFER_WRITE = vk.VK_ACCESS_2_TRANSFER_WRITE_BIT;
-    pub const TRANSFER_READ = vk.VK_ACCESS_2_TRANSFER_READ_BIT;
-    pub const MEMORY_READ = vk.VK_ACCESS_2_MEMORY_READ_BIT;
-    pub const MEMORY_WRITE = vk.VK_ACCESS_2_MEMORY_WRITE_BIT;
+pub const PipeAccess = enum(vk.VkAccessFlagBits2) {
+    None = 0,
+    ShaderRead = vk.VK_ACCESS_2_SHADER_STORAGE_READ_BIT,
+    ShaderWrite = vk.VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+    ShaderReadWrite = vk.VK_ACCESS_2_SHADER_STORAGE_READ_BIT | vk.VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+    ColorAttWrite = vk.VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+    ColorAttRead = vk.VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT,
+    ColorAttReadWrite = vk.VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT | vk.VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+    TransferRead = vk.VK_ACCESS_2_TRANSFER_READ_BIT,
+    TransferWrite = vk.VK_ACCESS_2_TRANSFER_WRITE_BIT,
+    TransferReadWrite = vk.VK_ACCESS_2_TRANSFER_READ_BIT | vk.VK_ACCESS_2_TRANSFER_WRITE_BIT,
+    MemoryRead = vk.VK_ACCESS_2_MEMORY_READ_BIT,
+    MemoryWrite = vk.VK_ACCESS_2_MEMORY_WRITE_BIT,
+    MemoryReadWrite = vk.VK_ACCESS_2_MEMORY_READ_BIT | vk.VK_ACCESS_2_MEMORY_WRITE_BIT,
     //.. more exist
 };
 
 pub const ResourceState = struct {
-    stage: vk.VkPipelineStageFlagBits2 = PipeStage.TOP_OF_PIPE,
-    access: vk.VkAccessFlagBits2 = PipeAccess.NONE,
-    layout: vk.VkImageLayout = ImageLayout.UNDEFINED,
+    stage: PipeStage = .TopOfPipe,
+    access: PipeAccess = .None,
+    layout: ImageLayout = .Undefined,
 };
 
 pub const RenderGraph = struct {
@@ -152,7 +156,7 @@ pub const RenderGraph = struct {
             const srcImgPtr = try resMan.getImagePtr(imgId);
 
             const imgState = self.resourceStates.get(imgId);
-            const neededImgState = ResourceState{ .stage = PipeStage.TRANSFER, .access = PipeAccess.TRANSFER_READ, .layout = ImageLayout.TRANSFER_SRC };
+            const neededImgState = ResourceState{ .stage = .Transfer, .access = .TransferRead, .layout = .TransferSrc };
 
             if (imgState.stage != neededImgState.stage or imgState.access != neededImgState.access or imgState.layout != neededImgState.layout) {
                 // Transition Source Image (Color/General -> Transfer Src)
@@ -161,8 +165,8 @@ pub const RenderGraph = struct {
                 self.resourceStates.set(imgId, neededImgState);
             }
             // Transition Destination Swapchain (Undefined -> Transfer Dst)
-            const swapchainState = ResourceState{ .stage = PipeStage.TOP_OF_PIPE, .access = PipeAccess.NONE, .layout = ImageLayout.UNDEFINED }; // SHOULD THIS BE UNDEFINED?
-            const neededState = ResourceState{ .stage = PipeStage.TRANSFER, .access = PipeAccess.TRANSFER_WRITE, .layout = ImageLayout.TRANSFER_DST }; // SHOULD THIS BE UNDEFINED?
+            const swapchainState = ResourceState{ .stage = .TopOfPipe, .access = .None, .layout = .Undefined }; // SHOULD THIS BE UNDEFINED?
+            const neededState = ResourceState{ .stage = .Transfer, .access = .TransferWrite, .layout = .TransferDst }; // SHOULD THIS BE UNDEFINED?
             const swapchainBarrier = createImageBarrier(swapchainState, neededState, swapchain.images[swapchain.curIndex]);
             try self.tempBarriers.append(swapchainBarrier); // Managed by Swapchain, needs no State Update
         }
@@ -180,8 +184,8 @@ pub const RenderGraph = struct {
         for (targets) |swapchainIndex| {
             // DOESNT HANDLE EDGECASE WHERE BLIT WASNT DONE BECAUSE NO WINDOW SHOWED THE RENDER
             const swapchain = swapchainMap.getPtrAtIndex(swapchainIndex);
-            const swapchainState = ResourceState{ .stage = PipeStage.TOP_OF_PIPE, .access = PipeAccess.NONE, .layout = ImageLayout.TRANSFER_DST }; // EDGE CASE: Probably Transfer?!
-            const neededState = ResourceState{ .stage = PipeStage.BOTTOM_OF_PIPE, .access = PipeAccess.NONE, .layout = ImageLayout.PRESENT_SRC };
+            const swapchainState = ResourceState{ .stage = .TopOfPipe, .access = .None, .layout = .TransferDst }; // EDGE CASE: Probably Transfer?!
+            const neededState = ResourceState{ .stage = .BotOfPipe, .access = .None, .layout = .PresentSrc };
             const barrier = createImageBarrier(swapchainState, neededState, swapchain.images[swapchain.curIndex]);
             try self.tempBarriers.append(barrier);
         }
@@ -205,12 +209,12 @@ pub const RenderGraph = struct {
 fn createImageBarrier(curState: ResourceState, newState: ResourceState, img: vk.VkImage) vk.VkImageMemoryBarrier2 {
     return vk.VkImageMemoryBarrier2{
         .sType = vk.VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-        .srcStageMask = curState.stage,
-        .srcAccessMask = curState.access,
-        .dstStageMask = newState.stage,
-        .dstAccessMask = newState.access,
-        .oldLayout = curState.layout,
-        .newLayout = newState.layout,
+        .srcStageMask = @intFromEnum(curState.stage),
+        .srcAccessMask = @intFromEnum(curState.access),
+        .dstStageMask = @intFromEnum(newState.stage),
+        .dstAccessMask = @intFromEnum(newState.access),
+        .oldLayout = @intFromEnum(curState.layout),
+        .newLayout = @intFromEnum(newState.layout),
         .srcQueueFamilyIndex = vk.VK_QUEUE_FAMILY_IGNORED,
         .dstQueueFamilyIndex = vk.VK_QUEUE_FAMILY_IGNORED,
         .image = img,
@@ -218,13 +222,13 @@ fn createImageBarrier(curState: ResourceState, newState: ResourceState, img: vk.
     };
 }
 
-fn createBufferBarrier(srcStage: u64, srcAccess: u64, dstStage: u64, dstAccess: u64, buffer: vk.VkBuffer) vk.VkBufferMemoryBarrier2 {
+fn createBufferBarrier(curState: ResourceState, newState: ResourceState, buffer: vk.VkBuffer) vk.VkBufferMemoryBarrier2 {
     return vk.VkBufferMemoryBarrier2{
         .sType = vk.VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-        .srcStageMask = srcStage,
-        .srcAccessMask = srcAccess,
-        .dstStageMask = dstStage,
-        .dstAccessMask = dstAccess,
+        .srcStageMask = @intFromEnum(curState.stage),
+        .srcAccessMask = @intFromEnum(curState.access),
+        .dstStageMask = @intFromEnum(newState.stage),
+        .dstAccessMask = @intFromEnum(newState.access),
         .srcQueueFamilyIndex = vk.VK_QUEUE_FAMILY_IGNORED,
         .dstQueueFamilyIndex = vk.VK_QUEUE_FAMILY_IGNORED,
         .buffer = buffer,
