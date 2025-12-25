@@ -29,6 +29,7 @@ pub const Pass = struct {
         vertexPass,
         empty,
     };
+    pub const RenderAttachment = struct { id: u32, rendertype: enum { Color, Depth } };
     pub const ResourceUsage = struct {
         id: u32,
         stage: vk.VkPipelineStageFlagBits2 = PipeStage.TOP_OF_PIPE,
@@ -36,6 +37,7 @@ pub const Pass = struct {
         layout: vk.VkImageLayout = ImageLayout.GENERAL,
     };
     passType: PassType = .empty,
+    attachments: []const RenderAttachment,
     resUsage: []const ResourceUsage,
     shaderIds: []const u8,
     clear: bool = false,
@@ -89,6 +91,9 @@ pub const buff1 = ResourceInfo{ .gpuId = 1, .binding = 1, .memUsage = .CpuWriteO
 pub const buff2 = ResourceInfo{ .gpuId = 0, .binding = 2, .memUsage = .CpuWriteOptimal, .info = .{ .bufInf = .{ .bufUsage = .Storage, .length = 100, .sizeOfElement = @sizeOf(Object) } } };
 
 pub const computeTest: Pass = .{
+    .attachments = &.{
+        .{ .id = img1.gpuId, .rendertype = .Color },
+    },
     .resUsage = &.{
         .{ .id = img1.gpuId, .stage = PipeStage.COMPUTE, .access = PipeAccess.SHADER_WRITE, .layout = ImageLayout.GENERAL }, // SHADER_READ TOO?
     },
@@ -96,6 +101,9 @@ pub const computeTest: Pass = .{
 };
 
 pub const graphicsTest: Pass = .{
+    .attachments = &.{
+        .{ .id = img2.gpuId, .rendertype = .Color },
+    },
     .resUsage = &.{
         .{ .id = img2.gpuId, .stage = PipeStage.COLOR_ATTACHMENT, .access = PipeAccess.COLOR_ATTACHMENT_WRITE, .layout = ImageLayout.COLOR_ATTACHMENT },
     },
@@ -103,6 +111,9 @@ pub const graphicsTest: Pass = .{
 };
 
 pub const meshTest: Pass = .{
+    .attachments = &.{
+        .{ .id = img3.gpuId, .rendertype = .Color },
+    },
     .resUsage = &.{
         .{ .id = img3.gpuId, .stage = PipeStage.COLOR_ATTACHMENT, .access = PipeAccess.COLOR_ATTACHMENT_WRITE, .layout = ImageLayout.COLOR_ATTACHMENT },
     },
@@ -110,6 +121,9 @@ pub const meshTest: Pass = .{
 };
 
 pub const taskTest: Pass = .{
+    .attachments = &.{
+        .{ .id = img4.gpuId, .rendertype = .Color },
+    },
     .resUsage = &.{
         .{ .id = img4.gpuId, .stage = PipeStage.COLOR_ATTACHMENT, .access = PipeAccess.COLOR_ATTACHMENT_WRITE, .layout = ImageLayout.COLOR_ATTACHMENT },
     },
@@ -117,6 +131,9 @@ pub const taskTest: Pass = .{
 };
 
 pub const gridTest: Pass = .{
+    .attachments = &.{
+        .{ .id = img4.gpuId, .rendertype = .Color },
+    },
     .resUsage = &.{
         .{ .id = img4.gpuId, .stage = PipeStage.COLOR_ATTACHMENT, .access = PipeAccess.COLOR_ATTACHMENT_WRITE, .layout = ImageLayout.COLOR_ATTACHMENT },
     },

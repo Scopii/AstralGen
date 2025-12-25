@@ -22,7 +22,6 @@ pub const Resource = struct {
         view: vk.VkImageView,
         extent3d: vk.VkExtent3D,
         format: vk.VkFormat,
-        curLayout: u32 = vk.VK_IMAGE_LAYOUT_UNDEFINED,
     };
     pub const GpuBuffer = struct {
         pub const deviceAddress = u64;

@@ -107,8 +107,17 @@ pub const RenderGraph = struct {
     }
 
     pub fn recordCompute(self: *RenderGraph, cmd: vk.VkCommandBuffer, pass: rc.Pass, pcs: PushConstants, validShaders: []const ShaderObject, resMan: *ResourceManager) !void {
-        if (pass.resUsage.len > 1) std.debug.print("WARNING: Compute Pass can only use one Render Image\n", .{});
-        const resource = try resMan.getResourcePtr(pass.resUsage[0].id); // HARD CODED TO FIRST
+        if (pass.attachments.len > 1) std.debug.print("WARNING: Compute Pass only supports Attachment Standard\n", .{});
+
+        const attachmentIndex = for (pass.attachments) |attachment| {
+            if (attachment.rendertype == .Color) break attachment.id;
+        } else null;
+
+        if (attachmentIndex == null) {
+            std.debug.print("Compute needs Attachment! \n", .{});
+            return error.RecordCompute;
+        }
+        const resource = try resMan.getResourcePtr(attachmentIndex.?);
 
         switch (resource.resourceType) {
             .gpuImg => |gpuImg| {
@@ -126,12 +135,13 @@ pub const RenderGraph = struct {
     pub fn recordGraphics(self: *RenderGraph, cmd: vk.VkCommandBuffer, pass: rc.Pass, pcs: PushConstants, validShaders: []const ShaderObject, resMan: *ResourceManager) !void {
         vk.vkCmdPushConstants(cmd, self.pipeLayout, vk.VK_SHADER_STAGE_ALL, 0, @sizeOf(PushConstants), &pcs);
         bindShaderStages(cmd, validShaders);
-        const resource = try resMan.getResourcePtr(pass.resUsage[0].id); // HARD CODED TO FIRST
 
-        switch (resource.resourceType) {
-            .gpuImg => |*gpuImg| try renderWithState(cmd, gpuImg, pass.passType, pass.clear), // NEEDS IMPLEMENTATION FOR MULTIPLE RENDER TARGETS!!!!!
-            else => std.debug.print("ERROR: Graphics Pass needs at least 1 Render Image, has none\n", .{}),
+        var attachments: [8]*GpuImage = undefined;
+        for (0..pass.attachments.len) |i| {
+            attachments[i] = try resMan.getImagePtr(pass.attachments[i].id);
         }
+
+        try renderWithState(cmd, attachments[0..pass.attachments.len], pass.attachments, pass.passType, pass.clear);
     }
 
     pub fn recordSwapchainBlits(self: *RenderGraph, cmd: vk.VkCommandBuffer, targets: []const u32, swapchainMap: *SwapchainManager.SwapchainMap, resMan: *ResourceManager) !void {
@@ -266,19 +276,28 @@ fn bindShaderStages(cmd: vk.VkCommandBuffer, shaderObjects: []const ShaderObject
     vkFn.vkCmdBindShadersEXT.?(cmd, 8, &allStages, &handles);
 }
 
-fn renderWithState(cmd: vk.VkCommandBuffer, renderImg: *GpuImage, passType: rc.Pass.PassType, clear: bool) !void {
+fn renderWithState(cmd: vk.VkCommandBuffer, renderImages: []*GpuImage, attachments: []const rc.Pass.RenderAttachment, passType: rc.Pass.PassType, clear: bool) !void {
+    if (attachments.len > 8) return error.TooManyAttachments;
+
+    // RENDER IMG POINTERS HAVE TO MATCH ATTACHMENTS LENGTH!
+
+    var colorInfos: [8]vk.VkRenderingAttachmentInfo = undefined;
+    const mainImg = renderImages[0].*;
+
+    for (0..attachments.len) |i| {
+        colorInfos[i] = vk.VkRenderingAttachmentInfo{
+            .sType = vk.VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+            .imageView = mainImg.view,
+            .imageLayout = vk.VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+            .loadOp = if (clear) vk.VK_ATTACHMENT_LOAD_OP_CLEAR else vk.VK_ATTACHMENT_LOAD_OP_LOAD,
+            .storeOp = vk.VK_ATTACHMENT_STORE_OP_STORE,
+            .clearValue = .{ .color = .{ .float32 = .{ 0.0, 0.0, 0.1, 1.0 } } },
+        };
+    }
+
     const scissor = vk.VkRect2D{
         .offset = .{ .x = 0, .y = 0 },
-        .extent = .{ .width = renderImg.extent3d.width, .height = renderImg.extent3d.height },
-    };
-
-    const colorAttachInf = vk.VkRenderingAttachmentInfo{
-        .sType = vk.VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-        .imageView = renderImg.view,
-        .imageLayout = vk.VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-        .loadOp = if (clear) vk.VK_ATTACHMENT_LOAD_OP_CLEAR else vk.VK_ATTACHMENT_LOAD_OP_LOAD,
-        .storeOp = vk.VK_ATTACHMENT_STORE_OP_STORE,
-        .clearValue = .{ .color = .{ .float32 = .{ 0.0, 0.0, 0.1, 1.0 } } },
+        .extent = .{ .width = mainImg.extent3d.width, .height = mainImg.extent3d.height },
     };
 
     const renderInf = vk.VkRenderingInfo{
@@ -286,8 +305,8 @@ fn renderWithState(cmd: vk.VkCommandBuffer, renderImg: *GpuImage, passType: rc.P
         .flags = 0,
         .renderArea = scissor,
         .layerCount = 1,
-        .colorAttachmentCount = 1,
-        .pColorAttachments = &colorAttachInf,
+        .colorAttachmentCount = @intCast(attachments.len),
+        .pColorAttachments = &colorInfos,
         .pDepthAttachment = null,
         .pStencilAttachment = null,
     };
@@ -296,8 +315,8 @@ fn renderWithState(cmd: vk.VkCommandBuffer, renderImg: *GpuImage, passType: rc.P
     const viewport = vk.VkViewport{
         .x = 0,
         .y = 0,
-        .width = @floatFromInt(renderImg.extent3d.width),
-        .height = @floatFromInt(renderImg.extent3d.height),
+        .width = @floatFromInt(mainImg.extent3d.width),
+        .height = @floatFromInt(mainImg.extent3d.height),
         .minDepth = 0.0,
         .maxDepth = 1.0,
     };
@@ -324,24 +343,23 @@ fn renderWithState(cmd: vk.VkCommandBuffer, renderImg: *GpuImage, passType: rc.P
     vkFn.vkCmdSetStencilTestEnable.?(cmd, vk.VK_FALSE);
 
     const colorBlendEnable = vk.VK_TRUE;
-    const colorBlendAttachments = [_]vk.VkBool32{colorBlendEnable};
-    vkFn.vkCmdSetColorBlendEnableEXT.?(cmd, 0, 1, &colorBlendAttachments);
+    const colorBlendAttachments = [_]vk.VkBool32{colorBlendEnable} ** 8;
+    vkFn.vkCmdSetColorBlendEnableEXT.?(cmd, 0, @intCast(attachments.len), &colorBlendAttachments);
 
     const blendEquation = vk.VkColorBlendEquationEXT{
-        .srcColorBlendFactor = vk.VK_BLEND_FACTOR_SRC_ALPHA, // Take Shader Alpha
-        .dstColorBlendFactor = vk.VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA, // Take 1-Alpha from Background
-        .colorBlendOp = vk.VK_BLEND_OP_ADD, // Add them
+        .srcColorBlendFactor = vk.VK_BLEND_FACTOR_SRC_ALPHA,
+        .dstColorBlendFactor = vk.VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+        .colorBlendOp = vk.VK_BLEND_OP_ADD,
         .srcAlphaBlendFactor = vk.VK_BLEND_FACTOR_ONE,
         .dstAlphaBlendFactor = vk.VK_BLEND_FACTOR_ZERO,
         .alphaBlendOp = vk.VK_BLEND_OP_ADD,
     };
-    const equations = [_]vk.VkColorBlendEquationEXT{blendEquation};
-
-    vkFn.vkCmdSetColorBlendEquationEXT.?(cmd, 0, 1, &equations);
+    const equations = [_]vk.VkColorBlendEquationEXT{blendEquation} ** 8;
+    vkFn.vkCmdSetColorBlendEquationEXT.?(cmd, 0, @intCast(attachments.len), &equations);
 
     const colorWriteMask = vk.VK_COLOR_COMPONENT_R_BIT | vk.VK_COLOR_COMPONENT_G_BIT | vk.VK_COLOR_COMPONENT_B_BIT | vk.VK_COLOR_COMPONENT_A_BIT;
-    const colorWriteMasks = [_]vk.VkColorComponentFlags{colorWriteMask};
-    vkFn.vkCmdSetColorWriteMaskEXT.?(cmd, 0, 1, &colorWriteMasks);
+    const colorWriteMasks = [_]vk.VkColorComponentFlags{colorWriteMask} ** 8;
+    vkFn.vkCmdSetColorWriteMaskEXT.?(cmd, 0, @intCast(attachments.len), &colorWriteMasks);
 
     vkFn.vkCmdSetPrimitiveTopology.?(cmd, vk.VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
     vkFn.vkCmdSetPrimitiveRestartEnable.?(cmd, vk.VK_FALSE);

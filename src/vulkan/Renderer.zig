@@ -139,7 +139,7 @@ pub const Renderer = struct {
                 std.debug.print("Pass {} Shader Layout invalid", .{err});
                 return error.PassInvalid;
             };
-            try self.passes.append(.{ .passType = passType, .shaderIds = pass.shaderIds, .clear = pass.clear, .resUsage = pass.resUsage });
+            try self.passes.append(.{ .passType = passType, .shaderIds = pass.shaderIds, .clear = pass.clear, .resUsage = pass.resUsage, .attachments = pass.attachments });
         }
     }
 
