@@ -57,6 +57,11 @@ pub const CmdManager = struct {
             .pInheritanceInfo = null,
         };
         try check(vk.vkBeginCommandBuffer(cmd, &beginInf), "could not Begin CmdBuffer");
+
+        bindDescriptorBuffer(cmd, self.descLayoutAddress);
+        setDescriptorBufferOffset(cmd, vk.VK_PIPELINE_BIND_POINT_COMPUTE, self.pipeLayout);
+        setDescriptorBufferOffset(cmd, vk.VK_PIPELINE_BIND_POINT_GRAPHICS, self.pipeLayout);
+
         return self.cmds[frameInFlight];
     }
 
@@ -90,4 +95,19 @@ fn createCmdPool(gpi: vk.VkDevice, familyIndex: u32) !vk.VkCommandPool {
     var pool: vk.VkCommandPool = undefined;
     try check(vk.vkCreateCommandPool(gpi, &poolInf, null, &pool), "Could not create Cmd Pool");
     return pool;
+}
+
+fn bindDescriptorBuffer(cmd: vk.VkCommandBuffer, gpuAddress: u64) void {
+    const bufferBindingInf = vk.VkDescriptorBufferBindingInfoEXT{
+        .sType = vk.VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT,
+        .address = gpuAddress,
+        .usage = vk.VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT,
+    };
+    vkFn.vkCmdBindDescriptorBuffersEXT.?(cmd, 1, &bufferBindingInf);
+}
+
+fn setDescriptorBufferOffset(cmd: vk.VkCommandBuffer, bindPoint: vk.VkPipelineBindPoint, pipeLayout: vk.VkPipelineLayout) void {
+    const bufferIndex: u32 = 0;
+    const descOffset: vk.VkDeviceSize = 0;
+    vkFn.vkCmdSetDescriptorBufferOffsetsEXT.?(cmd, bindPoint, pipeLayout, 0, 1, &bufferIndex, &descOffset);
 }

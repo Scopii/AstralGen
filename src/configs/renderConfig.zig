@@ -36,9 +36,7 @@ pub const Pass = struct {
         layout: vk.VkImageLayout = ImageLayout.GENERAL,
     };
     passType: PassType = .empty,
-    //inputIDs: []const u32,
     resUsage: []const ResourceUsage,
-    imgId: u32,
     shaderIds: []const u8,
     clear: bool = false,
 };
@@ -94,7 +92,6 @@ pub const computeTest: Pass = .{
     .resUsage = &.{
         .{ .id = img1.gpuId, .stage = PipeStage.COMPUTE, .access = PipeAccess.SHADER_WRITE, .layout = ImageLayout.GENERAL }, // SHADER_READ TOO?
     },
-    .imgId = img1.gpuId,
     .shaderIds = &.{sc.t1Comp.id},
 };
 
@@ -102,7 +99,6 @@ pub const graphicsTest: Pass = .{
     .resUsage = &.{
         .{ .id = img2.gpuId, .stage = PipeStage.COLOR_ATTACHMENT, .access = PipeAccess.COLOR_ATTACHMENT_WRITE, .layout = ImageLayout.COLOR_ATTACHMENT },
     },
-    .imgId = img2.gpuId,
     .shaderIds = &.{ sc.t2Vert.id, sc.t2Frag.id },
 };
 
@@ -110,7 +106,6 @@ pub const meshTest: Pass = .{
     .resUsage = &.{
         .{ .id = img3.gpuId, .stage = PipeStage.COLOR_ATTACHMENT, .access = PipeAccess.COLOR_ATTACHMENT_WRITE, .layout = ImageLayout.COLOR_ATTACHMENT },
     },
-    .imgId = img3.gpuId,
     .shaderIds = &.{ sc.t3Mesh.id, sc.t3Frag.id },
 };
 
@@ -118,7 +113,6 @@ pub const taskTest: Pass = .{
     .resUsage = &.{
         .{ .id = img4.gpuId, .stage = PipeStage.COLOR_ATTACHMENT, .access = PipeAccess.COLOR_ATTACHMENT_WRITE, .layout = ImageLayout.COLOR_ATTACHMENT },
     },
-    .imgId = img4.gpuId,
     .shaderIds = &.{ sc.t4Task.id, sc.t4Mesh.id, sc.t4Frag.id },
 };
 
@@ -126,8 +120,29 @@ pub const gridTest: Pass = .{
     .resUsage = &.{
         .{ .id = img4.gpuId, .stage = PipeStage.COLOR_ATTACHMENT, .access = PipeAccess.COLOR_ATTACHMENT_WRITE, .layout = ImageLayout.COLOR_ATTACHMENT },
     },
-    .imgId = img4.gpuId,
     .shaderIds = &.{ sc.gridTask.id, sc.gridMesh.id, sc.gridFrag.id },
 };
 
+pub const gridTest2: Pass = .{
+    .resUsage = &.{
+        .{ .id = img3.gpuId, .stage = PipeStage.COLOR_ATTACHMENT, .access = PipeAccess.COLOR_ATTACHMENT_WRITE, .layout = ImageLayout.COLOR_ATTACHMENT },
+    },
+    .shaderIds = &.{ sc.gridTask.id, sc.gridMesh.id, sc.gridFrag.id },
+};
+
+pub const gridTest3: Pass = .{
+    .resUsage = &.{
+        .{ .id = img2.gpuId, .stage = PipeStage.COLOR_ATTACHMENT, .access = PipeAccess.COLOR_ATTACHMENT_WRITE, .layout = ImageLayout.COLOR_ATTACHMENT },
+    },
+    .shaderIds = &.{ sc.gridTask.id, sc.gridMesh.id, sc.gridFrag.id },
+};
+
+pub const gridTest4: Pass = .{
+    .resUsage = &.{
+        .{ .id = img1.gpuId, .stage = PipeStage.COLOR_ATTACHMENT, .access = PipeAccess.COLOR_ATTACHMENT_WRITE, .layout = ImageLayout.COLOR_ATTACHMENT },
+    },
+    .shaderIds = &.{ sc.gridTask.id, sc.gridMesh.id, sc.gridFrag.id },
+};
+
+// pub const renderSequence: []const Pass = &.{ gridTest, gridTest2, gridTest3, gridTest4 };
 pub const renderSequence: []const Pass = &.{ computeTest, graphicsTest, meshTest, taskTest, gridTest };

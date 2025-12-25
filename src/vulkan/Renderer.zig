@@ -139,7 +139,7 @@ pub const Renderer = struct {
                 std.debug.print("Pass {} Shader Layout invalid", .{err});
                 return error.PassInvalid;
             };
-            try self.passes.append(.{ .passType = passType, .imgId = pass.imgId, .shaderIds = pass.shaderIds, .clear = pass.clear, .resUsage = pass.resUsage });
+            try self.passes.append(.{ .passType = passType, .shaderIds = pass.shaderIds, .clear = pass.clear, .resUsage = pass.resUsage });
         }
         self.renderGraph.addPasses(passes);
     }
@@ -167,7 +167,7 @@ pub const Renderer = struct {
             try self.renderGraph.recordPassBarriers(cmd, pass, &self.resourceMan);
 
             const objectBuf = try self.resourceMan.getBufferPtr(1);
-            const passImg = try self.resourceMan.getImagePtr(pass.imgId);
+            const passImg = try self.resourceMan.getImagePtr(pass.resUsage[0].id); // FOR COMPUTE IN SHADER
 
             const pcs = PushConstants{
                 .camPosAndFov = cam.getPosAndFov(),

@@ -57,7 +57,6 @@ pub const ResourceState = struct {
 pub const RenderGraph = struct {
     alloc: Allocator,
     pipeLayout: vk.VkPipelineLayout,
-    descLayoutAddress: u64,
     resourceStates: CreateMapArray(ResourceState, rc.GPU_RESOURCE_MAX, u32, rc.GPU_RESOURCE_MAX, 0) = .{},
     tempBarriers: std.array_list.Managed(vk.VkImageMemoryBarrier2),
 
@@ -65,7 +64,6 @@ pub const RenderGraph = struct {
         return .{
             .alloc = alloc,
             .pipeLayout = resourceMan.descMan.pipeLayout,
-            .descLayoutAddress = resourceMan.descMan.descBuffer.gpuAddress,
             .tempBarriers = std.array_list.Managed(vk.VkImageMemoryBarrier2).init(alloc),
         };
     }
@@ -85,23 +83,22 @@ pub const RenderGraph = struct {
     pub fn recordPassBarriers(self: *RenderGraph, cmd: vk.VkCommandBuffer, pass: rc.Pass, resMan: *ResourceManager) !void {
         for (pass.resUsage) |resUsage| {
             const state = self.resourceStates.get(resUsage.id);
+            const neededState = ResourceState{ .stage = resUsage.stage, .access = resUsage.access, .layout = resUsage.layout };
 
-            if (resUsage.stage != state.stage or resUsage.access != state.access or resUsage.layout != state.layout) {
+            if (state.stage != neededState.stage or neededState.access != neededState.access or neededState.layout != neededState.layout) {
                 const resource = try resMan.getResourcePtr(resUsage.id);
 
                 switch (resource.resourceType) {
                     .gpuImg => |*gpuImg| {
-                        try self.tempBarriers.append(
-                            createImageMemoryBarrier2(state.stage, state.access, resUsage.stage, resUsage.access, state.layout, resUsage.layout, gpuImg.img),
-                        );
-                        self.resourceStates.set(resUsage.id, .{ .stage = resUsage.stage, .access = resUsage.access, .layout = resUsage.layout });
+                        const barrier = createImageMemoryBarrier2NEW(state, neededState, gpuImg.img);
+                        try self.tempBarriers.append(barrier);
+                        self.updateResourceState(resUsage);
                     },
                     .gpuBuf => std.debug.print("ERROR: Buffer Render Graph Build not implemented yet\n", .{}),
                 }
             }
         }
-        createPipelineBarriers2(cmd, self.tempBarriers.items);
-        self.tempBarriers.clearRetainingCapacity();
+        self.bakeBarriers(cmd);
     }
 
     pub fn recordPass(self: *RenderGraph, cmd: vk.VkCommandBuffer, pass: rc.Pass, pcs: PushConstants, validShaders: []const ShaderObject, resMan: *ResourceManager) !void {
@@ -110,33 +107,16 @@ pub const RenderGraph = struct {
             .graphicsPass, .meshPass, .taskMeshPass => try self.recordGraphics(cmd, pass, pcs, validShaders, resMan),
             else => std.debug.print("Renderer: {s} has no Command Recording yet\n", .{@tagName(pass.passType)}),
         }
-        self.tempBarriers.clearRetainingCapacity();
     }
 
-    pub fn resetResourceState(self: *RenderGraph, id: u32) void {
-        self.resourceStates.set(id, .{});
-    }
-
-    pub fn recordCompute(
-        self: *RenderGraph,
-        cmd: vk.VkCommandBuffer,
-        pass: rc.Pass,
-        pcs: PushConstants,
-        validShaders: []const ShaderObject,
-        resMan: *ResourceManager,
-    ) !void {
-        if (pass.resUsage.len > 1) {
-            std.debug.print("WARNING: Compute Pass can only use one Render Image\n", .{});
-        }
+    pub fn recordCompute(self: *RenderGraph, cmd: vk.VkCommandBuffer, pass: rc.Pass, pcs: PushConstants, validShaders: []const ShaderObject, resMan: *ResourceManager) !void {
+        if (pass.resUsage.len > 1) std.debug.print("WARNING: Compute Pass can only use one Render Image\n", .{});
         const resource = try resMan.getResourcePtr(pass.resUsage[0].id); // HARD CODED TO FIRST
 
         switch (resource.resourceType) {
             .gpuImg => |gpuImg| {
                 vk.vkCmdPushConstants(cmd, self.pipeLayout, vk.VK_SHADER_STAGE_ALL, 0, @sizeOf(PushConstants), &pcs);
                 bindShaderStages(cmd, validShaders);
-                bindDescriptorBuffer(cmd, self.descLayoutAddress);
-                setDescriptorBufferOffset(cmd, vk.VK_PIPELINE_BIND_POINT_COMPUTE, self.pipeLayout);
-
                 vk.vkCmdDispatch(cmd, (gpuImg.extent3d.width + 7) / 8, (gpuImg.extent3d.height + 7) / 8, 1);
             },
             else => {
@@ -146,128 +126,106 @@ pub const RenderGraph = struct {
         }
     }
 
-    pub fn recordGraphics(
-        self: *RenderGraph,
-        cmd: vk.VkCommandBuffer,
-        pass: rc.Pass,
-        pcs: PushConstants,
-        validShaders: []const ShaderObject,
-        resMan: *ResourceManager,
-    ) !void {
+    pub fn recordGraphics(self: *RenderGraph, cmd: vk.VkCommandBuffer, pass: rc.Pass, pcs: PushConstants, validShaders: []const ShaderObject, resMan: *ResourceManager) !void {
         vk.vkCmdPushConstants(cmd, self.pipeLayout, vk.VK_SHADER_STAGE_ALL, 0, @sizeOf(PushConstants), &pcs);
         bindShaderStages(cmd, validShaders);
-        bindDescriptorBuffer(cmd, self.descLayoutAddress);
-        setDescriptorBufferOffset(cmd, vk.VK_PIPELINE_BIND_POINT_GRAPHICS, self.pipeLayout);
-
         const resource = try resMan.getResourcePtr(pass.resUsage[0].id); // HARD CODED TO FIRST
 
         switch (resource.resourceType) {
-            .gpuImg => |*gpuImg| {
-                beginRenderingWithState(cmd, gpuImg, pass.clear); // NEEDS IMPLEMENTATION FOR MULTIPLE RENDER TARGETS!!!!!
-
-                switch (pass.passType) {
-                    .graphicsPass => {
-                        vkFn.vkCmdSetVertexInputEXT.?(cmd, 0, null, 0, null); // Currently empty vertex input state
-                        vk.vkCmdDraw(cmd, 3, 1, 0, 0);
-                    },
-                    .meshPass, .taskMeshPass => vkFn.vkCmdDrawMeshTasksEXT.?(cmd, 1, 1, 1),
-                    else => return error.UnsupportedPipelineType,
-                }
-                vk.vkCmdEndRendering(cmd);
-            },
-            else => {
-                std.debug.print("ERROR: Graphics Pass needs at least 1 Render Image, has none\n", .{});
-            },
+            .gpuImg => |*gpuImg| try renderWithState(cmd, gpuImg, pass.passType, pass.clear), // NEEDS IMPLEMENTATION FOR MULTIPLE RENDER TARGETS!!!!!
+            else => std.debug.print("ERROR: Graphics Pass needs at least 1 Render Image, has none\n", .{}),
         }
     }
 
     pub fn recordSwapchainBlits(self: *RenderGraph, cmd: vk.VkCommandBuffer, targets: []const u32, swapchainMap: *SwapchainManager.SwapchainMap, resMan: *ResourceManager) !void {
         for (targets) |swapchainIndex| {
             const swapchain = swapchainMap.getPtrAtIndex(swapchainIndex);
-            const imgID = swapchain.passImgId;
+            const imgId = swapchain.passImgId;
 
-            if (resMan.isResourceIdUsed(imgID) == false) {
-                std.debug.print("Error: Window wants RenderID {} but it is null\n", .{imgID});
+            if (resMan.isResourceIdUsed(imgId) == false) {
+                std.debug.print("Error: Window wants RenderID {} but it is null\n", .{imgId});
                 continue;
             }
-            const state = self.resourceStates.get(imgID);
-            const srcImgPtr = try resMan.getImagePtr(imgID);
+            const srcImgPtr = try resMan.getImagePtr(imgId);
+            const imgState = self.resourceStates.get(imgId);
+            const neededImgState = ResourceState{ .stage = PipeStage.TRANSFER, .access = PipeAccess.TRANSFER_READ, .layout = ImageLayout.TRANSFER_SRC };
 
-            if (state.stage != PipeStage.TRANSFER or state.access != PipeAccess.TRANSFER_READ or state.layout != ImageLayout.TRANSFER_SRC) {
+            if (imgState.stage != neededImgState.stage or imgState.access != neededImgState.access or imgState.layout != neededImgState.layout) {
                 // Transition Source Image (Color/General -> Transfer Src)
-                try self.tempBarriers.append(
-                    createImageMemoryBarrier2(
-                        state.stage,
-                        state.access,
-                        PipeStage.TRANSFER,
-                        PipeAccess.TRANSFER_READ,
-                        state.layout,
-                        ImageLayout.TRANSFER_SRC,
-                        srcImgPtr.img,
-                    ),
-                );
-                self.resourceStates.set(imgID, .{ .stage = PipeStage.TRANSFER, .access = PipeAccess.TRANSFER_READ, .layout = ImageLayout.TRANSFER_SRC });
+                const renderImgBarrier = createImageMemoryBarrier2NEW(imgState, neededImgState, srcImgPtr.img);
+                try self.tempBarriers.append(renderImgBarrier);
+                self.resourceStates.set(imgId, neededImgState);
             }
-
             // Transition Destination Swapchain (Undefined -> Transfer Dst)
-            try self.tempBarriers.append(
-                createImageMemoryBarrier2(
-                    PipeStage.TOP_OF_PIPE,
-                    PipeAccess.NONE,
-                    PipeStage.TRANSFER,
-                    PipeAccess.TRANSFER_WRITE,
-                    ImageLayout.UNDEFINED,
-                    ImageLayout.TRANSFER_DST,
-                    swapchain.images[swapchain.curIndex],
-                ),
-            );
+            const swapchainState = ResourceState{ .stage = PipeStage.TOP_OF_PIPE, .access = PipeAccess.NONE, .layout = ImageLayout.UNDEFINED }; // SHOULD THIS BE UNDEFINED?
+            const neededState = ResourceState{ .stage = PipeStage.TRANSFER, .access = PipeAccess.TRANSFER_WRITE, .layout = ImageLayout.UNDEFINED }; // SHOULD THIS BE UNDEFINED?
+            const swapchainBarrier = createImageMemoryBarrier2NEW(swapchainState, neededState, swapchain.images[swapchain.curIndex]);
+            try self.tempBarriers.append(swapchainBarrier); // Managed by Swapchain, needs no State Update
         }
-        createPipelineBarriers2(cmd, self.tempBarriers.items);
-        self.tempBarriers.clearRetainingCapacity();
+        self.bakeBarriers(cmd);
 
+        // BLITS
         for (targets) |swapchainIndex| {
-            // BLITS
             const swapchain = swapchainMap.getPtrAtIndex(swapchainIndex);
-            const srcImgPtr = try resMan.getImagePtr(swapchain.passImgId);
-
-            const blitOffsets = calculateBlitOffsets(srcImgPtr.extent3d, .{ .height = swapchain.extent.height, .width = swapchain.extent.width, .depth = 1 }, rc.RENDER_IMG_STRETCH);
-            copyImageToImage(cmd, srcImgPtr.img, blitOffsets.srcOffsets, swapchain.images[swapchain.curIndex], blitOffsets.dstOffsets, rc.RENDER_IMG_STRETCH);
+            const renderImgPtr = try resMan.getImagePtr(swapchain.passImgId);
+            const blitOffsets = calculateBlitOffsets(renderImgPtr.extent3d, .{ .height = swapchain.extent.height, .width = swapchain.extent.width, .depth = 1 }, rc.RENDER_IMG_STRETCH);
+            copyImageToImage(cmd, renderImgPtr.img, blitOffsets.srcOffsets, swapchain.images[swapchain.curIndex], blitOffsets.dstOffsets, rc.RENDER_IMG_STRETCH);
         }
 
+        // Swapchain Presentation Barriers
         for (targets) |swapchainIndex| {
             // DOESNT HANDLE EDGECASE WHERE BLIT WASNT DONE BECAUSE NO WINDOW SHOWED THE RENDER
             const swapchain = swapchainMap.getPtrAtIndex(swapchainIndex);
-
-            try self.tempBarriers.append(
-                createImageMemoryBarrier2(
-                    PipeStage.TOP_OF_PIPE,
-                    PipeAccess.NONE,
-                    PipeStage.BOTTOM_OF_PIPE, // Nothing on GPU needs to wait (Presentation engine waits via Semaphore)
-                    PipeAccess.NONE,
-                    ImageLayout.TRANSFER_DST, // PROBABLY TRANSFER_DST but maybe not in edge case ^^
-                    ImageLayout.PRESENT_SRC,
-                    swapchain.images[swapchain.curIndex],
-                ),
-            );
+            const swapchainState = ResourceState{ .stage = PipeStage.TOP_OF_PIPE, .access = PipeAccess.NONE, .layout = ImageLayout.TRANSFER_DST }; // EDGE CASE: Probably Transfer?!
+            const neededState = ResourceState{ .stage = PipeStage.BOTTOM_OF_PIPE, .access = PipeAccess.NONE, .layout = ImageLayout.PRESENT_SRC };
+            const barrier = createImageMemoryBarrier2NEW(swapchainState, neededState, swapchain.images[swapchain.curIndex]);
+            try self.tempBarriers.append(barrier);
         }
+        self.bakeBarriers(cmd);
+    }
+
+    fn bakeBarriers(self: *RenderGraph, cmd: vk.VkCommandBuffer) void {
         createPipelineBarriers2(cmd, self.tempBarriers.items);
         self.tempBarriers.clearRetainingCapacity();
     }
+
+    fn updateResourceState(self: *RenderGraph, resUsage: rc.Pass.ResourceUsage) void {
+        self.resourceStates.set(resUsage.id, .{ .stage = resUsage.stage, .access = resUsage.access, .layout = resUsage.layout });
+    }
+
+    pub fn resetResourceState(self: *RenderGraph, id: u32) void {
+        self.resourceStates.set(id, .{});
+    }
 };
 
-fn createImageMemoryBarrier2(srcStage: u64, srcAccess: u64, dstStage: u64, dstAccess: u64, oldLayout: u32, newLayout: u32, img: vk.VkImage) vk.VkImageMemoryBarrier2 {
+fn createImageMemoryBarrier2NEW(curState: ResourceState, newState: ResourceState, img: vk.VkImage) vk.VkImageMemoryBarrier2 {
     return vk.VkImageMemoryBarrier2{
+        .sType = vk.VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+        .srcStageMask = curState.stage,
+        .srcAccessMask = curState.access,
+        .dstStageMask = newState.stage,
+        .dstAccessMask = newState.access,
+        .oldLayout = curState.layout,
+        .newLayout = newState.layout,
+        .srcQueueFamilyIndex = vk.VK_QUEUE_FAMILY_IGNORED,
+        .dstQueueFamilyIndex = vk.VK_QUEUE_FAMILY_IGNORED,
+        .image = img,
+        .subresourceRange = createSubresourceRange(vk.VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1),
+    };
+}
+
+fn createBufferMemoryBarrier2(srcStage: u64, srcAccess: u64, dstStage: u64, dstAccess: u64, buffer: vk.VkBuffer) vk.VkBufferMemoryBarrier2 {
+    return vk.VkBufferMemoryBarrier2{
         .sType = vk.VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
         .srcStageMask = srcStage,
         .srcAccessMask = srcAccess,
         .dstStageMask = dstStage,
         .dstAccessMask = dstAccess,
-        .oldLayout = oldLayout,
-        .newLayout = newLayout,
         .srcQueueFamilyIndex = vk.VK_QUEUE_FAMILY_IGNORED,
         .dstQueueFamilyIndex = vk.VK_QUEUE_FAMILY_IGNORED,
-        .image = img,
-        .subresourceRange = createSubresourceRange(vk.VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1),
+        .buffer = buffer,
+        .offset = 0,
+        .size = vk.VK_WHOLE_SIZE, // whole Buffer
     };
 }
 
@@ -286,21 +244,6 @@ fn createSubresourceRange(mask: u32, mipLevel: u32, levelCount: u32, arrayLayer:
 
 fn createSubresourceLayers(mask: u32, mipLevel: u32, arrayLayer: u32, layerCount: u32) vk.VkImageSubresourceLayers {
     return vk.VkImageSubresourceLayers{ .aspectMask = mask, .mipLevel = mipLevel, .baseArrayLayer = arrayLayer, .layerCount = layerCount };
-}
-
-fn bindDescriptorBuffer(cmd: vk.VkCommandBuffer, gpuAddress: u64) void {
-    const bufferBindingInf = vk.VkDescriptorBufferBindingInfoEXT{
-        .sType = vk.VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT,
-        .address = gpuAddress,
-        .usage = vk.VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT,
-    };
-    vkFn.vkCmdBindDescriptorBuffersEXT.?(cmd, 1, &bufferBindingInf);
-}
-
-fn setDescriptorBufferOffset(cmd: vk.VkCommandBuffer, bindPoint: vk.VkPipelineBindPoint, pipeLayout: vk.VkPipelineLayout) void {
-    const bufferIndex: u32 = 0;
-    const descOffset: vk.VkDeviceSize = 0;
-    vkFn.vkCmdSetDescriptorBufferOffsetsEXT.?(cmd, bindPoint, pipeLayout, 0, 1, &bufferIndex, &descOffset);
 }
 
 fn bindShaderStages(cmd: vk.VkCommandBuffer, shaderObjects: []const ShaderObject) void {
@@ -329,7 +272,7 @@ fn bindShaderStages(cmd: vk.VkCommandBuffer, shaderObjects: []const ShaderObject
     vkFn.vkCmdBindShadersEXT.?(cmd, 8, &allStages, &handles);
 }
 
-fn beginRenderingWithState(cmd: vk.VkCommandBuffer, renderImg: *GpuImage, clear: bool) void {
+fn renderWithState(cmd: vk.VkCommandBuffer, renderImg: *GpuImage, passType: rc.Pass.PassType, clear: bool) !void {
     const scissor = vk.VkRect2D{
         .offset = .{ .x = 0, .y = 0 },
         .extent = .{ .width = renderImg.extent3d.width, .height = renderImg.extent3d.height },
@@ -379,7 +322,7 @@ fn beginRenderingWithState(cmd: vk.VkCommandBuffer, renderImg: *GpuImage, clear:
     vkFn.vkCmdSetAlphaToOneEnableEXT.?(cmd, vk.VK_FALSE);
     vkFn.vkCmdSetAlphaToCoverageEnableEXT.?(cmd, vk.VK_FALSE);
     vkFn.vkCmdSetLogicOpEnableEXT.?(cmd, vk.VK_FALSE);
-    vkFn.vkCmdSetCullMode.?(cmd, vk.VK_CULL_MODE_FRONT_BIT); // CULL_MODE_BACK_BIT looking inside the grid
+    vkFn.vkCmdSetCullMode.?(cmd, vk.VK_CULL_MODE_FRONT_BIT);
     vkFn.vkCmdSetFrontFace.?(cmd, vk.VK_FRONT_FACE_CLOCKWISE);
     vkFn.vkCmdSetDepthTestEnable.?(cmd, vk.VK_FALSE);
     vkFn.vkCmdSetDepthWriteEnable.?(cmd, vk.VK_FALSE);
@@ -408,6 +351,16 @@ fn beginRenderingWithState(cmd: vk.VkCommandBuffer, renderImg: *GpuImage, clear:
 
     vkFn.vkCmdSetPrimitiveTopology.?(cmd, vk.VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
     vkFn.vkCmdSetPrimitiveRestartEnable.?(cmd, vk.VK_FALSE);
+
+    switch (passType) {
+        .graphicsPass => {
+            vkFn.vkCmdSetVertexInputEXT.?(cmd, 0, null, 0, null); // Currently empty vertex input state
+            vk.vkCmdDraw(cmd, 3, 1, 0, 0);
+        },
+        .meshPass, .taskMeshPass => vkFn.vkCmdDrawMeshTasksEXT.?(cmd, 1, 1, 1),
+        else => return error.UnsupportedPipelineType,
+    }
+    vk.vkCmdEndRendering(cmd);
 }
 
 pub fn copyImageToImage(cmd: vk.VkCommandBuffer, srcImg: vk.VkImage, srcOffsets: [2]vk.VkOffset3D, dstImg: vk.VkImage, dstOffsets: [2]vk.VkOffset3D, stretch: bool) void {
@@ -432,7 +385,6 @@ pub fn copyImageToImage(cmd: vk.VkCommandBuffer, srcImg: vk.VkImage, srcOffsets:
 }
 
 fn calculateBlitOffsets(srcImgExtent: vk.VkExtent3D, dstImgExtent: vk.VkExtent3D, stretch: bool) struct { srcOffsets: [2]vk.VkOffset3D, dstOffsets: [2]vk.VkOffset3D } {
-    // 3. CALCULATE BLIT OFFSETS
     var srcOffsets: [2]vk.VkOffset3D = undefined;
     var dstOffsets: [2]vk.VkOffset3D = undefined;
 
