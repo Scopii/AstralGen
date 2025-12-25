@@ -18,7 +18,7 @@ pub const WindowManager = struct {
     appExit: bool = false,
 
     inputEvents: FixedList(KeyEvent, 127) = .{},
-    mouseMovements: FixedList(MouseMovement, 63) = .{},
+    mouseMovements: FixedList(MouseMovement, 510) = .{},
 
     pub fn init() !WindowManager {
         if (sdl.SDL_Init(sdl.SDL_INIT_VIDEO) != true) {
