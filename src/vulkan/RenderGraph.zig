@@ -3,12 +3,13 @@ const vk = @import("../modules/vk.zig").c;
 const Allocator = std.mem.Allocator;
 const rc = @import("../configs/renderConfig.zig");
 const ResourceManager = @import("resources/ResourceManager.zig").ResourceManager;
+const Resource = @import("resources/ResourceManager.zig").Resource;
+const GpuImage = @import("resources/ResourceManager.zig").Resource.GpuImage;
 const CreateMapArray = @import("../structures/MapArray.zig").CreateMapArray;
 const ShaderObject = @import("ShaderObject.zig").ShaderObject;
 const PushConstants = @import("resources/DescriptorManager.zig").PushConstants;
 const vkFn = @import("../modules/vk.zig");
 const sc = @import("../configs/shaderConfig.zig");
-const GpuImage = @import("resources/ResourceManager.zig").Resource.GpuImage;
 const SwapchainManager = @import("SwapchainManager.zig");
 
 pub const ImageLayout = enum(vk.VkImageLayout) {
@@ -99,27 +100,29 @@ pub const RenderGraph = struct {
         self.tempBufBarriers.deinit();
     }
 
+    fn createBarrier(self: *RenderGraph, state: ResourceState, neededState: ResourceState, resource: *Resource) !void {
+        switch (resource.resourceType) {
+            .gpuImg => |*gpuImg| {
+                const barrier = createImageBarrier(state, neededState, gpuImg.img, gpuImg.imgInf.imgType);
+                try self.tempImgBarriers.append(barrier);
+                resource.state = neededState;
+            },
+            .gpuBuf => |*gpuBuf| {
+                const barrier = createBufferBarrier(state, neededState, gpuBuf.buffer);
+                try self.tempBufBarriers.append(barrier);
+                resource.state = neededState;
+            },
+        }
+    }
+
     pub fn recordPassBarriers(self: *RenderGraph, cmd: vk.VkCommandBuffer, pass: rc.Pass, resMan: *ResourceManager) !void {
         for (pass.resUsages) |resUsage| {
             // CHECK IF RESOURCE IS ALREADY SET
-
             const resource = try resMan.getResourcePtr(resUsage.id);
             const state = resource.state;
             const neededState = ResourceState{ .stage = resUsage.stage, .access = resUsage.access, .layout = resUsage.layout };
-
             if (state.stage != neededState.stage or state.access != neededState.access or state.layout != neededState.layout) {
-                switch (resource.resourceType) {
-                    .gpuImg => |*gpuImg| {
-                        const barrier = createImageBarrier(state, neededState, gpuImg.img, gpuImg.imgInf.imgType);
-                        try self.tempImgBarriers.append(barrier);
-                        resource.state = neededState;
-                    },
-                    .gpuBuf => |*gpuBuf| {
-                        const barrier = createBufferBarrier(state, neededState, gpuBuf.buffer);
-                        try self.tempBufBarriers.append(barrier);
-                        resource.state = neededState;
-                    },
-                }
+                try self.createBarrier(state, neededState, resource);
             }
         }
         self.bakeBarriers(cmd);
@@ -194,11 +197,9 @@ pub const RenderGraph = struct {
             const imgState = srcImgPtr.state;
             const neededImgState = ResourceState{ .stage = .Transfer, .access = .TransferRead, .layout = .TransferSrc };
 
+            // Transition Source Image (Color/General -> Transfer Src)
             if (imgState.stage != neededImgState.stage or imgState.access != neededImgState.access or imgState.layout != neededImgState.layout) {
-                // Transition Source Image (Color/General -> Transfer Src)
-                const imgBarrier = createImageBarrier(imgState, neededImgState, srcImgPtr.resourceType.gpuImg.img, srcImgPtr.resourceType.gpuImg.imgInf.imgType);
-                try self.tempImgBarriers.append(imgBarrier);
-                srcImgPtr.state = neededImgState;
+                try self.createBarrier(imgState, neededImgState, srcImgPtr);
             }
             // Transition Destination Swapchain (Undefined -> Transfer Dst)
             const swapchainState = ResourceState{ .stage = .TopOfPipe, .access = .None, .layout = .Undefined };
