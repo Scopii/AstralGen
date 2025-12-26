@@ -82,18 +82,21 @@ pub const ResourceState = struct {
 pub const RenderGraph = struct {
     alloc: Allocator,
     pipeLayout: vk.VkPipelineLayout,
-    tempBarriers: std.array_list.Managed(vk.VkImageMemoryBarrier2),
+    tempImgBarriers: std.array_list.Managed(vk.VkImageMemoryBarrier2),
+    tempBufBarriers: std.array_list.Managed(vk.VkBufferMemoryBarrier2),
 
     pub fn init(alloc: Allocator, resourceMan: *ResourceManager) RenderGraph {
         return .{
             .alloc = alloc,
             .pipeLayout = resourceMan.descMan.pipeLayout,
-            .tempBarriers = std.array_list.Managed(vk.VkImageMemoryBarrier2).init(alloc),
+            .tempImgBarriers = std.array_list.Managed(vk.VkImageMemoryBarrier2).init(alloc),
+            .tempBufBarriers = std.array_list.Managed(vk.VkBufferMemoryBarrier2).init(alloc),
         };
     }
 
     pub fn deinit(self: *RenderGraph) void {
-        self.tempBarriers.deinit();
+        self.tempImgBarriers.deinit();
+        self.tempBufBarriers.deinit();
     }
 
     pub fn recordPassBarriers(self: *RenderGraph, cmd: vk.VkCommandBuffer, pass: rc.Pass, resMan: *ResourceManager) !void {
@@ -105,14 +108,17 @@ pub const RenderGraph = struct {
             const neededState = ResourceState{ .stage = resUsage.stage, .access = resUsage.access, .layout = resUsage.layout };
 
             if (state.stage != neededState.stage or state.access != neededState.access or state.layout != neededState.layout) {
-
                 switch (resource.resourceType) {
                     .gpuImg => |*gpuImg| {
                         const barrier = createImageBarrier(state, neededState, gpuImg.img, gpuImg.imgInf.imgType);
-                        try self.tempBarriers.append(barrier);
+                        try self.tempImgBarriers.append(barrier);
                         resource.state = neededState;
                     },
-                    .gpuBuf => std.debug.print("ERROR: Buffer Render Graph Build not implemented yet\n", .{}),
+                    .gpuBuf => |*gpuBuf| {
+                        const barrier = createBufferBarrier(state, neededState, gpuBuf.buffer);
+                        try self.tempBufBarriers.append(barrier);
+                        resource.state = neededState;
+                    },
                 }
             }
         }
@@ -191,14 +197,14 @@ pub const RenderGraph = struct {
             if (imgState.stage != neededImgState.stage or imgState.access != neededImgState.access or imgState.layout != neededImgState.layout) {
                 // Transition Source Image (Color/General -> Transfer Src)
                 const imgBarrier = createImageBarrier(imgState, neededImgState, srcImgPtr.resourceType.gpuImg.img, srcImgPtr.resourceType.gpuImg.imgInf.imgType);
-                try self.tempBarriers.append(imgBarrier);
+                try self.tempImgBarriers.append(imgBarrier);
                 srcImgPtr.state = neededImgState;
             }
             // Transition Destination Swapchain (Undefined -> Transfer Dst)
             const swapchainState = ResourceState{ .stage = .TopOfPipe, .access = .None, .layout = .Undefined };
             const neededState = ResourceState{ .stage = .Transfer, .access = .TransferWrite, .layout = .TransferDst };
             const swapchainBarrier = createImageBarrier(swapchainState, neededState, swapchain.images[swapchain.curIndex], .Color); // SHOULD THIS BE COLOR ?!
-            try self.tempBarriers.append(swapchainBarrier); // Managed by Swapchain, needs no State Update
+            try self.tempImgBarriers.append(swapchainBarrier); // Managed by Swapchain, needs no State Update
         }
         self.bakeBarriers(cmd);
 
@@ -217,16 +223,16 @@ pub const RenderGraph = struct {
             const swapchainState = ResourceState{ .stage = .TopOfPipe, .access = .None, .layout = .TransferDst }; // EDGE CASE: Probably Transfer?!
             const neededState = ResourceState{ .stage = .BotOfPipe, .access = .None, .layout = .PresentSrc };
             const barrier = createImageBarrier(swapchainState, neededState, swapchain.images[swapchain.curIndex], .Color);
-            try self.tempBarriers.append(barrier);
+            try self.tempImgBarriers.append(barrier);
         }
         self.bakeBarriers(cmd);
     }
 
     fn bakeBarriers(self: *RenderGraph, cmd: vk.VkCommandBuffer) void {
-        createPipelineBarriers2(cmd, self.tempBarriers.items);
-        self.tempBarriers.clearRetainingCapacity();
+        createPipelineBarriers2(cmd, self.tempImgBarriers.items, self.tempBufBarriers.items);
+        self.tempImgBarriers.clearRetainingCapacity();
+        self.tempBufBarriers.clearRetainingCapacity();
     }
-
 };
 
 fn createImageBarrier(curState: ResourceState, newState: ResourceState, img: vk.VkImage, imgType: rc.ImgType) vk.VkImageMemoryBarrier2 {
@@ -253,7 +259,7 @@ fn createImageBarrier(curState: ResourceState, newState: ResourceState, img: vk.
 
 fn createBufferBarrier(curState: ResourceState, newState: ResourceState, buffer: vk.VkBuffer) vk.VkBufferMemoryBarrier2 {
     return vk.VkBufferMemoryBarrier2{
-        .sType = vk.VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+        .sType = vk.VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2,
         .srcStageMask = @intFromEnum(curState.stage),
         .srcAccessMask = @intFromEnum(curState.access),
         .dstStageMask = @intFromEnum(newState.stage),
@@ -266,11 +272,13 @@ fn createBufferBarrier(curState: ResourceState, newState: ResourceState, buffer:
     };
 }
 
-fn createPipelineBarriers2(cmd: vk.VkCommandBuffer, barriers: []const vk.VkImageMemoryBarrier2) void {
+fn createPipelineBarriers2(cmd: vk.VkCommandBuffer, imgBarriers: []const vk.VkImageMemoryBarrier2, bufBarriers: []const vk.VkBufferMemoryBarrier2) void {
     const depInf = vk.VkDependencyInfo{
         .sType = vk.VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-        .imageMemoryBarrierCount = @intCast(barriers.len),
-        .pImageMemoryBarriers = barriers.ptr,
+        .imageMemoryBarrierCount = @intCast(imgBarriers.len),
+        .pImageMemoryBarriers = imgBarriers.ptr,
+        .bufferMemoryBarrierCount = @intCast(bufBarriers.len),
+        .pBufferMemoryBarriers = bufBarriers.len,
     };
     vk.vkCmdPipelineBarrier2(cmd, &depInf);
 }
