@@ -278,7 +278,7 @@ fn createPipelineBarriers2(cmd: vk.VkCommandBuffer, imgBarriers: []const vk.VkIm
         .imageMemoryBarrierCount = @intCast(imgBarriers.len),
         .pImageMemoryBarriers = imgBarriers.ptr,
         .bufferMemoryBarrierCount = @intCast(bufBarriers.len),
-        .pBufferMemoryBarriers = bufBarriers.len,
+        .pBufferMemoryBarriers = bufBarriers.ptr,
     };
     vk.vkCmdPipelineBarrier2(cmd, &depInf);
 }
