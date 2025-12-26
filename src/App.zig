@@ -72,6 +72,7 @@ pub const App = struct {
         try renderer.createResource(rc.img3);
         try renderer.createResource(rc.img4);
         try renderer.createResource(rc.img5);
+        try renderer.createResource(rc.img6);
 
         try renderer.createPass(rc.renderSequence);
 
@@ -96,10 +97,10 @@ pub const App = struct {
     }
 
     pub fn initWindows(self: *App) !void {
-        try self.windowMan.addWindow("Task", 16 * 52, 9 * 52, rc.img4.gpuId, 120, 50);
-        try self.windowMan.addWindow("Mesh", 16 * 52, 9 * 52, rc.img3.gpuId, 120, 550);
-        try self.windowMan.addWindow("Compute", 16 * 52, 9 * 52, rc.img1.gpuId, 960, 50);
-        try self.windowMan.addWindow("Graphics", 16 * 52, 9 * 52, rc.img2.gpuId, 960, 550);
+        try self.windowMan.addWindow("Task", 16 * 52, 9 * 52, rc.img4.id, 120, 50);
+        try self.windowMan.addWindow("Mesh", 16 * 52, 9 * 52, rc.img3.id, 120, 550);
+        try self.windowMan.addWindow("Compute", 16 * 52, 9 * 52, rc.img1.id, 960, 50);
+        try self.windowMan.addWindow("Graphics", 16 * 52, 9 * 52, rc.img2.id, 960, 550);
     }
 
     pub fn run(self: *App) !void {

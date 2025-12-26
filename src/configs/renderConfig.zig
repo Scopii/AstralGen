@@ -22,101 +22,117 @@ pub const RENDER_IMG_STRETCH = true; // Ignored on AUTO_RESIZE
 
 pub const Pass = struct {
     passType: PassType = .empty,
-    attachments: []const RenderAttachment,
-    resUsage: []const ResourceUsage,
+    attachments: []const Attachment,
+    resUsages: []const ResourceUsage,
     shaderIds: []const u8,
-    clear: bool = false,
+    clearColor: bool = false,
+    clearDepth: bool = false,
+    clearStencil: bool = false,
 
     pub const PassType = enum { computePass, graphicsPass, meshPass, taskMeshPass, vertexPass, empty };
-    pub const RenderAttachment = struct { id: u32, rendertype: enum { Color, Depth, Stencil } };
-    pub const ResourceUsage = struct {
-        id: u32,
-        stage: PipeStage = .TopOfPipe,
-        access: PipeAccess = .None,
-        layout: ImageLayout = .General,
-    };
+    pub const Attachment = struct { id: u32, renderType: ImgType };
+    pub const ResourceUsage = struct { id: u32, stage: PipeStage = .TopOfPipe, access: PipeAccess = .None, layout: ImageLayout = .General };
 };
 
-pub const ResourceInfo = struct {
-    gpuId: u32,
-    binding: u8,
-    memUsage: MemUsage,
-    info: union(enum) { imgInf: ImgInf, bufInf: BufInf },
+pub const ImgType = enum { Color, Depth, Stencil };
 
-    pub const ImgInf = struct { extent: vk.VkExtent3D, imgFormat: c_uint = RENDER_IMG_FORMAT, arrayIndex: u32 };
-    pub const BufInf = struct { sizeOfElement: u64 = 0, length: u32, bufUsage: enum { Storage, Uniform, Index, Vertex, Staging } };
-    pub const MemUsage = enum { GpuOptimal, CpuWriteOptimal, CpuReadOptimal };
+pub const ResourceInf = struct {
+    id: u32,
+    binding: u8,
+    memUse: MemUsage,
+    inf: union(enum) { imgInf: ImgInf, bufInf: BufInf },
+
+    pub const ImgInf = struct { extent: vk.VkExtent3D, format: c_uint = RENDER_IMG_FORMAT, arrayIndex: u32, imgType: ImgType };
+    pub const BufInf = struct { dataSize: u64 = 0, length: u32, usage: enum { Storage, Uniform, Index, Vertex, Staging } };
+    pub const MemUsage = enum { Gpu, CpuWrite, CpuRead };
 };
 
 pub const DescBinding = union(enum) {
-    pub const ImageArrayBinding = struct { binding: u32, arrayLength: u32 };
-    pub const BufferBinding = struct { binding: u32 };
     imageArrayBinding: ImageArrayBinding,
     bufferBinding: BufferBinding,
+
+    pub const ImageArrayBinding = struct { binding: u32, arrayLength: u32 };
+    pub const BufferBinding = struct { binding: u32 };
 };
 
 pub const textureBinding = DescBinding{ .imageArrayBinding = .{ .binding = 0, .arrayLength = GPU_IMG_MAX } };
-pub const objectBinding1 = DescBinding{ .bufferBinding = .{ .binding = 1 } };
-pub const objectBinding2 = DescBinding{ .bufferBinding = .{ .binding = 2 } };
-pub const bindingRegistry: []const DescBinding = &.{ textureBinding, objectBinding1, objectBinding2 };
+pub const objBinding1 = DescBinding{ .bufferBinding = .{ .binding = 1 } };
+pub const objBinding2 = DescBinding{ .bufferBinding = .{ .binding = 2 } };
+pub const bindingRegistry: []const DescBinding = &.{ textureBinding, objBinding1, objBinding2 };
 
-pub const img1 = ResourceInfo{ .gpuId = 50, .binding = 0, .memUsage = .GpuOptimal, .info = .{ .imgInf = .{ .arrayIndex = 0, .extent = .{ .width = 500, .height = 500, .depth = 1 } } } };
-pub const img2 = ResourceInfo{ .gpuId = 51, .binding = 0, .memUsage = .GpuOptimal, .info = .{ .imgInf = .{ .arrayIndex = 1, .extent = .{ .width = 300, .height = 300, .depth = 1 } } } };
-pub const img3 = ResourceInfo{ .gpuId = 52, .binding = 0, .memUsage = .GpuOptimal, .info = .{ .imgInf = .{ .arrayIndex = 2, .extent = .{ .width = 100, .height = 100, .depth = 1 } } } };
-pub const img4 = ResourceInfo{ .gpuId = 53, .binding = 0, .memUsage = .GpuOptimal, .info = .{ .imgInf = .{ .arrayIndex = 3, .extent = .{ .width = 1920, .height = 1080, .depth = 1 } } } };
-pub const img5 = ResourceInfo{ .gpuId = 54, .binding = 0, .memUsage = .GpuOptimal, .info = .{ .imgInf = .{ .arrayIndex = 4, .extent = .{ .width = 1920, .height = 1080, .depth = 1 } } } };
-pub const buff1 = ResourceInfo{ .gpuId = 1, .binding = 1, .memUsage = .CpuWriteOptimal, .info = .{ .bufInf = .{ .bufUsage = .Storage, .length = 1000, .sizeOfElement = @sizeOf(Object) } } };
-pub const buff2 = ResourceInfo{ .gpuId = 0, .binding = 2, .memUsage = .CpuWriteOptimal, .info = .{ .bufInf = .{ .bufUsage = .Storage, .length = 100, .sizeOfElement = @sizeOf(Object) } } };
+pub const img1 = ResourceInf{ .id = 50, .binding = 0, .memUse = .Gpu, .inf = .{ .imgInf = .{ .arrayIndex = 0, .imgType = .Color, .extent = .{ .width = 500, .height = 500, .depth = 1 } } } };
+pub const img2 = ResourceInf{ .id = 51, .binding = 0, .memUse = .Gpu, .inf = .{ .imgInf = .{ .arrayIndex = 1, .imgType = .Color, .extent = .{ .width = 300, .height = 300, .depth = 1 } } } };
+pub const img3 = ResourceInf{ .id = 52, .binding = 0, .memUse = .Gpu, .inf = .{ .imgInf = .{ .arrayIndex = 2, .imgType = .Color, .extent = .{ .width = 100, .height = 100, .depth = 1 } } } };
+pub const img4 = ResourceInf{ .id = 53, .binding = 0, .memUse = .Gpu, .inf = .{ .imgInf = .{ .arrayIndex = 3, .imgType = .Color, .extent = .{ .width = 1920, .height = 1080, .depth = 1 } } } };
+pub const img5 = ResourceInf{ .id = 54, .binding = 0, .memUse = .Gpu, .inf = .{ .imgInf = .{ .arrayIndex = 4, .imgType = .Color, .extent = .{ .width = 1920, .height = 1080, .depth = 1 } } } };
+
+pub const img6 = ResourceInf{
+    .id = 56,
+    .binding = 0,
+    .memUse = .Gpu,
+    .inf = .{
+        .imgInf = .{
+            .arrayIndex = 5,
+            .imgType = .Depth,
+            .extent = .{ .width = 1920, .height = 1080, .depth = 1 },
+            .format = vk.VK_FORMAT_D32_SFLOAT,
+        },
+    },
+};
+pub const buff1 = ResourceInf{ .id = 1, .binding = 1, .memUse = .CpuWrite, .inf = .{ .bufInf = .{ .usage = .Storage, .length = 1000, .dataSize = @sizeOf(Object) } } };
+pub const buff2 = ResourceInf{ .id = 0, .binding = 2, .memUse = .CpuWrite, .inf = .{ .bufInf = .{ .usage = .Storage, .length = 100, .dataSize = @sizeOf(Object) } } };
 
 pub const computeTest: Pass = .{
     .attachments = &.{
-        .{ .id = img1.gpuId, .rendertype = .Color },
+        .{ .id = img1.id, .renderType = .Color },
     },
-    .resUsage = &.{
-        .{ .id = img1.gpuId, .stage = .Compute, .access = .ShaderWrite, .layout = .General }, // SHADER_READ TOO?
+    .resUsages = &.{
+        .{ .id = img1.id, .stage = .Compute, .access = .ShaderWrite, .layout = .General },
     },
     .shaderIds = &.{sc.t1Comp.id},
 };
 
 pub const graphicsTest: Pass = .{
     .attachments = &.{
-        .{ .id = img2.gpuId, .rendertype = .Color },
+        .{ .id = img2.id, .renderType = .Color },
+        .{ .id = img6.id, .renderType = .Depth },
     },
-    .resUsage = &.{
-        .{ .id = img2.gpuId, .stage = .ColorAtt, .access = .ColorAttWrite, .layout = .ColorAtt },
+    .resUsages = &.{
+        .{ .id = img2.id, .stage = .ColorAtt, .access = .ColorAttWrite, .layout = .ColorAtt },
+        .{ .id = img6.id, .stage = .EarlyFragTest, .access = .DepthStencilRead, .layout = .DepthAtt },
     },
     .shaderIds = &.{ sc.t2Vert.id, sc.t2Frag.id },
 };
 
 pub const meshTest: Pass = .{
     .attachments = &.{
-        .{ .id = img3.gpuId, .rendertype = .Color },
+        .{ .id = img3.id, .renderType = .Color },
     },
-    .resUsage = &.{
-        .{ .id = img3.gpuId, .stage = .ColorAtt, .access = .ColorAttWrite, .layout = .ColorAtt },
+    .resUsages = &.{
+        .{ .id = img3.id, .stage = .ColorAtt, .access = .ColorAttWrite, .layout = .ColorAtt },
     },
     .shaderIds = &.{ sc.t3Mesh.id, sc.t3Frag.id },
 };
 
 pub const taskTest: Pass = .{
     .attachments = &.{
-        .{ .id = img4.gpuId, .rendertype = .Color },
+        .{ .id = img4.id, .renderType = .Color },
     },
-    .resUsage = &.{
-        .{ .id = img4.gpuId, .stage = .ColorAtt, .access = .ColorAttWrite, .layout = .ColorAtt },
+    .resUsages = &.{
+        .{ .id = img4.id, .stage = .ColorAtt, .access = .ColorAttWrite, .layout = .ColorAtt },
     },
     .shaderIds = &.{ sc.t4Task.id, sc.t4Mesh.id, sc.t4Frag.id },
 };
 
 pub const gridTest: Pass = .{
     .attachments = &.{
-        .{ .id = img4.gpuId, .rendertype = .Color },
+        .{ .id = img4.id, .renderType = .Color },
     },
-    .resUsage = &.{
-        .{ .id = img4.gpuId, .stage = .ColorAtt, .access = .ColorAttWrite, .layout = .ColorAtt },
+    .resUsages = &.{
+        .{ .id = img4.id, .stage = .ColorAtt, .access = .ColorAttWrite, .layout = .ColorAtt },
     },
     .shaderIds = &.{ sc.gridTask.id, sc.gridMesh.id, sc.gridFrag.id },
-    .clear = true,
+    .clearColor = true,
 };
 
 pub const renderSequence: []const Pass = &.{ computeTest, graphicsTest, meshTest, taskTest, gridTest };

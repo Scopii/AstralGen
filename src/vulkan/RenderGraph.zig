@@ -14,21 +14,36 @@ const SwapchainManager = @import("SwapchainManager.zig");
 pub const ImageLayout = enum(vk.VkImageLayout) {
     Undefined = vk.VK_IMAGE_LAYOUT_UNDEFINED,
     General = vk.VK_IMAGE_LAYOUT_GENERAL,
+
     ColorAtt = vk.VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+
+    DepthStencilAtt = vk.VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+    DepthStencilAttRead = vk.VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL,
+
+    DepthAtt = vk.VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
+    DepthAttRead = vk.VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL,
+    StencilAtt = vk.VK_IMAGE_LAYOUT_STENCIL_ATTACHMENT_OPTIMAL,
+
+    StencilAttRead = vk.VK_IMAGE_LAYOUT_STENCIL_READ_ONLY_OPTIMAL,
+
     TransferSrc = vk.VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
     TransferDst = vk.VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+
     PresentSrc = vk.VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
     //.. more exist
 };
 
-pub const PipeStage = enum(vk.VkPipelineStageFlagBits2) {
+pub const PipeStage = enum(vk.VkPipelineStageFlagBits2) { //( SHOULD BE CORRECT ORDER)
     TopOfPipe = vk.VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
     Compute = vk.VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
     VertShader = vk.VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT,
     TaskShader = vk.VK_PIPELINE_STAGE_2_TASK_SHADER_BIT_EXT,
     MeshShader = vk.VK_PIPELINE_STAGE_2_MESH_SHADER_BIT_EXT,
     FragShader = vk.VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+    EarlyFragTest = vk.VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT,
     ColorAtt = vk.VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+    LatFragTest = vk.VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
+    AllGraphics = vk.VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT,
     Transfer = vk.VK_PIPELINE_STAGE_2_TRANSFER_BIT,
     AllCmds = vk.VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
     BotOfPipe = vk.VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT,
@@ -40,12 +55,18 @@ pub const PipeAccess = enum(vk.VkAccessFlagBits2) {
     ShaderRead = vk.VK_ACCESS_2_SHADER_STORAGE_READ_BIT,
     ShaderWrite = vk.VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
     ShaderReadWrite = vk.VK_ACCESS_2_SHADER_STORAGE_READ_BIT | vk.VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+
     ColorAttWrite = vk.VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
     ColorAttRead = vk.VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT,
     ColorAttReadWrite = vk.VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT | vk.VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+
+    DepthStencilRead = vk.VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT,
+    DepthStencilWrite = vk.VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+
     TransferRead = vk.VK_ACCESS_2_TRANSFER_READ_BIT,
     TransferWrite = vk.VK_ACCESS_2_TRANSFER_WRITE_BIT,
     TransferReadWrite = vk.VK_ACCESS_2_TRANSFER_READ_BIT | vk.VK_ACCESS_2_TRANSFER_WRITE_BIT,
+
     MemoryRead = vk.VK_ACCESS_2_MEMORY_READ_BIT,
     MemoryWrite = vk.VK_ACCESS_2_MEMORY_WRITE_BIT,
     MemoryReadWrite = vk.VK_ACCESS_2_MEMORY_READ_BIT | vk.VK_ACCESS_2_MEMORY_WRITE_BIT,
@@ -77,7 +98,7 @@ pub const RenderGraph = struct {
     }
 
     pub fn recordPassBarriers(self: *RenderGraph, cmd: vk.VkCommandBuffer, pass: rc.Pass, resMan: *ResourceManager) !void {
-        for (pass.resUsage) |resUsage| {
+        for (pass.resUsages) |resUsage| {
             // CHECK IF RESOURCE IS ALREADY SET
             if (!self.resourceStates.isKeyUsed(resUsage.id)) {
                 self.resourceStates.set(resUsage.id, .{});
@@ -91,7 +112,7 @@ pub const RenderGraph = struct {
 
                 switch (resource.resourceType) {
                     .gpuImg => |*gpuImg| {
-                        const barrier = createImageBarrier(state, neededState, gpuImg.img);
+                        const barrier = createImageBarrier(state, neededState, gpuImg.img, gpuImg.imgInf.imgType);
                         try self.tempBarriers.append(barrier);
                         self.updateResourceState(resUsage);
                     },
@@ -114,7 +135,7 @@ pub const RenderGraph = struct {
         if (pass.attachments.len > 1) std.debug.print("WARNING: Compute Pass only supports Attachment Standard\n", .{});
 
         const attachmentIndex = for (pass.attachments) |attachment| {
-            if (attachment.rendertype == .Color) break attachment.id;
+            if (attachment.renderType == .Color) break attachment.id;
         } else null;
 
         if (attachmentIndex == null) {
@@ -127,7 +148,7 @@ pub const RenderGraph = struct {
             .gpuImg => |gpuImg| {
                 vk.vkCmdPushConstants(cmd, self.pipeLayout, vk.VK_SHADER_STAGE_ALL, 0, @sizeOf(PushConstants), &pcs);
                 bindShaderStages(cmd, validShaders);
-                vk.vkCmdDispatch(cmd, (gpuImg.extent3d.width + 7) / 8, (gpuImg.extent3d.height + 7) / 8, 1);
+                vk.vkCmdDispatch(cmd, (gpuImg.imgInf.extent.width + 7) / 8, (gpuImg.imgInf.extent.height + 7) / 8, 1);
             },
             else => {
                 std.debug.print("ERROR: Compute Pass needs 1 Render Image, has none\n", .{});
@@ -140,12 +161,25 @@ pub const RenderGraph = struct {
         vk.vkCmdPushConstants(cmd, self.pipeLayout, vk.VK_SHADER_STAGE_ALL, 0, @sizeOf(PushConstants), &pcs);
         bindShaderStages(cmd, validShaders);
 
-        var attachments: [8]*GpuImage = undefined;
-        for (0..pass.attachments.len) |i| {
-            attachments[i] = try resMan.getImagePtr(pass.attachments[i].id);
+        if (pass.attachments.len > 3) return error.TooManyAttachments;
+
+        var colorAttImg: ?*GpuImage = null;
+        var depthAttImg: ?*GpuImage = null;
+        var stencilAttImg: ?*GpuImage = null;
+
+        for (pass.attachments) |attachment| {
+            switch (attachment.renderType) {
+                .Color => colorAttImg = try resMan.getImagePtr(attachment.id),
+                .Depth => depthAttImg = try resMan.getImagePtr(attachment.id),
+                .Stencil => stencilAttImg = try resMan.getImagePtr(attachment.id),
+            }
         }
 
-        try renderWithState(cmd, attachments[0..pass.attachments.len], pass.attachments, pass.passType, pass.clear);
+        const colorAtt = if (colorAttImg) |img| createAttachment(.Color, img.view, pass.clearColor) else null;
+        const depthAtt = if (depthAttImg) |img| createAttachment(.Depth, img.view, pass.clearDepth) else null;
+        const stencilAtt = if (stencilAttImg) |img| createAttachment(.Stencil, img.view, pass.clearStencil) else null;
+
+        try renderWithState(cmd, colorAttImg.?, colorAtt, depthAtt, stencilAtt, pass);
     }
 
     pub fn recordSwapchainBlits(self: *RenderGraph, cmd: vk.VkCommandBuffer, targets: []const u32, swapchainMap: *SwapchainManager.SwapchainMap, resMan: *ResourceManager) !void {
@@ -160,14 +194,14 @@ pub const RenderGraph = struct {
 
             if (imgState.stage != neededImgState.stage or imgState.access != neededImgState.access or imgState.layout != neededImgState.layout) {
                 // Transition Source Image (Color/General -> Transfer Src)
-                const imgBarrier = createImageBarrier(imgState, neededImgState, srcImgPtr.img);
+                const imgBarrier = createImageBarrier(imgState, neededImgState, srcImgPtr.img, srcImgPtr.imgInf.imgType);
                 try self.tempBarriers.append(imgBarrier);
                 self.resourceStates.set(imgId, neededImgState);
             }
             // Transition Destination Swapchain (Undefined -> Transfer Dst)
-            const swapchainState = ResourceState{ .stage = .TopOfPipe, .access = .None, .layout = .Undefined }; // SHOULD THIS BE UNDEFINED?
-            const neededState = ResourceState{ .stage = .Transfer, .access = .TransferWrite, .layout = .TransferDst }; // SHOULD THIS BE UNDEFINED?
-            const swapchainBarrier = createImageBarrier(swapchainState, neededState, swapchain.images[swapchain.curIndex]);
+            const swapchainState = ResourceState{ .stage = .TopOfPipe, .access = .None, .layout = .Undefined };
+            const neededState = ResourceState{ .stage = .Transfer, .access = .TransferWrite, .layout = .TransferDst };
+            const swapchainBarrier = createImageBarrier(swapchainState, neededState, swapchain.images[swapchain.curIndex], .Color); // SHOULD THIS BE COLOR ?!
             try self.tempBarriers.append(swapchainBarrier); // Managed by Swapchain, needs no State Update
         }
         self.bakeBarriers(cmd);
@@ -176,7 +210,7 @@ pub const RenderGraph = struct {
         for (targets) |swapchainIndex| {
             const swapchain = swapchainMap.getPtrAtIndex(swapchainIndex);
             const renderImgPtr = try resMan.getImagePtr(swapchain.passImgId);
-            const blitOffsets = calculateBlitOffsets(renderImgPtr.extent3d, .{ .height = swapchain.extent.height, .width = swapchain.extent.width, .depth = 1 }, rc.RENDER_IMG_STRETCH);
+            const blitOffsets = calculateBlitOffsets(renderImgPtr.imgInf.extent, .{ .height = swapchain.extent.height, .width = swapchain.extent.width, .depth = 1 }, rc.RENDER_IMG_STRETCH);
             copyImageToImage(cmd, renderImgPtr.img, blitOffsets.srcOffsets, swapchain.images[swapchain.curIndex], blitOffsets.dstOffsets, rc.RENDER_IMG_STRETCH);
         }
 
@@ -186,7 +220,7 @@ pub const RenderGraph = struct {
             const swapchain = swapchainMap.getPtrAtIndex(swapchainIndex);
             const swapchainState = ResourceState{ .stage = .TopOfPipe, .access = .None, .layout = .TransferDst }; // EDGE CASE: Probably Transfer?!
             const neededState = ResourceState{ .stage = .BotOfPipe, .access = .None, .layout = .PresentSrc };
-            const barrier = createImageBarrier(swapchainState, neededState, swapchain.images[swapchain.curIndex]);
+            const barrier = createImageBarrier(swapchainState, neededState, swapchain.images[swapchain.curIndex], .Color);
             try self.tempBarriers.append(barrier);
         }
         self.bakeBarriers(cmd);
@@ -206,7 +240,13 @@ pub const RenderGraph = struct {
     }
 };
 
-fn createImageBarrier(curState: ResourceState, newState: ResourceState, img: vk.VkImage) vk.VkImageMemoryBarrier2 {
+fn createImageBarrier(curState: ResourceState, newState: ResourceState, img: vk.VkImage, imgType: rc.ImgType) vk.VkImageMemoryBarrier2 {
+    const aspectMask: vk.VkImageAspectFlagBits = switch (imgType) {
+        .Color => vk.VK_IMAGE_ASPECT_COLOR_BIT,
+        .Depth => vk.VK_IMAGE_ASPECT_DEPTH_BIT,
+        .Stencil => vk.VK_IMAGE_ASPECT_STENCIL_BIT,
+    };
+
     return vk.VkImageMemoryBarrier2{
         .sType = vk.VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
         .srcStageMask = @intFromEnum(curState.stage),
@@ -218,7 +258,7 @@ fn createImageBarrier(curState: ResourceState, newState: ResourceState, img: vk.
         .srcQueueFamilyIndex = vk.VK_QUEUE_FAMILY_IGNORED,
         .dstQueueFamilyIndex = vk.VK_QUEUE_FAMILY_IGNORED,
         .image = img,
-        .subresourceRange = createSubresourceRange(vk.VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1),
+        .subresourceRange = createSubresourceRange(aspectMask, 0, 1, 0, 1),
     };
 }
 
@@ -280,28 +320,42 @@ fn bindShaderStages(cmd: vk.VkCommandBuffer, shaderObjects: []const ShaderObject
     vkFn.vkCmdBindShadersEXT.?(cmd, 8, &allStages, &handles);
 }
 
-fn renderWithState(cmd: vk.VkCommandBuffer, renderImages: []*GpuImage, attachments: []const rc.Pass.RenderAttachment, passType: rc.Pass.PassType, clear: bool) !void {
-    if (attachments.len > 8) return error.TooManyAttachments;
+fn createAttachment(renderType: enum { Color, Depth, Stencil }, imgView: vk.VkImageView, clear: bool) vk.VkRenderingAttachmentInfo {
+    const imageLayout: vk.VkImageLayout = switch (renderType) {
+        .Color => vk.VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+        .Depth, .Stencil => vk.VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+    };
 
-    // RENDER IMG POINTERS HAVE TO MATCH ATTACHMENTS LENGTH!
+    const clearValue: vk.VkClearValue = switch (renderType) {
+        .Color => .{ .color = .{ .float32 = .{ 0.0, 0.0, 0.1, 1.0 } } },
+        .Depth, .Stencil => .{ .depthStencil = .{ .depth = 1.0, .stencil = 0 } },
+    };
 
-    var colorInfos: [8]vk.VkRenderingAttachmentInfo = undefined;
-    const mainImg = renderImages[0].*;
+    return vk.VkRenderingAttachmentInfo{
+        .sType = vk.VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+        .imageView = imgView,
+        .imageLayout = imageLayout,
+        .loadOp = if (clear) vk.VK_ATTACHMENT_LOAD_OP_CLEAR else vk.VK_ATTACHMENT_LOAD_OP_LOAD,
+        .storeOp = vk.VK_ATTACHMENT_STORE_OP_STORE,
+        .clearValue = clearValue, // ✓ Now correct per type
+    };
+}
 
-    for (0..attachments.len) |i| {
-        colorInfos[i] = vk.VkRenderingAttachmentInfo{
-            .sType = vk.VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-            .imageView = mainImg.view,
-            .imageLayout = vk.VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-            .loadOp = if (clear) vk.VK_ATTACHMENT_LOAD_OP_CLEAR else vk.VK_ATTACHMENT_LOAD_OP_LOAD,
-            .storeOp = vk.VK_ATTACHMENT_STORE_OP_STORE,
-            .clearValue = .{ .color = .{ .float32 = .{ 0.0, 0.0, 0.1, 1.0 } } },
-        };
-    }
+fn renderWithState(
+    cmd: vk.VkCommandBuffer,
+    mainImg: *GpuImage,
+    colorAtt: ?vk.VkRenderingAttachmentInfo,
+    depthAtt: ?vk.VkRenderingAttachmentInfo,
+    stencilAtt: ?vk.VkRenderingAttachmentInfo,
+    pass: rc.Pass,
+) !void {
+    var colorAttCopy = colorAtt;
+    var depthAttCopy = depthAtt;
+    var stencilAttCopy = stencilAtt;
 
     const scissor = vk.VkRect2D{
         .offset = .{ .x = 0, .y = 0 },
-        .extent = .{ .width = mainImg.extent3d.width, .height = mainImg.extent3d.height },
+        .extent = .{ .width = mainImg.imgInf.extent.width, .height = mainImg.imgInf.extent.height },
     };
 
     const renderInf = vk.VkRenderingInfo{
@@ -309,18 +363,18 @@ fn renderWithState(cmd: vk.VkCommandBuffer, renderImages: []*GpuImage, attachmen
         .flags = 0,
         .renderArea = scissor,
         .layerCount = 1,
-        .colorAttachmentCount = @intCast(attachments.len),
-        .pColorAttachments = &colorInfos,
-        .pDepthAttachment = null,
-        .pStencilAttachment = null,
+        .colorAttachmentCount = if (colorAtt != null) 1 else 0,
+        .pColorAttachments = if (colorAttCopy != null) &colorAttCopy.? else null,
+        .pDepthAttachment = if (depthAttCopy != null) &depthAttCopy.? else null,
+        .pStencilAttachment = if (stencilAttCopy != null) &stencilAttCopy.? else null,
     };
     vk.vkCmdBeginRendering(cmd, &renderInf);
 
     const viewport = vk.VkViewport{
         .x = 0,
         .y = 0,
-        .width = @floatFromInt(mainImg.extent3d.width),
-        .height = @floatFromInt(mainImg.extent3d.height),
+        .width = @floatFromInt(mainImg.imgInf.extent.width),
+        .height = @floatFromInt(mainImg.imgInf.extent.height),
         .minDepth = 0.0,
         .maxDepth = 1.0,
     };
@@ -347,8 +401,8 @@ fn renderWithState(cmd: vk.VkCommandBuffer, renderImages: []*GpuImage, attachmen
     vkFn.vkCmdSetStencilTestEnable.?(cmd, vk.VK_FALSE);
 
     const colorBlendEnable = vk.VK_TRUE;
-    const colorBlendAttachments = [_]vk.VkBool32{colorBlendEnable} ** 8;
-    vkFn.vkCmdSetColorBlendEnableEXT.?(cmd, 0, @intCast(attachments.len), &colorBlendAttachments);
+    const colorBlendAttachments = [_]vk.VkBool32{colorBlendEnable};
+    vkFn.vkCmdSetColorBlendEnableEXT.?(cmd, 0, 1, &colorBlendAttachments);
 
     const blendEquation = vk.VkColorBlendEquationEXT{
         .srcColorBlendFactor = vk.VK_BLEND_FACTOR_SRC_ALPHA,
@@ -358,17 +412,17 @@ fn renderWithState(cmd: vk.VkCommandBuffer, renderImages: []*GpuImage, attachmen
         .dstAlphaBlendFactor = vk.VK_BLEND_FACTOR_ZERO,
         .alphaBlendOp = vk.VK_BLEND_OP_ADD,
     };
-    const equations = [_]vk.VkColorBlendEquationEXT{blendEquation} ** 8;
-    vkFn.vkCmdSetColorBlendEquationEXT.?(cmd, 0, @intCast(attachments.len), &equations);
+    const equations = [_]vk.VkColorBlendEquationEXT{blendEquation};
+    vkFn.vkCmdSetColorBlendEquationEXT.?(cmd, 0, 1, &equations);
 
     const colorWriteMask = vk.VK_COLOR_COMPONENT_R_BIT | vk.VK_COLOR_COMPONENT_G_BIT | vk.VK_COLOR_COMPONENT_B_BIT | vk.VK_COLOR_COMPONENT_A_BIT;
-    const colorWriteMasks = [_]vk.VkColorComponentFlags{colorWriteMask} ** 8;
-    vkFn.vkCmdSetColorWriteMaskEXT.?(cmd, 0, @intCast(attachments.len), &colorWriteMasks);
+    const colorWriteMasks = [_]vk.VkColorComponentFlags{colorWriteMask};
+    vkFn.vkCmdSetColorWriteMaskEXT.?(cmd, 0, 1, &colorWriteMasks);
 
     vkFn.vkCmdSetPrimitiveTopology.?(cmd, vk.VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
     vkFn.vkCmdSetPrimitiveRestartEnable.?(cmd, vk.VK_FALSE);
 
-    switch (passType) {
+    switch (pass.passType) {
         .graphicsPass => {
             vkFn.vkCmdSetVertexInputEXT.?(cmd, 0, null, 0, null); // Currently empty vertex input state
             vk.vkCmdDraw(cmd, 3, 1, 0, 0);

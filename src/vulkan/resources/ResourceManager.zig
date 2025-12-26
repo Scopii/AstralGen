@@ -10,25 +10,22 @@ const CreateMapArray = @import("../../structures/MapArray.zig").CreateMapArray;
 
 pub const Resource = struct {
     resourceType: ResourceUnion,
+
     pub const ResourceUnion = union(enum) {
         gpuBuf: GpuBuffer,
         gpuImg: GpuImage,
     };
-
     pub const GpuImage = struct {
-        arrayIndex: u32,
+        imgInf: rc.ResourceInf.ImgInf,
         allocation: vk.VmaAllocation,
         img: vk.VkImage,
         view: vk.VkImageView,
-        extent3d: vk.VkExtent3D,
-        format: vk.VkFormat,
     };
     pub const GpuBuffer = struct {
-        pub const deviceAddress = u64;
         allocation: vk.VmaAllocation,
         allocInf: vk.VmaAllocationInfo,
         buffer: vk.VkBuffer,
-        gpuAddress: deviceAddress,
+        gpuAddress: u64,
         count: u32 = 0,
     };
 };
@@ -103,33 +100,33 @@ pub const ResourceManager = struct {
         } else return error.ResourceValidationFailed;
     }
 
-    pub fn createResource(self: *ResourceManager, resInf: rc.ResourceInfo) !void {
-        switch (resInf.info) {
+    pub fn createResource(self: *ResourceManager, resInf: rc.ResourceInf) !void {
+        switch (resInf.inf) {
             .imgInf => |imgInf| {
-                const img = try self.gpuAlloc.allocGpuImage(imgInf.extent, imgInf.imgFormat, resInf.memUsage, imgInf.arrayIndex);
+                const img = try self.gpuAlloc.allocGpuImage(imgInf, resInf.memUse);
                 try self.descMan.updateImageDescriptor(img.view, resInf.binding, imgInf.arrayIndex);
-                self.resources.set(resInf.gpuId, .{ .resourceType = .{ .gpuImg = img } });
+                self.resources.set(resInf.id, .{ .resourceType = .{ .gpuImg = img } });
             },
             .bufInf => |bufInf| {
-                const buffer = try self.gpuAlloc.allocDefinedBuffer(bufInf, resInf.memUsage);
+                const buffer = try self.gpuAlloc.allocDefinedBuffer(bufInf, resInf.memUse);
                 try self.descMan.updateBufferDescriptor(buffer, resInf.binding, 0);
-                self.resources.set(resInf.gpuId, .{ .resourceType = .{ .gpuBuf = buffer } });
+                self.resources.set(resInf.id, .{ .resourceType = .{ .gpuBuf = buffer } });
             },
         }
-        std.debug.print("Gpu Resource created with {s} gpuId {} binding {}\n", .{ @tagName(resInf.info), resInf.gpuId, resInf.binding });
+        std.debug.print("Gpu Resource created with {s} gpuId {} binding {}\n", .{ @tagName(resInf.inf), resInf.id, resInf.binding });
     }
 
-    pub fn updateResource(self: *ResourceManager, resource: rc.ResourceInfo, data: anytype) !void {
-        switch (resource.info) {
+    pub fn updateResource(self: *ResourceManager, resource: rc.ResourceInf, data: anytype) !void {
+        switch (resource.inf) {
             .imgInf => |_| {},
-            .bufInf => |bufInf| try self.updateBuffer(bufInf, data, resource.gpuId),
+            .bufInf => |bufInf| try self.updateBuffer(bufInf, data, resource.id),
         }
     }
 
-    pub fn updateBuffer(self: *ResourceManager, bufInf: rc.ResourceInfo.BufInf, data: anytype, gpuId: u32) !void {
+    pub fn updateBuffer(self: *ResourceManager, bufInf: rc.ResourceInf.BufInf, data: anytype, gpuId: u32) !void {
         const T = std.meta.Child(@TypeOf(data));
-        if (@sizeOf(T) != bufInf.sizeOfElement) {
-            std.debug.print("Error: Size mismatch! Config expects {} bytes, Data is {} bytes\n", .{ bufInf.sizeOfElement, @sizeOf(T) });
+        if (@sizeOf(T) != bufInf.dataSize) {
+            std.debug.print("Error: Size mismatch! Config expects {} bytes, Data is {} bytes\n", .{ bufInf.dataSize, @sizeOf(T) });
             return error.TypeMismatch;
         }
         var resource = try self.getResourcePtr(gpuId);

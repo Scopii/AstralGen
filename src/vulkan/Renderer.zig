@@ -77,7 +77,7 @@ pub const Renderer = struct {
                 break;
             }
         }
-        var dirtyPassImgIds: [rc.MAX_WINDOWS]?u32 = .{null} ** rc.MAX_WINDOWS;
+        var dirtyImgIds: [rc.MAX_WINDOWS]?u32 = .{null} ** rc.MAX_WINDOWS;
 
         for (0..winPtrs.len) |i| {
             const winPtr = winPtrs[i];
@@ -85,7 +85,7 @@ pub const Renderer = struct {
             switch (winPtr.state) {
                 .needUpdate, .needCreation => {
                     try self.swapchainMan.createSwapchain(&self.context, .{ .window = winPtr });
-                    dirtyPassImgIds[i] = winPtr.passImgId;
+                    dirtyImgIds[i] = winPtr.passImgId;
                 },
                 .needActive, .needInactive => {
                     self.swapchainMan.changeState(winPtr.windowId, if (winPtr.state == .needActive) .active else .inactive);
@@ -96,10 +96,10 @@ pub const Renderer = struct {
         }
 
         if (rc.RENDER_IMG_AUTO_RESIZE == true) {
-            for (0..dirtyPassImgIds.len) |i| {
-                if (dirtyPassImgIds[i] == null) break;
+            for (0..dirtyImgIds.len) |i| {
+                if (dirtyImgIds[i] == null) break;
 
-                const gpuId = dirtyPassImgIds[i].?;
+                const gpuId = dirtyImgIds[i].?;
                 const resource = try self.resourceMan.getResourcePtr(gpuId);
                 switch (resource.resourceType) {
                     .gpuImg => |passImg| try self.updatePassImage(gpuId, passImg),
@@ -110,17 +110,17 @@ pub const Renderer = struct {
     }
 
     pub fn updatePassImage(self: *Renderer, gpuId: u32, img: Resource.GpuImage) !void {
-        const old = img.extent3d;
+        const old = img.imgInf.extent;
         const new = self.swapchainMan.getMaxRenderExtent(gpuId);
 
         if (new.height != 0 or new.width != 0) {
             if (new.width != old.width or new.height != old.height) {
                 const extent = vk.VkExtent3D{ .width = new.width, .height = new.height, .depth = 1 };
-                const newImg = rc.ResourceInfo{
-                    .gpuId = gpuId,
+                const newImg = rc.ResourceInf{
+                    .id = gpuId,
                     .binding = rc.RENDER_IMG_BINDING,
-                    .memUsage = .GpuOptimal,
-                    .info = .{ .imgInf = .{ .extent = extent, .arrayIndex = img.arrayIndex } },
+                    .memUse = .Gpu,
+                    .inf = .{ .imgInf = .{ .extent = extent, .arrayIndex = img.imgInf.arrayIndex, .imgType = img.imgInf.imgType } },
                 };
                 self.resourceMan.destroyResource(gpuId);
                 self.renderGraph.resetResourceState(gpuId);
@@ -139,7 +139,15 @@ pub const Renderer = struct {
                 std.debug.print("Pass {} Shader Layout invalid", .{err});
                 return error.PassInvalid;
             };
-            try self.passes.append(.{ .passType = passType, .shaderIds = pass.shaderIds, .clear = pass.clear, .resUsage = pass.resUsage, .attachments = pass.attachments });
+            try self.passes.append(.{
+                .passType = passType,
+                .shaderIds = pass.shaderIds,
+                .resUsages = pass.resUsages,
+                .attachments = pass.attachments,
+                .clearColor = pass.clearColor,
+                .clearDepth = pass.clearDepth,
+                .clearStencil = pass.clearStencil,
+            });
         }
     }
 
@@ -166,14 +174,14 @@ pub const Renderer = struct {
             try self.renderGraph.recordPassBarriers(cmd, pass, &self.resourceMan);
 
             const objectBuf = try self.resourceMan.getBufferPtr(1);
-            const passImg = try self.resourceMan.getImagePtr(pass.resUsage[0].id); // FOR COMPUTE IN SHADER
+            const passImg = try self.resourceMan.getImagePtr(pass.resUsages[0].id); // FOR COMPUTE IN SHADER
 
             const pcs = PushConstants{
                 .camPosAndFov = cam.getPosAndFov(),
                 .camDir = cam.getForward(),
                 .runtime = runtimeAsFloat,
                 .dataCount = objectBuf.count,
-                .passImgIndex = passImg.arrayIndex,
+                .passImgIndex = passImg.imgInf.arrayIndex,
                 .viewProj = cam.getViewProj(),
             };
             const shaderArray = self.shaderMan.getShaders(pass.shaderIds);
@@ -221,11 +229,11 @@ pub const Renderer = struct {
         try self.shaderMan.createShaders(loadedShaders);
     }
 
-    pub fn createResource(self: *Renderer, resourceInf: rc.ResourceInfo) !void {
+    pub fn createResource(self: *Renderer, resourceInf: rc.ResourceInf) !void {
         try self.resourceMan.createResource(resourceInf);
     }
 
-    pub fn updateResource(self: *Renderer, resourceInf: rc.ResourceInfo, data: anytype) !void {
+    pub fn updateResource(self: *Renderer, resourceInf: rc.ResourceInf, data: anytype) !void {
         try self.resourceMan.updateResource(resourceInf, data);
     }
 };
