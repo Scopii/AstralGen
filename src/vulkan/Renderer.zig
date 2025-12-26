@@ -123,7 +123,6 @@ pub const Renderer = struct {
                     .inf = .{ .imgInf = .{ .extent = extent, .arrayIndex = img.imgInf.arrayIndex, .imgType = img.imgInf.imgType } },
                 };
                 self.resourceMan.destroyResource(gpuId);
-                self.renderGraph.resetResourceState(gpuId);
                 try self.resourceMan.createResource(newImg);
                 std.debug.print("Render Image ID {} recreated {}x{} to {}x{}\n", .{ gpuId, old.width, old.height, new.width, new.height });
             }

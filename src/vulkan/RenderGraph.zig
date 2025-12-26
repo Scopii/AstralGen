@@ -82,7 +82,6 @@ pub const ResourceState = struct {
 pub const RenderGraph = struct {
     alloc: Allocator,
     pipeLayout: vk.VkPipelineLayout,
-    resourceStates: CreateMapArray(ResourceState, rc.GPU_RESOURCE_MAX, u32, rc.GPU_RESOURCE_MAX, 0) = .{},
     tempBarriers: std.array_list.Managed(vk.VkImageMemoryBarrier2),
 
     pub fn init(alloc: Allocator, resourceMan: *ResourceManager) RenderGraph {
@@ -100,21 +99,18 @@ pub const RenderGraph = struct {
     pub fn recordPassBarriers(self: *RenderGraph, cmd: vk.VkCommandBuffer, pass: rc.Pass, resMan: *ResourceManager) !void {
         for (pass.resUsages) |resUsage| {
             // CHECK IF RESOURCE IS ALREADY SET
-            if (!self.resourceStates.isKeyUsed(resUsage.id)) {
-                self.resourceStates.set(resUsage.id, .{});
-            }
 
-            const state = self.resourceStates.get(resUsage.id);
+            const resource = try resMan.getResourcePtr(resUsage.id);
+            const state = resource.state;
             const neededState = ResourceState{ .stage = resUsage.stage, .access = resUsage.access, .layout = resUsage.layout };
 
             if (state.stage != neededState.stage or state.access != neededState.access or state.layout != neededState.layout) {
-                const resource = try resMan.getResourcePtr(resUsage.id);
 
                 switch (resource.resourceType) {
                     .gpuImg => |*gpuImg| {
                         const barrier = createImageBarrier(state, neededState, gpuImg.img, gpuImg.imgInf.imgType);
                         try self.tempBarriers.append(barrier);
-                        self.updateResourceState(resUsage);
+                        resource.state = neededState;
                     },
                     .gpuBuf => std.debug.print("ERROR: Buffer Render Graph Build not implemented yet\n", .{}),
                 }
@@ -187,16 +183,16 @@ pub const RenderGraph = struct {
         for (targets) |swapchainIndex| {
             const swapchain = swapchainMap.getPtrAtIndex(swapchainIndex);
             const imgId = swapchain.passImgId;
-            const srcImgPtr = try resMan.getImagePtr(imgId);
+            const srcImgPtr = try resMan.getResourcePtr(imgId);
 
-            const imgState = self.resourceStates.get(imgId);
+            const imgState = srcImgPtr.state;
             const neededImgState = ResourceState{ .stage = .Transfer, .access = .TransferRead, .layout = .TransferSrc };
 
             if (imgState.stage != neededImgState.stage or imgState.access != neededImgState.access or imgState.layout != neededImgState.layout) {
                 // Transition Source Image (Color/General -> Transfer Src)
-                const imgBarrier = createImageBarrier(imgState, neededImgState, srcImgPtr.img, srcImgPtr.imgInf.imgType);
+                const imgBarrier = createImageBarrier(imgState, neededImgState, srcImgPtr.resourceType.gpuImg.img, srcImgPtr.resourceType.gpuImg.imgInf.imgType);
                 try self.tempBarriers.append(imgBarrier);
-                self.resourceStates.set(imgId, neededImgState);
+                srcImgPtr.state = neededImgState;
             }
             // Transition Destination Swapchain (Undefined -> Transfer Dst)
             const swapchainState = ResourceState{ .stage = .TopOfPipe, .access = .None, .layout = .Undefined };
@@ -231,13 +227,6 @@ pub const RenderGraph = struct {
         self.tempBarriers.clearRetainingCapacity();
     }
 
-    fn updateResourceState(self: *RenderGraph, resUsage: rc.Pass.ResourceUsage) void {
-        self.resourceStates.set(resUsage.id, .{ .stage = resUsage.stage, .access = resUsage.access, .layout = resUsage.layout });
-    }
-
-    pub fn resetResourceState(self: *RenderGraph, id: u32) void {
-        self.resourceStates.set(id, .{});
-    }
 };
 
 fn createImageBarrier(curState: ResourceState, newState: ResourceState, img: vk.VkImage, imgType: rc.ImgType) vk.VkImageMemoryBarrier2 {
