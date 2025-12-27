@@ -142,6 +142,7 @@ pub const ResourceManager = struct {
 
     pub fn replaceResource(self: *ResourceManager, gpuId: u32, newInf: rc.ResourceInf.ImgInf) !void {
         var oldRes = self.resources.get(gpuId);
+        oldRes.state = .{};
         const slotIndex = oldRes.bindlessIndex;
 
         self.gpuAlloc.freeGpuImage(oldRes.resourceType.gpuImg);

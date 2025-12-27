@@ -28,7 +28,7 @@ pub const Pass = struct {
     clearColor: bool = false,
     clearDepth: bool = false,
     clearStencil: bool = false,
-    
+
     pub const PassType = enum { computePass, graphicsPass, meshPass, taskMeshPass, vertexPass, empty };
     pub const Attachment = struct { id: u32, renderType: ImgType };
     pub const ResourceUsage = struct { id: u32, stage: PipeStage = .TopOfPipe, access: PipeAccess = .None, layout: ImageLayout = .General };
@@ -118,7 +118,7 @@ pub const gridTest: Pass = .{
         .{ .id = img4.id, .stage = .ColorAtt, .access = .ColorAttWrite, .layout = .ColorAtt },
     },
     .shaderIds = &.{ sc.gridTask.id, sc.gridMesh.id, sc.gridFrag.id },
-    .clearColor = true,
+    .clearColor = false,
 };
 
 pub const renderSequence: []const Pass = &.{ computeTest, graphicsTest, meshTest, taskTest, gridTest };

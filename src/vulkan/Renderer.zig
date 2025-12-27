@@ -70,7 +70,6 @@ pub const Renderer = struct {
     }
 
     pub fn updateWindowState(self: *Renderer, winPtrs: []*Window) !void {
-        // Handle window state changes...
         for (winPtrs) |winPtr| {
             if (winPtr.state == .needDelete or winPtr.state == .needUpdate) {
                 _ = vk.vkDeviceWaitIdle(self.context.gpi);
@@ -136,15 +135,9 @@ pub const Renderer = struct {
                 std.debug.print("Pass {} Shader Layout invalid", .{err});
                 return error.PassInvalid;
             };
-            try self.passes.append(.{
-                .passType = passType,
-                .shaderIds = pass.shaderIds,
-                .resUsages = pass.resUsages,
-                .attachments = pass.attachments,
-                .clearColor = pass.clearColor,
-                .clearDepth = pass.clearDepth,
-                .clearStencil = pass.clearStencil,
-            });
+            var validatedPass = pass;
+            validatedPass.passType = passType;
+            try self.passes.append(validatedPass);
         }
     }
 
