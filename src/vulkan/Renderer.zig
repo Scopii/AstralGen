@@ -114,12 +114,7 @@ pub const Renderer = struct {
 
         if (new.height != 0 or new.width != 0) {
             if (new.width != old.width or new.height != old.height) {
-                const newImgInf = rc.ResourceInf.ImgInf{
-                    .extent = .{ .width = new.width, .height = new.height, .depth = 1 },
-                    .imgType = img.imgInf.imgType,
-                    .arrayIndex = 0, // ignored
-
-                };
+                const newImgInf = rc.ResourceInf.ImgInf{ .extent = .{ .width = new.width, .height = new.height, .depth = 1 }, .imgType = img.imgInf.imgType };
                 try self.resourceMan.replaceResource(gpuId, newImgInf);
                 std.debug.print("Render Image ID {} recreated {}x{} to {}x{}\n", .{ gpuId, old.width, old.height, new.width, new.height });
             }

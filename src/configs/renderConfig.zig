@@ -42,7 +42,7 @@ pub const ResourceInf = struct {
     memUse: MemUsage,
     inf: union(enum) { imgInf: ImgInf, bufInf: BufInf },
 
-    pub const ImgInf = struct { extent: vk.VkExtent3D, format: c_uint = RENDER_IMG_FORMAT, arrayIndex: u32, imgType: ImgType };
+    pub const ImgInf = struct { extent: vk.VkExtent3D, format: c_uint = RENDER_IMG_FORMAT, imgType: ImgType };
     pub const BufInf = struct { dataSize: u64 = 0, length: u32, usage: enum { Storage, Uniform, Index, Vertex, Staging } };
     pub const MemUsage = enum { Gpu, CpuWrite, CpuRead };
 };
@@ -57,14 +57,12 @@ pub const bindingRegistry: []const DescBinding = &.{
     .{ .bufferBinding = .{ .binding = 1, .arrayLength = GPU_BUF_MAX } },
 };
 
-pub const img1 = ResourceInf{ .id = 50, .binding = 0, .memUse = .Gpu, .inf = .{ .imgInf = .{ .arrayIndex = 0, .imgType = .Color, .extent = .{ .width = 500, .height = 500, .depth = 1 } } } };
-pub const img2 = ResourceInf{ .id = 51, .binding = 0, .memUse = .Gpu, .inf = .{ .imgInf = .{ .arrayIndex = 1, .imgType = .Color, .extent = .{ .width = 300, .height = 300, .depth = 1 } } } };
-pub const img3 = ResourceInf{ .id = 52, .binding = 0, .memUse = .Gpu, .inf = .{ .imgInf = .{ .arrayIndex = 2, .imgType = .Color, .extent = .{ .width = 100, .height = 100, .depth = 1 } } } };
-pub const img4 = ResourceInf{ .id = 53, .binding = 0, .memUse = .Gpu, .inf = .{ .imgInf = .{ .arrayIndex = 3, .imgType = .Color, .extent = .{ .width = 1920, .height = 1080, .depth = 1 } } } };
-pub const img5 = ResourceInf{ .id = 54, .binding = 0, .memUse = .Gpu, .inf = .{ .imgInf = .{ .arrayIndex = 4, .imgType = .Color, .extent = .{ .width = 1920, .height = 1080, .depth = 1 } } } };
-pub const img6 = ResourceInf{ .id = 56, .binding = 0, .memUse = .Gpu, .inf = .{
-    .imgInf = .{ .arrayIndex = 5, .imgType = .Depth, .extent = .{ .width = 1920, .height = 1080, .depth = 1 }, .format = vk.VK_FORMAT_D32_SFLOAT },
-} };
+pub const img1 = ResourceInf{ .id = 50, .binding = 0, .memUse = .Gpu, .inf = .{ .imgInf = .{ .imgType = .Color, .extent = .{ .width = 500, .height = 500, .depth = 1 } } } };
+pub const img2 = ResourceInf{ .id = 51, .binding = 0, .memUse = .Gpu, .inf = .{ .imgInf = .{ .imgType = .Color, .extent = .{ .width = 300, .height = 300, .depth = 1 } } } };
+pub const img3 = ResourceInf{ .id = 52, .binding = 0, .memUse = .Gpu, .inf = .{ .imgInf = .{ .imgType = .Color, .extent = .{ .width = 100, .height = 100, .depth = 1 } } } };
+pub const img4 = ResourceInf{ .id = 53, .binding = 0, .memUse = .Gpu, .inf = .{ .imgInf = .{ .imgType = .Color, .extent = .{ .width = 1920, .height = 1080, .depth = 1 } } } };
+pub const img5 = ResourceInf{ .id = 54, .binding = 0, .memUse = .Gpu, .inf = .{ .imgInf = .{ .imgType = .Color, .extent = .{ .width = 1920, .height = 1080, .depth = 1 } } } };
+pub const img6 = ResourceInf{ .id = 56, .binding = 0, .memUse = .Gpu, .inf = .{ .imgInf = .{ .imgType = .Depth, .extent = .{ .width = 1920, .height = 1080, .depth = 1 }, .format = vk.VK_FORMAT_D32_SFLOAT } } };
 pub const buff1 = ResourceInf{ .id = 1, .binding = 1, .memUse = .CpuWrite, .inf = .{ .bufInf = .{ .usage = .Storage, .length = 1000, .dataSize = @sizeOf(Object) } } };
 pub const buff2 = ResourceInf{ .id = 0, .binding = 2, .memUse = .CpuWrite, .inf = .{ .bufInf = .{ .usage = .Storage, .length = 100, .dataSize = @sizeOf(Object) } } };
 
