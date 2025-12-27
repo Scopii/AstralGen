@@ -52,13 +52,13 @@ pub const DescBinding = union(enum) {
     bufferBinding: BufferBinding,
 
     pub const ImageArrayBinding = struct { binding: u32, arrayLength: u32 };
-    pub const BufferBinding = struct { binding: u32 };
+    pub const BufferBinding = struct { binding: u32, arrayLength: u32 };
 };
 
-pub const textureBinding = DescBinding{ .imageArrayBinding = .{ .binding = 0, .arrayLength = GPU_IMG_MAX } };
-pub const objBinding1 = DescBinding{ .bufferBinding = .{ .binding = 1 } };
-pub const objBinding2 = DescBinding{ .bufferBinding = .{ .binding = 2 } };
-pub const bindingRegistry: []const DescBinding = &.{ textureBinding, objBinding1, objBinding2 };
+pub const bindingRegistry: []const DescBinding = &.{
+    .{ .imageArrayBinding = .{ .binding = 0, .arrayLength = GPU_IMG_MAX } },
+    .{ .bufferBinding = .{ .binding = 1, .arrayLength = GPU_BUF_MAX } },
+};
 
 pub const img1 = ResourceInf{ .id = 50, .binding = 0, .memUse = .Gpu, .inf = .{ .imgInf = .{ .arrayIndex = 0, .imgType = .Color, .extent = .{ .width = 500, .height = 500, .depth = 1 } } } };
 pub const img2 = ResourceInf{ .id = 51, .binding = 0, .memUse = .Gpu, .inf = .{ .imgInf = .{ .arrayIndex = 1, .imgType = .Color, .extent = .{ .width = 300, .height = 300, .depth = 1 } } } };

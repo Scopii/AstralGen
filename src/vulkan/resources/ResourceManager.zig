@@ -11,6 +11,7 @@ const CreateMapArray = @import("../../structures/MapArray.zig").CreateMapArray;
 
 pub const Resource = struct {
     resourceType: ResourceUnion,
+    bindlessIndex: u32,
     state: ResourceState = .{},
 
     pub const ResourceUnion = union(enum) {
@@ -38,6 +39,8 @@ pub const ResourceManager = struct {
     gpi: vk.VkDevice,
     gpu: vk.VkPhysicalDevice,
     resources: CreateMapArray(Resource, rc.GPU_RESOURCE_MAX, u32, rc.GPU_RESOURCE_MAX, 0) = .{},
+    nextImageIndex: u32 = 0,
+    nextBufferIndex: u32 = 0,
     descMan: DescriptorManager,
 
     pub fn init(alloc: Allocator, context: *const Context) !ResourceManager {
@@ -105,17 +108,25 @@ pub const ResourceManager = struct {
     pub fn createResource(self: *ResourceManager, resInf: rc.ResourceInf) !void {
         switch (resInf.inf) {
             .imgInf => |imgInf| {
+                const bindlessIndex = self.nextImageIndex + 1;
                 const img = try self.gpuAlloc.allocGpuImage(imgInf, resInf.memUse);
-                try self.descMan.updateImageDescriptor(img.view, resInf.binding, imgInf.arrayIndex);
-                self.resources.set(resInf.id, .{ .resourceType = .{ .gpuImg = img } });
+
+                try self.descMan.updateImageDescriptor(img.view, 0, bindlessIndex);
+                const finalRes = Resource{ .resourceType = .{ .gpuImg = img }, .bindlessIndex = bindlessIndex };
+                self.resources.set(resInf.id, finalRes);
+                std.debug.print("Image created. ID: {} -> BindlessIndex: {}\n", .{ resInf.id, bindlessIndex });
             },
             .bufInf => |bufInf| {
+                const bindlessIndex = self.nextBufferIndex + 1;
                 const buffer = try self.gpuAlloc.allocDefinedBuffer(bufInf, resInf.memUse);
-                try self.descMan.updateBufferDescriptor(buffer, resInf.binding, 0);
-                self.resources.set(resInf.id, .{ .resourceType = .{ .gpuBuf = buffer } });
+
+                try self.descMan.updateBufferDescriptor(buffer, 1, bindlessIndex);
+
+                const finalRes = Resource{ .resourceType = .{ .gpuBuf = buffer }, .bindlessIndex = bindlessIndex };
+                self.resources.set(resInf.id, finalRes);
+                std.debug.print("Buffer created. ID: {} -> BindlessIndex: {}\n", .{ resInf.id, bindlessIndex });
             },
         }
-        std.debug.print("Gpu Resource created with {s} gpuId {} binding {}\n", .{ @tagName(resInf.inf), resInf.id, resInf.binding });
     }
 
     pub fn updateResource(self: *ResourceManager, resource: rc.ResourceInf, data: anytype) !void {
@@ -123,6 +134,19 @@ pub const ResourceManager = struct {
             .imgInf => |_| {},
             .bufInf => |bufInf| try self.updateBuffer(bufInf, data, resource.id),
         }
+    }
+
+    pub fn replaceResource(self: *ResourceManager, gpuId: u32, newInf: rc.ResourceInf.ImgInf) !void {
+        var oldRes = self.resources.get(gpuId);
+        const slotIndex = oldRes.bindlessIndex;
+
+        self.gpuAlloc.freeGpuImage(oldRes.resourceType.gpuImg);
+        const newGpuImg = try self.gpuAlloc.allocGpuImage(newInf, .Gpu);
+        try self.descMan.updateImageDescriptor(newGpuImg.view, 0, slotIndex);
+
+        oldRes.resourceType = .{ .gpuImg = newGpuImg };
+        self.resources.set(gpuId, oldRes);
+        std.debug.print("Resource {} Resized/Replaced at Slot {}\n", .{ gpuId, slotIndex });
     }
 
     pub fn updateBuffer(self: *ResourceManager, bufInf: rc.ResourceInf.BufInf, data: anytype, gpuId: u32) !void {
@@ -146,7 +170,7 @@ pub const ResourceManager = struct {
                 @memcpy(dataPtr[0..data.len], data);
                 // Update
                 buffer.count = @intCast(data.len);
-                self.resources.set(gpuId, .{ .resourceType = .{ .gpuBuf = buffer.* } });
+                self.resources.set(gpuId, .{ .resourceType = .{ .gpuBuf = buffer.* }, .bindlessIndex = resource.bindlessIndex });
             },
             else => std.debug.print("Warning: GPU Buffer Update failed because Resource {} is not a GPU Buffer", .{gpuId}),
         }

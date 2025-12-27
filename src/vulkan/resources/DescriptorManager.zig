@@ -13,7 +13,7 @@ pub const PushConstants = extern struct {
     runtime: f32,
     dataCount: u32,
     passImgIndex: u32,
-    padding: u32 = 0,
+    objectBufIndex: u32 = 0,
     viewProj: [4][4]f32,
 };
 
@@ -44,7 +44,7 @@ pub const DescriptorManager = struct {
                     bindings[i] = createDescriptorLayoutBinding(imgArray.binding, vk.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, imgArray.arrayLength, vk.VK_SHADER_STAGE_ALL);
                 },
                 .bufferBinding => |buffer| {
-                    bindings[i] = createDescriptorLayoutBinding(buffer.binding, vk.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, vk.VK_SHADER_STAGE_ALL);
+                    bindings[i] = createDescriptorLayoutBinding(buffer.binding, vk.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, buffer.arrayLength, vk.VK_SHADER_STAGE_ALL);
                 },
             }
         }
@@ -138,11 +138,7 @@ fn createDescriptorLayout(gpi: vk.VkDevice, layoutBindings: []const vk.VkDescrip
     var bindingFlags: [rc.bindingRegistry.len]vk.VkDescriptorBindingFlags = undefined;
 
     for (0..layoutBindings.len) |i| {
-        if (layoutBindings[i].descriptorType == vk.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE) {
-            bindingFlags[i] = vk.VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT;
-        } else {
-            bindingFlags[i] = 0;
-        }
+        bindingFlags[i] = vk.VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT;
     }
     const bindingFlagsInf = vk.VkDescriptorSetLayoutBindingFlagsCreateInfo{
         .sType = vk.VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO,

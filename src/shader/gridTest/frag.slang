@@ -3,25 +3,22 @@ struct VertexOut {
     float3 color : COLOR0; // <--- Input from Mesh Shader
 };
 
-// Push Constant
 struct PushConstants {
     float4 camPosAndFov;
     float4 camDir;
     float runtime;
     uint dataCount;
     uint outputImageIndex;
-    uint padding;
-    float4x4 viewProj;
+    uint objectBufferIndex;
 };
 
 [[vk::push_constant]] ConstantBuffer<PushConstants> pc;
 
 [shader("fragment")]
 float4 main(VertexOut pin) : SV_Target {
-    // We are ONLY running this code if we hit the Cube.
-    // The background is already handled by vkCmdBeginRendering info.clearValue.
+    // ONLY if code if hit Cube.
+    // background is vkCmdBeginRendering info.clearValue.
     
-    // Output the color we calculated in the Mesh Shader
-    // (This will make the cube look Red/Green/Blue interpolated)
+    // Output the color from the Mesh Shader
     return float4(pin.color, 0.5); 
 }

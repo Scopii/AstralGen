@@ -115,15 +115,13 @@ pub const Renderer = struct {
 
         if (new.height != 0 or new.width != 0) {
             if (new.width != old.width or new.height != old.height) {
-                const extent = vk.VkExtent3D{ .width = new.width, .height = new.height, .depth = 1 };
-                const newImg = rc.ResourceInf{
-                    .id = gpuId,
-                    .binding = rc.RENDER_IMG_BINDING,
-                    .memUse = .Gpu,
-                    .inf = .{ .imgInf = .{ .extent = extent, .arrayIndex = img.imgInf.arrayIndex, .imgType = img.imgInf.imgType } },
+                const newImgInf = rc.ResourceInf.ImgInf{
+                    .extent = .{ .width = new.width, .height = new.height, .depth = 1 },
+                    .imgType = img.imgInf.imgType,
+                    .arrayIndex = 0, // ignored
+
                 };
-                self.resourceMan.destroyResource(gpuId);
-                try self.resourceMan.createResource(newImg);
+                try self.resourceMan.replaceResource(gpuId, newImgInf);
                 std.debug.print("Render Image ID {} recreated {}x{} to {}x{}\n", .{ gpuId, old.width, old.height, new.width, new.height });
             }
         }
@@ -172,15 +170,16 @@ pub const Renderer = struct {
         for (self.passes.items) |pass| {
             try self.renderGraph.recordPassBarriers(cmd, pass, &self.resourceMan);
 
-            const objectBuf = try self.resourceMan.getBufferPtr(1);
-            const passImg = try self.resourceMan.getImagePtr(pass.resUsages[0].id); // FOR COMPUTE IN SHADER
+            const objectBuf = try self.resourceMan.getResourcePtr(1);
+            const passImg = try self.resourceMan.getResourcePtr(pass.resUsages[0].id); // FOR COMPUTE IN SHADER
 
             const pcs = PushConstants{
                 .camPosAndFov = cam.getPosAndFov(),
                 .camDir = cam.getForward(),
                 .runtime = runtimeAsFloat,
-                .dataCount = objectBuf.count,
-                .passImgIndex = passImg.imgInf.arrayIndex,
+                .dataCount = objectBuf.resourceType.gpuBuf.count,
+                .passImgIndex = passImg.bindlessIndex,
+                .objectBufIndex = objectBuf.bindlessIndex,
                 .viewProj = cam.getViewProj(),
             };
             const shaderArray = self.shaderMan.getShaders(pass.shaderIds);

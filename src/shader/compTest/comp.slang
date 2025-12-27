@@ -10,11 +10,12 @@ struct PushConstants {
     float4 camDir;
     float runtime;
     uint dataCount;
-    uint outputImageIndex;
+    uint outputImageIndex;  
+    uint objectBufferIndex; 
 };
 
 [[vk::binding(0, 0)]] RWTexture2D<float4> globalImages[];
-[[vk::binding(1, 0)]] StructuredBuffer<Object> objectBuffer;
+[[vk::binding(1, 0)]] StructuredBuffer<Object> globalBuffers[];
 [[vk::push_constant]] ConstantBuffer<PushConstants> pc;
 
 // Marching Constants
@@ -46,13 +47,15 @@ struct MapResult {
     int index;
 };
 
-MapResult map(float3 pos) {
+MapResult map(float3 pos, StructuredBuffer<Object> objectBuffer) {
     float closestDist = MAX_DIST;
     int closestIndex = -1;
 
     // Loop over the Object Buffer
     for (uint i = 0; i < pc.dataCount; i++) {
+        // 2. Read from that specific buffer
         Object obj = objectBuffer[i];
+
         float3 objPos = float3(obj.posX, obj.posY, obj.posZ);
 
         float dist = MAX_DIST;
@@ -73,12 +76,11 @@ MapResult map(float3 pos) {
 }
 
 // Normal Functions
-float3 getNormal(float3 pos) {
-    // Access dist from the returned struct
+float3 getNormal(float3 pos, StructuredBuffer<Object> objectBuffer) {
     return normalize(float3(
-        map(pos + float3(EPSILON, 0, 0)).dist - map(pos - float3(EPSILON, 0, 0)).dist,
-        map(pos + float3(0, EPSILON, 0)).dist - map(pos - float3(0, EPSILON, 0)).dist,
-        map(pos + float3(0, 0, EPSILON)).dist - map(pos - float3(0, 0, EPSILON)).dist
+        map(pos + float3(EPSILON, 0, 0), objectBuffer).dist - map(pos - float3(EPSILON, 0, 0), objectBuffer).dist,
+        map(pos + float3(0, EPSILON, 0), objectBuffer).dist - map(pos - float3(0, EPSILON, 0), objectBuffer).dist,
+        map(pos + float3(0, 0, EPSILON), objectBuffer).dist - map(pos - float3(0, 0, EPSILON), objectBuffer).dist
     ));
 }
 
@@ -86,8 +88,8 @@ float3 getNormal(float3 pos) {
 [shader("compute")] // Slang attribute to explicitly mark stage
 [numthreads(8, 8, 1)]
 void main(uint3 id : SV_DispatchThreadID) {
-    uint renderImgIdx = pc.outputImageIndex;
-    RWTexture2D<float4> renderImg = globalImages[renderImgIdx];
+    RWTexture2D<float4> renderImg = globalImages[pc.outputImageIndex];
+    StructuredBuffer<Object> objectBuffer = globalBuffers[pc.objectBufferIndex];
 
     // Bounds check (because group size is 8x8)
     uint renderWidth, renderHeight;
@@ -114,7 +116,7 @@ void main(uint3 id : SV_DispatchThreadID) {
     [loop]
     for (int step = 0; step < MAX_STEPS; step++) {
         pos = pc.camPosAndFov.xyz + rayDirection * march;
-        MapResult result = map(pos);
+        MapResult result = map(pos, objectBuffer);
 
         if (result.dist < MIN_DIST) {
             hit = true;
@@ -126,8 +128,8 @@ void main(uint3 id : SV_DispatchThreadID) {
     }
     
     // Output
-    if(hit && hitIndex != -1) {
-        float3 normal = getNormal(pos);
+    if (hit && hitIndex != -1) {
+        float3 normal = getNormal(pos, objectBuffer);
         float3 lightDir = normalize(float3(1.0, 1.0, -1.0));
         float lighting = max(dot(normal, lightDir), 0.1);
 

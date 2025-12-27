@@ -11,10 +11,11 @@ struct PushConstants {
     float runtime;
     uint dataCount;
     uint outputImageIndex;
+    uint objectBufferIndex;
 };
 
 [[vk::binding(0, 0)]] RWTexture2D<float4> globalImages[];
-[[vk::binding(1, 0)]] StructuredBuffer<Object> objectBuffer;
+[[vk::binding(1, 0)]] StructuredBuffer<Object> globalBuffers[];
 [[vk::push_constant]] ConstantBuffer<PushConstants> pc;
 
 // Marching Constants
@@ -47,13 +48,15 @@ struct MapResult {
     int index;
 };
 
-MapResult map(float3 pos) {
+MapResult map(float3 pos, StructuredBuffer<Object> objectBuffer) {
     float closestDist = MAX_DIST;
     int closestIndex = -1;
 
     // Loop over the Object Buffer
     for (uint i = 0; i < pc.dataCount; i++) {
+        // 2. Read from that specific buffer
         Object obj = objectBuffer[i];
+
         float3 objPos = float3(obj.posX, obj.posY, obj.posZ);
 
         float dist = MAX_DIST;
@@ -66,7 +69,7 @@ MapResult map(float3 pos) {
             closestIndex = i;
         }
     }
-    
+
     MapResult res;
     res.dist = closestDist;
     res.index = closestIndex;
@@ -74,18 +77,19 @@ MapResult map(float3 pos) {
 }
 
 // Normal Functions
-float3 getNormal(float3 pos) {
-    // Access dist from the returned struct
+float3 getNormal(float3 pos, StructuredBuffer<Object> objectBuffer) {
     return normalize(float3(
-        map(pos + float3(EPSILON, 0, 0)).dist - map(pos - float3(EPSILON, 0, 0)).dist,
-        map(pos + float3(0, EPSILON, 0)).dist - map(pos - float3(0, EPSILON, 0)).dist,
-        map(pos + float3(0, 0, EPSILON)).dist - map(pos - float3(0, 0, EPSILON)).dist
+        map(pos + float3(EPSILON, 0, 0), objectBuffer).dist - map(pos - float3(EPSILON, 0, 0), objectBuffer).dist,
+        map(pos + float3(0, EPSILON, 0), objectBuffer).dist - map(pos - float3(0, EPSILON, 0), objectBuffer).dist,
+        map(pos + float3(0, 0, EPSILON), objectBuffer).dist - map(pos - float3(0, 0, EPSILON), objectBuffer).dist
     ));
 }
 
 // SHADER
 [shader("fragment")]
 float4 main(float4 pixelPos: SV_Position) : SV_Target {
+    StructuredBuffer<Object> objectBuffer = globalBuffers[pc.objectBufferIndex];
+
     uint width, height;
     globalImages[pc.outputImageIndex].GetDimensions(width, height);
     float2 renderDimensions = float2(width, height);
@@ -108,7 +112,7 @@ float4 main(float4 pixelPos: SV_Position) : SV_Target {
     [loop]
     for (int step = 0; step < MAX_STEPS; step++) {
         pos = pc.camPosAndFov.xyz + rayDir * march;
-        MapResult res = map(pos);
+        MapResult res = map(pos, objectBuffer);
 
         if (res.dist < MIN_DIST) {
             hit = true;
@@ -121,7 +125,7 @@ float4 main(float4 pixelPos: SV_Position) : SV_Target {
 
     // Output
     if (hit && hitIndex != -1) {
-        float3 normal = getNormal(pos);
+        float3 normal = getNormal(pos, objectBuffer);
         float3 lightDirection = normalize(float3(1.0, 1.0, -1.0));
         float lighting = max(dot(normal, lightDirection), 0.1);
 
