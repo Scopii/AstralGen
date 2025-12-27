@@ -108,19 +108,23 @@ pub const ResourceManager = struct {
     pub fn createResource(self: *ResourceManager, resInf: rc.ResourceInf) !void {
         switch (resInf.inf) {
             .imgInf => |imgInf| {
-                const bindlessIndex = self.nextImageIndex + 1;
-                const img = try self.gpuAlloc.allocGpuImage(imgInf, resInf.memUse);
+                const bindlessIndex = self.nextImageIndex;
+                self.nextImageIndex += 1;
 
-                try self.descMan.updateImageDescriptor(img.view, 0, bindlessIndex);
+                const img = try self.gpuAlloc.allocGpuImage(imgInf, resInf.memUse);
+                try self.descMan.updateImageDescriptor(img.view, resInf.binding, bindlessIndex);
+
                 const finalRes = Resource{ .resourceType = .{ .gpuImg = img }, .bindlessIndex = bindlessIndex };
                 self.resources.set(resInf.id, finalRes);
                 std.debug.print("Image created. ID: {} -> BindlessIndex: {}\n", .{ resInf.id, bindlessIndex });
             },
             .bufInf => |bufInf| {
-                const bindlessIndex = self.nextBufferIndex + 1;
-                const buffer = try self.gpuAlloc.allocDefinedBuffer(bufInf, resInf.memUse);
+                // 1. Assign Bindless Index
+                const bindlessIndex = self.nextBufferIndex;
+                self.nextBufferIndex += 1;
 
-                try self.descMan.updateBufferDescriptor(buffer, 1, bindlessIndex);
+                const buffer = try self.gpuAlloc.allocDefinedBuffer(bufInf, resInf.memUse);
+                try self.descMan.updateBufferDescriptor(buffer, resInf.binding, bindlessIndex);
 
                 const finalRes = Resource{ .resourceType = .{ .gpuBuf = buffer }, .bindlessIndex = bindlessIndex };
                 self.resources.set(resInf.id, finalRes);
@@ -184,12 +188,8 @@ pub const ResourceManager = struct {
         const resource = self.resources.getPtr(gpuId);
 
         switch (resource.resourceType) {
-            .gpuImg => |img| {
-                self.gpuAlloc.freeGpuImage(img);
-            },
-            .gpuBuf => |buf| {
-                self.gpuAlloc.freeGpuBuffer(buf.buffer, buf.allocation);
-            },
+            .gpuImg => |img| self.gpuAlloc.freeGpuImage(img),
+            .gpuBuf => |buf| self.gpuAlloc.freeGpuBuffer(buf.buffer, buf.allocation),
         }
         self.resources.removeAtKey(gpuId);
     }

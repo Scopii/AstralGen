@@ -11,8 +11,8 @@ pub const DESIRED_SWAPCHAIN_IMAGES: u8 = 3;
 pub const DISPLAY_MODE = vk.VK_PRESENT_MODE_IMMEDIATE_KHR;
 pub const MAX_WINDOWS: u8 = 16;
 
-pub const GPU_BUF_MAX = 16;
-pub const GPU_IMG_MAX = 64;
+pub const GPU_BUF_MAX = 1024;
+pub const GPU_IMG_MAX = 1024;
 pub const GPU_RESOURCE_MAX = GPU_BUF_MAX + GPU_IMG_MAX;
 
 pub const RENDER_IMG_BINDING = 0; // FOR UPDATING THE RENDER IMAGE ON WINDOW RESIZES
@@ -28,7 +28,7 @@ pub const Pass = struct {
     clearColor: bool = false,
     clearDepth: bool = false,
     clearStencil: bool = false,
-
+    
     pub const PassType = enum { computePass, graphicsPass, meshPass, taskMeshPass, vertexPass, empty };
     pub const Attachment = struct { id: u32, renderType: ImgType };
     pub const ResourceUsage = struct { id: u32, stage: PipeStage = .TopOfPipe, access: PipeAccess = .None, layout: ImageLayout = .General };
@@ -48,11 +48,8 @@ pub const ResourceInf = struct {
 };
 
 pub const DescBinding = union(enum) {
-    imageArrayBinding: ImageArrayBinding,
-    bufferBinding: BufferBinding,
-
-    pub const ImageArrayBinding = struct { binding: u32, arrayLength: u32 };
-    pub const BufferBinding = struct { binding: u32, arrayLength: u32 };
+    imageArrayBinding: struct { binding: u32, arrayLength: u32 },
+    bufferBinding: struct { binding: u32, arrayLength: u32 },
 };
 
 pub const bindingRegistry: []const DescBinding = &.{
@@ -65,20 +62,9 @@ pub const img2 = ResourceInf{ .id = 51, .binding = 0, .memUse = .Gpu, .inf = .{ 
 pub const img3 = ResourceInf{ .id = 52, .binding = 0, .memUse = .Gpu, .inf = .{ .imgInf = .{ .arrayIndex = 2, .imgType = .Color, .extent = .{ .width = 100, .height = 100, .depth = 1 } } } };
 pub const img4 = ResourceInf{ .id = 53, .binding = 0, .memUse = .Gpu, .inf = .{ .imgInf = .{ .arrayIndex = 3, .imgType = .Color, .extent = .{ .width = 1920, .height = 1080, .depth = 1 } } } };
 pub const img5 = ResourceInf{ .id = 54, .binding = 0, .memUse = .Gpu, .inf = .{ .imgInf = .{ .arrayIndex = 4, .imgType = .Color, .extent = .{ .width = 1920, .height = 1080, .depth = 1 } } } };
-
-pub const img6 = ResourceInf{
-    .id = 56,
-    .binding = 0,
-    .memUse = .Gpu,
-    .inf = .{
-        .imgInf = .{
-            .arrayIndex = 5,
-            .imgType = .Depth,
-            .extent = .{ .width = 1920, .height = 1080, .depth = 1 },
-            .format = vk.VK_FORMAT_D32_SFLOAT,
-        },
-    },
-};
+pub const img6 = ResourceInf{ .id = 56, .binding = 0, .memUse = .Gpu, .inf = .{
+    .imgInf = .{ .arrayIndex = 5, .imgType = .Depth, .extent = .{ .width = 1920, .height = 1080, .depth = 1 }, .format = vk.VK_FORMAT_D32_SFLOAT },
+} };
 pub const buff1 = ResourceInf{ .id = 1, .binding = 1, .memUse = .CpuWrite, .inf = .{ .bufInf = .{ .usage = .Storage, .length = 1000, .dataSize = @sizeOf(Object) } } };
 pub const buff2 = ResourceInf{ .id = 0, .binding = 2, .memUse = .CpuWrite, .inf = .{ .bufInf = .{ .usage = .Storage, .length = 100, .dataSize = @sizeOf(Object) } } };
 
