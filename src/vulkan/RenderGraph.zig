@@ -153,7 +153,10 @@ pub const RenderGraph = struct {
             .gpuImg => |gpuImg| {
                 vk.vkCmdPushConstants(cmd, self.pipeLayout, vk.VK_SHADER_STAGE_ALL, 0, @sizeOf(PushConstants), &pcs);
                 bindShaderStages(cmd, validShaders);
-                vk.vkCmdDispatch(cmd, (gpuImg.imgInf.extent.width + 7) / 8, (gpuImg.imgInf.extent.height + 7) / 8, 1);
+
+                if (pass.dispatch == null) {
+                    vk.vkCmdDispatch(cmd, (gpuImg.imgInf.extent.width + 7) / 8, (gpuImg.imgInf.extent.height + 7) / 8, 1);
+                } else vk.vkCmdDispatch(cmd, pass.dispatch.?.x, pass.dispatch.?.y, pass.dispatch.?.z);
             },
             else => {
                 std.debug.print("ERROR: Compute Pass needs 1 Render Image, has none\n", .{});
@@ -425,7 +428,8 @@ fn renderWithState(
             vkFn.vkCmdSetVertexInputEXT.?(cmd, 0, null, 0, null); // Currently empty vertex input state
             vk.vkCmdDraw(cmd, 3, 1, 0, 0);
         },
-        .meshPass, .taskMeshPass => vkFn.vkCmdDrawMeshTasksEXT.?(cmd, 1, 1, 1),
+        .meshPass, .taskMeshPass => vkFn.vkCmdDrawMeshTasksEXT.?(cmd, pass.dispatch.?.x, pass.dispatch.?.y, pass.dispatch.?.z),
+
         else => return error.UnsupportedPipelineType,
     }
     vk.vkCmdEndRendering(cmd);

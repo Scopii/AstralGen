@@ -130,6 +130,14 @@ pub const Renderer = struct {
                 std.debug.print("Pass {} Shader Layout invalid", .{err});
                 return error.PassInvalid;
             };
+            if (pass.dispatch == null) {
+                if (passType == .taskMeshPass or passType == .meshPass) {
+                    std.debug.print("Passs with type {s} needs dispatch", .{@tagName(pass.passType)});
+                return error.PassInvalid;
+                }
+                if (passType == .computePass) std.debug.print("Compute pass defaulting to Swapchain Img Dispatch Size", .{});
+            }
+
             var validatedPass = pass;
             validatedPass.passType = passType;
             try self.passes.append(validatedPass);
