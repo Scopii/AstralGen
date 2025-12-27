@@ -39,14 +39,8 @@ pub const DescriptorManager = struct {
         // Create Descriptor Layouts
         var bindings: [rc.bindingRegistry.len]vk.VkDescriptorSetLayoutBinding = undefined;
         for (0..bindings.len) |i| {
-            switch (rc.bindingRegistry[i]) {
-                .imageArrayBinding => |imgArray| {
-                    bindings[i] = createDescriptorLayoutBinding(imgArray.binding, vk.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, imgArray.arrayLength, vk.VK_SHADER_STAGE_ALL);
-                },
-                .bufferBinding => |buffer| {
-                    bindings[i] = createDescriptorLayoutBinding(buffer.binding, vk.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, buffer.arrayLength, vk.VK_SHADER_STAGE_ALL);
-                },
-            }
+            const binding = rc.bindingRegistry[i];
+            bindings[i] = createDescriptorLayoutBinding(binding.binding, binding.descType, binding.arrayLength, vk.VK_SHADER_STAGE_ALL);
         }
         const descLayout = try createDescriptorLayout(gpi, &bindings);
         errdefer vk.vkDestroyDescriptorSetLayout(gpi, descLayout, null);

@@ -63,7 +63,6 @@ pub const App = struct {
 
         // RENDERING SET UP
         try renderer.createResource(rc.buff1);
-        try renderer.createResource(rc.buff2);
 
         try renderer.updateResource(rc.buff1, ecs.getObjects());
 
