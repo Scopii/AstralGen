@@ -112,7 +112,13 @@ pub const ResourceManager = struct {
                 self.nextImageIndex += 1;
 
                 const img = try self.gpuAlloc.allocGpuImage(imgInf, resInf.memUse);
-                try self.descMan.updateImageDescriptor(img.view, resInf.binding, bindlessIndex);
+
+                // TEMPORARARY SOLUTION
+                // Depth images usually sampled (read-only) or attachments
+                // Later Bindless Array for VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE.
+                if (imgInf.imgType != .Depth) {
+                    try self.descMan.updateImageDescriptor(img.view, 0, bindlessIndex);
+                }
 
                 const finalRes = Resource{ .resourceType = .{ .gpuImg = img }, .bindlessIndex = bindlessIndex };
                 self.resources.set(resInf.id, finalRes);

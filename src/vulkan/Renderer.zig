@@ -126,21 +126,28 @@ pub const Renderer = struct {
             const shaderArray = self.shaderMan.getShaders(pass.shaderIds);
             const validShaders = shaderArray[0..pass.shaderIds.len];
 
+            const isDispatch: bool = switch (pass.renderCall) {
+                .dispatch => true,
+                .draw => false,
+            };
+
+            const isCompute: bool = switch (pass.passPipe) {
+                .compute => true,
+                .classic => false,
+            };
+
             const passType = checkShaderLayout(validShaders) catch |err| {
                 std.debug.print("Pass {} Shader Layout invalid", .{err});
                 return error.PassInvalid;
             };
-            if (pass.dispatch == null) {
-                if (passType == .taskMeshPass or passType == .meshPass) {
-                    std.debug.print("Passs with type {s} needs dispatch", .{@tagName(pass.passType)});
-                return error.PassInvalid;
-                }
-                if (passType == .computePass) std.debug.print("Compute pass defaulting to Swapchain Img Dispatch Size", .{});
+
+            switch (passType) {
+                .computePass => if (!isCompute or !isDispatch) return error.PassInvalid,
+                .graphicsPass, .vertexPass => if (isCompute or isDispatch) return error.PassInvalid,
+                .taskMeshPass, .meshPass => if (isCompute or !isDispatch) return error.PassInvalid,
             }
 
-            var validatedPass = pass;
-            validatedPass.passType = passType;
-            try self.passes.append(validatedPass);
+            try self.passes.append(pass);
         }
     }
 
@@ -163,18 +170,29 @@ pub const Renderer = struct {
     }
 
     fn recordPasses(self: *Renderer, cmd: vk.VkCommandBuffer, cam: *Camera, runtimeAsFloat: f32) !void {
+        const objectBuf = try self.resourceMan.getResourcePtr(1);
+        var renderImgBindlessId: ?u32 = null;
+
         for (self.passes.items) |pass| {
             try self.renderGraph.recordPassBarriers(cmd, pass, &self.resourceMan);
 
-            const objectBuf = try self.resourceMan.getResourcePtr(1);
-            const passImg = try self.resourceMan.getResourcePtr(pass.resUsages[0].id); // FOR COMPUTE IN SHADER
+            switch (pass.passPipe) {
+                .compute => |computePipe| if (computePipe.renderImgId != null) {
+                    const resource = try self.resourceMan.getResourcePtr(computePipe.renderImgId.?); // FOR COMPUTE IN SHADER
+                    switch (resource.resourceType) {
+                        .gpuImg => renderImgBindlessId = resource.bindlessIndex,
+                        else => return error.ComputeRenderImgIdIsNotImage,
+                    }
+                },
+                else => {},
+            }
 
             const pcs = PushConstants{
                 .camPosAndFov = cam.getPosAndFov(),
                 .camDir = cam.getForward(),
                 .runtime = runtimeAsFloat,
                 .dataCount = objectBuf.resourceType.gpuBuf.count,
-                .passImgIndex = passImg.bindlessIndex,
+                .passImgIndex = if (renderImgBindlessId != null) renderImgBindlessId.? else 0,
                 .objectBufIndex = objectBuf.bindlessIndex,
                 .viewProj = cam.getViewProj(),
             };

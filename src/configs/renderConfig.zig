@@ -21,16 +21,22 @@ pub const RENDER_IMG_STRETCH = true; // Ignored on AUTO_RESIZE
 
 pub const Pass = struct {
     shaderIds: []const u8,
-    passType: PassType = .empty,
-    attachments: []const Attachment,
     resUsages: []const ResourceUsage,
-    clearColor: bool = false,
-    clearDepth: bool = false,
-    clearStencil: bool = false,
-    dispatch: ?struct {  x: u32, y: u32, z: u32 } = null,
+    renderCall: union(enum) {
+        dispatch: Dispatch,
+        draw: Draw,
+    },
+    passPipe: union(enum) {
+        compute: ComputePass,
+        classic: ClassicPass,
+    },
 
-    pub const PassType = enum { computePass, graphicsPass, meshPass, taskMeshPass, vertexPass, empty };
-    pub const Attachment = struct { id: u32, renderType: ImgType };
+    pub const ComputePass = struct { renderImgId: ?u32 };
+    pub const ClassicPass = struct { attachments: []const Attachment };
+    pub const Dispatch = struct { x: u32, y: u32, z: u32 };
+    pub const Draw = struct { vertices: u32, instances: u32 };
+    pub const PassType = enum { computePass, graphicsPass, meshPass, taskMeshPass, vertexPass };
+    pub const Attachment = struct { id: u32, renderType: ImgType, clear: bool };
     pub const ResourceUsage = struct { id: u32, stage: PipeStage = .TopOfPipe, access: PipeAccess = .None, layout: ImageLayout = .General };
 };
 
@@ -63,8 +69,11 @@ pub const img6 = ResourceInf{ .id = 11, .binding = 0, .memUse = .Gpu, .inf = .{ 
 
 pub const computeTest: Pass = .{
     .shaderIds = &.{sc.t1Comp.id},
-    .attachments = &.{
-        .{ .id = img1.id, .renderType = .Color },
+    .renderCall = .{ .dispatch = .{ .x = 8, .y = 8, .z = 1 } },
+    .passPipe = .{
+        .compute = .{
+            .renderImgId = img1.id,
+        },
     },
     .resUsages = &.{
         .{ .id = img1.id, .stage = .Compute, .access = .ShaderWrite, .layout = .General },
@@ -73,9 +82,14 @@ pub const computeTest: Pass = .{
 
 pub const graphicsTest: Pass = .{
     .shaderIds = &.{ sc.t2Vert.id, sc.t2Frag.id },
-    .attachments = &.{
-        .{ .id = img2.id, .renderType = .Color },
-        .{ .id = img6.id, .renderType = .Depth },
+    .renderCall = .{ .draw = .{ .vertices = 3, .instances = 1 } },
+    .passPipe = .{
+        .classic = .{
+            .attachments = &.{
+                .{ .id = img2.id, .renderType = .Color, .clear = false },
+                .{ .id = img6.id, .renderType = .Depth, .clear = false },
+            },
+        },
     },
     .resUsages = &.{
         .{ .id = img2.id, .stage = .ColorAtt, .access = .ColorAttWrite, .layout = .ColorAtt },
@@ -84,10 +98,14 @@ pub const graphicsTest: Pass = .{
 };
 
 pub const meshTest: Pass = .{
-    .dispatch = .{.x = 1 , .y = 1 , .z = 1},
     .shaderIds = &.{ sc.t3Mesh.id, sc.t3Frag.id },
-    .attachments = &.{
-        .{ .id = img3.id, .renderType = .Color },
+    .renderCall = .{ .dispatch = .{ .x = 1, .y = 1, .z = 1 } },
+    .passPipe = .{
+        .classic = .{
+            .attachments = &.{
+                .{ .id = img3.id, .renderType = .Color, .clear = false },
+            },
+        },
     },
     .resUsages = &.{
         .{ .id = img3.id, .stage = .ColorAtt, .access = .ColorAttWrite, .layout = .ColorAtt },
@@ -95,10 +113,14 @@ pub const meshTest: Pass = .{
 };
 
 pub const taskTest: Pass = .{
-    .dispatch = .{.x = 1 , .y = 1 , .z = 1},
     .shaderIds = &.{ sc.t4Task.id, sc.t4Mesh.id, sc.t4Frag.id },
-    .attachments = &.{
-        .{ .id = img4.id, .renderType = .Color },
+    .renderCall = .{ .dispatch = .{ .x = 1, .y = 1, .z = 1 } },
+    .passPipe = .{
+        .classic = .{
+            .attachments = &.{
+                .{ .id = img4.id, .renderType = .Color, .clear = false },
+            },
+        },
     },
     .resUsages = &.{
         .{ .id = img4.id, .stage = .ColorAtt, .access = .ColorAttWrite, .layout = .ColorAtt },
@@ -106,15 +128,18 @@ pub const taskTest: Pass = .{
 };
 
 pub const gridTest: Pass = .{
-    .dispatch = .{.x = 1 , .y = 1 , .z = 1},
     .shaderIds = &.{ sc.gridTask.id, sc.gridMesh.id, sc.gridFrag.id },
-    .attachments = &.{
-        .{ .id = img4.id, .renderType = .Color },
+    .renderCall = .{ .dispatch = .{ .x = 1, .y = 1, .z = 1 } },
+    .passPipe = .{
+        .classic = .{
+            .attachments = &.{
+                .{ .id = img4.id, .renderType = .Color, .clear = false },
+            },
+        },
     },
     .resUsages = &.{
         .{ .id = img4.id, .stage = .ColorAtt, .access = .ColorAttWrite, .layout = .ColorAtt },
     },
-    .clearColor = false,
 };
 
 pub const renderSequence: []const Pass = &.{ computeTest, graphicsTest, meshTest, taskTest, gridTest };
