@@ -129,9 +129,10 @@ pub const RenderGraph = struct {
     }
 
     pub fn recordPass(self: *RenderGraph, cmd: vk.VkCommandBuffer, pass: rc.Pass, pcs: PushConstants, validShaders: []const ShaderObject, resMan: *ResourceManager) !void {
-        switch (pass.passPipe) {
-            .compute => |pipe| try self.recordCompute(cmd, pass.renderCall.dispatch, pcs, validShaders, pipe.renderImgId, resMan),
-            .classic => try self.recordGraphics(cmd, pass, pcs, validShaders, resMan),
+        switch (pass.kind) {
+            .compute => |comp| try self.recordCompute(cmd, comp.workgroups, pcs, validShaders, pass.renderImgId, resMan),
+            .graphics => |graphics| try self.recordGraphics(cmd, graphics.attachments, pass, pcs, validShaders, resMan),
+            .taskOrMesh => |taskOrMesh| try self.recordGraphics(cmd, taskOrMesh.attachments, pass, pcs, validShaders, resMan),
         }
     }
 
@@ -139,8 +140,8 @@ pub const RenderGraph = struct {
         vk.vkCmdPushConstants(cmd, self.pipeLayout, vk.VK_SHADER_STAGE_ALL, 0, @sizeOf(PushConstants), &pcs);
         bindShaderStages(cmd, validShaders);
 
-        if (renderImgId != null) {
-            const resource = try resMan.getResourcePtr(renderImgId.?);
+        if (renderImgId) |imgId| {
+            const resource = try resMan.getResourcePtr(imgId);
             switch (resource.resourceType) {
                 .gpuImg => |gpuImg| {
                     vk.vkCmdDispatch(
@@ -158,14 +159,14 @@ pub const RenderGraph = struct {
         } else vk.vkCmdDispatch(cmd, dispatch.x, dispatch.y, dispatch.z);
     }
 
-    pub fn recordGraphics(self: *RenderGraph, cmd: vk.VkCommandBuffer, pass: rc.Pass, pcs: PushConstants, validShaders: []const ShaderObject, resMan: *ResourceManager) !void {
+    pub fn recordGraphics(self: *RenderGraph, cmd: vk.VkCommandBuffer, attachments: []const rc.Pass.Attachment, pass: rc.Pass, pcs: PushConstants, validShaders: []const ShaderObject, resMan: *ResourceManager) !void {
         vk.vkCmdPushConstants(cmd, self.pipeLayout, vk.VK_SHADER_STAGE_ALL, 0, @sizeOf(PushConstants), &pcs);
         bindShaderStages(cmd, validShaders);
 
-        const attachments = pass.passPipe.classic.attachments;
         if (attachments.len > 8) return error.TooManyAttachments;
+        if (pass.renderImgId == null) return error.GraphicsPassNeedsRenderImgId;
 
-        var mainImg: ?*GpuImage = null;
+        const mainImg: *GpuImage = try resMan.getImagePtr(pass.renderImgId.?);
         var colorAttCount: u8 = 0;
         var colorAttachments: [6]vk.VkRenderingAttachmentInfo = undefined;
         var depthAtt: ?vk.VkRenderingAttachmentInfo = null;
@@ -176,7 +177,6 @@ pub const RenderGraph = struct {
 
             switch (attachment.renderType) {
                 .Color => if (colorAttCount < 6) {
-                    if (colorAttCount == 0) mainImg = img;
                     colorAttachments[colorAttCount] = createAttachment(attachment.renderType, img.view, attachment.clear);
                     colorAttCount += 1;
                 } else return error.TooManyColorAttachments,
@@ -189,7 +189,7 @@ pub const RenderGraph = struct {
             }
         }
 
-        if (mainImg) |main| try renderWithState(cmd, main, colorAttachments[0..colorAttCount], depthAtt, stencilAtt, pass) else return error.GraphicsPassNeedsOneAttachment;
+        try renderWithState(cmd, mainImg, colorAttachments[0..colorAttCount], depthAtt, stencilAtt, pass);
     }
 
     pub fn recordSwapchainBlits(self: *RenderGraph, cmd: vk.VkCommandBuffer, targets: []const u32, swapchainMap: *SwapchainManager.SwapchainMap, resMan: *ResourceManager) !void {
@@ -421,12 +421,13 @@ fn renderWithState(
     vkFn.vkCmdSetPrimitiveTopology.?(cmd, vk.VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
     vkFn.vkCmdSetPrimitiveRestartEnable.?(cmd, vk.VK_FALSE);
 
-    switch (pass.renderCall) {
-        .draw => |draw| {
+    switch (pass.kind) {
+        .graphics => |graphics| {
             vkFn.vkCmdSetVertexInputEXT.?(cmd, 0, null, 0, null); // Currently empty vertex input state
-            vk.vkCmdDraw(cmd, draw.vertices, draw.vertices, 0, 0);
+            vk.vkCmdDraw(cmd, graphics.vertexCount, graphics.instanceCount, 0, 0);
         },
-        .dispatch => |dispatch| vkFn.vkCmdDrawMeshTasksEXT.?(cmd, dispatch.x, dispatch.y, dispatch.z),
+        .taskOrMesh => |taskOrMesh| vkFn.vkCmdDrawMeshTasksEXT.?(cmd, taskOrMesh.workgroups.x, taskOrMesh.workgroups.y, taskOrMesh.workgroups.z),
+        .compute => return error.ComputeLandedInGraphicsPass,
     }
     vk.vkCmdEndRendering(cmd);
 }

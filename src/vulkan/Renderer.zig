@@ -126,27 +126,17 @@ pub const Renderer = struct {
             const shaderArray = self.shaderMan.getShaders(pass.shaderIds);
             const validShaders = shaderArray[0..pass.shaderIds.len];
 
-            const isDispatch: bool = switch (pass.renderCall) {
-                .dispatch => true,
-                .draw => false,
-            };
-
-            const isCompute: bool = switch (pass.passPipe) {
-                .compute => true,
-                .classic => false,
-            };
-
             const passType = checkShaderLayout(validShaders) catch |err| {
                 std.debug.print("Pass {} Shader Layout invalid", .{err});
                 return error.PassInvalid;
             };
+            const passKind = pass.kind;
 
             switch (passType) {
-                .computePass => if (!isCompute or !isDispatch) return error.PassInvalid,
-                .graphicsPass, .vertexPass => if (isCompute or isDispatch) return error.PassInvalid,
-                .taskMeshPass, .meshPass => if (isCompute or !isDispatch) return error.PassInvalid,
+                .computePass => if (passKind != .compute) return error.PassInvalid,
+                .graphicsPass, .vertexPass => if (passKind != .graphics) return error.PassInvalid,
+                .taskMeshPass, .meshPass => if (passKind != .taskOrMesh) return error.PassInvalid,
             }
-
             try self.passes.append(pass);
         }
     }
@@ -176,15 +166,12 @@ pub const Renderer = struct {
         for (self.passes.items) |pass| {
             try self.renderGraph.recordPassBarriers(cmd, pass, &self.resourceMan);
 
-            switch (pass.passPipe) {
-                .compute => |computePipe| if (computePipe.renderImgId != null) {
-                    const resource = try self.resourceMan.getResourcePtr(computePipe.renderImgId.?); // FOR COMPUTE IN SHADER
-                    switch (resource.resourceType) {
-                        .gpuImg => renderImgBindlessId = resource.bindlessIndex,
-                        else => return error.ComputeRenderImgIdIsNotImage,
-                    }
-                },
-                else => {},
+            if (pass.renderImgId) |imgId| {
+                const resource = try self.resourceMan.getResourcePtr(imgId);
+                switch (resource.resourceType) {
+                    .gpuImg => renderImgBindlessId = resource.bindlessIndex,
+                    else => return error.RenderImgIdIsNotImage,
+                }
             }
 
             const pcs = PushConstants{
