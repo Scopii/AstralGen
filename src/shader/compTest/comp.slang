@@ -6,12 +6,13 @@ struct Object {
 };
 
 struct PushConstants {
+    float4x4 viewProj;
     float4 camPosAndFov;
     float4 camDir;
     float runtime;
-    uint dataCount;
-    uint outputImageIndex;  
-    uint objectBufferIndex; 
+    uint renderImgIdx;
+    uint objectBufCount;
+    uint objectBufIdx;
 };
 
 [[vk::binding(0, 0)]] RWTexture2D<float4> globalImages[];
@@ -52,7 +53,7 @@ MapResult map(float3 pos, StructuredBuffer<Object> objectBuffer) {
     int closestIndex = -1;
 
     // Loop over the Object Buffer
-    for (uint i = 0; i < pc.dataCount; i++) {
+    for (uint i = 0; i < pc.objectBufCount; i++) {
         // 2. Read from that specific buffer
         Object obj = objectBuffer[i];
 
@@ -88,8 +89,8 @@ float3 getNormal(float3 pos, StructuredBuffer<Object> objectBuffer) {
 [shader("compute")] // Slang attribute to explicitly mark stage
 [numthreads(8, 8, 1)]
 void main(uint3 id : SV_DispatchThreadID) {
-    RWTexture2D<float4> renderImg = globalImages[pc.outputImageIndex];
-    StructuredBuffer<Object> objectBuffer = globalBuffers[pc.objectBufferIndex];
+    RWTexture2D<float4> renderImg = globalImages[pc.renderImgIdx];
+    StructuredBuffer<Object> objectBuffer = globalBuffers[pc.objectBufIdx];
 
     // Bounds check (because group size is 8x8)
     uint renderWidth, renderHeight;

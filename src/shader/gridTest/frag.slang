@@ -4,12 +4,13 @@ struct VertexOut {
 };
 
 struct PushConstants {
+    float4x4 viewProj;
     float4 camPosAndFov;
     float4 camDir;
     float runtime;
-    uint dataCount;
-    uint outputImageIndex;
-    uint objectBufferIndex;
+    uint renderImgIdx;
+    uint objectBufCount;
+    uint objectBufIdx;
 };
 
 [[vk::push_constant]] ConstantBuffer<PushConstants> pc;

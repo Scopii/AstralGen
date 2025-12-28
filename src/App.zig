@@ -62,9 +62,9 @@ pub const App = struct {
         shaderCompiler.freeFreshShaders();
 
         // RENDERING SET UP
-        try renderer.createResource(rc.buff1);
+        try renderer.createResource(rc.buf1);
 
-        try renderer.updateResource(rc.buff1, ecs.getObjects());
+        try renderer.updateResource(rc.buf1, ecs.getObjects());
 
         try renderer.createResource(rc.img1);
         try renderer.createResource(rc.img2);

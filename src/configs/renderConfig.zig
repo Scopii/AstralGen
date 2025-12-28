@@ -23,23 +23,12 @@ pub const Pass = struct {
     shaderIds: []const u8,
     resUsages: []const ResourceUsage,
     renderImgId: ?u32 = null,
-
     kind: union(enum) {
-        compute: struct {
-            workgroups: Dispatch,
-        },
-        graphics: struct {
-            attachments: []const Attachment,
-            vertexCount: u32 = 3,
-            instanceCount: u32 = 1,
-        },
-        taskOrMesh: struct {
-            attachments: []const Attachment,
-            workgroups: Dispatch,
-        },
+        compute: struct { workgroups: Dispatch },
+        taskOrMesh: struct { attachments: []const Attachment, workgroups: Dispatch },
+        graphics: struct { attachments: []const Attachment, vertexCount: u32 = 3, instanceCount: u32 = 1 },
     },
     pub const Dispatch = struct { x: u32, y: u32, z: u32 };
-    pub const PassType = enum { computePass, graphicsPass, meshPass, taskMeshPass, vertexPass };
     pub const Attachment = struct { id: u32, renderType: ImgType, clear: bool };
     pub const ResourceUsage = struct { id: u32, stage: PipeStage = .TopOfPipe, access: PipeAccess = .None, layout: ImageLayout = .General };
 };
@@ -48,7 +37,6 @@ pub const ImgType = enum { Color, Depth, Stencil };
 
 pub const ResourceInf = struct {
     id: u32,
-    binding: u8,
     memUse: MemUsage,
     inf: union(enum) { imgInf: ImgInf, bufInf: BufInf },
 
@@ -57,83 +45,93 @@ pub const ResourceInf = struct {
     pub const MemUsage = enum { Gpu, CpuWrite, CpuRead };
 };
 
-pub const DescriptorBinding = struct { binding: u32, descType: vk.VkDescriptorType, arrayLength: u32 };
-pub const bindingRegistry: []const DescriptorBinding = &.{
-    .{ .binding = 0, .descType = vk.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, .arrayLength = GPU_IMG_MAX },
-    .{ .binding = 1, .descType = vk.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, .arrayLength = GPU_BUF_MAX },
+pub const STORAGE_IMG_BINDING = 0;
+pub const STORAGE_BUF_BINDING = 1;
+
+pub const bindingRegistry: []const struct { binding: u32, descType: vk.VkDescriptorType, arrayLength: u32 } = &.{
+    .{ .binding = STORAGE_IMG_BINDING, .descType = vk.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, .arrayLength = GPU_IMG_MAX },
+    .{ .binding = STORAGE_BUF_BINDING, .descType = vk.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, .arrayLength = GPU_BUF_MAX },
 };
 
-pub const buff1 = ResourceInf{ .id = 1, .binding = 1, .memUse = .CpuWrite, .inf = .{ .bufInf = .{ .usage = .Storage, .length = 100, .dataSize = @sizeOf(Object) } } };
-pub const img1 = ResourceInf{ .id = 3, .binding = 0, .memUse = .Gpu, .inf = .{ .imgInf = .{ .imgType = .Color, .extent = .{ .width = 500, .height = 500, .depth = 1 } } } };
-pub const img2 = ResourceInf{ .id = 5, .binding = 0, .memUse = .Gpu, .inf = .{ .imgInf = .{ .imgType = .Color, .extent = .{ .width = 300, .height = 300, .depth = 1 } } } };
-pub const img3 = ResourceInf{ .id = 7, .binding = 0, .memUse = .Gpu, .inf = .{ .imgInf = .{ .imgType = .Color, .extent = .{ .width = 100, .height = 100, .depth = 1 } } } };
-pub const img4 = ResourceInf{ .id = 9, .binding = 0, .memUse = .Gpu, .inf = .{ .imgInf = .{ .imgType = .Color, .extent = .{ .width = 1920, .height = 1080, .depth = 1 } } } };
-pub const img5 = ResourceInf{ .id = 10, .binding = 0, .memUse = .Gpu, .inf = .{ .imgInf = .{ .imgType = .Color, .extent = .{ .width = 1920, .height = 1080, .depth = 1 } } } };
-pub const img6 = ResourceInf{ .id = 11, .binding = 0, .memUse = .Gpu, .inf = .{ .imgInf = .{ .imgType = .Depth, .extent = .{ .width = 1920, .height = 1080, .depth = 1 }, .format = vk.VK_FORMAT_D32_SFLOAT } } };
+pub const buf1 = ResourceInf{ .id = 1, .memUse = .CpuWrite, .inf = .{ .bufInf = .{ .usage = .Storage, .length = 100, .dataSize = @sizeOf(Object) } } };
+pub const img1 = ResourceInf{ .id = 3, .memUse = .Gpu, .inf = .{ .imgInf = .{ .imgType = .Color, .extent = .{ .width = 500, .height = 500, .depth = 1 } } } };
+pub const img2 = ResourceInf{ .id = 5, .memUse = .Gpu, .inf = .{ .imgInf = .{ .imgType = .Color, .extent = .{ .width = 300, .height = 300, .depth = 1 } } } };
+pub const img3 = ResourceInf{ .id = 7, .memUse = .Gpu, .inf = .{ .imgInf = .{ .imgType = .Color, .extent = .{ .width = 100, .height = 100, .depth = 1 } } } };
+pub const img4 = ResourceInf{ .id = 9, .memUse = .Gpu, .inf = .{ .imgInf = .{ .imgType = .Color, .extent = .{ .width = 1920, .height = 1080, .depth = 1 } } } };
+pub const img5 = ResourceInf{ .id = 10, .memUse = .Gpu, .inf = .{ .imgInf = .{ .imgType = .Color, .extent = .{ .width = 1920, .height = 1080, .depth = 1 } } } };
+pub const img6 = ResourceInf{ .id = 11, .memUse = .Gpu, .inf = .{ .imgInf = .{ .imgType = .Depth, .extent = .{ .width = 1920, .height = 1080, .depth = 1 }, .format = vk.VK_FORMAT_D32_SFLOAT } } };
 
 pub const computeTest: Pass = .{
     .shaderIds = &.{sc.t1Comp.id},
     .renderImgId = img1.id,
-    .kind = .{ .compute = .{
-        .workgroups = .{ .x = 8, .y = 8, .z = 1 },
-    } },
+    .kind = .{
+        .compute = .{ .workgroups = .{ .x = 8, .y = 8, .z = 1 } },
+    },
     .resUsages = &.{
         .{ .id = img1.id, .stage = .Compute, .access = .ShaderWrite, .layout = .General },
     },
 };
 
-pub const graphicsTest: Pass = .{
+const graphicsTest: Pass = .{
     .shaderIds = &.{ sc.t2Vert.id, sc.t2Frag.id },
     .renderImgId = img2.id,
-    .kind = .{ .graphics = .{
-        .attachments = &.{
-            .{ .id = img2.id, .renderType = .Color, .clear = false },
-            .{ .id = img6.id, .renderType = .Depth, .clear = false },
+    .kind = .{
+        .graphics = .{
+            .attachments = &.{
+                .{ .id = img2.id, .renderType = .Color, .clear = false },
+                .{ .id = img6.id, .renderType = .Depth, .clear = false },
+            },
         },
-    } },
+    },
     .resUsages = &.{
         .{ .id = img2.id, .stage = .ColorAtt, .access = .ColorAttWrite, .layout = .ColorAtt },
         .{ .id = img6.id, .stage = .EarlyFragTest, .access = .DepthStencilRead, .layout = .DepthAtt },
     },
 };
 
-pub const meshTest: Pass = .{
+const meshTest: Pass = .{
     .shaderIds = &.{ sc.t3Mesh.id, sc.t3Frag.id },
     .renderImgId = img3.id,
-    .kind = .{ .taskOrMesh = .{
-        .workgroups = .{ .x = 1, .y = 1, .z = 1 },
-        .attachments = &.{
-            .{ .id = img3.id, .renderType = .Color, .clear = false },
+    .kind = .{
+        .taskOrMesh = .{
+            .workgroups = .{ .x = 1, .y = 1, .z = 1 },
+            .attachments = &.{
+                .{ .id = img3.id, .renderType = .Color, .clear = false },
+            },
         },
-    } },
+    },
     .resUsages = &.{
         .{ .id = img3.id, .stage = .ColorAtt, .access = .ColorAttWrite, .layout = .ColorAtt },
     },
 };
 
-pub const taskTest: Pass = .{
+const taskTest: Pass = .{
     .shaderIds = &.{ sc.t4Task.id, sc.t4Mesh.id, sc.t4Frag.id },
     .renderImgId = img4.id,
-    .kind = .{ .taskOrMesh = .{
-        .workgroups = .{ .x = 1, .y = 1, .z = 1 },
-        .attachments = &.{
-            .{ .id = img4.id, .renderType = .Color, .clear = false },
+    .kind = .{
+        .taskOrMesh = .{
+            .workgroups = .{ .x = 1, .y = 1, .z = 1 },
+            .attachments = &.{
+                .{ .id = img4.id, .renderType = .Color, .clear = false },
+            },
         },
-    } },
+    },
     .resUsages = &.{
         .{ .id = img4.id, .stage = .ColorAtt, .access = .ColorAttWrite, .layout = .ColorAtt },
     },
 };
 
-pub const gridTest: Pass = .{
+const gridTest: Pass = .{
     .shaderIds = &.{ sc.gridTask.id, sc.gridMesh.id, sc.gridFrag.id },
     .renderImgId = img4.id,
-    .kind = .{ .taskOrMesh = .{
-        .workgroups = .{ .x = 1, .y = 1, .z = 1 },
-        .attachments = &.{
-            .{ .id = img4.id, .renderType = .Color, .clear = false },
+    .kind = .{
+        .taskOrMesh = .{
+            .workgroups = .{ .x = 1, .y = 1, .z = 1 },
+            .attachments = &.{
+                .{ .id = img4.id, .renderType = .Color, .clear = false },
+            },
         },
-    } },
+    },
     .resUsages = &.{
         .{ .id = img4.id, .stage = .ColorAtt, .access = .ColorAttWrite, .layout = .ColorAtt },
     },

@@ -8,13 +8,13 @@ const check = @import("../ErrorHelpers.zig").check;
 const rc = @import("../../configs/renderConfig.zig");
 
 pub const PushConstants = extern struct {
+    viewProj: [4][4]f32,
     camPosAndFov: [4]f32,
     camDir: [4]f32,
     runtime: f32,
-    dataCount: u32,
-    passImgIndex: u32,
-    objectBufIndex: u32 = 0,
-    viewProj: [4][4]f32,
+    renderImgIdx: u32,
+    objectBufCount: u32,
+    objectBufIdx: u32,
 };
 
 pub const DescriptorBuffer = struct {

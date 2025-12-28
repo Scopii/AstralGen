@@ -31,13 +31,13 @@ static const uint3 cubeIndices[12] = {
 [[vk::push_constant]] ConstantBuffer<PushConstants> pc;
 
 struct PushConstants {
+    float4x4 viewProj;
     float4 camPosAndFov;
     float4 camDir;
     float runtime;
-    uint dataCount;
-    uint outputImageIndex;
-    uint padding;
-    float4x4 viewProj;
+    uint renderImgIdx;
+    uint objectBufCount;
+    uint objectBufIdx;
 };
 
 [shader("mesh")]

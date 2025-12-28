@@ -161,7 +161,16 @@ pub const Renderer = struct {
 
     fn recordPasses(self: *Renderer, cmd: vk.VkCommandBuffer, cam: *Camera, runtimeAsFloat: f32) !void {
         const objectBuf = try self.resourceMan.getResourcePtr(1);
-        var renderImgBindlessId: ?u32 = null;
+
+        var pcs = PushConstants{
+            .viewProj = cam.getViewProj(),
+            .camPosAndFov = cam.getPosAndFov(),
+            .camDir = cam.getForward(),
+            .runtime = runtimeAsFloat,
+            .renderImgIdx = 0,
+            .objectBufCount = objectBuf.resourceType.gpuBuf.count,
+            .objectBufIdx = objectBuf.bindlessIndex,
+        };
 
         for (self.passes.items) |pass| {
             try self.renderGraph.recordPassBarriers(cmd, pass, &self.resourceMan);
@@ -169,23 +178,12 @@ pub const Renderer = struct {
             if (pass.renderImgId) |imgId| {
                 const resource = try self.resourceMan.getResourcePtr(imgId);
                 switch (resource.resourceType) {
-                    .gpuImg => renderImgBindlessId = resource.bindlessIndex,
+                    .gpuImg => pcs.renderImgIdx = resource.bindlessIndex,
                     else => return error.RenderImgIdIsNotImage,
                 }
             }
-
-            const pcs = PushConstants{
-                .camPosAndFov = cam.getPosAndFov(),
-                .camDir = cam.getForward(),
-                .runtime = runtimeAsFloat,
-                .dataCount = objectBuf.resourceType.gpuBuf.count,
-                .passImgIndex = if (renderImgBindlessId != null) renderImgBindlessId.? else 0,
-                .objectBufIndex = objectBuf.bindlessIndex,
-                .viewProj = cam.getViewProj(),
-            };
             const shaderArray = self.shaderMan.getShaders(pass.shaderIds);
             const validShaders = shaderArray[0..pass.shaderIds.len];
-
             try self.renderGraph.recordPass(cmd, pass, pcs, validShaders, &self.resourceMan);
         }
     }
@@ -241,7 +239,7 @@ fn createSemaphoreSubmitInfo(semaphore: vk.VkSemaphore, stageMask: u64, value: u
     return .{ .sType = vk.VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO, .semaphore = semaphore, .stageMask = stageMask, .value = value };
 }
 
-fn checkShaderLayout(shaders: []const ShaderObject) !rc.Pass.PassType {
+fn checkShaderLayout(shaders: []const ShaderObject) !enum { computePass, graphicsPass, meshPass, taskMeshPass, vertexPass } {
     var shdr: [9]u8 = .{0} ** 9;
     var prevIndex: i8 = -1;
 
