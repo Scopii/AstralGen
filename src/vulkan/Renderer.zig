@@ -76,11 +76,11 @@ pub const Renderer = struct {
                 break;
             }
         }
+        
         var dirtyImgIds: [rc.MAX_WINDOWS]?u32 = .{null} ** rc.MAX_WINDOWS;
 
         for (0..winPtrs.len) |i| {
             const winPtr = winPtrs[i];
-
             switch (winPtr.state) {
                 .needUpdate, .needCreation => {
                     try self.swapchainMan.createSwapchain(&self.context, .{ .window = winPtr });
@@ -123,10 +123,9 @@ pub const Renderer = struct {
 
     pub fn createPass(self: *Renderer, passes: []const rc.Pass) !void {
         for (passes) |pass| {
-            const shaderArray = self.shaderMan.getShaders(pass.shaderIds);
-            const validShaders = shaderArray[0..pass.shaderIds.len];
+            const shaders = self.shaderMan.getShaders(pass.shaderIds)[0..pass.shaderIds.len];
 
-            const passType = checkShaderLayout(validShaders) catch |err| {
+            const passType = checkShaderLayout(shaders) catch |err| {
                 std.debug.print("Pass {} Shader Layout invalid", .{err});
                 return error.PassInvalid;
             };
@@ -160,16 +159,12 @@ pub const Renderer = struct {
     }
 
     fn recordPasses(self: *Renderer, cmd: vk.VkCommandBuffer, cam: *Camera, runtimeAsFloat: f32) !void {
-        var pcs = PushConstants{
-            .viewProj = cam.getViewProj(),
-            .camPosAndFov = cam.getPosAndFov(),
-            .camDir = cam.getForward(),
-            .runtime = runtimeAsFloat,
-        };
+        var pcs = PushConstants{ .viewProj = cam.getViewProj(), .camPosAndFov = cam.getPosAndFov(), .camDir = cam.getForward(), .runtime = runtimeAsFloat };
 
+        // Adjust Push Constants for every Pass
         for (self.passes.items) |pass| {
             if (pass.shaderSlots.len > 3) return error.TooManyShaderSlotsInPass;
-
+            // Assign Shader Slots
             for (0..pass.shaderSlots.len) |i| {
                 const slot = pass.shaderSlots[i];
                 const resource = try self.resourceMan.getResourcePtr(pass.resUsages[slot].id);
@@ -184,9 +179,7 @@ pub const Renderer = struct {
                     },
                 }
             }
-
-            try self.renderGraph.recordPassBarriers(cmd, pass, &self.resourceMan);
-
+            // Assign Render Image
             if (pass.renderImgId) |imgId| {
                 const resource = try self.resourceMan.getResourcePtr(imgId);
                 switch (resource.resourceType) {
@@ -194,9 +187,10 @@ pub const Renderer = struct {
                     else => return error.RenderImgIdIsNotImage,
                 }
             }
-            const shaderArray = self.shaderMan.getShaders(pass.shaderIds);
-            const validShaders = shaderArray[0..pass.shaderIds.len];
-            try self.renderGraph.recordPass(cmd, pass, pcs, validShaders, &self.resourceMan);
+
+            const shaders = self.shaderMan.getShaders(pass.shaderIds)[0..pass.shaderIds.len];
+            try self.renderGraph.recordPassBarriers(cmd, pass, &self.resourceMan);
+            try self.renderGraph.recordPass(cmd, pass, pcs, shaders, &self.resourceMan);
         }
     }
 

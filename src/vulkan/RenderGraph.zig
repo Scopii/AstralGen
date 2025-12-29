@@ -14,15 +14,9 @@ const SwapchainManager = @import("SwapchainManager.zig");
 
 pub const ImageLayout = enum(vk.VkImageLayout) {
     Undefined = vk.VK_IMAGE_LAYOUT_UNDEFINED,
-
-    // Used for Storage Images / Compute Writes
-    General = vk.VK_IMAGE_LAYOUT_GENERAL,
-
-    // Replaces: ColorAtt, DepthStencilAtt, DepthAtt, StencilAtt (Output)
-    Attachment = vk.VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
-    // Replaces: ShaderReadOnly, DepthStencilRead, DepthRead... (Input)
-    ReadOnly = vk.VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL,
-
+    General = vk.VK_IMAGE_LAYOUT_GENERAL, // for Storage Images / Compute Writes
+    Attachment = vk.VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL, // Replaces All Attachments (Outputs)
+    ReadOnly = vk.VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL, // Replaces All AttachmentReads (Inputs)
     TransferSrc = vk.VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
     TransferDst = vk.VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
     PresentSrc = vk.VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
@@ -95,7 +89,9 @@ pub const RenderGraph = struct {
         self.tempBufBarriers.deinit();
     }
 
-    fn createBarrier(self: *RenderGraph, state: ResourceState, neededState: ResourceState, resource: *Resource) !void {
+    fn createBarrierIfNeeded(self: *RenderGraph, state: ResourceState, neededState: ResourceState, resource: *Resource) !void {
+        if (state.stage == neededState.stage and state.access == neededState.access and state.layout == neededState.layout) return;
+
         switch (resource.resourceType) {
             .gpuImg => |*gpuImg| {
                 const barrier = createImageBarrier(state, neededState, gpuImg.img, gpuImg.imgInf.imgType);
@@ -112,18 +108,14 @@ pub const RenderGraph = struct {
 
     pub fn recordPassBarriers(self: *RenderGraph, cmd: vk.VkCommandBuffer, pass: rc.Pass, resMan: *ResourceManager) !void {
         for (pass.resUsages) |resUsage| {
-            // CHECK IF RESOURCE IS ALREADY SET
             const resource = try resMan.getResourcePtr(resUsage.id);
-            const state = resource.state;
             const neededState = ResourceState{ .stage = resUsage.stage, .access = resUsage.access, .layout = resUsage.layout };
-            if (state.stage != neededState.stage or state.access != neededState.access or state.layout != neededState.layout) {
-                try self.createBarrier(state, neededState, resource);
-            }
+            try self.createBarrierIfNeeded(resource.state, neededState, resource);
         }
         self.bakeBarriers(cmd);
     }
 
-    pub fn recordCompute(_: *RenderGraph, cmd: vk.VkCommandBuffer, dispatch: rc.Pass.Dispatch, renderImgId: ?u32, resMan: *ResourceManager) !void {
+    fn recordCompute(cmd: vk.VkCommandBuffer, dispatch: rc.Pass.Dispatch, renderImgId: ?u32, resMan: *ResourceManager) !void {
         if (renderImgId) |imgId| {
             const resource = try resMan.getResourcePtr(imgId);
             switch (resource.resourceType) {
@@ -135,10 +127,7 @@ pub const RenderGraph = struct {
                         1, // (gpuImg.imgInf.extent.depth + dispatch.z - 1) / dispatch.z
                     );
                 },
-                else => {
-                    std.debug.print("ERROR: Compute Pass RenderImgId is no Image\n", .{});
-                    return error.ComputePassNotPossible;
-                },
+                else => return error.ComputePassRenderImgIsNoImg,
             }
         } else vk.vkCmdDispatch(cmd, dispatch.x, dispatch.y, dispatch.z);
     }
@@ -148,30 +137,27 @@ pub const RenderGraph = struct {
         bindShaderStages(cmd, validShaders);
 
         switch (pass.kind) {
-            .compute => |comp| try self.recordCompute(cmd, comp.workgroups, pass.renderImgId, resMan),
-            .graphics => |graphics| try self.recordGraphics(cmd, graphics.colorAtts, graphics.depthAtt, graphics.stencilAtt, pass, resMan),
-            .taskOrMesh => |taskOrMesh| try self.recordGraphics(cmd, taskOrMesh.colorAtts, taskOrMesh.depthAtt, taskOrMesh.stencilAtt, pass, resMan),
+            .compute => |comp| try recordCompute(cmd, comp.workgroups, pass.renderImgId, resMan),
+            .graphics => |graphics| try recordGraphics(cmd, graphics.colorAtts, graphics.depthAtt, graphics.stencilAtt, pass, resMan),
+            .taskOrMesh => |taskOrMesh| try recordGraphics(cmd, taskOrMesh.colorAtts, taskOrMesh.depthAtt, taskOrMesh.stencilAtt, pass, resMan),
         }
     }
 
-    pub fn recordGraphics(_: *RenderGraph, cmd: vk.VkCommandBuffer, colorAtts: []const rc.Pass.Attachment, depthAtt: ?rc.Pass.Attachment, stencilAtt: ?rc.Pass.Attachment, pass: rc.Pass, resMan: *ResourceManager) !void {
+    fn recordGraphics(cmd: vk.VkCommandBuffer, colorAtts: []const rc.Pass.Attachment, depthAtt: ?rc.Pass.Attachment, stencilAtt: ?rc.Pass.Attachment, pass: rc.Pass, resMan: *ResourceManager) !void {
         if (colorAtts.len > 8) return error.TooManyAttachments;
         if (pass.renderImgId == null) return error.GraphicsPassNeedsRenderImgId;
 
-        const mainImg: *GpuImage = try resMan.getImagePtr(pass.renderImgId.?);
-
-        var depthInf: ?vk.VkRenderingAttachmentInfo = null;
-        if (depthAtt) |depth| {
+        const depthInf: ?vk.VkRenderingAttachmentInfo = if (depthAtt) |depth| blk: {
             const imgId = pass.resUsages[depth.resUsageSlot].id;
             const img = try resMan.getImagePtr(imgId);
-            depthInf = createAttachment(img.imgInf.imgType, img.view, depth.clear);
-        }
-        var stencilInf: ?vk.VkRenderingAttachmentInfo = null;
-        if (stencilAtt) |stencil| {
+            break :blk createAttachment(img.imgInf.imgType, img.view, depth.clear);
+        } else null;
+
+        const stencilInf: ?vk.VkRenderingAttachmentInfo = if (stencilAtt) |stencil| blk: {
             const imgId = pass.resUsages[stencil.resUsageSlot].id;
             const img = try resMan.getImagePtr(imgId);
-            stencilInf = createAttachment(img.imgInf.imgType, img.view, stencil.clear);
-        }
+            break :blk createAttachment(img.imgInf.imgType, img.view, stencil.clear);
+        } else null;
 
         var colorInfs: [8]vk.VkRenderingAttachmentInfo = undefined;
         for (0..colorAtts.len) |i| {
@@ -181,44 +167,63 @@ pub const RenderGraph = struct {
             colorInfs[i] = createAttachment(img.imgInf.imgType, img.view, color.clear);
         }
 
-        try renderWithState(cmd, mainImg, colorInfs[0..colorAtts.len], depthInf, stencilInf, pass);
+        const mainImg: *GpuImage = try resMan.getImagePtr(pass.renderImgId.?);
+        //try setRenderInf(cmd, mainImg, colorInfs[0..colorAtts.len], depthInf, stencilInf, pass);
+
+        const scissor = vk.VkRect2D{
+            .offset = .{ .x = 0, .y = 0 },
+            .extent = .{ .width = mainImg.imgInf.extent.width, .height = mainImg.imgInf.extent.height },
+        };
+
+        const renderInf = vk.VkRenderingInfo{
+            .sType = vk.VK_STRUCTURE_TYPE_RENDERING_INFO,
+            .flags = 0,
+            .renderArea = scissor,
+            .layerCount = 1,
+            .colorAttachmentCount = @intCast(colorAtts.len),
+            .pColorAttachments = &colorInfs,
+            .pDepthAttachment = if (depthInf != null) &depthInf.? else null,
+            .pStencilAttachment = if (stencilInf != null) &stencilInf.? else null,
+        };
+        vk.vkCmdBeginRendering(cmd, &renderInf);
+
+        const viewport = vk.VkViewport{
+            .x = 0,
+            .y = 0,
+            .width = @floatFromInt(mainImg.imgInf.extent.width),
+            .height = @floatFromInt(mainImg.imgInf.extent.height),
+            .minDepth = 0.0,
+            .maxDepth = 1.0,
+        };
+        vkFn.vkCmdSetViewportWithCount.?(cmd, 1, &viewport);
+        vkFn.vkCmdSetScissorWithCount.?(cmd, 1, &scissor);
+
+        try renderWithState(cmd, pass);
     }
 
     pub fn recordSwapchainBlits(self: *RenderGraph, cmd: vk.VkCommandBuffer, targets: []const u32, swapchainMap: *SwapchainManager.SwapchainMap, resMan: *ResourceManager) !void {
         // Render Image and Swapchain Preperations
         for (targets) |swapchainIndex| {
             const swapchain = swapchainMap.getPtrAtIndex(swapchainIndex);
-            const imgId = swapchain.passImgId;
-            const srcImgPtr = try resMan.getResourcePtr(imgId);
-
-            const imgState = srcImgPtr.state;
-            const neededImgState = ResourceState{ .stage = .Transfer, .access = .TransferRead, .layout = .TransferSrc };
-
-            // Transition Source Image (Color/General -> Transfer Src)
-            if (imgState.stage != neededImgState.stage or imgState.access != neededImgState.access or imgState.layout != neededImgState.layout) {
-                try self.createBarrier(imgState, neededImgState, srcImgPtr);
-            }
-            // Transition Destination Swapchain (Undefined -> Transfer Dst)
-            const swapchainState = ResourceState{ .stage = .TopOfPipe, .access = .None, .layout = .Undefined };
-            const neededState = ResourceState{ .stage = .Transfer, .access = .TransferWrite, .layout = .TransferDst };
-            const swapchainBarrier = createImageBarrier(swapchainState, neededState, swapchain.images[swapchain.curIndex], .Color); // SHOULD THIS BE COLOR ?!
-            try self.tempImgBarriers.append(swapchainBarrier); // Managed by Swapchain, needs no State Update
+            const renderImg = try resMan.getResourcePtr(swapchain.passImgId);
+            try self.createBarrierIfNeeded(renderImg.state, .{ .stage = .Transfer, .access = .TransferRead, .layout = .TransferSrc }, renderImg);
+            const swapchainImg = swapchain.images[swapchain.curIndex];
+            try self.tempImgBarriers.append(createImageBarrier(.{}, .{ .stage = .Transfer, .access = .TransferWrite, .layout = .TransferDst }, swapchainImg, .Color));
         }
         self.bakeBarriers(cmd);
 
         // Blits
         for (targets) |swapchainIndex| {
             const swapchain = swapchainMap.getPtrAtIndex(swapchainIndex);
-            const renderImgPtr = try resMan.getImagePtr(swapchain.passImgId);
-            const blitOffsets = calculateBlitOffsets(renderImgPtr.imgInf.extent, .{ .height = swapchain.extent.height, .width = swapchain.extent.width, .depth = 1 }, rc.RENDER_IMG_STRETCH);
-            copyImageToImage(cmd, renderImgPtr.img, blitOffsets.srcOffsets, swapchain.images[swapchain.curIndex], blitOffsets.dstOffsets, rc.RENDER_IMG_STRETCH);
+            const renderImg = try resMan.getImagePtr(swapchain.passImgId);
+            const blitOffsets = calculateBlitOffsets(renderImg.imgInf.extent, .{ .height = swapchain.extent.height, .width = swapchain.extent.width, .depth = 1 }, rc.RENDER_IMG_STRETCH);
+            copyImageToImage(cmd, renderImg.img, blitOffsets.srcOffsets, swapchain.images[swapchain.curIndex], blitOffsets.dstOffsets, rc.RENDER_IMG_STRETCH);
         }
 
         // Swapchain Presentation Barriers
         for (targets) |swapchainIndex| {
-            // DOESNT HANDLE EDGECASE WHERE BLIT WASNT DONE BECAUSE NO WINDOW SHOWED THE RENDER
             const swapchain = swapchainMap.getPtrAtIndex(swapchainIndex);
-            const swapchainState = ResourceState{ .stage = .TopOfPipe, .access = .None, .layout = .TransferDst }; // EDGE CASE: Probably Transfer?!
+            const swapchainState = ResourceState{ .stage = .TopOfPipe, .access = .None, .layout = .TransferDst };
             const neededState = ResourceState{ .stage = .BotOfPipe, .access = .None, .layout = .PresentSrc };
             const barrier = createImageBarrier(swapchainState, neededState, swapchain.images[swapchain.curIndex], .Color);
             try self.tempImgBarriers.append(barrier);
@@ -316,8 +321,6 @@ fn bindShaderStages(cmd: vk.VkCommandBuffer, shaderObjects: []const ShaderObject
 }
 
 fn createAttachment(renderType: rc.ImgType, imgView: vk.VkImageView, clear: bool) vk.VkRenderingAttachmentInfo {
-    const imageLayout = vk.VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL;
-
     const clearValue: vk.VkClearValue = switch (renderType) {
         .Color => .{ .color = .{ .float32 = .{ 0.0, 0.0, 0.1, 1.0 } } },
         .Depth, .Stencil => .{ .depthStencil = .{ .depth = 1.0, .stencil = 0 } },
@@ -326,49 +329,14 @@ fn createAttachment(renderType: rc.ImgType, imgView: vk.VkImageView, clear: bool
     return vk.VkRenderingAttachmentInfo{
         .sType = vk.VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
         .imageView = imgView,
-        .imageLayout = imageLayout,
+        .imageLayout = vk.VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
         .loadOp = if (clear) vk.VK_ATTACHMENT_LOAD_OP_CLEAR else vk.VK_ATTACHMENT_LOAD_OP_LOAD,
         .storeOp = vk.VK_ATTACHMENT_STORE_OP_STORE,
         .clearValue = clearValue, // ✓ Now correct per type
     };
 }
 
-fn renderWithState(
-    cmd: vk.VkCommandBuffer,
-    mainImg: *GpuImage,
-    colorAtt: []vk.VkRenderingAttachmentInfo,
-    depthAtt: ?vk.VkRenderingAttachmentInfo,
-    stencilAtt: ?vk.VkRenderingAttachmentInfo,
-    pass: rc.Pass,
-) !void {
-    const scissor = vk.VkRect2D{
-        .offset = .{ .x = 0, .y = 0 },
-        .extent = .{ .width = mainImg.imgInf.extent.width, .height = mainImg.imgInf.extent.height },
-    };
-
-    const renderInf = vk.VkRenderingInfo{
-        .sType = vk.VK_STRUCTURE_TYPE_RENDERING_INFO,
-        .flags = 0,
-        .renderArea = scissor,
-        .layerCount = 1,
-        .colorAttachmentCount = @intCast(colorAtt.len),
-        .pColorAttachments = colorAtt.ptr,
-        .pDepthAttachment = if (depthAtt != null) &depthAtt.? else null,
-        .pStencilAttachment = if (stencilAtt != null) &stencilAtt.? else null,
-    };
-    vk.vkCmdBeginRendering(cmd, &renderInf);
-
-    const viewport = vk.VkViewport{
-        .x = 0,
-        .y = 0,
-        .width = @floatFromInt(mainImg.imgInf.extent.width),
-        .height = @floatFromInt(mainImg.imgInf.extent.height),
-        .minDepth = 0.0,
-        .maxDepth = 1.0,
-    };
-    vkFn.vkCmdSetViewportWithCount.?(cmd, 1, &viewport);
-    vkFn.vkCmdSetScissorWithCount.?(cmd, 1, &scissor);
-
+fn renderWithState(cmd: vk.VkCommandBuffer, pass: rc.Pass) !void {
     vkFn.vkCmdSetRasterizerDiscardEnable.?(cmd, vk.VK_FALSE);
     vkFn.vkCmdSetDepthBiasEnable.?(cmd, vk.VK_FALSE);
     vkFn.vkCmdSetPolygonModeEXT.?(cmd, vk.VK_POLYGON_MODE_FILL);
