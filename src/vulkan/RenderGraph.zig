@@ -116,6 +116,68 @@ pub const RenderGraph = struct {
     }
 
     pub fn recordPassBarriers(self: *RenderGraph, cmd: vk.VkCommandBuffer, pass: rc.Pass, resMan: *ResourceManager) !void {
+        switch (pass.kind) {
+            .graphics => |graphics| {
+                for (graphics.colorAtts) |colorAtt| {
+                    const resUsage = colorAtt.resUsage;
+                    const resource = try resMan.getResourcePtr(resUsage.id);
+                    const state = resource.state;
+                    const neededState = ResourceState{ .stage = resUsage.stage, .access = resUsage.access, .layout = resUsage.layout };
+                    if (state.stage != neededState.stage or state.access != neededState.access or state.layout != neededState.layout) {
+                        try self.createBarrier(state, neededState, resource);
+                    }
+                }
+                if (graphics.depthAtt) |depthAtt| {
+                    const resUsage = depthAtt.resUsage;
+                    const resource = try resMan.getResourcePtr(resUsage.id);
+                    const state = resource.state;
+                    const neededState = ResourceState{ .stage = resUsage.stage, .access = resUsage.access, .layout = resUsage.layout };
+                    if (state.stage != neededState.stage or state.access != neededState.access or state.layout != neededState.layout) {
+                        try self.createBarrier(state, neededState, resource);
+                    }
+                }
+                if (graphics.stencilAtt) |stencilAtt| {
+                    const resUsage = stencilAtt.resUsage;
+                    const resource = try resMan.getResourcePtr(resUsage.id);
+                    const state = resource.state;
+                    const neededState = ResourceState{ .stage = resUsage.stage, .access = resUsage.access, .layout = resUsage.layout };
+                    if (state.stage != neededState.stage or state.access != neededState.access or state.layout != neededState.layout) {
+                        try self.createBarrier(state, neededState, resource);
+                    }
+                }
+            },
+            .taskOrMesh => |taskOrMesh| {
+                for (taskOrMesh.colorAtts) |colorAtt| {
+                    const resUsage = colorAtt.resUsage;
+                    const resource = try resMan.getResourcePtr(resUsage.id);
+                    const state = resource.state;
+                    const neededState = ResourceState{ .stage = resUsage.stage, .access = resUsage.access, .layout = resUsage.layout };
+                    if (state.stage != neededState.stage or state.access != neededState.access or state.layout != neededState.layout) {
+                        try self.createBarrier(state, neededState, resource);
+                    }
+                }
+                if (taskOrMesh.depthAtt) |depthAtt| {
+                    const resUsage = depthAtt.resUsage;
+                    const resource = try resMan.getResourcePtr(resUsage.id);
+                    const state = resource.state;
+                    const neededState = ResourceState{ .stage = resUsage.stage, .access = resUsage.access, .layout = resUsage.layout };
+                    if (state.stage != neededState.stage or state.access != neededState.access or state.layout != neededState.layout) {
+                        try self.createBarrier(state, neededState, resource);
+                    }
+                }
+                if (taskOrMesh.stencilAtt) |stencilAtt| {
+                    const resUsage = stencilAtt.resUsage;
+                    const resource = try resMan.getResourcePtr(resUsage.id);
+                    const state = resource.state;
+                    const neededState = ResourceState{ .stage = resUsage.stage, .access = resUsage.access, .layout = resUsage.layout };
+                    if (state.stage != neededState.stage or state.access != neededState.access or state.layout != neededState.layout) {
+                        try self.createBarrier(state, neededState, resource);
+                    }
+                }
+            },
+            else => {},
+        }
+
         for (pass.resUsages) |resUsage| {
             // CHECK IF RESOURCE IS ALREADY SET
             const resource = try resMan.getResourcePtr(resUsage.id);
@@ -128,18 +190,7 @@ pub const RenderGraph = struct {
         self.bakeBarriers(cmd);
     }
 
-    pub fn recordPass(self: *RenderGraph, cmd: vk.VkCommandBuffer, pass: rc.Pass, pcs: PushConstants, validShaders: []const ShaderObject, resMan: *ResourceManager) !void {
-        switch (pass.kind) {
-            .compute => |comp| try self.recordCompute(cmd, comp.workgroups, pcs, validShaders, pass.renderImgId, resMan),
-            .graphics => |graphics| try self.recordGraphics(cmd, graphics.attachments, pass, pcs, validShaders, resMan),
-            .taskOrMesh => |taskOrMesh| try self.recordGraphics(cmd, taskOrMesh.attachments, pass, pcs, validShaders, resMan),
-        }
-    }
-
-    pub fn recordCompute(self: *RenderGraph, cmd: vk.VkCommandBuffer, dispatch: rc.Pass.Dispatch, pcs: PushConstants, validShaders: []const ShaderObject, renderImgId: ?u32, resMan: *ResourceManager) !void {
-        vk.vkCmdPushConstants(cmd, self.pipeLayout, vk.VK_SHADER_STAGE_ALL, 0, @sizeOf(PushConstants), &pcs);
-        bindShaderStages(cmd, validShaders);
-
+    pub fn recordCompute(_: *RenderGraph, cmd: vk.VkCommandBuffer, dispatch: rc.Pass.Dispatch, renderImgId: ?u32, resMan: *ResourceManager) !void {
         if (renderImgId) |imgId| {
             const resource = try resMan.getResourcePtr(imgId);
             switch (resource.resourceType) {
@@ -159,37 +210,42 @@ pub const RenderGraph = struct {
         } else vk.vkCmdDispatch(cmd, dispatch.x, dispatch.y, dispatch.z);
     }
 
-    pub fn recordGraphics(self: *RenderGraph, cmd: vk.VkCommandBuffer, attachments: []const rc.Pass.Attachment, pass: rc.Pass, pcs: PushConstants, validShaders: []const ShaderObject, resMan: *ResourceManager) !void {
+    pub fn recordPass(self: *RenderGraph, cmd: vk.VkCommandBuffer, pass: rc.Pass, pcs: PushConstants, validShaders: []const ShaderObject, resMan: *ResourceManager) !void {
         vk.vkCmdPushConstants(cmd, self.pipeLayout, vk.VK_SHADER_STAGE_ALL, 0, @sizeOf(PushConstants), &pcs);
         bindShaderStages(cmd, validShaders);
 
-        if (attachments.len > 8) return error.TooManyAttachments;
+        switch (pass.kind) {
+            .compute => |comp| try self.recordCompute(cmd, comp.workgroups, pass.renderImgId, resMan),
+            .graphics => |graphics| try self.recordGraphics(cmd, graphics.colorAtts, graphics.depthAtt, graphics.stencilAtt, pass, resMan),
+            .taskOrMesh => |taskOrMesh| try self.recordGraphics(cmd, taskOrMesh.colorAtts, taskOrMesh.depthAtt, taskOrMesh.stencilAtt, pass, resMan),
+        }
+    }
+
+    pub fn recordGraphics(_: *RenderGraph, cmd: vk.VkCommandBuffer, colorAtts: []const rc.Pass.Attachment, depthAtt: ?rc.Pass.Attachment, stencilAtt: ?rc.Pass.Attachment, pass: rc.Pass, resMan: *ResourceManager) !void {
+        if (colorAtts.len > 8) return error.TooManyAttachments;
         if (pass.renderImgId == null) return error.GraphicsPassNeedsRenderImgId;
 
         const mainImg: *GpuImage = try resMan.getImagePtr(pass.renderImgId.?);
-        var colorAttCount: u8 = 0;
-        var colorAttachments: [6]vk.VkRenderingAttachmentInfo = undefined;
-        var depthAtt: ?vk.VkRenderingAttachmentInfo = null;
-        var stencilAtt: ?vk.VkRenderingAttachmentInfo = null;
 
-        for (attachments) |attachment| {
-            const img = try resMan.getImagePtr(attachment.id);
-
-            switch (attachment.renderType) {
-                .Color => if (colorAttCount < 6) {
-                    colorAttachments[colorAttCount] = createAttachment(attachment.renderType, img.view, attachment.clear);
-                    colorAttCount += 1;
-                } else return error.TooManyColorAttachments,
-                .Depth => if (stencilAtt == null) {
-                    depthAtt = createAttachment(attachment.renderType, img.view, attachment.clear);
-                } else return error.TooManyDepthAttachments,
-                .Stencil => if (stencilAtt == null) {
-                    stencilAtt = createAttachment(attachment.renderType, img.view, attachment.clear);
-                } else return error.TooManyStencilAttachments,
-            }
+        var depthInf: ?vk.VkRenderingAttachmentInfo = null;
+        if (depthAtt) |depth| {
+            const img = try resMan.getImagePtr(depth.resUsage.id);
+            depthInf = createAttachment(img.imgInf.imgType, img.view, depth.clear);
+        }
+        var stencilInf: ?vk.VkRenderingAttachmentInfo = null;
+        if (stencilAtt) |stencil| {
+            const img = try resMan.getImagePtr(stencil.resUsage.id);
+            stencilInf = createAttachment(img.imgInf.imgType, img.view, stencil.clear);
         }
 
-        try renderWithState(cmd, mainImg, colorAttachments[0..colorAttCount], depthAtt, stencilAtt, pass);
+        var colorInfs: [8]vk.VkRenderingAttachmentInfo = undefined;
+        for (0..colorAtts.len) |i| {
+            const color = colorAtts[i];
+            const img = try resMan.getImagePtr(color.resUsage.id);
+            colorInfs[i] = createAttachment(img.imgInf.imgType, img.view, color.clear);
+        }
+
+        try renderWithState(cmd, mainImg, colorInfs[0..colorAtts.len], depthInf, stencilInf, pass);
     }
 
     pub fn recordSwapchainBlits(self: *RenderGraph, cmd: vk.VkCommandBuffer, targets: []const u32, swapchainMap: *SwapchainManager.SwapchainMap, resMan: *ResourceManager) !void {

@@ -11,8 +11,10 @@ struct PushConstants {
     float4 camDir;
     float runtime;
     uint renderImgIdx;
-    uint objectBufCount;
-    uint objectBufIdx;
+    uint buf1Index;
+    uint buf1Count;
+    uint buf2Index;
+    uint buf2Count;
 };
 
 [[vk::binding(0, 0)]] RWTexture2D<float4> globalImages[];
@@ -53,7 +55,7 @@ MapResult map(float3 pos, StructuredBuffer<Object> objectBuffer) {
     int closestIndex = -1;
 
     // Loop over the Object Buffer
-    for (uint i = 0; i < pc.objectBufCount; i++) {
+    for (uint i = 0; i < pc.buf1Count; i++) {
         // 2. Read from that specific buffer
         Object obj = objectBuffer[i];
 
@@ -90,7 +92,7 @@ float3 getNormal(float3 pos, StructuredBuffer<Object> objectBuffer) {
 [numthreads(8, 8, 1)]
 void main(uint3 id : SV_DispatchThreadID) {
     RWTexture2D<float4> renderImg = globalImages[pc.renderImgIdx];
-    StructuredBuffer<Object> objectBuffer = globalBuffers[pc.objectBufIdx];
+    StructuredBuffer<Object> objectBuffer = globalBuffers[pc.buf1Index];
 
     // Bounds check (because group size is 8x8)
     uint renderWidth, renderHeight;

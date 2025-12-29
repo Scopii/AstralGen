@@ -23,13 +23,27 @@ pub const Pass = struct {
     shaderIds: []const u8,
     resUsages: []const ResourceUsage,
     renderImgId: ?u32 = null,
+
     kind: union(enum) {
-        compute: struct { workgroups: Dispatch },
-        taskOrMesh: struct { attachments: []const Attachment, workgroups: Dispatch },
-        graphics: struct { attachments: []const Attachment, vertexCount: u32 = 3, instanceCount: u32 = 1 },
+        compute: struct {
+            workgroups: Dispatch,
+        },
+        taskOrMesh: struct {
+            colorAtts: []const Attachment,
+            depthAtt: ?Attachment = null,
+            stencilAtt: ?Attachment = null,
+            workgroups: Dispatch,
+        },
+        graphics: struct {
+            colorAtts: []const Attachment,
+            depthAtt: ?Attachment = null,
+            stencilAtt: ?Attachment = null,
+            vertexCount: u32 = 3,
+            instanceCount: u32 = 1,
+        },
     },
     pub const Dispatch = struct { x: u32, y: u32, z: u32 };
-    pub const Attachment = struct { id: u32, renderType: ImgType, clear: bool };
+    pub const Attachment = struct { resUsage: ResourceUsage, clear: bool };
     pub const ResourceUsage = struct { id: u32, stage: PipeStage = .TopOfPipe, access: PipeAccess = .None, layout: ImageLayout = .General };
 };
 
@@ -77,15 +91,13 @@ const graphicsTest: Pass = .{
     .renderImgId = img2.id,
     .kind = .{
         .graphics = .{
-            .attachments = &.{
-                .{ .id = img2.id, .renderType = .Color, .clear = false },
-                .{ .id = img6.id, .renderType = .Depth, .clear = false },
+            .colorAtts = &.{
+                .{ .resUsage = .{ .id = img2.id, .stage = .ColorAtt, .access = .ColorAttWrite, .layout = .ColorAtt }, .clear = false },
             },
+            .depthAtt = .{ .resUsage = .{ .id = img6.id, .stage = .EarlyFragTest, .access = .DepthStencilRead, .layout = .DepthAtt }, .clear = false },
         },
     },
     .resUsages = &.{
-        .{ .id = img2.id, .stage = .ColorAtt, .access = .ColorAttWrite, .layout = .ColorAtt },
-        .{ .id = img6.id, .stage = .EarlyFragTest, .access = .DepthStencilRead, .layout = .DepthAtt },
     },
 };
 
@@ -95,13 +107,13 @@ const meshTest: Pass = .{
     .kind = .{
         .taskOrMesh = .{
             .workgroups = .{ .x = 1, .y = 1, .z = 1 },
-            .attachments = &.{
-                .{ .id = img3.id, .renderType = .Color, .clear = false },
+            .colorAtts = &.{
+                .{ .resUsage = .{ .id = img3.id, .stage = .ColorAtt, .access = .ColorAttWrite, .layout = .ColorAtt }, .clear = false },
             },
         },
     },
     .resUsages = &.{
-        .{ .id = img3.id, .stage = .ColorAtt, .access = .ColorAttWrite, .layout = .ColorAtt },
+
     },
 };
 
@@ -111,13 +123,13 @@ const taskTest: Pass = .{
     .kind = .{
         .taskOrMesh = .{
             .workgroups = .{ .x = 1, .y = 1, .z = 1 },
-            .attachments = &.{
-                .{ .id = img4.id, .renderType = .Color, .clear = false },
+            .colorAtts = &.{
+                .{ .resUsage = .{ .id = img4.id, .stage = .ColorAtt, .access = .ColorAttWrite, .layout = .ColorAtt }, .clear = false },
             },
         },
     },
     .resUsages = &.{
-        .{ .id = img4.id, .stage = .ColorAtt, .access = .ColorAttWrite, .layout = .ColorAtt },
+
     },
 };
 
@@ -127,13 +139,13 @@ const gridTest: Pass = .{
     .kind = .{
         .taskOrMesh = .{
             .workgroups = .{ .x = 1, .y = 1, .z = 1 },
-            .attachments = &.{
-                .{ .id = img4.id, .renderType = .Color, .clear = false },
+            .colorAtts = &.{
+                .{ .resUsage = .{ .id = img4.id, .stage = .ColorAtt, .access = .ColorAttWrite, .layout = .ColorAtt }, .clear = false },
             },
         },
     },
     .resUsages = &.{
-        .{ .id = img4.id, .stage = .ColorAtt, .access = .ColorAttWrite, .layout = .ColorAtt },
+
     },
 };
 

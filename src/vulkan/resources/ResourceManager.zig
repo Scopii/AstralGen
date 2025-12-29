@@ -153,7 +153,7 @@ pub const ResourceManager = struct {
 
         self.gpuAlloc.freeGpuImage(oldRes.resourceType.gpuImg);
         const newGpuImg = try self.gpuAlloc.allocGpuImage(newInf, .Gpu);
-        try self.descMan.updateImageDescriptor(newGpuImg.view, 0, slotIndex);
+        try self.descMan.updateImageDescriptor(newGpuImg.view, rc.STORAGE_IMG_BINDING, slotIndex);
 
         oldRes.resourceType = .{ .gpuImg = newGpuImg };
         self.resources.set(gpuId, oldRes);

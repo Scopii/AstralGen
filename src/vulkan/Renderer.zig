@@ -168,8 +168,10 @@ pub const Renderer = struct {
             .camDir = cam.getForward(),
             .runtime = runtimeAsFloat,
             .renderImgIdx = 0,
-            .objectBufCount = objectBuf.resourceType.gpuBuf.count,
-            .objectBufIdx = objectBuf.bindlessIndex,
+            .buf1Index = objectBuf.bindlessIndex,
+            .buf1Count = objectBuf.resourceType.gpuBuf.count,
+            .buf2Index = 0,
+            .buf2Count = 0,
         };
 
         for (self.passes.items) |pass| {

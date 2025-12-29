@@ -13,8 +13,10 @@ pub const PushConstants = extern struct {
     camDir: [4]f32,
     runtime: f32,
     renderImgIdx: u32,
-    objectBufCount: u32,
-    objectBufIdx: u32,
+    buf1Index: u32,
+    buf1Count: u32,
+    buf2Index: u32,
+    buf2Count: u32,
 };
 
 pub const DescriptorBuffer = struct {

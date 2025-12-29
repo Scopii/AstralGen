@@ -36,8 +36,10 @@ struct PushConstants {
     float4 camDir;
     float runtime;
     uint renderImgIdx;
-    uint objectBufCount;
-    uint objectBufIdx;
+    uint buf1Index;
+    uint buf1Count;
+    uint buf2Index;
+    uint buf2Count;
 };
 
 [shader("mesh")]
