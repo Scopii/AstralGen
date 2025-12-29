@@ -168,6 +168,8 @@ pub const Renderer = struct {
         };
 
         for (self.passes.items) |pass| {
+            if (pass.shaderSlots.len > 3) return error.TooManyShaderSlotsInPass;
+
             for (0..pass.shaderSlots.len) |i| {
                 const slot = pass.shaderSlots[i];
                 const resource = try self.resourceMan.getResourcePtr(pass.resUsages[slot].id);

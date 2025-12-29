@@ -41,6 +41,7 @@ pub const ResourceManager = struct {
     resources: CreateMapArray(Resource, rc.GPU_RESOURCE_MAX, u32, rc.GPU_RESOURCE_MAX, 0) = .{},
     nextImageIndex: u32 = 0,
     nextBufferIndex: u32 = 0,
+    nextSampledImageIndex: u32 = 0,
     descMan: DescriptorManager,
 
     pub fn init(alloc: Allocator, context: *const Context) !ResourceManager {
@@ -108,24 +109,23 @@ pub const ResourceManager = struct {
     pub fn createResource(self: *ResourceManager, resInf: rc.ResourceInf) !void {
         switch (resInf.inf) {
             .imgInf => |imgInf| {
-                const bindlessIndex = self.nextImageIndex;
-                self.nextImageIndex += 1;
-
+                var bindlessIndex: u32 = undefined;
                 const img = try self.gpuAlloc.allocGpuImage(imgInf, resInf.memUse);
 
-                // TEMPORARARY SOLUTION
-                // Depth images usually sampled (read-only) or attachments
-                // Later Bindless Array for VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE.
-                if (imgInf.imgType != .Depth) {
+                if (imgInf.imgType == .Color) {
+                    bindlessIndex = self.nextImageIndex;
+                    self.nextImageIndex += 1;
                     try self.descMan.updateImageDescriptor(img.view, rc.STORAGE_IMG_BINDING, bindlessIndex);
+                } else {
+                    bindlessIndex = self.nextSampledImageIndex;
+                    self.nextSampledImageIndex += 1;
+                    try self.descMan.updateSampledImageDescriptor(img.view, rc.SAMPLED_IMG_BINDING, bindlessIndex);
                 }
-
                 const finalRes = Resource{ .resourceType = .{ .gpuImg = img }, .bindlessIndex = bindlessIndex };
                 self.resources.set(resInf.id, finalRes);
                 std.debug.print("Image created. ID: {} -> BindlessIndex: {}\n", .{ resInf.id, bindlessIndex });
             },
             .bufInf => |bufInf| {
-                // 1. Assign Bindless Index
                 const bindlessIndex = self.nextBufferIndex;
                 self.nextBufferIndex += 1;
 

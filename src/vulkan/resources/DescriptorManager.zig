@@ -81,6 +81,20 @@ pub const DescriptorManager = struct {
         try self.updateDescriptor(&getInf, binding, arrayIndex, self.descBufferProps.storageImageDescriptorSize);
     }
 
+    pub fn updateSampledImageDescriptor(self: *DescriptorManager, gpuImgView: vk.VkImageView, binding: u8, arrayIndex: u32) !void {
+        const imgInf = vk.VkDescriptorImageInfo{
+            .sampler = null,
+            .imageView = gpuImgView,
+            .imageLayout = vk.VK_IMAGE_LAYOUT_GENERAL,
+        };
+        const getInf = vk.VkDescriptorGetInfoEXT{
+            .sType = vk.VK_STRUCTURE_TYPE_DESCRIPTOR_GET_INFO_EXT,
+            .type = vk.VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+            .data = .{ .pSampledImage = &imgInf },
+        };
+        try self.updateDescriptor(&getInf, binding, arrayIndex, self.descBufferProps.sampledImageDescriptorSize);
+    }
+
     pub fn updateBufferDescriptor(self: *DescriptorManager, gpuBuffer: Resource.GpuBuffer, binding: u8, arrayIndex: u32) !void {
         const addressInf = vk.VkDescriptorAddressInfoEXT{
             .sType = vk.VK_STRUCTURE_TYPE_DESCRIPTOR_ADDRESS_INFO_EXT,

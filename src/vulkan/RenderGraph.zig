@@ -14,24 +14,19 @@ const SwapchainManager = @import("SwapchainManager.zig");
 
 pub const ImageLayout = enum(vk.VkImageLayout) {
     Undefined = vk.VK_IMAGE_LAYOUT_UNDEFINED,
+
+    // Used for Storage Images / Compute Writes
     General = vk.VK_IMAGE_LAYOUT_GENERAL,
 
-    ColorAtt = vk.VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-
-    DepthStencilAtt = vk.VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-    DepthStencilAttRead = vk.VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL,
-
-    DepthAtt = vk.VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
-    DepthAttRead = vk.VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL,
-    StencilAtt = vk.VK_IMAGE_LAYOUT_STENCIL_ATTACHMENT_OPTIMAL,
-
-    StencilAttRead = vk.VK_IMAGE_LAYOUT_STENCIL_READ_ONLY_OPTIMAL,
+    // Replaces: ColorAtt, DepthStencilAtt, DepthAtt, StencilAtt (Output)
+    Attachment = vk.VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
+    // Replaces: ShaderReadOnly, DepthStencilRead, DepthRead... (Input)
+    ReadOnly = vk.VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL,
 
     TransferSrc = vk.VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
     TransferDst = vk.VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-
     PresentSrc = vk.VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-    //.. more exist
+    //more exist
 };
 
 pub const PipeStage = enum(vk.VkPipelineStageFlagBits2) { //( SHOULD BE CORRECT ORDER)
@@ -321,10 +316,7 @@ fn bindShaderStages(cmd: vk.VkCommandBuffer, shaderObjects: []const ShaderObject
 }
 
 fn createAttachment(renderType: rc.ImgType, imgView: vk.VkImageView, clear: bool) vk.VkRenderingAttachmentInfo {
-    const imageLayout: vk.VkImageLayout = switch (renderType) {
-        .Color => vk.VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-        .Depth, .Stencil => vk.VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-    };
+    const imageLayout = vk.VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL;
 
     const clearValue: vk.VkClearValue = switch (renderType) {
         .Color => .{ .color = .{ .float32 = .{ 0.0, 0.0, 0.1, 1.0 } } },

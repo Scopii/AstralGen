@@ -63,10 +63,12 @@ pub const ResourceInf = struct {
 
 pub const STORAGE_IMG_BINDING = 0;
 pub const STORAGE_BUF_BINDING = 1;
+pub const SAMPLED_IMG_BINDING = 2;
 
 pub const bindingRegistry: []const struct { binding: u32, descType: vk.VkDescriptorType, arrayLength: u32 } = &.{
     .{ .binding = STORAGE_IMG_BINDING, .descType = vk.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, .arrayLength = GPU_IMG_MAX },
     .{ .binding = STORAGE_BUF_BINDING, .descType = vk.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, .arrayLength = GPU_BUF_MAX },
+    .{ .binding = SAMPLED_IMG_BINDING, .descType = vk.VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, .arrayLength = GPU_IMG_MAX },
 };
 
 pub const buf1 = ResourceInf{ .id = 1, .memUse = .CpuWrite, .inf = .{ .bufInf = .{ .usage = .Storage, .length = 100, .dataSize = @sizeOf(Object) } } };
@@ -103,8 +105,8 @@ const graphicsTest: Pass = .{
         },
     },
     .resUsages = &.{
-        .{ .id = img2.id, .stage = .ColorAtt, .access = .ColorAttWrite, .layout = .ColorAtt },
-        .{ .id = img6.id, .stage = .EarlyFragTest, .access = .DepthStencilRead, .layout = .DepthAtt },
+        .{ .id = img2.id, .stage = .ColorAtt, .access = .ColorAttWrite, .layout = .Attachment },
+        .{ .id = img6.id, .stage = .EarlyFragTest, .access = .DepthStencilRead, .layout = .Attachment },
         .{ .id = buf1.id, .stage = .FragShader, .access = .ShaderRead },
     },
 };
@@ -122,7 +124,7 @@ const meshTest: Pass = .{
         },
     },
     .resUsages = &.{
-        .{ .id = img3.id, .stage = .ColorAtt, .access = .ColorAttWrite, .layout = .ColorAtt },
+        .{ .id = img3.id, .stage = .ColorAtt, .access = .ColorAttWrite, .layout = .Attachment },
         .{ .id = buf1.id, .stage = .FragShader, .access = .ShaderRead },
     },
 };
@@ -140,7 +142,7 @@ const taskTest: Pass = .{
         },
     },
     .resUsages = &.{
-        .{ .id = img4.id, .stage = .ColorAtt, .access = .ColorAttWrite, .layout = .ColorAtt },
+        .{ .id = img4.id, .stage = .ColorAtt, .access = .ColorAttWrite, .layout = .Attachment },
         .{ .id = buf1.id, .stage = .FragShader, .access = .ShaderRead },
     },
 };
@@ -158,7 +160,7 @@ const gridTest: Pass = .{
         },
     },
     .resUsages = &.{
-        .{ .id = img4.id, .stage = .ColorAtt, .access = .ColorAttWrite, .layout = .ColorAtt },
+        .{ .id = img4.id, .stage = .ColorAtt, .access = .ColorAttWrite, .layout = .Attachment },
     },
 };
 
