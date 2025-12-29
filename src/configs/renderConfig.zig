@@ -82,6 +82,7 @@ pub const computeTest: Pass = .{
         .compute = .{ .workgroups = .{ .x = 8, .y = 8, .z = 1 } },
     },
     .resUsages = &.{
+        .{ .id = buf1.id, .stage = .Compute, .access = .ShaderRead },
         .{ .id = img1.id, .stage = .Compute, .access = .ShaderWrite, .layout = .General },
     },
 };
@@ -98,6 +99,7 @@ const graphicsTest: Pass = .{
         },
     },
     .resUsages = &.{
+        .{ .id = buf1.id, .stage = .FragShader, .access = .ShaderRead },
     },
 };
 
@@ -113,7 +115,7 @@ const meshTest: Pass = .{
         },
     },
     .resUsages = &.{
-
+        .{ .id = buf1.id, .stage = .FragShader, .access = .ShaderRead },
     },
 };
 
@@ -129,7 +131,7 @@ const taskTest: Pass = .{
         },
     },
     .resUsages = &.{
-
+        .{ .id = buf1.id, .stage = .FragShader, .access = .ShaderRead },
     },
 };
 
@@ -145,7 +147,6 @@ const gridTest: Pass = .{
         },
     },
     .resUsages = &.{
-
     },
 };
 

@@ -160,21 +160,28 @@ pub const Renderer = struct {
     }
 
     fn recordPasses(self: *Renderer, cmd: vk.VkCommandBuffer, cam: *Camera, runtimeAsFloat: f32) !void {
-        const objectBuf = try self.resourceMan.getResourcePtr(1);
-
         var pcs = PushConstants{
             .viewProj = cam.getViewProj(),
             .camPosAndFov = cam.getPosAndFov(),
             .camDir = cam.getForward(),
             .runtime = runtimeAsFloat,
-            .renderImgIdx = 0,
-            .buf1Index = objectBuf.bindlessIndex,
-            .buf1Count = objectBuf.resourceType.gpuBuf.count,
-            .buf2Index = 0,
-            .buf2Count = 0,
         };
 
         for (self.passes.items) |pass| {
+            var bufferSlot: u32 = 0;
+
+            for (0..pass.resUsages.len) |i| {
+                const resource = try self.resourceMan.getResourcePtr(pass.resUsages[i].id);
+                switch (resource.resourceType) {
+                    .gpuBuf => |gpuBuf| {
+                        pcs.resUsageInfos[bufferSlot].bufIndex = resource.bindlessIndex;
+                        pcs.resUsageInfos[bufferSlot].bufCount = gpuBuf.count;
+                        bufferSlot += 1;
+                    },
+                    else => {}, //std.debug.print("Warning Resource {} was not assigned because it is not buffer \n", .{pass.resUsages[i].id}),
+                }
+            }
+
             try self.renderGraph.recordPassBarriers(cmd, pass, &self.resourceMan);
 
             if (pass.renderImgId) |imgId| {
