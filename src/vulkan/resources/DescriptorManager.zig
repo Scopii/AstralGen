@@ -7,15 +7,15 @@ const Resource = @import("ResourceManager.zig").Resource;
 const check = @import("../ErrorHelpers.zig").check;
 const rc = @import("../../configs/renderConfig.zig");
 
-const bufUsage = extern struct {bufIndex: u32 = 0, bufCount: u32 = 0};
+const bufUsage = extern struct { index: u32 = 0, count: u32 = 0 };
 
 pub const PushConstants = extern struct {
-    viewProj: [4][4]f32,
+    viewProj: [4][4]f32, 
     camPosAndFov: [4]f32,
     camDir: [4]f32,
     runtime: f32,
     renderImgIdx: u32 = 0,
-    resUsageInfos: [2]bufUsage = undefined,
+    resUsageInfos: [3]bufUsage = undefined,
 };
 
 pub const DescriptorBuffer = struct {

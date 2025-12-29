@@ -24,6 +24,8 @@ pub const Pass = struct {
     resUsages: []const ResourceUsage,
     renderImgId: ?u32 = null,
 
+    shaderSlots: []const u32,
+
     kind: union(enum) {
         compute: struct {
             workgroups: Dispatch,
@@ -43,7 +45,7 @@ pub const Pass = struct {
         },
     },
     pub const Dispatch = struct { x: u32, y: u32, z: u32 };
-    pub const Attachment = struct { resUsage: ResourceUsage, clear: bool };
+    pub const Attachment = struct { resUsageSlot: u8, clear: bool };
     pub const ResourceUsage = struct { id: u32, stage: PipeStage = .TopOfPipe, access: PipeAccess = .None, layout: ImageLayout = .General };
 };
 
@@ -77,76 +79,86 @@ pub const img6 = ResourceInf{ .id = 11, .memUse = .Gpu, .inf = .{ .imgInf = .{ .
 
 pub const computeTest: Pass = .{
     .shaderIds = &.{sc.t1Comp.id},
+    .shaderSlots = &.{1},
     .renderImgId = img1.id,
     .kind = .{
         .compute = .{ .workgroups = .{ .x = 8, .y = 8, .z = 1 } },
     },
     .resUsages = &.{
-        .{ .id = buf1.id, .stage = .Compute, .access = .ShaderRead },
         .{ .id = img1.id, .stage = .Compute, .access = .ShaderWrite, .layout = .General },
+        .{ .id = buf1.id, .stage = .Compute, .access = .ShaderRead },
     },
 };
 
 const graphicsTest: Pass = .{
     .shaderIds = &.{ sc.t2Vert.id, sc.t2Frag.id },
+    .shaderSlots = &.{2},
     .renderImgId = img2.id,
     .kind = .{
         .graphics = .{
             .colorAtts = &.{
-                .{ .resUsage = .{ .id = img2.id, .stage = .ColorAtt, .access = .ColorAttWrite, .layout = .ColorAtt }, .clear = false },
+                .{ .resUsageSlot = 0, .clear = false },
             },
-            .depthAtt = .{ .resUsage = .{ .id = img6.id, .stage = .EarlyFragTest, .access = .DepthStencilRead, .layout = .DepthAtt }, .clear = false },
+            .depthAtt = .{ .resUsageSlot = 1, .clear = false },
         },
     },
     .resUsages = &.{
+        .{ .id = img2.id, .stage = .ColorAtt, .access = .ColorAttWrite, .layout = .ColorAtt },
+        .{ .id = img6.id, .stage = .EarlyFragTest, .access = .DepthStencilRead, .layout = .DepthAtt },
         .{ .id = buf1.id, .stage = .FragShader, .access = .ShaderRead },
     },
 };
 
 const meshTest: Pass = .{
     .shaderIds = &.{ sc.t3Mesh.id, sc.t3Frag.id },
+    .shaderSlots = &.{1},
     .renderImgId = img3.id,
     .kind = .{
         .taskOrMesh = .{
             .workgroups = .{ .x = 1, .y = 1, .z = 1 },
             .colorAtts = &.{
-                .{ .resUsage = .{ .id = img3.id, .stage = .ColorAtt, .access = .ColorAttWrite, .layout = .ColorAtt }, .clear = false },
+                .{ .resUsageSlot = 0, .clear = false },
             },
         },
     },
     .resUsages = &.{
+        .{ .id = img3.id, .stage = .ColorAtt, .access = .ColorAttWrite, .layout = .ColorAtt },
         .{ .id = buf1.id, .stage = .FragShader, .access = .ShaderRead },
     },
 };
 
 const taskTest: Pass = .{
     .shaderIds = &.{ sc.t4Task.id, sc.t4Mesh.id, sc.t4Frag.id },
+    .shaderSlots = &.{1},
     .renderImgId = img4.id,
     .kind = .{
         .taskOrMesh = .{
             .workgroups = .{ .x = 1, .y = 1, .z = 1 },
             .colorAtts = &.{
-                .{ .resUsage = .{ .id = img4.id, .stage = .ColorAtt, .access = .ColorAttWrite, .layout = .ColorAtt }, .clear = false },
+                .{ .resUsageSlot = 0, .clear = false },
             },
         },
     },
     .resUsages = &.{
+        .{ .id = img4.id, .stage = .ColorAtt, .access = .ColorAttWrite, .layout = .ColorAtt },
         .{ .id = buf1.id, .stage = .FragShader, .access = .ShaderRead },
     },
 };
 
 const gridTest: Pass = .{
     .shaderIds = &.{ sc.gridTask.id, sc.gridMesh.id, sc.gridFrag.id },
+    .shaderSlots = &.{},
     .renderImgId = img4.id,
     .kind = .{
         .taskOrMesh = .{
             .workgroups = .{ .x = 1, .y = 1, .z = 1 },
             .colorAtts = &.{
-                .{ .resUsage = .{ .id = img4.id, .stage = .ColorAtt, .access = .ColorAttWrite, .layout = .ColorAtt }, .clear = false },
+                .{ .resUsageSlot = 0, .clear = false },
             },
         },
     },
     .resUsages = &.{
+        .{ .id = img4.id, .stage = .ColorAtt, .access = .ColorAttWrite, .layout = .ColorAtt },
     },
 };
 

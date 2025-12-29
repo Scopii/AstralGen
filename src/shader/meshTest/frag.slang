@@ -11,10 +11,12 @@ struct PushConstants {
     float4 camDir;
     float runtime;
     uint renderImgIdx;
-    uint buf1Index;
-    uint buf1Count;
-    uint buf2Index;
-    uint buf2Count;
+    uint res1Index;
+    uint res1Count;
+    uint res2Index;
+    uint res2Count;
+    uint res3Index;
+    uint res3Count;
 };
 
 [[vk::binding(0, 0)]] RWTexture2D<float4> globalImages[];
@@ -56,7 +58,7 @@ MapResult map(float3 pos, StructuredBuffer<Object> objectBuffer) {
     int closestIndex = -1;
 
     // Loop over the Object Buffer
-    for (uint i = 0; i < pc.buf1Count; i++) {
+    for (uint i = 0; i < pc.res1Count; i++) {
         // 2. Read from that specific buffer
         Object obj = objectBuffer[i];
 
@@ -91,7 +93,7 @@ float3 getNormal(float3 pos, StructuredBuffer<Object> objectBuffer) {
 // SHADER
 [shader("fragment")]
 float4 main(float4 pixelPos: SV_Position) : SV_Target {
-    StructuredBuffer<Object> objectBuffer = globalBuffers[pc.buf1Index];
+    StructuredBuffer<Object> objectBuffer = globalBuffers[pc.res1Index];
 
     uint width, height;
     globalImages[pc.renderImgIdx].GetDimensions(width, height);

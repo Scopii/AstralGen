@@ -86,7 +86,7 @@ pub const RenderGraph = struct {
     tempImgBarriers: std.array_list.Managed(vk.VkImageMemoryBarrier2),
     tempBufBarriers: std.array_list.Managed(vk.VkBufferMemoryBarrier2),
 
-    pub fn init(alloc: Allocator, resourceMan: *ResourceManager) RenderGraph {
+    pub fn init(alloc: Allocator, resourceMan: *const ResourceManager) RenderGraph {
         return .{
             .alloc = alloc,
             .pipeLayout = resourceMan.descMan.pipeLayout,
@@ -116,68 +116,6 @@ pub const RenderGraph = struct {
     }
 
     pub fn recordPassBarriers(self: *RenderGraph, cmd: vk.VkCommandBuffer, pass: rc.Pass, resMan: *ResourceManager) !void {
-        switch (pass.kind) {
-            .graphics => |graphics| {
-                for (graphics.colorAtts) |colorAtt| {
-                    const resUsage = colorAtt.resUsage;
-                    const resource = try resMan.getResourcePtr(resUsage.id);
-                    const state = resource.state;
-                    const neededState = ResourceState{ .stage = resUsage.stage, .access = resUsage.access, .layout = resUsage.layout };
-                    if (state.stage != neededState.stage or state.access != neededState.access or state.layout != neededState.layout) {
-                        try self.createBarrier(state, neededState, resource);
-                    }
-                }
-                if (graphics.depthAtt) |depthAtt| {
-                    const resUsage = depthAtt.resUsage;
-                    const resource = try resMan.getResourcePtr(resUsage.id);
-                    const state = resource.state;
-                    const neededState = ResourceState{ .stage = resUsage.stage, .access = resUsage.access, .layout = resUsage.layout };
-                    if (state.stage != neededState.stage or state.access != neededState.access or state.layout != neededState.layout) {
-                        try self.createBarrier(state, neededState, resource);
-                    }
-                }
-                if (graphics.stencilAtt) |stencilAtt| {
-                    const resUsage = stencilAtt.resUsage;
-                    const resource = try resMan.getResourcePtr(resUsage.id);
-                    const state = resource.state;
-                    const neededState = ResourceState{ .stage = resUsage.stage, .access = resUsage.access, .layout = resUsage.layout };
-                    if (state.stage != neededState.stage or state.access != neededState.access or state.layout != neededState.layout) {
-                        try self.createBarrier(state, neededState, resource);
-                    }
-                }
-            },
-            .taskOrMesh => |taskOrMesh| {
-                for (taskOrMesh.colorAtts) |colorAtt| {
-                    const resUsage = colorAtt.resUsage;
-                    const resource = try resMan.getResourcePtr(resUsage.id);
-                    const state = resource.state;
-                    const neededState = ResourceState{ .stage = resUsage.stage, .access = resUsage.access, .layout = resUsage.layout };
-                    if (state.stage != neededState.stage or state.access != neededState.access or state.layout != neededState.layout) {
-                        try self.createBarrier(state, neededState, resource);
-                    }
-                }
-                if (taskOrMesh.depthAtt) |depthAtt| {
-                    const resUsage = depthAtt.resUsage;
-                    const resource = try resMan.getResourcePtr(resUsage.id);
-                    const state = resource.state;
-                    const neededState = ResourceState{ .stage = resUsage.stage, .access = resUsage.access, .layout = resUsage.layout };
-                    if (state.stage != neededState.stage or state.access != neededState.access or state.layout != neededState.layout) {
-                        try self.createBarrier(state, neededState, resource);
-                    }
-                }
-                if (taskOrMesh.stencilAtt) |stencilAtt| {
-                    const resUsage = stencilAtt.resUsage;
-                    const resource = try resMan.getResourcePtr(resUsage.id);
-                    const state = resource.state;
-                    const neededState = ResourceState{ .stage = resUsage.stage, .access = resUsage.access, .layout = resUsage.layout };
-                    if (state.stage != neededState.stage or state.access != neededState.access or state.layout != neededState.layout) {
-                        try self.createBarrier(state, neededState, resource);
-                    }
-                }
-            },
-            else => {},
-        }
-
         for (pass.resUsages) |resUsage| {
             // CHECK IF RESOURCE IS ALREADY SET
             const resource = try resMan.getResourcePtr(resUsage.id);
@@ -229,19 +167,22 @@ pub const RenderGraph = struct {
 
         var depthInf: ?vk.VkRenderingAttachmentInfo = null;
         if (depthAtt) |depth| {
-            const img = try resMan.getImagePtr(depth.resUsage.id);
+            const imgId = pass.resUsages[depth.resUsageSlot].id;
+            const img = try resMan.getImagePtr(imgId);
             depthInf = createAttachment(img.imgInf.imgType, img.view, depth.clear);
         }
         var stencilInf: ?vk.VkRenderingAttachmentInfo = null;
         if (stencilAtt) |stencil| {
-            const img = try resMan.getImagePtr(stencil.resUsage.id);
+            const imgId = pass.resUsages[stencil.resUsageSlot].id;
+            const img = try resMan.getImagePtr(imgId);
             stencilInf = createAttachment(img.imgInf.imgType, img.view, stencil.clear);
         }
 
         var colorInfs: [8]vk.VkRenderingAttachmentInfo = undefined;
         for (0..colorAtts.len) |i| {
             const color = colorAtts[i];
-            const img = try resMan.getImagePtr(color.resUsage.id);
+            const imgId = pass.resUsages[color.resUsageSlot].id;
+            const img = try resMan.getImagePtr(imgId);
             colorInfs[i] = createAttachment(img.imgInf.imgType, img.view, color.clear);
         }
 

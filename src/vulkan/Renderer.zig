@@ -36,7 +36,7 @@ pub const Renderer = struct {
         const alloc = memoryMan.getAllocator();
         const instance = try createInstance(alloc);
         const context = try Context.init(alloc, instance);
-        var resourceMan = try ResourceManager.init(alloc, &context);
+        const resourceMan = try ResourceManager.init(alloc, &context);
         const renderGraph = RenderGraph.init(alloc, &resourceMan);
         const cmdMan = try CmdManager.init(alloc, &context, rc.MAX_IN_FLIGHT, &resourceMan);
         const scheduler = try Scheduler.init(&context, rc.MAX_IN_FLIGHT);
@@ -168,17 +168,18 @@ pub const Renderer = struct {
         };
 
         for (self.passes.items) |pass| {
-            var bufferSlot: u32 = 0;
-
-            for (0..pass.resUsages.len) |i| {
-                const resource = try self.resourceMan.getResourcePtr(pass.resUsages[i].id);
+            for (0..pass.shaderSlots.len) |i| {
+                const slot = pass.shaderSlots[i];
+                const resource = try self.resourceMan.getResourcePtr(pass.resUsages[slot].id);
                 switch (resource.resourceType) {
                     .gpuBuf => |gpuBuf| {
-                        pcs.resUsageInfos[bufferSlot].bufIndex = resource.bindlessIndex;
-                        pcs.resUsageInfos[bufferSlot].bufCount = gpuBuf.count;
-                        bufferSlot += 1;
+                        pcs.resUsageInfos[i].index = resource.bindlessIndex;
+                        pcs.resUsageInfos[i].count = gpuBuf.count;
                     },
-                    else => {}, //std.debug.print("Warning Resource {} was not assigned because it is not buffer \n", .{pass.resUsages[i].id}),
+                    .gpuImg => |_| {
+                        pcs.resUsageInfos[i].index = resource.bindlessIndex;
+                        pcs.resUsageInfos[i].count = 1;
+                    },
                 }
             }
 

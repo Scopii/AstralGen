@@ -28,19 +28,21 @@ static const uint3 cubeIndices[12] = {
     uint3(2, 6, 7), uint3(7, 3, 2)
 };
 
-[[vk::push_constant]] ConstantBuffer<PushConstants> pc;
-
 struct PushConstants {
     float4x4 viewProj;
     float4 camPosAndFov;
     float4 camDir;
     float runtime;
     uint renderImgIdx;
-    uint buf1Index;
-    uint buf1Count;
-    uint buf2Index;
-    uint buf2Count;
+    uint res1Index;
+    uint res1Count;
+    uint res2Index;
+    uint res2Count;
+    uint res3Index;
+    uint res3Count;
 };
+
+[[vk::push_constant]] ConstantBuffer<PushConstants> pc;
 
 [shader("mesh")]
 [outputtopology("triangle")]
