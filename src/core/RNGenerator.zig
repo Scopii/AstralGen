@@ -16,20 +16,32 @@ pub const RNGenerator = struct {
     pub fn int(self: *RNGenerator, comptime T: type) T {
         return self.random.int(T);
     }
+    pub fn intFixed(self: *RNGenerator, comptime T: type) T {
+        return self.prng.random().int(T);
+    }
 
     // integer within given range (inclusive).
     pub fn intRange(self: *RNGenerator, comptime T: type, min: T, max: T) T {
         return self.random.intRangeAtMost(T, min, max); // Use intRangeAtMost for inclusive
+    }
+    pub fn intRangeFixed(self: *RNGenerator, comptime T: type, min: T, max: T) T {
+        return self.prng.random().intRangeAtMost(T, min, max); // Use intRangeAtMost for inclusive
     }
 
     // float of specified type (0.0 <= x < 1.0).
     pub fn float(self: *RNGenerator, comptime T: type) T {
         return self.random.float(T);
     }
+    pub fn floatFixed(self: *RNGenerator, comptime T: type) T {
+        return self.prng.random().float(T);
+    }
 
     // boolean (true or false).
     pub fn boolean(self: *RNGenerator) bool {
         return self.random.boolean();
+    }
+    pub fn booleanFixed(self: *RNGenerator) bool {
+        return self.prng.random().boolean();
     }
 
     // element from slice.
@@ -37,9 +49,18 @@ pub const RNGenerator = struct {
         const index = self.random.intRangeLessThan(usize, 0, items.len);
         return items[index];
     }
+    pub fn choiceFixed(self: *RNGenerator, comptime T: type, items: []const T) T {
+        const index = self.prng.random().intRangeLessThan(usize, 0, items.len);
+        return items[index];
+    }
 
     // fills slice with random bytes
     pub fn bytes(self: *RNGenerator, buf: []u8) void {
         self.random.bytes(buf);
     }
+    pub fn bytesFixed(self: *RNGenerator, buf: []u8) void {
+        self.prng.random().bytes(buf);
+    }
+
+
 };

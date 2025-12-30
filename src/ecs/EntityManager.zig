@@ -10,18 +10,18 @@ pub const EntityManager = struct {
         var objects: [objCount]Object = undefined;
 
         for (0..objects.len) |i| {
-            const id = rng.intRange(u32, 0, @typeInfo(Object.SDF).@"enum".fields.len - 1);
+            const id = rng.intRangeFixed(u32, 0, @typeInfo(Object.SDF).@"enum".fields.len - 1);
 
             objects[i] = .{
                 .sdfId = @enumFromInt(id),
-                .colorR = rng.float(f32),
-                .colorG = rng.float(f32),
-                .colorB = rng.float(f32),
+                .colorR = rng.floatFixed(f32),
+                .colorG = rng.floatFixed(f32),
+                .colorB = rng.floatFixed(f32),
 
-                .posX = rng.float(f32) * 30 - 15,
-                .posY = rng.float(f32) * 30 - 15,
-                .posZ = rng.float(f32) * 30 - 15,
-                .size = rng.float(f32) + 0.2,
+                .posX = rng.floatFixed(f32) * 30 - 15,
+                .posY = rng.floatFixed(f32) * 30 - 15,
+                .posZ = rng.floatFixed(f32) * 30 - 15,
+                .size = rng.floatFixed(f32) + 0.2,
             };
         }
         std.debug.print("Created {} Objects\n", .{objects.len});
