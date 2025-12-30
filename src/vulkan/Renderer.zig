@@ -142,21 +142,16 @@ pub const Renderer = struct {
 
     pub fn draw(self: *Renderer, cam: *Camera, runtimeAsFloat: f32) !void {
         try self.scheduler.waitForGPU();
-
         const frameInFlight = self.scheduler.frameInFlight;
+        
         if (try self.swapchainMan.updateTargets(frameInFlight, &self.context) == false) return;
-
-        const time1 = std.time.microTimestamp();
+        const targets = self.swapchainMan.getTargets();
 
         const cmd = try self.cmdMan.beginRecording(frameInFlight);
         try self.recordPasses(cmd, cam, runtimeAsFloat);
-        try self.renderGraph.recordSwapchainBlits(cmd, self.swapchainMan.targets.slice(), &self.swapchainMan.swapchains, &self.resourceMan);
+        try self.renderGraph.recordSwapchainBlits(cmd, targets, &self.swapchainMan.swapchains, &self.resourceMan);
         try CmdManager.endRecording(cmd);
 
-        const time2 = std.time.microTimestamp();
-        std.debug.print("Record Function Time: {} Frame: {}\n", .{ time2 - time1, self.scheduler.totalFrames });
-
-        const targets = self.swapchainMan.targets.slice();
         try self.queueSubmit(cmd, targets, frameInFlight);
         try self.swapchainMan.present(targets, self.context.presentQ);
 

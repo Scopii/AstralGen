@@ -48,6 +48,10 @@ pub const SwapchainManager = struct {
         }
     }
 
+    pub fn getTargets(self: *SwapchainManager) []u32 {
+        return self.targets.slice();
+    }
+
     pub fn present(self: *SwapchainManager, presentIds: []const u32, presentQueue: vk.VkQueue) !void {
         var swapchainHandles: [rc.MAX_WINDOWS]vk.VkSwapchainKHR = undefined;
         var imageIndices: [rc.MAX_WINDOWS]u32 = undefined;
