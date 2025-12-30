@@ -280,9 +280,17 @@ fn createGPI(alloc: Allocator, gpu: vk.VkPhysicalDevice, families: QueueFamilies
         .extendedDynamicState = vk.VK_TRUE,
     };
 
+    var shadingRateFeatures = vk.VkPhysicalDeviceFragmentShadingRateFeaturesKHR{
+        .sType = vk.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_SHADING_RATE_FEATURES_KHR,
+        .pNext = &dynamicStateFeatures,
+        .pipelineFragmentShadingRate = vk.VK_TRUE,   // for cmd call
+        .primitiveFragmentShadingRate = vk.VK_TRUE,  // for Mesh Shader writing
+        .attachmentFragmentShadingRate = vk.VK_FALSE, // for images to control rate
+    };
+
     var shaderObjFeatures = vk.VkPhysicalDeviceShaderObjectFeaturesEXT{
         .sType = vk.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_OBJECT_FEATURES_EXT,
-        .pNext = &dynamicStateFeatures,
+        .pNext = &shadingRateFeatures,
         .shaderObject = vk.VK_TRUE,
     };
 
@@ -335,6 +343,8 @@ fn createGPI(alloc: Allocator, gpu: vk.VkPhysicalDevice, families: QueueFamilies
         "VK_EXT_extended_dynamic_state",
         "VK_EXT_extended_dynamic_state2",
         "VK_EXT_extended_dynamic_state3",
+        "VK_EXT_conservative_rasterization",
+        "VK_KHR_fragment_shading_rate",
     };
 
     const createInf = vk.VkDeviceCreateInfo{
@@ -352,42 +362,59 @@ fn createGPI(alloc: Allocator, gpu: vk.VkPhysicalDevice, families: QueueFamilies
     var gpi: vk.VkDevice = undefined;
     try check(vk.vkCreateDevice(gpu, &createInf, null, &gpi), "Unable to create Vulkan device!");
 
-    // Mesh Shader Draw Function
+    // 1. Draw Commands
     try loadVkProc(gpi, &vkFn.vkCmdDrawMeshTasksEXT, "vkCmdDrawMeshTasksEXT");
-    // additional dynamic state function pointers
-    try loadVkProc(gpi, &vkFn.vkCmdSetRasterizerDiscardEnable, "vkCmdSetRasterizerDiscardEnable");
-    try loadVkProc(gpi, &vkFn.vkCmdSetCullMode, "vkCmdSetCullMode");
-    try loadVkProc(gpi, &vkFn.vkCmdSetFrontFace, "vkCmdSetFrontFace");
-    try loadVkProc(gpi, &vkFn.vkCmdSetDepthTestEnable, "vkCmdSetDepthTestEnable");
-    try loadVkProc(gpi, &vkFn.vkCmdSetDepthWriteEnable, "vkCmdSetDepthWriteEnable");
-    try loadVkProc(gpi, &vkFn.vkCmdSetDepthBoundsTestEnable, "vkCmdSetDepthBoundsTestEnable");
-    try loadVkProc(gpi, &vkFn.vkCmdSetStencilTestEnable, "vkCmdSetStencilTestEnable");
-    try loadVkProc(gpi, &vkFn.vkCmdSetColorBlendEnableEXT, "vkCmdSetColorBlendEnableEXT");
-    try loadVkProc(gpi, &vkFn.vkCmdSetColorBlendEquationEXT, "vkCmdSetColorBlendEquationEXT");
-    try loadVkProc(gpi, &vkFn.vkCmdSetColorWriteMaskEXT, "vkCmdSetColorWriteMaskEXT");
-    try loadVkProc(gpi, &vkFn.vkCmdSetPrimitiveTopology, "vkCmdSetPrimitiveTopology");
-    try loadVkProc(gpi, &vkFn.vkCmdSetPrimitiveRestartEnable, "vkCmdSetPrimitiveRestartEnable");
-    try loadVkProc(gpi, &vkFn.vkCmdSetDepthBiasEnable, "vkCmdSetDepthBiasEnable");
-    try loadVkProc(gpi, &vkFn.vkCmdSetPolygonModeEXT, "vkCmdSetPolygonModeEXT");
-    try loadVkProc(gpi, &vkFn.vkCmdSetRasterizationSamplesEXT, "vkCmdSetRasterizationSamplesEXT");
-    try loadVkProc(gpi, &vkFn.vkCmdSetSampleMaskEXT, "vkCmdSetSampleMaskEXT");
-    try loadVkProc(gpi, &vkFn.vkCmdSetDepthClampEnableEXT, "vkCmdSetDepthClampEnableEXT");
-    try loadVkProc(gpi, &vkFn.vkCmdSetAlphaToOneEnableEXT, "vkCmdSetAlphaToOneEnableEXT");
-    try loadVkProc(gpi, &vkFn.vkCmdSetAlphaToCoverageEnableEXT, "vkCmdSetAlphaToCoverageEnableEXT");
-    try loadVkProc(gpi, &vkFn.vkCmdSetLogicOpEnableEXT, "vkCmdSetLogicOpEnableEXT");
-    try loadVkProc(gpi, &vkFn.vkCmdSetViewportWithCount, "vkCmdSetViewportWithCount");
-    try loadVkProc(gpi, &vkFn.vkCmdSetScissorWithCount, "vkCmdSetScissorWithCount");
-    // Import Shader Object Functions
+    try loadVkProc(gpi, &vkFn.vkCmdDrawMeshTasksIndirectEXT, "vkCmdDrawMeshTasksIndirectEXT");
+
+    // 2. Shader Object
     try loadVkProc(gpi, &vkFn.vkCreateShadersEXT, "vkCreateShadersEXT");
     try loadVkProc(gpi, &vkFn.vkDestroyShaderEXT, "vkDestroyShaderEXT");
     try loadVkProc(gpi, &vkFn.vkCmdBindShadersEXT, "vkCmdBindShadersEXT");
-    try loadVkProc(gpi, &vkFn.vkCmdSetVertexInputEXT, "vkCmdSetVertexInputEXT");
-    // Import Descriptor Buffer Functions
+
+    // 3. Descriptor Buffers
     try loadVkProc(gpi, &vkFn.vkCmdBindDescriptorBuffersEXT, "vkCmdBindDescriptorBuffersEXT");
     try loadVkProc(gpi, &vkFn.vkCmdSetDescriptorBufferOffsetsEXT, "vkCmdSetDescriptorBufferOffsetsEXT");
     try loadVkProc(gpi, &vkFn.vkGetDescriptorEXT, "vkGetDescriptorEXT");
     try loadVkProc(gpi, &vkFn.vkGetDescriptorSetLayoutSizeEXT, "vkGetDescriptorSetLayoutSizeEXT");
     try loadVkProc(gpi, &vkFn.vkGetDescriptorSetLayoutBindingOffsetEXT, "vkGetDescriptorSetLayoutBindingOffsetEXT");
+
+    // 4. Rasterization & Geometry
+    try loadVkProc(gpi, &vkFn.vkCmdSetPolygonModeEXT, "vkCmdSetPolygonModeEXT");
+    try loadVkProc(gpi, &vkFn.vkCmdSetCullMode, "vkCmdSetCullMode");
+    try loadVkProc(gpi, &vkFn.vkCmdSetFrontFace, "vkCmdSetFrontFace");
+    try loadVkProc(gpi, &vkFn.vkCmdSetPrimitiveTopology, "vkCmdSetPrimitiveTopology");
+    try loadVkProc(gpi, &vkFn.vkCmdSetPrimitiveRestartEnable, "vkCmdSetPrimitiveRestartEnable");
+    try loadVkProc(gpi, &vkFn.vkCmdSetRasterizerDiscardEnable, "vkCmdSetRasterizerDiscardEnable");
+    try loadVkProc(gpi, &vkFn.vkCmdSetRasterizationSamplesEXT, "vkCmdSetRasterizationSamplesEXT");
+    try loadVkProc(gpi, &vkFn.vkCmdSetSampleMaskEXT, "vkCmdSetSampleMaskEXT");
+    try loadVkProc(gpi, &vkFn.vkCmdSetVertexInputEXT, "vkCmdSetVertexInputEXT");
+
+    // 5. Depth & Stencil
+    try loadVkProc(gpi, &vkFn.vkCmdSetDepthTestEnable, "vkCmdSetDepthTestEnable");
+    try loadVkProc(gpi, &vkFn.vkCmdSetDepthWriteEnable, "vkCmdSetDepthWriteEnable");
+    try loadVkProc(gpi, &vkFn.vkCmdSetDepthBoundsTestEnable, "vkCmdSetDepthBoundsTestEnable");
+    try loadVkProc(gpi, &vkFn.vkCmdSetDepthBiasEnable, "vkCmdSetDepthBiasEnable");
+    try loadVkProc(gpi, &vkFn.vkCmdSetDepthBias, "vkCmdSetDepthBias"); 
+    try loadVkProc(gpi, &vkFn.vkCmdSetDepthClampEnableEXT, "vkCmdSetDepthClampEnableEXT");
+    try loadVkProc(gpi, &vkFn.vkCmdSetStencilTestEnable, "vkCmdSetStencilTestEnable");
+
+    // 6. Color & Blending
+    try loadVkProc(gpi, &vkFn.vkCmdSetColorBlendEnableEXT, "vkCmdSetColorBlendEnableEXT");
+    try loadVkProc(gpi, &vkFn.vkCmdSetColorBlendEquationEXT, "vkCmdSetColorBlendEquationEXT");
+    try loadVkProc(gpi, &vkFn.vkCmdSetColorWriteMaskEXT, "vkCmdSetColorWriteMaskEXT");
+    try loadVkProc(gpi, &vkFn.vkCmdSetBlendConstants, "vkCmdSetBlendConstants"); 
+    try loadVkProc(gpi, &vkFn.vkCmdSetLogicOpEnableEXT, "vkCmdSetLogicOpEnableEXT");
+    try loadVkProc(gpi, &vkFn.vkCmdSetAlphaToOneEnableEXT, "vkCmdSetAlphaToOneEnableEXT");
+    try loadVkProc(gpi, &vkFn.vkCmdSetAlphaToCoverageEnableEXT, "vkCmdSetAlphaToCoverageEnableEXT");
+
+    // 7. Viewport & Scissor
+    try loadVkProc(gpi, &vkFn.vkCmdSetViewportWithCount, "vkCmdSetViewportWithCount");
+    try loadVkProc(gpi, &vkFn.vkCmdSetScissorWithCount, "vkCmdSetScissorWithCount");
+
+    // 8. Advanced / Debug / Voxel
+    try loadVkProc(gpi, &vkFn.vkCmdSetLineWidth, "vkCmdSetLineWidth"); 
+    try loadVkProc(gpi, &vkFn.vkCmdSetConservativeRasterizationModeEXT, "vkCmdSetConservativeRasterizationModeEXT"); 
+    try loadVkProc(gpi, &vkFn.vkCmdSetFragmentShadingRateKHR, "vkCmdSetFragmentShadingRateKHR"); 
 
     return gpi;
 }

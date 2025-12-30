@@ -170,7 +170,6 @@ pub const RenderGraph = struct {
         }
 
         const mainImg: *GpuImage = try resMan.getImagePtr(pass.renderImgId.?);
-        //try setRenderInf(cmd, mainImg, colorInfs[0..colorAtts.len], depthInf, stencilInf, pass);
 
         const scissor = vk.VkRect2D{
             .offset = .{ .x = 0, .y = 0 },
@@ -347,25 +346,28 @@ fn createAttachment(renderType: rc.ImgType, imgView: vk.VkImageView, clear: bool
 }
 
 fn setCmdState(cmd: vk.VkCommandBuffer) void {
-    vkFn.vkCmdSetRasterizerDiscardEnable.?(cmd, vk.VK_FALSE);
-    vkFn.vkCmdSetDepthBiasEnable.?(cmd, vk.VK_FALSE);
+    // Rasterization & Geometry
     vkFn.vkCmdSetPolygonModeEXT.?(cmd, vk.VK_POLYGON_MODE_FILL);
-    vkFn.vkCmdSetRasterizationSamplesEXT.?(cmd, vk.VK_SAMPLE_COUNT_1_BIT);
-
-    const sampleMask: u32 = 0xFFFFFFFF;
-    vkFn.vkCmdSetSampleMaskEXT.?(cmd, vk.VK_SAMPLE_COUNT_1_BIT, &sampleMask);
-
-    vkFn.vkCmdSetDepthClampEnableEXT.?(cmd, vk.VK_FALSE);
-    vkFn.vkCmdSetAlphaToOneEnableEXT.?(cmd, vk.VK_FALSE);
-    vkFn.vkCmdSetAlphaToCoverageEnableEXT.?(cmd, vk.VK_FALSE);
-    vkFn.vkCmdSetLogicOpEnableEXT.?(cmd, vk.VK_FALSE);
     vkFn.vkCmdSetCullMode.?(cmd, vk.VK_CULL_MODE_FRONT_BIT);
     vkFn.vkCmdSetFrontFace.?(cmd, vk.VK_FRONT_FACE_CLOCKWISE);
+    vkFn.vkCmdSetPrimitiveTopology.?(cmd, vk.VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
+    vkFn.vkCmdSetPrimitiveRestartEnable.?(cmd, vk.VK_FALSE);
+    vkFn.vkCmdSetRasterizerDiscardEnable.?(cmd, vk.VK_FALSE);
+    vkFn.vkCmdSetRasterizationSamplesEXT.?(cmd, vk.VK_SAMPLE_COUNT_1_BIT);
+    
+    const sampleMask: u32 = 0xFFFFFFFF;
+    vkFn.vkCmdSetSampleMaskEXT.?(cmd, vk.VK_SAMPLE_COUNT_1_BIT, &sampleMask);
+    
+    // Depth & Stencil
     vkFn.vkCmdSetDepthTestEnable.?(cmd, vk.VK_FALSE);
     vkFn.vkCmdSetDepthWriteEnable.?(cmd, vk.VK_FALSE);
     vkFn.vkCmdSetDepthBoundsTestEnable.?(cmd, vk.VK_FALSE);
+    vkFn.vkCmdSetDepthBiasEnable.?(cmd, vk.VK_FALSE);
+    vkFn.vkCmdSetDepthBias.?(cmd, 0.0, 0.0, 0.0); 
+    vkFn.vkCmdSetDepthClampEnableEXT.?(cmd, vk.VK_FALSE);
     vkFn.vkCmdSetStencilTestEnable.?(cmd, vk.VK_FALSE);
 
+    // Color & Blending
     const colorBlendEnable = vk.VK_TRUE;
     const colorBlendAttachments = [_]vk.VkBool32{colorBlendEnable};
     vkFn.vkCmdSetColorBlendEnableEXT.?(cmd, 0, 1, &colorBlendAttachments);
@@ -384,9 +386,24 @@ fn setCmdState(cmd: vk.VkCommandBuffer) void {
     const colorWriteMask = vk.VK_COLOR_COMPONENT_R_BIT | vk.VK_COLOR_COMPONENT_G_BIT | vk.VK_COLOR_COMPONENT_B_BIT | vk.VK_COLOR_COMPONENT_A_BIT;
     const colorWriteMasks = [_]vk.VkColorComponentFlags{colorWriteMask};
     vkFn.vkCmdSetColorWriteMaskEXT.?(cmd, 0, 1, &colorWriteMasks);
+    
+    const blendConsts = [_]f32{ 0.0, 0.0, 0.0, 0.0 };
+    vkFn.vkCmdSetBlendConstants.?(cmd, &blendConsts); 
 
-    vkFn.vkCmdSetPrimitiveTopology.?(cmd, vk.VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
-    vkFn.vkCmdSetPrimitiveRestartEnable.?(cmd, vk.VK_FALSE);
+    vkFn.vkCmdSetLogicOpEnableEXT.?(cmd, vk.VK_FALSE);
+    vkFn.vkCmdSetAlphaToOneEnableEXT.?(cmd, vk.VK_FALSE);
+    vkFn.vkCmdSetAlphaToCoverageEnableEXT.?(cmd, vk.VK_FALSE);
+
+    // Advanced / Debug / Voxel Optimization
+    vkFn.vkCmdSetLineWidth.?(cmd, 1.0); 
+    vkFn.vkCmdSetConservativeRasterizationModeEXT.?(cmd, vk.VK_CONSERVATIVE_RASTERIZATION_MODE_DISABLED_EXT);
+    
+    // Default to 1x1 Shading Rate (No reduction)
+    const combinerOps = [_]vk.VkFragmentShadingRateCombinerOpKHR{
+        vk.VK_FRAGMENT_SHADING_RATE_COMBINER_OP_KEEP_KHR,
+        vk.VK_FRAGMENT_SHADING_RATE_COMBINER_OP_KEEP_KHR
+    };
+    vkFn.vkCmdSetFragmentShadingRateKHR.?(cmd, &.{ .width = 1, .height = 1 }, &combinerOps);
 }
 
 pub fn copyImageToImage(cmd: vk.VkCommandBuffer, srcImg: vk.VkImage, srcOffsets: [2]vk.VkOffset3D, dstImg: vk.VkImage, dstOffsets: [2]vk.VkOffset3D, stretch: bool) void {
