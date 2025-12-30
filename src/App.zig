@@ -40,9 +40,7 @@ pub const App = struct {
         };
         errdefer shaderCompiler.deinit();
 
-        if (shaderCon.SHADER_STARTUP_COMPILATION) {
-            try shaderCompiler.loadShaders(shaderCon.shadersToCompile);
-        }
+        try shaderCompiler.loadShaders(shaderCon.shadersToCompile);
 
         var rng = RNGenerator.init(std.Random.Xoshiro256, 1000);
 

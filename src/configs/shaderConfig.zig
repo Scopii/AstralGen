@@ -1,7 +1,7 @@
 const vk = @import("../modules/vk.zig").c;
 // Shader Compilation
-pub const SHADER_HOTLOAD = true;
-pub const SHADER_STARTUP_COMPILATION = true;
+pub const SHADER_HOTLOAD = false;
+pub const SHADER_STARTUP_COMPILATION = false;
 pub const SHADER_MAX = 100;
 // Paths
 pub const rootPath: []const u8 = "../..";

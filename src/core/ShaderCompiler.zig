@@ -51,7 +51,9 @@ pub const ShaderCompiler = struct {
 
     pub fn loadShaders(self: *ShaderCompiler, shaderConfigs: []const ShaderInfo) !void {
         const alloc = self.alloc;
-        try compileShadersParallel(alloc, self.shaderPath, self.shaderOutputPath, shaderConfigs);
+        if (sc.SHADER_STARTUP_COMPILATION) {
+            try compileShadersParallel(alloc, self.shaderPath, self.shaderOutputPath, shaderConfigs);
+        }
         const curTime = std.time.nanoTimestamp();
 
         for (shaderConfigs) |shaderConfig| {
