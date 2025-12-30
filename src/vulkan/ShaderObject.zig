@@ -1,4 +1,3 @@
-const std = @import("std");
 const vk = @import("../modules/vk.zig").c;
 const vkFn = @import("../modules/vk.zig");
 const PushConstants = @import("resources/DescriptorManager.zig").PushConstants;

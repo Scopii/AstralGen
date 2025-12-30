@@ -3,17 +3,9 @@ const vk = @import("../modules/vk.zig").c;
 const vkFn = @import("../modules/vk.zig");
 const Allocator = std.mem.Allocator;
 const Context = @import("Context.zig").Context;
-const GpuImage = @import("resources/ResourceManager.zig").Resource.GpuImage;
 const ResourceManager = @import("resources/ResourceManager.zig").ResourceManager;
-const SwapchainManager = @import("SwapchainManager.zig");
-const ShaderObject = @import("ShaderObject.zig").ShaderObject;
-const PushConstants = @import("resources/DescriptorManager.zig").PushConstants;
 const rc = @import("../configs/renderConfig.zig");
-const RenderType = rc.Pass.PassType;
-const sc = @import("../configs/shaderConfig.zig");
 const MAX_WINDOWS = rc.MAX_WINDOWS;
-const RENDER_IMG_STRETCH = rc.RENDER_IMG_STRETCH;
-const CreateMapArray = @import("../structures/MapArray.zig").CreateMapArray;
 const check = @import("ErrorHelpers.zig").check;
 
 pub const CmdManager = struct {

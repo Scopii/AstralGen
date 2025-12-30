@@ -5,7 +5,6 @@ const rc = @import("../configs/renderConfig.zig");
 const ResourceManager = @import("resources/ResourceManager.zig").ResourceManager;
 const Resource = @import("resources/ResourceManager.zig").Resource;
 const GpuImage = @import("resources/ResourceManager.zig").Resource.GpuImage;
-const CreateMapArray = @import("../structures/MapArray.zig").CreateMapArray;
 const ShaderObject = @import("ShaderObject.zig").ShaderObject;
 const PushConstants = @import("resources/DescriptorManager.zig").PushConstants;
 const vkFn = @import("../modules/vk.zig");

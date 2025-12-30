@@ -1,7 +1,6 @@
 const std = @import("std");
 const vk = @import("../modules/vk.zig").c;
 const Context = @import("Context.zig").Context;
-const Camera = @import("../core/Camera.zig").Camera;
 const Scheduler = @import("Scheduler.zig").Scheduler;
 const Window = @import("../platform/Window.zig").Window;
 const LoadedShader = @import("../core/ShaderCompiler.zig").LoadedShader;
@@ -17,9 +16,8 @@ const ShaderObject = @import("ShaderObject.zig").ShaderObject;
 const Resource = @import("resources/ResourceManager.zig").Resource;
 const RenderGraph = @import("RenderGraph.zig").RenderGraph;
 const RendererData = @import("../App.zig").RendererData;
-
-const Allocator = std.mem.Allocator;
 const rc = @import("../configs/renderConfig.zig");
+const Allocator = std.mem.Allocator;
 
 pub const Renderer = struct {
     alloc: Allocator,
