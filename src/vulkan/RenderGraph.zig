@@ -107,6 +107,8 @@ pub const RenderGraph = struct {
     }
 
     pub fn recordPassBarriers(self: *RenderGraph, cmd: vk.VkCommandBuffer, pass: rc.Pass, resMan: *ResourceManager) !void {
+        setCmdState(cmd);
+
         for (pass.resUsages) |resUsage| {
             const resource = try resMan.getResourcePtr(resUsage.id);
             const neededState = ResourceState{ .stage = resUsage.stage, .access = resUsage.access, .layout = resUsage.layout };
@@ -198,7 +200,15 @@ pub const RenderGraph = struct {
         vkFn.vkCmdSetViewportWithCount.?(cmd, 1, &viewport);
         vkFn.vkCmdSetScissorWithCount.?(cmd, 1, &scissor);
 
-        try renderWithState(cmd, pass);
+        switch (pass.kind) {
+            .graphics => |graphics| {
+                vkFn.vkCmdSetVertexInputEXT.?(cmd, 0, null, 0, null); // Currently empty vertex input state
+                vk.vkCmdDraw(cmd, graphics.vertexCount, graphics.instanceCount, 0, 0);
+            },
+            .taskOrMesh => |taskOrMesh| vkFn.vkCmdDrawMeshTasksEXT.?(cmd, taskOrMesh.workgroups.x, taskOrMesh.workgroups.y, taskOrMesh.workgroups.z),
+            .compute => return error.ComputeLandedInGraphicsPass,
+        }
+        vk.vkCmdEndRendering(cmd);
     }
 
     pub fn recordSwapchainBlits(self: *RenderGraph, cmd: vk.VkCommandBuffer, targets: []const u32, swapchainMap: *SwapchainManager.SwapchainMap, resMan: *ResourceManager) !void {
@@ -336,7 +346,7 @@ fn createAttachment(renderType: rc.ImgType, imgView: vk.VkImageView, clear: bool
     };
 }
 
-fn renderWithState(cmd: vk.VkCommandBuffer, pass: rc.Pass) !void {
+fn setCmdState(cmd: vk.VkCommandBuffer) void {
     vkFn.vkCmdSetRasterizerDiscardEnable.?(cmd, vk.VK_FALSE);
     vkFn.vkCmdSetDepthBiasEnable.?(cmd, vk.VK_FALSE);
     vkFn.vkCmdSetPolygonModeEXT.?(cmd, vk.VK_POLYGON_MODE_FILL);
@@ -377,16 +387,6 @@ fn renderWithState(cmd: vk.VkCommandBuffer, pass: rc.Pass) !void {
 
     vkFn.vkCmdSetPrimitiveTopology.?(cmd, vk.VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
     vkFn.vkCmdSetPrimitiveRestartEnable.?(cmd, vk.VK_FALSE);
-
-    switch (pass.kind) {
-        .graphics => |graphics| {
-            vkFn.vkCmdSetVertexInputEXT.?(cmd, 0, null, 0, null); // Currently empty vertex input state
-            vk.vkCmdDraw(cmd, graphics.vertexCount, graphics.instanceCount, 0, 0);
-        },
-        .taskOrMesh => |taskOrMesh| vkFn.vkCmdDrawMeshTasksEXT.?(cmd, taskOrMesh.workgroups.x, taskOrMesh.workgroups.y, taskOrMesh.workgroups.z),
-        .compute => return error.ComputeLandedInGraphicsPass,
-    }
-    vk.vkCmdEndRendering(cmd);
 }
 
 pub fn copyImageToImage(cmd: vk.VkCommandBuffer, srcImg: vk.VkImage, srcOffsets: [2]vk.VkOffset3D, dstImg: vk.VkImage, dstOffsets: [2]vk.VkOffset3D, stretch: bool) void {
