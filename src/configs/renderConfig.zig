@@ -155,7 +155,7 @@ const gridTest: Pass = .{
         .taskOrMesh = .{
             .workgroups = .{ .x = 1, .y = 1, .z = 1 },
             .colorAtts = &.{
-                .{ .resUsageSlot = 0, .clear = false },
+                .{ .resUsageSlot = 0, .clear = true },
             },
         },
     },

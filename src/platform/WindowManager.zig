@@ -12,7 +12,7 @@ const SDL_KEY_MAX = @import("../core/EventManager.zig").SDL_KEY_MAX;
 pub const WindowManager = struct {
     windows: CreateMapArray(Window, MAX_WINDOWS, u32, MAX_WINDOWS, 0) = .{},
     mainWindow: ?*Window = null,
-    changedWindows: FixedList(*Window, MAX_WINDOWS) = .{},
+    changedWindows: FixedList(Window, MAX_WINDOWS) = .{},
     openWindows: u8 = 0,
     fullscreen: bool = false,
     appExit: bool = false,
@@ -84,7 +84,7 @@ pub const WindowManager = struct {
 
         const window = try Window.init(windowId, sdlHandle, renderId, vk.VkExtent2D{ .width = @intCast(width), .height = @intCast(height) });
         self.windows.set(windowId, window);
-        try self.changedWindows.append(self.windows.getPtr(windowId));
+        try self.changedWindows.append(self.windows.get(windowId));
         self.openWindows += 1;
         std.debug.print("Window ID {} created to present Render ID {}\n", .{ windowId, renderId });
     }
@@ -93,18 +93,19 @@ pub const WindowManager = struct {
         _ = sdl.SDL_ShowSimpleMessageBox(sdl.SDL_MESSAGEBOX_ERROR, title.ptr, message.ptr, null);
     }
 
-    pub fn getChangedWindows(self: *WindowManager) []*Window {
+    pub fn getChangedWindows(self: *WindowManager) []Window {
         return self.changedWindows.slice();
     }
 
     pub fn cleanupWindows(self: *WindowManager) void {
-        for (self.changedWindows.slice()) |window| {
-            switch (window.state) {
-                .needDelete => self.destroyWindow(window.windowId),
-                .needUpdate, .needCreation => window.state = .active,
-                .needActive => window.state = .active,
-                .needInactive => window.state = .inactive,
-                else => std.debug.print("WindowManager: Window {} State {s} should not need cleanup\n", .{ window.windowId, @tagName(window.state) }),
+        for (self.changedWindows.slice()) |tempWindow| {
+            const actualWindow = self.windows.getPtr(tempWindow.windowId);
+            switch (tempWindow.state) {
+                .needDelete => self.destroyWindow(actualWindow.windowId),
+                .needUpdate, .needCreation => actualWindow.state = .active,
+                .needActive => actualWindow.state = .active,
+                .needInactive => actualWindow.state = .inactive,
+                else => std.debug.print("WindowManager: Window {} State {s} should not need cleanup\n", .{ tempWindow.windowId, @tagName(tempWindow.state) }),
             }
         }
         self.changedWindows.clear();
@@ -205,7 +206,7 @@ pub const WindowManager = struct {
                 return;
             },
         }
-        try self.changedWindows.append(window);
+        try self.changedWindows.append(window.*);
         std.debug.print("State of Window {} now {s}\n", .{ id, @tagName(window.state) });
     }
 

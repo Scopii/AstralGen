@@ -123,7 +123,7 @@ pub const SwapchainManager = struct {
         return vk.VkExtent2D{ .width = maxWidth, .height = maxHeight };
     }
 
-    pub fn removeSwapchain(self: *SwapchainManager, windows: []const *Window) void {
+    pub fn removeSwapchain(self: *SwapchainManager, windows: []const Window) void {
         for (windows) |window| {
             const key = window.windowId;
 
@@ -152,7 +152,7 @@ pub const SwapchainManager = struct {
         self.alloc.free(sweapchain.renderDoneSems);
     }
 
-    pub fn createSwapchain(self: *SwapchainManager, context: *const Context, input: union(enum) { window: *Window, id: u32 }) !void {
+    pub fn createSwapchain(self: *SwapchainManager, context: *const Context, input: union(enum) { window: Window, id: u32 }) !void {
         const alloc = self.alloc;
         const gpu = context.gpu;
         var extent: vk.VkExtent2D = undefined;

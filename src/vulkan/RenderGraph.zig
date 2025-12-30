@@ -75,12 +75,12 @@ pub const RenderGraph = struct {
     tempImgBarriers: std.array_list.Managed(vk.VkImageMemoryBarrier2),
     tempBufBarriers: std.array_list.Managed(vk.VkBufferMemoryBarrier2),
 
-    pub fn init(alloc: Allocator, resourceMan: *const ResourceManager) RenderGraph {
+    pub fn init(alloc: Allocator, resourceMan: *const ResourceManager) !RenderGraph {
         return .{
             .alloc = alloc,
             .pipeLayout = resourceMan.descMan.pipeLayout,
-            .tempImgBarriers = std.array_list.Managed(vk.VkImageMemoryBarrier2).init(alloc),
-            .tempBufBarriers = std.array_list.Managed(vk.VkBufferMemoryBarrier2).init(alloc),
+            .tempImgBarriers = try std.array_list.Managed(vk.VkImageMemoryBarrier2).initCapacity(alloc, 30),
+            .tempBufBarriers = try std.array_list.Managed(vk.VkBufferMemoryBarrier2).initCapacity(alloc, 30),
         };
     }
 

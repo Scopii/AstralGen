@@ -12,6 +12,8 @@ const RNGenerator = @import("core/RNGenerator.zig").RNGenerator;
 const Camera = @import("core/Camera.zig").Camera;
 const shaderCon = @import("configs/shaderConfig.zig");
 const rc = @import("configs/renderConfig.zig");
+const FixedList = @import("structures/FixedList.zig").FixedList;
+const Window = @import("platform/Window.zig").Window;
 
 pub const App = struct {
     memoryMan: *MemoryManager,
@@ -112,8 +114,11 @@ pub const App = struct {
 
         var firstFrame = true;
 
+        var rendererData: RendererData = undefined;
+
         // Main loop
         while (true) {
+            rendererData.changedWindows = .{};
             // Poll Inputs
             windowMan.pollEvents() catch |err| {
                 std.log.err("Error in pollEvents(): {}", .{err});
@@ -124,7 +129,7 @@ pub const App = struct {
 
             // Process Window Changes
             if (windowMan.changedWindows.len > 0) {
-                try renderer.updateWindowState(windowMan.getChangedWindows());
+                rendererData.changedWindows = windowMan.*.changedWindows;
                 windowMan.cleanupWindows();
             }
 
@@ -135,7 +140,6 @@ pub const App = struct {
             // Update Time
             timeMan.update();
             const dt = timeMan.getDeltaTime(.nano, f64);
-            const runTime = timeMan.getRuntime(.seconds, f32);
 
             // Handle Mouse Input
             cam.rotate(self.eventMan.mouseMoveX, self.eventMan.mouseMoveY);
@@ -171,8 +175,13 @@ pub const App = struct {
 
             if (firstFrame) windowMan.showAllWindows();
 
+            rendererData.viewProj = cam.getViewProj();
+            rendererData.camPosAndFov = cam.getPosAndFov();
+            rendererData.camDir = cam.getForward();
+            rendererData.runtime = timeMan.getRuntime(.seconds, f32);
+
             // Draw and reset Frame Arena
-            renderer.draw(cam, runTime) catch |err| {
+            renderer.draw(rendererData) catch |err| {
                 std.log.err("Error in renderer.draw(): {}", .{err});
                 break;
             };
@@ -184,4 +193,12 @@ pub const App = struct {
             }
         }
     }
+};
+
+pub const RendererData = struct {
+    changedWindows: FixedList(Window, rc.MAX_WINDOWS) = .{},
+    viewProj: [4][4]f32,
+    camPosAndFov: [4]f32,
+    camDir: [4]f32,
+    runtime: f32,
 };

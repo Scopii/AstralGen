@@ -16,6 +16,7 @@ const createInstance = @import("Context.zig").createInstance;
 const ShaderObject = @import("ShaderObject.zig").ShaderObject;
 const Resource = @import("resources/ResourceManager.zig").Resource;
 const RenderGraph = @import("RenderGraph.zig").RenderGraph;
+const RendererData = @import("../App.zig").RendererData;
 
 const Allocator = std.mem.Allocator;
 const rc = @import("../configs/renderConfig.zig");
@@ -37,7 +38,7 @@ pub const Renderer = struct {
         const instance = try createInstance(alloc);
         const context = try Context.init(alloc, instance);
         const resourceMan = try ResourceManager.init(alloc, &context);
-        const renderGraph = RenderGraph.init(alloc, &resourceMan);
+        const renderGraph = try RenderGraph.init(alloc, &resourceMan);
         const cmdMan = try CmdManager.init(alloc, &context, rc.MAX_IN_FLIGHT, &resourceMan);
         const scheduler = try Scheduler.init(&context, rc.MAX_IN_FLIGHT);
         const shaderMan = try ShaderManager.init(alloc, &context, &resourceMan);
@@ -69,9 +70,9 @@ pub const Renderer = struct {
         self.passes.deinit();
     }
 
-    pub fn updateWindowState(self: *Renderer, winPtrs: []*Window) !void {
-        for (winPtrs) |winPtr| {
-            if (winPtr.state == .needDelete or winPtr.state == .needUpdate) {
+    fn updateWindowStates(self: *Renderer, tempWindows: []const Window) !void {
+        for (tempWindows) |tempWindow| {
+            if (tempWindow.state == .needDelete or tempWindow.state == .needUpdate) {
                 _ = vk.vkDeviceWaitIdle(self.context.gpi);
                 break;
             }
@@ -79,18 +80,18 @@ pub const Renderer = struct {
 
         var dirtyImgIds: [rc.MAX_WINDOWS]?u32 = .{null} ** rc.MAX_WINDOWS;
 
-        for (0..winPtrs.len) |i| {
-            const winPtr = winPtrs[i];
-            switch (winPtr.state) {
+        for (0..tempWindows.len) |i| {
+            const tempWindow = tempWindows[i];
+            switch (tempWindow.state) {
                 .needUpdate, .needCreation => {
-                    try self.swapchainMan.createSwapchain(&self.context, .{ .window = winPtr });
-                    dirtyImgIds[i] = winPtr.passImgId;
+                    try self.swapchainMan.createSwapchain(&self.context, .{ .window = tempWindow });
+                    dirtyImgIds[i] = tempWindow.passImgId;
                 },
                 .needActive, .needInactive => {
-                    self.swapchainMan.changeState(winPtr.windowId, if (winPtr.state == .needActive) .active else .inactive);
+                    self.swapchainMan.changeState(tempWindow.windowId, if (tempWindow.state == .needActive) .active else .inactive);
                 },
-                .needDelete => self.swapchainMan.removeSwapchain(&.{winPtr}),
-                else => std.debug.print("Warning: Window State {s} cant be handled in Renderer\n", .{@tagName(winPtr.state)}),
+                .needDelete => self.swapchainMan.removeSwapchain(&.{tempWindow}),
+                else => std.debug.print("Warning: Window State {s} cant be handled in Renderer\n", .{@tagName(tempWindow.state)}),
             }
         }
 
@@ -140,15 +141,20 @@ pub const Renderer = struct {
         }
     }
 
-    pub fn draw(self: *Renderer, cam: *Camera, runtimeAsFloat: f32) !void {
+    pub fn draw(self: *Renderer, rendererData: RendererData) !void {
+        if (rendererData.changedWindows.len > 0) {
+            const tempWindows = rendererData.changedWindows;
+            try self.updateWindowStates(tempWindows.constSlice());
+        }
+
         try self.scheduler.waitForGPU();
         const frameInFlight = self.scheduler.frameInFlight;
-        
+
         if (try self.swapchainMan.updateTargets(frameInFlight, &self.context) == false) return;
         const targets = self.swapchainMan.getTargets();
 
         const cmd = try self.cmdMan.beginRecording(frameInFlight);
-        try self.recordPasses(cmd, cam, runtimeAsFloat);
+        try self.recordPasses(cmd, rendererData);
         try self.renderGraph.recordSwapchainBlits(cmd, targets, &self.swapchainMan.swapchains, &self.resourceMan);
         try CmdManager.endRecording(cmd);
 
@@ -158,8 +164,13 @@ pub const Renderer = struct {
         self.scheduler.nextFrame();
     }
 
-    fn recordPasses(self: *Renderer, cmd: vk.VkCommandBuffer, cam: *Camera, runtimeAsFloat: f32) !void {
-        var pcs = PushConstants{ .viewProj = cam.getViewProj(), .camPosAndFov = cam.getPosAndFov(), .camDir = cam.getForward(), .runtime = runtimeAsFloat };
+    fn recordPasses(self: *Renderer, cmd: vk.VkCommandBuffer, rendererData: RendererData) !void {
+        var pcs = PushConstants{
+            .viewProj = rendererData.viewProj,
+            .camPosAndFov = rendererData.camPosAndFov,
+            .camDir = rendererData.camDir,
+            .runtime = rendererData.runtime,
+        };
 
         // Adjust Push Constants for every Pass
         for (self.passes.items) |pass| {
