@@ -72,8 +72,8 @@ pub const bindingRegistry: []const struct { binding: u32, descType: vk.VkDescrip
     .{ .binding = SAMPLED_IMG_BINDING, .descType = vk.VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, .arrayLength = GPU_IMG_MAX },
 };
 
-pub const objectSB = ResourceInf{ .id = 1, .memUse = .CpuWrite, .inf = .{ .bufInf = .{ .usage = .Storage, .length = 100, .dataSize = @sizeOf(Object) } } };
-pub const cameraUB = ResourceInf{ .id = 40, .memUse = .CpuWrite, .inf = .{ .bufInf = .{ .usage = .Storage, .length = 1, .dataSize = @sizeOf(CameraData) } } };
+pub const objectSB = ResourceInf{ .id = 1, .memUse = .Gpu, .inf = .{ .bufInf = .{ .usage = .Storage, .length = 100, .dataSize = @sizeOf(Object) } } };
+pub const cameraUB = ResourceInf{ .id = 40, .memUse = .Gpu, .inf = .{ .bufInf = .{ .usage = .Storage, .length = 1, .dataSize = @sizeOf(CameraData) } } };
 
 pub const compImg = ResourceInf{ .id = 3, .memUse = .Gpu, .inf = .{ .imgInf = .{ .imgType = .Color, .extent = .{ .width = 500, .height = 500, .depth = 1 } } } };
 pub const grapImg = ResourceInf{ .id = 5, .memUse = .Gpu, .inf = .{ .imgInf = .{ .imgType = .Color, .extent = .{ .width = 300, .height = 300, .depth = 1 } } } };

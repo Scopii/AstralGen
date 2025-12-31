@@ -86,14 +86,14 @@ pub const SwapchainManager = struct {
             if (ptr.*.state == .inactive) continue;
 
             const windowID = self.swapchains.getKeyFromIndex(@intCast(i));
-            const result1 = vk.vkAcquireNextImageKHR(gpi, ptr.handle, std.math.maxInt(u64), ptr.imgRdySems[frameInFlight], null, &ptr.curIndex);
+            const result1 = vk.vkAcquireNextImageKHR(gpi, ptr.handle, 0, ptr.imgRdySems[frameInFlight], null, &ptr.curIndex);
 
             switch (result1) {
                 vk.VK_SUCCESS => try self.targets.append(@intCast(i)),
 
                 vk.VK_ERROR_OUT_OF_DATE_KHR, vk.VK_SUBOPTIMAL_KHR => {
                     try self.createSwapchain(context, .{ .id = windowID });
-                    const result2 = vk.vkAcquireNextImageKHR(gpi, ptr.handle, std.math.maxInt(u64), ptr.imgRdySems[frameInFlight], null, &ptr.curIndex);
+                    const result2 = vk.vkAcquireNextImageKHR(gpi, ptr.handle, 0, ptr.imgRdySems[frameInFlight], null, &ptr.curIndex);
 
                     if (result2 == vk.VK_SUCCESS) {
                         try self.targets.append(@intCast(i));

@@ -38,6 +38,21 @@ pub const GpuAllocator = struct {
         return .{ .allocation = gpuBuffer.allocation, .allocInf = gpuBuffer.allocInf, .buffer = gpuBuffer.buffer, .gpuAddress = gpuBuffer.gpuAddress };
     }
 
+    pub fn printMemoryLocation(self: *const GpuAllocator, allocation: vk.VmaAllocation, gpu: vk.VkPhysicalDevice) void {
+        var allocInf: vk.VmaAllocationInfo = undefined;
+        vk.vmaGetAllocationInfo(self.handle, allocation, &allocInf);
+
+        var memProps: vk.VkPhysicalDeviceMemoryProperties = undefined;
+        vk.vkGetPhysicalDeviceMemoryProperties(gpu, &memProps);
+
+        const flags = memProps.memoryTypes[allocInf.memoryType].propertyFlags;
+
+        const is_vram = (flags & vk.VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) != 0;
+        const is_cpu_visible = (flags & vk.VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) != 0;
+
+        std.debug.print("Allocation is in VRAM: {}, CPU Visible: {}\n", .{ is_vram, is_cpu_visible });
+    }
+
     pub fn allocDefinedBuffer(self: *const GpuAllocator, bindingInf: rc.ResourceInf.BufInf, memUsage: rc.ResourceInf.MemUsage) !Resource.GpuBuffer {
         if (bindingInf.dataSize == 0) {
             std.debug.print("Binding Info has invalid element size\n", .{});
@@ -124,7 +139,6 @@ pub const GpuAllocator = struct {
             .Depth => vk.VK_IMAGE_ASPECT_DEPTH_BIT,
             .Stencil => vk.VK_IMAGE_ASPECT_STENCIL_BIT,
         };
-        
         var view: vk.VkImageView = undefined;
         const viewInf = createAllocatedImageViewInf(resourceImgInf.format, img, aspectMask);
         try check(vk.vkCreateImageView(self.gpi, &viewInf, null, &view), "Could not create Render Image View");

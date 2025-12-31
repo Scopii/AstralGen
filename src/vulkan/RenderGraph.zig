@@ -88,6 +88,19 @@ pub const RenderGraph = struct {
         self.tempBufBarriers.deinit();
     }
 
+    pub fn recordTransfers(self: *RenderGraph, cmd: vk.VkCommandBuffer, resMan: *ResourceManager) !void {
+        if (resMan.pendingTransfers.items.len == 0) return;
+
+        for (resMan.pendingTransfers.items) |transfer| {
+            const dstRes = try resMan.getResourcePtr(transfer.dstResId);
+            // Transition Destination to TransferDst
+            try self.createBarrierIfNeeded(dstRes.state, .{ .stage = .Transfer, .access = .TransferWrite, .layout = .TransferDst }, dstRes);
+            const copy = vk.VkBufferCopy{ .srcOffset = transfer.srcOffset, .dstOffset = 0, .size = transfer.size };
+            vk.vkCmdCopyBuffer(cmd, resMan.stagingBuffer.buffer, dstRes.resourceType.gpuBuf.buffer, 1, &copy);
+        }
+        self.bakeBarriers(cmd);
+    }
+
     fn createBarrierIfNeeded(self: *RenderGraph, state: ResourceState, neededState: ResourceState, resource: *Resource) !void {
         if (state.stage == neededState.stage and state.access == neededState.access and state.layout == neededState.layout) return;
 
@@ -231,7 +244,7 @@ pub const RenderGraph = struct {
         // Swapchain Presentation Barriers
         for (targets) |swapchainIndex| {
             const swapchain = swapchainMap.getPtrAtIndex(swapchainIndex);
-            const swapchainState = ResourceState{ .stage = .TopOfPipe, .access = .None, .layout = .TransferDst };
+            const swapchainState = ResourceState{ .stage = .Transfer, .access = .TransferWrite, .layout = .TransferDst };
             const neededState = ResourceState{ .stage = .BotOfPipe, .access = .None, .layout = .PresentSrc };
             const barrier = createImageBarrier(swapchainState, neededState, swapchain.images[swapchain.curIndex], .Color);
             try self.tempImgBarriers.append(barrier);
@@ -353,16 +366,16 @@ fn setCmdState(cmd: vk.VkCommandBuffer) void {
     vkFn.vkCmdSetPrimitiveRestartEnable.?(cmd, vk.VK_FALSE);
     vkFn.vkCmdSetRasterizerDiscardEnable.?(cmd, vk.VK_FALSE);
     vkFn.vkCmdSetRasterizationSamplesEXT.?(cmd, vk.VK_SAMPLE_COUNT_1_BIT);
-    
+
     const sampleMask: u32 = 0xFFFFFFFF;
     vkFn.vkCmdSetSampleMaskEXT.?(cmd, vk.VK_SAMPLE_COUNT_1_BIT, &sampleMask);
-    
+
     // Depth & Stencil
     vkFn.vkCmdSetDepthTestEnable.?(cmd, vk.VK_FALSE);
     vkFn.vkCmdSetDepthWriteEnable.?(cmd, vk.VK_FALSE);
     vkFn.vkCmdSetDepthBoundsTestEnable.?(cmd, vk.VK_FALSE);
     vkFn.vkCmdSetDepthBiasEnable.?(cmd, vk.VK_FALSE);
-    vkFn.vkCmdSetDepthBias.?(cmd, 0.0, 0.0, 0.0); 
+    vkFn.vkCmdSetDepthBias.?(cmd, 0.0, 0.0, 0.0);
     vkFn.vkCmdSetDepthClampEnableEXT.?(cmd, vk.VK_FALSE);
     vkFn.vkCmdSetStencilTestEnable.?(cmd, vk.VK_FALSE);
 
@@ -385,23 +398,20 @@ fn setCmdState(cmd: vk.VkCommandBuffer) void {
     const colorWriteMask = vk.VK_COLOR_COMPONENT_R_BIT | vk.VK_COLOR_COMPONENT_G_BIT | vk.VK_COLOR_COMPONENT_B_BIT | vk.VK_COLOR_COMPONENT_A_BIT;
     const colorWriteMasks = [_]vk.VkColorComponentFlags{colorWriteMask};
     vkFn.vkCmdSetColorWriteMaskEXT.?(cmd, 0, 1, &colorWriteMasks);
-    
+
     const blendConsts = [_]f32{ 0.0, 0.0, 0.0, 0.0 };
-    vkFn.vkCmdSetBlendConstants.?(cmd, &blendConsts); 
+    vkFn.vkCmdSetBlendConstants.?(cmd, &blendConsts);
 
     vkFn.vkCmdSetLogicOpEnableEXT.?(cmd, vk.VK_FALSE);
     vkFn.vkCmdSetAlphaToOneEnableEXT.?(cmd, vk.VK_FALSE);
     vkFn.vkCmdSetAlphaToCoverageEnableEXT.?(cmd, vk.VK_FALSE);
 
     // Advanced / Debug / Voxel Optimization
-    vkFn.vkCmdSetLineWidth.?(cmd, 1.0); 
+    vkFn.vkCmdSetLineWidth.?(cmd, 1.0);
     vkFn.vkCmdSetConservativeRasterizationModeEXT.?(cmd, vk.VK_CONSERVATIVE_RASTERIZATION_MODE_DISABLED_EXT);
-    
+
     // Default to 1x1 Shading Rate (No reduction)
-    const combinerOps = [_]vk.VkFragmentShadingRateCombinerOpKHR{
-        vk.VK_FRAGMENT_SHADING_RATE_COMBINER_OP_KEEP_KHR,
-        vk.VK_FRAGMENT_SHADING_RATE_COMBINER_OP_KEEP_KHR
-    };
+    const combinerOps = [_]vk.VkFragmentShadingRateCombinerOpKHR{ vk.VK_FRAGMENT_SHADING_RATE_COMBINER_OP_KEEP_KHR, vk.VK_FRAGMENT_SHADING_RATE_COMBINER_OP_KEEP_KHR };
     vkFn.vkCmdSetFragmentShadingRateKHR.?(cmd, &.{ .width = 1, .height = 1 }, &combinerOps);
 }
 

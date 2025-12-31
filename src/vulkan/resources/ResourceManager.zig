@@ -33,6 +33,12 @@ pub const Resource = struct {
     };
 };
 
+const PendingTransfer = struct {
+    srcOffset: u64,
+    dstResId: u32,
+    size: u64,
+};
+
 pub const ResourceManager = struct {
     cpuAlloc: Allocator,
     gpuAlloc: GpuAllocator,
@@ -44,10 +50,23 @@ pub const ResourceManager = struct {
     nextSampledImageIndex: u32 = 0,
     descMan: DescriptorManager,
 
+    stagingBuffer: Resource.GpuBuffer,
+    stagingPtr: [*]u8, // Mapped pointer for fast copying
+    stagingOffset: u64 = 0,
+    pendingTransfers: std.array_list.Managed(PendingTransfer),
+
     pub fn init(alloc: Allocator, context: *const Context) !ResourceManager {
         const gpi = context.gpi;
         const gpu = context.gpu;
         const gpuAlloc = try GpuAllocator.init(context.instance, context.gpi, context.gpu);
+
+        const stagingSize = 32 * 1024 * 1024;
+        const staging = try gpuAlloc.allocBuffer(
+            stagingSize,
+            vk.VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+            vk.VMA_MEMORY_USAGE_CPU_ONLY,
+            vk.VMA_ALLOCATION_CREATE_MAPPED_BIT | vk.VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT,
+        );
 
         return .{
             .cpuAlloc = alloc,
@@ -55,6 +74,9 @@ pub const ResourceManager = struct {
             .gpi = gpi,
             .gpu = gpu,
             .descMan = try DescriptorManager.init(alloc, gpuAlloc, gpi, gpu),
+            .stagingBuffer = staging,
+            .stagingPtr = @ptrCast(staging.allocInf.pMappedData.?),
+            .pendingTransfers = std.array_list.Managed(PendingTransfer).init(alloc),
         };
     }
 
@@ -63,7 +85,45 @@ pub const ResourceManager = struct {
             self.destroyResource(self.resources.getKeyFromIndex(0));
         }
         self.descMan.deinit();
+
+        self.pendingTransfers.deinit();
+        self.gpuAlloc.freeGpuBuffer(self.stagingBuffer.buffer, self.stagingBuffer.allocation);
+
         self.gpuAlloc.deinit();
+    }
+
+    pub fn queueBufferUpload(self: *ResourceManager, resInf: rc.ResourceInf, id: u32, data: anytype) !void {
+        const DataType = @TypeOf(data);
+        const typeInfo = @typeInfo(DataType);
+
+        // 1. Convert anytype to a byte slice safely
+        const bytes: []const u8 = switch (typeInfo) {
+            .pointer => |ptr| switch (ptr.size) {
+                .one => std.mem.asBytes(data), // For &singleStruct
+                .slice => std.mem.sliceAsBytes(data), // For slices/arrays
+                else => return error.UnsupportedPointerType,
+            },
+            else => return error.ExpectedPointer,
+        };
+
+        if (self.stagingOffset + bytes.len > 1 * 1024 * 1024) return error.StagingBufferFull;
+
+        // 2. Copy CPU data into the staging area
+        @memcpy(self.stagingPtr[self.stagingOffset..][0..bytes.len], bytes);
+
+        try self.pendingTransfers.append(.{
+            .srcOffset = self.stagingOffset,
+            .dstResId = id,
+            .size = bytes.len,
+        });
+
+        var resource = try self.getResourcePtr(id);
+        if (resource.resourceType == .gpuBuf) {
+            resource.resourceType.gpuBuf.count = @intCast(bytes.len / resInf.inf.bufInf.dataSize);
+        }
+
+        // 3. Align the offset to 16 bytes for GPU safety
+        self.stagingOffset += (bytes.len + 15) & ~@as(u64, 15);
     }
 
     pub fn getResourcePtr(self: *ResourceManager, gpuId: u32) !*Resource {
@@ -133,6 +193,7 @@ pub const ResourceManager = struct {
                 try self.descMan.updateBufferDescriptor(buffer, rc.STORAGE_BUF_BINDING, bindlessIndex);
 
                 const finalRes = Resource{ .resourceType = .{ .gpuBuf = buffer }, .bindlessIndex = bindlessIndex };
+                self.gpuAlloc.printMemoryLocation(finalRes.resourceType.gpuBuf.allocation, self.gpu);
                 self.resources.set(resInf.id, finalRes);
                 std.debug.print("Buffer created. ID: {} -> BindlessIndex: {}\n", .{ resInf.id, bindlessIndex });
             },
@@ -142,7 +203,11 @@ pub const ResourceManager = struct {
     pub fn updateResource(self: *ResourceManager, resource: rc.ResourceInf, data: anytype) !void {
         switch (resource.inf) {
             .imgInf => |_| {},
-            .bufInf => |bufInf| try self.updateBuffer(bufInf, data, resource.id),
+            .bufInf => |bufInf| if (resource.memUse == .Gpu) {
+                try self.queueBufferUpload(resource, resource.id, data);
+            } else {
+                try self.updateBuffer(bufInf, data, resource.id);
+            },
         }
     }
 

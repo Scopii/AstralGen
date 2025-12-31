@@ -147,6 +147,12 @@ pub const Renderer = struct {
         const targets = self.swapchainMan.getTargets();
 
         const cmd = try self.cmdMan.beginRecording(frameInFlight);
+
+        try self.renderGraph.recordTransfers(cmd, &self.resourceMan);
+        // Reset the staging offset for the next frame's potential uploads
+        self.resourceMan.stagingOffset = 0;
+        self.resourceMan.pendingTransfers.clearRetainingCapacity();
+
         try self.recordPasses(cmd, rendererData);
         try self.renderGraph.recordSwapchainBlits(cmd, targets, &self.swapchainMan.swapchains, &self.resourceMan);
         try CmdManager.endRecording(cmd);
