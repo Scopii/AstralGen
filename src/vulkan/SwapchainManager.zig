@@ -91,6 +91,11 @@ pub const SwapchainManager = struct {
             switch (result1) {
                 vk.VK_SUCCESS => try self.targets.append(@intCast(i)),
 
+                vk.VK_TIMEOUT, vk.VK_NOT_READY => {
+                    std.debug.print("OS could not provide Swapchain Image in Time \n", .{});
+                    continue;
+                },
+
                 vk.VK_ERROR_OUT_OF_DATE_KHR, vk.VK_SUBOPTIMAL_KHR => {
                     try self.createSwapchain(context, .{ .id = windowID });
                     const result2 = vk.vkAcquireNextImageKHR(gpi, ptr.handle, 0, ptr.imgRdySems[frameInFlight], null, &ptr.curIndex);

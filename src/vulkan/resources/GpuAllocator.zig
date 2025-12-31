@@ -101,13 +101,17 @@ pub const GpuAllocator = struct {
         const allocCreateInf = vk.VmaAllocationCreateInfo{ .usage = memUsage, .flags = memFlags };
         try check(vk.vmaCreateBuffer(self.handle, &bufferInf, &allocCreateInf, &buffer, &allocation, &allocVmaInf), "Failed to create Gpu Buffer");
 
-        const addressInf = vk.VkBufferDeviceAddressInfo{ .sType = vk.VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO, .buffer = buffer };
+        var gpuAddress: u64 = 0;
+        if ((bufUsage & vk.VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT) != 0) {
+            const addressInf = vk.VkBufferDeviceAddressInfo{ .sType = vk.VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO, .buffer = buffer };
+            gpuAddress = vk.vkGetBufferDeviceAddress(self.gpi, &addressInf);
+        }
 
         return .{
             .buffer = buffer,
             .allocation = allocation,
             .allocInf = allocVmaInf,
-            .gpuAddress = vk.vkGetBufferDeviceAddress(self.gpi, &addressInf),
+            .gpuAddress = gpuAddress,
         };
     }
 
