@@ -118,7 +118,6 @@ pub const App = struct {
 
         // Main loop
         while (true) {
-            rendererData.changedWindows = .{};
             // Poll Inputs
             windowMan.pollEvents() catch |err| {
                 std.log.err("Error in pollEvents(): {}", .{err});
@@ -129,7 +128,7 @@ pub const App = struct {
 
             // Process Window Changes
             if (windowMan.changedWindows.len > 0) {
-                rendererData.changedWindows = windowMan.*.changedWindows;
+                try renderer.updateWindowStates(windowMan.getChangedWindows());
                 windowMan.cleanupWindows();
             }
 
@@ -175,9 +174,6 @@ pub const App = struct {
 
             if (firstFrame) windowMan.showAllWindows();
 
-            rendererData.viewProj = cam.getViewProj();
-            rendererData.camPosAndFov = cam.getPosAndFov();
-            rendererData.camDir = cam.getForward();
             rendererData.runtime = timeMan.getRuntime(.seconds, f32);
 
             const camData = CameraData{
@@ -203,9 +199,5 @@ pub const App = struct {
 };
 
 pub const RendererData = struct {
-    changedWindows: FixedList(Window, rc.MAX_WINDOWS) = .{},
-    viewProj: [4][4]f32,
-    camPosAndFov: [4]f32,
-    camDir: [4]f32,
     runtime: f32,
 };

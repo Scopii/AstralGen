@@ -68,7 +68,7 @@ pub const Renderer = struct {
         self.passes.deinit();
     }
 
-    fn updateWindowStates(self: *Renderer, tempWindows: []const Window) !void {
+    pub fn updateWindowStates(self: *Renderer, tempWindows: []const Window) !void {
         for (tempWindows) |tempWindow| {
             if (tempWindow.state == .needDelete or tempWindow.state == .needUpdate) {
                 _ = vk.vkDeviceWaitIdle(self.context.gpi);
@@ -140,11 +140,6 @@ pub const Renderer = struct {
     }
 
     pub fn draw(self: *Renderer, rendererData: RendererData) !void {
-        if (rendererData.changedWindows.len > 0) {
-            const tempWindows = rendererData.changedWindows;
-            try self.updateWindowStates(tempWindows.constSlice());
-        }
-
         try self.scheduler.waitForGPU();
         const frameInFlight = self.scheduler.frameInFlight;
 
