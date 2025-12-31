@@ -160,32 +160,47 @@ pub const ResourceManager = struct {
         std.debug.print("Resource {} Resized/Replaced at Slot {}\n", .{ gpuId, slotIndex });
     }
 
-    pub fn updateBuffer(self: *ResourceManager, bufInf: rc.ResourceInf.BufInf, data: anytype, gpuId: u32) !void {
-        const T = std.meta.Child(@TypeOf(data));
-        if (@sizeOf(T) != bufInf.dataSize) {
-            std.debug.print("Error: Size mismatch! Config expects {} bytes, Data is {} bytes\n", .{ bufInf.dataSize, @sizeOf(T) });
-            return error.TypeMismatch;
-        }
-        var resource = try self.getResourcePtr(gpuId);
-
-        switch (resource.resourceType) {
-            .gpuBuf => |*buffer| {
-                const pMappedData = buffer.allocInf.pMappedData;
-                // Simple alignment check
-                const alignment = @alignOf(T);
-                if (@intFromPtr(pMappedData) % alignment != 0) {
-                    return error.ImproperAlignment;
-                }
-                // Copy
-                const dataPtr: [*]T = @ptrCast(@alignCast(pMappedData));
-                @memcpy(dataPtr[0..data.len], data);
-                // Update
-                buffer.count = @intCast(data.len);
-                self.resources.set(gpuId, .{ .resourceType = .{ .gpuBuf = buffer.* }, .bindlessIndex = resource.bindlessIndex });
-            },
-            else => std.debug.print("Warning: GPU Buffer Update failed because Resource {} is not a GPU Buffer", .{gpuId}),
-        }
+    fn updateBuffer(self: *ResourceManager, bufInf: rc.ResourceInf.BufInf, data: anytype, gpuId: u32) !void {
+    const DataType = @TypeOf(data);
+    const typeInfo = @typeInfo(DataType);
+    
+    // Convert to byte slice based on input type
+    const dataBytes: []const u8 = switch (typeInfo) {
+        .pointer => |ptr| switch (ptr.size) {
+            .one => std.mem.asBytes(data),     // *T or *[N]T
+            .slice => std.mem.sliceAsBytes(data), // []T
+            else => return error.UnsupportedPointerType,
+        },
+        else => return error.ExpectedPointer,
+    };
+    
+    // Calculate element count
+    const elementCount = dataBytes.len / bufInf.dataSize;
+    if (dataBytes.len % bufInf.dataSize != 0) {
+        std.debug.print("Error: Data size {} not aligned to element size {}\n", .{ dataBytes.len, bufInf.dataSize });
+        return error.TypeMismatch;
     }
+    
+    var resource = try self.getResourcePtr(gpuId);
+    
+    switch (resource.resourceType) {
+        .gpuBuf => |*buffer| {
+            const pMappedData = buffer.allocInf.pMappedData;
+            
+            if (pMappedData == null) {
+                return error.BufferNotMapped;
+            }
+            
+            // Copy bytes
+            const destBytes: [*]u8 = @ptrCast(pMappedData);
+            @memcpy(destBytes[0..dataBytes.len], dataBytes);
+            
+            buffer.count = @intCast(elementCount);
+            self.resources.set(gpuId, .{ .resourceType = .{ .gpuBuf = buffer.* }, .bindlessIndex = resource.bindlessIndex });
+        },
+        else => return error.WrongResourceType,
+    }
+}
 
     pub fn destroyResource(self: *ResourceManager, gpuId: u32) void {
         if (self.resources.isKeyUsed(gpuId) != true) {

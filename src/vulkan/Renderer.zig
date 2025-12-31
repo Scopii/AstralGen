@@ -163,16 +163,11 @@ pub const Renderer = struct {
     }
 
     fn recordPasses(self: *Renderer, cmd: vk.VkCommandBuffer, rendererData: RendererData) !void {
-        var pcs = PushConstants{
-            .viewProj = rendererData.viewProj,
-            .camPosAndFov = rendererData.camPosAndFov,
-            .camDir = rendererData.camDir,
-            .runtime = rendererData.runtime,
-        };
+        var pcs = PushConstants{ .runtime = rendererData.runtime };
 
         // Adjust Push Constants for every Pass
         for (self.passes.items) |pass| {
-            if (pass.shaderSlots.len > 3) return error.TooManyShaderSlotsInPass;
+            if (pass.shaderSlots.len > pcs.resUsageInfos.len) return error.TooManyShaderSlotsInPass;
             // Assign Shader Slots
             for (0..pass.shaderSlots.len) |i| {
                 const slot = pass.shaderSlots[i];

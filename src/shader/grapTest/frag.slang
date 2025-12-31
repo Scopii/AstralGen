@@ -5,22 +5,26 @@ struct Object {
     uint4 _padding; 
 };
 
-struct PushConstants {
+struct CameraData {
     float4x4 viewProj;
     float4 camPosAndFov;
     float4 camDir;
+};
+
+struct Resource {
+    uint index;
+    uint count;
+};
+
+struct PushConstants {
     float runtime;
     uint renderImgIdx;
-    uint res1Index;
-    uint res1Count;
-    uint res2Index;
-    uint res2Count;
-    uint res3Index;
-    uint res3Count;
+    Resource resources[15];
 };
 
 [[vk::binding(0, 0)]] RWTexture2D<float4> globalImages[];
-[[vk::binding(1, 0)]] StructuredBuffer<Object> globalBuffers[];
+[[vk::binding(1, 0)]] StructuredBuffer<Object> globalObjectBuffers[];
+[[vk::binding(1, 0)]] StructuredBuffer<CameraData> globalCameraBuffers[];
 [[vk::push_constant]] ConstantBuffer<PushConstants> pc;
 
 // Marching Constants
@@ -57,8 +61,10 @@ MapResult map(float3 pos, StructuredBuffer<Object> objectBuffer) {
     float closestDist = MAX_DIST;
     int closestIndex = -1;
 
+    uint objectCount = pc.resources[0].count;
+
     // Loop over the Object Buffer
-    for (uint i = 0; i < pc.res1Count; i++) {
+    for (uint i = 0; i < objectCount; i++) {
         // 2. Read from that specific buffer
         Object obj = objectBuffer[i];
 
@@ -93,18 +99,20 @@ float3 getNormal(float3 pos, StructuredBuffer<Object> objectBuffer) {
 // SHADER
 [shader("fragment")]
 float4 main(float4 pixelPos: SV_Position) : SV_Target {
-    StructuredBuffer<Object> objectBuffer = globalBuffers[pc.res1Index];
+    StructuredBuffer<Object> objectBuffer = globalObjectBuffers[pc.resources[0].index];
+    StructuredBuffer<CameraData> camData = globalCameraBuffers[pc.resources[1].index];
+    CameraData cam = camData[0];
 
     uint width, height;
     globalImages[pc.renderImgIdx].GetDimensions(width, height);
     float2 renderDimensions = float2(width, height);
     float2 uv = (pixelPos.xy / renderDimensions) * 2.0 - 1.0;
 
-    float3 camForward = normalize(pc.camDir.xyz);
+    float3 camForward = normalize(cam.camDir.xyz);
     float3 camRight = normalize(cross(camForward, float3(0, 1, 0)));
     float3 camUp = normalize(cross(camRight, camForward));
 
-    float focalLength = 1.0 / tan(radians(pc.camPosAndFov.w * 0.5));
+    float focalLength = 1.0 / tan(radians(cam.camPosAndFov.w * 0.5));
     float aspectRatio = renderDimensions.x / renderDimensions.y;
     float3 rayDir = normalize(uv.x * camRight * aspectRatio - uv.y * camUp + focalLength * camForward);
 
@@ -116,7 +124,7 @@ float4 main(float4 pixelPos: SV_Position) : SV_Target {
 
     [loop]
     for (int step = 0; step < MAX_STEPS; step++) {
-        pos = pc.camPosAndFov.xyz + rayDir * march;
+        pos = cam.camPosAndFov.xyz + rayDir * march;
         MapResult res = map(pos, objectBuffer);
 
         if (res.dist < MIN_DIST) {

@@ -5,6 +5,12 @@ const inputCon = @import("../configs/inputConfig.zig");
 const M_PI = 3.14159; //3.1415927
 const TWO_PI = 2 * M_PI;
 
+pub const CameraData = struct {
+    viewProj: [4][4]f32,
+    camPosAndFov: [4]f32,
+    camDir: [4]f32,
+};
+
 pub const Camera = struct {
     pos: zm.Vec = zm.f32x4(0, 0, -5, 0),
     fov: f32 = inputCon.CAM_INIT_FOV,

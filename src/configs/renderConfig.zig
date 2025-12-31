@@ -1,5 +1,6 @@
 const vk = @import("../modules/vk.zig").c;
 const Object = @import("../ecs/EntityManager.zig").Object;
+const CameraData = @import("../core/Camera.zig").CameraData;
 const sc = @import("shaderConfig.zig");
 const PipeAccess = @import("../vulkan/RenderGraph.zig").PipeAccess;
 const PipeStage = @import("../vulkan/RenderGraph.zig").PipeStage;
@@ -71,31 +72,34 @@ pub const bindingRegistry: []const struct { binding: u32, descType: vk.VkDescrip
     .{ .binding = SAMPLED_IMG_BINDING, .descType = vk.VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, .arrayLength = GPU_IMG_MAX },
 };
 
-pub const buf1 = ResourceInf{ .id = 1, .memUse = .CpuWrite, .inf = .{ .bufInf = .{ .usage = .Storage, .length = 100, .dataSize = @sizeOf(Object) } } };
-pub const img1 = ResourceInf{ .id = 3, .memUse = .Gpu, .inf = .{ .imgInf = .{ .imgType = .Color, .extent = .{ .width = 500, .height = 500, .depth = 1 } } } };
-pub const img2 = ResourceInf{ .id = 5, .memUse = .Gpu, .inf = .{ .imgInf = .{ .imgType = .Color, .extent = .{ .width = 300, .height = 300, .depth = 1 } } } };
-pub const img3 = ResourceInf{ .id = 7, .memUse = .Gpu, .inf = .{ .imgInf = .{ .imgType = .Color, .extent = .{ .width = 100, .height = 100, .depth = 1 } } } };
-pub const img4 = ResourceInf{ .id = 9, .memUse = .Gpu, .inf = .{ .imgInf = .{ .imgType = .Color, .extent = .{ .width = 1920, .height = 1080, .depth = 1 } } } };
-pub const img5 = ResourceInf{ .id = 10, .memUse = .Gpu, .inf = .{ .imgInf = .{ .imgType = .Color, .extent = .{ .width = 1920, .height = 1080, .depth = 1 } } } };
-pub const img6 = ResourceInf{ .id = 11, .memUse = .Gpu, .inf = .{ .imgInf = .{ .imgType = .Depth, .extent = .{ .width = 1920, .height = 1080, .depth = 1 }, .format = vk.VK_FORMAT_D32_SFLOAT } } };
+pub const objectSB = ResourceInf{ .id = 1, .memUse = .CpuWrite, .inf = .{ .bufInf = .{ .usage = .Storage, .length = 100, .dataSize = @sizeOf(Object) } } };
+pub const cameraUB = ResourceInf{ .id = 40, .memUse = .CpuWrite, .inf = .{ .bufInf = .{ .usage = .Storage, .length = 1, .dataSize = @sizeOf(CameraData) } } };
+
+pub const compImg = ResourceInf{ .id = 3, .memUse = .Gpu, .inf = .{ .imgInf = .{ .imgType = .Color, .extent = .{ .width = 500, .height = 500, .depth = 1 } } } };
+pub const grapImg = ResourceInf{ .id = 5, .memUse = .Gpu, .inf = .{ .imgInf = .{ .imgType = .Color, .extent = .{ .width = 300, .height = 300, .depth = 1 } } } };
+pub const meshImg = ResourceInf{ .id = 7, .memUse = .Gpu, .inf = .{ .imgInf = .{ .imgType = .Color, .extent = .{ .width = 100, .height = 100, .depth = 1 } } } };
+pub const taskImg = ResourceInf{ .id = 9, .memUse = .Gpu, .inf = .{ .imgInf = .{ .imgType = .Color, .extent = .{ .width = 1920, .height = 1080, .depth = 1 } } } };
+pub const testImg = ResourceInf{ .id = 10, .memUse = .Gpu, .inf = .{ .imgInf = .{ .imgType = .Color, .extent = .{ .width = 1920, .height = 1080, .depth = 1 } } } };
+pub const grapDepthImg = ResourceInf{ .id = 11, .memUse = .Gpu, .inf = .{ .imgInf = .{ .imgType = .Depth, .extent = .{ .width = 1920, .height = 1080, .depth = 1 }, .format = vk.VK_FORMAT_D32_SFLOAT } } };
 
 pub const computeTest: Pass = .{
     .shaderIds = &.{sc.t1Comp.id},
-    .shaderSlots = &.{1},
-    .renderImgId = img1.id,
+    .shaderSlots = &.{ 1, 2 },
+    .renderImgId = compImg.id,
     .kind = .{
         .compute = .{ .workgroups = .{ .x = 8, .y = 8, .z = 1 } },
     },
     .resUsages = &.{
-        .{ .id = img1.id, .stage = .Compute, .access = .ShaderWrite, .layout = .General },
-        .{ .id = buf1.id, .stage = .Compute, .access = .ShaderRead },
+        .{ .id = compImg.id, .stage = .Compute, .access = .ShaderWrite, .layout = .General },
+        .{ .id = objectSB.id, .stage = .Compute, .access = .ShaderRead },
+        .{ .id = cameraUB.id, .stage = .Compute, .access = .ShaderRead },
     },
 };
 
 const graphicsTest: Pass = .{
     .shaderIds = &.{ sc.t2Vert.id, sc.t2Frag.id },
-    .shaderSlots = &.{2},
-    .renderImgId = img2.id,
+    .shaderSlots = &.{ 2, 3 },
+    .renderImgId = grapImg.id,
     .kind = .{
         .graphics = .{
             .colorAtts = &.{
@@ -105,16 +109,17 @@ const graphicsTest: Pass = .{
         },
     },
     .resUsages = &.{
-        .{ .id = img2.id, .stage = .ColorAtt, .access = .ColorAttWrite, .layout = .Attachment },
-        .{ .id = img6.id, .stage = .EarlyFragTest, .access = .DepthStencilRead, .layout = .Attachment },
-        .{ .id = buf1.id, .stage = .FragShader, .access = .ShaderRead },
+        .{ .id = grapImg.id, .stage = .ColorAtt, .access = .ColorAttWrite, .layout = .Attachment },
+        .{ .id = grapDepthImg.id, .stage = .EarlyFragTest, .access = .DepthStencilRead, .layout = .Attachment },
+        .{ .id = objectSB.id, .stage = .FragShader, .access = .ShaderRead },
+        .{ .id = cameraUB.id, .stage = .Compute, .access = .ShaderRead },
     },
 };
 
 const meshTest: Pass = .{
     .shaderIds = &.{ sc.t3Mesh.id, sc.t3Frag.id },
-    .shaderSlots = &.{1},
-    .renderImgId = img3.id,
+    .shaderSlots = &.{ 1, 2 },
+    .renderImgId = meshImg.id,
     .kind = .{
         .taskOrMesh = .{
             .workgroups = .{ .x = 1, .y = 1, .z = 1 },
@@ -124,15 +129,16 @@ const meshTest: Pass = .{
         },
     },
     .resUsages = &.{
-        .{ .id = img3.id, .stage = .ColorAtt, .access = .ColorAttWrite, .layout = .Attachment },
-        .{ .id = buf1.id, .stage = .FragShader, .access = .ShaderRead },
+        .{ .id = meshImg.id, .stage = .ColorAtt, .access = .ColorAttWrite, .layout = .Attachment },
+        .{ .id = objectSB.id, .stage = .FragShader, .access = .ShaderRead },
+        .{ .id = cameraUB.id, .stage = .Compute, .access = .ShaderRead },
     },
 };
 
 const taskTest: Pass = .{
     .shaderIds = &.{ sc.t4Task.id, sc.t4Mesh.id, sc.t4Frag.id },
-    .shaderSlots = &.{1},
-    .renderImgId = img4.id,
+    .shaderSlots = &.{ 1, 2 },
+    .renderImgId = taskImg.id,
     .kind = .{
         .taskOrMesh = .{
             .workgroups = .{ .x = 1, .y = 1, .z = 1 },
@@ -142,15 +148,16 @@ const taskTest: Pass = .{
         },
     },
     .resUsages = &.{
-        .{ .id = img4.id, .stage = .ColorAtt, .access = .ColorAttWrite, .layout = .Attachment },
-        .{ .id = buf1.id, .stage = .FragShader, .access = .ShaderRead },
+        .{ .id = taskImg.id, .stage = .ColorAtt, .access = .ColorAttWrite, .layout = .Attachment },
+        .{ .id = objectSB.id, .stage = .FragShader, .access = .ShaderRead },
+        .{ .id = cameraUB.id, .stage = .Compute, .access = .ShaderRead },
     },
 };
 
 const gridTest: Pass = .{
     .shaderIds = &.{ sc.gridTask.id, sc.gridMesh.id, sc.gridFrag.id },
-    .shaderSlots = &.{},
-    .renderImgId = img4.id,
+    .shaderSlots = &.{1},
+    .renderImgId = taskImg.id,
     .kind = .{
         .taskOrMesh = .{
             .workgroups = .{ .x = 1, .y = 1, .z = 1 },
@@ -160,7 +167,8 @@ const gridTest: Pass = .{
         },
     },
     .resUsages = &.{
-        .{ .id = img4.id, .stage = .ColorAtt, .access = .ColorAttWrite, .layout = .Attachment },
+        .{ .id = taskImg.id, .stage = .ColorAtt, .access = .ColorAttWrite, .layout = .Attachment },
+        .{ .id = cameraUB.id, .stage = .Compute, .access = .ShaderRead },
     },
 };
 

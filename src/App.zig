@@ -10,6 +10,7 @@ const EntityManager = @import("ecs/EntityManager.zig").EntityManager;
 const UiManager = @import("core/UiManager.zig").UiManager;
 const RNGenerator = @import("core/RNGenerator.zig").RNGenerator;
 const Camera = @import("core/Camera.zig").Camera;
+const CameraData = @import("core/Camera.zig").CameraData;
 const shaderCon = @import("configs/shaderConfig.zig");
 const rc = @import("configs/renderConfig.zig");
 const FixedList = @import("structures/FixedList.zig").FixedList;
@@ -62,16 +63,17 @@ pub const App = struct {
         shaderCompiler.freeFreshShaders();
 
         // RENDERING SET UP
-        try renderer.createResource(rc.buf1);
+        try renderer.createResource(rc.objectSB);
+        try renderer.createResource(rc.cameraUB);
 
-        try renderer.updateResource(rc.buf1, ecs.getObjects());
+        try renderer.updateResource(rc.objectSB, ecs.getObjects());
 
-        try renderer.createResource(rc.img1);
-        try renderer.createResource(rc.img2);
-        try renderer.createResource(rc.img3);
-        try renderer.createResource(rc.img4);
-        try renderer.createResource(rc.img5);
-        try renderer.createResource(rc.img6);
+        try renderer.createResource(rc.compImg);
+        try renderer.createResource(rc.grapImg);
+        try renderer.createResource(rc.meshImg);
+        try renderer.createResource(rc.taskImg);
+        try renderer.createResource(rc.testImg);
+        try renderer.createResource(rc.grapDepthImg);
 
         try renderer.createPass(rc.renderSequence);
 
@@ -96,10 +98,10 @@ pub const App = struct {
     }
 
     pub fn initWindows(self: *App) !void {
-        try self.windowMan.addWindow("Task", 16 * 52, 9 * 52, rc.img4.id, 120, 50);
-        try self.windowMan.addWindow("Mesh", 16 * 52, 9 * 52, rc.img3.id, 120, 550);
-        try self.windowMan.addWindow("Compute", 16 * 52, 9 * 52, rc.img1.id, 960, 50);
-        try self.windowMan.addWindow("Graphics", 16 * 52, 9 * 52, rc.img2.id, 960, 550);
+        try self.windowMan.addWindow("Task", 16 * 52, 9 * 52, rc.taskImg.id, 120, 50);
+        try self.windowMan.addWindow("Mesh", 16 * 52, 9 * 52, rc.meshImg.id, 120, 550);
+        try self.windowMan.addWindow("Compute", 16 * 52, 9 * 52, rc.compImg.id, 960, 50);
+        try self.windowMan.addWindow("Graphics", 16 * 52, 9 * 52, rc.grapImg.id, 960, 550);
     }
 
     pub fn run(self: *App) !void {
@@ -177,6 +179,13 @@ pub const App = struct {
             rendererData.camPosAndFov = cam.getPosAndFov();
             rendererData.camDir = cam.getForward();
             rendererData.runtime = timeMan.getRuntime(.seconds, f32);
+
+            const camData = CameraData{
+                .viewProj = cam.getViewProj(),
+                .camPosAndFov = cam.getPosAndFov(),
+                .camDir = cam.getForward(),
+            };
+            try renderer.updateResource(rc.cameraUB, &camData);
 
             // Draw and reset Frame Arena
             renderer.draw(rendererData) catch |err| {

@@ -10,12 +10,9 @@ const rc = @import("../../configs/renderConfig.zig");
 const bufUsage = extern struct { index: u32 = 0, count: u32 = 0 };
 
 pub const PushConstants = extern struct {
-    viewProj: [4][4]f32, 
-    camPosAndFov: [4]f32,
-    camDir: [4]f32,
     runtime: f32,
     renderImgIdx: u32 = 0,
-    resUsageInfos: [3]bufUsage = undefined,
+    resUsageInfos: [15]bufUsage = undefined,
 };
 
 pub const DescriptorBuffer = struct {

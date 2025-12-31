@@ -3,22 +3,6 @@ struct VertexOut {
     float3 color : COLOR0; // <--- Input from Mesh Shader
 };
 
-struct PushConstants {
-    float4x4 viewProj;
-    float4 camPosAndFov;
-    float4 camDir;
-    float runtime;
-    uint renderImgIdx;
-    uint res1Index;
-    uint res1Count;
-    uint res2Index;
-    uint res2Count;
-    uint res3Index;
-    uint res3Count;
-};
-
-[[vk::push_constant]] ConstantBuffer<PushConstants> pc;
-
 [shader("fragment")]
 float4 main(VertexOut pin) : SV_Target {
     // ONLY if code if hit Cube.
