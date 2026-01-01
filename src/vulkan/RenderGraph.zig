@@ -10,6 +10,7 @@ const PushConstants = @import("resources/DescriptorManager.zig").PushConstants;
 const vkFn = @import("../modules/vk.zig");
 const sc = @import("../configs/shaderConfig.zig");
 const SwapchainManager = @import("SwapchainManager.zig");
+const Command = @import("Command.zig").Command;
 
 pub const ImageLayout = enum(vk.VkImageLayout) {
     Undefined = vk.VK_IMAGE_LAYOUT_UNDEFINED,
@@ -88,15 +89,14 @@ pub const RenderGraph = struct {
         self.tempBufBarriers.deinit();
     }
 
-    pub fn recordTransfers(self: *RenderGraph, cmd: vk.VkCommandBuffer, resMan: *ResourceManager) !void {
+    pub fn recordTransfers(self: *RenderGraph, cmd: *const Command, resMan: *ResourceManager) !void {
         if (resMan.pendingTransfers.items.len == 0) return;
 
         for (resMan.pendingTransfers.items) |transfer| {
-            const dstRes = try resMan.getResourcePtr(transfer.dstResId);
+            const destResource = try resMan.getResourcePtr(transfer.dstResId);
             // Transition Destination to TransferDst
-            try self.createBarrierIfNeeded(dstRes.state, .{ .stage = .Transfer, .access = .TransferWrite, .layout = .TransferDst }, dstRes);
-            const copy = vk.VkBufferCopy{ .srcOffset = transfer.srcOffset, .dstOffset = 0, .size = transfer.size };
-            vk.vkCmdCopyBuffer(cmd, resMan.stagingBuffer.buffer, dstRes.resourceType.gpuBuf.buffer, 1, &copy);
+            try self.createBarrierIfNeeded(destResource.state, .{ .stage = .Transfer, .access = .TransferWrite, .layout = .TransferDst }, destResource);
+            cmd.copyBuffer(resMan.stagingBuffer.buffer, &transfer, destResource.resourceType.gpuBuf.buffer);
         }
         self.bakeBarriers(cmd);
     }
@@ -118,8 +118,8 @@ pub const RenderGraph = struct {
         }
     }
 
-    pub fn recordPassBarriers(self: *RenderGraph, cmd: vk.VkCommandBuffer, pass: rc.Pass, resMan: *ResourceManager) !void {
-        setCmdState(cmd);
+    pub fn recordPassBarriers(self: *RenderGraph, cmd: *const Command, pass: rc.Pass, resMan: *ResourceManager) !void {
+        cmd.setGraphicsState();
 
         for (pass.resUsages) |resUsage| {
             const resource = try resMan.getResourcePtr(resUsage.id);
@@ -129,13 +129,12 @@ pub const RenderGraph = struct {
         self.bakeBarriers(cmd);
     }
 
-    fn recordCompute(cmd: vk.VkCommandBuffer, dispatch: rc.Pass.Dispatch, renderImgId: ?u32, resMan: *ResourceManager) !void {
+    fn recordCompute(cmd: *const Command, dispatch: rc.Pass.Dispatch, renderImgId: ?u32, resMan: *ResourceManager) !void {
         if (renderImgId) |imgId| {
             const resource = try resMan.getResourcePtr(imgId);
             switch (resource.resourceType) {
                 .gpuImg => |gpuImg| {
-                    vk.vkCmdDispatch(
-                        cmd,
+                    cmd.dispatch(
                         (gpuImg.imgInf.extent.width + dispatch.x - 1) / dispatch.x,
                         (gpuImg.imgInf.extent.height + dispatch.y - 1) / dispatch.y,
                         1, // (gpuImg.imgInf.extent.depth + dispatch.z - 1) / dispatch.z
@@ -143,12 +142,12 @@ pub const RenderGraph = struct {
                 },
                 else => return error.ComputePassRenderImgIsNoImg,
             }
-        } else vk.vkCmdDispatch(cmd, dispatch.x, dispatch.y, dispatch.z);
+        } else cmd.dispatch(dispatch.x, dispatch.y, dispatch.z);
     }
 
-    pub fn recordPass(self: *RenderGraph, cmd: vk.VkCommandBuffer, pass: rc.Pass, pcs: PushConstants, validShaders: []const ShaderObject, resMan: *ResourceManager) !void {
-        vk.vkCmdPushConstants(cmd, self.pipeLayout, vk.VK_SHADER_STAGE_ALL, 0, @sizeOf(PushConstants), &pcs);
-        bindShaderStages(cmd, validShaders);
+    pub fn recordPass(self: *RenderGraph, cmd: *const Command, pass: rc.Pass, pcs: PushConstants, validShaders: []const ShaderObject, resMan: *ResourceManager) !void {
+        cmd.setPushConstants(self.pipeLayout, vk.VK_SHADER_STAGE_ALL, 0, @sizeOf(PushConstants), &pcs);
+        cmd.bindShaders(validShaders);
 
         switch (pass.kind) {
             .compute => |comp| try recordCompute(cmd, comp.workgroups, pass.renderImgId, resMan),
@@ -157,9 +156,9 @@ pub const RenderGraph = struct {
         }
     }
 
-    fn recordGraphics(cmd: vk.VkCommandBuffer, colorAtts: []const rc.Pass.Attachment, depthAtt: ?rc.Pass.Attachment, stencilAtt: ?rc.Pass.Attachment, pass: rc.Pass, resMan: *ResourceManager) !void {
+    fn recordGraphics(cmd: *const Command, colorAtts: []const rc.Pass.Attachment, depthAtt: ?rc.Pass.Attachment, stencilAtt: ?rc.Pass.Attachment, pass: rc.Pass, resMan: *ResourceManager) !void {
         if (colorAtts.len > 8) return error.TooManyAttachments;
-        if (pass.renderImgId == null) return error.GraphicsPassNeedsRenderImgId;
+        const mainImg = if (pass.renderImgId) |imgId| try resMan.getImagePtr(imgId) else return error.GraphicsPassNeedsRenderImgId;
 
         const depthInf: ?vk.VkRenderingAttachmentInfo = if (depthAtt) |depth| blk: {
             const imgId = pass.resUsages[depth.resUsageSlot].id;
@@ -181,48 +180,20 @@ pub const RenderGraph = struct {
             colorInfs[i] = createAttachment(img.imgInf.imgType, img.view, color.clear);
         }
 
-        const mainImg: *GpuImage = try resMan.getImagePtr(pass.renderImgId.?);
-
-        const scissor = vk.VkRect2D{
-            .offset = .{ .x = 0, .y = 0 },
-            .extent = .{ .width = mainImg.imgInf.extent.width, .height = mainImg.imgInf.extent.height },
-        };
-
-        const renderInf = vk.VkRenderingInfo{
-            .sType = vk.VK_STRUCTURE_TYPE_RENDERING_INFO,
-            .flags = 0,
-            .renderArea = scissor,
-            .layerCount = 1,
-            .colorAttachmentCount = @intCast(colorAtts.len),
-            .pColorAttachments = &colorInfs,
-            .pDepthAttachment = if (depthInf != null) &depthInf.? else null,
-            .pStencilAttachment = if (stencilInf != null) &stencilInf.? else null,
-        };
-        vk.vkCmdBeginRendering(cmd, &renderInf);
-
-        const viewport = vk.VkViewport{
-            .x = 0,
-            .y = 0,
-            .width = @floatFromInt(mainImg.imgInf.extent.width),
-            .height = @floatFromInt(mainImg.imgInf.extent.height),
-            .minDepth = 0.0,
-            .maxDepth = 1.0,
-        };
-        vkFn.vkCmdSetViewportWithCount.?(cmd, 1, &viewport);
-        vkFn.vkCmdSetScissorWithCount.?(cmd, 1, &scissor);
+        cmd.beginRendering(mainImg.imgInf.extent.width, mainImg.imgInf.extent.height, colorInfs[0..colorAtts.len], depthInf, stencilInf);
 
         switch (pass.kind) {
-            .graphics => |graphics| {
-                vkFn.vkCmdSetVertexInputEXT.?(cmd, 0, null, 0, null); // Currently empty vertex input state
-                vk.vkCmdDraw(cmd, graphics.vertexCount, graphics.instanceCount, 0, 0);
-            },
-            .taskOrMesh => |taskOrMesh| vkFn.vkCmdDrawMeshTasksEXT.?(cmd, taskOrMesh.workgroups.x, taskOrMesh.workgroups.y, taskOrMesh.workgroups.z),
             .compute => return error.ComputeLandedInGraphicsPass,
+            .taskOrMesh => |taskOrMesh| cmd.drawMeshTasks(taskOrMesh.workgroups.x, taskOrMesh.workgroups.y, taskOrMesh.workgroups.z),
+            .graphics => |graphics| {
+                cmd.setEmptyVertexInput();
+                cmd.draw(graphics.vertexCount, graphics.instanceCount, 0, 0);
+            },
         }
-        vk.vkCmdEndRendering(cmd);
+        cmd.endRendering();
     }
 
-    pub fn recordSwapchainBlits(self: *RenderGraph, cmd: vk.VkCommandBuffer, targets: []const u32, swapchainMap: *SwapchainManager.SwapchainMap, resMan: *ResourceManager) !void {
+    pub fn recordSwapchainBlits(self: *RenderGraph, cmd: *const Command, targets: []const u32, swapchainMap: *SwapchainManager.SwapchainMap, resMan: *ResourceManager) !void {
         // Render Image and Swapchain Preperations
         for (targets) |swapchainIndex| {
             const swapchain = swapchainMap.getPtrAtIndex(swapchainIndex);
@@ -236,24 +207,23 @@ pub const RenderGraph = struct {
         // Blits
         for (targets) |swapchainIndex| {
             const swapchain = swapchainMap.getPtrAtIndex(swapchainIndex);
+            const swapchainExtent = vk.VkExtent3D{ .height = swapchain.extent.height, .width = swapchain.extent.width, .depth = 1 };
             const renderImg = try resMan.getImagePtr(swapchain.passImgId);
-            const blitOffsets = calculateBlitOffsets(renderImg.imgInf.extent, .{ .height = swapchain.extent.height, .width = swapchain.extent.width, .depth = 1 }, rc.RENDER_IMG_STRETCH);
-            copyImageToImage(cmd, renderImg.img, blitOffsets.srcOffsets, swapchain.images[swapchain.curIndex], blitOffsets.dstOffsets, rc.RENDER_IMG_STRETCH);
+            cmd.copyImageToImage(renderImg.img, renderImg.imgInf.extent, swapchain.images[swapchain.curIndex], swapchainExtent, rc.RENDER_IMG_STRETCH);
         }
 
         // Swapchain Presentation Barriers
         for (targets) |swapchainIndex| {
             const swapchain = swapchainMap.getPtrAtIndex(swapchainIndex);
-            const swapchainState = ResourceState{ .stage = .Transfer, .access = .TransferWrite, .layout = .TransferDst };
+            const state = ResourceState{ .stage = .Transfer, .access = .TransferWrite, .layout = .TransferDst };
             const neededState = ResourceState{ .stage = .BotOfPipe, .access = .None, .layout = .PresentSrc };
-            const barrier = createImageBarrier(swapchainState, neededState, swapchain.images[swapchain.curIndex], .Color);
-            try self.tempImgBarriers.append(barrier);
+            try self.tempImgBarriers.append(createImageBarrier(state, neededState, swapchain.images[swapchain.curIndex], .Color));
         }
         self.bakeBarriers(cmd);
     }
 
-    fn bakeBarriers(self: *RenderGraph, cmd: vk.VkCommandBuffer) void {
-        createPipelineBarriers2(cmd, self.tempImgBarriers.items, self.tempBufBarriers.items);
+    fn bakeBarriers(self: *RenderGraph, cmd: *const Command) void {
+        cmd.bakeBarriers(self.tempImgBarriers.items, self.tempBufBarriers.items);
         self.tempImgBarriers.clearRetainingCapacity();
         self.tempBufBarriers.clearRetainingCapacity();
     }
@@ -296,49 +266,8 @@ fn createBufferBarrier(curState: ResourceState, newState: ResourceState, buffer:
     };
 }
 
-fn createPipelineBarriers2(cmd: vk.VkCommandBuffer, imgBarriers: []const vk.VkImageMemoryBarrier2, bufBarriers: []const vk.VkBufferMemoryBarrier2) void {
-    const depInf = vk.VkDependencyInfo{
-        .sType = vk.VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-        .imageMemoryBarrierCount = @intCast(imgBarriers.len),
-        .pImageMemoryBarriers = imgBarriers.ptr,
-        .bufferMemoryBarrierCount = @intCast(bufBarriers.len),
-        .pBufferMemoryBarriers = bufBarriers.ptr,
-    };
-    vk.vkCmdPipelineBarrier2(cmd, &depInf);
-}
-
 fn createSubresourceRange(mask: u32, mipLevel: u32, levelCount: u32, arrayLayer: u32, layerCount: u32) vk.VkImageSubresourceRange {
     return vk.VkImageSubresourceRange{ .aspectMask = mask, .baseMipLevel = mipLevel, .levelCount = levelCount, .baseArrayLayer = arrayLayer, .layerCount = layerCount };
-}
-
-fn createSubresourceLayers(mask: u32, mipLevel: u32, arrayLayer: u32, layerCount: u32) vk.VkImageSubresourceLayers {
-    return vk.VkImageSubresourceLayers{ .aspectMask = mask, .mipLevel = mipLevel, .baseArrayLayer = arrayLayer, .layerCount = layerCount };
-}
-
-fn bindShaderStages(cmd: vk.VkCommandBuffer, shaderObjects: []const ShaderObject) void {
-    const allStages = [_]vk.VkShaderStageFlagBits{
-        vk.VK_SHADER_STAGE_VERTEX_BIT,
-        vk.VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT,
-        vk.VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT,
-        vk.VK_SHADER_STAGE_GEOMETRY_BIT,
-        vk.VK_SHADER_STAGE_FRAGMENT_BIT,
-        vk.VK_SHADER_STAGE_COMPUTE_BIT,
-        vk.VK_SHADER_STAGE_TASK_BIT_EXT,
-        vk.VK_SHADER_STAGE_MESH_BIT_EXT,
-    };
-    var handles: [8]vk.VkShaderEXT = .{null} ** 8;
-
-    for (shaderObjects) |shader| {
-        const activeStageBit = sc.getShaderBit(shader.stage);
-
-        for (0..8) |i| {
-            if (allStages[i] == activeStageBit) {
-                handles[i] = shader.handle;
-                break;
-            }
-        }
-    }
-    vkFn.vkCmdBindShadersEXT.?(cmd, 8, &allStages, &handles);
 }
 
 fn createAttachment(renderType: rc.ImgType, imgView: vk.VkImageView, clear: bool) vk.VkRenderingAttachmentInfo {
@@ -355,120 +284,4 @@ fn createAttachment(renderType: rc.ImgType, imgView: vk.VkImageView, clear: bool
         .storeOp = vk.VK_ATTACHMENT_STORE_OP_STORE,
         .clearValue = clearValue, // ✓ Now correct per type
     };
-}
-
-fn setCmdState(cmd: vk.VkCommandBuffer) void {
-    // Rasterization & Geometry
-    vkFn.vkCmdSetPolygonModeEXT.?(cmd, vk.VK_POLYGON_MODE_FILL);
-    vkFn.vkCmdSetCullMode.?(cmd, vk.VK_CULL_MODE_FRONT_BIT);
-    vkFn.vkCmdSetFrontFace.?(cmd, vk.VK_FRONT_FACE_CLOCKWISE);
-    vkFn.vkCmdSetPrimitiveTopology.?(cmd, vk.VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
-    vkFn.vkCmdSetPrimitiveRestartEnable.?(cmd, vk.VK_FALSE);
-    vkFn.vkCmdSetRasterizerDiscardEnable.?(cmd, vk.VK_FALSE);
-    vkFn.vkCmdSetRasterizationSamplesEXT.?(cmd, vk.VK_SAMPLE_COUNT_1_BIT);
-
-    const sampleMask: u32 = 0xFFFFFFFF;
-    vkFn.vkCmdSetSampleMaskEXT.?(cmd, vk.VK_SAMPLE_COUNT_1_BIT, &sampleMask);
-
-    // Depth & Stencil
-    vkFn.vkCmdSetDepthTestEnable.?(cmd, vk.VK_FALSE);
-    vkFn.vkCmdSetDepthWriteEnable.?(cmd, vk.VK_FALSE);
-    vkFn.vkCmdSetDepthBoundsTestEnable.?(cmd, vk.VK_FALSE);
-    vkFn.vkCmdSetDepthBiasEnable.?(cmd, vk.VK_FALSE);
-    vkFn.vkCmdSetDepthBias.?(cmd, 0.0, 0.0, 0.0);
-    vkFn.vkCmdSetDepthClampEnableEXT.?(cmd, vk.VK_FALSE);
-    vkFn.vkCmdSetStencilTestEnable.?(cmd, vk.VK_FALSE);
-
-    // Color & Blending
-    const colorBlendEnable = vk.VK_TRUE;
-    const colorBlendAttachments = [_]vk.VkBool32{colorBlendEnable};
-    vkFn.vkCmdSetColorBlendEnableEXT.?(cmd, 0, 1, &colorBlendAttachments);
-
-    const blendEquation = vk.VkColorBlendEquationEXT{
-        .srcColorBlendFactor = vk.VK_BLEND_FACTOR_SRC_ALPHA,
-        .dstColorBlendFactor = vk.VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
-        .colorBlendOp = vk.VK_BLEND_OP_ADD,
-        .srcAlphaBlendFactor = vk.VK_BLEND_FACTOR_ONE,
-        .dstAlphaBlendFactor = vk.VK_BLEND_FACTOR_ZERO,
-        .alphaBlendOp = vk.VK_BLEND_OP_ADD,
-    };
-    const equations = [_]vk.VkColorBlendEquationEXT{blendEquation};
-    vkFn.vkCmdSetColorBlendEquationEXT.?(cmd, 0, 1, &equations);
-
-    const colorWriteMask = vk.VK_COLOR_COMPONENT_R_BIT | vk.VK_COLOR_COMPONENT_G_BIT | vk.VK_COLOR_COMPONENT_B_BIT | vk.VK_COLOR_COMPONENT_A_BIT;
-    const colorWriteMasks = [_]vk.VkColorComponentFlags{colorWriteMask};
-    vkFn.vkCmdSetColorWriteMaskEXT.?(cmd, 0, 1, &colorWriteMasks);
-
-    const blendConsts = [_]f32{ 0.0, 0.0, 0.0, 0.0 };
-    vkFn.vkCmdSetBlendConstants.?(cmd, &blendConsts);
-
-    vkFn.vkCmdSetLogicOpEnableEXT.?(cmd, vk.VK_FALSE);
-    vkFn.vkCmdSetAlphaToOneEnableEXT.?(cmd, vk.VK_FALSE);
-    vkFn.vkCmdSetAlphaToCoverageEnableEXT.?(cmd, vk.VK_FALSE);
-
-    // Advanced / Debug / Voxel Optimization
-    vkFn.vkCmdSetLineWidth.?(cmd, 1.0);
-    vkFn.vkCmdSetConservativeRasterizationModeEXT.?(cmd, vk.VK_CONSERVATIVE_RASTERIZATION_MODE_DISABLED_EXT);
-
-    // Default to 1x1 Shading Rate (No reduction)
-    const combinerOps = [_]vk.VkFragmentShadingRateCombinerOpKHR{ vk.VK_FRAGMENT_SHADING_RATE_COMBINER_OP_KEEP_KHR, vk.VK_FRAGMENT_SHADING_RATE_COMBINER_OP_KEEP_KHR };
-    vkFn.vkCmdSetFragmentShadingRateKHR.?(cmd, &.{ .width = 1, .height = 1 }, &combinerOps);
-}
-
-pub fn copyImageToImage(cmd: vk.VkCommandBuffer, srcImg: vk.VkImage, srcOffsets: [2]vk.VkOffset3D, dstImg: vk.VkImage, dstOffsets: [2]vk.VkOffset3D, stretch: bool) void {
-    const blitRegion = vk.VkImageBlit2{
-        .sType = vk.VK_STRUCTURE_TYPE_IMAGE_BLIT_2,
-        .srcSubresource = createSubresourceLayers(vk.VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1),
-        .srcOffsets = srcOffsets,
-        .dstSubresource = createSubresourceLayers(vk.VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1),
-        .dstOffsets = dstOffsets,
-    };
-    const blitInf = vk.VkBlitImageInfo2{
-        .sType = vk.VK_STRUCTURE_TYPE_BLIT_IMAGE_INFO_2,
-        .dstImage = dstImg,
-        .dstImageLayout = vk.VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-        .srcImage = srcImg,
-        .srcImageLayout = vk.VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-        .filter = if (stretch) vk.VK_FILTER_LINEAR else vk.VK_FILTER_NEAREST, // Linear for stretch, Nearest for pixel-perfect
-        .regionCount = 1,
-        .pRegions = &blitRegion,
-    };
-    vk.vkCmdBlitImage2(cmd, &blitInf);
-}
-
-fn calculateBlitOffsets(srcImgExtent: vk.VkExtent3D, dstImgExtent: vk.VkExtent3D, stretch: bool) struct { srcOffsets: [2]vk.VkOffset3D, dstOffsets: [2]vk.VkOffset3D } {
-    var srcOffsets: [2]vk.VkOffset3D = undefined;
-    var dstOffsets: [2]vk.VkOffset3D = undefined;
-
-    if (stretch == true) {
-        // Stretch: Source is full image, Dest is full window
-        srcOffsets[0] = .{ .x = 0, .y = 0, .z = 0 };
-        srcOffsets[1] = .{ .x = @intCast(srcImgExtent.width), .y = @intCast(srcImgExtent.height), .z = 1 };
-        dstOffsets[0] = .{ .x = 0, .y = 0, .z = 0 };
-        dstOffsets[1] = .{ .x = @intCast(dstImgExtent.width), .y = @intCast(dstImgExtent.height), .z = 1 };
-    } else {
-        // No Stretch (Center / Crop)
-        const srcW: i32 = @intCast(srcImgExtent.width);
-        const srcH: i32 = @intCast(srcImgExtent.height);
-        const winW: i32 = @intCast(dstImgExtent.width);
-        const winH: i32 = @intCast(dstImgExtent.height);
-        // Determine the size of the region to copy (smaller of the two dimensions)
-        const blitW = @min(srcW, winW);
-        const blitH = @min(srcH, winH);
-
-        // Center the region on the SOURCE
-        // If Source < Window, this is 0. If Source > Window, this crops the center.
-        const srcX = @divFloor(srcW - blitW, 2);
-        const srcY = @divFloor(srcH - blitH, 2);
-        srcOffsets[0] = .{ .x = srcX, .y = srcY, .z = 0 };
-        srcOffsets[1] = .{ .x = srcX + blitW, .y = srcY + blitH, .z = 1 };
-
-        // Center the region on the DESTINATION
-        // If Window > Source, this centers the image on screen. If Window < Source, this is 0.
-        const dstX = @divFloor(winW - blitW, 2);
-        const dstY = @divFloor(winH - blitH, 2);
-        dstOffsets[0] = .{ .x = dstX, .y = dstY, .z = 0 };
-        dstOffsets[1] = .{ .x = dstX + blitW, .y = dstY + blitH, .z = 1 };
-    }
-    return .{ .srcOffsets = srcOffsets, .dstOffsets = dstOffsets };
 }

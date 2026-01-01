@@ -7,12 +7,12 @@ const Resource = @import("ResourceManager.zig").Resource;
 const check = @import("../ErrorHelpers.zig").check;
 const rc = @import("../../configs/renderConfig.zig");
 
-const bufUsage = extern struct { index: u32 = 0, count: u32 = 0 };
+pub const ResourceSlot = extern struct { index: u32 = 0, count: u32 = 0 };
 
 pub const PushConstants = extern struct {
     runtime: f32,
     renderImgIdx: u32 = 0,
-    resUsageInfos: [15]bufUsage = undefined,
+    resourceSlots: [15]ResourceSlot = undefined,
 };
 
 pub const DescriptorBuffer = struct {

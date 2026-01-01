@@ -18,15 +18,16 @@ const RenderGraph = @import("RenderGraph.zig").RenderGraph;
 const RendererData = @import("../App.zig").RendererData;
 const rc = @import("../configs/renderConfig.zig");
 const Allocator = std.mem.Allocator;
+const Command = @import("Command.zig").Command;
 
 pub const Renderer = struct {
     alloc: Allocator,
     arenaAlloc: Allocator,
     context: Context,
-    resourceMan: ResourceManager,
+    resMan: ResourceManager,
     renderGraph: RenderGraph,
     shaderMan: ShaderManager,
-    swapchainMan: SwapchainManager,
+    swapMan: SwapchainManager,
     cmdMan: CmdManager,
     scheduler: Scheduler,
     passes: std.array_list.Managed(rc.Pass),
@@ -35,23 +36,23 @@ pub const Renderer = struct {
         const alloc = memoryMan.getAllocator();
         const instance = try createInstance(alloc);
         const context = try Context.init(alloc, instance);
-        const resourceMan = try ResourceManager.init(alloc, &context);
-        const renderGraph = try RenderGraph.init(alloc, &resourceMan);
-        const cmdMan = try CmdManager.init(alloc, &context, rc.MAX_IN_FLIGHT, &resourceMan);
+        const resMan = try ResourceManager.init(alloc, &context);
+        const renderGraph = try RenderGraph.init(alloc, &resMan);
+        const cmdMan = try CmdManager.init(alloc, &context, rc.MAX_IN_FLIGHT, &resMan);
         const scheduler = try Scheduler.init(&context, rc.MAX_IN_FLIGHT);
-        const shaderMan = try ShaderManager.init(alloc, &context, &resourceMan);
-        const swapchainMan = try SwapchainManager.init(alloc, &context);
+        const shaderMan = try ShaderManager.init(alloc, &context, &resMan);
+        const swapMan = try SwapchainManager.init(alloc, &context);
 
         return .{
             .alloc = alloc,
             .arenaAlloc = memoryMan.getGlobalArena(),
             .context = context,
-            .resourceMan = resourceMan,
+            .resMan = resMan,
             .renderGraph = renderGraph,
             .shaderMan = shaderMan,
             .cmdMan = cmdMan,
             .scheduler = scheduler,
-            .swapchainMan = swapchainMan,
+            .swapMan = swapMan,
             .passes = std.array_list.Managed(rc.Pass).init(alloc),
         };
     }
@@ -60,9 +61,9 @@ pub const Renderer = struct {
         _ = vk.vkDeviceWaitIdle(self.context.gpi);
         self.scheduler.deinit();
         self.cmdMan.deinit();
-        self.swapchainMan.deinit();
+        self.swapMan.deinit();
         self.shaderMan.deinit();
-        self.resourceMan.deinit();
+        self.resMan.deinit();
         self.renderGraph.deinit();
         self.context.deinit();
         self.passes.deinit();
@@ -82,13 +83,13 @@ pub const Renderer = struct {
             const tempWindow = tempWindows[i];
             switch (tempWindow.state) {
                 .needUpdate, .needCreation => {
-                    try self.swapchainMan.createSwapchain(&self.context, .{ .window = tempWindow });
+                    try self.swapMan.createSwapchain(&self.context, .{ .window = tempWindow });
                     dirtyImgIds[i] = tempWindow.passImgId;
                 },
                 .needActive, .needInactive => {
-                    self.swapchainMan.changeState(tempWindow.windowId, if (tempWindow.state == .needActive) .active else .inactive);
+                    self.swapMan.changeState(tempWindow.windowId, if (tempWindow.state == .needActive) .active else .inactive);
                 },
-                .needDelete => self.swapchainMan.removeSwapchain(&.{tempWindow}),
+                .needDelete => self.swapMan.removeSwapchain(&.{tempWindow}),
                 else => std.debug.print("Warning: Window State {s} cant be handled in Renderer\n", .{@tagName(tempWindow.state)}),
             }
         }
@@ -98,7 +99,7 @@ pub const Renderer = struct {
                 if (dirtyImgIds[i] == null) break;
 
                 const gpuId = dirtyImgIds[i].?;
-                const resource = try self.resourceMan.getResourcePtr(gpuId);
+                const resource = try self.resMan.getResourcePtr(gpuId);
                 switch (resource.resourceType) {
                     .gpuImg => |passImg| try self.updatePassImage(gpuId, passImg),
                     else => std.debug.print("Warning: updateRenderImage failed, renderID: {} is not an Image", .{gpuId}),
@@ -109,12 +110,11 @@ pub const Renderer = struct {
 
     pub fn updatePassImage(self: *Renderer, gpuId: u32, img: Resource.GpuImage) !void {
         const old = img.imgInf.extent;
-        const new = self.swapchainMan.getMaxRenderExtent(gpuId);
+        const new = self.swapMan.getMaxRenderExtent(gpuId);
 
         if (new.height != 0 or new.width != 0) {
             if (new.width != old.width or new.height != old.height) {
-                const newImgInf = rc.ResourceInf.ImgInf{ .extent = .{ .width = new.width, .height = new.height, .depth = 1 }, .imgType = img.imgInf.imgType };
-                try self.resourceMan.replaceResource(gpuId, newImgInf);
+                try self.resMan.replaceResource(gpuId, .{ .extent = .{ .width = new.width, .height = new.height, .depth = 1 }, .imgType = img.imgInf.imgType });
                 std.debug.print("Render Image ID {} recreated {}x{} to {}x{}\n", .{ gpuId, old.width, old.height, new.width, new.height });
             }
         }
@@ -122,20 +122,9 @@ pub const Renderer = struct {
 
     pub fn createPass(self: *Renderer, passes: []const rc.Pass) !void {
         for (passes) |pass| {
-            const shaders = self.shaderMan.getShaders(pass.shaderIds)[0..pass.shaderIds.len];
-
-            const passType = checkShaderLayout(shaders) catch |err| {
-                std.debug.print("Pass {} Shader Layout invalid", .{err});
-                return error.PassInvalid;
-            };
-            const passKind = pass.kind;
-
-            switch (passType) {
-                .computePass => if (passKind != .compute) return error.PassInvalid,
-                .graphicsPass, .vertexPass => if (passKind != .graphics) return error.PassInvalid,
-                .taskMeshPass, .meshPass => if (passKind != .taskOrMesh) return error.PassInvalid,
-            }
-            try self.passes.append(pass);
+            if (self.shaderMan.isPassValid(pass) == true) {
+                try self.passes.append(pass);
+            } else std.debug.print("Error: Pass not valid, not appended", .{});
         }
     }
 
@@ -143,72 +132,60 @@ pub const Renderer = struct {
         try self.scheduler.waitForGPU();
         const frameInFlight = self.scheduler.frameInFlight;
 
-        if (try self.swapchainMan.updateTargets(frameInFlight, &self.context) == false) return;
-        const targets = self.swapchainMan.getTargets();
+        if (try self.swapMan.updateTargets(frameInFlight, &self.context) == false) return;
+        const targets = self.swapMan.getTargets();
 
         const cmd = try self.cmdMan.beginRecording(frameInFlight);
 
-        try self.renderGraph.recordTransfers(cmd, &self.resourceMan);
-        // Reset the staging offset for the next frame's potential uploads
-        self.resourceMan.stagingOffset = 0;
-        self.resourceMan.pendingTransfers.clearRetainingCapacity();
+        try self.renderGraph.recordTransfers(&cmd, &self.resMan);
+        self.resMan.resetTransfers();
 
-        try self.recordPasses(cmd, rendererData);
-        try self.renderGraph.recordSwapchainBlits(cmd, targets, &self.swapchainMan.swapchains, &self.resourceMan);
-        try CmdManager.endRecording(cmd);
+        try self.recordPasses(&cmd, rendererData);
+        try self.renderGraph.recordSwapchainBlits(&cmd, targets, &self.swapMan.swapchains, &self.resMan);
+        try CmdManager.endRecording(&cmd);
 
-        try self.queueSubmit(cmd, targets, frameInFlight);
-        try self.swapchainMan.present(targets, self.context.presentQ);
+        try self.queueSubmit(cmd.getHandle(), targets, frameInFlight);
+        try self.swapMan.present(targets, self.context.presentQ);
 
         self.scheduler.nextFrame();
     }
 
-    fn recordPasses(self: *Renderer, cmd: vk.VkCommandBuffer, rendererData: RendererData) !void {
+    fn recordPasses(self: *Renderer, cmd: *const Command, rendererData: RendererData) !void {
         var pcs = PushConstants{ .runtime = rendererData.runtime };
 
         // Adjust Push Constants for every Pass
         for (self.passes.items) |pass| {
-            if (pass.shaderSlots.len > pcs.resUsageInfos.len) return error.TooManyShaderSlotsInPass;
+            if (pass.shaderSlots.len > pcs.resourceSlots.len) return error.TooManyShaderSlotsInPass;
+
             // Assign Shader Slots
             for (0..pass.shaderSlots.len) |i| {
-                const slot = pass.shaderSlots[i];
-                const resource = try self.resourceMan.getResourcePtr(pass.resUsages[slot].id);
-                switch (resource.resourceType) {
-                    .gpuBuf => |gpuBuf| {
-                        pcs.resUsageInfos[i].index = resource.bindlessIndex;
-                        pcs.resUsageInfos[i].count = gpuBuf.count;
-                    },
-                    .gpuImg => |_| {
-                        pcs.resUsageInfos[i].index = resource.bindlessIndex;
-                        pcs.resUsageInfos[i].count = 1;
-                    },
-                }
+                const shaderSlot = pass.shaderSlots[i];
+                const resource = try self.resMan.getResourcePtr(pass.resUsages[shaderSlot].id);
+                pcs.resourceSlots[i] = resource.getResourceSlot();
             }
+
             // Assign Render Image
             if (pass.renderImgId) |imgId| {
-                const resource = try self.resourceMan.getResourcePtr(imgId);
-                switch (resource.resourceType) {
-                    .gpuImg => pcs.renderImgIdx = resource.bindlessIndex,
-                    else => return error.RenderImgIdIsNotImage,
-                }
+                const renderImg = try self.resMan.getResourcePtr(imgId);
+                pcs.renderImgIdx = renderImg.getResourceSlot().index;
             }
 
             const shaders = self.shaderMan.getShaders(pass.shaderIds)[0..pass.shaderIds.len];
-            try self.renderGraph.recordPassBarriers(cmd, pass, &self.resourceMan);
-            try self.renderGraph.recordPass(cmd, pass, pcs, shaders, &self.resourceMan);
+            try self.renderGraph.recordPassBarriers(cmd, pass, &self.resMan);
+            try self.renderGraph.recordPass(cmd, pass, pcs, shaders, &self.resMan);
         }
     }
 
     fn queueSubmit(self: *Renderer, cmd: vk.VkCommandBuffer, submitIds: []const u32, frameInFlight: u8) !void {
         var waitInfos: [rc.MAX_WINDOWS]vk.VkSemaphoreSubmitInfo = undefined;
         for (submitIds, 0..) |id, i| {
-            const swapchain = self.swapchainMan.swapchains.getAtIndex(id);
+            const swapchain = self.swapMan.swapchains.getAtIndex(id);
             waitInfos[i] = createSemaphoreSubmitInfo(swapchain.imgRdySems[frameInFlight], vk.VK_PIPELINE_STAGE_2_TRANSFER_BIT, 0);
         }
 
         var signalInfos: [rc.MAX_WINDOWS + 1]vk.VkSemaphoreSubmitInfo = undefined;
         for (submitIds, 0..) |id, i| {
-            const swapchain = self.swapchainMan.swapchains.getAtIndex(id);
+            const swapchain = self.swapMan.swapchains.getAtIndex(id);
             signalInfos[i] = createSemaphoreSubmitInfo(swapchain.renderDoneSems[swapchain.curIndex], vk.VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, 0);
         }
         // Signal CPU Timeline
@@ -238,11 +215,11 @@ pub const Renderer = struct {
     }
 
     pub fn createResource(self: *Renderer, resourceInf: rc.ResourceInf) !void {
-        try self.resourceMan.createResource(resourceInf);
+        try self.resMan.createResource(resourceInf);
     }
 
     pub fn updateResource(self: *Renderer, resourceInf: rc.ResourceInf, data: anytype) !void {
-        try self.resourceMan.updateResource(resourceInf, data);
+        try self.resMan.updateResource(resourceInf, data);
     }
 };
 

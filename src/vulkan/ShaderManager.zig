@@ -7,6 +7,7 @@ const ResourceManager = @import("resources/ResourceManager.zig").ResourceManager
 const CreateMapArray = @import("../structures/MapArray.zig").CreateMapArray;
 const LoadedShader = @import("../core/ShaderCompiler.zig").LoadedShader;
 const ShaderObject = @import("ShaderObject.zig").ShaderObject;
+const rc = @import("../configs/renderConfig.zig");
 
 pub const ShaderManager = struct {
     alloc: Allocator,
@@ -53,4 +54,52 @@ pub const ShaderManager = struct {
         }
         return shaders;
     }
+
+    pub fn isPassValid(self: *ShaderManager, pass: rc.Pass) bool {
+        const shaders = self.getShaders(pass.shaderIds)[0..pass.shaderIds.len];
+
+        const passType = checkShaderLayout(shaders) catch |err| {
+            std.debug.print("Pass {} Shader Layout invalid", .{err});
+            return false;
+        };
+        const passKind = pass.kind;
+
+        switch (passType) {
+            .computePass => if (passKind != .compute) return false,
+            .graphicsPass, .vertexPass => if (passKind != .graphics) return false,
+            .taskMeshPass, .meshPass => if (passKind != .taskOrMesh) return false,
+        }
+        return true;
+    }
 };
+
+fn checkShaderLayout(shaders: []const ShaderObject) !enum { computePass, graphicsPass, meshPass, taskMeshPass, vertexPass } {
+    var shdr: [9]u8 = .{0} ** 9;
+    var prevIndex: i8 = -1;
+
+    for (shaders) |shader| {
+        const curIndex: i8 = switch (shader.stage) {
+            .compute => 0,
+            .vert => 1,
+            .tessControl => 2,
+            .tessEval => 3,
+            .geometry => 4,
+            .task => 5,
+            .mesh => 6,
+            .meshNoTask => 6, // LAYOUT NOT CHECKED YET
+            .frag => 7,
+        };
+        if (curIndex < prevIndex) return error.ShaderLayoutOrderInvalid;
+        prevIndex = curIndex;
+        shdr[@intCast(curIndex)] += 1;
+    }
+    switch (shaders.len) {
+        1 => if (shdr[0] == 1) return .computePass else if (shdr[1] == 1) return .vertexPass,
+        2 => if (shdr[6] == 1 and shdr[7] == 1) return .meshPass,
+        3 => if (shdr[5] == 1 and shdr[6] == 1 and shdr[7] == 1) return .taskMeshPass,
+        else => {},
+    }
+    if (shdr[1] == 1 and shdr[2] <= 1 and shdr[3] <= 1 and shdr[4] <= 1 and shdr[5] == 0 and shdr[6] == 0 and shdr[7] == 1) return .graphicsPass;
+    if (shdr[2] != shdr[3]) return error.ShaderLayoutTessellationMismatch;
+    return error.ShaderLayoutInvalid;
+}

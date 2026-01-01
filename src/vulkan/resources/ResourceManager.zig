@@ -2,6 +2,7 @@ const std = @import("std");
 const vk = @import("../../modules/vk.zig").c;
 const Allocator = std.mem.Allocator;
 const Context = @import("../Context.zig").Context;
+const ResourceSlot = @import("DescriptorManager.zig").ResourceSlot;
 const DescriptorManager = @import("DescriptorManager.zig").DescriptorManager;
 const ResourceState = @import("../RenderGraph.zig").ResourceState;
 const GpuAllocator = @import("GpuAllocator.zig").GpuAllocator;
@@ -31,9 +32,25 @@ pub const Resource = struct {
         gpuAddress: u64,
         count: u32 = 0,
     };
+
+    pub fn getResourceSlot(self: *Resource) ResourceSlot {
+        var resSlot = ResourceSlot{};
+
+        switch (self.resourceType) {
+            .gpuBuf => |gpuBuf| {
+                resSlot.index = self.bindlessIndex;
+                resSlot.count = gpuBuf.count;
+            },
+            .gpuImg => |_| {
+                resSlot.index = self.bindlessIndex;
+                resSlot.count = 1;
+            },
+        }
+        return resSlot;
+    }
 };
 
-const PendingTransfer = struct {
+pub const PendingTransfer = struct {
     srcOffset: u64,
     dstResId: u32,
     size: u64,
@@ -90,6 +107,11 @@ pub const ResourceManager = struct {
         self.gpuAlloc.freeGpuBuffer(self.stagingBuffer.buffer, self.stagingBuffer.allocation);
 
         self.gpuAlloc.deinit();
+    }
+
+    pub fn resetTransfers(self: *ResourceManager) void {
+        self.stagingOffset = 0;
+        self.pendingTransfers.clearRetainingCapacity();
     }
 
     pub fn queueBufferUpload(self: *ResourceManager, resInf: rc.ResourceInf, id: u32, data: anytype) !void {

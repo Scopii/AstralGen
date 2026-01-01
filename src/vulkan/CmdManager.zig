@@ -7,22 +7,24 @@ const ResourceManager = @import("resources/ResourceManager.zig").ResourceManager
 const rc = @import("../configs/renderConfig.zig");
 const MAX_WINDOWS = rc.MAX_WINDOWS;
 const check = @import("ErrorHelpers.zig").check;
+const Command = @import("Command.zig").Command;
 
 pub const CmdManager = struct {
     alloc: Allocator,
     gpi: vk.VkDevice,
     pool: vk.VkCommandPool,
-    cmds: []vk.VkCommandBuffer,
+    cmds: []Command,
     pipeLayout: vk.VkPipelineLayout,
     descLayoutAddress: u64,
-    blitBarriers: [MAX_WINDOWS + 1]vk.VkImageMemoryBarrier2 = undefined,
 
     pub fn init(alloc: Allocator, context: *const Context, maxInFlight: u32, resMan: *const ResourceManager) !CmdManager {
         const gpi = context.gpi;
         const pool = try createCmdPool(gpi, context.families.graphics);
 
-        const cmds = try alloc.alloc(vk.VkCommandBuffer, maxInFlight);
-        for (0..maxInFlight) |i| cmds[i] = try createCmd(gpi, pool, vk.VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+        const cmds = try alloc.alloc(Command, maxInFlight);
+        for (0..maxInFlight) |i| {
+            cmds[i] = try Command.init(try createCmd(gpi, pool, vk.VK_COMMAND_BUFFER_LEVEL_PRIMARY));
+        }
 
         return .{
             .alloc = alloc,
@@ -39,26 +41,26 @@ pub const CmdManager = struct {
         vk.vkDestroyCommandPool(self.gpi, self.pool, null);
     }
 
-    pub fn beginRecording(self: *CmdManager, frameInFlight: u8) !vk.VkCommandBuffer {
+    pub fn beginRecording(self: *CmdManager, frameInFlight: u8) !Command {
         const cmd = self.cmds[frameInFlight];
-        try check(vk.vkResetCommandBuffer(cmd, 0), "could not reset command buffer"); // Might be optional
+        try check(vk.vkResetCommandBuffer(cmd.handle, 0), "could not reset command buffer"); // Might be optional
 
         const beginInf = vk.VkCommandBufferBeginInfo{
             .sType = vk.VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
             .flags = vk.VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT, //vk.VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT
             .pInheritanceInfo = null,
         };
-        try check(vk.vkBeginCommandBuffer(cmd, &beginInf), "could not Begin CmdBuffer");
+        try check(vk.vkBeginCommandBuffer(cmd.handle, &beginInf), "could not Begin CmdBuffer");
 
-        bindDescriptorBuffer(cmd, self.descLayoutAddress);
-        setDescriptorBufferOffset(cmd, vk.VK_PIPELINE_BIND_POINT_COMPUTE, self.pipeLayout);
-        setDescriptorBufferOffset(cmd, vk.VK_PIPELINE_BIND_POINT_GRAPHICS, self.pipeLayout);
+        cmd.bindDescriptorBuffer(self.descLayoutAddress);
+        cmd.setDescriptorBufferOffset(vk.VK_PIPELINE_BIND_POINT_COMPUTE, self.pipeLayout);
+        cmd.setDescriptorBufferOffset(vk.VK_PIPELINE_BIND_POINT_GRAPHICS, self.pipeLayout);
 
-        return self.cmds[frameInFlight];
+        return cmd;
     }
 
-    pub fn endRecording(cmd: vk.VkCommandBuffer) !void {
-        try check(vk.vkEndCommandBuffer(cmd), "Could not End Cmd Buffer");
+    pub fn endRecording(cmd: *const Command) !void {
+        try check(vk.vkEndCommandBuffer(cmd.handle), "Could not End Cmd Buffer");
     }
 
     pub fn getCmd(self: *const CmdManager, frameInFlight: u8) vk.VkCommandBuffer {
@@ -89,17 +91,3 @@ fn createCmdPool(gpi: vk.VkDevice, familyIndex: u32) !vk.VkCommandPool {
     return pool;
 }
 
-fn bindDescriptorBuffer(cmd: vk.VkCommandBuffer, gpuAddress: u64) void {
-    const bufferBindingInf = vk.VkDescriptorBufferBindingInfoEXT{
-        .sType = vk.VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT,
-        .address = gpuAddress,
-        .usage = vk.VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT,
-    };
-    vkFn.vkCmdBindDescriptorBuffersEXT.?(cmd, 1, &bufferBindingInf);
-}
-
-fn setDescriptorBufferOffset(cmd: vk.VkCommandBuffer, bindPoint: vk.VkPipelineBindPoint, pipeLayout: vk.VkPipelineLayout) void {
-    const bufferIndex: u32 = 0;
-    const descOffset: vk.VkDeviceSize = 0;
-    vkFn.vkCmdSetDescriptorBufferOffsetsEXT.?(cmd, bindPoint, pipeLayout, 0, 1, &bufferIndex, &descOffset);
-}

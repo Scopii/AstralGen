@@ -24,10 +24,10 @@ pub const Pass = struct {
     shaderIds: []const u8,
     resUsages: []const ResourceUsage,
     renderImgId: ?u32 = null,
-
     shaderSlots: []const u32,
+    kind: PassKind,
 
-    kind: union(enum) {
+    pub const PassKind = union(enum) {
         compute: struct {
             workgroups: Dispatch,
         },
@@ -44,7 +44,7 @@ pub const Pass = struct {
             vertexCount: u32 = 3,
             instanceCount: u32 = 1,
         },
-    },
+    };
     pub const Dispatch = struct { x: u32, y: u32, z: u32 };
     pub const Attachment = struct { resUsageSlot: u8, clear: bool };
     pub const ResourceUsage = struct { id: u32, stage: PipeStage = .TopOfPipe, access: PipeAccess = .None, layout: ImageLayout = .General };
