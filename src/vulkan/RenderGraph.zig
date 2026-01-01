@@ -10,7 +10,6 @@ const SwapchainManager = @import("SwapchainManager.zig");
 const Command = @import("Command.zig").Command;
 const vh = @import("Helpers.zig");
 
-
 pub const ResourceState = struct {
     stage: vh.PipeStage = .TopOfPipe,
     access: vh.PipeAccess = .None,
@@ -97,15 +96,16 @@ pub const RenderGraph = struct {
         cmd.bindShaders(validShaders);
 
         switch (pass.kind) {
-            .compute => |comp| try recordCompute(cmd, comp.workgroups, pass.renderImgId, resMan),
-            .graphics => |graphics| try recordGraphics(cmd, graphics.colorAtts, graphics.depthAtt, graphics.stencilAtt, pass, resMan),
-            .taskOrMesh => |taskOrMesh| try recordGraphics(cmd, taskOrMesh.colorAtts, taskOrMesh.depthAtt, taskOrMesh.stencilAtt, pass, resMan),
+            .compute => |comp| try recordCompute(cmd, comp.workgroups, null, resMan),
+            .computeOnImage => |compOnImage| try recordCompute(cmd, compOnImage.workgroups, compOnImage.renderImgId, resMan),
+            .graphics => |graphics| try recordGraphics(cmd, graphics.colorAtts, graphics.depthAtt, graphics.stencilAtt, graphics.renderImgId, pass, resMan),
+            .taskOrMesh => |taskOrMesh| try recordGraphics(cmd, taskOrMesh.colorAtts, taskOrMesh.depthAtt, taskOrMesh.stencilAtt, taskOrMesh.renderImgId, pass, resMan),
         }
     }
 
-    fn recordGraphics(cmd: *const Command, colorAtts: []const rc.Pass.Attachment, depthAtt: ?rc.Pass.Attachment, stencilAtt: ?rc.Pass.Attachment, pass: rc.Pass, resMan: *ResourceManager) !void {
+    fn recordGraphics(cmd: *const Command, colorAtts: []const rc.Pass.Attachment, depthAtt: ?rc.Pass.Attachment, stencilAtt: ?rc.Pass.Attachment, renderImgId: u32, pass: rc.Pass, resMan: *ResourceManager) !void {
         if (colorAtts.len > 8) return error.TooManyAttachments;
-        const mainImg = if (pass.renderImgId) |imgId| try resMan.getImagePtr(imgId) else return error.GraphicsPassNeedsRenderImgId;
+        const mainImg = try resMan.getImagePtr(renderImgId);
 
         const depthInf: ?vk.VkRenderingAttachmentInfo = if (depthAtt) |depth| blk: {
             const imgId = pass.resUsages[depth.resUsageSlot].id;
@@ -130,7 +130,7 @@ pub const RenderGraph = struct {
         cmd.beginRendering(mainImg.imgInf.extent.width, mainImg.imgInf.extent.height, colorInfs[0..colorAtts.len], depthInf, stencilInf);
 
         switch (pass.kind) {
-            .compute => return error.ComputeLandedInGraphicsPass,
+            .compute, .computeOnImage => return error.ComputeLandedInGraphicsPass,
             .taskOrMesh => |taskOrMesh| cmd.drawMeshTasks(taskOrMesh.workgroups.x, taskOrMesh.workgroups.y, taskOrMesh.workgroups.z),
             .graphics => |graphics| {
                 cmd.setEmptyVertexInput();

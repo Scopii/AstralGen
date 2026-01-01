@@ -104,7 +104,7 @@ float4 main(float4 pixelPos: SV_Position) : SV_Target {
     CameraData cam = camData[0];
 
     uint width, height;
-    globalImages[pc.renderImgIdx].GetDimensions(width, height);
+    globalImages[pc.resources[2].index].GetDimensions(width, height);
     float2 renderDimensions = float2(width, height);
     float2 uv = (pixelPos.xy / renderDimensions) * 2.0 - 1.0;
 

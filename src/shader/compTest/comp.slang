@@ -96,10 +96,10 @@ float3 getNormal(float3 pos, StructuredBuffer<Object> objectBuffer) {
 }
 
 // SHADER
-[shader("compute")] // Slang attribute to explicitly mark stage
+[shader("compute")] 
 [numthreads(8, 8, 1)]
 void main(uint3 id : SV_DispatchThreadID) {
-    RWTexture2D<float4> renderImg = globalImages[pc.renderImgIdx];
+    RWTexture2D<float4> renderImg = globalImages[pc.resources[2].index];
     StructuredBuffer<Object> objectBuffer = globalObjectBuffers[pc.resources[0].index];
     StructuredBuffer<CameraData> camData = globalCameraBuffers[pc.resources[1].index];
     CameraData cam = camData[0];

@@ -22,7 +22,6 @@ pub const RENDER_IMG_STRETCH = true; // Ignored on AUTO_RESIZE
 pub const Pass = struct {
     shaderIds: []const u8,
     resUsages: []const ResourceUsage,
-    renderImgId: ?u32 = null,
     shaderSlots: []const u32,
     kind: PassKind,
 
@@ -30,13 +29,19 @@ pub const Pass = struct {
         compute: struct {
             workgroups: Dispatch,
         },
+        computeOnImage: struct {
+            renderImgId: u32,
+            workgroups: Dispatch,
+        },
         taskOrMesh: struct {
+            renderImgId: u32,
             colorAtts: []const Attachment,
             depthAtt: ?Attachment = null,
             stencilAtt: ?Attachment = null,
             workgroups: Dispatch,
         },
         graphics: struct {
+            renderImgId: u32,
             colorAtts: []const Attachment,
             depthAtt: ?Attachment = null,
             stencilAtt: ?Attachment = null,
@@ -71,10 +76,12 @@ pub const grapDepthImg = ResourceInf{ .id = 11, .memUse = .Gpu, .inf = .{ .imgIn
 
 pub const computeTest: Pass = .{
     .shaderIds = &.{sc.t1Comp.id},
-    .shaderSlots = &.{ 1, 2 },
-    .renderImgId = compImg.id,
+    .shaderSlots = &.{ 1, 2, 0 },
     .kind = .{
-        .compute = .{ .workgroups = .{ .x = 8, .y = 8, .z = 1 } },
+        .computeOnImage = .{
+            .renderImgId = compImg.id,
+            .workgroups = .{ .x = 8, .y = 8, .z = 1 },
+        },
     },
     .resUsages = &.{
         .{ .id = compImg.id, .stage = .Compute, .access = .ShaderWrite, .layout = .General },
@@ -85,10 +92,12 @@ pub const computeTest: Pass = .{
 
 const graphicsTest: Pass = .{
     .shaderIds = &.{ sc.t2Vert.id, sc.t2Frag.id },
-    .shaderSlots = &.{ 2, 3 },
-    .renderImgId = grapImg.id,
+    .shaderSlots = &.{ 2, 3, 0 },
     .kind = .{
         .graphics = .{
+            .renderImgId = grapImg.id,
+            .vertexCount = 3,
+            .instanceCount = 1,
             .colorAtts = &.{
                 .{ .resUsageSlot = 0, .clear = false },
             },
@@ -105,10 +114,10 @@ const graphicsTest: Pass = .{
 
 const meshTest: Pass = .{
     .shaderIds = &.{ sc.t3Mesh.id, sc.t3Frag.id },
-    .shaderSlots = &.{ 1, 2 },
-    .renderImgId = meshImg.id,
+    .shaderSlots = &.{ 1, 2, 0 },
     .kind = .{
         .taskOrMesh = .{
+            .renderImgId = meshImg.id,
             .workgroups = .{ .x = 1, .y = 1, .z = 1 },
             .colorAtts = &.{
                 .{ .resUsageSlot = 0, .clear = false },
@@ -124,10 +133,10 @@ const meshTest: Pass = .{
 
 const taskTest: Pass = .{
     .shaderIds = &.{ sc.t4Task.id, sc.t4Mesh.id, sc.t4Frag.id },
-    .shaderSlots = &.{ 1, 2 },
-    .renderImgId = taskImg.id,
+    .shaderSlots = &.{ 1, 2, 0 },
     .kind = .{
         .taskOrMesh = .{
+            .renderImgId = taskImg.id,
             .workgroups = .{ .x = 1, .y = 1, .z = 1 },
             .colorAtts = &.{
                 .{ .resUsageSlot = 0, .clear = false },
@@ -143,10 +152,10 @@ const taskTest: Pass = .{
 
 const gridTest: Pass = .{
     .shaderIds = &.{ sc.gridTask.id, sc.gridMesh.id, sc.gridFrag.id },
-    .shaderSlots = &.{1},
-    .renderImgId = taskImg.id,
+    .shaderSlots = &.{1, 0},
     .kind = .{
         .taskOrMesh = .{
+            .renderImgId = taskImg.id,
             .workgroups = .{ .x = 1, .y = 1, .z = 1 },
             .colorAtts = &.{
                 .{ .resUsageSlot = 0, .clear = true },

@@ -124,7 +124,7 @@ pub const Renderer = struct {
         for (passes) |pass| {
             if (self.shaderMan.isPassValid(pass) == true) {
                 try self.passes.append(pass);
-            } else std.debug.print("Error: Pass not valid, not appended", .{});
+            } else std.debug.print("Error: Pass ShaderLayout does not match Pass Type -> not appended\n", .{});
         }
     }
 
@@ -161,12 +161,6 @@ pub const Renderer = struct {
                 const shaderSlot = pass.shaderSlots[i];
                 const resource = try self.resMan.getResourcePtr(pass.resUsages[shaderSlot].id);
                 pcs.resourceSlots[i] = resource.getResourceSlot();
-            }
-
-            // Assign Render Image
-            if (pass.renderImgId) |imgId| {
-                const renderImg = try self.resMan.getResourcePtr(imgId);
-                pcs.renderImgIdx = renderImg.getResourceSlot().index;
             }
 
             const shaders = self.shaderMan.getShaders(pass.shaderIds)[0..pass.shaderIds.len];

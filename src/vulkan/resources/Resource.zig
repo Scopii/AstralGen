@@ -12,7 +12,7 @@ const CreateMapArray = @import("../../structures/MapArray.zig").CreateMapArray;
 pub const PushConstants = extern struct {
     runtime: f32,
     renderImgIdx: u32 = 0,
-    resourceSlots: [7]ResourceSlot = undefined,
+    resourceSlots: [15]ResourceSlot = undefined, // 7 is 64
 };
 
 pub const ResourceSlot = extern struct { index: u32 = 0, count: u32 = 0 };

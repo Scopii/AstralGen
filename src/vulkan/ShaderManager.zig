@@ -65,7 +65,7 @@ pub const ShaderManager = struct {
         const passKind = pass.kind;
 
         switch (passType) {
-            .computePass => if (passKind != .compute) return false,
+            .computePass => if (passKind != .compute and passKind != .computeOnImage) return false,
             .graphicsPass, .vertexPass => if (passKind != .graphics) return false,
             .taskMeshPass, .meshPass => if (passKind != .taskOrMesh) return false,
         }
