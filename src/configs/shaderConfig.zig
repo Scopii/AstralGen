@@ -1,5 +1,5 @@
 const vk = @import("../modules/vk.zig").c;
-const ve = @import("../vulkan/Helpers.zig");
+const vh = @import("../vulkan/Helpers.zig");
 
 // Shader Compilation
 pub const SHADER_HOTLOAD = true;
@@ -12,7 +12,7 @@ pub const sprvPath: []const u8 = "/zig-out/shader";
 
 pub const ShaderInfo = struct {
     id: u8,
-    shaderType: ve.ShaderStage,
+    shaderType: vh.ShaderStage,
     glslFile: []const u8,
     spvFile: []const u8,
 };

@@ -118,6 +118,13 @@ pub const App = struct {
 
         // Main loop
         while (true) {
+            // Shader Hotloading
+            if (shaderCon.SHADER_HOTLOAD == true) {
+                try self.shaderCompiler.checkShaderUpdates();
+                try renderer.addShaders(self.shaderCompiler.pullFreshShaders());
+                self.shaderCompiler.freeFreshShaders();
+            }
+
             // Poll Inputs
             windowMan.pollEvents() catch |err| {
                 std.log.err("Error in pollEvents(): {}", .{err});
@@ -132,6 +139,12 @@ pub const App = struct {
                 windowMan.cleanupWindows();
             }
 
+            // Handle Mouse Input
+            if (eventMan.mouseMoved() == true) {
+                cam.rotate(self.eventMan.mouseMoveX, self.eventMan.mouseMoveY);
+                eventMan.resetMouseChange();
+            }
+
             // Close Or Idle
             if (windowMan.appExit == true) return;
             if (windowMan.openWindows == 0) continue;
@@ -139,10 +152,6 @@ pub const App = struct {
             // Update Time
             timeMan.update();
             const dt = timeMan.getDeltaTime(.nano, f64);
-
-            // Handle Mouse Input
-            cam.rotate(self.eventMan.mouseMoveX, self.eventMan.mouseMoveY);
-            eventMan.resetMouseChange();
 
             // Generate and Process and clear Events
             for (eventMan.getAppEvents()) |appEvent| {
@@ -165,23 +174,15 @@ pub const App = struct {
             }
             eventMan.clearAppEvents();
 
-            // Shader Hotloading
-            if (shaderCon.SHADER_HOTLOAD == true) {
-                try self.shaderCompiler.checkShaderUpdates();
-                try renderer.addShaders(self.shaderCompiler.pullFreshShaders());
-                self.shaderCompiler.freeFreshShaders();
-            }
-
             if (firstFrame) windowMan.showAllWindows();
 
             rendererData.runtime = timeMan.getRuntime(.seconds, f32);
 
-            const camData = CameraData{
-                .viewProj = cam.getViewProj(),
-                .camPosAndFov = cam.getPosAndFov(),
-                .camDir = cam.getForward(),
-            };
-            try renderer.updateResource(rc.cameraUB, &camData);
+            if (cam.needsUpdate == true) {
+                const camData = cam.getCameraData();
+                try renderer.updateResource(rc.cameraUB, &camData);
+                cam.needsUpdate = false;
+            }
 
             // Draw and reset Frame Arena
             renderer.draw(rendererData) catch |err| {

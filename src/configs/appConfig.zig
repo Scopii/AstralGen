@@ -1,5 +1,5 @@
 // Vulkan Validation Layers
-pub const DEBUG_MODE = true;
+pub const VULKAN_VALIDATION = true;
 pub const EXTRA_VALIDATION = false;
 pub const BEST_PRACTICES = false;
 

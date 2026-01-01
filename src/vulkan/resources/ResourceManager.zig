@@ -117,7 +117,7 @@ pub const ResourceManager = struct {
         const DataType = @TypeOf(data);
         const typeInfo = @typeInfo(DataType);
 
-        // 1. Convert anytype to a byte slice safely
+        // Convert anytype to a byte slice safely
         const bytes: []const u8 = switch (typeInfo) {
             .pointer => |ptr| switch (ptr.size) {
                 .one => std.mem.asBytes(data), // For &singleStruct
@@ -129,7 +129,7 @@ pub const ResourceManager = struct {
 
         if (self.stagingOffset + bytes.len > 1 * 1024 * 1024) return error.StagingBufferFull;
 
-        // 2. Copy CPU data into the staging area
+        // Copy CPU data into the staging area
         @memcpy(self.stagingPtr[self.stagingOffset..][0..bytes.len], bytes);
 
         try self.pendingTransfers.append(.{
@@ -143,7 +143,7 @@ pub const ResourceManager = struct {
             resource.resourceType.gpuBuf.count = @intCast(bytes.len / resInf.inf.bufInf.dataSize);
         }
 
-        // 3. Align the offset to 16 bytes for GPU safety
+        // Align the offset to 16 bytes for GPU safety
         self.stagingOffset += (bytes.len + 15) & ~@as(u64, 15);
     }
 

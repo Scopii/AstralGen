@@ -222,6 +222,10 @@ pub const Command = struct {
         const combinerOps = [_]vk.VkFragmentShadingRateCombinerOpKHR{ vk.VK_FRAGMENT_SHADING_RATE_COMBINER_OP_KEEP_KHR, vk.VK_FRAGMENT_SHADING_RATE_COMBINER_OP_KEEP_KHR };
         vkFn.vkCmdSetFragmentShadingRateKHR.?(cmd, &.{ .width = 1, .height = 1 }, &combinerOps);
     }
+
+    pub fn createSubmitInfo(self: *const Command) vk.VkCommandBufferSubmitInfo {
+        return vk.VkCommandBufferSubmitInfo{ .sType = vk.VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO, .commandBuffer = self.handle };
+    }
 };
 
 fn createSubresourceLayers(mask: u32, mipLevel: u32, arrayLayer: u32, layerCount: u32) vk.VkImageSubresourceLayers {

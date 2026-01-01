@@ -50,6 +50,10 @@ pub const EventManager = struct {
             std.debug.print("Mouse Total Movement x:{} y:{}, processed {} movements\n", .{ self.mouseMoveX, self.mouseMoveY, movements.len });
     }
 
+    pub fn mouseMoved(self: *EventManager) bool {
+        return if (self.mouseMoveX != 0 or self.mouseMoveY != 0) true else false;
+    }
+
     pub fn getAppEvents(self: *EventManager) []AppEvent {
         for (inputCon.keyMap) |assignment| {
             const actualKey = switch (assignment.device) {

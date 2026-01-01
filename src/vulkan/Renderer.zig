@@ -142,7 +142,7 @@ pub const Renderer = struct {
         try self.renderGraph.recordSwapchainBlits(&cmd, targets, &self.swapMan.swapchains, &self.resMan);
         try cmd.endRecording();
 
-        try self.queueSubmit(cmd.getHandle(), targets, frameInFlight);
+        try self.queueSubmit(&cmd, targets, frameInFlight);
         try self.swapMan.present(targets, self.context.presentQ);
 
         self.scheduler.nextFrame();
@@ -174,29 +174,29 @@ pub const Renderer = struct {
         }
     }
 
-    fn queueSubmit(self: *Renderer, cmd: vk.VkCommandBuffer, submitIds: []const u32, frameInFlight: u8) !void {
+    fn queueSubmit(self: *Renderer, cmd: *const Command, targets: []const u32, frameInFlight: u8) !void {
         var waitInfos: [rc.MAX_WINDOWS]vk.VkSemaphoreSubmitInfo = undefined;
-        for (submitIds, 0..) |id, i| {
+        for (targets, 0..) |id, i| {
             const swapchain = self.swapMan.swapchains.getAtIndex(id);
             waitInfos[i] = createSemaphoreSubmitInfo(swapchain.imgRdySems[frameInFlight], vk.VK_PIPELINE_STAGE_2_TRANSFER_BIT, 0);
         }
 
         var signalInfos: [rc.MAX_WINDOWS + 1]vk.VkSemaphoreSubmitInfo = undefined;
-        for (submitIds, 0..) |id, i| {
+        for (targets, 0..) |id, i| {
             const swapchain = self.swapMan.swapchains.getAtIndex(id);
             signalInfos[i] = createSemaphoreSubmitInfo(swapchain.renderDoneSems[swapchain.curIndex], vk.VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, 0);
         }
         // Signal CPU Timeline
-        signalInfos[submitIds.len] = createSemaphoreSubmitInfo(self.scheduler.cpuSyncTimeline, vk.VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, self.scheduler.totalFrames + 1);
+        signalInfos[targets.len] = createSemaphoreSubmitInfo(self.scheduler.cpuSyncTimeline, vk.VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, self.scheduler.totalFrames + 1);
 
-        const cmdSubmitInf = vk.VkCommandBufferSubmitInfo{ .sType = vk.VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO, .commandBuffer = cmd };
+        const cmdSubmitInf = cmd.createSubmitInfo();
         const submitInf = vk.VkSubmitInfo2{
             .sType = vk.VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
-            .waitSemaphoreInfoCount = @intCast(submitIds.len),
+            .waitSemaphoreInfoCount = @intCast(targets.len),
             .pWaitSemaphoreInfos = &waitInfos,
             .commandBufferInfoCount = 1,
             .pCommandBufferInfos = &cmdSubmitInf,
-            .signalSemaphoreInfoCount = @intCast(submitIds.len + 1), // Swapchains + 1 Timeline
+            .signalSemaphoreInfoCount = @intCast(targets.len + 1), // Swapchains + 1 Timeline
             .pSignalSemaphoreInfos = &signalInfos,
         };
         try vh.check(vk.vkQueueSubmit2(self.context.graphicsQ, 1, &submitInf, null), "Failed main submission");

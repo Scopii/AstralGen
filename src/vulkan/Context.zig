@@ -76,7 +76,7 @@ pub fn createInstance(alloc: Allocator) !vk.VkInstance {
     const reqExtensions = sdl.SDL_Vulkan_GetInstanceExtensions(&extCount);
     for (0..extCount) |i| try extensions.append(reqExtensions[i]);
 
-    if (appCon.DEBUG_MODE) {
+    if (appCon.VULKAN_VALIDATION) {
         try extensions.append("VK_EXT_debug_utils");
         try layers.append("VK_LAYER_KHRONOS_validation");
         try layers.append("VK_LAYER_KHRONOS_synchronization2");
@@ -283,8 +283,8 @@ fn createGPI(alloc: Allocator, gpu: vk.VkPhysicalDevice, families: QueueFamilies
     var shadingRateFeatures = vk.VkPhysicalDeviceFragmentShadingRateFeaturesKHR{
         .sType = vk.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_SHADING_RATE_FEATURES_KHR,
         .pNext = &dynamicStateFeatures,
-        .pipelineFragmentShadingRate = vk.VK_TRUE,   // for cmd call
-        .primitiveFragmentShadingRate = vk.VK_TRUE,  // for Mesh Shader writing
+        .pipelineFragmentShadingRate = vk.VK_TRUE, // for cmd call
+        .primitiveFragmentShadingRate = vk.VK_TRUE, // for Mesh Shader writing
         .attachmentFragmentShadingRate = vk.VK_FALSE, // for images to control rate
     };
 
@@ -394,7 +394,7 @@ fn createGPI(alloc: Allocator, gpu: vk.VkPhysicalDevice, families: QueueFamilies
     try loadVkProc(gpi, &vkFn.vkCmdSetDepthWriteEnable, "vkCmdSetDepthWriteEnable");
     try loadVkProc(gpi, &vkFn.vkCmdSetDepthBoundsTestEnable, "vkCmdSetDepthBoundsTestEnable");
     try loadVkProc(gpi, &vkFn.vkCmdSetDepthBiasEnable, "vkCmdSetDepthBiasEnable");
-    try loadVkProc(gpi, &vkFn.vkCmdSetDepthBias, "vkCmdSetDepthBias"); 
+    try loadVkProc(gpi, &vkFn.vkCmdSetDepthBias, "vkCmdSetDepthBias");
     try loadVkProc(gpi, &vkFn.vkCmdSetDepthClampEnableEXT, "vkCmdSetDepthClampEnableEXT");
     try loadVkProc(gpi, &vkFn.vkCmdSetStencilTestEnable, "vkCmdSetStencilTestEnable");
 
@@ -402,7 +402,7 @@ fn createGPI(alloc: Allocator, gpu: vk.VkPhysicalDevice, families: QueueFamilies
     try loadVkProc(gpi, &vkFn.vkCmdSetColorBlendEnableEXT, "vkCmdSetColorBlendEnableEXT");
     try loadVkProc(gpi, &vkFn.vkCmdSetColorBlendEquationEXT, "vkCmdSetColorBlendEquationEXT");
     try loadVkProc(gpi, &vkFn.vkCmdSetColorWriteMaskEXT, "vkCmdSetColorWriteMaskEXT");
-    try loadVkProc(gpi, &vkFn.vkCmdSetBlendConstants, "vkCmdSetBlendConstants"); 
+    try loadVkProc(gpi, &vkFn.vkCmdSetBlendConstants, "vkCmdSetBlendConstants");
     try loadVkProc(gpi, &vkFn.vkCmdSetLogicOpEnableEXT, "vkCmdSetLogicOpEnableEXT");
     try loadVkProc(gpi, &vkFn.vkCmdSetAlphaToOneEnableEXT, "vkCmdSetAlphaToOneEnableEXT");
     try loadVkProc(gpi, &vkFn.vkCmdSetAlphaToCoverageEnableEXT, "vkCmdSetAlphaToCoverageEnableEXT");
@@ -412,9 +412,9 @@ fn createGPI(alloc: Allocator, gpu: vk.VkPhysicalDevice, families: QueueFamilies
     try loadVkProc(gpi, &vkFn.vkCmdSetScissorWithCount, "vkCmdSetScissorWithCount");
 
     // 8. Advanced / Debug / Voxel
-    try loadVkProc(gpi, &vkFn.vkCmdSetLineWidth, "vkCmdSetLineWidth"); 
-    try loadVkProc(gpi, &vkFn.vkCmdSetConservativeRasterizationModeEXT, "vkCmdSetConservativeRasterizationModeEXT"); 
-    try loadVkProc(gpi, &vkFn.vkCmdSetFragmentShadingRateKHR, "vkCmdSetFragmentShadingRateKHR"); 
+    try loadVkProc(gpi, &vkFn.vkCmdSetLineWidth, "vkCmdSetLineWidth");
+    try loadVkProc(gpi, &vkFn.vkCmdSetConservativeRasterizationModeEXT, "vkCmdSetConservativeRasterizationModeEXT");
+    try loadVkProc(gpi, &vkFn.vkCmdSetFragmentShadingRateKHR, "vkCmdSetFragmentShadingRateKHR");
 
     return gpi;
 }
