@@ -154,12 +154,12 @@ pub const Renderer = struct {
 
         // Adjust Push Constants for every Pass
         for (self.passes.items) |pass| {
-            if (pass.shaderSlots.len > pcs.resourceSlots.len) return error.TooManyShaderSlotsInPass;
+            if (pass.shaderUsages.len > pcs.resourceSlots.len) return error.TooManyShaderSlotsInPass;
 
             // Assign Shader Slots
-            for (0..pass.shaderSlots.len) |i| {
-                const shaderSlot = pass.shaderSlots[i];
-                const resource = try self.resMan.getResourcePtr(pass.resUsages[shaderSlot].id);
+            for (0..pass.shaderUsages.len) |i| {
+                const shaderSlot = pass.shaderUsages[i];
+                const resource = try self.resMan.getResourcePtr(shaderSlot.id);
                 pcs.resourceSlots[i] = resource.getResourceSlot();
             }
 

@@ -67,11 +67,49 @@ pub const RenderGraph = struct {
     pub fn recordPassBarriers(self: *RenderGraph, cmd: *const Command, pass: rc.Pass, resMan: *ResourceManager) !void {
         cmd.setGraphicsState();
 
+        switch (pass.kind) {
+            .graphics, => |graphics| {
+                for (graphics.colorAtts) |attUsage| {
+                    const resource = try resMan.getResourcePtr(attUsage.id);
+                    try self.createBarrierIfNeeded(resource.state, attUsage.getNeededState(), resource);
+                }
+                if (graphics.depthAtt) |attUsage| {
+                    const resource = try resMan.getResourcePtr(attUsage.id);
+                    try self.createBarrierIfNeeded(resource.state, attUsage.getNeededState(), resource);
+                }
+                if (graphics.stencilAtt) |attUsage| {
+                    const resource = try resMan.getResourcePtr(attUsage.id);
+                    try self.createBarrierIfNeeded(resource.state, attUsage.getNeededState(), resource);
+                }
+            },
+
+            .taskOrMesh => |taskOrMesh| {
+                for (taskOrMesh.colorAtts) |attUsage| {
+                    const resource = try resMan.getResourcePtr(attUsage.id);
+                    try self.createBarrierIfNeeded(resource.state, attUsage.getNeededState(), resource);
+                }
+                if (taskOrMesh.depthAtt) |attUsage| {
+                    const resource = try resMan.getResourcePtr(attUsage.id);
+                    try self.createBarrierIfNeeded(resource.state, attUsage.getNeededState(), resource);
+                }
+                if (taskOrMesh.stencilAtt) |attUsage| {
+                    const resource = try resMan.getResourcePtr(attUsage.id);
+                    try self.createBarrierIfNeeded(resource.state, attUsage.getNeededState(), resource);
+                }
+            },
+            else => {},
+        }
+
         for (pass.resUsages) |resUsage| {
             const resource = try resMan.getResourcePtr(resUsage.id);
-            const neededState = ResourceState{ .stage = resUsage.stage, .access = resUsage.access, .layout = resUsage.layout };
-            try self.createBarrierIfNeeded(resource.state, neededState, resource);
+            try self.createBarrierIfNeeded(resource.state, resUsage.getNeededState(), resource);
         }
+
+        for (pass.shaderUsages) |resUsage| {
+            const resource = try resMan.getResourcePtr(resUsage.id);
+            try self.createBarrierIfNeeded(resource.state, resUsage.getNeededState(), resource);
+        }
+
         self.bakeBarriers(cmd);
     }
 
@@ -103,27 +141,24 @@ pub const RenderGraph = struct {
         }
     }
 
-    fn recordGraphics(cmd: *const Command, colorAtts: []const rc.Pass.Attachment, depthAtt: ?rc.Pass.Attachment, stencilAtt: ?rc.Pass.Attachment, renderImgId: u32, pass: rc.Pass, resMan: *ResourceManager) !void {
+    fn recordGraphics(cmd: *const Command, colorAtts: []const rc.Pass.AttachmentUsage, depthAtt: ?rc.Pass.AttachmentUsage, stencilAtt: ?rc.Pass.AttachmentUsage, renderImgId: u32, pass: rc.Pass, resMan: *ResourceManager) !void {
         if (colorAtts.len > 8) return error.TooManyAttachments;
         const mainImg = try resMan.getImagePtr(renderImgId);
 
         const depthInf: ?vk.VkRenderingAttachmentInfo = if (depthAtt) |depth| blk: {
-            const imgId = pass.resUsages[depth.resUsageSlot].id;
-            const img = try resMan.getImagePtr(imgId);
+            const img = try resMan.getImagePtr(depth.id);
             break :blk createAttachment(img.imgInf.imgType, img.view, depth.clear);
         } else null;
 
         const stencilInf: ?vk.VkRenderingAttachmentInfo = if (stencilAtt) |stencil| blk: {
-            const imgId = pass.resUsages[stencil.resUsageSlot].id;
-            const img = try resMan.getImagePtr(imgId);
+            const img = try resMan.getImagePtr(stencil.id);
             break :blk createAttachment(img.imgInf.imgType, img.view, stencil.clear);
         } else null;
 
         var colorInfs: [8]vk.VkRenderingAttachmentInfo = undefined;
         for (0..colorAtts.len) |i| {
             const color = colorAtts[i];
-            const imgId = pass.resUsages[color.resUsageSlot].id;
-            const img = try resMan.getImagePtr(imgId);
+            const img = try resMan.getImagePtr(color.id);
             colorInfs[i] = createAttachment(img.imgInf.imgType, img.view, color.clear);
         }
 
