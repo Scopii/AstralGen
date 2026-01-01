@@ -18,7 +18,9 @@ struct Resource {
 
 struct PushConstants {
     float runtime;
-    uint renderImgIdx;
+    float deltaTime;
+    uint width;
+    uint height;
     Resource resources[15];
 };
 
@@ -105,8 +107,8 @@ void main(uint3 id : SV_DispatchThreadID) {
     CameraData cam = camData[0];
 
     // Bounds check (because group size is 8x8)
-    uint renderWidth, renderHeight;
-    renderImg.GetDimensions(renderWidth, renderHeight);
+    uint renderWidth = pc.width;
+    uint renderHeight = pc.height;
     if (id.x >= renderWidth || id.y >= renderHeight) return;
 
     float2 uv = (float2(id.xy) / float2(renderWidth, renderHeight)) * 2.0 - 1.0;

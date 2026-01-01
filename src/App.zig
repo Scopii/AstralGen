@@ -176,7 +176,8 @@ pub const App = struct {
 
             if (firstFrame) windowMan.showAllWindows();
 
-            rendererData.runtime = timeMan.getRuntime(.seconds, f32);
+            rendererData.runTime = timeMan.getRuntime(.seconds, f32);
+            rendererData.deltaTime = timeMan.getDeltaTime(.seconds, f32);
 
             if (cam.needsUpdate == true) {
                 const camData = cam.getCameraData();
@@ -200,5 +201,6 @@ pub const App = struct {
 };
 
 pub const RendererData = struct {
-    runtime: f32,
+    runTime: f32,
+    deltaTime: f32,
 };

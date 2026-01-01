@@ -18,7 +18,9 @@ struct Resource {
 
 struct PushConstants {
     float runtime;
-    uint renderImgIdx;
+    float deltaTime;
+    uint width;
+    uint height;
     Resource resources[15];
 };
 
@@ -103,8 +105,8 @@ float4 main(float4 pixelPos: SV_Position) : SV_Target {
     StructuredBuffer<CameraData> camData = globalCameraBuffers[pc.resources[1].index];
     CameraData cam = camData[0];
 
-    uint width, height;
-    globalImages[pc.resources[2].index].GetDimensions(width, height);
+    uint width = pc.width;
+    uint height = pc.height;
     float2 renderDimensions = float2(width, height);
     float2 uv = (pixelPos.xy / renderDimensions) * 2.0 - 1.0;
 

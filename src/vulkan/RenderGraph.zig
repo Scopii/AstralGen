@@ -9,6 +9,7 @@ const PushConstants = @import("resources/Resource.zig").PushConstants;
 const SwapchainManager = @import("SwapchainManager.zig");
 const Command = @import("Command.zig").Command;
 const vh = @import("Helpers.zig");
+const RendererData = @import("../App.zig").RendererData;
 
 pub const ResourceState = struct {
     stage: vh.PipeStage = .TopOfPipe,
@@ -68,7 +69,8 @@ pub const RenderGraph = struct {
         cmd.setGraphicsState();
 
         switch (pass.kind) {
-            .graphics, => |graphics| {
+            .graphics,
+            => |graphics| {
                 for (graphics.colorAtts) |attUsage| {
                     const resource = try resMan.getResourcePtr(attUsage.id);
                     try self.createBarrierIfNeeded(resource.state, attUsage.getNeededState(), resource);
@@ -129,21 +131,52 @@ pub const RenderGraph = struct {
         } else cmd.dispatch(dispatch.x, dispatch.y, dispatch.z);
     }
 
-    pub fn recordPass(self: *RenderGraph, cmd: *const Command, pass: rc.Pass, pcs: PushConstants, validShaders: []const ShaderObject, resMan: *ResourceManager) !void {
+    pub fn recordPass(self: *RenderGraph, cmd: *const Command, pass: rc.Pass, rendererData: RendererData, validShaders: []const ShaderObject, resMan: *ResourceManager) !void {
+        try self.recordPassBarriers(cmd, pass, resMan);
+
+        var pcs = PushConstants{ .runTime = rendererData.runTime, .deltaTime = rendererData.deltaTime };
+        if (pass.shaderUsages.len > pcs.resourceSlots.len) return error.TooManyShaderSlotsInPass;
+        // Assign Shader Slots
+        for (0..pass.shaderUsages.len) |i| {
+            const shaderSlot = pass.shaderUsages[i];
+            const resource = try resMan.getResourcePtr(shaderSlot.id);
+            pcs.resourceSlots[i] = resource.getResourceSlot();
+        }
+
+        const mainImg = switch (pass.kind) {
+            .compute => null,
+            .computeOnImage => |compOnImage| try resMan.getImagePtr(compOnImage.renderImgId),
+            .graphics => |graphics| try resMan.getImagePtr(graphics.renderImgId),
+            .taskOrMesh => |taskOrMesh| try resMan.getImagePtr(taskOrMesh.renderImgId),
+        };
+
+        if (mainImg) |img| {
+            pcs.width = img.imgInf.extent.width;
+            pcs.height = img.imgInf.extent.height;
+        }
+
         cmd.setPushConstants(self.pipeLayout, vk.VK_SHADER_STAGE_ALL, 0, @sizeOf(PushConstants), &pcs);
         cmd.bindShaders(validShaders);
 
         switch (pass.kind) {
             .compute => |comp| try recordCompute(cmd, comp.workgroups, null, resMan),
             .computeOnImage => |compOnImage| try recordCompute(cmd, compOnImage.workgroups, compOnImage.renderImgId, resMan),
-            .graphics => |graphics| try recordGraphics(cmd, graphics.colorAtts, graphics.depthAtt, graphics.stencilAtt, graphics.renderImgId, pass, resMan),
-            .taskOrMesh => |taskOrMesh| try recordGraphics(cmd, taskOrMesh.colorAtts, taskOrMesh.depthAtt, taskOrMesh.stencilAtt, taskOrMesh.renderImgId, pass, resMan),
+            .graphics => |graphics| try recordGraphics(cmd, graphics.colorAtts, graphics.depthAtt, graphics.stencilAtt, pcs.width, pcs.height, pass, resMan),
+            .taskOrMesh => |taskOrMesh| try recordGraphics(cmd, taskOrMesh.colorAtts, taskOrMesh.depthAtt, taskOrMesh.stencilAtt, pcs.width, pcs.height, pass, resMan),
         }
     }
 
-    fn recordGraphics(cmd: *const Command, colorAtts: []const rc.Pass.AttachmentUsage, depthAtt: ?rc.Pass.AttachmentUsage, stencilAtt: ?rc.Pass.AttachmentUsage, renderImgId: u32, pass: rc.Pass, resMan: *ResourceManager) !void {
+    fn recordGraphics(
+        cmd: *const Command,
+        colorAtts: []const rc.Pass.AttachmentUsage,
+        depthAtt: ?rc.Pass.AttachmentUsage,
+        stencilAtt: ?rc.Pass.AttachmentUsage,
+        width: u32,
+        height: u32,
+        pass: rc.Pass,
+        resMan: *ResourceManager,
+    ) !void {
         if (colorAtts.len > 8) return error.TooManyAttachments;
-        const mainImg = try resMan.getImagePtr(renderImgId);
 
         const depthInf: ?vk.VkRenderingAttachmentInfo = if (depthAtt) |depth| blk: {
             const img = try resMan.getImagePtr(depth.id);
@@ -162,7 +195,7 @@ pub const RenderGraph = struct {
             colorInfs[i] = createAttachment(img.imgInf.imgType, img.view, color.clear);
         }
 
-        cmd.beginRendering(mainImg.imgInf.extent.width, mainImg.imgInf.extent.height, colorInfs[0..colorAtts.len], depthInf, stencilInf);
+        cmd.beginRendering(width, height, colorInfs[0..colorAtts.len], depthInf, stencilInf);
 
         switch (pass.kind) {
             .compute, .computeOnImage => return error.ComputeLandedInGraphicsPass,

@@ -150,22 +150,9 @@ pub const Renderer = struct {
     }
 
     fn recordPasses(self: *Renderer, cmd: *const Command, rendererData: RendererData) !void {
-        var pcs = PushConstants{ .runtime = rendererData.runtime };
-
-        // Adjust Push Constants for every Pass
         for (self.passes.items) |pass| {
-            if (pass.shaderUsages.len > pcs.resourceSlots.len) return error.TooManyShaderSlotsInPass;
-
-            // Assign Shader Slots
-            for (0..pass.shaderUsages.len) |i| {
-                const shaderSlot = pass.shaderUsages[i];
-                const resource = try self.resMan.getResourcePtr(shaderSlot.id);
-                pcs.resourceSlots[i] = resource.getResourceSlot();
-            }
-
             const shaders = self.shaderMan.getShaders(pass.shaderIds)[0..pass.shaderIds.len];
-            try self.renderGraph.recordPassBarriers(cmd, pass, &self.resMan);
-            try self.renderGraph.recordPass(cmd, pass, pcs, shaders, &self.resMan);
+            try self.renderGraph.recordPass(cmd, pass, rendererData, shaders, &self.resMan);
         }
     }
 

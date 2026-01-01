@@ -173,7 +173,7 @@ const gridTest: Pass = .{
             .renderImgId = taskImg.id,
             .workgroups = .{ .x = 1, .y = 1, .z = 1 },
             .colorAtts = &.{
-                .{ .id = taskImg.id, .stage = .ColorAtt, .access = .ColorAttWrite, .layout = .Attachment, .clear = true },
+                .{ .id = taskImg.id, .stage = .ColorAtt, .access = .ColorAttWrite, .layout = .Attachment, .clear = false },
             },
         },
     },

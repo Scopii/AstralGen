@@ -41,7 +41,9 @@ struct Resource {
 
 struct PushConstants {
     float runtime;
-    uint renderImgIdx;
+    float deltaTime;
+    uint width;
+    uint height;
     Resource resources[15];
 };
 
