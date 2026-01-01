@@ -3,7 +3,8 @@ const std = @import("std");
 const DescriptorBuffer = @import("DescriptorManager.zig").DescriptorBuffer;
 const Resource = @import("ResourceManager.zig").Resource;
 const rc = @import("../../configs/renderConfig.zig");
-const check = @import("../ErrorHelpers.zig").check;
+const check = @import("../Helpers.zig").check;
+const ve = @import("../Helpers.zig");
 
 pub const GpuAllocator = struct {
     handle: vk.VmaAllocator,
@@ -53,14 +54,14 @@ pub const GpuAllocator = struct {
         std.debug.print("Allocation is in VRAM: {}, CPU Visible: {}\n", .{ is_vram, is_cpu_visible });
     }
 
-    pub fn allocDefinedBuffer(self: *const GpuAllocator, bindingInf: rc.ResourceInf.BufInf, memUsage: rc.ResourceInf.MemUsage) !Resource.GpuBuffer {
+    pub fn allocDefinedBuffer(self: *const GpuAllocator, bindingInf: rc.ResourceInf.BufInf, memUsage: ve.MemUsage) !Resource.GpuBuffer {
         if (bindingInf.dataSize == 0) {
             std.debug.print("Binding Info has invalid element size\n", .{});
             return error.AllocDefinedBufferFailed;
         }
         const bufferByteSize = @as(vk.VkDeviceSize, bindingInf.length) * bindingInf.dataSize;
 
-        var bufferBits: vk.VkBufferUsageFlags = switch (bindingInf.usage) {
+        var bufferBits: vk.VkBufferUsageFlags = switch (bindingInf.bufType) {
             .Storage => vk.VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
             .Uniform => vk.VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
             .Index => vk.VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
@@ -68,7 +69,7 @@ pub const GpuAllocator = struct {
             .Staging => vk.VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
         };
 
-        if (bindingInf.usage != .Staging) {
+        if (bindingInf.bufType != .Staging) {
             bufferBits |= vk.VK_BUFFER_USAGE_TRANSFER_DST_BIT;
             bufferBits |= vk.VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
         }
@@ -83,7 +84,7 @@ pub const GpuAllocator = struct {
             .Gpu => 0,
             .CpuWrite, .CpuRead => vk.VMA_ALLOCATION_CREATE_MAPPED_BIT,
         };
-        if (bindingInf.usage == .Staging) memFlags |= vk.VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+        if (bindingInf.bufType == .Staging) memFlags |= vk.VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
 
         return try self.allocBuffer(bufferByteSize, bufferBits, memType, memFlags);
     }
@@ -115,7 +116,7 @@ pub const GpuAllocator = struct {
         };
     }
 
-    pub fn allocGpuImage(self: *GpuAllocator, resourceImgInf: rc.ResourceInf.ImgInf, memUsage: rc.ResourceInf.MemUsage) !Resource.GpuImage {
+    pub fn allocGpuImage(self: *GpuAllocator, resourceImgInf: rc.ResourceInf.ImgInf, memUsage: ve.MemUsage) !Resource.GpuImage {
         const mappedMemUsage: vk.VmaMemoryUsage = switch (memUsage) {
             .Gpu => vk.VMA_MEMORY_USAGE_GPU_ONLY,
             .CpuWrite => vk.VMA_MEMORY_USAGE_CPU_TO_GPU,

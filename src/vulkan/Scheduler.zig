@@ -1,7 +1,7 @@
 const std = @import("std");
 const vk = @import("../modules/vk.zig").c;
 const Context = @import("Context.zig").Context;
-const check = @import("ErrorHelpers.zig").check;
+const vh = @import("Helpers.zig");
 
 pub const Scheduler = struct {
     gpi: vk.VkDevice,
@@ -53,7 +53,7 @@ pub const Scheduler = struct {
 pub fn createSemaphore(gpi: vk.VkDevice) !vk.VkSemaphore {
     const seamphoreInf = vk.VkSemaphoreCreateInfo{ .sType = vk.VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO };
     var semaphore: vk.VkSemaphore = undefined;
-    try check(vk.vkCreateSemaphore(gpi, &seamphoreInf, null, &semaphore), "Could not create Semaphore");
+    try vh.check(vk.vkCreateSemaphore(gpi, &seamphoreInf, null, &semaphore), "Could not create Semaphore");
     return semaphore;
 }
 
@@ -63,7 +63,7 @@ pub fn createFence(gpi: vk.VkDevice) !vk.VkFence {
         .flags = vk.VK_FENCE_CREATE_SIGNALED_BIT,
     };
     var fence: vk.VkFence = undefined;
-    try check(vk.vkCreateFence(gpi, &fenceInf, null, &fence), "Could not create Fence");
+    try vh.check(vk.vkCreateFence(gpi, &fenceInf, null, &fence), "Could not create Fence");
     return fence;
 }
 
@@ -78,7 +78,7 @@ pub fn createTimeline(gpi: vk.VkDevice) !vk.VkSemaphore {
         .pNext = &semaphoreTypeInf,
     };
     var semaphore: vk.VkSemaphore = undefined;
-    try check(vk.vkCreateSemaphore(gpi, &semaphoreInf, null, &semaphore), "Could not create Timeline Semaphore");
+    try vh.check(vk.vkCreateSemaphore(gpi, &semaphoreInf, null, &semaphore), "Could not create Timeline Semaphore");
     return semaphore;
 }
 
@@ -89,11 +89,11 @@ pub fn waitForTimeline(gpi: vk.VkDevice, semaphore: vk.VkSemaphore, val: u64, ti
         .pSemaphores = &semaphore,
         .pValues = &val,
     };
-    try check(vk.vkWaitSemaphores(gpi, &waitInf, timeout), "Failed to wait for timeline semaphore");
+    try vh.check(vk.vkWaitSemaphores(gpi, &waitInf, timeout), "Failed to wait for timeline semaphore");
 }
 
 pub fn getTimelineVal(gpi: vk.VkDevice, semaphore: vk.VkSemaphore) !u64 {
     var val: u64 = 0;
-    try check(vk.vkGetSemaphoreCounterValue(gpi, semaphore, &val), "Failed to get timeline semaphore value");
+    try vh.check(vk.vkGetSemaphoreCounterValue(gpi, semaphore, &val), "Failed to get timeline semaphore value");
     return val;
 }

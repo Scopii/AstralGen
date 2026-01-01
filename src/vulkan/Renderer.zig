@@ -10,15 +10,14 @@ const SwapchainManager = @import("SwapchainManager.zig").SwapchainManager;
 const PushConstants = @import("resources/DescriptorManager.zig").PushConstants;
 const ResourceManager = @import("resources/ResourceManager.zig").ResourceManager;
 const MemoryManager = @import("../core/MemoryManager.zig").MemoryManager;
-const check = @import("ErrorHelpers.zig").check;
 const createInstance = @import("Context.zig").createInstance;
-const ShaderObject = @import("ShaderObject.zig").ShaderObject;
 const Resource = @import("resources/ResourceManager.zig").Resource;
 const RenderGraph = @import("RenderGraph.zig").RenderGraph;
 const RendererData = @import("../App.zig").RendererData;
 const rc = @import("../configs/renderConfig.zig");
 const Allocator = std.mem.Allocator;
 const Command = @import("Command.zig").Command;
+const vh = @import("Helpers.zig");
 
 pub const Renderer = struct {
     alloc: Allocator,
@@ -200,7 +199,7 @@ pub const Renderer = struct {
             .signalSemaphoreInfoCount = @intCast(submitIds.len + 1), // Swapchains + 1 Timeline
             .pSignalSemaphoreInfos = &signalInfos,
         };
-        try check(vk.vkQueueSubmit2(self.context.graphicsQ, 1, &submitInf, null), "Failed main submission");
+        try vh.check(vk.vkQueueSubmit2(self.context.graphicsQ, 1, &submitInf, null), "Failed main submission");
     }
 
     pub fn addShaders(self: *Renderer, loadedShaders: []LoadedShader) !void {
@@ -224,35 +223,4 @@ pub const Renderer = struct {
 
 fn createSemaphoreSubmitInfo(semaphore: vk.VkSemaphore, stageMask: u64, value: u64) vk.VkSemaphoreSubmitInfo {
     return .{ .sType = vk.VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO, .semaphore = semaphore, .stageMask = stageMask, .value = value };
-}
-
-fn checkShaderLayout(shaders: []const ShaderObject) !enum { computePass, graphicsPass, meshPass, taskMeshPass, vertexPass } {
-    var shdr: [9]u8 = .{0} ** 9;
-    var prevIndex: i8 = -1;
-
-    for (shaders) |shader| {
-        const curIndex: i8 = switch (shader.stage) {
-            .compute => 0,
-            .vert => 1,
-            .tessControl => 2,
-            .tessEval => 3,
-            .geometry => 4,
-            .task => 5,
-            .mesh => 6,
-            .meshNoTask => 6, // LAYOUT NOT CHECKED YET
-            .frag => 7,
-        };
-        if (curIndex < prevIndex) return error.ShaderLayoutOrderInvalid;
-        prevIndex = curIndex;
-        shdr[@intCast(curIndex)] += 1;
-    }
-    switch (shaders.len) {
-        1 => if (shdr[0] == 1) return .computePass else if (shdr[1] == 1) return .vertexPass,
-        2 => if (shdr[6] == 1 and shdr[7] == 1) return .meshPass,
-        3 => if (shdr[5] == 1 and shdr[6] == 1 and shdr[7] == 1) return .taskMeshPass,
-        else => {},
-    }
-    if (shdr[1] == 1 and shdr[2] <= 1 and shdr[3] <= 1 and shdr[4] <= 1 and shdr[5] == 0 and shdr[6] == 0 and shdr[7] == 1) return .graphicsPass;
-    if (shdr[2] != shdr[3]) return error.ShaderLayoutTessellationMismatch;
-    return error.ShaderLayoutInvalid;
 }

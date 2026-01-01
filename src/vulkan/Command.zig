@@ -1,16 +1,9 @@
-const std = @import("std");
 const vk = @import("../modules/vk.zig").c;
 const vkFn = @import("../modules/vk.zig");
-const Allocator = std.mem.Allocator;
-const Context = @import("Context.zig").Context;
 const ResourceManager = @import("resources/ResourceManager.zig").ResourceManager;
-const rc = @import("../configs/renderConfig.zig");
-const MAX_WINDOWS = rc.MAX_WINDOWS;
-const check = @import("ErrorHelpers.zig").check;
-const sc = @import("../configs/shaderConfig.zig");
 const ShaderObject = @import("ShaderObject.zig").ShaderObject;
-const GpuImage = @import("resources/ResourceManager.zig").Resource.GpuImage;
 const PendingTransfer = @import("resources/ResourceManager.zig").PendingTransfer;
+const vh = @import("Helpers.zig");
 
 pub const Command = struct {
     handle: vk.VkCommandBuffer,
@@ -20,7 +13,7 @@ pub const Command = struct {
     }
 
     pub fn endRecording(self: *const Command) !void {
-        try check(vk.vkEndCommandBuffer(self.handle), "Could not End Cmd Buffer");
+        try vh.check(vk.vkEndCommandBuffer(self.handle), "Could not End Cmd Buffer");
     }
 
     pub fn bakeBarriers(self: *const Command, imgBarriers: []const vk.VkImageMemoryBarrier2, bufBarriers: []const vk.VkBufferMemoryBarrier2) void {
@@ -149,7 +142,7 @@ pub const Command = struct {
         var handles: [8]vk.VkShaderEXT = .{null} ** 8;
 
         for (shaderObjects) |shader| {
-            const activeStageBit = sc.getShaderBit(shader.stage);
+            const activeStageBit = vh.getShaderBit(shader.stage);
 
             for (0..8) |i| {
                 if (allStages[i] == activeStageBit) {

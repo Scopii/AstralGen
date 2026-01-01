@@ -6,7 +6,6 @@ const ResourceSlot = @import("DescriptorManager.zig").ResourceSlot;
 const DescriptorManager = @import("DescriptorManager.zig").DescriptorManager;
 const ResourceState = @import("../RenderGraph.zig").ResourceState;
 const GpuAllocator = @import("GpuAllocator.zig").GpuAllocator;
-const Object = @import("../../ecs/EntityManager.zig").Object;
 const rc = @import("../../configs/renderConfig.zig");
 const CreateMapArray = @import("../../structures/MapArray.zig").CreateMapArray;
 

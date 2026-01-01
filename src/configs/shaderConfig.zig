@@ -1,4 +1,6 @@
 const vk = @import("../modules/vk.zig").c;
+const ve = @import("../vulkan/Helpers.zig");
+
 // Shader Compilation
 pub const SHADER_HOTLOAD = true;
 pub const SHADER_STARTUP_COMPILATION = true;
@@ -8,25 +10,9 @@ pub const rootPath: []const u8 = "../..";
 pub const glslPath: []const u8 = "/src/shader";
 pub const sprvPath: []const u8 = "/zig-out/shader";
 
-pub const ShaderStage = enum(vk.VkShaderStageFlagBits) { compute, vert, tessControl, tessEval, geometry, task, mesh, meshNoTask, frag };
-
-pub fn getShaderBit(stageEnum: ShaderStage) vk.VkShaderStageFlagBits {
-    return switch (stageEnum) {
-        .compute => vk.VK_SHADER_STAGE_COMPUTE_BIT,
-        .vert => vk.VK_SHADER_STAGE_VERTEX_BIT,
-        .tessControl => vk.VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT,
-        .tessEval => vk.VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT,
-        .geometry => vk.VK_SHADER_STAGE_GEOMETRY_BIT,
-        .task => vk.VK_SHADER_STAGE_TASK_BIT_EXT,
-        .mesh => vk.VK_SHADER_STAGE_MESH_BIT_EXT,
-        .meshNoTask => vk.VK_SHADER_STAGE_MESH_BIT_EXT,
-        .frag => vk.VK_SHADER_STAGE_FRAGMENT_BIT,
-    };
-}
-
 pub const ShaderInfo = struct {
     id: u8,
-    shaderType: ShaderStage,
+    shaderType: ve.ShaderStage,
     glslFile: []const u8,
     spvFile: []const u8,
 };

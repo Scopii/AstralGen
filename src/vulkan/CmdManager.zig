@@ -1,12 +1,9 @@
 const std = @import("std");
 const vk = @import("../modules/vk.zig").c;
-const vkFn = @import("../modules/vk.zig");
 const Allocator = std.mem.Allocator;
 const Context = @import("Context.zig").Context;
 const ResourceManager = @import("resources/ResourceManager.zig").ResourceManager;
-const rc = @import("../configs/renderConfig.zig");
-const MAX_WINDOWS = rc.MAX_WINDOWS;
-const check = @import("ErrorHelpers.zig").check;
+const vh = @import("Helpers.zig");
 const Command = @import("Command.zig").Command;
 
 pub const CmdManager = struct {
@@ -43,14 +40,14 @@ pub const CmdManager = struct {
 
     pub fn getAndBeginCommand(self: *CmdManager, frameInFlight: u8) !Command {
         const cmd = self.cmds[frameInFlight];
-        try check(vk.vkResetCommandBuffer(cmd.handle, 0), "could not reset command buffer"); // Might be optional
+        try vh.check(vk.vkResetCommandBuffer(cmd.handle, 0), "could not reset command buffer"); // Might be optional
 
         const beginInf = vk.VkCommandBufferBeginInfo{
             .sType = vk.VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
             .flags = vk.VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT, //vk.VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT
             .pInheritanceInfo = null,
         };
-        try check(vk.vkBeginCommandBuffer(cmd.handle, &beginInf), "could not Begin CmdBuffer");
+        try vh.check(vk.vkBeginCommandBuffer(cmd.handle, &beginInf), "could not Begin CmdBuffer");
 
         cmd.bindDescriptorBuffer(self.descLayoutAddress);
         cmd.setDescriptorBufferOffset(vk.VK_PIPELINE_BIND_POINT_COMPUTE, self.pipeLayout);
@@ -68,7 +65,7 @@ fn createCmd(gpi: vk.VkDevice, pool: vk.VkCommandPool, level: vk.VkCommandBuffer
         .commandBufferCount = 1,
     };
     var cmd: vk.VkCommandBuffer = undefined;
-    try check(vk.vkAllocateCommandBuffers(gpi, &allocInf, &cmd), "Could not create Cmd Buffer");
+    try vh.check(vk.vkAllocateCommandBuffers(gpi, &allocInf, &cmd), "Could not create Cmd Buffer");
     return cmd;
 }
 
@@ -79,6 +76,6 @@ fn createCmdPool(gpi: vk.VkDevice, familyIndex: u32) !vk.VkCommandPool {
         .queueFamilyIndex = familyIndex,
     };
     var pool: vk.VkCommandPool = undefined;
-    try check(vk.vkCreateCommandPool(gpi, &poolInf, null, &pool), "Could not create Cmd Pool");
+    try vh.check(vk.vkCreateCommandPool(gpi, &poolInf, null, &pool), "Could not create Cmd Pool");
     return pool;
 }

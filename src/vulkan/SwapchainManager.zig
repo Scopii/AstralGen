@@ -6,7 +6,7 @@ const Context = @import("Context.zig").Context;
 const Window = @import("../platform/Window.zig").Window;
 const CreateMapArray = @import("../structures/MapArray.zig").CreateMapArray;
 const FixedList = @import("../structures/FixedList.zig").FixedList;
-const check = @import("ErrorHelpers.zig").check;
+const vh = @import("Helpers.zig");
 const createSemaphore = @import("Scheduler.zig").createSemaphore;
 const rc = @import("../configs/renderConfig.zig");
 
@@ -72,7 +72,7 @@ pub const SwapchainManager = struct {
         };
         const result = vk.vkQueuePresentKHR(presentQueue, &presentInf);
         if (result != vk.VK_SUCCESS and result != vk.VK_ERROR_OUT_OF_DATE_KHR and result != vk.VK_SUBOPTIMAL_KHR) {
-            try check(result, "Failed to present swapchain image");
+            try vh.check(result, "Failed to present swapchain image");
         }
     }
 
@@ -104,7 +104,7 @@ pub const SwapchainManager = struct {
                         std.debug.print("Resolved Error for Swapchain {}", .{ptr.*});
                     } else std.debug.print("Could not Resolve Swapchain Error {}", .{ptr.*});
                 },
-                else => try check(result1, "Could not acquire swapchain image"),
+                else => try vh.check(result1, "Could not acquire swapchain image"),
             }
         }
         return if (self.targets.len != 0) true else false;
@@ -235,14 +235,14 @@ pub const SwapchainManager = struct {
             .oldSwapchain = if (oldHandle != null) oldHandle.? else null,
         };
         var handle: vk.VkSwapchainKHR = undefined;
-        try check(vk.vkCreateSwapchainKHR(gpi, &swapchainInf, null, &handle), "Could not create Swapchain Handle");
+        try vh.check(vk.vkCreateSwapchainKHR(gpi, &swapchainInf, null, &handle), "Could not create Swapchain Handle");
 
         var realImgCount: u32 = 0;
         _ = vk.vkGetSwapchainImagesKHR(gpi, handle, &realImgCount, null);
 
         const images = try alloc.alloc(vk.VkImage, realImgCount);
         errdefer alloc.free(images);
-        try check(vk.vkGetSwapchainImagesKHR(gpi, handle, &realImgCount, images.ptr), "Could not get Swapchain Images");
+        try vh.check(vk.vkGetSwapchainImagesKHR(gpi, handle, &realImgCount, images.ptr), "Could not get Swapchain Images");
 
         const views = try alloc.alloc(vk.VkImageView, realImgCount);
         errdefer alloc.free(views);
@@ -261,7 +261,7 @@ pub const SwapchainManager = struct {
                     .layerCount = 1,
                 },
             };
-            try check(vk.vkCreateImageView(gpi, &imgViewInf, null, &views[i]), "Failed to create image view");
+            try vh.check(vk.vkCreateImageView(gpi, &imgViewInf, null, &views[i]), "Failed to create image view");
         }
 
         const imgRdySems = try alloc.alloc(vk.VkSemaphore, rc.MAX_IN_FLIGHT);
@@ -288,7 +288,7 @@ pub const SwapchainManager = struct {
 
 fn getSurfaceCaps(gpu: vk.VkPhysicalDevice, surface: vk.VkSurfaceKHR) !vk.VkSurfaceCapabilitiesKHR {
     var caps: vk.VkSurfaceCapabilitiesKHR = undefined;
-    try check(vk.vkGetPhysicalDeviceSurfaceCapabilitiesKHR(gpu, surface, &caps), "Failed to get surface capabilities");
+    try vh.check(vk.vkGetPhysicalDeviceSurfaceCapabilitiesKHR(gpu, surface, &caps), "Failed to get surface capabilities");
     return caps;
 }
 
@@ -311,13 +311,13 @@ fn pickExtent(caps: *const vk.VkSurfaceCapabilitiesKHR, curExtent: vk.VkExtent2D
 
 fn pickSurfaceFormat(alloc: Allocator, gpu: vk.VkPhysicalDevice, surface: vk.VkSurfaceKHR) !vk.VkSurfaceFormatKHR {
     var formatCount: u32 = 0;
-    try check(vk.vkGetPhysicalDeviceSurfaceFormatsKHR(gpu, surface, &formatCount, null), "Failed to get format count");
+    try vh.check(vk.vkGetPhysicalDeviceSurfaceFormatsKHR(gpu, surface, &formatCount, null), "Failed to get format count");
     if (formatCount == 0) return error.NoSurfaceFormats;
 
     const formats = try alloc.alloc(vk.VkSurfaceFormatKHR, formatCount);
     defer alloc.free(formats);
 
-    try check(vk.vkGetPhysicalDeviceSurfaceFormatsKHR(gpu, surface, &formatCount, formats.ptr), "Failed to get surface formats");
+    try vh.check(vk.vkGetPhysicalDeviceSurfaceFormatsKHR(gpu, surface, &formatCount, formats.ptr), "Failed to get surface formats");
     // Return preferred format if available otherwise first one
     if (formats.len == 1 and formats[0].format == vk.VK_FORMAT_UNDEFINED) {
         return vk.VkSurfaceFormatKHR{ .format = vk.VK_FORMAT_B8G8R8A8_UNORM, .colorSpace = vk.VK_COLOR_SPACE_SRGB_NONLINEAR_KHR };

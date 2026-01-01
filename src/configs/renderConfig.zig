@@ -2,9 +2,7 @@ const vk = @import("../modules/vk.zig").c;
 const Object = @import("../ecs/EntityManager.zig").Object;
 const CameraData = @import("../core/Camera.zig").CameraData;
 const sc = @import("shaderConfig.zig");
-const PipeAccess = @import("../vulkan/RenderGraph.zig").PipeAccess;
-const PipeStage = @import("../vulkan/RenderGraph.zig").PipeStage;
-const ImageLayout = @import("../vulkan/RenderGraph.zig").ImageLayout;
+const ve = @import("../vulkan/Helpers.zig");
 
 // Rendering, Swapchains and Windows
 pub const MAX_IN_FLIGHT: u8 = 2; // (Frames)
@@ -47,19 +45,16 @@ pub const Pass = struct {
     };
     pub const Dispatch = struct { x: u32, y: u32, z: u32 };
     pub const Attachment = struct { resUsageSlot: u8, clear: bool };
-    pub const ResourceUsage = struct { id: u32, stage: PipeStage = .TopOfPipe, access: PipeAccess = .None, layout: ImageLayout = .General };
+    pub const ResourceUsage = struct { id: u32, stage: ve.PipeStage = .TopOfPipe, access: ve.PipeAccess = .None, layout: ve.ImageLayout = .General };
 };
-
-pub const ImgType = enum { Color, Depth, Stencil };
 
 pub const ResourceInf = struct {
     id: u32,
-    memUse: MemUsage,
+    memUse: ve.MemUsage,
     inf: union(enum) { imgInf: ImgInf, bufInf: BufInf },
 
-    pub const ImgInf = struct { extent: vk.VkExtent3D, format: c_uint = RENDER_IMG_FORMAT, imgType: ImgType };
-    pub const BufInf = struct { dataSize: u64 = 0, length: u32, usage: enum { Storage, Uniform, Index, Vertex, Staging } };
-    pub const MemUsage = enum { Gpu, CpuWrite, CpuRead };
+    pub const ImgInf = struct { extent: vk.VkExtent3D, format: c_uint = RENDER_IMG_FORMAT, imgType: ve.ImgType };
+    pub const BufInf = struct { dataSize: u64 = 0, length: u32, bufType: ve.BufferType };
 };
 
 pub const STORAGE_IMG_BINDING = 0;
@@ -72,8 +67,8 @@ pub const bindingRegistry: []const struct { binding: u32, descType: vk.VkDescrip
     .{ .binding = SAMPLED_IMG_BINDING, .descType = vk.VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, .arrayLength = GPU_IMG_MAX },
 };
 
-pub const objectSB = ResourceInf{ .id = 1, .memUse = .Gpu, .inf = .{ .bufInf = .{ .usage = .Storage, .length = 100, .dataSize = @sizeOf(Object) } } };
-pub const cameraUB = ResourceInf{ .id = 40, .memUse = .Gpu, .inf = .{ .bufInf = .{ .usage = .Storage, .length = 1, .dataSize = @sizeOf(CameraData) } } };
+pub const objectSB = ResourceInf{ .id = 1, .memUse = .Gpu, .inf = .{ .bufInf = .{ .bufType = .Storage, .length = 100, .dataSize = @sizeOf(Object) } } };
+pub const cameraUB = ResourceInf{ .id = 40, .memUse = .Gpu, .inf = .{ .bufInf = .{ .bufType = .Storage, .length = 1, .dataSize = @sizeOf(CameraData) } } };
 
 pub const compImg = ResourceInf{ .id = 3, .memUse = .Gpu, .inf = .{ .imgInf = .{ .imgType = .Color, .extent = .{ .width = 500, .height = 500, .depth = 1 } } } };
 pub const grapImg = ResourceInf{ .id = 5, .memUse = .Gpu, .inf = .{ .imgInf = .{ .imgType = .Color, .extent = .{ .width = 300, .height = 300, .depth = 1 } } } };

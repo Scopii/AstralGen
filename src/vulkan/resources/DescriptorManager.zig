@@ -4,7 +4,7 @@ const vkFn = @import("../../modules/vk.zig");
 const Allocator = std.mem.Allocator;
 const GpuAllocator = @import("GpuAllocator.zig").GpuAllocator;
 const Resource = @import("ResourceManager.zig").Resource;
-const check = @import("../ErrorHelpers.zig").check;
+const vh = @import("../Helpers.zig");
 const rc = @import("../../configs/renderConfig.zig");
 
 pub const ResourceSlot = extern struct { index: u32 = 0, count: u32 = 0 };
@@ -159,7 +159,7 @@ fn createDescriptorLayout(gpi: vk.VkDevice, layoutBindings: []const vk.VkDescrip
         .flags = vk.VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT,
     };
     var layout: vk.VkDescriptorSetLayout = undefined;
-    try check(vk.vkCreateDescriptorSetLayout(gpi, &layoutInf, null, &layout), "Failed to create descriptor set layout");
+    try vh.check(vk.vkCreateDescriptorSetLayout(gpi, &layoutInf, null, &layout), "Failed to create descriptor set layout");
     return layout;
 }
 
@@ -173,6 +173,6 @@ fn createPipelineLayout(gpi: vk.VkDevice, descLayout: vk.VkDescriptorSetLayout, 
         .pPushConstantRanges = if (size > 0) &pcRange else null,
     };
     var layout: vk.VkPipelineLayout = undefined;
-    try check(vk.vkCreatePipelineLayout(gpi, &pipeLayoutInf, null, &layout), "Failed to create pipeline layout");
+    try vh.check(vk.vkCreatePipelineLayout(gpi, &pipeLayoutInf, null, &layout), "Failed to create pipeline layout");
     return layout;
 }
