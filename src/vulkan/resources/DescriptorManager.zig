@@ -3,17 +3,10 @@ const vk = @import("../../modules/vk.zig").c;
 const vkFn = @import("../../modules/vk.zig");
 const Allocator = std.mem.Allocator;
 const GpuAllocator = @import("GpuAllocator.zig").GpuAllocator;
-const Resource = @import("ResourceManager.zig").Resource;
+const Resource = @import("Resource.zig").Resource;
+const PushConstants = @import("Resource.zig").PushConstants;
 const vh = @import("../Helpers.zig");
 const rc = @import("../../configs/renderConfig.zig");
-
-pub const ResourceSlot = extern struct { index: u32 = 0, count: u32 = 0 };
-
-pub const PushConstants = extern struct {
-    runtime: f32,
-    renderImgIdx: u32 = 0,
-    resourceSlots: [15]ResourceSlot = undefined,
-};
 
 pub const DescriptorBuffer = struct {
     allocation: vk.VmaAllocation,

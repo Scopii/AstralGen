@@ -1,6 +1,7 @@
 const vk = @import("../modules/vk.zig").c;
 const Object = @import("../ecs/EntityManager.zig").Object;
 const CameraData = @import("../core/Camera.zig").CameraData;
+const ResourceInf = @import("../vulkan/resources/Resource.zig").ResourceInf;
 const sc = @import("shaderConfig.zig");
 const ve = @import("../vulkan/Helpers.zig");
 
@@ -46,15 +47,6 @@ pub const Pass = struct {
     pub const Dispatch = struct { x: u32, y: u32, z: u32 };
     pub const Attachment = struct { resUsageSlot: u8, clear: bool };
     pub const ResourceUsage = struct { id: u32, stage: ve.PipeStage = .TopOfPipe, access: ve.PipeAccess = .None, layout: ve.ImageLayout = .General };
-};
-
-pub const ResourceInf = struct {
-    id: u32,
-    memUse: ve.MemUsage,
-    inf: union(enum) { imgInf: ImgInf, bufInf: BufInf },
-
-    pub const ImgInf = struct { extent: vk.VkExtent3D, format: c_uint = RENDER_IMG_FORMAT, imgType: ve.ImgType };
-    pub const BufInf = struct { dataSize: u64 = 0, length: u32, bufType: ve.BufferType };
 };
 
 pub const STORAGE_IMG_BINDING = 0;

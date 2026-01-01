@@ -1,7 +1,8 @@
 const vk = @import("../../modules/vk.zig").c;
 const std = @import("std");
 const DescriptorBuffer = @import("DescriptorManager.zig").DescriptorBuffer;
-const Resource = @import("ResourceManager.zig").Resource;
+const Resource = @import("Resource.zig").Resource;
+const ResourceInf = @import("Resource.zig").ResourceInf;
 const rc = @import("../../configs/renderConfig.zig");
 const check = @import("../Helpers.zig").check;
 const ve = @import("../Helpers.zig");
@@ -33,28 +34,23 @@ pub const GpuAllocator = struct {
 
     pub fn allocDescriptorBuffer(self: *const GpuAllocator, size: vk.VkDeviceSize) !DescriptorBuffer {
         const buffUsage = vk.VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT | vk.VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
-        const memUsage = vk.VMA_MEMORY_USAGE_CPU_TO_GPU;
-        const memFlags = vk.VMA_ALLOCATION_CREATE_MAPPED_BIT;
-        const gpuBuffer = try self.allocBuffer(size, buffUsage, memUsage, memFlags);
+        const gpuBuffer = try self.allocBuffer(size, buffUsage, vk.VMA_MEMORY_USAGE_CPU_TO_GPU, vk.VMA_ALLOCATION_CREATE_MAPPED_BIT);
         return .{ .allocation = gpuBuffer.allocation, .allocInf = gpuBuffer.allocInf, .buffer = gpuBuffer.buffer, .gpuAddress = gpuBuffer.gpuAddress };
     }
 
     pub fn printMemoryLocation(self: *const GpuAllocator, allocation: vk.VmaAllocation, gpu: vk.VkPhysicalDevice) void {
         var allocInf: vk.VmaAllocationInfo = undefined;
         vk.vmaGetAllocationInfo(self.handle, allocation, &allocInf);
-
         var memProps: vk.VkPhysicalDeviceMemoryProperties = undefined;
         vk.vkGetPhysicalDeviceMemoryProperties(gpu, &memProps);
 
         const flags = memProps.memoryTypes[allocInf.memoryType].propertyFlags;
-
-        const is_vram = (flags & vk.VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) != 0;
-        const is_cpu_visible = (flags & vk.VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) != 0;
-
-        std.debug.print("Allocation is in VRAM: {}, CPU Visible: {}\n", .{ is_vram, is_cpu_visible });
+        const isVram = (flags & vk.VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) != 0;
+        const isCpuVisible = (flags & vk.VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) != 0;
+        std.debug.print("Allocation is in VRAM: {}, CPU Visible: {}\n", .{ isVram, isCpuVisible });
     }
 
-    pub fn allocDefinedBuffer(self: *const GpuAllocator, bindingInf: rc.ResourceInf.BufInf, memUsage: ve.MemUsage) !Resource.GpuBuffer {
+    pub fn allocDefinedBuffer(self: *const GpuAllocator, bindingInf: ResourceInf.BufInf, memUsage: ve.MemUsage) !Resource.GpuBuffer {
         if (bindingInf.dataSize == 0) {
             std.debug.print("Binding Info has invalid element size\n", .{});
             return error.AllocDefinedBufferFailed;
@@ -116,8 +112,8 @@ pub const GpuAllocator = struct {
         };
     }
 
-    pub fn allocGpuImage(self: *GpuAllocator, resourceImgInf: rc.ResourceInf.ImgInf, memUsage: ve.MemUsage) !Resource.GpuImage {
-        const mappedMemUsage: vk.VmaMemoryUsage = switch (memUsage) {
+    pub fn allocGpuImage(self: *GpuAllocator, resourceImgInf: ResourceInf.ImgInf, memUsage: ve.MemUsage) !Resource.GpuImage {
+        const memType: vk.VmaMemoryUsage = switch (memUsage) {
             .Gpu => vk.VMA_MEMORY_USAGE_GPU_ONLY,
             .CpuWrite => vk.VMA_MEMORY_USAGE_CPU_TO_GPU,
             .CpuRead => vk.VMA_MEMORY_USAGE_GPU_TO_CPU,
@@ -136,7 +132,7 @@ pub const GpuAllocator = struct {
         var img: vk.VkImage = undefined;
         var allocation: vk.VmaAllocation = undefined;
         const imgInf = createAllocatedImageInf(resourceImgInf.format, usages, resourceImgInf.extent);
-        const imgAllocInf = vk.VmaAllocationCreateInfo{ .usage = mappedMemUsage, .requiredFlags = vk.VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT };
+        const imgAllocInf = vk.VmaAllocationCreateInfo{ .usage = memType, .requiredFlags = vk.VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT };
         try check(vk.vmaCreateImage(self.handle, &imgInf, &imgAllocInf, &img, &allocation, null), "Could not create Render Image");
 
         const aspectMask: vk.VkImageAspectFlags = switch (resourceImgInf.imgType) {

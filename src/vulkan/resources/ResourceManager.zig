@@ -4,50 +4,12 @@ const Allocator = std.mem.Allocator;
 const Context = @import("../Context.zig").Context;
 const ResourceSlot = @import("DescriptorManager.zig").ResourceSlot;
 const DescriptorManager = @import("DescriptorManager.zig").DescriptorManager;
+const Resource = @import("Resource.zig").Resource;
+const ResourceInf = @import("Resource.zig").ResourceInf;
 const ResourceState = @import("../RenderGraph.zig").ResourceState;
 const GpuAllocator = @import("GpuAllocator.zig").GpuAllocator;
 const rc = @import("../../configs/renderConfig.zig");
 const CreateMapArray = @import("../../structures/MapArray.zig").CreateMapArray;
-
-pub const Resource = struct {
-    resourceType: ResourceUnion,
-    bindlessIndex: u32,
-    state: ResourceState = .{},
-
-    pub const ResourceUnion = union(enum) {
-        gpuBuf: GpuBuffer,
-        gpuImg: GpuImage,
-    };
-    pub const GpuImage = struct {
-        imgInf: rc.ResourceInf.ImgInf,
-        allocation: vk.VmaAllocation,
-        img: vk.VkImage,
-        view: vk.VkImageView,
-    };
-    pub const GpuBuffer = struct {
-        allocation: vk.VmaAllocation,
-        allocInf: vk.VmaAllocationInfo,
-        buffer: vk.VkBuffer,
-        gpuAddress: u64,
-        count: u32 = 0,
-    };
-
-    pub fn getResourceSlot(self: *Resource) ResourceSlot {
-        var resSlot = ResourceSlot{};
-
-        switch (self.resourceType) {
-            .gpuBuf => |gpuBuf| {
-                resSlot.index = self.bindlessIndex;
-                resSlot.count = gpuBuf.count;
-            },
-            .gpuImg => |_| {
-                resSlot.index = self.bindlessIndex;
-                resSlot.count = 1;
-            },
-        }
-        return resSlot;
-    }
-};
 
 pub const PendingTransfer = struct {
     srcOffset: u64,
@@ -113,7 +75,7 @@ pub const ResourceManager = struct {
         self.pendingTransfers.clearRetainingCapacity();
     }
 
-    pub fn queueBufferUpload(self: *ResourceManager, resInf: rc.ResourceInf, id: u32, data: anytype) !void {
+    pub fn queueBufferUpload(self: *ResourceManager, resInf: ResourceInf, id: u32, data: anytype) !void {
         const DataType = @TypeOf(data);
         const typeInfo = @typeInfo(DataType);
 
@@ -187,7 +149,7 @@ pub const ResourceManager = struct {
         } else return error.ResourceValidationFailed;
     }
 
-    pub fn createResource(self: *ResourceManager, resInf: rc.ResourceInf) !void {
+    pub fn createResource(self: *ResourceManager, resInf: ResourceInf) !void {
         switch (resInf.inf) {
             .imgInf => |imgInf| {
                 var bindlessIndex: u32 = undefined;
@@ -221,7 +183,7 @@ pub const ResourceManager = struct {
         }
     }
 
-    pub fn updateResource(self: *ResourceManager, resource: rc.ResourceInf, data: anytype) !void {
+    pub fn updateResource(self: *ResourceManager, resource: ResourceInf, data: anytype) !void {
         switch (resource.inf) {
             .imgInf => |_| {},
             .bufInf => |bufInf| if (resource.memUse == .Gpu) {
@@ -232,7 +194,7 @@ pub const ResourceManager = struct {
         }
     }
 
-    pub fn replaceResource(self: *ResourceManager, gpuId: u32, newInf: rc.ResourceInf.ImgInf) !void {
+    pub fn replaceResource(self: *ResourceManager, gpuId: u32, newInf: ResourceInf.ImgInf) !void {
         var oldRes = self.resources.get(gpuId);
         oldRes.state = .{};
         const slotIndex = oldRes.bindlessIndex;
@@ -246,7 +208,7 @@ pub const ResourceManager = struct {
         std.debug.print("Resource {} Resized/Replaced at Slot {}\n", .{ gpuId, slotIndex });
     }
 
-    fn updateBuffer(self: *ResourceManager, bufInf: rc.ResourceInf.BufInf, data: anytype, gpuId: u32) !void {
+    fn updateBuffer(self: *ResourceManager, bufInf: ResourceInf.BufInf, data: anytype, gpuId: u32) !void {
         const DataType = @TypeOf(data);
         const typeInfo = @typeInfo(DataType);
 

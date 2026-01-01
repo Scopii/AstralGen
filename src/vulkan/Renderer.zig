@@ -7,11 +7,12 @@ const LoadedShader = @import("../core/ShaderCompiler.zig").LoadedShader;
 const CmdManager = @import("CmdManager.zig").CmdManager;
 const ShaderManager = @import("ShaderManager.zig").ShaderManager;
 const SwapchainManager = @import("SwapchainManager.zig").SwapchainManager;
-const PushConstants = @import("resources/DescriptorManager.zig").PushConstants;
+const PushConstants = @import("resources/Resource.zig").PushConstants;
 const ResourceManager = @import("resources/ResourceManager.zig").ResourceManager;
 const MemoryManager = @import("../core/MemoryManager.zig").MemoryManager;
 const createInstance = @import("Context.zig").createInstance;
-const Resource = @import("resources/ResourceManager.zig").Resource;
+const Resource = @import("resources/Resource.zig").Resource;
+const ResourceInf = @import("resources/Resource.zig").ResourceInf;
 const RenderGraph = @import("RenderGraph.zig").RenderGraph;
 const RendererData = @import("../App.zig").RendererData;
 const rc = @import("../configs/renderConfig.zig");
@@ -212,11 +213,11 @@ pub const Renderer = struct {
         try self.shaderMan.createShaders(loadedShaders);
     }
 
-    pub fn createResource(self: *Renderer, resourceInf: rc.ResourceInf) !void {
+    pub fn createResource(self: *Renderer, resourceInf: ResourceInf) !void {
         try self.resMan.createResource(resourceInf);
     }
 
-    pub fn updateResource(self: *Renderer, resourceInf: rc.ResourceInf, data: anytype) !void {
+    pub fn updateResource(self: *Renderer, resourceInf: ResourceInf, data: anytype) !void {
         try self.resMan.updateResource(resourceInf, data);
     }
 };

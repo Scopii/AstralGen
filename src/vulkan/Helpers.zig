@@ -102,3 +102,9 @@ fn errorHandle(result: vk.VkResult, comptime msg: []const u8) !void {
     return error.VulkanError;
 }
 
+pub fn Handle(comptime _: type) type {
+    return packed struct {
+        id: u32,
+        pub inline fn raw(self: @This()) u32 { return self.id; }
+    };
+}
