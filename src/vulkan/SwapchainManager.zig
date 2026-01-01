@@ -11,7 +11,6 @@ const createSemaphore = @import("Scheduler.zig").createSemaphore;
 const rc = @import("../configs/renderConfig.zig");
 
 pub const Swapchain = struct {
-    const SwapchainState = enum { active, inactive };
     surface: vk.VkSurfaceKHR,
     handle: vk.VkSwapchainKHR,
     extent: vk.VkExtent2D,
@@ -22,7 +21,7 @@ pub const Swapchain = struct {
     renderDoneSems: []vk.VkSemaphore, // indexed by swapchain images
     surfaceFormat: vk.VkSurfaceFormatKHR,
     passImgId: u32,
-    state: SwapchainState = .active,
+    inUse: bool = true,
 };
 
 pub const SwapchainMap = CreateMapArray(Swapchain, rc.MAX_WINDOWS, u32, rc.MAX_WINDOWS, 0);
@@ -83,7 +82,7 @@ pub const SwapchainManager = struct {
 
         for (0..self.swapchains.getCount()) |i| {
             const ptr = self.swapchains.getPtrAtIndex(@intCast(i));
-            if (ptr.*.state == .inactive) continue;
+            if (ptr.*.inUse == false) continue;
 
             const windowID = self.swapchains.getKeyFromIndex(@intCast(i));
             const result1 = vk.vkAcquireNextImageKHR(gpi, ptr.handle, 0, ptr.imgRdySems[frameInFlight], null, &ptr.curIndex);
@@ -111,8 +110,8 @@ pub const SwapchainManager = struct {
         return if (self.targets.len != 0) true else false;
     }
 
-    pub fn changeState(self: *SwapchainManager, windowId: u32, state: Swapchain.SwapchainState) void {
-        self.swapchains.getPtr(windowId).state = state;
+    pub fn changeState(self: *SwapchainManager, windowId: u32, inUse: bool) void {
+        self.swapchains.getPtr(windowId).inUse = inUse;
     }
 
     pub fn getMaxRenderExtent(self: *SwapchainManager, passImgId: u32) vk.VkExtent2D {
@@ -120,7 +119,7 @@ pub const SwapchainManager = struct {
         var maxHeight: u32 = 0;
 
         for (self.swapchains.getElements()) |swapchain| {
-            if (swapchain.state == .active and swapchain.passImgId == passImgId) {
+            if (swapchain.inUse == true and swapchain.passImgId == passImgId) {
                 maxWidth = @max(maxWidth, swapchain.extent.width);
                 maxHeight = @max(maxHeight, swapchain.extent.height);
             }

@@ -19,6 +19,10 @@ pub const Command = struct {
         return .{ .handle = cmd };
     }
 
+    pub fn endRecording(self: *const Command) !void {
+        try check(vk.vkEndCommandBuffer(self.handle), "Could not End Cmd Buffer");
+    }
+
     pub fn bakeBarriers(self: *const Command, imgBarriers: []const vk.VkImageMemoryBarrier2, bufBarriers: []const vk.VkBufferMemoryBarrier2) void {
         const depInf = vk.VkDependencyInfo{
             .sType = vk.VK_STRUCTURE_TYPE_DEPENDENCY_INFO,

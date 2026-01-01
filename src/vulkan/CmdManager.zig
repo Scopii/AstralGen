@@ -41,7 +41,7 @@ pub const CmdManager = struct {
         vk.vkDestroyCommandPool(self.gpi, self.pool, null);
     }
 
-    pub fn beginRecording(self: *CmdManager, frameInFlight: u8) !Command {
+    pub fn getAndBeginCommand(self: *CmdManager, frameInFlight: u8) !Command {
         const cmd = self.cmds[frameInFlight];
         try check(vk.vkResetCommandBuffer(cmd.handle, 0), "could not reset command buffer"); // Might be optional
 
@@ -57,14 +57,6 @@ pub const CmdManager = struct {
         cmd.setDescriptorBufferOffset(vk.VK_PIPELINE_BIND_POINT_GRAPHICS, self.pipeLayout);
 
         return cmd;
-    }
-
-    pub fn endRecording(cmd: *const Command) !void {
-        try check(vk.vkEndCommandBuffer(cmd.handle), "Could not End Cmd Buffer");
-    }
-
-    pub fn getCmd(self: *const CmdManager, frameInFlight: u8) vk.VkCommandBuffer {
-        return self.cmds[frameInFlight];
     }
 };
 
@@ -90,4 +82,3 @@ fn createCmdPool(gpi: vk.VkDevice, familyIndex: u32) !vk.VkCommandPool {
     try check(vk.vkCreateCommandPool(gpi, &poolInf, null, &pool), "Could not create Cmd Pool");
     return pool;
 }
-

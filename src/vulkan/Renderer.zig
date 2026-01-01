@@ -87,7 +87,7 @@ pub const Renderer = struct {
                     dirtyImgIds[i] = tempWindow.passImgId;
                 },
                 .needActive, .needInactive => {
-                    self.swapMan.changeState(tempWindow.windowId, if (tempWindow.state == .needActive) .active else .inactive);
+                    self.swapMan.changeState(tempWindow.windowId, if (tempWindow.state == .needActive) true else false);
                 },
                 .needDelete => self.swapMan.removeSwapchain(&.{tempWindow}),
                 else => std.debug.print("Warning: Window State {s} cant be handled in Renderer\n", .{@tagName(tempWindow.state)}),
@@ -135,14 +135,13 @@ pub const Renderer = struct {
         if (try self.swapMan.updateTargets(frameInFlight, &self.context) == false) return;
         const targets = self.swapMan.getTargets();
 
-        const cmd = try self.cmdMan.beginRecording(frameInFlight);
-
+        const cmd = try self.cmdMan.getAndBeginCommand(frameInFlight);
         try self.renderGraph.recordTransfers(&cmd, &self.resMan);
         self.resMan.resetTransfers();
 
         try self.recordPasses(&cmd, rendererData);
         try self.renderGraph.recordSwapchainBlits(&cmd, targets, &self.swapMan.swapchains, &self.resMan);
-        try CmdManager.endRecording(&cmd);
+        try cmd.endRecording();
 
         try self.queueSubmit(cmd.getHandle(), targets, frameInFlight);
         try self.swapMan.present(targets, self.context.presentQ);

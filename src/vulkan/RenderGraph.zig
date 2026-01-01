@@ -93,10 +93,9 @@ pub const RenderGraph = struct {
         if (resMan.pendingTransfers.items.len == 0) return;
 
         for (resMan.pendingTransfers.items) |transfer| {
-            const destResource = try resMan.getResourcePtr(transfer.dstResId);
-            // Transition Destination to TransferDst
-            try self.createBarrierIfNeeded(destResource.state, .{ .stage = .Transfer, .access = .TransferWrite, .layout = .TransferDst }, destResource);
-            cmd.copyBuffer(resMan.stagingBuffer.buffer, &transfer, destResource.resourceType.gpuBuf.buffer);
+            const dstResource = try resMan.getResourcePtr(transfer.dstResId);
+            try self.createBarrierIfNeeded(dstResource.state, .{ .stage = .Transfer, .access = .TransferWrite, .layout = .TransferDst }, dstResource);
+            cmd.copyBuffer(resMan.stagingBuffer.buffer, &transfer, dstResource.resourceType.gpuBuf.buffer);
         }
         self.bakeBarriers(cmd);
     }
@@ -194,13 +193,14 @@ pub const RenderGraph = struct {
     }
 
     pub fn recordSwapchainBlits(self: *RenderGraph, cmd: *const Command, targets: []const u32, swapchainMap: *SwapchainManager.SwapchainMap, resMan: *ResourceManager) !void {
+        const swapchainMidState = ResourceState{ .stage = .Transfer, .access = .TransferWrite, .layout = .TransferDst };
         // Render Image and Swapchain Preperations
         for (targets) |swapchainIndex| {
             const swapchain = swapchainMap.getPtrAtIndex(swapchainIndex);
             const renderImg = try resMan.getResourcePtr(swapchain.passImgId);
             try self.createBarrierIfNeeded(renderImg.state, .{ .stage = .Transfer, .access = .TransferRead, .layout = .TransferSrc }, renderImg);
             const swapchainImg = swapchain.images[swapchain.curIndex];
-            try self.tempImgBarriers.append(createImageBarrier(.{}, .{ .stage = .Transfer, .access = .TransferWrite, .layout = .TransferDst }, swapchainImg, .Color));
+            try self.tempImgBarriers.append(createImageBarrier(.{}, swapchainMidState, swapchainImg, .Color));
         }
         self.bakeBarriers(cmd);
 
@@ -215,9 +215,8 @@ pub const RenderGraph = struct {
         // Swapchain Presentation Barriers
         for (targets) |swapchainIndex| {
             const swapchain = swapchainMap.getPtrAtIndex(swapchainIndex);
-            const state = ResourceState{ .stage = .Transfer, .access = .TransferWrite, .layout = .TransferDst };
-            const neededState = ResourceState{ .stage = .BotOfPipe, .access = .None, .layout = .PresentSrc };
-            try self.tempImgBarriers.append(createImageBarrier(state, neededState, swapchain.images[swapchain.curIndex], .Color));
+            const presentState = ResourceState{ .stage = .BotOfPipe, .access = .None, .layout = .PresentSrc };
+            try self.tempImgBarriers.append(createImageBarrier(swapchainMidState, presentState, swapchain.images[swapchain.curIndex], .Color));
         }
         self.bakeBarriers(cmd);
     }
