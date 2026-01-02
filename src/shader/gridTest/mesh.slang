@@ -44,7 +44,7 @@ struct PushConstants {
     float deltaTime;
     uint width;
     uint height;
-    Resource resources[15];
+    Resource resources[14];
 };
 
 [[vk::binding(0, 0)]] RWTexture2D<float4> globalImages[];

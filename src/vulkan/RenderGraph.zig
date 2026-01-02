@@ -126,9 +126,9 @@ pub const RenderGraph = struct {
 
         const mainImg = switch (pass.passType) {
             .compute => null,
-            .computeOnImage => |compOnImage| try resMan.getImagePtr(compOnImage.renderImgId),
-            .graphics => |graphics| try resMan.getImagePtr(graphics.renderImgId),
-            .taskOrMesh => |taskOrMesh| try resMan.getImagePtr(taskOrMesh.renderImgId),
+            .computeOnImg => |compOnImage| try resMan.getImagePtr(compOnImage.mainImgId),
+            .graphics => |graphics| try resMan.getImagePtr(graphics.mainImgId),
+            .taskOrMesh => |taskOrMesh| try resMan.getImagePtr(taskOrMesh.mainImgId),
         };
 
         if (mainImg) |img| {
@@ -141,7 +141,7 @@ pub const RenderGraph = struct {
 
         switch (pass.passType) {
             .compute => |comp| try recordCompute(cmd, comp.workgroups, null, resMan),
-            .computeOnImage => |compOnImage| try recordCompute(cmd, compOnImage.workgroups, compOnImage.renderImgId, resMan),
+            .computeOnImg => |compOnImage| try recordCompute(cmd, compOnImage.workgroups, compOnImage.mainImgId, resMan),
             .graphics => |graphics| try recordGraphics(cmd, graphics.colorAtts, graphics.depthAtt, graphics.stencilAtt, pcs.width, pcs.height, pass, resMan),
             .taskOrMesh => |taskOrMesh| try recordGraphics(cmd, taskOrMesh.colorAtts, taskOrMesh.depthAtt, taskOrMesh.stencilAtt, pcs.width, pcs.height, pass, resMan),
         }
@@ -179,11 +179,11 @@ pub const RenderGraph = struct {
         cmd.beginRendering(width, height, colorInfs[0..colorAtts.len], depthInf, stencilInf);
 
         switch (pass.passType) {
-            .compute, .computeOnImage => return error.ComputeLandedInGraphicsPass,
+            .compute, .computeOnImg => return error.ComputeLandedInGraphicsPass,
             .taskOrMesh => |taskOrMesh| cmd.drawMeshTasks(taskOrMesh.workgroups.x, taskOrMesh.workgroups.y, taskOrMesh.workgroups.z),
             .graphics => |graphics| {
                 cmd.setEmptyVertexInput();
-                cmd.draw(graphics.vertexCount, graphics.instanceCount, 0, 0);
+                cmd.draw(graphics.draw.vertices, graphics.draw.instances, 0, 0);
             },
         }
         cmd.endRendering();

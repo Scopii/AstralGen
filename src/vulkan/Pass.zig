@@ -8,65 +8,58 @@ pub const Pass = struct {
     passType: PassType,
 
     pub const PassType = union(enum) {
-        compute: struct {
-            workgroups: Dispatch,
-        },
-        computeOnImage: struct {
-            renderImgId: u32,
-            workgroups: Dispatch,
-        },
-        taskOrMesh: struct {
-            renderImgId: u32,
-            colorAtts: []const Attachment,
-            depthAtt: ?Attachment = null,
-            stencilAtt: ?Attachment = null,
-            workgroups: Dispatch,
-        },
-        graphics: struct {
-            renderImgId: u32,
-            colorAtts: []const Attachment,
-            depthAtt: ?Attachment = null,
-            stencilAtt: ?Attachment = null,
-            vertexCount: u32 = 3,
-            instanceCount: u32 = 1,
-        },
+        compute: ComputeData,
+        computeOnImg: ComputeOnImgData,
+        taskOrMesh: TaskOrMeshData,
+        graphics: GraphicsData,
     };
 
-    pub fn createComputeOnImage(renderImgId: u32, groupX: u32, groupY: u32, groupZ: u32) Pass.PassType {
-        return .{
-            .computeOnImage = .{
-                .renderImgId = renderImgId,
-                .workgroups = .{ .x = groupX, .y = groupY, .z = groupZ },
-            },
-        };
+    const ComputeData = struct {
+        workgroups: Dispatch,
+    };
+
+    const ComputeOnImgData = struct {
+        mainImgId: u32,
+        workgroups: Dispatch,
+    };
+
+    const TaskOrMeshData = struct {
+        mainImgId: u32,
+        colorAtts: []const Attachment,
+        depthAtt: ?Attachment = null,
+        stencilAtt: ?Attachment = null,
+        workgroups: Dispatch,
+    };
+
+    const GraphicsData = struct {
+        mainImgId: u32,
+        colorAtts: []const Attachment,
+        depthAtt: ?Attachment = null,
+        stencilAtt: ?Attachment = null,
+        draw: struct { vertices: u32, instances: u32} = .{.vertices = 3, .instances = 1},
+    };
+
+    pub fn createComputeOnImage(data: ComputeOnImgData) Pass.PassType {
+        return .{ .computeOnImg = data };
     }
 
-    pub fn createCompute(groupX: u32, groupY: u32, groupZ: u32) Pass.PassType {
-        return .{
-            .compute = .{
-                .workgroups = .{ .x = groupX, .y = groupY, .z = groupZ },
-            },
-        };
+    pub fn createCompute(data: ComputeData) Pass.PassType {
+        return .{ .compute = .{ .workgroups = data.workgroups } };
     }
 
-    pub fn createGraphics(renderImgId: u32, vertexCount: u32, instanceCount: u32, colorAtts: []const Attachment, depthAtt: ?Attachment, stencilAtt: ?Attachment) Pass.PassType {
-        return .{
-            .graphics = .{
-                .renderImgId = renderImgId,
-                .vertexCount = vertexCount,
-                .instanceCount = instanceCount,
-                .colorAtts = colorAtts,
-                .depthAtt = depthAtt,
-                .stencilAtt = stencilAtt,
-            },
-        };
+    pub fn createGraphics(data: GraphicsData) Pass.PassType {
+        return .{ .graphics = data };
+    }
+
+    pub fn createTaskOrMesh(data: TaskOrMeshData) Pass.PassType {
+        return .{ .taskOrMesh = data };
     }
 
     pub fn getColorAtts(self: *const Pass) []const Attachment {
         return switch (self.passType) {
             .graphics => |g| g.colorAtts,
             .taskOrMesh => |t| t.colorAtts,
-            .compute, .computeOnImage => &[_]Attachment{},
+            .compute, .computeOnImg => &[_]Attachment{},
         };
     }
 
@@ -74,7 +67,7 @@ pub const Pass = struct {
         return switch (self.passType) {
             .graphics => |g| g.depthAtt,
             .taskOrMesh => |t| t.depthAtt,
-            .compute, .computeOnImage => null,
+            .compute, .computeOnImg => null,
         };
     }
 
@@ -82,7 +75,7 @@ pub const Pass = struct {
         return switch (self.passType) {
             .graphics => |g| g.stencilAtt,
             .taskOrMesh => |t| t.stencilAtt,
-            .compute, .computeOnImage => null,
+            .compute, .computeOnImg => null,
         };
     }
 
