@@ -3,6 +3,9 @@ const Object = @import("../ecs/EntityManager.zig").Object;
 const CameraData = @import("../core/Camera.zig").CameraData;
 const ResourceInf = @import("../vulkan/resources/Resource.zig").ResourceInf;
 const ResourceState = @import("../vulkan/RenderGraph.zig").ResourceState;
+const Pass = @import("../vulkan/Pass.zig").Pass;
+const Attachment = @import("../vulkan/Pass.zig").Attachment;
+const ResourceUse = @import("../vulkan/Pass.zig").ResourceUse;
 const sc = @import("shaderConfig.zig");
 const ve = @import("../vulkan/Helpers.zig");
 
@@ -20,61 +23,6 @@ pub const RENDER_IMG_FORMAT = vk.VK_FORMAT_R16G16B16A16_SFLOAT;
 pub const RENDER_IMG_AUTO_RESIZE = true;
 pub const RENDER_IMG_STRETCH = true; // Ignored on AUTO_RESIZE
 
-pub const Pass = struct {
-    shaderIds: []const u8,
-    resUsages: []const ResourceUsage = &.{},
-    shaderUsages: []const ResourceUsage,
-    kind: PassKind,
-
-    pub const PassKind = union(enum) {
-        compute: struct {
-            workgroups: Dispatch,
-        },
-        computeOnImage: struct {
-            renderImgId: u32,
-            workgroups: Dispatch,
-        },
-        taskOrMesh: struct {
-            renderImgId: u32,
-            colorAtts: []const AttachmentUsage,
-            depthAtt: ?AttachmentUsage = null,
-            stencilAtt: ?AttachmentUsage = null,
-            workgroups: Dispatch,
-        },
-        graphics: struct {
-            renderImgId: u32,
-            colorAtts: []const AttachmentUsage,
-            depthAtt: ?AttachmentUsage = null,
-            stencilAtt: ?AttachmentUsage = null,
-            vertexCount: u32 = 3,
-            instanceCount: u32 = 1,
-        },
-    };
-    pub const Dispatch = struct { x: u32, y: u32, z: u32 };
-    // pub const AttachmentOld = struct { resUsageSlot: u8, clear: bool };
-    pub const AttachmentUsage = struct {
-        id: u32,
-        stage: ve.PipeStage = .TopOfPipe,
-        access: ve.PipeAccess = .None,
-        layout: ve.ImageLayout = .General,
-        clear: bool,
-
-        pub fn getNeededState(self: *const AttachmentUsage) ResourceState {
-            return .{ .stage = self.stage, .access = self.access, .layout = self.layout };
-        }
-    };
-    pub const ResourceUsage = struct {
-        id: u32,
-        stage: ve.PipeStage = .TopOfPipe,
-        access: ve.PipeAccess = .None,
-        layout: ve.ImageLayout = .General,
-
-        pub fn getNeededState(self: *const ResourceUsage) ResourceState {
-            return .{ .stage = self.stage, .access = self.access, .layout = self.layout };
-        }
-    };
-};
-
 pub const STORAGE_IMG_BINDING = 0;
 pub const STORAGE_BUF_BINDING = 1;
 pub const SAMPLED_IMG_BINDING = 2;
@@ -85,46 +33,39 @@ pub const bindingRegistry: []const struct { binding: u32, descType: vk.VkDescrip
     .{ .binding = SAMPLED_IMG_BINDING, .descType = vk.VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, .arrayLength = GPU_IMG_MAX },
 };
 
-pub const objectSB = ResourceInf{ .id = 1, .memUse = .Gpu, .inf = .{ .bufInf = .{ .bufType = .Storage, .length = 100, .dataSize = @sizeOf(Object) } } };
-pub const cameraUB = ResourceInf{ .id = 40, .memUse = .Gpu, .inf = .{ .bufInf = .{ .bufType = .Storage, .length = 1, .dataSize = @sizeOf(CameraData) } } };
+pub const objectSB = ResourceInf.Buffer(1, .Gpu, .Storage, 100, Object);
+pub const cameraUB = ResourceInf.Buffer(40, .Gpu, .Storage, 1, CameraData);
 
-pub const compImg = ResourceInf{ .id = 3, .memUse = .Gpu, .inf = .{ .imgInf = .{ .imgType = .Color, .extent = .{ .width = 500, .height = 500, .depth = 1 } } } };
-pub const grapImg = ResourceInf{ .id = 5, .memUse = .Gpu, .inf = .{ .imgInf = .{ .imgType = .Color, .extent = .{ .width = 300, .height = 300, .depth = 1 } } } };
-pub const meshImg = ResourceInf{ .id = 7, .memUse = .Gpu, .inf = .{ .imgInf = .{ .imgType = .Color, .extent = .{ .width = 100, .height = 100, .depth = 1 } } } };
-pub const taskImg = ResourceInf{ .id = 9, .memUse = .Gpu, .inf = .{ .imgInf = .{ .imgType = .Color, .extent = .{ .width = 1920, .height = 1080, .depth = 1 } } } };
-pub const testImg = ResourceInf{ .id = 10, .memUse = .Gpu, .inf = .{ .imgInf = .{ .imgType = .Color, .extent = .{ .width = 1920, .height = 1080, .depth = 1 } } } };
-pub const grapDepthImg = ResourceInf{ .id = 11, .memUse = .Gpu, .inf = .{ .imgInf = .{ .imgType = .Depth, .extent = .{ .width = 1920, .height = 1080, .depth = 1 }, .format = vk.VK_FORMAT_D32_SFLOAT } } };
+pub const compImg = ResourceInf.Image(3, .Gpu, .Color, 500, 500, 1, RENDER_IMG_FORMAT);
+pub const grapImg = ResourceInf.Image(5, .Gpu, .Color, 300, 300, 1, RENDER_IMG_FORMAT);
+pub const meshImg = ResourceInf.Image(7, .Gpu, .Color, 100, 100, 1, RENDER_IMG_FORMAT);
+pub const taskImg = ResourceInf.Image(9, .Gpu, .Color, 1920, 1920, 1, RENDER_IMG_FORMAT);
+pub const testImg = ResourceInf.Image(10, .Gpu, .Color, 1920, 1920, 1, RENDER_IMG_FORMAT);
+pub const grapDepthImg = ResourceInf.Image(11, .Gpu, .Depth, 1920, 1920, 1, vk.VK_FORMAT_D32_SFLOAT);
 
 pub const computeTest: Pass = .{
     .shaderIds = &.{sc.t1Comp.id},
     .shaderUsages = &.{
-        .{ .id = objectSB.id, .stage = .Compute, .access = .ShaderRead },
-        .{ .id = cameraUB.id, .stage = .Compute, .access = .ShaderRead },
-        .{ .id = compImg.id, .stage = .Compute, .access = .ShaderWrite, .layout = .General },
+        ResourceUse.create(objectSB.id, .ComputeShader, .ShaderRead, .General),
+        ResourceUse.create(cameraUB.id, .ComputeShader, .ShaderRead, .General),
+        ResourceUse.create(compImg.id, .ComputeShader, .ShaderWrite, .General),
     },
-    .kind = .{
-        .computeOnImage = .{
-            .renderImgId = compImg.id,
-            .workgroups = .{ .x = 8, .y = 8, .z = 1 },
-        },
-    },
+    .passType = Pass.createComputeOnImage(compImg.id, 8, 8, 1),
 };
 
 const graphicsTest: Pass = .{
     .shaderIds = &.{ sc.t2Vert.id, sc.t2Frag.id },
     .shaderUsages = &.{
-        .{ .id = objectSB.id, .stage = .FragShader, .access = .ShaderRead },
-        .{ .id = cameraUB.id, .stage = .Compute, .access = .ShaderRead },
+        ResourceUse.create(objectSB.id, .FragShader, .ShaderRead, .General),
+        ResourceUse.create(cameraUB.id, .ComputeShader, .ShaderRead, .General),
     },
-    .kind = .{
+    .passType = .{
         .graphics = .{
             .renderImgId = grapImg.id,
             .vertexCount = 3,
             .instanceCount = 1,
-            .colorAtts = &.{
-                .{ .id = grapImg.id, .stage = .ColorAtt, .access = .ColorAttWrite, .layout = .Attachment, .clear = false },
-            },
-            .depthAtt = .{ .id = grapDepthImg.id, .stage = .EarlyFragTest, .access = .DepthStencilRead, .layout = .Attachment, .clear = false },
+            .colorAtts = &.{Attachment.create(grapImg.id, .ColorAtt, .ColorAttWrite, false)},
+            .depthAtt = Attachment.create(grapDepthImg.id, .EarlyFragTest, .DepthStencilRead, false),
         },
     },
 };
@@ -132,16 +73,14 @@ const graphicsTest: Pass = .{
 const meshTest: Pass = .{
     .shaderIds = &.{ sc.t3Mesh.id, sc.t3Frag.id },
     .shaderUsages = &.{
-        .{ .id = objectSB.id, .stage = .FragShader, .access = .ShaderRead },
-        .{ .id = cameraUB.id, .stage = .Compute, .access = .ShaderRead },
+        ResourceUse.create(objectSB.id, .FragShader, .ShaderRead, .General),
+        ResourceUse.create(cameraUB.id, .ComputeShader, .ShaderRead, .General),
     },
-    .kind = .{
+    .passType = .{
         .taskOrMesh = .{
             .renderImgId = meshImg.id,
             .workgroups = .{ .x = 1, .y = 1, .z = 1 },
-            .colorAtts = &.{
-                .{ .id = meshImg.id, .stage = .ColorAtt, .access = .ColorAttWrite, .layout = .Attachment, .clear = false },
-            },
+            .colorAtts = &.{Attachment.create(meshImg.id, .ColorAtt, .ColorAttWrite, false)},
         },
     },
 };
@@ -149,16 +88,14 @@ const meshTest: Pass = .{
 const taskTest: Pass = .{
     .shaderIds = &.{ sc.t4Task.id, sc.t4Mesh.id, sc.t4Frag.id },
     .shaderUsages = &.{
-        .{ .id = objectSB.id, .stage = .FragShader, .access = .ShaderRead },
-        .{ .id = cameraUB.id, .stage = .Compute, .access = .ShaderRead },
+        ResourceUse.create(objectSB.id, .FragShader, .ShaderRead, .General),
+        ResourceUse.create(cameraUB.id, .ComputeShader, .ShaderRead, .General),
     },
-    .kind = .{
+    .passType = .{
         .taskOrMesh = .{
             .renderImgId = taskImg.id,
             .workgroups = .{ .x = 1, .y = 1, .z = 1 },
-            .colorAtts = &.{
-                .{ .id = taskImg.id, .stage = .ColorAtt, .access = .ColorAttWrite, .layout = .Attachment, .clear = false },
-            },
+            .colorAtts = &.{Attachment.create(taskImg.id, .ColorAtt, .ColorAttWrite, false)},
         },
     },
 };
@@ -166,15 +103,13 @@ const taskTest: Pass = .{
 const gridTest: Pass = .{
     .shaderIds = &.{ sc.gridTask.id, sc.gridMesh.id, sc.gridFrag.id },
     .shaderUsages = &.{
-        .{ .id = cameraUB.id, .stage = .Compute, .access = .ShaderRead },
+        ResourceUse.create(cameraUB.id, .TaskShader, .ShaderRead, .General),
     },
-    .kind = .{
+    .passType = .{
         .taskOrMesh = .{
             .renderImgId = taskImg.id,
             .workgroups = .{ .x = 1, .y = 1, .z = 1 },
-            .colorAtts = &.{
-                .{ .id = taskImg.id, .stage = .ColorAtt, .access = .ColorAttWrite, .layout = .Attachment, .clear = false },
-            },
+            .colorAtts = &.{Attachment.create(taskImg.id, .ColorAtt, .ColorAttWrite, false)},
         },
     },
 };

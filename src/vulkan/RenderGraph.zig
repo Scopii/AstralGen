@@ -10,6 +10,8 @@ const SwapchainManager = @import("SwapchainManager.zig");
 const Command = @import("Command.zig").Command;
 const vh = @import("Helpers.zig");
 const RendererData = @import("../App.zig").RendererData;
+const Pass = @import("Pass.zig").Pass;
+const Attachment = @import("Pass.zig").Attachment;
 
 pub const ResourceState = struct {
     stage: vh.PipeStage = .TopOfPipe,
@@ -65,57 +67,36 @@ pub const RenderGraph = struct {
         }
     }
 
-    pub fn recordPassBarriers(self: *RenderGraph, cmd: *const Command, pass: rc.Pass, resMan: *ResourceManager) !void {
-        cmd.setGraphicsState();
-
-        switch (pass.kind) {
-            .graphics,
-            => |graphics| {
-                for (graphics.colorAtts) |attUsage| {
-                    const resource = try resMan.getResourcePtr(attUsage.id);
-                    try self.createBarrierIfNeeded(resource.state, attUsage.getNeededState(), resource);
-                }
-                if (graphics.depthAtt) |attUsage| {
-                    const resource = try resMan.getResourcePtr(attUsage.id);
-                    try self.createBarrierIfNeeded(resource.state, attUsage.getNeededState(), resource);
-                }
-                if (graphics.stencilAtt) |attUsage| {
-                    const resource = try resMan.getResourcePtr(attUsage.id);
-                    try self.createBarrierIfNeeded(resource.state, attUsage.getNeededState(), resource);
-                }
-            },
-
-            .taskOrMesh => |taskOrMesh| {
-                for (taskOrMesh.colorAtts) |attUsage| {
-                    const resource = try resMan.getResourcePtr(attUsage.id);
-                    try self.createBarrierIfNeeded(resource.state, attUsage.getNeededState(), resource);
-                }
-                if (taskOrMesh.depthAtt) |attUsage| {
-                    const resource = try resMan.getResourcePtr(attUsage.id);
-                    try self.createBarrierIfNeeded(resource.state, attUsage.getNeededState(), resource);
-                }
-                if (taskOrMesh.stencilAtt) |attUsage| {
-                    const resource = try resMan.getResourcePtr(attUsage.id);
-                    try self.createBarrierIfNeeded(resource.state, attUsage.getNeededState(), resource);
-                }
-            },
-            else => {},
+    pub fn recordPassBarriers(self: *RenderGraph, cmd: *const Command, pass: Pass, resMan: *ResourceManager) !void {
+        for (pass.shaderUsages) |resUse| {
+            const resource = try resMan.getResourcePtr(resUse.id);
+            try self.createBarrierIfNeeded(resource.state, resUse.getNeededState(), resource);
         }
 
-        for (pass.resUsages) |resUsage| {
-            const resource = try resMan.getResourcePtr(resUsage.id);
-            try self.createBarrierIfNeeded(resource.state, resUsage.getNeededState(), resource);
+        for (pass.resUsages) |resUse| {
+            const resource = try resMan.getResourcePtr(resUse.id);
+            try self.createBarrierIfNeeded(resource.state, resUse.getNeededState(), resource);
         }
 
-        for (pass.shaderUsages) |resUsage| {
-            const resource = try resMan.getResourcePtr(resUsage.id);
-            try self.createBarrierIfNeeded(resource.state, resUsage.getNeededState(), resource);
+        for (pass.getColorAtts()) |colorAtt| {
+            const resource = try resMan.getResourcePtr(colorAtt.id);
+            try self.createBarrierIfNeeded(resource.state, colorAtt.getNeededState(), resource);
+        }
+
+        if (pass.getDepthAtt()) |depthAtt| {
+            const resource = try resMan.getResourcePtr(depthAtt.id);
+            try self.createBarrierIfNeeded(resource.state, depthAtt.getNeededState(), resource);
+        }
+
+        if (pass.getStencilAtt()) |stencilAtt| {
+            const resource = try resMan.getResourcePtr(stencilAtt.id);
+            try self.createBarrierIfNeeded(resource.state, stencilAtt.getNeededState(), resource);
         }
 
         self.bakeBarriers(cmd);
     }
 
-    fn recordCompute(cmd: *const Command, dispatch: rc.Pass.Dispatch, renderImgId: ?u32, resMan: *ResourceManager) !void {
+    fn recordCompute(cmd: *const Command, dispatch: Pass.Dispatch, renderImgId: ?u32, resMan: *ResourceManager) !void {
         if (renderImgId) |imgId| {
             const resource = try resMan.getResourcePtr(imgId);
             switch (resource.resourceType) {
@@ -123,7 +104,7 @@ pub const RenderGraph = struct {
                     cmd.dispatch(
                         (gpuImg.imgInf.extent.width + dispatch.x - 1) / dispatch.x,
                         (gpuImg.imgInf.extent.height + dispatch.y - 1) / dispatch.y,
-                        1, // (gpuImg.imgInf.extent.depth + dispatch.z - 1) / dispatch.z
+                        (gpuImg.imgInf.extent.depth + dispatch.z - 1) / dispatch.z,
                     );
                 },
                 else => return error.ComputePassRenderImgIsNoImg,
@@ -131,7 +112,7 @@ pub const RenderGraph = struct {
         } else cmd.dispatch(dispatch.x, dispatch.y, dispatch.z);
     }
 
-    pub fn recordPass(self: *RenderGraph, cmd: *const Command, pass: rc.Pass, rendererData: RendererData, validShaders: []const ShaderObject, resMan: *ResourceManager) !void {
+    pub fn recordPass(self: *RenderGraph, cmd: *const Command, pass: Pass, rendererData: RendererData, validShaders: []const ShaderObject, resMan: *ResourceManager) !void {
         try self.recordPassBarriers(cmd, pass, resMan);
 
         var pcs = PushConstants{ .runTime = rendererData.runTime, .deltaTime = rendererData.deltaTime };
@@ -143,7 +124,7 @@ pub const RenderGraph = struct {
             pcs.resourceSlots[i] = resource.getResourceSlot();
         }
 
-        const mainImg = switch (pass.kind) {
+        const mainImg = switch (pass.passType) {
             .compute => null,
             .computeOnImage => |compOnImage| try resMan.getImagePtr(compOnImage.renderImgId),
             .graphics => |graphics| try resMan.getImagePtr(graphics.renderImgId),
@@ -158,7 +139,7 @@ pub const RenderGraph = struct {
         cmd.setPushConstants(self.pipeLayout, vk.VK_SHADER_STAGE_ALL, 0, @sizeOf(PushConstants), &pcs);
         cmd.bindShaders(validShaders);
 
-        switch (pass.kind) {
+        switch (pass.passType) {
             .compute => |comp| try recordCompute(cmd, comp.workgroups, null, resMan),
             .computeOnImage => |compOnImage| try recordCompute(cmd, compOnImage.workgroups, compOnImage.renderImgId, resMan),
             .graphics => |graphics| try recordGraphics(cmd, graphics.colorAtts, graphics.depthAtt, graphics.stencilAtt, pcs.width, pcs.height, pass, resMan),
@@ -168,12 +149,12 @@ pub const RenderGraph = struct {
 
     fn recordGraphics(
         cmd: *const Command,
-        colorAtts: []const rc.Pass.AttachmentUsage,
-        depthAtt: ?rc.Pass.AttachmentUsage,
-        stencilAtt: ?rc.Pass.AttachmentUsage,
+        colorAtts: []const Attachment,
+        depthAtt: ?Attachment,
+        stencilAtt: ?Attachment,
         width: u32,
         height: u32,
-        pass: rc.Pass,
+        pass: Pass,
         resMan: *ResourceManager,
     ) !void {
         if (colorAtts.len > 8) return error.TooManyAttachments;
@@ -197,7 +178,7 @@ pub const RenderGraph = struct {
 
         cmd.beginRendering(width, height, colorInfs[0..colorAtts.len], depthInf, stencilInf);
 
-        switch (pass.kind) {
+        switch (pass.passType) {
             .compute, .computeOnImage => return error.ComputeLandedInGraphicsPass,
             .taskOrMesh => |taskOrMesh| cmd.drawMeshTasks(taskOrMesh.workgroups.x, taskOrMesh.workgroups.y, taskOrMesh.workgroups.z),
             .graphics => |graphics| {

@@ -19,6 +19,7 @@ const rc = @import("../configs/renderConfig.zig");
 const Allocator = std.mem.Allocator;
 const Command = @import("Command.zig").Command;
 const vh = @import("Helpers.zig");
+const Pass = @import("Pass.zig").Pass;
 
 pub const Renderer = struct {
     alloc: Allocator,
@@ -30,7 +31,7 @@ pub const Renderer = struct {
     swapMan: SwapchainManager,
     cmdMan: CmdManager,
     scheduler: Scheduler,
-    passes: std.array_list.Managed(rc.Pass),
+    passes: std.array_list.Managed(Pass),
 
     pub fn init(memoryMan: *MemoryManager) !Renderer {
         const alloc = memoryMan.getAllocator();
@@ -53,7 +54,7 @@ pub const Renderer = struct {
             .cmdMan = cmdMan,
             .scheduler = scheduler,
             .swapMan = swapMan,
-            .passes = std.array_list.Managed(rc.Pass).init(alloc),
+            .passes = std.array_list.Managed(Pass).init(alloc),
         };
     }
 
@@ -120,7 +121,7 @@ pub const Renderer = struct {
         }
     }
 
-    pub fn createPass(self: *Renderer, passes: []const rc.Pass) !void {
+    pub fn createPass(self: *Renderer, passes: []const Pass) !void {
         for (passes) |pass| {
             if (self.shaderMan.isPassValid(pass) == true) {
                 try self.passes.append(pass);
@@ -150,6 +151,8 @@ pub const Renderer = struct {
     }
 
     fn recordPasses(self: *Renderer, cmd: *const Command, rendererData: RendererData) !void {
+        cmd.setGraphicsState();
+
         for (self.passes.items) |pass| {
             const shaders = self.shaderMan.getShaders(pass.shaderIds)[0..pass.shaderIds.len];
             try self.renderGraph.recordPass(cmd, pass, rendererData, shaders, &self.resMan);

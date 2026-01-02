@@ -20,7 +20,7 @@ pub const ImageLayout = enum(vk.VkImageLayout) {
 
 pub const PipeStage = enum(vk.VkPipelineStageFlagBits2) { //( SHOULD BE CORRECT ORDER)
     TopOfPipe = vk.VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
-    Compute = vk.VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+    ComputeShader = vk.VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
     VertShader = vk.VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT,
     TaskShader = vk.VK_PIPELINE_STAGE_2_TASK_SHADER_BIT_EXT,
     MeshShader = vk.VK_PIPELINE_STAGE_2_MESH_SHADER_BIT_EXT,
@@ -40,7 +40,7 @@ pub const PipeAccess = enum(vk.VkAccessFlagBits2) {
     ShaderRead = vk.VK_ACCESS_2_SHADER_STORAGE_READ_BIT,
     ShaderWrite = vk.VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
     ShaderReadWrite = vk.VK_ACCESS_2_SHADER_STORAGE_READ_BIT | vk.VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
-    
+
     IndirectRead = vk.VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT,
 
     ColorAttWrite = vk.VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
@@ -107,6 +107,8 @@ fn errorHandle(result: vk.VkResult, comptime msg: []const u8) !void {
 pub fn Handle(comptime _: type) type {
     return packed struct {
         id: u32,
-        pub inline fn raw(self: @This()) u32 { return self.id; }
+        pub inline fn raw(self: @This()) u32 {
+            return self.id;
+        }
     };
 }

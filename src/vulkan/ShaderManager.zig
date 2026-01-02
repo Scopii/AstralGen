@@ -8,6 +8,7 @@ const CreateMapArray = @import("../structures/MapArray.zig").CreateMapArray;
 const LoadedShader = @import("../core/ShaderCompiler.zig").LoadedShader;
 const ShaderObject = @import("ShaderObject.zig").ShaderObject;
 const rc = @import("../configs/renderConfig.zig");
+const Pass = @import("Pass.zig").Pass;
 
 pub const ShaderManager = struct {
     alloc: Allocator,
@@ -55,14 +56,14 @@ pub const ShaderManager = struct {
         return shaders;
     }
 
-    pub fn isPassValid(self: *ShaderManager, pass: rc.Pass) bool {
+    pub fn isPassValid(self: *ShaderManager, pass: Pass) bool {
         const shaders = self.getShaders(pass.shaderIds)[0..pass.shaderIds.len];
 
         const passType = checkShaderLayout(shaders) catch |err| {
             std.debug.print("Pass {} Shader Layout invalid", .{err});
             return false;
         };
-        const passKind = pass.kind;
+        const passKind = pass.passType;
 
         switch (passType) {
             .computePass => if (passKind != .compute and passKind != .computeOnImage) return false,

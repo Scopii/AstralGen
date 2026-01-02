@@ -26,6 +26,26 @@ pub const ResourceInf = struct {
 
     pub const ImgInf = struct { extent: vk.VkExtent3D, format: c_uint = rc.RENDER_IMG_FORMAT, imgType: ve.ImgType };
     pub const BufInf = struct { dataSize: u64 = 0, length: u32, bufType: ve.BufferType };
+
+    pub fn Buffer(id: u32, memUsage: ve.MemUsage, bufType: ve.BufferType, length: u32, comptime T: type) ResourceInf {
+        return ResourceInf{ .id = id, .memUse = memUsage, .inf = .{ .bufInf = .{
+            .bufType = bufType,
+            .length = length,
+            .dataSize = @sizeOf(T),
+        } } };
+    }
+
+    pub fn Image(id: u32, memUsage: ve.MemUsage, imgType: ve.ImgType, width: u32, height: u32, depth: u32, format: c_int) ResourceInf {
+        return ResourceInf{ .id = id, .memUse = memUsage, .inf = .{ .imgInf = .{
+            .imgType = imgType,
+            .extent = .{
+                .width = width,
+                .height = height,
+                .depth = depth,
+            },
+            .format = format,
+        } } };
+    }
 };
 
 pub const Resource = struct {
