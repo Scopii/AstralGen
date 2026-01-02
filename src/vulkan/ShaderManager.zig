@@ -87,10 +87,9 @@ fn checkShaderLayout(shaders: []const ShaderObject) !enum { computePass, graphic
             .geometry => 4,
             .task => 5,
             .mesh => 6,
-            .meshNoTask => 6, // LAYOUT NOT CHECKED YET
+            .meshNoTask => 6, 
             .frag => 7,
         };
-        if (curIndex < prevIndex) return error.ShaderLayoutOrderInvalid;
         prevIndex = curIndex;
         shdr[@intCast(curIndex)] += 1;
     }

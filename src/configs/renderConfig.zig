@@ -57,7 +57,7 @@ pub const computeTest: Pass = .{
 };
 
 const graphicsTest: Pass = .{
-    .shaderIds = &.{ sc.t2Vert.id, sc.t2Frag.id },
+    .shaderIds = &.{ sc.t2Frag.id, sc.t2Vert.id },
     .passType = Pass.Graphics(.{
         .mainImgId = grapImg.id,
         .colorAtts = &.{Attachment.create(grapImg.id, .ColorAtt, .ColorAttWrite, false)},
