@@ -36,10 +36,10 @@ pub const Pass = struct {
         colorAtts: []const Attachment,
         depthAtt: ?Attachment = null,
         stencilAtt: ?Attachment = null,
-        draw: struct { vertices: u32, instances: u32} = .{.vertices = 3, .instances = 1},
+        draw: struct { vertices: u32, instances: u32 } = .{ .vertices = 3, .instances = 1 },
     };
 
-    pub fn createComputeOnImage(data: ComputeOnImgData) Pass.PassType {
+    pub fn ComputeOnImage(data: ComputeOnImgData) Pass.PassType {
         return .{ .computeOnImg = data };
     }
 
@@ -47,11 +47,11 @@ pub const Pass = struct {
         return .{ .compute = .{ .workgroups = data.workgroups } };
     }
 
-    pub fn createGraphics(data: GraphicsData) Pass.PassType {
+    pub fn Graphics(data: GraphicsData) Pass.PassType {
         return .{ .graphics = data };
     }
 
-    pub fn createTaskOrMesh(data: TaskOrMeshData) Pass.PassType {
+    pub fn TaskOrMesh(data: TaskOrMeshData) Pass.PassType {
         return .{ .taskOrMesh = data };
     }
 

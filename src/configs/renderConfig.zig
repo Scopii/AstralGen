@@ -45,63 +45,66 @@ pub const grapDepthImg = ResourceInf.Image(11, .Gpu, .Depth, 1920, 1920, 1, vk.V
 
 pub const computeTest: Pass = .{
     .shaderIds = &.{sc.t1Comp.id},
+    .passType = Pass.ComputeOnImage(.{
+        .mainImgId = compImg.id,
+        .workgroups = .{ .x = 8, .y = 8, .z = 1 },
+    }),
     .shaderUsages = &.{
         ResourceUse.create(objectSB.id, .ComputeShader, .ShaderRead, .General),
         ResourceUse.create(cameraUB.id, .ComputeShader, .ShaderRead, .General),
         ResourceUse.create(compImg.id, .ComputeShader, .ShaderWrite, .General),
     },
-    .passType = Pass.createComputeOnImage(.{ .mainImgId = compImg.id, .workgroups = .{ .x = 8, .y = 8, .z = 1 } }),
 };
 
 const graphicsTest: Pass = .{
     .shaderIds = &.{ sc.t2Vert.id, sc.t2Frag.id },
-    .shaderUsages = &.{
-        ResourceUse.create(objectSB.id, .FragShader, .ShaderRead, .General),
-        ResourceUse.create(cameraUB.id, .ComputeShader, .ShaderRead, .General),
-    },
-    .passType = Pass.createGraphics(.{
+    .passType = Pass.Graphics(.{
         .mainImgId = grapImg.id,
         .colorAtts = &.{Attachment.create(grapImg.id, .ColorAtt, .ColorAttWrite, false)},
         .depthAtt = Attachment.create(grapDepthImg.id, .EarlyFragTest, .DepthStencilRead, false),
     }),
+    .shaderUsages = &.{
+        ResourceUse.create(objectSB.id, .FragShader, .ShaderRead, .General),
+        ResourceUse.create(cameraUB.id, .ComputeShader, .ShaderRead, .General),
+    },
 };
 
 const meshTest: Pass = .{
     .shaderIds = &.{ sc.t3Mesh.id, sc.t3Frag.id },
-    .shaderUsages = &.{
-        ResourceUse.create(objectSB.id, .FragShader, .ShaderRead, .General),
-        ResourceUse.create(cameraUB.id, .ComputeShader, .ShaderRead, .General),
-    },
-    .passType = Pass.createTaskOrMesh(.{
+    .passType = Pass.TaskOrMesh(.{
         .mainImgId = meshImg.id,
         .workgroups = .{ .x = 1, .y = 1, .z = 1 },
         .colorAtts = &.{Attachment.create(meshImg.id, .ColorAtt, .ColorAttWrite, false)},
     }),
-};
-
-const taskTest: Pass = .{
-    .shaderIds = &.{ sc.t4Task.id, sc.t4Mesh.id, sc.t4Frag.id },
     .shaderUsages = &.{
         ResourceUse.create(objectSB.id, .FragShader, .ShaderRead, .General),
         ResourceUse.create(cameraUB.id, .ComputeShader, .ShaderRead, .General),
     },
-    .passType = Pass.createTaskOrMesh(.{
+};
+
+const taskTest: Pass = .{
+    .shaderIds = &.{ sc.t4Task.id, sc.t4Mesh.id, sc.t4Frag.id },
+    .passType = Pass.TaskOrMesh(.{
         .mainImgId = taskImg.id,
         .workgroups = .{ .x = 1, .y = 1, .z = 1 },
         .colorAtts = &.{Attachment.create(taskImg.id, .ColorAtt, .ColorAttWrite, false)},
     }),
+    .shaderUsages = &.{
+        ResourceUse.create(objectSB.id, .FragShader, .ShaderRead, .General),
+        ResourceUse.create(cameraUB.id, .ComputeShader, .ShaderRead, .General),
+    },
 };
 
 const gridTest: Pass = .{
     .shaderIds = &.{ sc.gridTask.id, sc.gridMesh.id, sc.gridFrag.id },
-    .shaderUsages = &.{
-        ResourceUse.create(cameraUB.id, .TaskShader, .ShaderRead, .General),
-    },
-    .passType = Pass.createTaskOrMesh(.{
+    .passType = Pass.TaskOrMesh(.{
         .mainImgId = taskImg.id,
         .workgroups = .{ .x = 1, .y = 1, .z = 1 },
         .colorAtts = &.{Attachment.create(taskImg.id, .ColorAtt, .ColorAttWrite, false)},
     }),
+    .shaderUsages = &.{
+        ResourceUse.create(cameraUB.id, .TaskShader, .ShaderRead, .General),
+    },
 };
 
 pub const renderSequence: []const Pass = &.{ computeTest, graphicsTest, meshTest, taskTest, gridTest };
