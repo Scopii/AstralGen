@@ -50,8 +50,6 @@ pub const ResourceInf = struct {
 
 pub const Resource = struct {
     resourceType: ResourceUnion,
-    bindlessIndex: u32,
-    state: ResourceState = .{},
 
     pub const ResourceUnion = union(enum) {
         gpuBuf: GpuBuffer,
@@ -62,6 +60,12 @@ pub const Resource = struct {
         allocation: vk.VmaAllocation,
         img: vk.VkImage,
         view: vk.VkImageView,
+        bindlessIndex: u32 = 0,
+        state: ResourceState = .{},
+
+        pub fn getResourceSlot(self: *GpuImage) ResourceSlot {
+            return ResourceSlot{ .index = self.bindlessIndex, .count = 1 };
+        }
     };
     pub const GpuBuffer = struct {
         allocation: vk.VmaAllocation,
@@ -69,21 +73,11 @@ pub const Resource = struct {
         buffer: vk.VkBuffer,
         gpuAddress: u64,
         count: u32 = 0,
-    };
+        bindlessIndex: u32 = 0,
+        state: ResourceState = .{},
 
-    pub fn getResourceSlot(self: *Resource) ResourceSlot {
-        var resSlot = ResourceSlot{};
-
-        switch (self.resourceType) {
-            .gpuBuf => |gpuBuf| {
-                resSlot.index = self.bindlessIndex;
-                resSlot.count = gpuBuf.count;
-            },
-            .gpuImg => |_| {
-                resSlot.index = self.bindlessIndex;
-                resSlot.count = 1;
-            },
+        pub fn getResourceSlot(self: *GpuBuffer) ResourceSlot {
+            return ResourceSlot{ .index = self.bindlessIndex, .count = self.count };
         }
-        return resSlot;
-    }
+    };
 };

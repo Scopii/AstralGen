@@ -22,7 +22,10 @@ pub const ResourceManager = struct {
     gpuAlloc: GpuAllocator,
     gpi: vk.VkDevice,
     gpu: vk.VkPhysicalDevice,
-    resources: CreateMapArray(Resource, rc.GPU_RESOURCE_MAX, u32, rc.GPU_RESOURCE_MAX, 0) = .{},
+
+    buffers: CreateMapArray(Resource, rc.GPU_BUF_MAX, u32, rc.GPU_BUF_MAX, 0) = .{},
+    textures: CreateMapArray(Resource, rc.GPU_IMG_MAX, u32, rc.GPU_IMG_MAX, 0) = .{},
+
     nextImageIndex: u32 = 0,
     nextBufferIndex: u32 = 0,
     nextSampledImageIndex: u32 = 0,
@@ -59,9 +62,13 @@ pub const ResourceManager = struct {
     }
 
     pub fn deinit(self: *ResourceManager) void {
-        while (self.resources.getCount() > 0) {
-            self.destroyResource(self.resources.getKeyFromIndex(0));
+        while (self.buffers.getCount() > 0) {
+            self.destroyBuffer(self.buffers.getKeyFromIndex(0));
         }
+        while (self.textures.getCount() > 0) {
+            self.destroyImage(self.textures.getKeyFromIndex(0));
+        }
+
         self.descMan.deinit();
 
         self.pendingTransfers.deinit();
@@ -100,37 +107,30 @@ pub const ResourceManager = struct {
             .size = bytes.len,
         });
 
-        var resource = try self.getResourcePtr(id);
-        if (resource.resourceType == .gpuBuf) {
-            resource.resourceType.gpuBuf.count = @intCast(bytes.len / resInf.inf.bufInf.dataSize);
-        }
+        var buffer = try self.getBufferPtr(id);
+        buffer.count = @intCast(bytes.len / resInf.inf.bufInf.dataSize);
 
         // Align the offset to 16 bytes for GPU safety
         self.stagingOffset += (bytes.len + 15) & ~@as(u64, 15);
     }
 
-    pub fn getResourcePtr(self: *ResourceManager, gpuId: u32) !*Resource {
-        if (self.resources.isKeyUsed(gpuId) == false) return error.ResourceIdEmpty;
-        return self.resources.getPtr(gpuId);
-    }
-
-    pub fn getImagePtr(self: *ResourceManager, gpuId: u32) !*Resource.GpuImage {
-        const resource = try self.getResourcePtr(gpuId);
-        switch (resource.resourceType) {
+    pub fn getImagePtr(self: *ResourceManager, texId: u32) !*Resource.GpuImage {
+        const image = self.textures.getPtr(texId);
+        switch (image.resourceType) {
             .gpuImg => |*gpuImg| return gpuImg,
             else => {
-                std.debug.print("Warning: Tried getting GPU Image but Resource {} is not an Image\n", .{gpuId});
+                std.debug.print("Warning: Tried getting GPU Image but Resource {} is not an Image\n", .{texId});
                 return error.WrongResourceType;
             },
         }
     }
 
-    pub fn getBufferPtr(self: *ResourceManager, gpuId: u32) !*Resource.GpuBuffer {
-        const resource = try self.getResourcePtr(gpuId);
-        switch (resource.resourceType) {
+    pub fn getBufferPtr(self: *ResourceManager, bufId: u32) !*Resource.GpuBuffer {
+        const buffer = self.buffers.getPtr(bufId);
+        switch (buffer.resourceType) {
             .gpuBuf => |*gpuBuf| return gpuBuf,
             else => {
-                std.debug.print("Warning: Tried getting GPU Buffer but Resource {} is not an Buffer\n", .{gpuId});
+                std.debug.print("Warning: Tried getting GPU Buffer but Resource {} is not an Buffer\n", .{bufId});
                 return error.WrongResourceType;
             },
         }
@@ -149,11 +149,30 @@ pub const ResourceManager = struct {
         } else return error.ResourceValidationFailed;
     }
 
-    pub fn createResource(self: *ResourceManager, resInf: ResourceInf) !void {
+    pub fn createBuffer(self: *ResourceManager, resInf: ResourceInf) !void {
+        switch (resInf.inf) {
+            .imgInf => {},
+            .bufInf => |bufInf| {
+                const bindlessIndex = self.nextBufferIndex;
+                self.nextBufferIndex += 1;
+
+                var buffer = try self.gpuAlloc.allocDefinedBuffer(bufInf, resInf.memUse);
+                buffer.bindlessIndex = bindlessIndex;
+                try self.descMan.updateBufferDescriptor(buffer, rc.STORAGE_BUF_BINDING, bindlessIndex);
+
+                const finalRes = Resource{ .resourceType = .{ .gpuBuf = buffer } };
+                self.gpuAlloc.printMemoryLocation(finalRes.resourceType.gpuBuf.allocation, self.gpu);
+                self.buffers.set(resInf.id, finalRes);
+                std.debug.print("Buffer created. ID: {} -> BindlessIndex: {}\n", .{ resInf.id, bindlessIndex });
+            },
+        }
+    }
+
+    pub fn createImage(self: *ResourceManager, resInf: ResourceInf) !void {
         switch (resInf.inf) {
             .imgInf => |imgInf| {
                 var bindlessIndex: u32 = undefined;
-                const img = try self.gpuAlloc.allocGpuImage(imgInf, resInf.memUse);
+                var img = try self.gpuAlloc.allocGpuImage(imgInf, resInf.memUse);
 
                 if (imgInf.imgType == .Color) {
                     bindlessIndex = self.nextImageIndex;
@@ -164,103 +183,94 @@ pub const ResourceManager = struct {
                     self.nextSampledImageIndex += 1;
                     try self.descMan.updateSampledImageDescriptor(img.view, rc.SAMPLED_IMG_BINDING, bindlessIndex);
                 }
-                const finalRes = Resource{ .resourceType = .{ .gpuImg = img }, .bindlessIndex = bindlessIndex };
-                self.resources.set(resInf.id, finalRes);
+                img.bindlessIndex = bindlessIndex;
+
+                const finalRes = Resource{ .resourceType = .{ .gpuImg = img } };
+                self.textures.set(resInf.id, finalRes);
                 std.debug.print("Image created. ID: {} -> BindlessIndex: {}\n", .{ resInf.id, bindlessIndex });
             },
-            .bufInf => |bufInf| {
-                const bindlessIndex = self.nextBufferIndex;
-                self.nextBufferIndex += 1;
-
-                const buffer = try self.gpuAlloc.allocDefinedBuffer(bufInf, resInf.memUse);
-                try self.descMan.updateBufferDescriptor(buffer, rc.STORAGE_BUF_BINDING, bindlessIndex);
-
-                const finalRes = Resource{ .resourceType = .{ .gpuBuf = buffer }, .bindlessIndex = bindlessIndex };
-                self.gpuAlloc.printMemoryLocation(finalRes.resourceType.gpuBuf.allocation, self.gpu);
-                self.resources.set(resInf.id, finalRes);
-                std.debug.print("Buffer created. ID: {} -> BindlessIndex: {}\n", .{ resInf.id, bindlessIndex });
-            },
+            .bufInf => {},
         }
     }
 
-    pub fn updateResource(self: *ResourceManager, resource: ResourceInf, data: anytype) !void {
+    pub fn updateImage(_: *ResourceManager, resource: ResourceInf, _: anytype) !void {
         switch (resource.inf) {
             .imgInf => |_| {},
-            .bufInf => |bufInf| if (resource.memUse == .Gpu) {
-                try self.queueBufferUpload(resource, resource.id, data);
+            .bufInf => {},
+        }
+    }
+
+    pub fn updateBuffer(self: *ResourceManager, resourceInf: ResourceInf, data: anytype) !void {
+        switch (resourceInf.inf) {
+            .imgInf => |_| {},
+            .bufInf => |bufInf| if (resourceInf.memUse == .Gpu) {
+                try self.queueBufferUpload(resourceInf, resourceInf.id, data);
             } else {
-                try self.updateBuffer(bufInf, data, resource.id);
-            },
-        }
-    }
+                const DataType = @TypeOf(data);
+                const typeInfo = @typeInfo(DataType);
 
-    pub fn replaceResource(self: *ResourceManager, gpuId: u32, newInf: ResourceInf.ImgInf) !void {
-        var oldRes = self.resources.get(gpuId);
-        oldRes.state = .{};
-        const slotIndex = oldRes.bindlessIndex;
+                // Convert to byte slice based on input type
+                const dataBytes: []const u8 = switch (typeInfo) {
+                    .pointer => |ptr| switch (ptr.size) {
+                        .one => std.mem.asBytes(data), // *T or *[N]T
+                        .slice => std.mem.sliceAsBytes(data), // []T
+                        else => return error.UnsupportedPointerType,
+                    },
+                    else => return error.ExpectedPointer,
+                };
 
-        self.gpuAlloc.freeGpuImage(oldRes.resourceType.gpuImg);
-        const newGpuImg = try self.gpuAlloc.allocGpuImage(newInf, .Gpu);
-        try self.descMan.updateImageDescriptor(newGpuImg.view, rc.STORAGE_IMG_BINDING, slotIndex);
-
-        oldRes.resourceType = .{ .gpuImg = newGpuImg };
-        self.resources.set(gpuId, oldRes);
-        std.debug.print("Resource {} Resized/Replaced at Slot {}\n", .{ gpuId, slotIndex });
-    }
-
-    fn updateBuffer(self: *ResourceManager, bufInf: ResourceInf.BufInf, data: anytype, gpuId: u32) !void {
-        const DataType = @TypeOf(data);
-        const typeInfo = @typeInfo(DataType);
-
-        // Convert to byte slice based on input type
-        const dataBytes: []const u8 = switch (typeInfo) {
-            .pointer => |ptr| switch (ptr.size) {
-                .one => std.mem.asBytes(data), // *T or *[N]T
-                .slice => std.mem.sliceAsBytes(data), // []T
-                else => return error.UnsupportedPointerType,
-            },
-            else => return error.ExpectedPointer,
-        };
-
-        // Calculate element count
-        const elementCount = dataBytes.len / bufInf.dataSize;
-        if (dataBytes.len % bufInf.dataSize != 0) {
-            std.debug.print("Error: Data size {} not aligned to element size {}\n", .{ dataBytes.len, bufInf.dataSize });
-            return error.TypeMismatch;
-        }
-
-        var resource = try self.getResourcePtr(gpuId);
-
-        switch (resource.resourceType) {
-            .gpuBuf => |*buffer| {
-                const pMappedData = buffer.allocInf.pMappedData;
-
-                if (pMappedData == null) {
-                    return error.BufferNotMapped;
+                // Calculate element count
+                const elementCount = dataBytes.len / bufInf.dataSize;
+                if (dataBytes.len % bufInf.dataSize != 0) {
+                    std.debug.print("Error: Data size {} not aligned to element size {}\n", .{ dataBytes.len, bufInf.dataSize });
+                    return error.TypeMismatch;
                 }
+
+                var buffer = try self.getBufferPtr(resourceInf.id);
+
+                const pMappedData = buffer.allocInf.pMappedData orelse return error.BufferNotMapped;
 
                 // Copy bytes
                 const destBytes: [*]u8 = @ptrCast(pMappedData);
                 @memcpy(destBytes[0..dataBytes.len], dataBytes);
 
                 buffer.count = @intCast(elementCount);
-                self.resources.set(gpuId, .{ .resourceType = .{ .gpuBuf = buffer.* }, .bindlessIndex = resource.bindlessIndex });
             },
-            else => return error.WrongResourceType,
         }
     }
 
-    pub fn destroyResource(self: *ResourceManager, gpuId: u32) void {
-        if (self.resources.isKeyUsed(gpuId) != true) {
-            std.debug.print("Warning: Tried to destroy empty Resource ID {}\n", .{gpuId});
+    pub fn replaceImage(self: *ResourceManager, gpuId: u32, newInf: ResourceInf.ImgInf) !void {
+        var oldImg = try self.getImagePtr(gpuId);
+        oldImg.state = .{};
+        const slotIndex = oldImg.bindlessIndex;
+
+        self.gpuAlloc.freeGpuImage(oldImg.*);
+        const newGpuImg = try self.gpuAlloc.allocGpuImage(newInf, .Gpu);
+        try self.descMan.updateImageDescriptor(newGpuImg.view, rc.STORAGE_IMG_BINDING, slotIndex);
+
+        oldImg.* = newGpuImg;
+        self.textures.set(gpuId, Resource{ .resourceType = .{ .gpuImg = oldImg.* } });
+        std.debug.print("Resource {} Resized/Replaced at Slot {}\n", .{ gpuId, slotIndex });
+    }
+
+    pub fn destroyImage(self: *ResourceManager, imgId: u32) void {
+        if (self.textures.isKeyUsed(imgId) != true) {
+            std.debug.print("Warning: Tried to destroy empty Resource ID {}\n", .{imgId});
             return;
         }
-        const resource = self.resources.getPtr(gpuId);
+        const img = self.textures.getPtr(imgId);
+        self.gpuAlloc.freeGpuImage(img.resourceType.gpuImg);
+        self.textures.removeAtKey(imgId);
+    }
 
-        switch (resource.resourceType) {
-            .gpuImg => |img| self.gpuAlloc.freeGpuImage(img),
-            .gpuBuf => |buf| self.gpuAlloc.freeGpuBuffer(buf.buffer, buf.allocation),
+    pub fn destroyBuffer(self: *ResourceManager, bufId: u32) void {
+        if (self.buffers.isKeyUsed(bufId) != true) {
+            std.debug.print("Warning: Tried to destroy empty Resource ID {}\n", .{bufId});
+            return;
         }
-        self.resources.removeAtKey(gpuId);
+        const buf = self.buffers.getPtr(bufId);
+        const gpuBuf = buf.resourceType.gpuBuf; 
+        self.gpuAlloc.freeGpuBuffer(gpuBuf.buffer, gpuBuf.allocation);
+        self.buffers.removeAtKey(bufId);
     }
 };

@@ -15,7 +15,7 @@ pub const DESIRED_SWAPCHAIN_IMAGES: u8 = 3;
 pub const DISPLAY_MODE = vk.VK_PRESENT_MODE_IMMEDIATE_KHR;
 pub const MAX_WINDOWS: u8 = 8;
 
-pub const GPU_BUF_MAX = 16;
+pub const GPU_BUF_MAX = 64;
 pub const GPU_IMG_MAX = 32;
 pub const GPU_RESOURCE_MAX = GPU_BUF_MAX + GPU_IMG_MAX;
 
@@ -49,9 +49,11 @@ pub const computeTest: Pass = .{
         .mainImgId = compImg.id,
         .workgroups = .{ .x = 8, .y = 8, .z = 1 },
     }),
-    .shaderUsages = &.{
+    .shaderBuffers = &.{
         ResourceUse.create(objectSB.id, .ComputeShader, .ShaderRead, .General),
         ResourceUse.create(cameraUB.id, .ComputeShader, .ShaderRead, .General),
+    },
+    .shaderImages = &.{
         ResourceUse.create(compImg.id, .ComputeShader, .ShaderWrite, .General),
     },
 };
@@ -63,7 +65,7 @@ const graphicsTest: Pass = .{
         .colorAtts = &.{Attachment.create(grapImg.id, .ColorAtt, .ColorAttWrite, false)},
         .depthAtt = Attachment.create(grapDepthImg.id, .EarlyFragTest, .DepthStencilRead, false),
     }),
-    .shaderUsages = &.{
+    .shaderBuffers = &.{
         ResourceUse.create(objectSB.id, .FragShader, .ShaderRead, .General),
         ResourceUse.create(cameraUB.id, .ComputeShader, .ShaderRead, .General),
     },
@@ -76,7 +78,7 @@ const meshTest: Pass = .{
         .workgroups = .{ .x = 1, .y = 1, .z = 1 },
         .colorAtts = &.{Attachment.create(meshImg.id, .ColorAtt, .ColorAttWrite, false)},
     }),
-    .shaderUsages = &.{
+    .shaderBuffers = &.{
         ResourceUse.create(objectSB.id, .FragShader, .ShaderRead, .General),
         ResourceUse.create(cameraUB.id, .ComputeShader, .ShaderRead, .General),
     },
@@ -89,7 +91,7 @@ const taskTest: Pass = .{
         .workgroups = .{ .x = 1, .y = 1, .z = 1 },
         .colorAtts = &.{Attachment.create(taskImg.id, .ColorAtt, .ColorAttWrite, false)},
     }),
-    .shaderUsages = &.{
+    .shaderBuffers = &.{
         ResourceUse.create(objectSB.id, .FragShader, .ShaderRead, .General),
         ResourceUse.create(cameraUB.id, .ComputeShader, .ShaderRead, .General),
     },
@@ -102,7 +104,7 @@ const gridTest: Pass = .{
         .workgroups = .{ .x = 1, .y = 1, .z = 1 },
         .colorAtts = &.{Attachment.create(taskImg.id, .ColorAtt, .ColorAttWrite, false)},
     }),
-    .shaderUsages = &.{
+    .shaderBuffers = &.{
         ResourceUse.create(cameraUB.id, .TaskShader, .ShaderRead, .General),
     },
 };

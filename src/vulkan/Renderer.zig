@@ -96,11 +96,8 @@ pub const Renderer = struct {
                 if (dirtyImgIds[i] == null) break;
 
                 const gpuId = dirtyImgIds[i].?;
-                const resource = try self.resMan.getResourcePtr(gpuId);
-                switch (resource.resourceType) {
-                    .gpuImg => |passImg| try self.updatePassImage(gpuId, passImg),
-                    else => std.debug.print("Warning: updateRenderImage failed, renderID: {} is not an Image", .{gpuId}),
-                }
+                const passImg = try self.resMan.getImagePtr(gpuId);
+                try self.updatePassImage(gpuId, passImg.*);
             }
         }
     }
@@ -111,7 +108,7 @@ pub const Renderer = struct {
 
         if (new.height != 0 or new.width != 0) {
             if (new.width != old.width or new.height != old.height) {
-                try self.resMan.replaceResource(gpuId, .{ .extent = .{ .width = new.width, .height = new.height, .depth = 1 }, .imgType = img.imgInf.imgType });
+                try self.resMan.replaceImage(gpuId, .{ .extent = .{ .width = new.width, .height = new.height, .depth = 1 }, .imgType = img.imgInf.imgType });
                 std.debug.print("Render Image ID {} recreated {}x{} to {}x{}\n", .{ gpuId, old.width, old.height, new.width, new.height });
             }
         }
@@ -178,12 +175,20 @@ pub const Renderer = struct {
         try self.shaderMan.createShaders(loadedShaders);
     }
 
-    pub fn createResource(self: *Renderer, resourceInf: ResourceInf) !void {
-        try self.resMan.createResource(resourceInf);
+    pub fn createBuffer(self: *Renderer, resourceInf: ResourceInf) !void {
+        try self.resMan.createBuffer(resourceInf);
     }
 
-    pub fn updateResource(self: *Renderer, resourceInf: ResourceInf, data: anytype) !void {
-        try self.resMan.updateResource(resourceInf, data);
+    pub fn updateBuffer(self: *Renderer, resourceInf: ResourceInf, data: anytype) !void {
+        try self.resMan.updateBuffer(resourceInf, data);
+    }
+
+    pub fn createImage(self: *Renderer, resourceInf: ResourceInf) !void {
+        try self.resMan.createImage(resourceInf);
+    }
+
+    pub fn updateImage(self: *Renderer, resourceInf: ResourceInf, data: anytype) !void {
+        try self.resMan.updateImage(resourceInf, data);
     }
 };
 

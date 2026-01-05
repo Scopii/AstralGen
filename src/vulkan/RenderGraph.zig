@@ -53,7 +53,7 @@ pub const RenderGraph = struct {
         targets: []const u32,
         swapchainMap: *SwapchainManager.SwapchainMap,
         passes: []Pass,
-        shaderMan: *ShaderManager, 
+        shaderMan: *ShaderManager,
     ) !Command {
         const cmd = try self.cmdMan.getAndBeginCommand(frameInFlight);
         cmd.setGraphicsState();
@@ -76,55 +76,64 @@ pub const RenderGraph = struct {
         if (resMan.pendingTransfers.items.len == 0) return;
 
         for (resMan.pendingTransfers.items) |transfer| {
-            const dstResource = try resMan.getResourcePtr(transfer.dstResId);
-            try self.createBarrierIfNeeded(dstResource.state, .{ .stage = .Transfer, .access = .TransferWrite, .layout = .TransferDst }, dstResource);
-            cmd.copyBuffer(resMan.stagingBuffer.buffer, &transfer, dstResource.resourceType.gpuBuf.buffer);
+            const dstBuffer = try resMan.getBufferPtr(transfer.dstResId);
+            try self.createBufferBarrierIfNeeded(dstBuffer.state, .{ .stage = .Transfer, .access = .TransferWrite, .layout = .TransferDst }, dstBuffer);
+            cmd.copyBuffer(resMan.stagingBuffer.buffer, &transfer, dstBuffer.buffer); // MAYBE POINTER DEREFERNCE?
         }
         resMan.resetTransfers();
         self.bakeBarriers(cmd);
     }
 
-    fn createBarrierIfNeeded(self: *RenderGraph, state: ResourceState, neededState: ResourceState, resource: *Resource) !void {
+    fn createImageBarrierIfNeeded(self: *RenderGraph, state: ResourceState, neededState: ResourceState, gpuImg: *Resource.GpuImage) !void {
         if (state.stage == neededState.stage and state.access == neededState.access and state.layout == neededState.layout) return;
 
-        switch (resource.resourceType) {
-            .gpuImg => |*gpuImg| {
-                const barrier = createImageBarrier(state, neededState, gpuImg.img, gpuImg.imgInf.imgType);
-                try self.tempImgBarriers.append(barrier);
-                resource.state = neededState;
-            },
-            .gpuBuf => |*gpuBuf| {
-                const barrier = createBufferBarrier(state, neededState, gpuBuf.buffer);
-                try self.tempBufBarriers.append(barrier);
-                resource.state = neededState;
-            },
-        }
+        const barrier = createImageBarrier(state, neededState, gpuImg.img, gpuImg.imgInf.imgType);
+        try self.tempImgBarriers.append(barrier);
+        gpuImg.state = neededState;
+    }
+
+    fn createBufferBarrierIfNeeded(self: *RenderGraph, state: ResourceState, neededState: ResourceState, gpuBuf: *Resource.GpuBuffer) !void {
+        if (state.stage == neededState.stage and state.access == neededState.access and state.layout == neededState.layout) return;
+
+        const barrier = createBufferBarrier(state, neededState, gpuBuf.buffer);
+        try self.tempBufBarriers.append(barrier);
+        gpuBuf.state = neededState;
     }
 
     pub fn recordPassBarriers(self: *RenderGraph, cmd: *const Command, pass: Pass, resMan: *ResourceManager) !void {
-        for (pass.shaderUsages) |shaderUse| {
-            const resource = try resMan.getResourcePtr(shaderUse.id);
-            try self.createBarrierIfNeeded(resource.state, shaderUse.getNeededState(), resource);
+        for (pass.shaderBuffers) |shaderUse| {
+            const buffer = try resMan.getBufferPtr(shaderUse.id);
+            try self.createBufferBarrierIfNeeded(buffer.state, shaderUse.getNeededState(), buffer);
         }
 
-        for (pass.resUsages) |resUse| {
-            const resource = try resMan.getResourcePtr(resUse.id);
-            try self.createBarrierIfNeeded(resource.state, resUse.getNeededState(), resource);
+        for (pass.usageBuffers) |resUse| {
+            const buffer = try resMan.getBufferPtr(resUse.id);
+            try self.createBufferBarrierIfNeeded(buffer.state, resUse.getNeededState(), buffer);
+        }
+
+        for (pass.shaderImages) |shaderUse| {
+            const img = try resMan.getImagePtr(shaderUse.id);
+            try self.createImageBarrierIfNeeded(img.state, shaderUse.getNeededState(), img);
+        }
+
+        for (pass.usageImages) |resUse| {
+            const img = try resMan.getImagePtr(resUse.id);
+            try self.createImageBarrierIfNeeded(img.state, resUse.getNeededState(), img);
         }
 
         for (pass.getColorAtts()) |colorAtt| {
-            const resource = try resMan.getResourcePtr(colorAtt.id);
-            try self.createBarrierIfNeeded(resource.state, colorAtt.getNeededState(), resource);
+            const img = try resMan.getImagePtr(colorAtt.id);
+            try self.createImageBarrierIfNeeded(img.state, colorAtt.getNeededState(), img);
         }
 
         if (pass.getDepthAtt()) |depthAtt| {
-            const resource = try resMan.getResourcePtr(depthAtt.id);
-            try self.createBarrierIfNeeded(resource.state, depthAtt.getNeededState(), resource);
+            const img = try resMan.getImagePtr(depthAtt.id);
+            try self.createImageBarrierIfNeeded(img.state, depthAtt.getNeededState(), img);
         }
 
         if (pass.getStencilAtt()) |stencilAtt| {
-            const resource = try resMan.getResourcePtr(stencilAtt.id);
-            try self.createBarrierIfNeeded(resource.state, stencilAtt.getNeededState(), resource);
+            const img = try resMan.getImagePtr(stencilAtt.id);
+            try self.createImageBarrierIfNeeded(img.state, stencilAtt.getNeededState(), img);
         }
 
         self.bakeBarriers(cmd);
@@ -132,17 +141,12 @@ pub const RenderGraph = struct {
 
     fn recordCompute(cmd: *const Command, dispatch: Pass.Dispatch, renderImgId: ?u32, resMan: *ResourceManager) !void {
         if (renderImgId) |imgId| {
-            const resource = try resMan.getResourcePtr(imgId);
-            switch (resource.resourceType) {
-                .gpuImg => |gpuImg| {
-                    cmd.dispatch(
-                        (gpuImg.imgInf.extent.width + dispatch.x - 1) / dispatch.x,
-                        (gpuImg.imgInf.extent.height + dispatch.y - 1) / dispatch.y,
-                        (gpuImg.imgInf.extent.depth + dispatch.z - 1) / dispatch.z,
-                    );
-                },
-                else => return error.ComputePassRenderImgIsNoImg,
-            }
+            const gpuImg = try resMan.getImagePtr(imgId);
+            cmd.dispatch(
+                (gpuImg.imgInf.extent.width + dispatch.x - 1) / dispatch.x,
+                (gpuImg.imgInf.extent.height + dispatch.y - 1) / dispatch.y,
+                (gpuImg.imgInf.extent.depth + dispatch.z - 1) / dispatch.z,
+            );
         } else cmd.dispatch(dispatch.x, dispatch.y, dispatch.z);
     }
 
@@ -150,12 +154,19 @@ pub const RenderGraph = struct {
         try self.recordPassBarriers(cmd, pass, resMan);
 
         var pcs = PushConstants{ .runTime = rendererData.runTime, .deltaTime = rendererData.deltaTime };
-        if (pass.shaderUsages.len > pcs.resourceSlots.len) return error.TooManyShaderSlotsInPass;
+        // if (pass.shaderUsages.len > pcs.resourceSlots.len) return error.TooManyShaderSlotsInPass;
+
         // Assign Shader Slots
-        for (0..pass.shaderUsages.len) |i| {
-            const shaderSlot = pass.shaderUsages[i];
-            const resource = try resMan.getResourcePtr(shaderSlot.id);
-            pcs.resourceSlots[i] = resource.getResourceSlot();
+        for (0..pass.shaderBuffers.len) |i| {
+            const shaderSlot = pass.shaderBuffers[i];
+            const buffer = try resMan.getBufferPtr(shaderSlot.id);
+            pcs.resourceSlots[i] = buffer.getResourceSlot();
+        }
+
+        for (0..pass.shaderImages.len) |i| {
+            const shaderSlot = pass.shaderImages[i];
+            const images = try resMan.getImagePtr(shaderSlot.id);
+            pcs.resourceSlots[i + pass.shaderBuffers.len] = images.getResourceSlot();
         }
 
         const mainImg = switch (pass.passType) {
@@ -228,8 +239,8 @@ pub const RenderGraph = struct {
         // Render Image and Swapchain Preperations
         for (targets) |swapchainIndex| {
             const swapchain = swapchainMap.getPtrAtIndex(swapchainIndex);
-            const renderImg = try resMan.getResourcePtr(swapchain.passImgId);
-            try self.createBarrierIfNeeded(renderImg.state, .{ .stage = .Transfer, .access = .TransferRead, .layout = .TransferSrc }, renderImg);
+            const renderImg = try resMan.getImagePtr(swapchain.passImgId);
+            try self.createImageBarrierIfNeeded(renderImg.state, .{ .stage = .Transfer, .access = .TransferRead, .layout = .TransferSrc }, renderImg);
             const swapchainImg = swapchain.images[swapchain.curIndex];
             try self.tempImgBarriers.append(createImageBarrier(.{}, swapchainMidState, swapchainImg, .Color));
         }

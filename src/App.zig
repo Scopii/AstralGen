@@ -63,17 +63,16 @@ pub const App = struct {
         shaderCompiler.freeFreshShaders();
 
         // RENDERING SET UP
-        try renderer.createResource(rc.objectSB);
-        try renderer.createResource(rc.cameraUB);
+        try renderer.createBuffer(rc.objectSB);
+        try renderer.updateBuffer(rc.objectSB, ecs.getObjects());
+        try renderer.createBuffer(rc.cameraUB);
 
-        try renderer.updateResource(rc.objectSB, ecs.getObjects());
-
-        try renderer.createResource(rc.compImg);
-        try renderer.createResource(rc.grapImg);
-        try renderer.createResource(rc.meshImg);
-        try renderer.createResource(rc.taskImg);
-        try renderer.createResource(rc.testImg);
-        try renderer.createResource(rc.grapDepthImg);
+        try renderer.createImage(rc.compImg);
+        try renderer.createImage(rc.grapImg);
+        try renderer.createImage(rc.meshImg);
+        try renderer.createImage(rc.taskImg);
+        try renderer.createImage(rc.testImg);
+        try renderer.createImage(rc.grapDepthImg);
 
         try renderer.createPass(rc.renderSequence);
 
@@ -181,7 +180,7 @@ pub const App = struct {
 
             if (cam.needsUpdate == true) {
                 const camData = cam.getCameraData();
-                try renderer.updateResource(rc.cameraUB, &camData);
+                try renderer.updateBuffer(rc.cameraUB, &camData);
                 cam.needsUpdate = false;
             }
 

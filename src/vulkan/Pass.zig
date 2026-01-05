@@ -3,8 +3,12 @@ const ve = @import("../vulkan/Helpers.zig");
 
 pub const Pass = struct {
     shaderIds: []const u8,
-    resUsages: []const ResourceUse = &.{},
-    shaderUsages: []const ResourceUse,
+    usageBuffers: []const ResourceUse = &.{},
+    usageImages: []const ResourceUse = &.{},
+    
+    shaderBuffers: []const ResourceUse = &.{},
+    shaderImages: []const ResourceUse = &.{},
+
     passType: PassType,
 
     pub const PassType = union(enum) {
