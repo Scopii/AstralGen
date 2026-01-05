@@ -3,8 +3,11 @@ const vk = @import("../modules/vk.zig").c;
 const Allocator = std.mem.Allocator;
 const rc = @import("../configs/renderConfig.zig");
 const ResourceManager = @import("resources/ResourceManager.zig").ResourceManager;
+const Context = @import("Context.zig").Context;
 const Resource = @import("resources/Resource.zig").Resource;
 const ShaderObject = @import("ShaderObject.zig").ShaderObject;
+const ShaderManager = @import("ShaderManager.zig").ShaderManager;
+const CmdManager = @import("CmdManager.zig").CmdManager;
 const PushConstants = @import("resources/Resource.zig").PushConstants;
 const SwapchainManager = @import("SwapchainManager.zig");
 const Command = @import("Command.zig").Command;
@@ -21,22 +24,52 @@ pub const ResourceState = struct {
 
 pub const RenderGraph = struct {
     alloc: Allocator,
+    cmdMan: CmdManager,
     pipeLayout: vk.VkPipelineLayout,
     tempImgBarriers: std.array_list.Managed(vk.VkImageMemoryBarrier2),
     tempBufBarriers: std.array_list.Managed(vk.VkBufferMemoryBarrier2),
 
-    pub fn init(alloc: Allocator, resourceMan: *const ResourceManager) !RenderGraph {
+    pub fn init(alloc: Allocator, resMan: *const ResourceManager, context: *const Context) !RenderGraph {
         return .{
             .alloc = alloc,
-            .pipeLayout = resourceMan.descMan.pipeLayout,
+            .cmdMan = try CmdManager.init(alloc, context, rc.MAX_IN_FLIGHT, resMan),
+            .pipeLayout = resMan.descMan.pipeLayout,
             .tempImgBarriers = try std.array_list.Managed(vk.VkImageMemoryBarrier2).initCapacity(alloc, 30),
             .tempBufBarriers = try std.array_list.Managed(vk.VkBufferMemoryBarrier2).initCapacity(alloc, 30),
         };
     }
 
     pub fn deinit(self: *RenderGraph) void {
+        self.cmdMan.deinit();
         self.tempImgBarriers.deinit();
         self.tempBufBarriers.deinit();
+    }
+
+    pub fn recordFrame(
+        self: *RenderGraph,
+        frameInFlight: u8,
+        resMan: *ResourceManager,
+        rendererData: RendererData,
+        targets: []const u32,
+        swapchainMap: *SwapchainManager.SwapchainMap,
+        passes: []Pass,
+        shaderMan: *ShaderManager, 
+    ) !Command {
+        const cmd = try self.cmdMan.getAndBeginCommand(frameInFlight);
+        cmd.setGraphicsState();
+
+        try self.recordTransfers(&cmd, resMan);
+
+        for (passes) |pass| {
+            const shaders = shaderMan.getShaders(pass.shaderIds)[0..pass.shaderIds.len];
+            try self.recordPass(&cmd, pass, rendererData, shaders, resMan);
+        }
+
+        try self.recordSwapchainBlits(&cmd, targets, swapchainMap, resMan);
+
+        try cmd.endRecording();
+
+        return cmd;
     }
 
     pub fn recordTransfers(self: *RenderGraph, cmd: *const Command, resMan: *ResourceManager) !void {
@@ -47,6 +80,7 @@ pub const RenderGraph = struct {
             try self.createBarrierIfNeeded(dstResource.state, .{ .stage = .Transfer, .access = .TransferWrite, .layout = .TransferDst }, dstResource);
             cmd.copyBuffer(resMan.stagingBuffer.buffer, &transfer, dstResource.resourceType.gpuBuf.buffer);
         }
+        resMan.resetTransfers();
         self.bakeBarriers(cmd);
     }
 
@@ -68,9 +102,9 @@ pub const RenderGraph = struct {
     }
 
     pub fn recordPassBarriers(self: *RenderGraph, cmd: *const Command, pass: Pass, resMan: *ResourceManager) !void {
-        for (pass.shaderUsages) |resUse| {
-            const resource = try resMan.getResourcePtr(resUse.id);
-            try self.createBarrierIfNeeded(resource.state, resUse.getNeededState(), resource);
+        for (pass.shaderUsages) |shaderUse| {
+            const resource = try resMan.getResourcePtr(shaderUse.id);
+            try self.createBarrierIfNeeded(resource.state, shaderUse.getNeededState(), resource);
         }
 
         for (pass.resUsages) |resUse| {

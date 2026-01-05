@@ -112,3 +112,17 @@ pub fn Handle(comptime _: type) type {
         }
     };
 }
+
+pub const TextureHandle = Handle(struct { }); // Unique type
+pub const BufferHandle = Handle(struct { });  // Unique type
+//fn bindTexture(h: TextureHandle) void; 
+
+// pub fn setDebugName(self: *Context, handle: u64, type_: vk.VkObjectType, name: []const u8) void {
+//     if (appCon.DEBUG_MODE) {
+//         // ... call vkSetDebugUtilsObjectNameEXT ...
+//     }
+// }
+
+// if (info.name) |n| {
+//     ctx.setDebugName(@intFromEnum(handle), .VK_OBJECT_TYPE_IMAGE, n);
+// }

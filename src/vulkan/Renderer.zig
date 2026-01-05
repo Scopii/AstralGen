@@ -29,7 +29,6 @@ pub const Renderer = struct {
     renderGraph: RenderGraph,
     shaderMan: ShaderManager,
     swapMan: SwapchainManager,
-    cmdMan: CmdManager,
     scheduler: Scheduler,
     passes: std.array_list.Managed(Pass),
 
@@ -38,8 +37,7 @@ pub const Renderer = struct {
         const instance = try createInstance(alloc);
         const context = try Context.init(alloc, instance);
         const resMan = try ResourceManager.init(alloc, &context);
-        const renderGraph = try RenderGraph.init(alloc, &resMan);
-        const cmdMan = try CmdManager.init(alloc, &context, rc.MAX_IN_FLIGHT, &resMan);
+        const renderGraph = try RenderGraph.init(alloc, &resMan, &context);
         const scheduler = try Scheduler.init(&context, rc.MAX_IN_FLIGHT);
         const shaderMan = try ShaderManager.init(alloc, &context, &resMan);
         const swapMan = try SwapchainManager.init(alloc, &context);
@@ -51,7 +49,6 @@ pub const Renderer = struct {
             .resMan = resMan,
             .renderGraph = renderGraph,
             .shaderMan = shaderMan,
-            .cmdMan = cmdMan,
             .scheduler = scheduler,
             .swapMan = swapMan,
             .passes = std.array_list.Managed(Pass).init(alloc),
@@ -61,7 +58,6 @@ pub const Renderer = struct {
     pub fn deinit(self: *Renderer) void {
         _ = vk.vkDeviceWaitIdle(self.context.gpi);
         self.scheduler.deinit();
-        self.cmdMan.deinit();
         self.swapMan.deinit();
         self.shaderMan.deinit();
         self.resMan.deinit();
@@ -136,27 +132,12 @@ pub const Renderer = struct {
         if (try self.swapMan.updateTargets(frameInFlight, &self.context) == false) return;
         const targets = self.swapMan.getTargets();
 
-        const cmd = try self.cmdMan.getAndBeginCommand(frameInFlight);
-        try self.renderGraph.recordTransfers(&cmd, &self.resMan);
-        self.resMan.resetTransfers();
-
-        try self.recordPasses(&cmd, rendererData);
-        try self.renderGraph.recordSwapchainBlits(&cmd, targets, &self.swapMan.swapchains, &self.resMan);
-        try cmd.endRecording();
+        const cmd = try self.renderGraph.recordFrame(frameInFlight, &self.resMan, rendererData, targets, &self.swapMan.swapchains, self.passes.items, &self.shaderMan);
 
         try self.queueSubmit(&cmd, targets, frameInFlight);
         try self.swapMan.present(targets, self.context.presentQ);
 
         self.scheduler.nextFrame();
-    }
-
-    fn recordPasses(self: *Renderer, cmd: *const Command, rendererData: RendererData) !void {
-        cmd.setGraphicsState();
-
-        for (self.passes.items) |pass| {
-            const shaders = self.shaderMan.getShaders(pass.shaderIds)[0..pass.shaderIds.len];
-            try self.renderGraph.recordPass(cmd, pass, rendererData, shaders, &self.resMan);
-        }
     }
 
     fn queueSubmit(self: *Renderer, cmd: *const Command, targets: []const u32, frameInFlight: u8) !void {
