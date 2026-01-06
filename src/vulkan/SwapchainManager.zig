@@ -9,18 +9,18 @@ const FixedList = @import("../structures/FixedList.zig").FixedList;
 const vh = @import("Helpers.zig");
 const createSemaphore = @import("Scheduler.zig").createSemaphore;
 const rc = @import("../configs/renderConfig.zig");
+const TextureBase = @import("resources/Texture.zig").TextureBase;
 
 pub const Swapchain = struct {
     surface: vk.VkSurfaceKHR,
     handle: vk.VkSwapchainKHR,
-    extent: vk.VkExtent2D,
-    images: []vk.VkImage,    // indexed by swapchain images
-    views: []vk.VkImageView, // indexed by swapchain images
     curIndex: u32 = 0,
+    renderTexId: u32,
     imgRdySems: []vk.VkSemaphore, // indexed by max-in-flight.
     renderDoneSems: []vk.VkSemaphore, // indexed by swapchain images
+    textures: []TextureBase, // indexed by swapchain images
+    extent: vk.VkExtent2D,
     surfaceFormat: vk.VkSurfaceFormatKHR,
-    renderTexId: u32,
     inUse: bool = true,
 };
 
@@ -144,14 +144,13 @@ pub const SwapchainManager = struct {
     fn destroySwapchain(self: *SwapchainManager, sweapchain: *Swapchain, deleteMode: enum { withSurface, withoutSurface }) void {
         const gpi = self.gpi;
 
-        for (sweapchain.views) |view| vk.vkDestroyImageView(gpi, view, null);
+        for (sweapchain.textures) |tex| vk.vkDestroyImageView(gpi, tex.view, null);
         for (sweapchain.imgRdySems) |sem| vk.vkDestroySemaphore(gpi, sem, null);
         for (sweapchain.renderDoneSems) |sem| vk.vkDestroySemaphore(gpi, sem, null);
         vk.vkDestroySwapchainKHR(gpi, sweapchain.handle, null);
         if (deleteMode == .withSurface) vk.vkDestroySurfaceKHR(self.instance, sweapchain.surface, null);
 
-        self.alloc.free(sweapchain.images);
-        self.alloc.free(sweapchain.views);
+        self.alloc.free(sweapchain.textures);
         self.alloc.free(sweapchain.imgRdySems);
         self.alloc.free(sweapchain.renderDoneSems);
     }
@@ -241,14 +240,14 @@ pub const SwapchainManager = struct {
         _ = vk.vkGetSwapchainImagesKHR(gpi, handle, &realImgCount, null);
 
         const images = try alloc.alloc(vk.VkImage, realImgCount);
-        errdefer alloc.free(images);
+        defer alloc.free(images);
         try vh.check(vk.vkGetSwapchainImagesKHR(gpi, handle, &realImgCount, images.ptr), "Could not get Swapchain Images");
 
-        const views = try alloc.alloc(vk.VkImageView, realImgCount);
-        errdefer alloc.free(views);
+        const baseTextures = try alloc.alloc(TextureBase, realImgCount);
+        errdefer alloc.free(baseTextures);
 
         for (0..realImgCount) |i| {
-            const imgViewInf = vk.VkImageViewCreateInfo{
+            const viewInf = vk.VkImageViewCreateInfo{
                 .sType = vk.VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
                 .image = images[i],
                 .viewType = vk.VK_IMAGE_VIEW_TYPE_2D,
@@ -261,7 +260,18 @@ pub const SwapchainManager = struct {
                     .layerCount = 1,
                 },
             };
-            try vh.check(vk.vkCreateImageView(gpi, &imgViewInf, null, &views[i]), "Failed to create image view");
+
+            var view: vk.VkImageView = undefined;
+            try vh.check(vk.vkCreateImageView(gpi, &viewInf, null, &view), "Failed to create image view");
+
+            baseTextures[i] = TextureBase{
+                .img = images[i],
+                .view = view,
+                .format = surfaceFormat.format,
+                .texType = .Color,
+                .extent = .{ .width = realExtent.width, .height = realExtent.height, .depth = 1 },
+                .state = .{ .layout = .Undefined, .stage = .TopOfPipe, .access = .None },
+            };
         }
 
         const renderDoneSems = try alloc.alloc(vk.VkSemaphore, realImgCount);
@@ -277,8 +287,7 @@ pub const SwapchainManager = struct {
             .surfaceFormat = surfaceFormat,
             .extent = realExtent,
             .handle = handle,
-            .images = images,
-            .views = views,
+            .textures = baseTextures,
             .imgRdySems = imgRdySems,
             .renderDoneSems = renderDoneSems,
             .renderTexId = passImgId,

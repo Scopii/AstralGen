@@ -101,7 +101,7 @@ pub const Renderer = struct {
     }
 
     pub fn updatePassImage(self: *Renderer, gpuId: u32, img: Texture) !void {
-        const old = img.extent;
+        const old = img.base.extent;
         const new = self.swapMan.getMaxRenderExtent(gpuId);
 
         if (new.height != 0 or new.width != 0) {
@@ -109,8 +109,8 @@ pub const Renderer = struct {
                 const imgInf = Texture.TexInf{
                     .texId = gpuId,
                     .extent = .{ .width = new.width, .height = new.height, .depth = 1 },
-                    .format = img.format,
-                    .texType = img.texType,
+                    .format = img.base.format,
+                    .texType = img.base.texType,
                     .memUse = .Gpu,
                 };
                 try self.resMan.replaceTexture(gpuId, imgInf);

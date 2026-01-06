@@ -162,6 +162,10 @@ pub const Command = struct {
         vk.vkCmdDispatch(self.handle, groupCountX, groupCountY, groupCountZ);
     }
 
+    pub fn fillBuffer(self: *const Command, buffer: vk.VkBuffer, offset: u64, size: u64, data: u32) void {
+        vk.vkCmdFillBuffer(self.handle, buffer, offset, size, data);
+    }
+
     pub fn copyBuffer(self: *const Command, srcBuffer: vk.VkBuffer, transfer: *const PendingTransfer, dstBuffer: vk.VkBuffer) void {
         const copy = vk.VkBufferCopy{ .srcOffset = transfer.srcOffset, .dstOffset = 0, .size = transfer.size };
         vk.vkCmdCopyBuffer(self.handle, srcBuffer, dstBuffer, 1, &copy);

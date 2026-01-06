@@ -144,11 +144,11 @@ pub const ResourceManager = struct {
         if (texInf.texType == .Color) {
             bindlessIndex = self.nextTextureIndex;
             self.nextTextureIndex += 1;
-            try self.descMan.updateTextureDescriptor(tex.view, rc.STORAGE_IMG_BINDING, bindlessIndex);
+            try self.descMan.updateTextureDescriptor(tex.base.view, rc.STORAGE_IMG_BINDING, bindlessIndex);
         } else {
             bindlessIndex = self.nextSampledTextureIndex;
             self.nextSampledTextureIndex += 1;
-            try self.descMan.updateSampledTextureDescriptor(tex.view, rc.SAMPLED_IMG_BINDING, bindlessIndex);
+            try self.descMan.updateSampledTextureDescriptor(tex.base.view, rc.SAMPLED_IMG_BINDING, bindlessIndex);
         }
         tex.bindlessIndex = bindlessIndex;
 
@@ -194,15 +194,14 @@ pub const ResourceManager = struct {
 
     pub fn replaceTexture(self: *ResourceManager, texId: u32, nexTexInf: Texture.TexInf) !void {
         var oldTex = try self.getTexturePtr(texId);
-        oldTex.state = .{};
+        oldTex.base.state = .{};
         const slotIndex = oldTex.bindlessIndex;
 
         self.gpuAlloc.freeTexture(oldTex.*);
         const newTex = try self.gpuAlloc.allocTexture(nexTexInf, .Gpu);
-        try self.descMan.updateTextureDescriptor(newTex.view, rc.STORAGE_IMG_BINDING, slotIndex);
+        try self.descMan.updateTextureDescriptor(newTex.base.view, rc.STORAGE_IMG_BINDING, slotIndex);
 
         oldTex.* = newTex;
-        self.textures.set(texId, oldTex.*);
         std.debug.print("Resource {} Resized/Replaced at Slot {}\n", .{ texId, slotIndex });
     }
 

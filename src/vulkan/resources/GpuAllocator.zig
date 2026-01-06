@@ -146,12 +146,8 @@ pub const GpuAllocator = struct {
         try check(vk.vkCreateImageView(self.gpi, &viewInf, null, &view), "Could not create Render Image View");
 
         return .{
-            .extent = texInf.extent,
-            .format = texInf.format,
-            .texType = texInf.texType,
             .allocation = allocation,
-            .img = img,
-            .view = view,
+            .base = .{ .extent = texInf.extent, .format = texInf.format, .texType = texInf.texType, .img = img, .view = view },
         };
     }
 
@@ -166,8 +162,8 @@ pub const GpuAllocator = struct {
     }
 
     pub fn freeTexture(self: *const GpuAllocator, tex: Texture) void {
-        vk.vkDestroyImageView(self.gpi, tex.view, null);
-        vk.vmaDestroyImage(self.handle, tex.img, tex.allocation);
+        vk.vkDestroyImageView(self.gpi, tex.base.view, null);
+        vk.vmaDestroyImage(self.handle, tex.base.img, tex.allocation);
     }
 };
 

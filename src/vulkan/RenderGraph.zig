@@ -58,7 +58,6 @@ pub const RenderGraph = struct {
     ) !Command {
         const cmd = try self.cmdMan.getAndBeginCommand(frameInFlight);
         cmd.setGraphicsState();
-
         try self.recordTransfers(&cmd, resMan);
 
         for (passes) |pass| {
@@ -67,7 +66,6 @@ pub const RenderGraph = struct {
         }
 
         try self.recordSwapchainBlits(&cmd, targets, swapchainMap, resMan);
-
         try cmd.endRecording();
 
         return cmd;
@@ -77,64 +75,58 @@ pub const RenderGraph = struct {
         if (resMan.pendingTransfers.items.len == 0) return;
 
         for (resMan.pendingTransfers.items) |transfer| {
-            const dstBuffer = try resMan.getBufferPtr(transfer.dstResId);
-            try self.createBufferBarrierIfNeeded(dstBuffer.state, .{ .stage = .Transfer, .access = .TransferWrite, .layout = .TransferDst }, dstBuffer);
-            cmd.copyBuffer(resMan.stagingBuffer.handle, &transfer, dstBuffer.handle); // MAYBE POINTER DEREFERNCE?
+            const buffer = try resMan.getBufferPtr(transfer.dstResId);
+            try self.bufferBarrierIfNeeded(buffer.state, .{ .stage = .Transfer, .access = .TransferWrite, .layout = .TransferDst }, buffer);
+            cmd.copyBuffer(resMan.stagingBuffer.handle, &transfer, buffer.handle); // MAYBE POINTER DEREFERNCE?
         }
         resMan.resetTransfers();
         self.bakeBarriers(cmd);
     }
 
-    fn createImageBarrierIfNeeded(self: *RenderGraph, state: ResourceState, neededState: ResourceState, tex: *Texture) !void {
+    fn imageBarrierIfNeeded(self: *RenderGraph, state: ResourceState, neededState: ResourceState, tex: *Texture) !void {
         if (state.stage == neededState.stage and state.access == neededState.access and state.layout == neededState.layout) return;
-
-        const barrier = createImageBarrier(state, neededState, tex.img, tex.texType);
-        try self.tempImgBarriers.append(barrier);
-        tex.state = neededState;
+        try self.tempImgBarriers.append(tex.base.createImageBarrier(neededState));
     }
 
-    fn createBufferBarrierIfNeeded(self: *RenderGraph, state: ResourceState, neededState: ResourceState, buffer: *Buffer) !void {
-        if (state.stage == neededState.stage and state.access == neededState.access and state.layout == neededState.layout) return;
-
-        const barrier = createBufferBarrier(state, neededState, buffer.handle);
-        try self.tempBufBarriers.append(barrier);
-        buffer.state = neededState;
+    fn bufferBarrierIfNeeded(self: *RenderGraph, state: ResourceState, neededState: ResourceState, buffer: *Buffer) !void {
+        if (state.stage == neededState.stage and state.access == neededState.access) return;
+        try self.tempBufBarriers.append(buffer.createBufferBarrier(neededState));
     }
 
     pub fn recordPassBarriers(self: *RenderGraph, cmd: *const Command, pass: Pass, resMan: *ResourceManager) !void {
         for (pass.shaderBuffers) |shaderUse| {
             const buffer = try resMan.getBufferPtr(shaderUse.id);
-            try self.createBufferBarrierIfNeeded(buffer.state, shaderUse.getNeededState(), buffer);
+            try self.bufferBarrierIfNeeded(buffer.state, shaderUse.getNeededState(), buffer);
         }
 
         for (pass.usageBuffers) |resUse| {
             const buffer = try resMan.getBufferPtr(resUse.id);
-            try self.createBufferBarrierIfNeeded(buffer.state, resUse.getNeededState(), buffer);
+            try self.bufferBarrierIfNeeded(buffer.state, resUse.getNeededState(), buffer);
         }
 
         for (pass.shaderTextures) |shaderUse| {
             const tex = try resMan.getTexturePtr(shaderUse.id);
-            try self.createImageBarrierIfNeeded(tex.state, shaderUse.getNeededState(), tex);
+            try self.imageBarrierIfNeeded(tex.base.state, shaderUse.getNeededState(), tex);
         }
 
         for (pass.useageTextures) |resUse| {
             const tex = try resMan.getTexturePtr(resUse.id);
-            try self.createImageBarrierIfNeeded(tex.state, resUse.getNeededState(), tex);
+            try self.imageBarrierIfNeeded(tex.base.state, resUse.getNeededState(), tex);
         }
 
         for (pass.getColorAtts()) |colorAtt| {
             const tex = try resMan.getTexturePtr(colorAtt.id);
-            try self.createImageBarrierIfNeeded(tex.state, colorAtt.getNeededState(), tex);
+            try self.imageBarrierIfNeeded(tex.base.state, colorAtt.getNeededState(), tex);
         }
 
         if (pass.getDepthAtt()) |depthAtt| {
             const tex = try resMan.getTexturePtr(depthAtt.id);
-            try self.createImageBarrierIfNeeded(tex.state, depthAtt.getNeededState(), tex);
+            try self.imageBarrierIfNeeded(tex.base.state, depthAtt.getNeededState(), tex);
         }
 
         if (pass.getStencilAtt()) |stencilAtt| {
             const tex = try resMan.getTexturePtr(stencilAtt.id);
-            try self.createImageBarrierIfNeeded(tex.state, stencilAtt.getNeededState(), tex);
+            try self.imageBarrierIfNeeded(tex.base.state, stencilAtt.getNeededState(), tex);
         }
 
         self.bakeBarriers(cmd);
@@ -142,11 +134,11 @@ pub const RenderGraph = struct {
 
     fn recordCompute(cmd: *const Command, dispatch: Pass.Dispatch, renderTexId: ?u32, resMan: *ResourceManager) !void {
         if (renderTexId) |imgId| {
-            const gpuImg = try resMan.getTexturePtr(imgId);
+            const tex = try resMan.getTexturePtr(imgId);
             cmd.dispatch(
-                (gpuImg.extent.width + dispatch.x - 1) / dispatch.x,
-                (gpuImg.extent.height + dispatch.y - 1) / dispatch.y,
-                (gpuImg.extent.depth + dispatch.z - 1) / dispatch.z,
+                (tex.base.extent.width + dispatch.x - 1) / dispatch.x,
+                (tex.base.extent.height + dispatch.y - 1) / dispatch.y,
+                (tex.base.extent.depth + dispatch.z - 1) / dispatch.z,
             );
         } else cmd.dispatch(dispatch.x, dispatch.y, dispatch.z);
     }
@@ -178,8 +170,8 @@ pub const RenderGraph = struct {
         };
 
         if (mainTex) |tex| {
-            pcs.width = tex.extent.width;
-            pcs.height = tex.extent.height;
+            pcs.width = tex.base.extent.width;
+            pcs.height = tex.base.extent.height;
         }
 
         cmd.setPushConstants(self.pipeLayout, vk.VK_SHADER_STAGE_ALL, 0, @sizeOf(PushConstants), &pcs);
@@ -207,19 +199,19 @@ pub const RenderGraph = struct {
 
         const depthInf: ?vk.VkRenderingAttachmentInfo = if (depthAtt) |depth| blk: {
             const tex = try resMan.getTexturePtr(depth.id);
-            break :blk createAttachment(tex.texType, tex.view, depth.clear);
+            break :blk tex.base.createAttachment(depth.clear);
         } else null;
 
         const stencilInf: ?vk.VkRenderingAttachmentInfo = if (stencilAtt) |stencil| blk: {
             const tex = try resMan.getTexturePtr(stencil.id);
-            break :blk createAttachment(tex.texType, tex.view, stencil.clear);
+            break :blk tex.base.createAttachment(stencil.clear);
         } else null;
 
         var colorInfs: [8]vk.VkRenderingAttachmentInfo = undefined;
         for (0..colorAtts.len) |i| {
             const color = colorAtts[i];
             const tex = try resMan.getTexturePtr(color.id);
-            colorInfs[i] = createAttachment(tex.texType, tex.view, color.clear);
+            colorInfs[i] = tex.base.createAttachment(color.clear);
         }
 
         cmd.beginRendering(width, height, colorInfs[0..colorAtts.len], depthInf, stencilInf);
@@ -238,28 +230,28 @@ pub const RenderGraph = struct {
     pub fn recordSwapchainBlits(self: *RenderGraph, cmd: *const Command, targets: []const u32, swapchainMap: *SwapchainManager.SwapchainMap, resMan: *ResourceManager) !void {
         const swapchainMidState = ResourceState{ .stage = .Transfer, .access = .TransferWrite, .layout = .TransferDst };
         // Render Image and Swapchain Preperations
-        for (targets) |swapchainIndex| {
-            const swapchain = swapchainMap.getPtrAtIndex(swapchainIndex);
+        for (targets) |index| {
+            const swapchain = swapchainMap.getPtrAtIndex(index);
             const renderTex = try resMan.getTexturePtr(swapchain.renderTexId);
-            try self.createImageBarrierIfNeeded(renderTex.state, .{ .stage = .Transfer, .access = .TransferRead, .layout = .TransferSrc }, renderTex);
-            const swapchainImg = swapchain.images[swapchain.curIndex];
-            try self.tempImgBarriers.append(createImageBarrier(.{}, swapchainMidState, swapchainImg, .Color));
+            try self.imageBarrierIfNeeded(renderTex.base.state, .{ .stage = .Transfer, .access = .TransferRead, .layout = .TransferSrc }, renderTex);
+            const presentTex = &swapchain.textures[swapchain.curIndex];
+            try self.tempImgBarriers.append(presentTex.createImageBarrier(swapchainMidState));
         }
         self.bakeBarriers(cmd);
 
         // Blits
-        for (targets) |swapchainIndex| {
-            const swapchain = swapchainMap.getPtrAtIndex(swapchainIndex);
-            const swapchainExtent = vk.VkExtent3D{ .height = swapchain.extent.height, .width = swapchain.extent.width, .depth = 1 };
+        for (targets) |index| {
+            const swapchain = swapchainMap.getPtrAtIndex(index);
+            const extent = vk.VkExtent3D{ .height = swapchain.extent.height, .width = swapchain.extent.width, .depth = 1 };
             const renderTex = try resMan.getTexturePtr(swapchain.renderTexId);
-            cmd.copyImageToImage(renderTex.img, renderTex.extent, swapchain.images[swapchain.curIndex], swapchainExtent, rc.RENDER_IMG_STRETCH);
+            cmd.copyImageToImage(renderTex.base.img, renderTex.base.extent, swapchain.textures[swapchain.curIndex].img, extent, rc.RENDER_IMG_STRETCH);
         }
 
         // Swapchain Presentation Barriers
-        for (targets) |swapchainIndex| {
-            const swapchain = swapchainMap.getPtrAtIndex(swapchainIndex);
-            const presentState = ResourceState{ .stage = .BotOfPipe, .access = .None, .layout = .PresentSrc };
-            try self.tempImgBarriers.append(createImageBarrier(swapchainMidState, presentState, swapchain.images[swapchain.curIndex], .Color));
+        for (targets) |index| {
+            const swapchain = swapchainMap.getPtrAtIndex(index);
+            const presentTex = &swapchain.textures[swapchain.curIndex];
+            try self.tempImgBarriers.append(presentTex.createImageBarrier(.{ .stage = .BotOfPipe, .access = .None, .layout = .PresentSrc }));
         }
         self.bakeBarriers(cmd);
     }
@@ -270,60 +262,3 @@ pub const RenderGraph = struct {
         self.tempBufBarriers.clearRetainingCapacity();
     }
 };
-
-fn createImageBarrier(curState: ResourceState, newState: ResourceState, img: vk.VkImage, texType: vh.TextureType) vk.VkImageMemoryBarrier2 {
-    const aspectMask: vk.VkImageAspectFlagBits = switch (texType) {
-        .Color => vk.VK_IMAGE_ASPECT_COLOR_BIT,
-        .Depth => vk.VK_IMAGE_ASPECT_DEPTH_BIT,
-        .Stencil => vk.VK_IMAGE_ASPECT_STENCIL_BIT,
-    };
-
-    return vk.VkImageMemoryBarrier2{
-        .sType = vk.VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-        .srcStageMask = @intFromEnum(curState.stage),
-        .srcAccessMask = @intFromEnum(curState.access),
-        .dstStageMask = @intFromEnum(newState.stage),
-        .dstAccessMask = @intFromEnum(newState.access),
-        .oldLayout = @intFromEnum(curState.layout),
-        .newLayout = @intFromEnum(newState.layout),
-        .srcQueueFamilyIndex = vk.VK_QUEUE_FAMILY_IGNORED,
-        .dstQueueFamilyIndex = vk.VK_QUEUE_FAMILY_IGNORED,
-        .image = img,
-        .subresourceRange = createSubresourceRange(aspectMask, 0, 1, 0, 1),
-    };
-}
-
-fn createBufferBarrier(curState: ResourceState, newState: ResourceState, buffer: vk.VkBuffer) vk.VkBufferMemoryBarrier2 {
-    return vk.VkBufferMemoryBarrier2{
-        .sType = vk.VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2,
-        .srcStageMask = @intFromEnum(curState.stage),
-        .srcAccessMask = @intFromEnum(curState.access),
-        .dstStageMask = @intFromEnum(newState.stage),
-        .dstAccessMask = @intFromEnum(newState.access),
-        .srcQueueFamilyIndex = vk.VK_QUEUE_FAMILY_IGNORED,
-        .dstQueueFamilyIndex = vk.VK_QUEUE_FAMILY_IGNORED,
-        .buffer = buffer,
-        .offset = 0,
-        .size = vk.VK_WHOLE_SIZE, // whole Buffer
-    };
-}
-
-fn createSubresourceRange(mask: u32, mipLevel: u32, levelCount: u32, arrayLayer: u32, layerCount: u32) vk.VkImageSubresourceRange {
-    return vk.VkImageSubresourceRange{ .aspectMask = mask, .baseMipLevel = mipLevel, .levelCount = levelCount, .baseArrayLayer = arrayLayer, .layerCount = layerCount };
-}
-
-fn createAttachment(renderType: vh.TextureType, view: vk.VkImageView, clear: bool) vk.VkRenderingAttachmentInfo {
-    const clearValue: vk.VkClearValue = switch (renderType) {
-        .Color => .{ .color = .{ .float32 = .{ 0.0, 0.0, 0.1, 1.0 } } },
-        .Depth, .Stencil => .{ .depthStencil = .{ .depth = 1.0, .stencil = 0 } },
-    };
-
-    return vk.VkRenderingAttachmentInfo{
-        .sType = vk.VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-        .imageView = view,
-        .imageLayout = vk.VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
-        .loadOp = if (clear) vk.VK_ATTACHMENT_LOAD_OP_CLEAR else vk.VK_ATTACHMENT_LOAD_OP_LOAD,
-        .storeOp = vk.VK_ATTACHMENT_STORE_OP_STORE,
-        .clearValue = clearValue, // ✓ Now correct per type
-    };
-}
