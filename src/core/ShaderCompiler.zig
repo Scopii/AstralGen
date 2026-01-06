@@ -1,13 +1,13 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 const sc = @import("../configs/shaderConfig.zig");
-const ShaderInfo = sc.ShaderInfo;
+const ShaderInf = sc.ShaderInf;
 
 pub const LoadedShader = struct {
     const alignedShader = []align(@alignOf(u32)) u8;
     data: []align(@alignOf(u32)) u8,
     timeStamp: i128,
-    shaderInf: ShaderInfo,
+    shaderInf: ShaderInf,
 };
 
 pub const ShaderCompiler = struct {
@@ -49,7 +49,7 @@ pub const ShaderCompiler = struct {
         return self.freshShaders.items;
     }
 
-    pub fn loadShaders(self: *ShaderCompiler, shaderConfigs: []const ShaderInfo) !void {
+    pub fn loadShaders(self: *ShaderCompiler, shaderConfigs: []const ShaderInf) !void {
         const alloc = self.alloc;
         if (sc.SHADER_STARTUP_COMPILATION) {
             try compileShadersParallel(alloc, self.shaderPath, self.shaderOutputPath, shaderConfigs);
@@ -145,7 +145,7 @@ fn threadCompile(src: []const u8, dst: []const u8) void {
     std.heap.page_allocator.free(dst);
 }
 
-pub fn compileShadersParallel(alloc: std.mem.Allocator, absShaderPath: []const u8, absShaderOutputPath: []const u8, shaders: []const ShaderInfo) !void {
+pub fn compileShadersParallel(alloc: std.mem.Allocator, absShaderPath: []const u8, absShaderOutputPath: []const u8, shaders: []const ShaderInf) !void {
     var threads = std.array_list.Managed(std.Thread).init(alloc);
     defer threads.deinit();
 

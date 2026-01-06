@@ -108,10 +108,11 @@ pub const Renderer = struct {
             if (new.width != old.width or new.height != old.height) {
                 const imgInf = Texture.TexInf{
                     .texId = gpuId,
-                    .extent = .{ .width = new.width, .height = new.height, .depth = 1 },
-                    .format = img.base.format,
-                    .texType = img.base.texType,
-                    .memUse = .Gpu,
+                    .width = new.width,
+                    .height = new.height,
+                    .depth = 1,
+                    .typ = img.base.texType,
+                    .mem = .Gpu,
                 };
                 try self.resMan.replaceTexture(gpuId, imgInf);
                 std.debug.print("Render Image ID {} recreated {}x{} to {}x{}\n", .{ gpuId, old.width, old.height, new.width, new.height });

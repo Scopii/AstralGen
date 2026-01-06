@@ -72,7 +72,7 @@ pub const App = struct {
         try renderer.createTexture(rc.meshTex);
         try renderer.createTexture(rc.taskTex);
         try renderer.createTexture(rc.testTex);
-        try renderer.createTexture(rc.grapDepthTex);
+        try renderer.createTexture(rc.depthTex);
 
         try renderer.createPasses(rc.renderSequence);
 

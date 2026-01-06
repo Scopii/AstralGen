@@ -168,7 +168,7 @@ pub const RenderGraph = struct {
 
         pcs.resourceSlots = resourceSlots;
 
-        const mainTex = switch (pass.passType) {
+        const mainTex = switch (pass.passTyp) {
             .compute => null,
             .computeOnTex => |compOnImage| try resMan.getTexturePtr(compOnImage.mainTexId),
             .graphics => |graphics| try resMan.getTexturePtr(graphics.mainTexId),
@@ -183,7 +183,7 @@ pub const RenderGraph = struct {
         cmd.setPushConstants(self.pipeLayout, vk.VK_SHADER_STAGE_ALL, 0, @sizeOf(PushConstants), &pcs);
         cmd.bindShaders(validShaders);
 
-        switch (pass.passType) {
+        switch (pass.passTyp) {
             .compute => |comp| try recordCompute(cmd, comp.workgroups, null, resMan),
             .computeOnTex => |compOnImage| try recordCompute(cmd, compOnImage.workgroups, compOnImage.mainTexId, resMan),
             .graphics => |graphics| try recordGraphics(cmd, graphics.colorAtts, graphics.depthAtt, graphics.stencilAtt, pcs.width, pcs.height, pass, resMan),
@@ -222,7 +222,7 @@ pub const RenderGraph = struct {
 
         cmd.beginRendering(width, height, colorInfs[0..colorAtts.len], depthInf, stencilInf);
 
-        switch (pass.passType) {
+        switch (pass.passTyp) {
             .compute, .computeOnTex => return error.ComputeLandedInGraphicsPass,
             .taskOrMesh => |taskOrMesh| cmd.drawMeshTasks(taskOrMesh.workgroups.x, taskOrMesh.workgroups.y, taskOrMesh.workgroups.z),
             .graphics => |graphics| {

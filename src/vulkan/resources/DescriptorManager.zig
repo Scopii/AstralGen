@@ -32,7 +32,7 @@ pub const DescriptorManager = struct {
         var bindings: [rc.bindingRegistry.len]vk.VkDescriptorSetLayoutBinding = undefined;
         for (0..bindings.len) |i| {
             const binding = rc.bindingRegistry[i];
-            bindings[i] = createDescriptorLayoutBinding(binding.binding, binding.descType, binding.arrayLength, vk.VK_SHADER_STAGE_ALL);
+            bindings[i] = createDescriptorLayoutBinding(binding.binding, binding.descType, binding.len, vk.VK_SHADER_STAGE_ALL);
         }
         const descLayout = try createDescriptorLayout(gpi, &bindings);
         errdefer vk.vkDestroyDescriptorSetLayout(gpi, descLayout, null);

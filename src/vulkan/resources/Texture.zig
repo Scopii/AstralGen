@@ -7,7 +7,7 @@ const vh = @import("../Helpers.zig");
 pub const TextureBase = struct {
     img: vk.VkImage,
     view: vk.VkImageView,
-    format: c_uint = rc.RENDER_IMG_FORMAT,
+    format: c_uint,
     texType: vh.TextureType,
     extent: vk.VkExtent3D,
     state: ResourceState = .{},
@@ -60,20 +60,15 @@ pub const Texture = struct {
 
     pub const TexInf = struct {
         texId: u32,
-        memUse: vh.MemUsage,
-        extent: vk.VkExtent3D,
-        format: c_uint = rc.RENDER_IMG_FORMAT,
-        texType: vh.TextureType,
+        mem: vh.MemUsage,
+        typ: vh.TextureType,
+        width: u32,
+        height: u32,
+        depth: u32 = 1,
     };
 
-    pub fn create(texId: u32, memUse: vh.MemUsage, texType: vh.TextureType, width: u32, height: u32, depth: u32, format: c_int) TexInf {
-        return .{
-            .texId = texId,
-            .memUse = memUse,
-            .texType = texType,
-            .extent = .{ .width = width, .height = height, .depth = depth },
-            .format = format,
-        };
+    pub fn create(texInf: TexInf) TexInf {
+        return texInf;
     }
 
     pub fn getResourceSlot(self: *const Texture) ResourceSlot {

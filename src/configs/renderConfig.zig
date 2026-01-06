@@ -21,7 +21,8 @@ pub const GPU_BUF_MAX = 64;
 pub const GPU_IMG_MAX = 32;
 pub const GPU_RESOURCE_MAX = GPU_BUF_MAX + GPU_IMG_MAX;
 
-pub const RENDER_IMG_FORMAT = vk.VK_FORMAT_R16G16B16A16_SFLOAT;
+pub const TEX_COLOR_FORMAT = vk.VK_FORMAT_R16G16B16A16_SFLOAT;
+pub const TEX_DEPTH_FORMAT = vk.VK_FORMAT_D32_SFLOAT;
 pub const RENDER_IMG_AUTO_RESIZE = true;
 pub const RENDER_IMG_STRETCH = true; // Ignored on AUTO_RESIZE
 
@@ -29,25 +30,25 @@ pub const STORAGE_IMG_BINDING = 0;
 pub const STORAGE_BUF_BINDING = 1;
 pub const SAMPLED_IMG_BINDING = 2;
 
-pub const bindingRegistry: []const struct { binding: u32, descType: vk.VkDescriptorType, arrayLength: u32 } = &.{
-    .{ .binding = STORAGE_IMG_BINDING, .descType = vk.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, .arrayLength = GPU_IMG_MAX },
-    .{ .binding = STORAGE_BUF_BINDING, .descType = vk.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, .arrayLength = GPU_BUF_MAX },
-    .{ .binding = SAMPLED_IMG_BINDING, .descType = vk.VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, .arrayLength = GPU_IMG_MAX },
+pub const bindingRegistry: []const struct { binding: u32, descType: vk.VkDescriptorType, len: u32 } = &.{
+    .{ .binding = STORAGE_IMG_BINDING, .descType = vk.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, .len = GPU_IMG_MAX },
+    .{ .binding = STORAGE_BUF_BINDING, .descType = vk.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, .len = GPU_BUF_MAX },
+    .{ .binding = SAMPLED_IMG_BINDING, .descType = vk.VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, .len = GPU_IMG_MAX },
 };
 
-pub const objectSB = Buffer.create(1, .Gpu, .Storage, 100, Object);
-pub const cameraUB = Buffer.create(40, .Gpu, .Storage, 1, CameraData);
+pub const objectSB = Buffer.create(.{ .bufId = 1, .mem = .Gpu, .typ = .Storage, .len = 100, .dataTyp = Object });
+pub const cameraUB = Buffer.create(.{ .bufId = 40, .mem = .Gpu, .typ = .Storage, .len = 1, .dataTyp = CameraData });
 
-pub const compTex = Texture.create(3, .Gpu, .Color, 500, 500, 1, RENDER_IMG_FORMAT);
-pub const grapTex = Texture.create(5, .Gpu, .Color, 300, 300, 1, RENDER_IMG_FORMAT);
-pub const meshTex = Texture.create(7, .Gpu, .Color, 100, 100, 1, RENDER_IMG_FORMAT);
-pub const taskTex = Texture.create(9, .Gpu, .Color, 1920, 1920, 1, RENDER_IMG_FORMAT);
-pub const testTex = Texture.create(10, .Gpu, .Color, 1920, 1920, 1, RENDER_IMG_FORMAT);
-pub const grapDepthTex = Texture.create(11, .Gpu, .Depth, 1920, 1920, 1, vk.VK_FORMAT_D32_SFLOAT);
+pub const compTex = Texture.create(.{ .texId = 1, .mem = .Gpu, .typ = .Color, .width = 500, .height = 500 });
+pub const grapTex = Texture.create(.{ .texId = 2, .mem = .Gpu, .typ = .Color, .width = 300, .height = 300 });
+pub const meshTex = Texture.create(.{ .texId = 3, .mem = .Gpu, .typ = .Color, .width = 100, .height = 100 });
+pub const taskTex = Texture.create(.{ .texId = 4, .mem = .Gpu, .typ = .Color, .width = 1920, .height = 1920 });
+pub const testTex = Texture.create(.{ .texId = 5, .mem = .Gpu, .typ = .Color, .width = 1920, .height = 1920 });
+pub const depthTex = Texture.create(.{ .texId = 11, .mem = .Gpu, .typ = .Depth, .width = 1920, .height = 1920 });
 
 pub const computeTest: Pass = .{
     .shaderIds = &.{sc.t1Comp.id},
-    .passType = Pass.ComputeOnImage(.{
+    .passTyp = Pass.ComputeOnImage(.{
         .mainTexId = compTex.texId,
         .workgroups = .{ .x = 8, .y = 8, .z = 1 },
     }),
@@ -62,10 +63,10 @@ pub const computeTest: Pass = .{
 
 const graphicsTest: Pass = .{
     .shaderIds = &.{ sc.t2Frag.id, sc.t2Vert.id },
-    .passType = Pass.Graphics(.{
+    .passTyp = Pass.Graphics(.{
         .mainTexId = grapTex.texId,
         .colorAtts = &.{Attachment.create(grapTex.texId, .ColorAtt, .ColorAttWrite, false)},
-        .depthAtt = Attachment.create(grapDepthTex.texId, .EarlyFragTest, .DepthStencilRead, false),
+        .depthAtt = Attachment.create(depthTex.texId, .EarlyFragTest, .DepthStencilRead, false),
     }),
     .bufUses = &.{
         BufferUse.create(objectSB.bufId, .FragShader, .ShaderRead, 0),
@@ -75,7 +76,7 @@ const graphicsTest: Pass = .{
 
 const meshTest: Pass = .{
     .shaderIds = &.{ sc.t3Mesh.id, sc.t3Frag.id },
-    .passType = Pass.TaskOrMesh(.{
+    .passTyp = Pass.TaskOrMesh(.{
         .mainTexId = meshTex.texId,
         .workgroups = .{ .x = 1, .y = 1, .z = 1 },
         .colorAtts = &.{Attachment.create(meshTex.texId, .ColorAtt, .ColorAttWrite, false)},
@@ -88,7 +89,7 @@ const meshTest: Pass = .{
 
 const taskTest: Pass = .{
     .shaderIds = &.{ sc.t4Task.id, sc.t4Mesh.id, sc.t4Frag.id },
-    .passType = Pass.TaskOrMesh(.{
+    .passTyp = Pass.TaskOrMesh(.{
         .mainTexId = taskTex.texId,
         .workgroups = .{ .x = 1, .y = 1, .z = 1 },
         .colorAtts = &.{Attachment.create(taskTex.texId, .ColorAtt, .ColorAttWrite, false)},
@@ -101,7 +102,7 @@ const taskTest: Pass = .{
 
 const gridTest: Pass = .{
     .shaderIds = &.{ sc.gridTask.id, sc.gridMesh.id, sc.gridFrag.id },
-    .passType = Pass.TaskOrMesh(.{
+    .passTyp = Pass.TaskOrMesh(.{
         .mainTexId = taskTex.texId,
         .workgroups = .{ .x = 1, .y = 1, .z = 1 },
         .colorAtts = &.{Attachment.create(taskTex.texId, .ColorAtt, .ColorAttWrite, false)},

@@ -6,7 +6,7 @@ const Texture = @import("Texture.zig").Texture;
 const Buffer = @import("Buffer.zig").Buffer;
 const rc = @import("../../configs/renderConfig.zig");
 const check = @import("../Helpers.zig").check;
-const ve = @import("../Helpers.zig");
+const vh = @import("../Helpers.zig");
 
 pub const GpuAllocator = struct {
     handle: vk.VmaAllocator,
@@ -51,14 +51,16 @@ pub const GpuAllocator = struct {
         std.debug.print("Allocation is in VRAM: {}, CPU Visible: {}\n", .{ isVram, isCpuVisible });
     }
 
-    pub fn allocDefinedBuffer(self: *const GpuAllocator, bufInf: Buffer.BufInf, memUse: ve.MemUsage) !Buffer {
-        if (bufInf.dataSize == 0) {
+    pub fn allocDefinedBuffer(self: *const GpuAllocator, bufInf: Buffer.BufInf, memUse: vh.MemUsage) !Buffer {
+        const dataSize = @sizeOf(bufInf.dataTyp);
+
+        if (dataSize == 0) {
             std.debug.print("Binding Info has invalid element size\n", .{});
             return error.AllocDefinedBufferFailed;
         }
-        const bufferByteSize = @as(vk.VkDeviceSize, bufInf.length) * bufInf.dataSize;
+        const bufferByteSize = @as(vk.VkDeviceSize, bufInf.len) * dataSize;
 
-        var bufferBits: vk.VkBufferUsageFlags = switch (bufInf.bufType) {
+        var bufferBits: vk.VkBufferUsageFlags = switch (bufInf.typ) {
             .Storage => vk.VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
             .Uniform => vk.VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
             .Index => vk.VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
@@ -66,7 +68,7 @@ pub const GpuAllocator = struct {
             .Staging => vk.VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
         };
 
-        if (bufInf.bufType != .Staging) {
+        if (bufInf.typ != .Staging) {
             bufferBits |= vk.VK_BUFFER_USAGE_TRANSFER_DST_BIT;
             bufferBits |= vk.VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
         }
@@ -81,7 +83,7 @@ pub const GpuAllocator = struct {
             .Gpu => 0,
             .CpuWrite, .CpuRead => vk.VMA_ALLOCATION_CREATE_MAPPED_BIT,
         };
-        if (bufInf.bufType == .Staging) memFlags |= vk.VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+        if (bufInf.typ == .Staging) memFlags |= vk.VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
 
         return try self.allocBuffer(bufferByteSize, bufferBits, memType, memFlags);
     }
@@ -113,7 +115,7 @@ pub const GpuAllocator = struct {
         };
     }
 
-    pub fn allocTexture(self: *GpuAllocator, texInf: Texture.TexInf, memUse: ve.MemUsage) !Texture {
+    pub fn allocTexture(self: *GpuAllocator, texInf: Texture.TexInf, memUse: vh.MemUsage) !Texture {
         const memType: vk.VmaMemoryUsage = switch (memUse) {
             .Gpu => vk.VMA_MEMORY_USAGE_GPU_ONLY,
             .CpuWrite => vk.VMA_MEMORY_USAGE_CPU_TO_GPU,
@@ -121,7 +123,7 @@ pub const GpuAllocator = struct {
         };
         var use: vk.VkImageUsageFlags = vk.VK_IMAGE_USAGE_TRANSFER_SRC_BIT | vk.VK_IMAGE_USAGE_TRANSFER_DST_BIT | vk.VK_IMAGE_USAGE_SAMPLED_BIT;
 
-        switch (texInf.texType) {
+        switch (texInf.typ) {
             .Color => {
                 use |= vk.VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
                 use |= vk.VK_IMAGE_USAGE_STORAGE_BIT; // Compute Write
@@ -129,25 +131,32 @@ pub const GpuAllocator = struct {
             .Depth, .Stencil => use |= vk.VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, // Depth usually CANNOT be Storage!
         }
 
+        const format: c_uint = switch (texInf.typ) {
+            .Color => rc.TEX_COLOR_FORMAT,
+            .Depth, .Stencil => rc.TEX_DEPTH_FORMAT,
+        };
+
         // Allocation from GPU local memory
         var img: vk.VkImage = undefined;
         var allocation: vk.VmaAllocation = undefined;
-        const imgInf = createAllocatedImageInf(texInf.format, use, texInf.extent);
+        const extent = vk.VkExtent3D{ .width = texInf.width, .height = texInf.height, .depth = texInf.depth };
+
+        const imgInf = createAllocatedImageInf(format, use, extent);
         const imgAllocInf = vk.VmaAllocationCreateInfo{ .usage = memType, .requiredFlags = vk.VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT };
         try check(vk.vmaCreateImage(self.handle, &imgInf, &imgAllocInf, &img, &allocation, null), "Could not create Render Image");
 
-        const aspectMask: vk.VkImageAspectFlags = switch (texInf.texType) {
+        const aspectMask: vk.VkImageAspectFlags = switch (texInf.typ) {
             .Color => vk.VK_IMAGE_ASPECT_COLOR_BIT,
             .Depth => vk.VK_IMAGE_ASPECT_DEPTH_BIT,
             .Stencil => vk.VK_IMAGE_ASPECT_STENCIL_BIT,
         };
         var view: vk.VkImageView = undefined;
-        const viewInf = createAllocatedImageViewInf(texInf.format, img, aspectMask);
+        const viewInf = createAllocatedImageViewInf(format, img, aspectMask);
         try check(vk.vkCreateImageView(self.gpi, &viewInf, null, &view), "Could not create Render Image View");
 
         return .{
             .allocation = allocation,
-            .base = .{ .extent = texInf.extent, .format = texInf.format, .texType = texInf.texType, .img = img, .view = view },
+            .base = .{ .extent = extent, .format = format, .texType = texInf.typ, .img = img, .view = view },
         };
     }
 

@@ -62,7 +62,7 @@ pub const ShaderManager = struct {
             std.debug.print("Pass {} Shader Layout invalid", .{err});
             return false;
         };
-        const passKind = pass.passType;
+        const passKind = pass.passTyp;
 
         switch (passType) {
             .computePass => if (passKind != .compute and passKind != .computeOnTex) return false,

@@ -15,24 +15,18 @@ pub const Buffer = struct {
 
     pub const BufInf = struct {
         bufId: u32,
-        memUse: vh.MemUsage,
-        dataSize: u64 = 0,
-        length: u32,
-        bufType: vh.BufferType,
+        mem: vh.MemUsage,
+        dataTyp: type,
+        len: u32,
+        typ: vh.BufferType,
     };
 
-    pub fn create(bufId: u32, memUse: vh.MemUsage, bufType: vh.BufferType, length: u32, comptime T: type) BufInf {
-        return .{
-            .bufId = bufId,
-            .memUse = memUse,
-            .bufType = bufType,
-            .length = length,
-            .dataSize = @sizeOf(T),
-        };
+    pub fn create(bufInf: BufInf) BufInf {
+        return bufInf;
     }
 
     pub fn createBufferBarrier(self: *Buffer, newState: ResourceState) vk.VkBufferMemoryBarrier2 {
-        const barrier =  vk.VkBufferMemoryBarrier2{
+        const barrier = vk.VkBufferMemoryBarrier2{
             .sType = vk.VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2,
             .srcStageMask = @intFromEnum(self.state.stage),
             .srcAccessMask = @intFromEnum(self.state.access),

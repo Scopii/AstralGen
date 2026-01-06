@@ -7,6 +7,7 @@ const Buffer = @import("Buffer.zig").Buffer;
 const DescriptorManager = @import("DescriptorManager.zig").DescriptorManager;
 const GpuAllocator = @import("GpuAllocator.zig").GpuAllocator;
 const rc = @import("../../configs/renderConfig.zig");
+const vh = @import("../Helpers.zig");
 const CreateMapArray = @import("../../structures/MapArray.zig").CreateMapArray;
 
 pub const PendingTransfer = struct {
@@ -82,6 +83,7 @@ pub const ResourceManager = struct {
 
     pub fn queueBufferUpload(self: *ResourceManager, bufInf: Buffer.BufInf, bufId: u32, data: anytype) !void {
         const DataType = @TypeOf(data);
+        const dataSize = @sizeOf(bufInf.dataTyp);
         const typeInfo = @typeInfo(DataType);
 
         // Convert anytype to a byte slice safely
@@ -106,7 +108,7 @@ pub const ResourceManager = struct {
         });
 
         var buffer = try self.getBufferPtr(bufId);
-        buffer.count = @intCast(bytes.len / bufInf.dataSize);
+        buffer.count = @intCast(bytes.len / dataSize);
 
         // Align the offset to 16 bytes for GPU safety
         self.stagingOffset += (bytes.len + 15) & ~@as(u64, 15);
@@ -128,7 +130,7 @@ pub const ResourceManager = struct {
         const bindlessIndex = self.nextBufferIndex;
         self.nextBufferIndex += 1;
 
-        var buffer = try self.gpuAlloc.allocDefinedBuffer(bufInf, bufInf.memUse);
+        var buffer = try self.gpuAlloc.allocDefinedBuffer(bufInf, bufInf.mem);
         buffer.bindlessIndex = bindlessIndex;
         try self.descMan.updateBufferDescriptor(buffer, rc.STORAGE_BUF_BINDING, bindlessIndex);
 
@@ -139,9 +141,9 @@ pub const ResourceManager = struct {
 
     pub fn createTexture(self: *ResourceManager, texInf: Texture.TexInf) !void {
         var bindlessIndex: u32 = undefined;
-        var tex = try self.gpuAlloc.allocTexture(texInf, texInf.memUse);
+        var tex = try self.gpuAlloc.allocTexture(texInf, texInf.mem);
 
-        if (texInf.texType == .Color) {
+        if (texInf.typ == .Color) {
             bindlessIndex = self.nextTextureIndex;
             self.nextTextureIndex += 1;
             try self.descMan.updateTextureDescriptor(tex.base.view, rc.STORAGE_IMG_BINDING, bindlessIndex);
@@ -157,7 +159,7 @@ pub const ResourceManager = struct {
     }
 
     pub fn updateBuffer(self: *ResourceManager, bufInf: Buffer.BufInf, data: anytype) !void {
-        if (bufInf.memUse == .Gpu) {
+        if (bufInf.mem == .Gpu) {
             try self.queueBufferUpload(bufInf, bufInf.bufId, data);
         } else {
             const DataType = @TypeOf(data);

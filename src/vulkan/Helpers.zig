@@ -107,15 +107,17 @@ fn errorHandle(result: vk.VkResult, comptime msg: []const u8) !void {
 pub fn Handle(comptime _: type) type {
     return packed struct {
         id: u32,
-        pub inline fn raw(self: @This()) u32 {
-            return self.id;
-        }
+        // pub inline fn raw(self: @This()) u32 {
+        //     return self.id;
+        // }
     };
 }
 
-pub const TextureHandle = Handle(struct {}); // Unique type
-pub const BufferHandle = Handle(struct {}); // Unique type
-//fn bindTexture(h: TextureHandle) void;
+// pub const TexId = Handle(struct {}); 
+// pub const BufferId = Handle(struct {}); 
+// pub const ShaderId = Handle(struct {}); 
+// pub const WindowId = Handle(struct {}); 
+// pub const SwapchainId = Handle(struct {}); 
 
 // pub fn setDebugName(self: *Context, handle: u64, type_: vk.VkObjectType, name: []const u8) void {
 //     if (appCon.DEBUG_MODE) {
