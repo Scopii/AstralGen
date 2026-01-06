@@ -1,7 +1,7 @@
 const vk = @import("../modules/vk.zig").c;
 const std = @import("std");
 
-pub const ImgType = enum { Color, Depth, Stencil };
+pub const TextureType = enum { Color, Depth, Stencil };
 
 pub const MemUsage = enum { Gpu, CpuWrite, CpuRead };
 
@@ -113,9 +113,9 @@ pub fn Handle(comptime _: type) type {
     };
 }
 
-pub const TextureHandle = Handle(struct { }); // Unique type
-pub const BufferHandle = Handle(struct { });  // Unique type
-//fn bindTexture(h: TextureHandle) void; 
+pub const TextureHandle = Handle(struct {}); // Unique type
+pub const BufferHandle = Handle(struct {}); // Unique type
+//fn bindTexture(h: TextureHandle) void;
 
 // pub fn setDebugName(self: *Context, handle: u64, type_: vk.VkObjectType, name: []const u8) void {
 //     if (appCon.DEBUG_MODE) {

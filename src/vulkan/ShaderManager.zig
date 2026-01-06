@@ -7,7 +7,6 @@ const ResourceManager = @import("resources/ResourceManager.zig").ResourceManager
 const CreateMapArray = @import("../structures/MapArray.zig").CreateMapArray;
 const LoadedShader = @import("../core/ShaderCompiler.zig").LoadedShader;
 const ShaderObject = @import("ShaderObject.zig").ShaderObject;
-const rc = @import("../configs/renderConfig.zig");
 const Pass = @import("Pass.zig").Pass;
 
 pub const ShaderManager = struct {
@@ -66,7 +65,7 @@ pub const ShaderManager = struct {
         const passKind = pass.passType;
 
         switch (passType) {
-            .computePass => if (passKind != .compute and passKind != .computeOnImg) return false,
+            .computePass => if (passKind != .compute and passKind != .computeOnTex) return false,
             .graphicsPass, .vertexPass => if (passKind != .graphics) return false,
             .taskMeshPass, .meshPass => if (passKind != .taskOrMesh) return false,
         }
@@ -87,7 +86,7 @@ fn checkShaderLayout(shaders: []const ShaderObject) !enum { computePass, graphic
             .geometry => 4,
             .task => 5,
             .mesh => 6,
-            .meshNoTask => 6, 
+            .meshNoTask => 6,
             .frag => 7,
         };
         prevIndex = curIndex;

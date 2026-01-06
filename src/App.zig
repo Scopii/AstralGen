@@ -67,12 +67,12 @@ pub const App = struct {
         try renderer.updateBuffer(rc.objectSB, ecs.getObjects());
         try renderer.createBuffer(rc.cameraUB);
 
-        try renderer.createImage(rc.compImg);
-        try renderer.createImage(rc.grapImg);
-        try renderer.createImage(rc.meshImg);
-        try renderer.createImage(rc.taskImg);
-        try renderer.createImage(rc.testImg);
-        try renderer.createImage(rc.grapDepthImg);
+        try renderer.createTexture(rc.compTex);
+        try renderer.createTexture(rc.grapTex);
+        try renderer.createTexture(rc.meshTex);
+        try renderer.createTexture(rc.taskTex);
+        try renderer.createTexture(rc.testTex);
+        try renderer.createTexture(rc.grapDepthTex);
 
         try renderer.createPass(rc.renderSequence);
 
@@ -97,10 +97,10 @@ pub const App = struct {
     }
 
     pub fn initWindows(self: *App) !void {
-        try self.windowMan.addWindow("Task", 16 * 52, 9 * 52, rc.taskImg.id, 120, 50);
-        try self.windowMan.addWindow("Mesh", 16 * 52, 9 * 52, rc.meshImg.id, 120, 550);
-        try self.windowMan.addWindow("Compute", 16 * 52, 9 * 52, rc.compImg.id, 960, 50);
-        try self.windowMan.addWindow("Graphics", 16 * 52, 9 * 52, rc.grapImg.id, 960, 550);
+        try self.windowMan.addWindow("Task", 16 * 52, 9 * 52, rc.taskTex.texId, 120, 50);
+        try self.windowMan.addWindow("Mesh", 16 * 52, 9 * 52, rc.meshTex.texId, 120, 550);
+        try self.windowMan.addWindow("Compute", 16 * 52, 9 * 52, rc.compTex.texId, 960, 50);
+        try self.windowMan.addWindow("Graphics", 16 * 52, 9 * 52, rc.grapTex.texId, 960, 550);
     }
 
     pub fn run(self: *App) !void {

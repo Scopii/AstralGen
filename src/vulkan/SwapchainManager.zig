@@ -14,13 +14,13 @@ pub const Swapchain = struct {
     surface: vk.VkSurfaceKHR,
     handle: vk.VkSwapchainKHR,
     extent: vk.VkExtent2D,
-    images: []vk.VkImage,
-    views: []vk.VkImageView,
+    images: []vk.VkImage,    // indexed by swapchain images
+    views: []vk.VkImageView, // indexed by swapchain images
     curIndex: u32 = 0,
     imgRdySems: []vk.VkSemaphore, // indexed by max-in-flight.
     renderDoneSems: []vk.VkSemaphore, // indexed by swapchain images
     surfaceFormat: vk.VkSurfaceFormatKHR,
-    passImgId: u32,
+    renderTexId: u32,
     inUse: bool = true,
 };
 
@@ -119,7 +119,7 @@ pub const SwapchainManager = struct {
         var maxHeight: u32 = 0;
 
         for (self.swapchains.getElements()) |swapchain| {
-            if (swapchain.inUse == true and swapchain.passImgId == passImgId) {
+            if (swapchain.inUse == true and swapchain.renderTexId == passImgId) {
                 maxWidth = @max(maxWidth, swapchain.extent.width);
                 maxHeight = @max(maxHeight, swapchain.extent.height);
             }
@@ -188,7 +188,7 @@ pub const SwapchainManager = struct {
         const surface = ptr.surface;
         const caps = try getSurfaceCaps(gpu, surface);
         const surfaceFormat = try pickSurfaceFormat(alloc, gpu, surface);
-        const swapchain = try self.createInternalSwapchain(surfaceFormat, surface, extent, caps, ptr.passImgId, ptr.handle);
+        const swapchain = try self.createInternalSwapchain(surfaceFormat, surface, extent, caps, ptr.renderTexId, ptr.handle);
         self.destroySwapchain(ptr, .withoutSurface);
         ptr.* = swapchain;
     }
@@ -264,13 +264,13 @@ pub const SwapchainManager = struct {
             try vh.check(vk.vkCreateImageView(gpi, &imgViewInf, null, &views[i]), "Failed to create image view");
         }
 
-        const imgRdySems = try alloc.alloc(vk.VkSemaphore, rc.MAX_IN_FLIGHT);
-        errdefer alloc.free(imgRdySems);
-        for (0..rc.MAX_IN_FLIGHT) |i| imgRdySems[i] = try createSemaphore(gpi);
-
         const renderDoneSems = try alloc.alloc(vk.VkSemaphore, realImgCount);
         errdefer alloc.free(renderDoneSems);
         for (0..realImgCount) |i| renderDoneSems[i] = try createSemaphore(gpi);
+
+        const imgRdySems = try alloc.alloc(vk.VkSemaphore, rc.MAX_IN_FLIGHT);
+        errdefer alloc.free(imgRdySems);
+        for (0..rc.MAX_IN_FLIGHT) |i| imgRdySems[i] = try createSemaphore(gpi);
 
         return .{
             .surface = surface,
@@ -281,7 +281,7 @@ pub const SwapchainManager = struct {
             .views = views,
             .imgRdySems = imgRdySems,
             .renderDoneSems = renderDoneSems,
-            .passImgId = passImgId,
+            .renderTexId = passImgId,
         };
     }
 };

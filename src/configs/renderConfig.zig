@@ -1,7 +1,8 @@
 const vk = @import("../modules/vk.zig").c;
 const Object = @import("../ecs/EntityManager.zig").Object;
 const CameraData = @import("../core/Camera.zig").CameraData;
-const ResourceInf = @import("../vulkan/resources/Resource.zig").ResourceInf;
+const Buffer = @import("../vulkan/resources/Buffer.zig").Buffer;
+const Texture = @import("../vulkan/resources/Texture.zig").Texture;
 const ResourceState = @import("../vulkan/RenderGraph.zig").ResourceState;
 const Pass = @import("../vulkan/Pass.zig").Pass;
 const Attachment = @import("../vulkan/Pass.zig").Attachment;
@@ -33,79 +34,79 @@ pub const bindingRegistry: []const struct { binding: u32, descType: vk.VkDescrip
     .{ .binding = SAMPLED_IMG_BINDING, .descType = vk.VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, .arrayLength = GPU_IMG_MAX },
 };
 
-pub const objectSB = ResourceInf.Buffer(1, .Gpu, .Storage, 100, Object);
-pub const cameraUB = ResourceInf.Buffer(40, .Gpu, .Storage, 1, CameraData);
+pub const objectSB = Buffer.create(1, .Gpu, .Storage, 100, Object);
+pub const cameraUB = Buffer.create(40, .Gpu, .Storage, 1, CameraData);
 
-pub const compImg = ResourceInf.Image(3, .Gpu, .Color, 500, 500, 1, RENDER_IMG_FORMAT);
-pub const grapImg = ResourceInf.Image(5, .Gpu, .Color, 300, 300, 1, RENDER_IMG_FORMAT);
-pub const meshImg = ResourceInf.Image(7, .Gpu, .Color, 100, 100, 1, RENDER_IMG_FORMAT);
-pub const taskImg = ResourceInf.Image(9, .Gpu, .Color, 1920, 1920, 1, RENDER_IMG_FORMAT);
-pub const testImg = ResourceInf.Image(10, .Gpu, .Color, 1920, 1920, 1, RENDER_IMG_FORMAT);
-pub const grapDepthImg = ResourceInf.Image(11, .Gpu, .Depth, 1920, 1920, 1, vk.VK_FORMAT_D32_SFLOAT);
+pub const compTex = Texture.create(3, .Gpu, .Color, 500, 500, 1, RENDER_IMG_FORMAT);
+pub const grapTex = Texture.create(5, .Gpu, .Color, 300, 300, 1, RENDER_IMG_FORMAT);
+pub const meshTex = Texture.create(7, .Gpu, .Color, 100, 100, 1, RENDER_IMG_FORMAT);
+pub const taskTex = Texture.create(9, .Gpu, .Color, 1920, 1920, 1, RENDER_IMG_FORMAT);
+pub const testTex = Texture.create(10, .Gpu, .Color, 1920, 1920, 1, RENDER_IMG_FORMAT);
+pub const grapDepthTex = Texture.create(11, .Gpu, .Depth, 1920, 1920, 1, vk.VK_FORMAT_D32_SFLOAT);
 
 pub const computeTest: Pass = .{
     .shaderIds = &.{sc.t1Comp.id},
     .passType = Pass.ComputeOnImage(.{
-        .mainImgId = compImg.id,
+        .mainTexId = compTex.texId,
         .workgroups = .{ .x = 8, .y = 8, .z = 1 },
     }),
     .shaderBuffers = &.{
-        ResourceUse.create(objectSB.id, .ComputeShader, .ShaderRead, .General),
-        ResourceUse.create(cameraUB.id, .ComputeShader, .ShaderRead, .General),
+        ResourceUse.create(objectSB.bufId, .ComputeShader, .ShaderRead, .General),
+        ResourceUse.create(cameraUB.bufId, .ComputeShader, .ShaderRead, .General),
     },
-    .shaderImages = &.{
-        ResourceUse.create(compImg.id, .ComputeShader, .ShaderWrite, .General),
+    .shaderTextures = &.{
+        ResourceUse.create(compTex.texId, .ComputeShader, .ShaderWrite, .General),
     },
 };
 
 const graphicsTest: Pass = .{
     .shaderIds = &.{ sc.t2Frag.id, sc.t2Vert.id },
     .passType = Pass.Graphics(.{
-        .mainImgId = grapImg.id,
-        .colorAtts = &.{Attachment.create(grapImg.id, .ColorAtt, .ColorAttWrite, false)},
-        .depthAtt = Attachment.create(grapDepthImg.id, .EarlyFragTest, .DepthStencilRead, false),
+        .mainTexId = grapTex.texId,
+        .colorAtts = &.{Attachment.create(grapTex.texId, .ColorAtt, .ColorAttWrite, false)},
+        .depthAtt = Attachment.create(grapDepthTex.texId, .EarlyFragTest, .DepthStencilRead, false),
     }),
     .shaderBuffers = &.{
-        ResourceUse.create(objectSB.id, .FragShader, .ShaderRead, .General),
-        ResourceUse.create(cameraUB.id, .ComputeShader, .ShaderRead, .General),
+        ResourceUse.create(objectSB.bufId, .FragShader, .ShaderRead, .General),
+        ResourceUse.create(cameraUB.bufId, .ComputeShader, .ShaderRead, .General),
     },
 };
 
 const meshTest: Pass = .{
     .shaderIds = &.{ sc.t3Mesh.id, sc.t3Frag.id },
     .passType = Pass.TaskOrMesh(.{
-        .mainImgId = meshImg.id,
+        .mainTexId = meshTex.texId,
         .workgroups = .{ .x = 1, .y = 1, .z = 1 },
-        .colorAtts = &.{Attachment.create(meshImg.id, .ColorAtt, .ColorAttWrite, false)},
+        .colorAtts = &.{Attachment.create(meshTex.texId, .ColorAtt, .ColorAttWrite, false)},
     }),
     .shaderBuffers = &.{
-        ResourceUse.create(objectSB.id, .FragShader, .ShaderRead, .General),
-        ResourceUse.create(cameraUB.id, .ComputeShader, .ShaderRead, .General),
+        ResourceUse.create(objectSB.bufId, .FragShader, .ShaderRead, .General),
+        ResourceUse.create(cameraUB.bufId, .ComputeShader, .ShaderRead, .General),
     },
 };
 
 const taskTest: Pass = .{
     .shaderIds = &.{ sc.t4Task.id, sc.t4Mesh.id, sc.t4Frag.id },
     .passType = Pass.TaskOrMesh(.{
-        .mainImgId = taskImg.id,
+        .mainTexId = taskTex.texId,
         .workgroups = .{ .x = 1, .y = 1, .z = 1 },
-        .colorAtts = &.{Attachment.create(taskImg.id, .ColorAtt, .ColorAttWrite, false)},
+        .colorAtts = &.{Attachment.create(taskTex.texId, .ColorAtt, .ColorAttWrite, false)},
     }),
     .shaderBuffers = &.{
-        ResourceUse.create(objectSB.id, .FragShader, .ShaderRead, .General),
-        ResourceUse.create(cameraUB.id, .ComputeShader, .ShaderRead, .General),
+        ResourceUse.create(objectSB.bufId, .FragShader, .ShaderRead, .General),
+        ResourceUse.create(cameraUB.bufId, .ComputeShader, .ShaderRead, .General),
     },
 };
 
 const gridTest: Pass = .{
     .shaderIds = &.{ sc.gridTask.id, sc.gridMesh.id, sc.gridFrag.id },
     .passType = Pass.TaskOrMesh(.{
-        .mainImgId = taskImg.id,
+        .mainTexId = taskTex.texId,
         .workgroups = .{ .x = 1, .y = 1, .z = 1 },
-        .colorAtts = &.{Attachment.create(taskImg.id, .ColorAtt, .ColorAttWrite, false)},
+        .colorAtts = &.{Attachment.create(taskTex.texId, .ColorAtt, .ColorAttWrite, false)},
     }),
     .shaderBuffers = &.{
-        ResourceUse.create(cameraUB.id, .TaskShader, .ShaderRead, .General),
+        ResourceUse.create(cameraUB.bufId, .TaskShader, .ShaderRead, .General),
     },
 };
 

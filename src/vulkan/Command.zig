@@ -132,7 +132,7 @@ pub const Command = struct {
         vk.vkCmdBeginRendering(self.handle, &renderInf);
     }
 
-    pub fn bindShaders(self: *const Command, shaderObjects: []const ShaderObject) void {
+    pub fn bindShaders(self: *const Command, shaders: []const ShaderObject) void {
         const allStages = [_]vk.VkShaderStageFlagBits{
             vk.VK_SHADER_STAGE_VERTEX_BIT,
             vk.VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT,
@@ -145,7 +145,7 @@ pub const Command = struct {
         };
         var handles: [8]vk.VkShaderEXT = .{null} ** 8;
 
-        for (shaderObjects) |shader| {
+        for (shaders) |shader| {
             const activeStageBit = vh.getShaderBit(shader.stage);
 
             for (0..8) |i| {

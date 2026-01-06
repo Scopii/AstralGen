@@ -4,15 +4,11 @@ const Context = @import("Context.zig").Context;
 const Scheduler = @import("Scheduler.zig").Scheduler;
 const Window = @import("../platform/Window.zig").Window;
 const LoadedShader = @import("../core/ShaderCompiler.zig").LoadedShader;
-const CmdManager = @import("CmdManager.zig").CmdManager;
 const ShaderManager = @import("ShaderManager.zig").ShaderManager;
 const SwapchainManager = @import("SwapchainManager.zig").SwapchainManager;
-const PushConstants = @import("resources/Resource.zig").PushConstants;
 const ResourceManager = @import("resources/ResourceManager.zig").ResourceManager;
 const MemoryManager = @import("../core/MemoryManager.zig").MemoryManager;
 const createInstance = @import("Context.zig").createInstance;
-const Resource = @import("resources/Resource.zig").Resource;
-const ResourceInf = @import("resources/Resource.zig").ResourceInf;
 const RenderGraph = @import("RenderGraph.zig").RenderGraph;
 const RendererData = @import("../App.zig").RendererData;
 const rc = @import("../configs/renderConfig.zig");
@@ -20,6 +16,8 @@ const Allocator = std.mem.Allocator;
 const Command = @import("Command.zig").Command;
 const vh = @import("Helpers.zig");
 const Pass = @import("Pass.zig").Pass;
+const Texture = @import("resources/Texture.zig").Texture;
+const Buffer = @import("resources/Buffer.zig").Buffer;
 
 pub const Renderer = struct {
     alloc: Allocator,
@@ -96,19 +94,26 @@ pub const Renderer = struct {
                 if (dirtyImgIds[i] == null) break;
 
                 const gpuId = dirtyImgIds[i].?;
-                const passImg = try self.resMan.getImagePtr(gpuId);
+                const passImg = try self.resMan.getTexturePtr(gpuId);
                 try self.updatePassImage(gpuId, passImg.*);
             }
         }
     }
 
-    pub fn updatePassImage(self: *Renderer, gpuId: u32, img: Resource.GpuImage) !void {
-        const old = img.imgInf.extent;
+    pub fn updatePassImage(self: *Renderer, gpuId: u32, img: Texture) !void {
+        const old = img.extent;
         const new = self.swapMan.getMaxRenderExtent(gpuId);
 
         if (new.height != 0 or new.width != 0) {
             if (new.width != old.width or new.height != old.height) {
-                try self.resMan.replaceImage(gpuId, .{ .extent = .{ .width = new.width, .height = new.height, .depth = 1 }, .imgType = img.imgInf.imgType });
+                const imgInf = Texture.TexInf{
+                    .texId = gpuId,
+                    .extent = .{ .width = new.width, .height = new.height, .depth = 1 },
+                    .format = img.format,
+                    .texType = img.texType,
+                    .memUse = .Gpu,
+                };
+                try self.resMan.replaceTexture(gpuId, imgInf);
                 std.debug.print("Render Image ID {} recreated {}x{} to {}x{}\n", .{ gpuId, old.width, old.height, new.width, new.height });
             }
         }
@@ -175,20 +180,16 @@ pub const Renderer = struct {
         try self.shaderMan.createShaders(loadedShaders);
     }
 
-    pub fn createBuffer(self: *Renderer, resourceInf: ResourceInf) !void {
-        try self.resMan.createBuffer(resourceInf);
+    pub fn createBuffer(self: *Renderer, bufInf: Buffer.BufInf) !void {
+        try self.resMan.createBuffer(bufInf);
     }
 
-    pub fn updateBuffer(self: *Renderer, resourceInf: ResourceInf, data: anytype) !void {
-        try self.resMan.updateBuffer(resourceInf, data);
+    pub fn updateBuffer(self: *Renderer, bufInf: Buffer.BufInf, data: anytype) !void {
+        try self.resMan.updateBuffer(bufInf, data);
     }
 
-    pub fn createImage(self: *Renderer, resourceInf: ResourceInf) !void {
-        try self.resMan.createImage(resourceInf);
-    }
-
-    pub fn updateImage(self: *Renderer, resourceInf: ResourceInf, data: anytype) !void {
-        try self.resMan.updateImage(resourceInf, data);
+    pub fn createTexture(self: *Renderer, texInf: Texture.TexInf) !void {
+        try self.resMan.createTexture(texInf);
     }
 };
 

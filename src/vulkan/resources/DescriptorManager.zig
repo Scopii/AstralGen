@@ -3,15 +3,16 @@ const vk = @import("../../modules/vk.zig").c;
 const vkFn = @import("../../modules/vk.zig");
 const Allocator = std.mem.Allocator;
 const GpuAllocator = @import("GpuAllocator.zig").GpuAllocator;
-const Resource = @import("Resource.zig").Resource;
 const PushConstants = @import("Resource.zig").PushConstants;
+const Texture = @import("Texture.zig").Texture;
+const Buffer = @import("Buffer.zig").Buffer;
 const vh = @import("../Helpers.zig");
 const rc = @import("../../configs/renderConfig.zig");
 
 pub const DescriptorBuffer = struct {
     allocation: vk.VmaAllocation,
     allocInf: vk.VmaAllocationInfo,
-    buffer: vk.VkBuffer,
+    handle: vk.VkBuffer,
     gpuAddress: u64,
 };
 
@@ -52,15 +53,15 @@ pub const DescriptorManager = struct {
     }
 
     pub fn deinit(self: *DescriptorManager) void {
-        self.gpuAlloc.freeGpuBuffer(self.descBuffer.buffer, self.descBuffer.allocation);
+        self.gpuAlloc.freeBuffer(self.descBuffer.handle, self.descBuffer.allocation);
         vk.vkDestroyDescriptorSetLayout(self.gpi, self.descLayout, null);
         vk.vkDestroyPipelineLayout(self.gpi, self.pipeLayout, null);
     }
 
-    pub fn updateImageDescriptor(self: *DescriptorManager, gpuImgView: vk.VkImageView, binding: u8, arrayIndex: u32) !void {
+    pub fn updateTextureDescriptor(self: *DescriptorManager, view: vk.VkImageView, binding: u8, arrayIndex: u32) !void {
         const imgInf = vk.VkDescriptorImageInfo{
             .sampler = null,
-            .imageView = gpuImgView,
+            .imageView = view,
             .imageLayout = vk.VK_IMAGE_LAYOUT_GENERAL,
         };
         const getInf = vk.VkDescriptorGetInfoEXT{
@@ -71,10 +72,10 @@ pub const DescriptorManager = struct {
         try self.updateDescriptor(&getInf, binding, arrayIndex, self.descBufferProps.storageImageDescriptorSize);
     }
 
-    pub fn updateSampledImageDescriptor(self: *DescriptorManager, gpuImgView: vk.VkImageView, binding: u8, arrayIndex: u32) !void {
+    pub fn updateSampledTextureDescriptor(self: *DescriptorManager, view: vk.VkImageView, binding: u8, arrayIndex: u32) !void {
         const imgInf = vk.VkDescriptorImageInfo{
             .sampler = null,
-            .imageView = gpuImgView,
+            .imageView = view,
             .imageLayout = vk.VK_IMAGE_LAYOUT_GENERAL,
         };
         const getInf = vk.VkDescriptorGetInfoEXT{
@@ -85,11 +86,11 @@ pub const DescriptorManager = struct {
         try self.updateDescriptor(&getInf, binding, arrayIndex, self.descBufferProps.sampledImageDescriptorSize);
     }
 
-    pub fn updateBufferDescriptor(self: *DescriptorManager, gpuBuffer: Resource.GpuBuffer, binding: u8, arrayIndex: u32) !void {
+    pub fn updateBufferDescriptor(self: *DescriptorManager, buffer: Buffer, binding: u8, arrayIndex: u32) !void {
         const addressInf = vk.VkDescriptorAddressInfoEXT{
             .sType = vk.VK_STRUCTURE_TYPE_DESCRIPTOR_ADDRESS_INFO_EXT,
-            .address = gpuBuffer.gpuAddress,
-            .range = gpuBuffer.allocInf.size,
+            .address = buffer.gpuAddress,
+            .range = buffer.allocInf.size,
             .format = vk.VK_FORMAT_UNDEFINED,
         };
         const getInf = vk.VkDescriptorGetInfoEXT{

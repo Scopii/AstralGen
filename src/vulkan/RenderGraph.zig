@@ -4,7 +4,6 @@ const Allocator = std.mem.Allocator;
 const rc = @import("../configs/renderConfig.zig");
 const ResourceManager = @import("resources/ResourceManager.zig").ResourceManager;
 const Context = @import("Context.zig").Context;
-const Resource = @import("resources/Resource.zig").Resource;
 const ShaderObject = @import("ShaderObject.zig").ShaderObject;
 const ShaderManager = @import("ShaderManager.zig").ShaderManager;
 const CmdManager = @import("CmdManager.zig").CmdManager;
@@ -15,6 +14,8 @@ const vh = @import("Helpers.zig");
 const RendererData = @import("../App.zig").RendererData;
 const Pass = @import("Pass.zig").Pass;
 const Attachment = @import("Pass.zig").Attachment;
+const Texture = @import("resources/Texture.zig").Texture;
+const Buffer = @import("resources/Buffer.zig").Buffer;
 
 pub const ResourceState = struct {
     stage: vh.PipeStage = .TopOfPipe,
@@ -78,26 +79,26 @@ pub const RenderGraph = struct {
         for (resMan.pendingTransfers.items) |transfer| {
             const dstBuffer = try resMan.getBufferPtr(transfer.dstResId);
             try self.createBufferBarrierIfNeeded(dstBuffer.state, .{ .stage = .Transfer, .access = .TransferWrite, .layout = .TransferDst }, dstBuffer);
-            cmd.copyBuffer(resMan.stagingBuffer.buffer, &transfer, dstBuffer.buffer); // MAYBE POINTER DEREFERNCE?
+            cmd.copyBuffer(resMan.stagingBuffer.handle, &transfer, dstBuffer.handle); // MAYBE POINTER DEREFERNCE?
         }
         resMan.resetTransfers();
         self.bakeBarriers(cmd);
     }
 
-    fn createImageBarrierIfNeeded(self: *RenderGraph, state: ResourceState, neededState: ResourceState, gpuImg: *Resource.GpuImage) !void {
+    fn createImageBarrierIfNeeded(self: *RenderGraph, state: ResourceState, neededState: ResourceState, tex: *Texture) !void {
         if (state.stage == neededState.stage and state.access == neededState.access and state.layout == neededState.layout) return;
 
-        const barrier = createImageBarrier(state, neededState, gpuImg.img, gpuImg.imgInf.imgType);
+        const barrier = createImageBarrier(state, neededState, tex.img, tex.texType);
         try self.tempImgBarriers.append(barrier);
-        gpuImg.state = neededState;
+        tex.state = neededState;
     }
 
-    fn createBufferBarrierIfNeeded(self: *RenderGraph, state: ResourceState, neededState: ResourceState, gpuBuf: *Resource.GpuBuffer) !void {
+    fn createBufferBarrierIfNeeded(self: *RenderGraph, state: ResourceState, neededState: ResourceState, buffer: *Buffer) !void {
         if (state.stage == neededState.stage and state.access == neededState.access and state.layout == neededState.layout) return;
 
-        const barrier = createBufferBarrier(state, neededState, gpuBuf.buffer);
+        const barrier = createBufferBarrier(state, neededState, buffer.handle);
         try self.tempBufBarriers.append(barrier);
-        gpuBuf.state = neededState;
+        buffer.state = neededState;
     }
 
     pub fn recordPassBarriers(self: *RenderGraph, cmd: *const Command, pass: Pass, resMan: *ResourceManager) !void {
@@ -111,41 +112,41 @@ pub const RenderGraph = struct {
             try self.createBufferBarrierIfNeeded(buffer.state, resUse.getNeededState(), buffer);
         }
 
-        for (pass.shaderImages) |shaderUse| {
-            const img = try resMan.getImagePtr(shaderUse.id);
-            try self.createImageBarrierIfNeeded(img.state, shaderUse.getNeededState(), img);
+        for (pass.shaderTextures) |shaderUse| {
+            const tex = try resMan.getTexturePtr(shaderUse.id);
+            try self.createImageBarrierIfNeeded(tex.state, shaderUse.getNeededState(), tex);
         }
 
-        for (pass.usageImages) |resUse| {
-            const img = try resMan.getImagePtr(resUse.id);
-            try self.createImageBarrierIfNeeded(img.state, resUse.getNeededState(), img);
+        for (pass.useageTextures) |resUse| {
+            const tex = try resMan.getTexturePtr(resUse.id);
+            try self.createImageBarrierIfNeeded(tex.state, resUse.getNeededState(), tex);
         }
 
         for (pass.getColorAtts()) |colorAtt| {
-            const img = try resMan.getImagePtr(colorAtt.id);
-            try self.createImageBarrierIfNeeded(img.state, colorAtt.getNeededState(), img);
+            const tex = try resMan.getTexturePtr(colorAtt.id);
+            try self.createImageBarrierIfNeeded(tex.state, colorAtt.getNeededState(), tex);
         }
 
         if (pass.getDepthAtt()) |depthAtt| {
-            const img = try resMan.getImagePtr(depthAtt.id);
-            try self.createImageBarrierIfNeeded(img.state, depthAtt.getNeededState(), img);
+            const tex = try resMan.getTexturePtr(depthAtt.id);
+            try self.createImageBarrierIfNeeded(tex.state, depthAtt.getNeededState(), tex);
         }
 
         if (pass.getStencilAtt()) |stencilAtt| {
-            const img = try resMan.getImagePtr(stencilAtt.id);
-            try self.createImageBarrierIfNeeded(img.state, stencilAtt.getNeededState(), img);
+            const tex = try resMan.getTexturePtr(stencilAtt.id);
+            try self.createImageBarrierIfNeeded(tex.state, stencilAtt.getNeededState(), tex);
         }
 
         self.bakeBarriers(cmd);
     }
 
-    fn recordCompute(cmd: *const Command, dispatch: Pass.Dispatch, renderImgId: ?u32, resMan: *ResourceManager) !void {
-        if (renderImgId) |imgId| {
-            const gpuImg = try resMan.getImagePtr(imgId);
+    fn recordCompute(cmd: *const Command, dispatch: Pass.Dispatch, renderTexId: ?u32, resMan: *ResourceManager) !void {
+        if (renderTexId) |imgId| {
+            const gpuImg = try resMan.getTexturePtr(imgId);
             cmd.dispatch(
-                (gpuImg.imgInf.extent.width + dispatch.x - 1) / dispatch.x,
-                (gpuImg.imgInf.extent.height + dispatch.y - 1) / dispatch.y,
-                (gpuImg.imgInf.extent.depth + dispatch.z - 1) / dispatch.z,
+                (gpuImg.extent.width + dispatch.x - 1) / dispatch.x,
+                (gpuImg.extent.height + dispatch.y - 1) / dispatch.y,
+                (gpuImg.extent.depth + dispatch.z - 1) / dispatch.z,
             );
         } else cmd.dispatch(dispatch.x, dispatch.y, dispatch.z);
     }
@@ -163,22 +164,22 @@ pub const RenderGraph = struct {
             pcs.resourceSlots[i] = buffer.getResourceSlot();
         }
 
-        for (0..pass.shaderImages.len) |i| {
-            const shaderSlot = pass.shaderImages[i];
-            const images = try resMan.getImagePtr(shaderSlot.id);
+        for (0..pass.shaderTextures.len) |i| {
+            const shaderSlot = pass.shaderTextures[i];
+            const images = try resMan.getTexturePtr(shaderSlot.id);
             pcs.resourceSlots[i + pass.shaderBuffers.len] = images.getResourceSlot();
         }
 
-        const mainImg = switch (pass.passType) {
+        const mainTex = switch (pass.passType) {
             .compute => null,
-            .computeOnImg => |compOnImage| try resMan.getImagePtr(compOnImage.mainImgId),
-            .graphics => |graphics| try resMan.getImagePtr(graphics.mainImgId),
-            .taskOrMesh => |taskOrMesh| try resMan.getImagePtr(taskOrMesh.mainImgId),
+            .computeOnTex => |compOnImage| try resMan.getTexturePtr(compOnImage.mainTexId),
+            .graphics => |graphics| try resMan.getTexturePtr(graphics.mainTexId),
+            .taskOrMesh => |taskOrMesh| try resMan.getTexturePtr(taskOrMesh.mainTexId),
         };
 
-        if (mainImg) |img| {
-            pcs.width = img.imgInf.extent.width;
-            pcs.height = img.imgInf.extent.height;
+        if (mainTex) |tex| {
+            pcs.width = tex.extent.width;
+            pcs.height = tex.extent.height;
         }
 
         cmd.setPushConstants(self.pipeLayout, vk.VK_SHADER_STAGE_ALL, 0, @sizeOf(PushConstants), &pcs);
@@ -186,7 +187,7 @@ pub const RenderGraph = struct {
 
         switch (pass.passType) {
             .compute => |comp| try recordCompute(cmd, comp.workgroups, null, resMan),
-            .computeOnImg => |compOnImage| try recordCompute(cmd, compOnImage.workgroups, compOnImage.mainImgId, resMan),
+            .computeOnTex => |compOnImage| try recordCompute(cmd, compOnImage.workgroups, compOnImage.mainTexId, resMan),
             .graphics => |graphics| try recordGraphics(cmd, graphics.colorAtts, graphics.depthAtt, graphics.stencilAtt, pcs.width, pcs.height, pass, resMan),
             .taskOrMesh => |taskOrMesh| try recordGraphics(cmd, taskOrMesh.colorAtts, taskOrMesh.depthAtt, taskOrMesh.stencilAtt, pcs.width, pcs.height, pass, resMan),
         }
@@ -205,26 +206,26 @@ pub const RenderGraph = struct {
         if (colorAtts.len > 8) return error.TooManyAttachments;
 
         const depthInf: ?vk.VkRenderingAttachmentInfo = if (depthAtt) |depth| blk: {
-            const img = try resMan.getImagePtr(depth.id);
-            break :blk createAttachment(img.imgInf.imgType, img.view, depth.clear);
+            const tex = try resMan.getTexturePtr(depth.id);
+            break :blk createAttachment(tex.texType, tex.view, depth.clear);
         } else null;
 
         const stencilInf: ?vk.VkRenderingAttachmentInfo = if (stencilAtt) |stencil| blk: {
-            const img = try resMan.getImagePtr(stencil.id);
-            break :blk createAttachment(img.imgInf.imgType, img.view, stencil.clear);
+            const tex = try resMan.getTexturePtr(stencil.id);
+            break :blk createAttachment(tex.texType, tex.view, stencil.clear);
         } else null;
 
         var colorInfs: [8]vk.VkRenderingAttachmentInfo = undefined;
         for (0..colorAtts.len) |i| {
             const color = colorAtts[i];
-            const img = try resMan.getImagePtr(color.id);
-            colorInfs[i] = createAttachment(img.imgInf.imgType, img.view, color.clear);
+            const tex = try resMan.getTexturePtr(color.id);
+            colorInfs[i] = createAttachment(tex.texType, tex.view, color.clear);
         }
 
         cmd.beginRendering(width, height, colorInfs[0..colorAtts.len], depthInf, stencilInf);
 
         switch (pass.passType) {
-            .compute, .computeOnImg => return error.ComputeLandedInGraphicsPass,
+            .compute, .computeOnTex => return error.ComputeLandedInGraphicsPass,
             .taskOrMesh => |taskOrMesh| cmd.drawMeshTasks(taskOrMesh.workgroups.x, taskOrMesh.workgroups.y, taskOrMesh.workgroups.z),
             .graphics => |graphics| {
                 cmd.setEmptyVertexInput();
@@ -239,8 +240,8 @@ pub const RenderGraph = struct {
         // Render Image and Swapchain Preperations
         for (targets) |swapchainIndex| {
             const swapchain = swapchainMap.getPtrAtIndex(swapchainIndex);
-            const renderImg = try resMan.getImagePtr(swapchain.passImgId);
-            try self.createImageBarrierIfNeeded(renderImg.state, .{ .stage = .Transfer, .access = .TransferRead, .layout = .TransferSrc }, renderImg);
+            const renderTex = try resMan.getTexturePtr(swapchain.renderTexId);
+            try self.createImageBarrierIfNeeded(renderTex.state, .{ .stage = .Transfer, .access = .TransferRead, .layout = .TransferSrc }, renderTex);
             const swapchainImg = swapchain.images[swapchain.curIndex];
             try self.tempImgBarriers.append(createImageBarrier(.{}, swapchainMidState, swapchainImg, .Color));
         }
@@ -250,8 +251,8 @@ pub const RenderGraph = struct {
         for (targets) |swapchainIndex| {
             const swapchain = swapchainMap.getPtrAtIndex(swapchainIndex);
             const swapchainExtent = vk.VkExtent3D{ .height = swapchain.extent.height, .width = swapchain.extent.width, .depth = 1 };
-            const renderImg = try resMan.getImagePtr(swapchain.passImgId);
-            cmd.copyImageToImage(renderImg.img, renderImg.imgInf.extent, swapchain.images[swapchain.curIndex], swapchainExtent, rc.RENDER_IMG_STRETCH);
+            const renderTex = try resMan.getTexturePtr(swapchain.renderTexId);
+            cmd.copyImageToImage(renderTex.img, renderTex.extent, swapchain.images[swapchain.curIndex], swapchainExtent, rc.RENDER_IMG_STRETCH);
         }
 
         // Swapchain Presentation Barriers
@@ -270,8 +271,8 @@ pub const RenderGraph = struct {
     }
 };
 
-fn createImageBarrier(curState: ResourceState, newState: ResourceState, img: vk.VkImage, imgType: vh.ImgType) vk.VkImageMemoryBarrier2 {
-    const aspectMask: vk.VkImageAspectFlagBits = switch (imgType) {
+fn createImageBarrier(curState: ResourceState, newState: ResourceState, img: vk.VkImage, texType: vh.TextureType) vk.VkImageMemoryBarrier2 {
+    const aspectMask: vk.VkImageAspectFlagBits = switch (texType) {
         .Color => vk.VK_IMAGE_ASPECT_COLOR_BIT,
         .Depth => vk.VK_IMAGE_ASPECT_DEPTH_BIT,
         .Stencil => vk.VK_IMAGE_ASPECT_STENCIL_BIT,
@@ -311,7 +312,7 @@ fn createSubresourceRange(mask: u32, mipLevel: u32, levelCount: u32, arrayLayer:
     return vk.VkImageSubresourceRange{ .aspectMask = mask, .baseMipLevel = mipLevel, .levelCount = levelCount, .baseArrayLayer = arrayLayer, .layerCount = layerCount };
 }
 
-fn createAttachment(renderType: vh.ImgType, imgView: vk.VkImageView, clear: bool) vk.VkRenderingAttachmentInfo {
+fn createAttachment(renderType: vh.TextureType, view: vk.VkImageView, clear: bool) vk.VkRenderingAttachmentInfo {
     const clearValue: vk.VkClearValue = switch (renderType) {
         .Color => .{ .color = .{ .float32 = .{ 0.0, 0.0, 0.1, 1.0 } } },
         .Depth, .Stencil => .{ .depthStencil = .{ .depth = 1.0, .stencil = 0 } },
@@ -319,7 +320,7 @@ fn createAttachment(renderType: vh.ImgType, imgView: vk.VkImageView, clear: bool
 
     return vk.VkRenderingAttachmentInfo{
         .sType = vk.VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-        .imageView = imgView,
+        .imageView = view,
         .imageLayout = vk.VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
         .loadOp = if (clear) vk.VK_ATTACHMENT_LOAD_OP_CLEAR else vk.VK_ATTACHMENT_LOAD_OP_LOAD,
         .storeOp = vk.VK_ATTACHMENT_STORE_OP_STORE,

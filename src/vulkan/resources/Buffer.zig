@@ -1,26 +1,37 @@
-const std = @import("std");
 const vk = @import("../../modules/vk.zig").c;
-const Allocator = std.mem.Allocator;
-const Context = @import("../Context.zig").Context;
-const DescriptorManager = @import("DescriptorManager.zig").DescriptorManager;
 const ResourceSlot = @import("Resource.zig").ResourceSlot;
 const ResourceState = @import("../RenderGraph.zig").ResourceState;
-const GpuAllocator = @import("GpuAllocator.zig").GpuAllocator;
 const rc = @import("../../configs/renderConfig.zig");
 const ve = @import("../Helpers.zig");
-const CreateMapArray = @import("../../structures/MapArray.zig").CreateMapArray;
-
 
 pub const Buffer = struct {
-    buffer: vk.VkBuffer,
+    handle: vk.VkBuffer,
     allocation: vk.VmaAllocation,
     allocInf: vk.VmaAllocationInfo,
     gpuAddress: u64,
     count: u32 = 0,
-    bindlessIndex: u32,
+    bindlessIndex: u32 = 0,
     state: ResourceState = .{},
 
     pub fn getResourceSlot(self: *Buffer) ResourceSlot {
         return ResourceSlot{ .index = self.bindlessIndex, .count = self.count };
+    }
+
+    pub const BufInf = struct {
+        bufId: u32,
+        memUse: ve.MemUsage,
+        dataSize: u64 = 0,
+        length: u32,
+        bufType: ve.BufferType,
+    };
+
+    pub fn create(bufId: u32, memUse: ve.MemUsage, bufType: ve.BufferType, length: u32, comptime T: type) BufInf {
+        return .{
+            .bufId = bufId,
+            .memUse = memUse,
+            .bufType = bufType,
+            .length = length,
+            .dataSize = @sizeOf(T),
+        };
     }
 };

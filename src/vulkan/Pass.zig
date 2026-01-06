@@ -4,16 +4,16 @@ const ve = @import("../vulkan/Helpers.zig");
 pub const Pass = struct {
     shaderIds: []const u8,
     usageBuffers: []const ResourceUse = &.{},
-    usageImages: []const ResourceUse = &.{},
-    
+    useageTextures: []const ResourceUse = &.{},
+
     shaderBuffers: []const ResourceUse = &.{},
-    shaderImages: []const ResourceUse = &.{},
+    shaderTextures: []const ResourceUse = &.{},
 
     passType: PassType,
 
     pub const PassType = union(enum) {
         compute: ComputeData,
-        computeOnImg: ComputeOnImgData,
+        computeOnTex: computeOnTexData,
         taskOrMesh: TaskOrMeshData,
         graphics: GraphicsData,
     };
@@ -22,13 +22,13 @@ pub const Pass = struct {
         workgroups: Dispatch,
     };
 
-    const ComputeOnImgData = struct {
-        mainImgId: u32,
+    const computeOnTexData = struct {
+        mainTexId: u32,
         workgroups: Dispatch,
     };
 
     const TaskOrMeshData = struct {
-        mainImgId: u32,
+        mainTexId: u32,
         colorAtts: []const Attachment,
         depthAtt: ?Attachment = null,
         stencilAtt: ?Attachment = null,
@@ -36,15 +36,15 @@ pub const Pass = struct {
     };
 
     const GraphicsData = struct {
-        mainImgId: u32,
+        mainTexId: u32,
         colorAtts: []const Attachment,
         depthAtt: ?Attachment = null,
         stencilAtt: ?Attachment = null,
         draw: struct { vertices: u32, instances: u32 } = .{ .vertices = 3, .instances = 1 },
     };
 
-    pub fn ComputeOnImage(data: ComputeOnImgData) Pass.PassType {
-        return .{ .computeOnImg = data };
+    pub fn ComputeOnImage(data: computeOnTexData) Pass.PassType {
+        return .{ .computeOnTex = data };
     }
 
     pub fn createCompute(data: ComputeData) Pass.PassType {
@@ -63,7 +63,7 @@ pub const Pass = struct {
         return switch (self.passType) {
             .graphics => |g| g.colorAtts,
             .taskOrMesh => |t| t.colorAtts,
-            .compute, .computeOnImg => &[_]Attachment{},
+            .compute, .computeOnTex => &[_]Attachment{},
         };
     }
 
@@ -71,7 +71,7 @@ pub const Pass = struct {
         return switch (self.passType) {
             .graphics => |g| g.depthAtt,
             .taskOrMesh => |t| t.depthAtt,
-            .compute, .computeOnImg => null,
+            .compute, .computeOnTex => null,
         };
     }
 
@@ -79,7 +79,7 @@ pub const Pass = struct {
         return switch (self.passType) {
             .graphics => |g| g.stencilAtt,
             .taskOrMesh => |t| t.stencilAtt,
-            .compute, .computeOnImg => null,
+            .compute, .computeOnTex => null,
         };
     }
 
