@@ -150,7 +150,7 @@ pub const RenderGraph = struct {
                     const buffer = try resMan.getBufferPtr(bufUse.bufId);
                     resourceSlots[slot] = buffer.getResourceSlot();
                     mask[slot] = true;
-                } else std.debug.print("Pass Shader Slot {} already used", .{slot});
+                } else std.debug.print("Pass Shader Slot {} already used\n", .{slot});
             }
         }
 
@@ -162,7 +162,7 @@ pub const RenderGraph = struct {
                     const tex = try resMan.getTexturePtr(texUse.texId);
                     resourceSlots[slot] = tex.getResourceSlot();
                     mask[slot] = true;
-                } else std.debug.print("Pass Shader Slot {} already used", .{slot});
+                } else std.debug.print("Pass Shader Slot {} already used\n", .{slot});
             }
         }
 
