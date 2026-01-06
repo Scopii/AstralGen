@@ -14,7 +14,7 @@ const vh = @import("Helpers.zig");
 const RendererData = @import("../App.zig").RendererData;
 const Pass = @import("Pass.zig").Pass;
 const Attachment = @import("Pass.zig").Attachment;
-const Texture = @import("resources/Texture.zig").Texture;
+const TextureBase = @import("resources/Texture.zig").TextureBase;
 const Buffer = @import("resources/Buffer.zig").Buffer;
 
 pub const ResourceState = struct {
@@ -83,9 +83,9 @@ pub const RenderGraph = struct {
         self.bakeBarriers(cmd);
     }
 
-    fn imageBarrierIfNeeded(self: *RenderGraph, state: ResourceState, neededState: ResourceState, tex: *Texture) !void {
+    fn imageBarrierIfNeeded(self: *RenderGraph, state: ResourceState, neededState: ResourceState, tex: *TextureBase) !void {
         if (state.stage == neededState.stage and state.access == neededState.access and state.layout == neededState.layout) return;
-        try self.tempImgBarriers.append(tex.base.createImageBarrier(neededState));
+        try self.tempImgBarriers.append(tex.createImageBarrier(neededState));
     }
 
     fn bufferBarrierIfNeeded(self: *RenderGraph, state: ResourceState, neededState: ResourceState, buffer: *Buffer) !void {
@@ -106,27 +106,27 @@ pub const RenderGraph = struct {
 
         for (pass.shaderTextures) |shaderUse| {
             const tex = try resMan.getTexturePtr(shaderUse.id);
-            try self.imageBarrierIfNeeded(tex.base.state, shaderUse.getNeededState(), tex);
+            try self.imageBarrierIfNeeded(tex.base.state, shaderUse.getNeededState(), &tex.base);
         }
 
         for (pass.useageTextures) |resUse| {
             const tex = try resMan.getTexturePtr(resUse.id);
-            try self.imageBarrierIfNeeded(tex.base.state, resUse.getNeededState(), tex);
+            try self.imageBarrierIfNeeded(tex.base.state, resUse.getNeededState(), &tex.base);
         }
 
         for (pass.getColorAtts()) |colorAtt| {
             const tex = try resMan.getTexturePtr(colorAtt.id);
-            try self.imageBarrierIfNeeded(tex.base.state, colorAtt.getNeededState(), tex);
+            try self.imageBarrierIfNeeded(tex.base.state, colorAtt.getNeededState(), &tex.base);
         }
 
         if (pass.getDepthAtt()) |depthAtt| {
             const tex = try resMan.getTexturePtr(depthAtt.id);
-            try self.imageBarrierIfNeeded(tex.base.state, depthAtt.getNeededState(), tex);
+            try self.imageBarrierIfNeeded(tex.base.state, depthAtt.getNeededState(), &tex.base);
         }
 
         if (pass.getStencilAtt()) |stencilAtt| {
             const tex = try resMan.getTexturePtr(stencilAtt.id);
-            try self.imageBarrierIfNeeded(tex.base.state, stencilAtt.getNeededState(), tex);
+            try self.imageBarrierIfNeeded(tex.base.state, stencilAtt.getNeededState(), &tex.base);
         }
 
         self.bakeBarriers(cmd);
@@ -228,14 +228,14 @@ pub const RenderGraph = struct {
     }
 
     pub fn recordSwapchainBlits(self: *RenderGraph, cmd: *const Command, targets: []const u32, swapchainMap: *SwapchainManager.SwapchainMap, resMan: *ResourceManager) !void {
-        const swapchainMidState = ResourceState{ .stage = .Transfer, .access = .TransferWrite, .layout = .TransferDst };
         // Render Image and Swapchain Preperations
         for (targets) |index| {
             const swapchain = swapchainMap.getPtrAtIndex(index);
             const renderTex = try resMan.getTexturePtr(swapchain.renderTexId);
-            try self.imageBarrierIfNeeded(renderTex.base.state, .{ .stage = .Transfer, .access = .TransferRead, .layout = .TransferSrc }, renderTex);
+            try self.imageBarrierIfNeeded(renderTex.base.state, .{ .stage = .Transfer, .access = .TransferRead, .layout = .TransferSrc }, &renderTex.base);
+            
             const presentTex = &swapchain.textures[swapchain.curIndex];
-            try self.tempImgBarriers.append(presentTex.createImageBarrier(swapchainMidState));
+            try self.imageBarrierIfNeeded(presentTex.state, .{ .stage = .Transfer, .access = .TransferWrite, .layout = .TransferDst }, presentTex);
         }
         self.bakeBarriers(cmd);
 
@@ -251,7 +251,7 @@ pub const RenderGraph = struct {
         for (targets) |index| {
             const swapchain = swapchainMap.getPtrAtIndex(index);
             const presentTex = &swapchain.textures[swapchain.curIndex];
-            try self.tempImgBarriers.append(presentTex.createImageBarrier(.{ .stage = .BotOfPipe, .access = .None, .layout = .PresentSrc }));
+            try self.imageBarrierIfNeeded(presentTex.state, .{ .stage = .BotOfPipe, .access = .None, .layout = .PresentSrc }, presentTex);
         }
         self.bakeBarriers(cmd);
     }
