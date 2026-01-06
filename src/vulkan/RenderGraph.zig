@@ -16,6 +16,7 @@ const Pass = @import("Pass.zig").Pass;
 const Attachment = @import("Pass.zig").Attachment;
 const TextureBase = @import("resources/Texture.zig").TextureBase;
 const Buffer = @import("resources/Buffer.zig").Buffer;
+const ResourceSlot = @import("resources/Resource.zig").ResourceSlot;
 
 pub const ResourceState = struct {
     stage: vh.PipeStage = .TopOfPipe,
@@ -94,38 +95,28 @@ pub const RenderGraph = struct {
     }
 
     pub fn recordPassBarriers(self: *RenderGraph, cmd: *const Command, pass: Pass, resMan: *ResourceManager) !void {
-        for (pass.shaderBuffers) |shaderUse| {
-            const buffer = try resMan.getBufferPtr(shaderUse.id);
-            try self.bufferBarrierIfNeeded(buffer.state, shaderUse.getNeededState(), buffer);
+        for (pass.bufUses) |bufUse| {
+            const buffer = try resMan.getBufferPtr(bufUse.bufId);
+            try self.bufferBarrierIfNeeded(buffer.state, bufUse.getNeededState(), buffer);
         }
 
-        for (pass.usageBuffers) |resUse| {
-            const buffer = try resMan.getBufferPtr(resUse.id);
-            try self.bufferBarrierIfNeeded(buffer.state, resUse.getNeededState(), buffer);
-        }
-
-        for (pass.shaderTextures) |shaderUse| {
-            const tex = try resMan.getTexturePtr(shaderUse.id);
-            try self.imageBarrierIfNeeded(tex.base.state, shaderUse.getNeededState(), &tex.base);
-        }
-
-        for (pass.useageTextures) |resUse| {
-            const tex = try resMan.getTexturePtr(resUse.id);
-            try self.imageBarrierIfNeeded(tex.base.state, resUse.getNeededState(), &tex.base);
+        for (pass.texUses) |texUse| {
+            const tex = try resMan.getTexturePtr(texUse.texId);
+            try self.imageBarrierIfNeeded(tex.base.state, texUse.getNeededState(), &tex.base);
         }
 
         for (pass.getColorAtts()) |colorAtt| {
-            const tex = try resMan.getTexturePtr(colorAtt.id);
+            const tex = try resMan.getTexturePtr(colorAtt.texId);
             try self.imageBarrierIfNeeded(tex.base.state, colorAtt.getNeededState(), &tex.base);
         }
 
         if (pass.getDepthAtt()) |depthAtt| {
-            const tex = try resMan.getTexturePtr(depthAtt.id);
+            const tex = try resMan.getTexturePtr(depthAtt.texId);
             try self.imageBarrierIfNeeded(tex.base.state, depthAtt.getNeededState(), &tex.base);
         }
 
         if (pass.getStencilAtt()) |stencilAtt| {
-            const tex = try resMan.getTexturePtr(stencilAtt.id);
+            const tex = try resMan.getTexturePtr(stencilAtt.texId);
             try self.imageBarrierIfNeeded(tex.base.state, stencilAtt.getNeededState(), &tex.base);
         }
 
@@ -147,20 +138,35 @@ pub const RenderGraph = struct {
         try self.recordPassBarriers(cmd, pass, resMan);
 
         var pcs = PushConstants{ .runTime = rendererData.runTime, .deltaTime = rendererData.deltaTime };
-        // if (pass.shaderUsages.len > pcs.resourceSlots.len) return error.TooManyShaderSlotsInPass;
 
-        // Assign Shader Slots
-        for (0..pass.shaderBuffers.len) |i| {
-            const shaderSlot = pass.shaderBuffers[i];
-            const buffer = try resMan.getBufferPtr(shaderSlot.id);
-            pcs.resourceSlots[i] = buffer.getResourceSlot();
+        var mask: [14]bool = .{false} ** 14;
+        var resourceSlots: [14]ResourceSlot = undefined;
+
+        for (pass.bufUses) |bufUse| {
+            const shaderSlot = bufUse.shaderSlot;
+
+            if (shaderSlot) |slot| {
+                if (mask[slot] == false) {
+                    const buffer = try resMan.getBufferPtr(bufUse.bufId);
+                    resourceSlots[slot] = buffer.getResourceSlot();
+                    mask[slot] = true;
+                } else std.debug.print("Pass Shader Slot {} already used", .{slot});
+            }
         }
 
-        for (0..pass.shaderTextures.len) |i| {
-            const shaderSlot = pass.shaderTextures[i];
-            const images = try resMan.getTexturePtr(shaderSlot.id);
-            pcs.resourceSlots[i + pass.shaderBuffers.len] = images.getResourceSlot();
+        for (pass.texUses) |texUse| {
+            const shaderSlot = texUse.shaderSlot;
+
+            if (shaderSlot) |slot| {
+                if (mask[slot] == false) {
+                    const tex = try resMan.getTexturePtr(texUse.texId);
+                    resourceSlots[slot] = tex.getResourceSlot();
+                    mask[slot] = true;
+                } else std.debug.print("Pass Shader Slot {} already used", .{slot});
+            }
         }
+
+        pcs.resourceSlots = resourceSlots;
 
         const mainTex = switch (pass.passType) {
             .compute => null,
@@ -198,19 +204,19 @@ pub const RenderGraph = struct {
         if (colorAtts.len > 8) return error.TooManyAttachments;
 
         const depthInf: ?vk.VkRenderingAttachmentInfo = if (depthAtt) |depth| blk: {
-            const tex = try resMan.getTexturePtr(depth.id);
+            const tex = try resMan.getTexturePtr(depth.texId);
             break :blk tex.base.createAttachment(depth.clear);
         } else null;
 
         const stencilInf: ?vk.VkRenderingAttachmentInfo = if (stencilAtt) |stencil| blk: {
-            const tex = try resMan.getTexturePtr(stencil.id);
+            const tex = try resMan.getTexturePtr(stencil.texId);
             break :blk tex.base.createAttachment(stencil.clear);
         } else null;
 
         var colorInfs: [8]vk.VkRenderingAttachmentInfo = undefined;
         for (0..colorAtts.len) |i| {
             const color = colorAtts[i];
-            const tex = try resMan.getTexturePtr(color.id);
+            const tex = try resMan.getTexturePtr(color.texId);
             colorInfs[i] = tex.base.createAttachment(color.clear);
         }
 
@@ -233,7 +239,7 @@ pub const RenderGraph = struct {
             const swapchain = swapchainMap.getPtrAtIndex(index);
             const renderTex = try resMan.getTexturePtr(swapchain.renderTexId);
             try self.imageBarrierIfNeeded(renderTex.base.state, .{ .stage = .Transfer, .access = .TransferRead, .layout = .TransferSrc }, &renderTex.base);
-            
+
             const presentTex = &swapchain.textures[swapchain.curIndex];
             try self.imageBarrierIfNeeded(presentTex.state, .{ .stage = .Transfer, .access = .TransferWrite, .layout = .TransferDst }, presentTex);
         }

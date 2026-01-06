@@ -18,6 +18,7 @@ const vh = @import("Helpers.zig");
 const Pass = @import("Pass.zig").Pass;
 const Texture = @import("resources/Texture.zig").Texture;
 const Buffer = @import("resources/Buffer.zig").Buffer;
+const PushConstants = @import("resources/Resource.zig").PushConstants;
 
 pub const Renderer = struct {
     alloc: Allocator,
@@ -119,7 +120,7 @@ pub const Renderer = struct {
         }
     }
 
-    pub fn createPass(self: *Renderer, passes: []const Pass) !void {
+    pub fn createPasses(self: *Renderer, passes: []const Pass) !void {
         for (passes) |pass| {
             if (self.shaderMan.isPassValid(pass) == true) {
                 try self.passes.append(pass);

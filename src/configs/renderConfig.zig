@@ -6,7 +6,8 @@ const Texture = @import("../vulkan/resources/Texture.zig").Texture;
 const ResourceState = @import("../vulkan/RenderGraph.zig").ResourceState;
 const Pass = @import("../vulkan/Pass.zig").Pass;
 const Attachment = @import("../vulkan/Pass.zig").Attachment;
-const ResourceUse = @import("../vulkan/Pass.zig").ResourceUse;
+const TextureUse = @import("../vulkan/Pass.zig").TextureUse;
+const BufferUse = @import("../vulkan/Pass.zig").BufferUse;
 const sc = @import("shaderConfig.zig");
 const ve = @import("../vulkan/Helpers.zig");
 
@@ -50,12 +51,12 @@ pub const computeTest: Pass = .{
         .mainTexId = compTex.texId,
         .workgroups = .{ .x = 8, .y = 8, .z = 1 },
     }),
-    .shaderBuffers = &.{
-        ResourceUse.create(objectSB.bufId, .ComputeShader, .ShaderRead, .General),
-        ResourceUse.create(cameraUB.bufId, .ComputeShader, .ShaderRead, .General),
+    .bufUses = &.{
+        BufferUse.create(objectSB.bufId, .ComputeShader, .ShaderRead, 0),
+        BufferUse.create(cameraUB.bufId, .ComputeShader, .ShaderRead, 1),
     },
-    .shaderTextures = &.{
-        ResourceUse.create(compTex.texId, .ComputeShader, .ShaderWrite, .General),
+    .texUses = &.{
+        TextureUse.create(compTex.texId, .ComputeShader, .ShaderWrite, .General, 2),
     },
 };
 
@@ -66,9 +67,9 @@ const graphicsTest: Pass = .{
         .colorAtts = &.{Attachment.create(grapTex.texId, .ColorAtt, .ColorAttWrite, false)},
         .depthAtt = Attachment.create(grapDepthTex.texId, .EarlyFragTest, .DepthStencilRead, false),
     }),
-    .shaderBuffers = &.{
-        ResourceUse.create(objectSB.bufId, .FragShader, .ShaderRead, .General),
-        ResourceUse.create(cameraUB.bufId, .ComputeShader, .ShaderRead, .General),
+    .bufUses = &.{
+        BufferUse.create(objectSB.bufId, .FragShader, .ShaderRead, 0),
+        BufferUse.create(cameraUB.bufId, .ComputeShader, .ShaderRead, 1),
     },
 };
 
@@ -79,9 +80,9 @@ const meshTest: Pass = .{
         .workgroups = .{ .x = 1, .y = 1, .z = 1 },
         .colorAtts = &.{Attachment.create(meshTex.texId, .ColorAtt, .ColorAttWrite, false)},
     }),
-    .shaderBuffers = &.{
-        ResourceUse.create(objectSB.bufId, .FragShader, .ShaderRead, .General),
-        ResourceUse.create(cameraUB.bufId, .ComputeShader, .ShaderRead, .General),
+    .bufUses = &.{
+        BufferUse.create(objectSB.bufId, .FragShader, .ShaderRead, 0),
+        BufferUse.create(cameraUB.bufId, .ComputeShader, .ShaderRead, 1),
     },
 };
 
@@ -92,9 +93,9 @@ const taskTest: Pass = .{
         .workgroups = .{ .x = 1, .y = 1, .z = 1 },
         .colorAtts = &.{Attachment.create(taskTex.texId, .ColorAtt, .ColorAttWrite, false)},
     }),
-    .shaderBuffers = &.{
-        ResourceUse.create(objectSB.bufId, .FragShader, .ShaderRead, .General),
-        ResourceUse.create(cameraUB.bufId, .ComputeShader, .ShaderRead, .General),
+    .bufUses = &.{
+        BufferUse.create(objectSB.bufId, .FragShader, .ShaderRead, 0),
+        BufferUse.create(cameraUB.bufId, .ComputeShader, .ShaderRead, 1),
     },
 };
 
@@ -105,8 +106,8 @@ const gridTest: Pass = .{
         .workgroups = .{ .x = 1, .y = 1, .z = 1 },
         .colorAtts = &.{Attachment.create(taskTex.texId, .ColorAtt, .ColorAttWrite, false)},
     }),
-    .shaderBuffers = &.{
-        ResourceUse.create(cameraUB.bufId, .TaskShader, .ShaderRead, .General),
+    .bufUses = &.{
+        BufferUse.create(cameraUB.bufId, .TaskShader, .ShaderRead, 0),
     },
 };
 

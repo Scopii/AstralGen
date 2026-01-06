@@ -1,14 +1,11 @@
 const ResourceState = @import("../vulkan/RenderGraph.zig").ResourceState;
+const ResourceSlot = @import("resources/Resource.zig").ResourceSlot;
 const ve = @import("../vulkan/Helpers.zig");
 
 pub const Pass = struct {
     shaderIds: []const u8,
-    usageBuffers: []const ResourceUse = &.{},
-    useageTextures: []const ResourceUse = &.{},
-
-    shaderBuffers: []const ResourceUse = &.{},
-    shaderTextures: []const ResourceUse = &.{},
-
+    bufUses: []const BufferUse = &.{},
+    texUses: []const TextureUse = &.{},
     passType: PassType,
 
     pub const PassType = union(enum) {
@@ -87,7 +84,7 @@ pub const Pass = struct {
 };
 
 pub const Attachment = struct {
-    id: u32,
+    texId: u32,
     stage: ve.PipeStage = .TopOfPipe,
     access: ve.PipeAccess = .None,
     layout: ve.ImageLayout = .General,
@@ -98,21 +95,37 @@ pub const Attachment = struct {
     }
 
     pub fn create(id: u32, stage: ve.PipeStage, access: ve.PipeAccess, clear: bool) Attachment {
-        return .{ .id = id, .stage = stage, .access = access, .layout = .Attachment, .clear = clear };
+        return .{ .texId = id, .stage = stage, .access = access, .layout = .Attachment, .clear = clear };
     }
 };
 
-pub const ResourceUse = struct {
-    id: u32,
+pub const TextureUse = struct {
+    texId: u32,
     stage: ve.PipeStage = .TopOfPipe,
     access: ve.PipeAccess = .None,
     layout: ve.ImageLayout = .General,
+    shaderSlot: ?u8 = null,
 
-    pub fn getNeededState(self: *const ResourceUse) ResourceState {
+    pub fn getNeededState(self: *const TextureUse) ResourceState {
         return .{ .stage = self.stage, .access = self.access, .layout = self.layout };
     }
 
-    pub fn create(id: u32, stage: ve.PipeStage, access: ve.PipeAccess, layout: ve.ImageLayout) ResourceUse {
-        return .{ .id = id, .stage = stage, .access = access, .layout = layout };
+    pub fn create(texId: u32, stage: ve.PipeStage, access: ve.PipeAccess, layout: ve.ImageLayout, shaderSlot: ?u8) TextureUse {
+        return .{ .texId = texId, .stage = stage, .access = access, .layout = layout, .shaderSlot = shaderSlot };
+    }
+};
+
+pub const BufferUse = struct {
+    bufId: u32,
+    stage: ve.PipeStage = .TopOfPipe,
+    access: ve.PipeAccess = .None,
+    shaderSlot: ?u8 = null,
+
+    pub fn getNeededState(self: *const BufferUse) ResourceState {
+        return .{ .stage = self.stage, .access = self.access, .layout = .General };
+    }
+
+    pub fn create(bufId: u32, stage: ve.PipeStage, access: ve.PipeAccess, shaderSlot: ?u8) BufferUse {
+        return .{ .bufId = bufId, .stage = stage, .access = access, .shaderSlot = shaderSlot };
     }
 };

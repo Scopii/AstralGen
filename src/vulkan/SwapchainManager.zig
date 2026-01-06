@@ -52,14 +52,14 @@ pub const SwapchainManager = struct {
     }
 
     pub fn present(self: *SwapchainManager, presentIds: []const u32, presentQueue: vk.VkQueue) !void {
-        var swapchainHandles: [rc.MAX_WINDOWS]vk.VkSwapchainKHR = undefined;
-        var imageIndices: [rc.MAX_WINDOWS]u32 = undefined;
+        var handles: [rc.MAX_WINDOWS]vk.VkSwapchainKHR = undefined;
+        var imgIndices: [rc.MAX_WINDOWS]u32 = undefined;
         var waitSems: [rc.MAX_WINDOWS]vk.VkSemaphore = undefined;
 
         for (presentIds, 0..) |id, i| {
             const swapchain = self.swapchains.getAtIndex(id);
-            swapchainHandles[i] = swapchain.handle;
-            imageIndices[i] = swapchain.curIndex;
+            handles[i] = swapchain.handle;
+            imgIndices[i] = swapchain.curIndex;
             waitSems[i] = swapchain.renderDoneSems[swapchain.curIndex];
         }
         const presentInf = vk.VkPresentInfoKHR{
@@ -67,8 +67,8 @@ pub const SwapchainManager = struct {
             .waitSemaphoreCount = @intCast(presentIds.len),
             .pWaitSemaphores = &waitSems,
             .swapchainCount = @intCast(presentIds.len),
-            .pSwapchains = &swapchainHandles,
-            .pImageIndices = &imageIndices,
+            .pSwapchains = &handles,
+            .pImageIndices = &imgIndices,
         };
         const result = vk.vkQueuePresentKHR(presentQueue, &presentInf);
         if (result != vk.VK_SUCCESS and result != vk.VK_ERROR_OUT_OF_DATE_KHR and result != vk.VK_SUBOPTIMAL_KHR) {
@@ -133,26 +133,25 @@ pub const SwapchainManager = struct {
 
             if (self.swapchains.isKeyValid(key) == true) {
                 self.destroySwapchain(self.swapchains.getPtr(key), .withSurface);
-
-                _ = self.swapchains.removeAtKey(key);
+                self.swapchains.removeAtKey(key);
 
                 std.debug.print("Swapchain Key {} destroyed\n", .{key});
             } else std.debug.print("Cant Swapchain to destroy missing.\n", .{});
         }
     }
 
-    fn destroySwapchain(self: *SwapchainManager, sweapchain: *Swapchain, deleteMode: enum { withSurface, withoutSurface }) void {
+    fn destroySwapchain(self: *SwapchainManager, swapchain: *Swapchain, deleteMode: enum { withSurface, withoutSurface }) void {
         const gpi = self.gpi;
 
-        for (sweapchain.textures) |tex| vk.vkDestroyImageView(gpi, tex.view, null);
-        for (sweapchain.imgRdySems) |sem| vk.vkDestroySemaphore(gpi, sem, null);
-        for (sweapchain.renderDoneSems) |sem| vk.vkDestroySemaphore(gpi, sem, null);
-        vk.vkDestroySwapchainKHR(gpi, sweapchain.handle, null);
-        if (deleteMode == .withSurface) vk.vkDestroySurfaceKHR(self.instance, sweapchain.surface, null);
+        for (swapchain.textures) |tex| vk.vkDestroyImageView(gpi, tex.view, null);
+        for (swapchain.imgRdySems) |sem| vk.vkDestroySemaphore(gpi, sem, null);
+        for (swapchain.renderDoneSems) |sem| vk.vkDestroySemaphore(gpi, sem, null);
+        vk.vkDestroySwapchainKHR(gpi, swapchain.handle, null);
+        if (deleteMode == .withSurface) vk.vkDestroySurfaceKHR(self.instance, swapchain.surface, null);
 
-        self.alloc.free(sweapchain.textures);
-        self.alloc.free(sweapchain.imgRdySems);
-        self.alloc.free(sweapchain.renderDoneSems);
+        self.alloc.free(swapchain.textures);
+        self.alloc.free(swapchain.imgRdySems);
+        self.alloc.free(swapchain.renderDoneSems);
     }
 
     pub fn createSwapchain(self: *SwapchainManager, context: *const Context, input: union(enum) { window: Window, id: u32 }) !void {
@@ -198,7 +197,7 @@ pub const SwapchainManager = struct {
         surface: vk.VkSurfaceKHR,
         extent: vk.VkExtent2D,
         caps: vk.VkSurfaceCapabilitiesKHR,
-        passImgId: u32,
+        renderTexId: u32,
         oldHandle: ?vk.VkSwapchainKHR,
     ) !Swapchain {
         const alloc = self.alloc;
@@ -290,7 +289,7 @@ pub const SwapchainManager = struct {
             .textures = baseTextures,
             .imgRdySems = imgRdySems,
             .renderDoneSems = renderDoneSems,
-            .renderTexId = passImgId,
+            .renderTexId = renderTexId,
         };
     }
 };

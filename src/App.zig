@@ -74,7 +74,7 @@ pub const App = struct {
         try renderer.createTexture(rc.testTex);
         try renderer.createTexture(rc.grapDepthTex);
 
-        try renderer.createPass(rc.renderSequence);
+        try renderer.createPasses(rc.renderSequence);
 
         return .{
             .cam = Camera.init(.{}),
