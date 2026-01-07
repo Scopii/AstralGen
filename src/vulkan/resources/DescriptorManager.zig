@@ -11,7 +11,8 @@ const rc = @import("../../configs/renderConfig.zig");
 
 pub const DescriptorBuffer = struct {
     allocation: vk.VmaAllocation,
-    allocInf: vk.VmaAllocationInfo,
+    mappedPtr: ?*anyopaque,
+    size: vk.VkDeviceSize,
     handle: vk.VkBuffer,
     gpuAddress: u64,
 };
@@ -90,7 +91,7 @@ pub const DescriptorManager = struct {
         const addressInf = vk.VkDescriptorAddressInfoEXT{
             .sType = vk.VK_STRUCTURE_TYPE_DESCRIPTOR_ADDRESS_INFO_EXT,
             .address = buffer.gpuAddress,
-            .range = buffer.allocInf.size,
+            .range = buffer.size,
             .format = vk.VK_FORMAT_UNDEFINED,
         };
         const getInf = vk.VkDescriptorGetInfoEXT{
@@ -110,7 +111,7 @@ pub const DescriptorManager = struct {
         var bindingOffset: vk.VkDeviceSize = 0;
         vkFn.vkGetDescriptorSetLayoutBindingOffsetEXT.?(self.gpi, self.descLayout, binding, &bindingOffset);
 
-        const mappedData = @as([*]u8, @ptrCast(self.descBuffer.allocInf.pMappedData));
+        const mappedData = @as([*]u8, @ptrCast(self.descBuffer.mappedPtr));
         const finalOffset = bindingOffset + (arrayIndex * descSize); // Base Offset of the Array + (Index * Size of one Element)
         const destPtr = mappedData + finalOffset;
         @memcpy(destPtr[0..descSize], descData[0..descSize]);

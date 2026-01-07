@@ -55,7 +55,7 @@ pub const ResourceManager = struct {
             .gpu = gpu,
             .descMan = try DescriptorManager.init(alloc, gpuAlloc, gpi, gpu),
             .stagingBuffer = staging,
-            .stagingPtr = @ptrCast(staging.allocInf.pMappedData.?),
+            .stagingPtr = @ptrCast(staging.mappedPtr.?),
             .pendingTransfers = std.array_list.Managed(PendingTransfer).init(alloc),
         };
     }

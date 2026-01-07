@@ -7,8 +7,9 @@ const vh = @import("../Helpers.zig");
 pub const Buffer = struct {
     handle: vk.VkBuffer,
     allocation: vk.VmaAllocation,
-    allocInf: vk.VmaAllocationInfo,
+    mappedPtr: ?*anyopaque,
     gpuAddress: u64,
+    size: vk.VkDeviceSize,
     count: u32 = 0,
     bindlessIndex: u32 = 0,
     state: ResourceState = .{},

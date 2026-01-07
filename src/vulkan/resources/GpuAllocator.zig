@@ -36,7 +36,7 @@ pub const GpuAllocator = struct {
     pub fn allocDescriptorBuffer(self: *const GpuAllocator, size: vk.VkDeviceSize) !DescriptorBuffer {
         const bufUsage = vk.VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT | vk.VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
         const buffer = try self.allocBuffer(size, bufUsage, vk.VMA_MEMORY_USAGE_CPU_TO_GPU, vk.VMA_ALLOCATION_CREATE_MAPPED_BIT);
-        return .{ .allocation = buffer.allocation, .allocInf = buffer.allocInf, .handle = buffer.handle, .gpuAddress = buffer.gpuAddress };
+        return .{ .allocation = buffer.allocation, .mappedPtr = buffer.mappedPtr, .size = size, .handle = buffer.handle, .gpuAddress = buffer.gpuAddress };
     }
 
     pub fn printMemoryLocation(self: *const GpuAllocator, allocation: vk.VmaAllocation, gpu: vk.VkPhysicalDevice) void {
@@ -110,7 +110,8 @@ pub const GpuAllocator = struct {
         return .{
             .handle = buffer,
             .allocation = allocation,
-            .allocInf = allocVmaInf,
+            .mappedPtr = allocVmaInf.pMappedData,
+            .size = allocVmaInf.size,
             .gpuAddress = gpuAddress,
         };
     }
