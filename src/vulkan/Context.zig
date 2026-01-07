@@ -5,6 +5,7 @@ const sdl = @import("../modules/sdl.zig").c;
 const Allocator = std.mem.Allocator;
 const appCon = @import("../configs/appConfig.zig");
 const vh = @import("Helpers.zig");
+const Queue = @import("Queue.zig").Queue;
 
 pub const QueueFamilies = struct {
     graphics: u32,
@@ -17,8 +18,8 @@ pub const Context = struct {
     gpu: vk.VkPhysicalDevice,
     families: QueueFamilies,
     gpi: vk.VkDevice,
-    graphicsQ: vk.VkQueue,
-    presentQ: vk.VkQueue,
+    graphicsQ: Queue,
+    presentQ: Queue,
 
     pub fn init(alloc: Allocator) !Context {
         const instance = try createInstance(alloc);
@@ -27,10 +28,8 @@ pub const Context = struct {
         const families = try checkGPUfamilies(alloc, gpu);
         const gpi = try createGPI(alloc, gpu, families);
 
-        var graphicsQ: vk.VkQueue = undefined;
-        vk.vkGetDeviceQueue(gpi, families.graphics, 0, &graphicsQ);
-        var presentQ: vk.VkQueue = undefined;
-        vk.vkGetDeviceQueue(gpi, families.present, 0, &presentQ);
+        const graphicsQ = Queue.init(gpi, families.graphics, 0);
+        const presentQ = Queue.init(gpi, families.present, 0);
 
         return .{
             .alloc = alloc,
@@ -199,22 +198,22 @@ fn checkGPUfeatures(alloc: Allocator, gpu: vk.VkPhysicalDevice) !bool {
     return matched == required.len;
 }
 
-fn findFamily(families: []const vk.VkQueueFamilyProperties) ?u32 {
-    for (families, 0..) |family, i| {
-        if (family.queueCount > 0 and (family.queueFlags & vk.VK_QUEUE_GRAPHICS_BIT != 0) and (family.queueFlags & vk.VK_QUEUE_COMPUTE_BIT != 0)) return @intCast(i);
-    }
-    return null;
-}
+// fn findFamily(families: []const vk.VkQueueFamilyProperties) ?u32 {
+//     for (families, 0..) |family, i| {
+//         if (family.queueCount > 0 and (family.queueFlags & vk.VK_QUEUE_GRAPHICS_BIT != 0) and (family.queueFlags & vk.VK_QUEUE_COMPUTE_BIT != 0)) return @intCast(i);
+//     }
+//     return null;
+// }
 
-// Not in use because using the same Family because most Graphics Queues support Presentation and this avoids creating a Surface for setup
-fn findPresentFamily(families: []const vk.VkQueueFamilyProperties, gpu: vk.VkPhysicalDevice) !?u32 {
-    for (families, 0..) |family, i| {
-        var presentSupport: vk.VkBool32 = vk.VK_FALSE;
-        try vh.check(vk.vkGetPhysicalDeviceSurfaceSupportKHR(gpu, @intCast(i), null, &presentSupport), "Failed to get present support");
-        if (presentSupport == vk.VK_TRUE and family.queueCount != 0) return @intCast(i);
-    }
-    return null;
-}
+// // Not in use because using the same Family because most Graphics Queues support Presentation and this avoids creating a Surface for setup
+// fn findPresentFamily(families: []const vk.VkQueueFamilyProperties, gpu: vk.VkPhysicalDevice) !?u32 {
+//     for (families, 0..) |family, i| {
+//         var presentSupport: vk.VkBool32 = vk.VK_FALSE;
+//         try vh.check(vk.vkGetPhysicalDeviceSurfaceSupportKHR(gpu, @intCast(i), null, &presentSupport), "Failed to get present support");
+//         if (presentSupport == vk.VK_TRUE and family.queueCount != 0) return @intCast(i);
+//     }
+//     return null;
+// }
 
 fn checkGPUfamilies(alloc: Allocator, gpu: vk.VkPhysicalDevice) !QueueFamilies {
     var familyCount: u32 = 0;

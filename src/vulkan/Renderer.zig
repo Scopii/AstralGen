@@ -137,37 +137,22 @@ pub const Renderer = struct {
         const cmd = try self.renderGraph.recordFrame(frameInFlight, &self.resMan, rendererData, targets, &self.swapMan.swapchains, self.passes.items, &self.shaderMan);
 
         try self.queueSubmit(&cmd, targets, frameInFlight);
-        try self.swapMan.present(targets, self.context.presentQ);
+        try self.swapMan.present(targets, self.context.presentQ.handle);
 
         self.scheduler.nextFrame();
     }
 
     fn queueSubmit(self: *Renderer, cmd: *const Command, targets: []const u32, frameInFlight: u8) !void {
         var waitInfos: [rc.MAX_WINDOWS]vk.VkSemaphoreSubmitInfo = undefined;
-        for (targets, 0..) |id, i| {
-            const swapchain = self.swapMan.swapchains.getAtIndex(id);
-            waitInfos[i] = createSemaphoreSubmitInfo(swapchain.imgRdySems[frameInFlight], vk.VK_PIPELINE_STAGE_2_TRANSFER_BIT, 0);
-        }
-
         var signalInfos: [rc.MAX_WINDOWS + 1]vk.VkSemaphoreSubmitInfo = undefined;
+        signalInfos[targets.len] = createSemaphoreSubmitInfo(self.scheduler.cpuSyncTimeline, .AllCmds, self.scheduler.totalFrames + 1);
+
         for (targets, 0..) |id, i| {
             const swapchain = self.swapMan.swapchains.getAtIndex(id);
-            signalInfos[i] = createSemaphoreSubmitInfo(swapchain.renderDoneSems[swapchain.curIndex], vk.VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, 0);
+            waitInfos[i] = createSemaphoreSubmitInfo(swapchain.imgRdySems[frameInFlight], .Transfer, 0);
+            signalInfos[i] = createSemaphoreSubmitInfo(swapchain.renderDoneSems[swapchain.curIndex], .AllCmds, 0);
         }
-        // Signal CPU Timeline
-        signalInfos[targets.len] = createSemaphoreSubmitInfo(self.scheduler.cpuSyncTimeline, vk.VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, self.scheduler.totalFrames + 1);
-
-        const cmdSubmitInf = cmd.createSubmitInfo();
-        const submitInf = vk.VkSubmitInfo2{
-            .sType = vk.VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
-            .waitSemaphoreInfoCount = @intCast(targets.len),
-            .pWaitSemaphoreInfos = &waitInfos,
-            .commandBufferInfoCount = 1,
-            .pCommandBufferInfos = &cmdSubmitInf,
-            .signalSemaphoreInfoCount = @intCast(targets.len + 1), // Swapchains + 1 Timeline
-            .pSignalSemaphoreInfos = &signalInfos,
-        };
-        try vh.check(vk.vkQueueSubmit2(self.context.graphicsQ, 1, &submitInf, null), "Failed main submission");
+        try self.context.graphicsQ.submit(waitInfos[0..targets.len], cmd.createSubmitInfo(), signalInfos[0 .. targets.len + 1]);
     }
 
     pub fn addShaders(self: *Renderer, loadedShaders: []LoadedShader) !void {
@@ -193,6 +178,6 @@ pub const Renderer = struct {
     }
 };
 
-fn createSemaphoreSubmitInfo(semaphore: vk.VkSemaphore, stageMask: u64, value: u64) vk.VkSemaphoreSubmitInfo {
-    return .{ .sType = vk.VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO, .semaphore = semaphore, .stageMask = stageMask, .value = value };
+fn createSemaphoreSubmitInfo(semaphore: vk.VkSemaphore, pipeStage: vh.PipeStage, value: u64) vk.VkSemaphoreSubmitInfo {
+    return .{ .sType = vk.VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO, .semaphore = semaphore, .stageMask = @intFromEnum(pipeStage), .value = value };
 }
