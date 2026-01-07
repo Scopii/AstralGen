@@ -22,7 +22,7 @@ const Buffer = @import("resources/Buffer.zig").Buffer;
 pub const Renderer = struct {
     alloc: Allocator,
     arenaAlloc: Allocator,
-    context: Context,
+    context: *Context,
     resMan: ResourceManager,
     renderGraph: RenderGraph,
     shaderMan: ShaderManager,
@@ -32,13 +32,13 @@ pub const Renderer = struct {
 
     pub fn init(memoryMan: *MemoryManager) !Renderer {
         const alloc = memoryMan.getAllocator();
-        const instance = try createInstance(alloc);
-        const context = try Context.init(alloc, instance);
-        const resMan = try ResourceManager.init(alloc, &context);
-        const renderGraph = try RenderGraph.init(alloc, &resMan, &context);
-        const scheduler = try Scheduler.init(&context, rc.MAX_IN_FLIGHT);
-        const shaderMan = try ShaderManager.init(alloc, &context, &resMan);
-        const swapMan = try SwapchainManager.init(alloc, &context);
+        const context = try alloc.create(Context);
+        context.* = try Context.init(alloc);
+        const resMan = try ResourceManager.init(alloc, context);
+        const renderGraph = try RenderGraph.init(alloc, context, &resMan);
+        const scheduler = try Scheduler.init(context, rc.MAX_IN_FLIGHT);
+        const shaderMan = try ShaderManager.init(alloc, context, &resMan);
+        const swapMan = try SwapchainManager.init(alloc, context);
 
         return .{
             .alloc = alloc,
@@ -61,6 +61,7 @@ pub const Renderer = struct {
         self.resMan.deinit();
         self.renderGraph.deinit();
         self.context.deinit();
+        self.alloc.destroy(self.context);
         self.passes.deinit();
     }
 
@@ -78,7 +79,7 @@ pub const Renderer = struct {
             const tempWindow = tempWindows[i];
             switch (tempWindow.state) {
                 .needUpdate, .needCreation => {
-                    try self.swapMan.createSwapchain(&self.context, .{ .window = tempWindow });
+                    try self.swapMan.createSwapchain(self.context, .{ .window = tempWindow });
                     dirtyImgIds[i] = tempWindow.renderTexId;
                 },
                 .needActive, .needInactive => {
@@ -115,7 +116,7 @@ pub const Renderer = struct {
                     .mem = .Gpu,
                 };
                 try self.resMan.replaceTexture(texId, imgInf);
-                std.debug.print("Render Image ID {} recreated {}x{} to {}x{}\n", .{ texId, old.width, old.height, new.width, new.height });
+                std.debug.print("Render Texture ID {} recreated {}x{} to {}x{}\n", .{ texId.val, old.width, old.height, new.width, new.height });
             }
         }
     }
@@ -132,7 +133,7 @@ pub const Renderer = struct {
         try self.scheduler.waitForGPU();
         const frameInFlight = self.scheduler.frameInFlight;
 
-        if (try self.swapMan.updateTargets(frameInFlight, &self.context) == false) return;
+        if (try self.swapMan.updateTargets(frameInFlight, self.context) == false) return;
         const targets = self.swapMan.getTargets();
 
         const cmd = try self.renderGraph.recordFrame(frameInFlight, &self.resMan, rendererData, targets, &self.swapMan.swapchains, self.passes.items, &self.shaderMan);

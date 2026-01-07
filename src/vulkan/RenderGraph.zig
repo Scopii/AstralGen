@@ -32,7 +32,7 @@ pub const RenderGraph = struct {
     tempImgBarriers: std.array_list.Managed(vk.VkImageMemoryBarrier2),
     tempBufBarriers: std.array_list.Managed(vk.VkBufferMemoryBarrier2),
 
-    pub fn init(alloc: Allocator, resMan: *const ResourceManager, context: *const Context) !RenderGraph {
+    pub fn init(alloc: Allocator, context: *const Context, resMan: *const ResourceManager) !RenderGraph {
         return .{
             .alloc = alloc,
             .cmdMan = try CmdManager.init(alloc, context, rc.MAX_IN_FLIGHT, resMan),

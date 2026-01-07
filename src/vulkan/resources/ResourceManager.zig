@@ -136,7 +136,7 @@ pub const ResourceManager = struct {
 
         self.gpuAlloc.printMemoryLocation(buffer.allocation, self.gpu);
         self.buffers.set(bufInf.id.val, buffer);
-        std.debug.print("Buffer created. ID: {} -> BindlessIndex: {}\n", .{ bufInf.id, bindlessIndex });
+        std.debug.print("Buffer created. ID: {} -> BindlessIndex: {}\n", .{ bufInf.id.val, bindlessIndex });
     }
 
     pub fn createTexture(self: *ResourceManager, texInf: Texture.TexInf) !void {
@@ -155,7 +155,7 @@ pub const ResourceManager = struct {
         tex.bindlessIndex = bindlessIndex;
 
         self.textures.set(texInf.id.val, tex);
-        std.debug.print("Image created. ID: {} -> BindlessIndex: {}\n", .{ texInf.id, bindlessIndex });
+        std.debug.print("Image created. ID: {} -> BindlessIndex: {}\n", .{ texInf.id.val, bindlessIndex });
     }
 
     pub fn updateBuffer(self: *ResourceManager, bufInf: Buffer.BufInf, data: anytype) !void {
@@ -204,7 +204,7 @@ pub const ResourceManager = struct {
         try self.descMan.updateTextureDescriptor(newTex.base.view, rc.STORAGE_IMG_BINDING, slotIndex);
 
         oldTex.* = newTex;
-        std.debug.print("Texture {} Resized/Replaced at Slot {}\n", .{ texId, slotIndex });
+        std.debug.print("Texture {} Resized/Replaced at Slot {}\n", .{ texId.val, slotIndex });
     }
 
     pub fn destroyTexture(self: *ResourceManager, texId: Texture.TexId) void {

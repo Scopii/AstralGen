@@ -20,7 +20,9 @@ pub const Context = struct {
     graphicsQ: vk.VkQueue,
     presentQ: vk.VkQueue,
 
-    pub fn init(alloc: Allocator, instance: vk.VkInstance) !Context {
+    pub fn init(alloc: Allocator) !Context {
+        const instance = try createInstance(alloc);
+
         const gpu = try pickGPU(alloc, instance);
         const families = try checkGPUfamilies(alloc, gpu);
         const gpi = try createGPI(alloc, gpu, families);
