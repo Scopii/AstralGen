@@ -59,7 +59,7 @@ pub const RenderGraph = struct {
         shaderMan: *ShaderManager,
     ) !Command {
         const cmd = try self.cmdMan.getAndBeginCommand(frameInFlight);
-        cmd.setGraphicsState();
+        cmd.setGraphicsState(.{});
 
         for (resMan.indirectBufIds.items) |id| {
             const indirectBuf = try resMan.getBufferPtr(id);

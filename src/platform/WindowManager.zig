@@ -100,13 +100,13 @@ pub const WindowManager = struct {
 
     pub fn cleanupWindows(self: *WindowManager) void {
         for (self.changedWindows.slice()) |tempWindow| {
-            const actualWindow = self.windows.getPtr(tempWindow.winId.id);
+            const actualWindow = self.windows.getPtr(tempWindow.id.val);
             switch (tempWindow.state) {
-                .needDelete => self.destroyWindow(actualWindow.winId),
+                .needDelete => self.destroyWindow(actualWindow.id),
                 .needUpdate, .needCreation => actualWindow.state = .active,
                 .needActive => actualWindow.state = .active,
                 .needInactive => actualWindow.state = .inactive,
-                else => std.debug.print("WindowManager: Window {} State {s} should not need cleanup\n", .{ tempWindow.winId, @tagName(tempWindow.state) }),
+                else => std.debug.print("WindowManager: Window {} State {s} should not need cleanup\n", .{ tempWindow.id.val, @tagName(tempWindow.state) }),
             }
         }
         self.changedWindows.clear();
@@ -124,9 +124,9 @@ pub const WindowManager = struct {
     }
 
     fn destroyWindow(self: *WindowManager, windowId: Window.WindowId) void {
-        const window = self.windows.get(windowId.id);
+        const window = self.windows.get(windowId.val);
         sdl.SDL_DestroyWindow(window.handle);
-        self.windows.removeAtKey(windowId.id);
+        self.windows.removeAtKey(windowId.val);
     }
 
     pub fn consumeKeyEvents(self: *WindowManager) []KeyEvent {

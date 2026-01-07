@@ -81,7 +81,7 @@ pub const Renderer = struct {
                     dirtyImgIds[i] = tempWindow.renderTexId;
                 },
                 .needActive, .needInactive => {
-                    self.swapMan.changeState(tempWindow.winId, if (tempWindow.state == .needActive) true else false);
+                    self.swapMan.changeState(tempWindow.id, if (tempWindow.state == .needActive) true else false);
                 },
                 .needDelete => self.swapMan.removeSwapchain(&.{tempWindow}),
                 else => std.debug.print("Warning: Window State {s} cant be handled in Renderer\n", .{@tagName(tempWindow.state)}),

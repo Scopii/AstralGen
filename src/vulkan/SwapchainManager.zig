@@ -112,7 +112,7 @@ pub const SwapchainManager = struct {
     }
 
     pub fn changeState(self: *SwapchainManager, winId: Window.WindowId, inUse: bool) void {
-        self.swapchains.getPtr(winId.id).inUse = inUse;
+        self.swapchains.getPtr(winId.val).inUse = inUse;
     }
 
     pub fn getMaxRenderExtent(self: *SwapchainManager, texId: TexId) vk.VkExtent2D {
@@ -130,7 +130,7 @@ pub const SwapchainManager = struct {
 
     pub fn removeSwapchain(self: *SwapchainManager, windows: []const Window) void {
         for (windows) |window| {
-            const key = window.winId.id;
+            const key = window.id.val;
 
             if (self.swapchains.isKeyValid(key) == true) {
                 self.destroySwapchain(self.swapchains.getPtr(key), .withSurface);
@@ -169,11 +169,11 @@ pub const SwapchainManager = struct {
                 const surfaceFormat = try pickSurfaceFormat(alloc, gpu, surface);
 
                 const swapchain = try self.createInternalSwapchain(surfaceFormat, surface, extent, caps, window.renderTexId, null);
-                self.swapchains.set(window.winId.id, swapchain);
-                std.debug.print("Swapchain added to Window {}\n", .{window.winId.id});
+                self.swapchains.set(window.id.val, swapchain);
+                std.debug.print("Swapchain added to Window {}\n", .{window.id.val});
                 return;
             } else {
-                ptr = self.swapchains.getPtr(window.winId.id);
+                ptr = self.swapchains.getPtr(window.id.val);
                 extent = window.extent;
                 std.debug.print("Swapchain recreated\n", .{});
             },
