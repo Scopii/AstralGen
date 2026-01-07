@@ -12,22 +12,23 @@ pub const Pass = struct {
     typ: PassType,
 
     pub const PassType = union(enum) {
-        compute: ComputeData,
-        computeOnTex: computeOnTexData,
-        taskOrMesh: TaskOrMeshData,
-        graphics: GraphicsData,
+        compute: Compute,
+        computeOnTex: ComputeOnTex,
+        taskOrMesh: TaskOrMesh,
+        taskOrMeshIndirect: TaskOrMeshIndirect,
+        graphics: Graphics,
     };
 
-    const ComputeData = struct {
+    const Compute = struct {
         workgroups: Dispatch,
     };
 
-    const computeOnTexData = struct {
+    const ComputeOnTex = struct {
         mainTexId: Texture.TexId,
         workgroups: Dispatch,
     };
 
-    const TaskOrMeshData = struct {
+    const TaskOrMesh = struct {
         mainTexId: Texture.TexId,
         colorAtts: []const Attachment,
         depthAtt: ?Attachment = null,
@@ -35,7 +36,16 @@ pub const Pass = struct {
         workgroups: Dispatch,
     };
 
-    const GraphicsData = struct {
+    const TaskOrMeshIndirect = struct {
+        mainTexId: Texture.TexId,
+        colorAtts: []const Attachment,
+        depthAtt: ?Attachment = null,
+        stencilAtt: ?Attachment = null,
+        workgroups: Dispatch,
+        indirectBuf: struct { id: Buffer.BufId, offset: u64 = 0},
+    };
+
+    const Graphics = struct {
         mainTexId: Texture.TexId,
         colorAtts: []const Attachment,
         depthAtt: ?Attachment = null,
@@ -43,27 +53,31 @@ pub const Pass = struct {
         draw: struct { vertices: u32, instances: u32 } = .{ .vertices = 3, .instances = 1 },
     };
 
-    pub fn ComputeOnImage(data: computeOnTexData) Pass.PassType {
+    pub fn computeOnImage(data: ComputeOnTex) Pass.PassType {
         return .{ .computeOnTex = data };
     }
 
-    pub fn Compute(data: ComputeData) Pass.PassType {
+    pub fn compute(data: Compute) Pass.PassType {
         return .{ .compute = .{ .workgroups = data.workgroups } };
     }
 
-    pub fn Graphics(data: GraphicsData) Pass.PassType {
+    pub fn graphics(data: Graphics) Pass.PassType {
         return .{ .graphics = data };
     }
 
-    pub fn TaskOrMesh(data: TaskOrMeshData) Pass.PassType {
+    pub fn taskOrMesh(data: TaskOrMesh) Pass.PassType {
         return .{ .taskOrMesh = data };
+    }
+
+    pub fn taskOrMeshIndirect(data: TaskOrMeshIndirect) Pass.PassType {
+        return .{ .taskOrMeshIndirect = data };
     }
 
     pub fn getColorAtts(self: *const Pass) []const Attachment {
         return switch (self.typ) {
             .taskOrMesh => |t| t.colorAtts,
             .graphics => |g| g.colorAtts,
-
+            .taskOrMeshIndirect => |i| i.colorAtts,
             .compute, .computeOnTex => &[_]Attachment{},
         };
     }
@@ -72,6 +86,7 @@ pub const Pass = struct {
         return switch (self.typ) {
             .taskOrMesh => |t| t.depthAtt,
             .graphics => |g| g.depthAtt,
+            .taskOrMeshIndirect => |i| i.depthAtt,
             .compute, .computeOnTex => null,
         };
     }
@@ -80,6 +95,7 @@ pub const Pass = struct {
         return switch (self.typ) {
             .taskOrMesh => |t| t.stencilAtt,
             .graphics => |g| g.stencilAtt,
+            .taskOrMeshIndirect => |i| i.stencilAtt,
             .compute, .computeOnTex => null,
         };
     }

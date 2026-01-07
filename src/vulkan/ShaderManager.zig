@@ -67,7 +67,7 @@ pub const ShaderManager = struct {
         switch (passType) {
             .computePass => if (passKind != .compute and passKind != .computeOnTex) return false,
             .graphicsPass, .vertexPass => if (passKind != .graphics) return false,
-            .taskMeshPass, .meshPass => if (passKind != .taskOrMesh) return false,
+            .taskMeshPass, .meshPass => if (passKind != .taskOrMesh and passKind != .taskOrMeshIndirect) return false,
         }
         return true;
     }
@@ -79,7 +79,7 @@ fn checkShaderLayout(shaders: []const ShaderObject) !enum { computePass, graphic
 
     for (shaders) |shader| {
         const curIndex: i8 = switch (shader.stage) {
-            .compute => 0,
+            .comp => 0,
             .vert => 1,
             .tessControl => 2,
             .tessEval => 3,

@@ -66,6 +66,7 @@ pub const App = struct {
         try renderer.createBuffer(rc.objectSB);
         try renderer.updateBuffer(rc.objectSB, ecs.getObjects());
         try renderer.createBuffer(rc.cameraUB);
+        try renderer.createBuffer(rc.indirectSB);
 
         try renderer.createTexture(rc.compTex);
         try renderer.createTexture(rc.grapTex);

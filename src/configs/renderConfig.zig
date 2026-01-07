@@ -39,6 +39,8 @@ pub const bindingRegistry: []const struct { binding: u32, descType: vk.VkDescrip
 pub const objectSB = Buffer.create(.{ .id = .{ .val = 1 }, .mem = .Gpu, .typ = .Storage, .len = 100, .dataTyp = Object });
 pub const cameraUB = Buffer.create(.{ .id = .{ .val = 40 }, .mem = .Gpu, .typ = .Storage, .len = 1, .dataTyp = CameraData });
 
+pub const indirectSB = Buffer.create(.{ .id = .{ .val = 41 }, .mem = .Gpu, .typ = .Indirect, .len = 1, .dataTyp = struct { x: u32, y: u32, z: u32, count: u32 } });
+
 pub const compTex = Texture.create(.{ .id = .{ .val = 1 }, .mem = .Gpu, .typ = .Color, .width = 500, .height = 500 });
 pub const grapTex = Texture.create(.{ .id = .{ .val = 2 }, .mem = .Gpu, .typ = .Color, .width = 300, .height = 300 });
 pub const meshTex = Texture.create(.{ .id = .{ .val = 3 }, .mem = .Gpu, .typ = .Color, .width = 100, .height = 100 });
@@ -48,7 +50,7 @@ pub const depthTex = Texture.create(.{ .id = .{ .val = 11 }, .mem = .Gpu, .typ =
 
 pub const computeTest: Pass = .{
     .shaderIds = &.{sc.t1Comp.id},
-    .typ = Pass.ComputeOnImage(.{
+    .typ = Pass.computeOnImage(.{
         .mainTexId = compTex.id,
         .workgroups = .{ .x = 8, .y = 8, .z = 1 },
     }),
@@ -63,7 +65,7 @@ pub const computeTest: Pass = .{
 
 const graphicsTest: Pass = .{
     .shaderIds = &.{ sc.t2Frag.id, sc.t2Vert.id },
-    .typ = Pass.Graphics(.{
+    .typ = Pass.graphics(.{
         .mainTexId = grapTex.id,
         .colorAtts = &.{Attachment.init(grapTex.id, .ColorAtt, .ColorAttWrite, false)},
         .depthAtt = Attachment.init(depthTex.id, .EarlyFragTest, .DepthStencilRead, false),
@@ -76,7 +78,7 @@ const graphicsTest: Pass = .{
 
 const meshTest: Pass = .{
     .shaderIds = &.{ sc.t3Mesh.id, sc.t3Frag.id },
-    .typ = Pass.TaskOrMesh(.{
+    .typ = Pass.taskOrMesh(.{
         .mainTexId = meshTex.id,
         .workgroups = .{ .x = 1, .y = 1, .z = 1 },
         .colorAtts = &.{Attachment.init(meshTex.id, .ColorAtt, .ColorAttWrite, false)},
@@ -89,7 +91,7 @@ const meshTest: Pass = .{
 
 const taskTest: Pass = .{
     .shaderIds = &.{ sc.t4Task.id, sc.t4Mesh.id, sc.t4Frag.id },
-    .typ = Pass.TaskOrMesh(.{
+    .typ = Pass.taskOrMesh(.{
         .mainTexId = taskTex.id,
         .workgroups = .{ .x = 1, .y = 1, .z = 1 },
         .colorAtts = &.{Attachment.init(taskTex.id, .ColorAtt, .ColorAttWrite, false)},
@@ -102,7 +104,7 @@ const taskTest: Pass = .{
 
 const gridTest: Pass = .{
     .shaderIds = &.{ sc.gridTask.id, sc.gridMesh.id, sc.gridFrag.id },
-    .typ = Pass.TaskOrMesh(.{
+    .typ = Pass.taskOrMesh(.{
         .mainTexId = taskTex.id,
         .workgroups = .{ .x = 1, .y = 1, .z = 1 },
         .colorAtts = &.{Attachment.init(taskTex.id, .ColorAtt, .ColorAttWrite, false)},
@@ -112,4 +114,27 @@ const gridTest: Pass = .{
     },
 };
 
-pub const renderSequence: []const Pass = &.{ computeTest, graphicsTest, meshTest, taskTest, gridTest };
+pub const indirectCompTest: Pass = .{
+    .shaderIds = &.{sc.indirectComp.id},
+    .typ = Pass.compute(.{
+        .workgroups = .{ .x = 1, .y = 1, .z = 1 },
+    }),
+    .bufUses = &.{
+        BufferUse.init(indirectSB.id, .ComputeShader, .ShaderReadWrite, 0),
+    },
+};
+
+const indirectMeshTest: Pass = .{
+    .shaderIds = &.{ sc.indirectTask.id, sc.indirectMesh.id, sc.indirectFrag.id }, // SHADERS?
+    .typ = Pass.taskOrMeshIndirect(.{
+        .mainTexId = taskTex.id,
+        .indirectBuf = .{ .id = indirectSB.id, .offset = 0 },
+        .workgroups = .{ .x = 1, .y = 1, .z = 1 },
+        .colorAtts = &.{Attachment.init(taskTex.id, .ColorAtt, .ColorAttWrite, false)},
+    }),
+    .bufUses = &.{
+        BufferUse.init(indirectSB.id, .DrawIndirect, .IndirectRead, null),
+    },
+};
+
+pub const renderSequence: []const Pass = &.{ computeTest, graphicsTest, meshTest, taskTest, gridTest, indirectCompTest, indirectMeshTest };

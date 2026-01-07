@@ -34,6 +34,7 @@ pub const ResourceManager = struct {
     stagingPtr: [*]u8, // Mapped pointer for fast copying
     stagingOffset: u64 = 0,
     pendingTransfers: std.array_list.Managed(PendingTransfer),
+    indirectBufIds: std.array_list.Managed(Buffer.BufId),
 
     pub fn init(alloc: Allocator, context: *const Context) !ResourceManager {
         const gpi = context.gpi;
@@ -57,6 +58,7 @@ pub const ResourceManager = struct {
             .stagingBuffer = staging,
             .stagingPtr = @ptrCast(staging.mappedPtr.?),
             .pendingTransfers = std.array_list.Managed(PendingTransfer).init(alloc),
+            .indirectBufIds = std.array_list.Managed(Buffer.BufId).init(alloc),
         };
     }
 
@@ -72,6 +74,8 @@ pub const ResourceManager = struct {
 
         self.pendingTransfers.deinit();
         self.gpuAlloc.freeBuffer(self.stagingBuffer.handle, self.stagingBuffer.allocation);
+
+        self.indirectBufIds.deinit();
 
         self.gpuAlloc.deinit();
     }
@@ -137,6 +141,10 @@ pub const ResourceManager = struct {
         self.gpuAlloc.printMemoryLocation(buffer.allocation, self.gpu);
         self.buffers.set(bufInf.id.val, buffer);
         std.debug.print("Buffer ID {} -> BindlessIndex {} created\n", .{ bufInf.id.val, bindlessIndex });
+        if (bufInf.typ == .Indirect) {
+            try self.indirectBufIds.append(bufInf.id);
+            std.debug.print("and added to Indirect List\n", .{ });
+        } else std.debug.print("\n", .{});
     }
 
     pub fn createTexture(self: *ResourceManager, texInf: Texture.TexInf) !void {

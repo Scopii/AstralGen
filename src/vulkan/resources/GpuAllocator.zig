@@ -66,6 +66,7 @@ pub const GpuAllocator = struct {
             .Index => vk.VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
             .Vertex => vk.VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
             .Staging => vk.VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+            .Indirect => vk.VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | vk.VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
         };
 
         if (bufInf.typ != .Staging) {

@@ -5,7 +5,7 @@ pub const TextureType = enum { Color, Depth, Stencil };
 
 pub const MemUsage = enum { Gpu, CpuWrite, CpuRead };
 
-pub const BufferType = enum { Storage, Uniform, Index, Vertex, Staging };
+pub const BufferType = enum { Storage, Uniform, Index, Vertex, Staging, Indirect };
 
 pub const ImageLayout = enum(vk.VkImageLayout) {
     Undefined = vk.VK_IMAGE_LAYOUT_UNDEFINED,
@@ -21,6 +21,7 @@ pub const ImageLayout = enum(vk.VkImageLayout) {
 pub const PipeStage = enum(vk.VkPipelineStageFlagBits2) { //( SHOULD BE CORRECT ORDER)
     TopOfPipe = vk.VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
     ComputeShader = vk.VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+    DrawIndirect = vk.VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT,
     VertShader = vk.VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT,
     TaskShader = vk.VK_PIPELINE_STAGE_2_TASK_SHADER_BIT_EXT,
     MeshShader = vk.VK_PIPELINE_STAGE_2_MESH_SHADER_BIT_EXT,
@@ -61,7 +62,7 @@ pub const PipeAccess = enum(vk.VkAccessFlagBits2) {
 };
 
 pub const ShaderStage = enum(vk.VkShaderStageFlagBits) {
-    compute,
+    comp,
     vert,
     tessControl,
     tessEval,
@@ -74,7 +75,7 @@ pub const ShaderStage = enum(vk.VkShaderStageFlagBits) {
 
 pub fn getShaderBit(stageEnum: ShaderStage) vk.VkShaderStageFlagBits {
     return switch (stageEnum) {
-        .compute => vk.VK_SHADER_STAGE_COMPUTE_BIT,
+        .comp => vk.VK_SHADER_STAGE_COMPUTE_BIT,
         .vert => vk.VK_SHADER_STAGE_VERTEX_BIT,
         .tessControl => vk.VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT,
         .tessEval => vk.VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT,
@@ -113,11 +114,11 @@ pub fn Handle(comptime _: type) type {
     };
 }
 
-// pub const TexId = Handle(struct {}); 
-// pub const BufferId = Handle(struct {}); 
-// pub const ShaderId = Handle(struct {}); 
-// pub const WindowId = Handle(struct {}); 
-// pub const SwapchainId = Handle(struct {}); 
+// pub const TexId = Handle(struct {});
+// pub const BufferId = Handle(struct {});
+// pub const ShaderId = Handle(struct {});
+// pub const WindowId = Handle(struct {});
+// pub const SwapchainId = Handle(struct {});
 
 // pub fn setDebugName(self: *Context, handle: u64, type_: vk.VkObjectType, name: []const u8) void {
 //     if (appCon.DEBUG_MODE) {

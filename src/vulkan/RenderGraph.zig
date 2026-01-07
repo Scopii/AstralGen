@@ -60,6 +60,12 @@ pub const RenderGraph = struct {
     ) !Command {
         const cmd = try self.cmdMan.getAndBeginCommand(frameInFlight);
         cmd.setGraphicsState();
+        
+        for (resMan.indirectBufIds.items) |id| {
+            const indirectBuf = try resMan.getBufferPtr(id);
+            cmd.fillBuffer(indirectBuf.handle, 0, 16, 0);
+        }
+
         try self.recordTransfers(&cmd, resMan);
 
         for (passes) |pass| {
@@ -174,6 +180,7 @@ pub const RenderGraph = struct {
             .computeOnTex => |compOnImage| try resMan.getTexturePtr(compOnImage.mainTexId),
             .graphics => |graphics| try resMan.getTexturePtr(graphics.mainTexId),
             .taskOrMesh => |taskOrMesh| try resMan.getTexturePtr(taskOrMesh.mainTexId),
+            .taskOrMeshIndirect => |taskOrMeshIndirect| try resMan.getTexturePtr(taskOrMeshIndirect.mainTexId),
         };
 
         if (mainTex) |tex| {
@@ -188,7 +195,8 @@ pub const RenderGraph = struct {
             .compute => |comp| try recordCompute(cmd, comp.workgroups, null, resMan),
             .computeOnTex => |compOnImage| try recordCompute(cmd, compOnImage.workgroups, compOnImage.mainTexId, resMan),
             .graphics => |graphics| try recordGraphics(cmd, graphics.colorAtts, graphics.depthAtt, graphics.stencilAtt, pcs.width, pcs.height, pass, resMan),
-            .taskOrMesh => |taskOrMesh| try recordGraphics(cmd, taskOrMesh.colorAtts, taskOrMesh.depthAtt, taskOrMesh.stencilAtt, pcs.width, pcs.height, pass, resMan),
+            .taskOrMesh => |taskMesh| try recordGraphics(cmd, taskMesh.colorAtts, taskMesh.depthAtt, taskMesh.stencilAtt, pcs.width, pcs.height, pass, resMan),
+            .taskOrMeshIndirect => |tmIndirect| try recordGraphics(cmd, tmIndirect.colorAtts, tmIndirect.depthAtt, tmIndirect.stencilAtt, pcs.width, pcs.height, pass, resMan),
         }
     }
 
@@ -226,6 +234,10 @@ pub const RenderGraph = struct {
         switch (pass.typ) {
             .compute, .computeOnTex => return error.ComputeLandedInGraphicsPass,
             .taskOrMesh => |taskOrMesh| cmd.drawMeshTasks(taskOrMesh.workgroups.x, taskOrMesh.workgroups.y, taskOrMesh.workgroups.z),
+            .taskOrMeshIndirect => |tmIndirect| {
+                const buffer = try resMan.getBufferPtr(tmIndirect.indirectBuf.id);
+                cmd.drawMeshTasksIndirect(buffer.handle, 0, 1, 16); // 16 bytes 4x u32
+            },
             .graphics => |graphics| {
                 cmd.setEmptyVertexInput();
                 cmd.draw(graphics.draw.vertices, graphics.draw.instances, 0, 0);
