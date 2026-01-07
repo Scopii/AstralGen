@@ -73,6 +73,16 @@ pub const Pass = struct {
         return .{ .taskOrMeshIndirect = data };
     }
 
+    pub fn getMainTexId(self: *const Pass) ?Texture.TexId {
+        return switch (self.typ) {
+            .taskOrMesh => |t| t.mainTexId,
+            .graphics => |g| g.mainTexId,
+            .taskOrMeshIndirect => |i| i.mainTexId,
+            .computeOnTex => |c| c.mainTexId,
+            .compute, => null,
+        };
+    }
+
     pub fn getColorAtts(self: *const Pass) []const Attachment {
         return switch (self.typ) {
             .taskOrMesh => |t| t.colorAtts,

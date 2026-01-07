@@ -125,7 +125,7 @@ pub const indirectCompTest: Pass = .{
 };
 
 const indirectMeshTest: Pass = .{
-    .shaderIds = &.{ sc.indirectTask.id, sc.indirectMesh.id, sc.indirectFrag.id }, // SHADERS?
+    .shaderIds = &.{ sc.indirectTask.id, sc.indirectMesh.id, sc.indirectFrag.id }, 
     .typ = Pass.taskOrMeshIndirect(.{
         .mainTexId = taskTex.id,
         .indirectBuf = .{ .id = indirectSB.id, .offset = 0 },

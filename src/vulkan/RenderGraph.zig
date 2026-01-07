@@ -60,7 +60,7 @@ pub const RenderGraph = struct {
     ) !Command {
         const cmd = try self.cmdMan.getAndBeginCommand(frameInFlight);
         cmd.setGraphicsState();
-        
+
         for (resMan.indirectBufIds.items) |id| {
             const indirectBuf = try resMan.getBufferPtr(id);
             cmd.fillBuffer(indirectBuf.handle, 0, 16, 0);
@@ -84,19 +84,21 @@ pub const RenderGraph = struct {
 
         for (resMan.pendingTransfers.items) |transfer| {
             const buffer = try resMan.getBufferPtr(transfer.dstResId);
-            try self.bufferBarrierIfNeeded(buffer.state, .{ .stage = .Transfer, .access = .TransferWrite, .layout = .TransferDst }, buffer);
+            try self.bufferBarrierIfNeeded(buffer, .{ .stage = .Transfer, .access = .TransferWrite, .layout = .TransferDst });
             cmd.copyBuffer(resMan.stagingBuffer.handle, &transfer, buffer.handle); // MAYBE POINTER DEREFERNCE?
         }
         resMan.resetTransfers();
         self.bakeBarriers(cmd);
     }
 
-    fn imageBarrierIfNeeded(self: *RenderGraph, state: ResourceState, neededState: ResourceState, tex: *TextureBase) !void {
+    fn imageBarrierIfNeeded(self: *RenderGraph, tex: *TextureBase, neededState: ResourceState) !void {
+        const state = tex.state;
         if (state.stage == neededState.stage and state.access == neededState.access and state.layout == neededState.layout) return;
         try self.tempImgBarriers.append(tex.createImageBarrier(neededState));
     }
 
-    fn bufferBarrierIfNeeded(self: *RenderGraph, state: ResourceState, neededState: ResourceState, buffer: *Buffer) !void {
+    fn bufferBarrierIfNeeded(self: *RenderGraph, buffer: *Buffer, neededState: ResourceState) !void {
+        const state = buffer.state;
         if (state.stage == neededState.stage and state.access == neededState.access) return;
         try self.tempBufBarriers.append(buffer.createBufferBarrier(neededState));
     }
@@ -104,27 +106,27 @@ pub const RenderGraph = struct {
     pub fn recordPassBarriers(self: *RenderGraph, cmd: *const Command, pass: Pass, resMan: *ResourceManager) !void {
         for (pass.bufUses) |bufUse| {
             const buffer = try resMan.getBufferPtr(bufUse.bufId);
-            try self.bufferBarrierIfNeeded(buffer.state, bufUse.getNeededState(), buffer);
+            try self.bufferBarrierIfNeeded(buffer, bufUse.getNeededState());
         }
 
         for (pass.texUses) |texUse| {
             const tex = try resMan.getTexturePtr(texUse.texId);
-            try self.imageBarrierIfNeeded(tex.base.state, texUse.getNeededState(), &tex.base);
+            try self.imageBarrierIfNeeded(&tex.base, texUse.getNeededState());
         }
 
         for (pass.getColorAtts()) |colorAtt| {
             const tex = try resMan.getTexturePtr(colorAtt.texId);
-            try self.imageBarrierIfNeeded(tex.base.state, colorAtt.getNeededState(), &tex.base);
+            try self.imageBarrierIfNeeded(&tex.base, colorAtt.getNeededState());
         }
 
         if (pass.getDepthAtt()) |depthAtt| {
             const tex = try resMan.getTexturePtr(depthAtt.texId);
-            try self.imageBarrierIfNeeded(tex.base.state, depthAtt.getNeededState(), &tex.base);
+            try self.imageBarrierIfNeeded(&tex.base, depthAtt.getNeededState());
         }
 
         if (pass.getStencilAtt()) |stencilAtt| {
             const tex = try resMan.getTexturePtr(stencilAtt.texId);
-            try self.imageBarrierIfNeeded(tex.base.state, stencilAtt.getNeededState(), &tex.base);
+            try self.imageBarrierIfNeeded(&tex.base, stencilAtt.getNeededState());
         }
 
         self.bakeBarriers(cmd);
@@ -175,17 +177,11 @@ pub const RenderGraph = struct {
 
         pcs.resourceSlots = resourceSlots;
 
-        const mainTex = switch (pass.typ) {
-            .compute => null,
-            .computeOnTex => |compOnImage| try resMan.getTexturePtr(compOnImage.mainTexId),
-            .graphics => |graphics| try resMan.getTexturePtr(graphics.mainTexId),
-            .taskOrMesh => |taskOrMesh| try resMan.getTexturePtr(taskOrMesh.mainTexId),
-            .taskOrMeshIndirect => |taskOrMeshIndirect| try resMan.getTexturePtr(taskOrMeshIndirect.mainTexId),
-        };
-
-        if (mainTex) |tex| {
-            pcs.width = tex.base.extent.width;
-            pcs.height = tex.base.extent.height;
+        const mainTexId = pass.getMainTexId();
+        if (mainTexId) |texId| {
+            const mainTex = try resMan.getTexturePtr(texId);
+            pcs.width = mainTex.base.extent.width;
+            pcs.height = mainTex.base.extent.height;
         }
 
         cmd.setPushConstants(self.pipeLayout, vk.VK_SHADER_STAGE_ALL, 0, @sizeOf(PushConstants), &pcs);
@@ -193,10 +189,10 @@ pub const RenderGraph = struct {
 
         switch (pass.typ) {
             .compute => |comp| try recordCompute(cmd, comp.workgroups, null, resMan),
-            .computeOnTex => |compOnImage| try recordCompute(cmd, compOnImage.workgroups, compOnImage.mainTexId, resMan),
+            .computeOnTex => |compOnImg| try recordCompute(cmd, compOnImg.workgroups, compOnImg.mainTexId, resMan),
             .graphics => |graphics| try recordGraphics(cmd, graphics.colorAtts, graphics.depthAtt, graphics.stencilAtt, pcs.width, pcs.height, pass, resMan),
             .taskOrMesh => |taskMesh| try recordGraphics(cmd, taskMesh.colorAtts, taskMesh.depthAtt, taskMesh.stencilAtt, pcs.width, pcs.height, pass, resMan),
-            .taskOrMeshIndirect => |tmIndirect| try recordGraphics(cmd, tmIndirect.colorAtts, tmIndirect.depthAtt, tmIndirect.stencilAtt, pcs.width, pcs.height, pass, resMan),
+            .taskOrMeshIndirect => |indirect| try recordGraphics(cmd, indirect.colorAtts, indirect.depthAtt, indirect.stencilAtt, pcs.width, pcs.height, pass, resMan),
         }
     }
 
@@ -251,10 +247,10 @@ pub const RenderGraph = struct {
         for (targets) |index| {
             const swapchain = swapchainMap.getPtrAtIndex(index);
             const renderTex = try resMan.getTexturePtr(swapchain.renderTexId);
-            try self.imageBarrierIfNeeded(renderTex.base.state, .{ .stage = .Transfer, .access = .TransferRead, .layout = .TransferSrc }, &renderTex.base);
+            try self.imageBarrierIfNeeded(&renderTex.base, .{ .stage = .Transfer, .access = .TransferRead, .layout = .TransferSrc });
 
             const presentTex = &swapchain.textures[swapchain.curIndex];
-            try self.imageBarrierIfNeeded(presentTex.state, .{ .stage = .Transfer, .access = .TransferWrite, .layout = .TransferDst }, presentTex);
+            try self.imageBarrierIfNeeded(presentTex, .{ .stage = .Transfer, .access = .TransferWrite, .layout = .TransferDst });
         }
         self.bakeBarriers(cmd);
 
@@ -270,7 +266,7 @@ pub const RenderGraph = struct {
         for (targets) |index| {
             const swapchain = swapchainMap.getPtrAtIndex(index);
             const presentTex = &swapchain.textures[swapchain.curIndex];
-            try self.imageBarrierIfNeeded(presentTex.state, .{ .stage = .BotOfPipe, .access = .None, .layout = .PresentSrc }, presentTex);
+            try self.imageBarrierIfNeeded(presentTex, .{ .stage = .BotOfPipe, .access = .None, .layout = .PresentSrc });
         }
         self.bakeBarriers(cmd);
     }
