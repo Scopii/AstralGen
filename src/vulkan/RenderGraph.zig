@@ -147,11 +147,11 @@ pub const RenderGraph = struct {
             const shaderSlot = bufUse.shaderSlot;
 
             if (shaderSlot) |slot| {
-                if (mask[slot] == false) {
+                if (mask[slot.val] == false) {
                     const buffer = try resMan.getBufferPtr(bufUse.bufId);
-                    resourceSlots[slot] = buffer.getResourceSlot();
-                    mask[slot] = true;
-                } else std.debug.print("Pass Shader Slot {} already used\n", .{slot});
+                    resourceSlots[slot.val] = buffer.getResourceSlot();
+                    mask[slot.val] = true;
+                } else std.debug.print("Pass Shader Slot {} already used\n", .{slot.val});
             }
         }
 
@@ -159,17 +159,17 @@ pub const RenderGraph = struct {
             const shaderSlot = texUse.shaderSlot;
 
             if (shaderSlot) |slot| {
-                if (mask[slot] == false) {
+                if (mask[slot.val] == false) {
                     const tex = try resMan.getTexturePtr(texUse.texId);
-                    resourceSlots[slot] = tex.getResourceSlot();
-                    mask[slot] = true;
-                } else std.debug.print("Pass Shader Slot {} already used\n", .{slot});
+                    resourceSlots[slot.val] = tex.getResourceSlot();
+                    mask[slot.val] = true;
+                } else std.debug.print("Pass Shader Slot {} already used\n", .{slot.val});
             }
         }
 
         pcs.resourceSlots = resourceSlots;
 
-        const mainTex = switch (pass.passTyp) {
+        const mainTex = switch (pass.typ) {
             .compute => null,
             .computeOnTex => |compOnImage| try resMan.getTexturePtr(compOnImage.mainTexId),
             .graphics => |graphics| try resMan.getTexturePtr(graphics.mainTexId),
@@ -184,7 +184,7 @@ pub const RenderGraph = struct {
         cmd.setPushConstants(self.pipeLayout, vk.VK_SHADER_STAGE_ALL, 0, @sizeOf(PushConstants), &pcs);
         cmd.bindShaders(validShaders);
 
-        switch (pass.passTyp) {
+        switch (pass.typ) {
             .compute => |comp| try recordCompute(cmd, comp.workgroups, null, resMan),
             .computeOnTex => |compOnImage| try recordCompute(cmd, compOnImage.workgroups, compOnImage.mainTexId, resMan),
             .graphics => |graphics| try recordGraphics(cmd, graphics.colorAtts, graphics.depthAtt, graphics.stencilAtt, pcs.width, pcs.height, pass, resMan),
@@ -223,7 +223,7 @@ pub const RenderGraph = struct {
 
         cmd.beginRendering(width, height, colorInfs[0..colorAtts.len], depthInf, stencilInf);
 
-        switch (pass.passTyp) {
+        switch (pass.typ) {
             .compute, .computeOnTex => return error.ComputeLandedInGraphicsPass,
             .taskOrMesh => |taskOrMesh| cmd.drawMeshTasks(taskOrMesh.workgroups.x, taskOrMesh.workgroups.y, taskOrMesh.workgroups.z),
             .graphics => |graphics| {

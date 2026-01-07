@@ -51,9 +51,9 @@ pub const Scheduler = struct {
 };
 
 pub fn createSemaphore(gpi: vk.VkDevice) !vk.VkSemaphore {
-    const seamphoreInf = vk.VkSemaphoreCreateInfo{ .sType = vk.VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO };
+    const semaphoreInf = vk.VkSemaphoreCreateInfo{ .sType = vk.VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO };
     var semaphore: vk.VkSemaphore = undefined;
-    try vh.check(vk.vkCreateSemaphore(gpi, &seamphoreInf, null, &semaphore), "Could not create Semaphore");
+    try vh.check(vk.vkCreateSemaphore(gpi, &semaphoreInf, null, &semaphore), "Could not create Semaphore");
     return semaphore;
 }
 

@@ -48,67 +48,67 @@ pub const depthTex = Texture.create(.{ .id = .{ .val = 11 }, .mem = .Gpu, .typ =
 
 pub const computeTest: Pass = .{
     .shaderIds = &.{sc.t1Comp.id},
-    .passTyp = Pass.ComputeOnImage(.{
+    .typ = Pass.ComputeOnImage(.{
         .mainTexId = compTex.id,
         .workgroups = .{ .x = 8, .y = 8, .z = 1 },
     }),
     .bufUses = &.{
-        BufferUse.create(objectSB.id, .ComputeShader, .ShaderRead, 0),
-        BufferUse.create(cameraUB.id, .ComputeShader, .ShaderRead, 1),
+        BufferUse.init(objectSB.id, .ComputeShader, .ShaderRead, 0),
+        BufferUse.init(cameraUB.id, .ComputeShader, .ShaderRead, 1),
     },
     .texUses = &.{
-        TextureUse.create(compTex.id, .ComputeShader, .ShaderWrite, .General, 2),
+        TextureUse.init(compTex.id, .ComputeShader, .ShaderWrite, .General, 2),
     },
 };
 
 const graphicsTest: Pass = .{
     .shaderIds = &.{ sc.t2Frag.id, sc.t2Vert.id },
-    .passTyp = Pass.Graphics(.{
+    .typ = Pass.Graphics(.{
         .mainTexId = grapTex.id,
-        .colorAtts = &.{Attachment.create(grapTex.id, .ColorAtt, .ColorAttWrite, false)},
-        .depthAtt = Attachment.create(depthTex.id, .EarlyFragTest, .DepthStencilRead, false),
+        .colorAtts = &.{Attachment.init(grapTex.id, .ColorAtt, .ColorAttWrite, false)},
+        .depthAtt = Attachment.init(depthTex.id, .EarlyFragTest, .DepthStencilRead, false),
     }),
     .bufUses = &.{
-        BufferUse.create(objectSB.id, .FragShader, .ShaderRead, 0),
-        BufferUse.create(cameraUB.id, .ComputeShader, .ShaderRead, 1),
+        BufferUse.init(objectSB.id, .FragShader, .ShaderRead, 0),
+        BufferUse.init(cameraUB.id, .ComputeShader, .ShaderRead, 1),
     },
 };
 
 const meshTest: Pass = .{
     .shaderIds = &.{ sc.t3Mesh.id, sc.t3Frag.id },
-    .passTyp = Pass.TaskOrMesh(.{
+    .typ = Pass.TaskOrMesh(.{
         .mainTexId = meshTex.id,
         .workgroups = .{ .x = 1, .y = 1, .z = 1 },
-        .colorAtts = &.{Attachment.create(meshTex.id, .ColorAtt, .ColorAttWrite, false)},
+        .colorAtts = &.{Attachment.init(meshTex.id, .ColorAtt, .ColorAttWrite, false)},
     }),
     .bufUses = &.{
-        BufferUse.create(objectSB.id, .FragShader, .ShaderRead, 0),
-        BufferUse.create(cameraUB.id, .ComputeShader, .ShaderRead, 1),
+        BufferUse.init(objectSB.id, .FragShader, .ShaderRead, 0),
+        BufferUse.init(cameraUB.id, .ComputeShader, .ShaderRead, 1),
     },
 };
 
 const taskTest: Pass = .{
     .shaderIds = &.{ sc.t4Task.id, sc.t4Mesh.id, sc.t4Frag.id },
-    .passTyp = Pass.TaskOrMesh(.{
+    .typ = Pass.TaskOrMesh(.{
         .mainTexId = taskTex.id,
         .workgroups = .{ .x = 1, .y = 1, .z = 1 },
-        .colorAtts = &.{Attachment.create(taskTex.id, .ColorAtt, .ColorAttWrite, false)},
+        .colorAtts = &.{Attachment.init(taskTex.id, .ColorAtt, .ColorAttWrite, false)},
     }),
     .bufUses = &.{
-        BufferUse.create(objectSB.id, .FragShader, .ShaderRead, 0),
-        BufferUse.create(cameraUB.id, .ComputeShader, .ShaderRead, 1),
+        BufferUse.init(objectSB.id, .FragShader, .ShaderRead, 0),
+        BufferUse.init(cameraUB.id, .ComputeShader, .ShaderRead, 1),
     },
 };
 
 const gridTest: Pass = .{
     .shaderIds = &.{ sc.gridTask.id, sc.gridMesh.id, sc.gridFrag.id },
-    .passTyp = Pass.TaskOrMesh(.{
+    .typ = Pass.TaskOrMesh(.{
         .mainTexId = taskTex.id,
         .workgroups = .{ .x = 1, .y = 1, .z = 1 },
-        .colorAtts = &.{Attachment.create(taskTex.id, .ColorAtt, .ColorAttWrite, false)},
+        .colorAtts = &.{Attachment.init(taskTex.id, .ColorAtt, .ColorAttWrite, false)},
     }),
     .bufUses = &.{
-        BufferUse.create(cameraUB.id, .TaskShader, .ShaderRead, 0),
+        BufferUse.init(cameraUB.id, .TaskShader, .ShaderRead, 0),
     },
 };
 

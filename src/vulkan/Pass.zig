@@ -9,7 +9,7 @@ pub const Pass = struct {
     shaderIds: []const ShaderId,
     bufUses: []const BufferUse = &.{},
     texUses: []const TextureUse = &.{},
-    passTyp: PassType,
+    typ: PassType,
 
     pub const PassType = union(enum) {
         compute: ComputeData,
@@ -47,7 +47,7 @@ pub const Pass = struct {
         return .{ .computeOnTex = data };
     }
 
-    pub fn createCompute(data: ComputeData) Pass.PassType {
+    pub fn Compute(data: ComputeData) Pass.PassType {
         return .{ .compute = .{ .workgroups = data.workgroups } };
     }
 
@@ -60,25 +60,26 @@ pub const Pass = struct {
     }
 
     pub fn getColorAtts(self: *const Pass) []const Attachment {
-        return switch (self.passTyp) {
-            .graphics => |g| g.colorAtts,
+        return switch (self.typ) {
             .taskOrMesh => |t| t.colorAtts,
+            .graphics => |g| g.colorAtts,
+
             .compute, .computeOnTex => &[_]Attachment{},
         };
     }
 
     pub fn getDepthAtt(self: *const Pass) ?Attachment {
-        return switch (self.passTyp) {
-            .graphics => |g| g.depthAtt,
+        return switch (self.typ) {
             .taskOrMesh => |t| t.depthAtt,
+            .graphics => |g| g.depthAtt,
             .compute, .computeOnTex => null,
         };
     }
 
     pub fn getStencilAtt(self: *const Pass) ?Attachment {
-        return switch (self.passTyp) {
-            .graphics => |g| g.stencilAtt,
+        return switch (self.typ) {
             .taskOrMesh => |t| t.stencilAtt,
+            .graphics => |g| g.stencilAtt,
             .compute, .computeOnTex => null,
         };
     }
@@ -97,24 +98,26 @@ pub const Attachment = struct {
         return .{ .stage = self.stage, .access = self.access, .layout = self.layout };
     }
 
-    pub fn create(id: Texture.TexId, stage: vh.PipeStage, access: vh.PipeAccess, clear: bool) Attachment {
+    pub fn init(id: Texture.TexId, stage: vh.PipeStage, access: vh.PipeAccess, clear: bool) Attachment {
         return .{ .texId = id, .stage = stage, .access = access, .layout = .Attachment, .clear = clear };
     }
 };
+
+pub const ShaderSlot = packed struct { val: u32 };
 
 pub const TextureUse = struct {
     texId: Texture.TexId,
     stage: vh.PipeStage = .TopOfPipe,
     access: vh.PipeAccess = .None,
     layout: vh.ImageLayout = .General,
-    shaderSlot: ?u8 = null,
+    shaderSlot: ?ShaderSlot = null,
 
     pub fn getNeededState(self: *const TextureUse) ResourceState {
         return .{ .stage = self.stage, .access = self.access, .layout = self.layout };
     }
 
-    pub fn create(id: Texture.TexId, stage: vh.PipeStage, access: vh.PipeAccess, layout: vh.ImageLayout, shaderSlot: ?u8) TextureUse {
-        return .{ .texId = id, .stage = stage, .access = access, .layout = layout, .shaderSlot = shaderSlot };
+    pub fn init(id: Texture.TexId, stage: vh.PipeStage, access: vh.PipeAccess, layout: vh.ImageLayout, shaderSlot: ?u8) TextureUse {
+        return .{ .texId = id, .stage = stage, .access = access, .layout = layout, .shaderSlot = if (shaderSlot) |slot| .{ .val = slot } else null };
     }
 };
 
@@ -122,13 +125,13 @@ pub const BufferUse = struct {
     bufId: Buffer.BufId,
     stage: vh.PipeStage = .TopOfPipe,
     access: vh.PipeAccess = .None,
-    shaderSlot: ?u8 = null,
+    shaderSlot: ?ShaderSlot = null,
 
     pub fn getNeededState(self: *const BufferUse) ResourceState {
         return .{ .stage = self.stage, .access = self.access, .layout = .General };
     }
 
-    pub fn create(bufId: Buffer.BufId, stage: vh.PipeStage, access: vh.PipeAccess, shaderSlot: ?u8) BufferUse {
-        return .{ .bufId = bufId, .stage = stage, .access = access, .shaderSlot = shaderSlot };
+    pub fn init(bufId: Buffer.BufId, stage: vh.PipeStage, access: vh.PipeAccess, shaderSlot: ?u8) BufferUse {
+        return .{ .bufId = bufId, .stage = stage, .access = access, .shaderSlot = if (shaderSlot) |slot| .{ .val = slot } else null };
     }
 };
