@@ -15,6 +15,7 @@ const RendererData = @import("../App.zig").RendererData;
 const Pass = @import("Pass.zig").Pass;
 const Attachment = @import("Pass.zig").Attachment;
 const TextureBase = @import("resources/Texture.zig").TextureBase;
+const TexId = @import("resources/Texture.zig").Texture.TexId;
 const Buffer = @import("resources/Buffer.zig").Buffer;
 const ResourceSlot = @import("resources/Resource.zig").ResourceSlot;
 
@@ -123,7 +124,7 @@ pub const RenderGraph = struct {
         self.bakeBarriers(cmd);
     }
 
-    fn recordCompute(cmd: *const Command, dispatch: Pass.Dispatch, renderTexId: ?u32, resMan: *ResourceManager) !void {
+    fn recordCompute(cmd: *const Command, dispatch: Pass.Dispatch, renderTexId: ?TexId, resMan: *ResourceManager) !void {
         if (renderTexId) |imgId| {
             const tex = try resMan.getTexturePtr(imgId);
             cmd.dispatch(

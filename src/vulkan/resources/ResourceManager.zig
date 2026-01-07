@@ -12,7 +12,7 @@ const CreateMapArray = @import("../../structures/MapArray.zig").CreateMapArray;
 
 pub const PendingTransfer = struct {
     srcOffset: u64,
-    dstResId: u32,
+    dstResId: Buffer.BufId,
     size: u64,
 };
 
@@ -65,7 +65,7 @@ pub const ResourceManager = struct {
             self.destroyBuffer(self.buffers.getKeyFromIndex(0));
         }
         while (self.textures.getCount() > 0) {
-            self.destroyTexture(self.textures.getKeyFromIndex(0));
+            self.destroyTexture(.{ .val = self.textures.getKeyFromIndex(0) });
         }
 
         self.descMan.deinit();
@@ -81,7 +81,7 @@ pub const ResourceManager = struct {
         self.pendingTransfers.clearRetainingCapacity();
     }
 
-    pub fn queueBufferUpload(self: *ResourceManager, bufInf: Buffer.BufInf, bufId: u32, data: anytype) !void {
+    pub fn queueBufferUpload(self: *ResourceManager, bufInf: Buffer.BufInf, bufId: Buffer.BufId, data: anytype) !void {
         const DataType = @TypeOf(data);
         const dataSize = @sizeOf(bufInf.dataTyp);
         const typeInfo = @typeInfo(DataType);
@@ -114,15 +114,15 @@ pub const ResourceManager = struct {
         self.stagingOffset += (bytes.len + 15) & ~@as(u64, 15);
     }
 
-    pub fn getTexturePtr(self: *ResourceManager, texId: u32) !*Texture {
-        if (self.textures.isKeyUsed(texId) == true) {
-            return self.textures.getPtr(texId);
+    pub fn getTexturePtr(self: *ResourceManager, texId: Texture.TexId) !*Texture {
+        if (self.textures.isKeyUsed(texId.val) == true) {
+            return self.textures.getPtr(texId.val);
         } else return error.TextureIdNotUsed;
     }
 
-    pub fn getBufferPtr(self: *ResourceManager, bufId: u32) !*Buffer {
-        if (self.buffers.isKeyUsed(bufId) == true) {
-            return self.buffers.getPtr(bufId);
+    pub fn getBufferPtr(self: *ResourceManager, bufId: Buffer.BufId) !*Buffer {
+        if (self.buffers.isKeyUsed(bufId.val) == true) {
+            return self.buffers.getPtr(bufId.val);
         } else return error.BufferIdNotUsed;
     }
 
@@ -135,8 +135,8 @@ pub const ResourceManager = struct {
         try self.descMan.updateBufferDescriptor(buffer, rc.STORAGE_BUF_BINDING, bindlessIndex);
 
         self.gpuAlloc.printMemoryLocation(buffer.allocation, self.gpu);
-        self.buffers.set(bufInf.bufId, buffer);
-        std.debug.print("Buffer created. ID: {} -> BindlessIndex: {}\n", .{ bufInf.bufId, bindlessIndex });
+        self.buffers.set(bufInf.id.val, buffer);
+        std.debug.print("Buffer created. ID: {} -> BindlessIndex: {}\n", .{ bufInf.id, bindlessIndex });
     }
 
     pub fn createTexture(self: *ResourceManager, texInf: Texture.TexInf) !void {
@@ -154,13 +154,13 @@ pub const ResourceManager = struct {
         }
         tex.bindlessIndex = bindlessIndex;
 
-        self.textures.set(texInf.texId, tex);
-        std.debug.print("Image created. ID: {} -> BindlessIndex: {}\n", .{ texInf.texId, bindlessIndex });
+        self.textures.set(texInf.id.val, tex);
+        std.debug.print("Image created. ID: {} -> BindlessIndex: {}\n", .{ texInf.id, bindlessIndex });
     }
 
     pub fn updateBuffer(self: *ResourceManager, bufInf: Buffer.BufInf, data: anytype) !void {
         if (bufInf.mem == .Gpu) {
-            try self.queueBufferUpload(bufInf, bufInf.bufId, data);
+            try self.queueBufferUpload(bufInf, bufInf.id, data);
         } else {
             const DataType = @TypeOf(data);
             const typeInfo = @typeInfo(DataType);
@@ -182,7 +182,7 @@ pub const ResourceManager = struct {
                 return error.TypeMismatch;
             }
 
-            var buffer = try self.getBufferPtr(bufInf.bufId);
+            var buffer = try self.getBufferPtr(bufInf.id);
 
             const pMappedData = buffer.allocInf.pMappedData orelse return error.BufferNotMapped;
 
@@ -194,7 +194,7 @@ pub const ResourceManager = struct {
         }
     }
 
-    pub fn replaceTexture(self: *ResourceManager, texId: u32, nexTexInf: Texture.TexInf) !void {
+    pub fn replaceTexture(self: *ResourceManager, texId: Texture.TexId, nexTexInf: Texture.TexInf) !void {
         var oldTex = try self.getTexturePtr(texId);
         oldTex.base.state = .{};
         const slotIndex = oldTex.bindlessIndex;
@@ -204,22 +204,22 @@ pub const ResourceManager = struct {
         try self.descMan.updateTextureDescriptor(newTex.base.view, rc.STORAGE_IMG_BINDING, slotIndex);
 
         oldTex.* = newTex;
-        std.debug.print("Resource {} Resized/Replaced at Slot {}\n", .{ texId, slotIndex });
+        std.debug.print("Texture {} Resized/Replaced at Slot {}\n", .{ texId, slotIndex });
     }
 
-    pub fn destroyTexture(self: *ResourceManager, texId: u32) void {
-        if (self.textures.isKeyUsed(texId) != true) {
-            std.debug.print("Warning: Tried to destroy empty Resource ID {}\n", .{texId});
+    pub fn destroyTexture(self: *ResourceManager, texId: Texture.TexId) void {
+        if (self.textures.isKeyUsed(texId.val) != true) {
+            std.debug.print("Warning: Tried to destroy empty Texture ID {}\n", .{texId});
             return;
         }
-        const tex = self.textures.getPtr(texId);
+        const tex = self.textures.getPtr(texId.val);
         self.gpuAlloc.freeTexture(tex.*);
-        self.textures.removeAtKey(texId);
+        self.textures.removeAtKey(texId.val);
     }
 
     pub fn destroyBuffer(self: *ResourceManager, bufId: u32) void {
         if (self.buffers.isKeyUsed(bufId) != true) {
-            std.debug.print("Warning: Tried to destroy empty Resource ID {}\n", .{bufId});
+            std.debug.print("Warning: Tried to destroy empty Buffer ID {}\n", .{bufId});
             return;
         }
         const buffer = self.buffers.getPtr(bufId);

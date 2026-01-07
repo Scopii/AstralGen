@@ -13,8 +13,10 @@ pub const Buffer = struct {
     bindlessIndex: u32 = 0,
     state: ResourceState = .{},
 
+    pub const BufId = packed struct { val: u32 };
+
     pub const BufInf = struct {
-        bufId: u32,
+        id: BufId,
         mem: vh.MemUsage,
         dataTyp: type,
         len: u32,

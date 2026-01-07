@@ -1,9 +1,12 @@
 const ResourceState = @import("../vulkan/RenderGraph.zig").ResourceState;
 const ResourceSlot = @import("resources/Resource.zig").ResourceSlot;
+const Texture = @import("resources/Texture.zig").Texture;
+const Buffer = @import("resources/Buffer.zig").Buffer;
 const vh = @import("../vulkan/Helpers.zig");
+const ShaderId = @import("../configs/shaderConfig.zig").ShaderInf.ShaderId;
 
 pub const Pass = struct {
-    shaderIds: []const u8,
+    shaderIds: []const ShaderId,
     bufUses: []const BufferUse = &.{},
     texUses: []const TextureUse = &.{},
     passTyp: PassType,
@@ -20,12 +23,12 @@ pub const Pass = struct {
     };
 
     const computeOnTexData = struct {
-        mainTexId: u32,
+        mainTexId: Texture.TexId,
         workgroups: Dispatch,
     };
 
     const TaskOrMeshData = struct {
-        mainTexId: u32,
+        mainTexId: Texture.TexId,
         colorAtts: []const Attachment,
         depthAtt: ?Attachment = null,
         stencilAtt: ?Attachment = null,
@@ -33,7 +36,7 @@ pub const Pass = struct {
     };
 
     const GraphicsData = struct {
-        mainTexId: u32,
+        mainTexId: Texture.TexId,
         colorAtts: []const Attachment,
         depthAtt: ?Attachment = null,
         stencilAtt: ?Attachment = null,
@@ -84,7 +87,7 @@ pub const Pass = struct {
 };
 
 pub const Attachment = struct {
-    texId: u32,
+    texId: Texture.TexId,
     stage: vh.PipeStage = .TopOfPipe,
     access: vh.PipeAccess = .None,
     layout: vh.ImageLayout = .General,
@@ -94,13 +97,13 @@ pub const Attachment = struct {
         return .{ .stage = self.stage, .access = self.access, .layout = self.layout };
     }
 
-    pub fn create(id: u32, stage: vh.PipeStage, access: vh.PipeAccess, clear: bool) Attachment {
+    pub fn create(id: Texture.TexId, stage: vh.PipeStage, access: vh.PipeAccess, clear: bool) Attachment {
         return .{ .texId = id, .stage = stage, .access = access, .layout = .Attachment, .clear = clear };
     }
 };
 
 pub const TextureUse = struct {
-    texId: u32,
+    texId: Texture.TexId,
     stage: vh.PipeStage = .TopOfPipe,
     access: vh.PipeAccess = .None,
     layout: vh.ImageLayout = .General,
@@ -110,13 +113,13 @@ pub const TextureUse = struct {
         return .{ .stage = self.stage, .access = self.access, .layout = self.layout };
     }
 
-    pub fn create(id: u32, stage: vh.PipeStage, access: vh.PipeAccess, layout: vh.ImageLayout, shaderSlot: ?u8) TextureUse {
+    pub fn create(id: Texture.TexId, stage: vh.PipeStage, access: vh.PipeAccess, layout: vh.ImageLayout, shaderSlot: ?u8) TextureUse {
         return .{ .texId = id, .stage = stage, .access = access, .layout = layout, .shaderSlot = shaderSlot };
     }
 };
 
 pub const BufferUse = struct {
-    bufId: u32,
+    bufId: Buffer.BufId,
     stage: vh.PipeStage = .TopOfPipe,
     access: vh.PipeAccess = .None,
     shaderSlot: ?u8 = null,
@@ -125,7 +128,7 @@ pub const BufferUse = struct {
         return .{ .stage = self.stage, .access = self.access, .layout = .General };
     }
 
-    pub fn create(bufId: u32, stage: vh.PipeStage, access: vh.PipeAccess, shaderSlot: ?u8) BufferUse {
+    pub fn create(bufId: Buffer.BufId, stage: vh.PipeStage, access: vh.PipeAccess, shaderSlot: ?u8) BufferUse {
         return .{ .bufId = bufId, .stage = stage, .access = access, .shaderSlot = shaderSlot };
     }
 };

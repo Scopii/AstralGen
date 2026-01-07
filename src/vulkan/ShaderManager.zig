@@ -37,7 +37,7 @@ pub const ShaderManager = struct {
     pub fn createShaders(self: *ShaderManager, loadedShaders: []LoadedShader) !void {
         for (loadedShaders) |loadedShader| {
             const shaderObj = try ShaderObject.init(self.gpi, loadedShader, self.descLayout);
-            const id = loadedShader.shaderInf.id;
+            const id = loadedShader.shaderInf.id.val;
 
             if (self.shaders.isKeyUsed(id) == true) {
                 self.shaders.getPtr(id).*.deinit(self.gpi);
@@ -47,10 +47,10 @@ pub const ShaderManager = struct {
         }
     }
 
-    pub fn getShaders(self: *ShaderManager, shaderIds: []const u8) [8]ShaderObject {
+    pub fn getShaders(self: *ShaderManager, shaderIds: []const shaderCon.ShaderInf.ShaderId) [8]ShaderObject {
         var shaders: [8]ShaderObject = undefined;
         for (0..shaderIds.len) |i| {
-            shaders[i] = self.shaders.get(shaderIds[i]);
+            shaders[i] = self.shaders.get(shaderIds[i].val);
         }
         return shaders;
     }

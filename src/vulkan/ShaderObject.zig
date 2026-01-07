@@ -9,7 +9,7 @@ pub const ShaderObject = struct {
     stage: vh.ShaderStage,
 
     pub fn init(gpi: vk.VkDevice, shader: LoadedShader, descLayout: vk.VkDescriptorSetLayout) !ShaderObject {
-        const stageEnum = shader.shaderInf.shaderType;
+        const stageEnum = shader.shaderInf.typ;
         const vkStage = vh.getShaderBit(stageEnum);
 
         var flags: vk.VkShaderCreateFlagsEXT = 0;

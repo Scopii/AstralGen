@@ -58,8 +58,10 @@ pub const Texture = struct {
     bindlessIndex: u32 = 0,
     base: TextureBase,
 
+    pub const TexId = packed struct { val: u32 };
+
     pub const TexInf = struct {
-        texId: u32,
+        id: TexId,
         mem: vh.MemUsage,
         typ: vh.TextureType,
         width: u32,

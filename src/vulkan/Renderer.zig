@@ -72,17 +72,17 @@ pub const Renderer = struct {
             }
         }
 
-        var dirtyImgIds: [rc.MAX_WINDOWS]?u32 = .{null} ** rc.MAX_WINDOWS;
+        var dirtyImgIds: [rc.MAX_WINDOWS]?Texture.TexId = .{null} ** rc.MAX_WINDOWS;
 
         for (0..tempWindows.len) |i| {
             const tempWindow = tempWindows[i];
             switch (tempWindow.state) {
                 .needUpdate, .needCreation => {
                     try self.swapMan.createSwapchain(&self.context, .{ .window = tempWindow });
-                    dirtyImgIds[i] = tempWindow.passImgId;
+                    dirtyImgIds[i] = tempWindow.renderTexId;
                 },
                 .needActive, .needInactive => {
-                    self.swapMan.changeState(tempWindow.windowId, if (tempWindow.state == .needActive) true else false);
+                    self.swapMan.changeState(tempWindow.winId, if (tempWindow.state == .needActive) true else false);
                 },
                 .needDelete => self.swapMan.removeSwapchain(&.{tempWindow}),
                 else => std.debug.print("Warning: Window State {s} cant be handled in Renderer\n", .{@tagName(tempWindow.state)}),
@@ -93,29 +93,29 @@ pub const Renderer = struct {
             for (0..dirtyImgIds.len) |i| {
                 if (dirtyImgIds[i] == null) break;
 
-                const gpuId = dirtyImgIds[i].?;
-                const passImg = try self.resMan.getTexturePtr(gpuId);
-                try self.updatePassImage(gpuId, passImg.*);
+                const texId = dirtyImgIds[i].?;
+                const passImg = try self.resMan.getTexturePtr(texId);
+                try self.updatePassImage(texId, passImg.*);
             }
         }
     }
 
-    pub fn updatePassImage(self: *Renderer, gpuId: u32, img: Texture) !void {
+    pub fn updatePassImage(self: *Renderer, texId: Texture.TexId, img: Texture) !void {
         const old = img.base.extent;
-        const new = self.swapMan.getMaxRenderExtent(gpuId);
+        const new = self.swapMan.getMaxRenderExtent(texId);
 
         if (new.height != 0 or new.width != 0) {
             if (new.width != old.width or new.height != old.height) {
                 const imgInf = Texture.TexInf{
-                    .texId = gpuId,
+                    .id = texId,
                     .width = new.width,
                     .height = new.height,
                     .depth = 1,
                     .typ = img.base.texType,
                     .mem = .Gpu,
                 };
-                try self.resMan.replaceTexture(gpuId, imgInf);
-                std.debug.print("Render Image ID {} recreated {}x{} to {}x{}\n", .{ gpuId, old.width, old.height, new.width, new.height });
+                try self.resMan.replaceTexture(texId, imgInf);
+                std.debug.print("Render Image ID {} recreated {}x{} to {}x{}\n", .{ texId, old.width, old.height, new.width, new.height });
             }
         }
     }
@@ -173,7 +173,7 @@ pub const Renderer = struct {
 
     pub fn addShaders(self: *Renderer, loadedShaders: []LoadedShader) !void {
         for (loadedShaders) |loadedShader| {
-            if (self.shaderMan.isShaderIdUsed(loadedShader.shaderInf.id) == true) {
+            if (self.shaderMan.isShaderIdUsed(loadedShader.shaderInf.id.val) == true) {
                 _ = vk.vkDeviceWaitIdle(self.context.gpi);
                 break;
             }

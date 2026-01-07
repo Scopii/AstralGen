@@ -2,6 +2,7 @@ const std = @import("std");
 const sdl = @import("../modules/sdl.zig").c;
 const vk = @import("../modules/vk.zig").c;
 const Window = @import("Window.zig").Window;
+const TexId = @import("../vulkan/resources/Texture.zig").Texture.TexId;
 const KeyEvent = @import("../core/EventManager.zig").KeyEvent;
 const MouseMovement = @import("../core/EventManager.zig").MouseMovement;
 const CreateMapArray = @import("../structures/MapArray.zig").CreateMapArray;
@@ -58,7 +59,7 @@ pub const WindowManager = struct {
         }
     }
 
-    pub fn addWindow(self: *WindowManager, title: [*c]const u8, width: c_int, height: c_int, renderId: u32, xPos: c_int, yPos: c_int) !void {
+    pub fn addWindow(self: *WindowManager, title: [*c]const u8, width: c_int, height: c_int, renderTexId: TexId, xPos: c_int, yPos: c_int) !void {
         const props = sdl.SDL_CreateProperties();
         if (props == 0) {
             std.log.err("SDL_CreateProperties failed: {s}\n", .{sdl.SDL_GetError()});
@@ -82,11 +83,11 @@ pub const WindowManager = struct {
         _ = sdl.SDL_SetWindowRelativeMouseMode(sdlHandle, true);
         const windowId = sdl.SDL_GetWindowID(sdlHandle);
 
-        const window = try Window.init(windowId, sdlHandle, renderId, vk.VkExtent2D{ .width = @intCast(width), .height = @intCast(height) });
+        const window = try Window.init(windowId, sdlHandle, renderTexId, vk.VkExtent2D{ .width = @intCast(width), .height = @intCast(height) });
         self.windows.set(windowId, window);
         try self.changedWindows.append(self.windows.get(windowId));
         self.openWindows += 1;
-        std.debug.print("Window ID {} created to present Render ID {}\n", .{ windowId, renderId });
+        std.debug.print("Window ID {} created to present Render ID {}\n", .{ windowId, renderTexId });
     }
 
     pub fn showErrorBox(_: *WindowManager, title: [:0]const u8, message: [:0]const u8) void {
@@ -99,13 +100,13 @@ pub const WindowManager = struct {
 
     pub fn cleanupWindows(self: *WindowManager) void {
         for (self.changedWindows.slice()) |tempWindow| {
-            const actualWindow = self.windows.getPtr(tempWindow.windowId);
+            const actualWindow = self.windows.getPtr(tempWindow.winId.id);
             switch (tempWindow.state) {
-                .needDelete => self.destroyWindow(actualWindow.windowId),
+                .needDelete => self.destroyWindow(actualWindow.winId),
                 .needUpdate, .needCreation => actualWindow.state = .active,
                 .needActive => actualWindow.state = .active,
                 .needInactive => actualWindow.state = .inactive,
-                else => std.debug.print("WindowManager: Window {} State {s} should not need cleanup\n", .{ tempWindow.windowId, @tagName(tempWindow.state) }),
+                else => std.debug.print("WindowManager: Window {} State {s} should not need cleanup\n", .{ tempWindow.winId, @tagName(tempWindow.state) }),
             }
         }
         self.changedWindows.clear();
@@ -122,10 +123,10 @@ pub const WindowManager = struct {
         }
     }
 
-    fn destroyWindow(self: *WindowManager, windowId: u32) void {
-        const window = self.windows.get(windowId);
+    fn destroyWindow(self: *WindowManager, windowId: Window.WindowId) void {
+        const window = self.windows.get(windowId.id);
         sdl.SDL_DestroyWindow(window.handle);
-        self.windows.removeAtKey(windowId);
+        self.windows.removeAtKey(windowId.id);
     }
 
     pub fn consumeKeyEvents(self: *WindowManager) []KeyEvent {

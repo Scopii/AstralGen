@@ -1,15 +1,18 @@
 const sdl = @import("../modules/sdl.zig").c;
 const vk = @import("../modules/vk.zig").c;
+const TexId = @import("../vulkan/resources/Texture.zig").Texture.TexId;
 
 pub const Window = struct {
     pub const WindowState = enum { active, inactive, needCreation, needUpdate, needDelete, needInactive, needActive };
     handle: *sdl.SDL_Window,
     state: WindowState = .needCreation,
-    passImgId: u32,
+    renderTexId: TexId,
     extent: vk.VkExtent2D,
-    windowId: u32,
+    winId: WindowId,
 
-    pub fn init(windowId: u32, sdlWindow: *sdl.SDL_Window, passImgId: u32, extent: vk.VkExtent2D) !Window {
-        return Window{ .handle = sdlWindow, .passImgId = passImgId, .extent = extent, .windowId = windowId };
+    pub const WindowId = packed struct { id: u32 };
+
+    pub fn init(id: u32, sdlWindow: *sdl.SDL_Window, renderTexId: TexId, extent: vk.VkExtent2D) !Window {
+        return Window{ .handle = sdlWindow, .renderTexId = renderTexId, .extent = extent, .winId = .{ .id = id } };
     }
 };
