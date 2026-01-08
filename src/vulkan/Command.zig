@@ -189,13 +189,14 @@ pub const Command = struct {
         vkFn.vkCmdSetSampleMaskEXT.?(cmd, state.sample.sampling, &sampleMask);
 
         // Depth & Stencil
-        vkFn.vkCmdSetDepthTestEnable.?(cmd, state.depthTest);
-        vkFn.vkCmdSetDepthWriteEnable.?(cmd, state.depthWrite);
         vkFn.vkCmdSetDepthBoundsTestEnable.?(cmd, state.depthBoundsTest);
         vkFn.vkCmdSetDepthBiasEnable.?(cmd, state.depthBias);
-        vkFn.vkCmdSetDepthBias.?(cmd, state.depthValues.constant, state.depthValues.clamp, state.depthValues.slope);
         vkFn.vkCmdSetDepthClampEnableEXT.?(cmd, state.depthClamp);
+
+        vkFn.vkCmdSetDepthTestEnable.?(cmd, state.depthTest);
+        vkFn.vkCmdSetDepthWriteEnable.?(cmd, state.depthWrite);
         vkFn.vkCmdSetDepthCompareOp.?(cmd, state.depthCompare);
+        vkFn.vkCmdSetDepthBias.?(cmd, state.depthValues.constant, state.depthValues.clamp, state.depthValues.slope);
 
         vkFn.vkCmdSetStencilTestEnable.?(cmd, state.stencilTest);
         vkFn.vkCmdSetStencilOp.?(cmd, state.stencilOp[0], state.stencilOp[1], state.stencilOp[2], state.stencilOp[3], state.stencilOp[4]);
@@ -219,23 +220,23 @@ pub const Command = struct {
         const equations = [_]vk.VkColorBlendEquationEXT{blendEquation} ** 8;
         vkFn.vkCmdSetColorBlendEquationEXT.?(cmd, 0, 8, &equations);
 
+        const blendConsts = [_]f32{ state.blendConstants.red, state.blendConstants.green, state.blendConstants.blue, state.blendConstants.alpha };
+        vkFn.vkCmdSetBlendConstants.?(cmd, &blendConsts);
+
         const colWriteMask = state.colorWriteMask;
         const colWriteMasks = [_]vk.VkColorComponentFlags{colWriteMask} ** 8;
         vkFn.vkCmdSetColorWriteMaskEXT.?(cmd, 0, 8, &colWriteMasks);
 
-        const blendConsts = [_]f32{ state.blendConstants.red, state.blendConstants.green, state.blendConstants.blue, state.blendConstants.alpha };
-        vkFn.vkCmdSetBlendConstants.?(cmd, &blendConsts);
-
-        vkFn.vkCmdSetLogicOpEnableEXT.?(cmd, state.logicOp);
-        vkFn.vkCmdSetLogicOpEXT.?(cmd, state.logicOpType);
         vkFn.vkCmdSetAlphaToOneEnableEXT.?(cmd, state.alphaToOne);
         vkFn.vkCmdSetAlphaToCoverageEnableEXT.?(cmd, state.alphaToCoverage);
+        
+        vkFn.vkCmdSetLogicOpEnableEXT.?(cmd, state.logicOp);
+        vkFn.vkCmdSetLogicOpEXT.?(cmd, state.logicOpType);
 
-        // Advanced / Debug / Voxel Optimization
+        // Advanced / Debug
         vkFn.vkCmdSetLineWidth.?(cmd, state.lineWidth);
         vkFn.vkCmdSetConservativeRasterizationModeEXT.?(cmd, state.conservativeRasterMode);
 
-        // Default to 1x1 Shading Rate (No reduction)
         const combinerOps = [_]vk.VkFragmentShadingRateCombinerOpKHR{ state.fragShadingRate.operation, state.fragShadingRate.operation };
         vkFn.vkCmdSetFragmentShadingRateKHR.?(cmd, &.{ .width = state.fragShadingRate.width, .height = state.fragShadingRate.height }, &combinerOps);
     }
