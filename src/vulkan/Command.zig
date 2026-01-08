@@ -195,13 +195,17 @@ pub const Command = struct {
         vkFn.vkCmdSetDepthBiasEnable.?(cmd, state.depthBias);
         vkFn.vkCmdSetDepthBias.?(cmd, state.depthValues.constant, state.depthValues.clamp, state.depthValues.slope);
         vkFn.vkCmdSetDepthClampEnableEXT.?(cmd, state.depthClamp);
+        vkFn.vkCmdSetDepthCompareOp.?(cmd, state.depthCompare);
 
-        vkFn.vkCmdSetStencilTestEnable.?(cmd, state.depthStencilTest);
-        // STENCIL CALLS MISSING
+        vkFn.vkCmdSetStencilTestEnable.?(cmd, state.stencilTest);
+        vkFn.vkCmdSetStencilOp.?(cmd, state.stencilOp[0], state.stencilOp[1], state.stencilOp[2], state.stencilOp[3], state.stencilOp[4]);
+        vkFn.vkCmdSetStencilCompareMask.?(cmd, state.stencilCompare.faceMask, state.stencilCompare.mask);
+        vkFn.vkCmdSetStencilWriteMask.?(cmd, state.stencilWrite.faceMask, state.stencilWrite.mask);
+        vkFn.vkCmdSetStencilReference.?(cmd, state.stencilReference.faceMask, state.stencilReference.mask);
 
         // Color & Blending
         const blendEnable = state.colorBlend;
-        const colorBlendAttachments = [_]vk.VkBool32{ blendEnable, blendEnable, blendEnable, blendEnable, blendEnable, blendEnable, blendEnable, blendEnable };
+        const colorBlendAttachments = [_]vk.VkBool32{blendEnable} ** 8;
         vkFn.vkCmdSetColorBlendEnableEXT.?(cmd, 0, 8, &colorBlendAttachments);
 
         const blendEquation = vk.VkColorBlendEquationEXT{
@@ -212,17 +216,18 @@ pub const Command = struct {
             .dstAlphaBlendFactor = state.colorBlendEquation.dstAlpha,
             .alphaBlendOp = state.colorBlendEquation.alphaOperation,
         };
-        const equations = [_]vk.VkColorBlendEquationEXT{ blendEquation, blendEquation, blendEquation, blendEquation, blendEquation, blendEquation, blendEquation, blendEquation };
+        const equations = [_]vk.VkColorBlendEquationEXT{blendEquation} ** 8;
         vkFn.vkCmdSetColorBlendEquationEXT.?(cmd, 0, 8, &equations);
 
         const colWriteMask = state.colorWriteMask;
-        const colWriteMasks = [_]vk.VkColorComponentFlags{ colWriteMask, colWriteMask, colWriteMask, colWriteMask, colWriteMask, colWriteMask, colWriteMask, colWriteMask };
+        const colWriteMasks = [_]vk.VkColorComponentFlags{colWriteMask} ** 8;
         vkFn.vkCmdSetColorWriteMaskEXT.?(cmd, 0, 8, &colWriteMasks);
 
         const blendConsts = [_]f32{ state.blendConstants.red, state.blendConstants.green, state.blendConstants.blue, state.blendConstants.alpha };
         vkFn.vkCmdSetBlendConstants.?(cmd, &blendConsts);
 
         vkFn.vkCmdSetLogicOpEnableEXT.?(cmd, state.logicOp);
+        vkFn.vkCmdSetLogicOpEXT.?(cmd, state.logicOpType);
         vkFn.vkCmdSetAlphaToOneEnableEXT.?(cmd, state.alphaToOne);
         vkFn.vkCmdSetAlphaToCoverageEnableEXT.?(cmd, state.alphaToCoverage);
 

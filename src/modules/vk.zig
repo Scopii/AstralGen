@@ -37,7 +37,13 @@ pub var vkCmdSetDepthBoundsTestEnable: c.PFN_vkCmdSetDepthBoundsTestEnable = nul
 pub var vkCmdSetDepthBiasEnable: c.PFN_vkCmdSetDepthBiasEnable = null;
 pub var vkCmdSetDepthBias: c.PFN_vkCmdSetDepthBias = null; // Value
 pub var vkCmdSetDepthClampEnableEXT: c.PFN_vkCmdSetDepthClampEnableEXT = null;
+pub var vkCmdSetDepthCompareOp: c.PFN_vkCmdSetDepthCompareOpEXT = null;
+
 pub var vkCmdSetStencilTestEnable: c.PFN_vkCmdSetStencilTestEnable = null;
+pub var vkCmdSetStencilOp: c.PFN_vkCmdSetStencilOp = null;
+pub var vkCmdSetStencilCompareMask: c.PFN_vkCmdSetStencilCompareMask = null;
+pub var vkCmdSetStencilWriteMask: c.PFN_vkCmdSetStencilWriteMask = null;
+pub var vkCmdSetStencilReference: c.PFN_vkCmdSetStencilReference = null;
 
 // Color & Blending State
 pub var vkCmdSetColorBlendEnableEXT: c.PFN_vkCmdSetColorBlendEnableEXT = null;
@@ -45,6 +51,7 @@ pub var vkCmdSetColorBlendEquationEXT: c.PFN_vkCmdSetColorBlendEquationEXT = nul
 pub var vkCmdSetColorWriteMaskEXT: c.PFN_vkCmdSetColorWriteMaskEXT = null;
 pub var vkCmdSetBlendConstants: c.PFN_vkCmdSetBlendConstants = null; // Value
 pub var vkCmdSetLogicOpEnableEXT: c.PFN_vkCmdSetLogicOpEnableEXT = null;
+pub var vkCmdSetLogicOpEXT: c.PFN_vkCmdSetLogicOpEXT = null;
 pub var vkCmdSetAlphaToOneEnableEXT: c.PFN_vkCmdSetAlphaToOneEnableEXT = null;
 pub var vkCmdSetAlphaToCoverageEnableEXT: c.PFN_vkCmdSetAlphaToCoverageEnableEXT = null;
 

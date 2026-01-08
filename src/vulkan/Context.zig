@@ -397,7 +397,13 @@ fn createGPI(alloc: Allocator, gpu: vk.VkPhysicalDevice, families: QueueFamilies
     try loadVkProc(gpi, &vkFn.vkCmdSetDepthBiasEnable, "vkCmdSetDepthBiasEnable");
     try loadVkProc(gpi, &vkFn.vkCmdSetDepthBias, "vkCmdSetDepthBias");
     try loadVkProc(gpi, &vkFn.vkCmdSetDepthClampEnableEXT, "vkCmdSetDepthClampEnableEXT");
+    try loadVkProc(gpi, &vkFn.vkCmdSetDepthCompareOp, "vkCmdSetDepthCompareOp");
+
     try loadVkProc(gpi, &vkFn.vkCmdSetStencilTestEnable, "vkCmdSetStencilTestEnable");
+    try loadVkProc(gpi, &vkFn.vkCmdSetStencilOp, "vkCmdSetStencilOp");
+    try loadVkProc(gpi, &vkFn.vkCmdSetStencilCompareMask, "vkCmdSetStencilCompareMask");
+    try loadVkProc(gpi, &vkFn.vkCmdSetStencilWriteMask, "vkCmdSetStencilWriteMask"); 
+    try loadVkProc(gpi, &vkFn.vkCmdSetStencilReference, "vkCmdSetStencilReference");
 
     // 6. Color & Blending
     try loadVkProc(gpi, &vkFn.vkCmdSetColorBlendEnableEXT, "vkCmdSetColorBlendEnableEXT");
@@ -405,6 +411,7 @@ fn createGPI(alloc: Allocator, gpu: vk.VkPhysicalDevice, families: QueueFamilies
     try loadVkProc(gpi, &vkFn.vkCmdSetColorWriteMaskEXT, "vkCmdSetColorWriteMaskEXT");
     try loadVkProc(gpi, &vkFn.vkCmdSetBlendConstants, "vkCmdSetBlendConstants");
     try loadVkProc(gpi, &vkFn.vkCmdSetLogicOpEnableEXT, "vkCmdSetLogicOpEnableEXT");
+    try loadVkProc(gpi, &vkFn.vkCmdSetLogicOpEXT, "vkCmdSetLogicOpEXT");
     try loadVkProc(gpi, &vkFn.vkCmdSetAlphaToOneEnableEXT, "vkCmdSetAlphaToOneEnableEXT");
     try loadVkProc(gpi, &vkFn.vkCmdSetAlphaToCoverageEnableEXT, "vkCmdSetAlphaToCoverageEnableEXT");
 

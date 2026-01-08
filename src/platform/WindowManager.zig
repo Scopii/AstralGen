@@ -87,7 +87,7 @@ pub const WindowManager = struct {
         self.windows.set(windowId, window);
         try self.changedWindows.append(self.windows.get(windowId));
         self.openWindows += 1;
-        std.debug.print("Window ID {} created to present Render ID {}\n", .{ windowId, renderTexId });
+        std.debug.print("Window ID {} created to present Render ID {}\n", .{ windowId, renderTexId.val });
     }
 
     pub fn showErrorBox(_: *WindowManager, title: [:0]const u8, message: [:0]const u8) void {

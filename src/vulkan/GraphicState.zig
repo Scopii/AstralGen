@@ -24,7 +24,13 @@ pub const GraphicState = struct {
     depthBias: u32 = vk.VK_FALSE,
     depthValues: struct { constant: f32 = 0.0, clamp: f32 = 0.0, slope: f32 = 0.0 } = .{},
     depthClamp: u32 = vk.VK_FALSE,
-    depthStencilTest: u32 = vk.VK_FALSE,
+    depthCompare: u32 = vk.VK_COMPARE_OP_LESS,
+
+    stencilTest: u32 = vk.VK_FALSE,
+    stencilOp: [5]u32 = .{ vk.VK_STENCIL_FACE_FRONT_AND_BACK, vk.VK_STENCIL_OP_KEEP, vk.VK_STENCIL_OP_KEEP, vk.VK_STENCIL_OP_KEEP, vk.VK_COMPARE_OP_ALWAYS },
+    stencilCompare: struct { faceMask: u32 = vk.VK_STENCIL_FACE_FRONT_AND_BACK, mask: u32 = 0xFFFFFFFF } = .{},
+    stencilWrite: struct { faceMask: u32 = vk.VK_STENCIL_FACE_FRONT_AND_BACK, mask: u32 = 0xFFFFFFFF } = .{},
+    stencilReference: struct { faceMask: u32 = vk.VK_STENCIL_FACE_FRONT_AND_BACK, mask: u32 = 0 } = .{},
 
     // // Color & Blending
     colorBlend: u32 = vk.VK_TRUE,
@@ -42,6 +48,8 @@ pub const GraphicState = struct {
     blendConstants: struct { red: f32 = 0.0, green: f32 = 0.0, blue: f32 = 0.0, alpha: f32 = 0.0 } = .{},
 
     logicOp: u32 = vk.VK_FALSE,
+    logicOpType: u32 = vk.VK_LOGIC_OP_COPY,
+
     alphaToOne: u32 = vk.VK_FALSE,
     alphaToCoverage: u32 = vk.VK_FALSE,
 
