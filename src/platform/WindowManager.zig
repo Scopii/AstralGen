@@ -15,58 +15,46 @@ pub const WindowManager = struct {
     mainWindow: ?*Window = null,
     changedWindows: FixedList(Window, MAX_WINDOWS) = .{},
     openWindows: u8 = 0,
-    fullscreen: bool = false,
     appExit: bool = false,
+    windowProps: sdl.SDL_PropertiesID,
 
     inputEvents: FixedList(KeyEvent, 127) = .{},
-    mouseMovements: FixedList(MouseMovement, 510) = .{},
+    mouseMoves: FixedList(MouseMovement, 510) = .{},
 
     pub fn init() !WindowManager {
         if (sdl.SDL_Init(sdl.SDL_INIT_VIDEO) != true) {
             std.log.err("SDL_Init failed: {s}\n", .{sdl.SDL_GetError()});
             return error.SdlInitFailed;
         }
-        return .{};
+
+        const windowProps = sdl.SDL_CreateProperties();
+        if (windowProps == 0) {
+            std.log.err("SDL_CreateProperties failed: {s}\n", .{sdl.SDL_GetError()});
+            return error.WindowInitFailed;
+        }
+        return .{ .windowProps = windowProps };
     }
 
     pub fn deinit(self: *WindowManager) void {
-        for (0..self.windows.getCount()) |_| {
-            const windowPtr = self.windows.getLastPtr();
-            sdl.SDL_DestroyWindow(windowPtr.handle);
-            self.windows.removeLast();
-        }
+        for (self.windows.getElements()) |*win| win.deinit();
+        sdl.SDL_DestroyProperties(self.windowProps);
         sdl.SDL_Quit();
     }
 
     pub fn showAllWindows(self: *WindowManager) void {
-        const windows = self.windows.getElements();
-        for (windows) |*win| {
-            _ = sdl.SDL_ShowWindow(win.handle);
-        }
+        for (self.windows.getElements()) |*win| win.show();
     }
 
     pub fn hideAllWindows(self: *WindowManager) void {
-        const windows = self.windows.getElements();
-        for (windows) |*win| {
-            _ = sdl.SDL_HideWindow(win.handle);
-        }
+        for (self.windows.getElements()) |*win| win.hide();
     }
 
     pub fn showOpacityAllWindows(self: *WindowManager) void {
-        const windows = self.windows.getElements();
-        for (windows) |*win| {
-            _ = sdl.SDL_SetWindowOpacity(win.handle, 1.0);
-        }
+        for (self.windows.getElements()) |*win| win.setOpacity(1.0);
     }
 
     pub fn addWindow(self: *WindowManager, title: [*c]const u8, width: c_int, height: c_int, renderTexId: TexId, xPos: c_int, yPos: c_int) !void {
-        const props = sdl.SDL_CreateProperties();
-        if (props == 0) {
-            std.log.err("SDL_CreateProperties failed: {s}\n", .{sdl.SDL_GetError()});
-            return error.WindowInitFailed;
-        }
-        defer sdl.SDL_DestroyProperties(props);
-
+        const props = self.windowProps;
         const flags = sdl.SDL_WINDOW_VULKAN | sdl.SDL_WINDOW_RESIZABLE | sdl.SDL_WINDOW_HIDDEN;
         _ = sdl.SDL_SetNumberProperty(props, sdl.SDL_PROP_WINDOW_CREATE_FLAGS_NUMBER, @intCast(flags));
         _ = sdl.SDL_SetNumberProperty(props, sdl.SDL_PROP_WINDOW_CREATE_X_NUMBER, @intCast(xPos));
@@ -75,19 +63,14 @@ pub const WindowManager = struct {
         _ = sdl.SDL_SetNumberProperty(props, sdl.SDL_PROP_WINDOW_CREATE_HEIGHT_NUMBER, @intCast(height));
         _ = sdl.SDL_SetStringProperty(props, sdl.SDL_PROP_WINDOW_CREATE_TITLE_STRING, title);
 
-        const sdlHandle = sdl.SDL_CreateWindowWithProperties(props) orelse {
-            std.log.err("SDL_CreateWindowWithProperties failed: {s}\n", .{sdl.SDL_GetError()});
-            return error.WindowInitFailed;
-        };
-        _ = sdl.SDL_SetWindowOpacity(sdlHandle, 0.0);
-        _ = sdl.SDL_SetWindowRelativeMouseMode(sdlHandle, true);
-        const windowId = sdl.SDL_GetWindowID(sdlHandle);
+        const window = try Window.init(props, renderTexId, vk.VkExtent2D{ .width = @intCast(width), .height = @intCast(height) });
+        window.setOpacity(0.0);
+        window.setRelativeMouseMode(true);
 
-        const window = try Window.init(windowId, sdlHandle, renderTexId, vk.VkExtent2D{ .width = @intCast(width), .height = @intCast(height) });
-        self.windows.set(windowId, window);
-        try self.changedWindows.append(self.windows.get(windowId));
+        self.windows.set(window.id.val, window);
+        try self.changedWindows.append(self.windows.get(window.id.val));
         self.openWindows += 1;
-        std.debug.print("Window ID {} created to present Render ID {}\n", .{ windowId, renderTexId.val });
+        std.debug.print("Window ID {} created to present Render ID {}\n", .{ window.id.val, renderTexId.val });
     }
 
     pub fn showErrorBox(_: *WindowManager, title: [:0]const u8, message: [:0]const u8) void {
@@ -101,6 +84,7 @@ pub const WindowManager = struct {
     pub fn cleanupWindows(self: *WindowManager) void {
         for (self.changedWindows.slice()) |tempWindow| {
             const actualWindow = self.windows.getPtr(tempWindow.id.val);
+
             switch (tempWindow.state) {
                 .needDelete => self.destroyWindow(actualWindow.id),
                 .needUpdate, .needCreation => actualWindow.state = .active,
@@ -125,7 +109,7 @@ pub const WindowManager = struct {
 
     fn destroyWindow(self: *WindowManager, windowId: Window.WindowId) void {
         const window = self.windows.get(windowId.val);
-        sdl.SDL_DestroyWindow(window.handle);
+        window.deinit();
         self.windows.removeAtKey(windowId.val);
     }
 
@@ -134,33 +118,28 @@ pub const WindowManager = struct {
         return self.inputEvents.slice();
     }
     pub fn consumeMouseMovements(self: *WindowManager) []MouseMovement {
-        defer self.mouseMovements.clear();
-        return self.mouseMovements.slice();
+        defer self.mouseMoves.clear();
+        return self.mouseMoves.slice();
     }
 
     pub fn resetMainWindowOpacity(self: *WindowManager) void {
         if (self.mainWindow) |window| {
-            const sdlHandle = window.*.handle;
-            if (sdl.SDL_GetWindowOpacity(sdlHandle) == 0) _ = sdl.SDL_SetWindowOpacity(sdlHandle, 1.0);
+            if (window.getOpacity() == 0) window.setOpacity(1.0);
         }
     }
 
     pub fn toggleMainFullscreen(self: *WindowManager) void {
         if (self.mainWindow) |window| {
-            const sdlHandle = window.*.handle;
-
-            if (self.fullscreen == false) {
-                _ = sdl.SDL_SetWindowBordered(sdlHandle, false);
-                _ = sdl.SDL_SetWindowOpacity(sdlHandle, 0.0);
-                _ = sdl.SDL_SetWindowFullscreen(sdlHandle, true);
-                self.fullscreen = true;
+            if (window.isFullscreen() == false) {
+                window.setBordered(false);
+                window.setOpacity(0);
+                window.setFullscreen(true);
             } else {
-                _ = sdl.SDL_SetWindowBordered(sdlHandle, true);
-                _ = sdl.SDL_SetWindowOpacity(sdlHandle, 0.0);
-                _ = sdl.SDL_SetWindowFullscreen(sdlHandle, false);
-                self.fullscreen = false;
+                window.setBordered(true);
+                window.setOpacity(0);
+                window.setFullscreen(false);
             }
-            _ = sdl.SDL_SetWindowOpacity(sdlHandle, 1.0);
+            window.setOpacity(1.0);
         }
     }
 
@@ -172,35 +151,33 @@ pub const WindowManager = struct {
             sdl.SDL_EVENT_WINDOW_FOCUS_LOST => {
                 std.debug.print("Main Window Lost\n", .{});
                 self.mainWindow = null;
-                return; // Should not append window changes
+                return; // Should not append window changes?
             },
             sdl.SDL_EVENT_WINDOW_FOCUS_GAINED => {
                 std.debug.print("Main Window Set\n", .{});
-                self.mainWindow = self.windows.getPtr(event.window.windowID);
-                return; // Should not append window changes
+                self.mainWindow = window;
+                return; // Should not append window changes?
             },
-            sdl.SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED => { // Ran for every pixel change if CPU isnt blocked
+            sdl.SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED => { // Signaled for every pixel change if CPU isnt blocked
                 std.debug.print("Window Pixel changed! \n", .{});
-                return; // Should not append window changes
+                return; // Should not append window changes?
             },
             sdl.SDL_EVENT_WINDOW_CLOSE_REQUESTED => {
-                if (window.state == .active) self.openWindows -= 1;
-                window.state = .needDelete;
+                if (window.getState() == .active) self.openWindows -= 1;
+                window.setState(.needDelete);
             },
             sdl.SDL_EVENT_WINDOW_MINIMIZED => {
                 self.openWindows -= 1;
-                window.state = .needInactive;
+                window.setState(.needInactive);
             },
             sdl.SDL_EVENT_WINDOW_RESTORED => {
-                if (window.state == .active) return;
+                if (window.getState() == .active) return;
                 self.openWindows += 1;
-                window.state = .needActive;
+                window.setState(.needActive);
             },
             sdl.SDL_EVENT_WINDOW_RESIZED => {
-                var newExtent: vk.VkExtent2D = undefined;
-                _ = sdl.SDL_GetWindowSize(window.handle, @ptrCast(&newExtent.width), @ptrCast(&newExtent.height));
-                window.extent = newExtent;
-                window.state = .needUpdate;
+                window.extent = window.getExtent();
+                window.setState(.needUpdate);
             },
             else => {
                 std.debug.print("Window Event {} could not be processed! \n", .{event.type});
@@ -250,8 +227,8 @@ pub const WindowManager = struct {
             => self.processKeyEvent(event),
 
             sdl.SDL_EVENT_MOUSE_MOTION => {
-                const mouseMovement = MouseMovement{ .xChange = event.motion.xrel, .yChange = event.motion.yrel };
-                self.mouseMovements.append(mouseMovement) catch |err| {
+                const mouseMove = MouseMovement{ .xChange = event.motion.xrel, .yChange = event.motion.yrel };
+                self.mouseMoves.append(mouseMove) catch |err| {
                     std.debug.print("WindowManager: mouseMovements append failed {}\n", .{err});
                 };
             },

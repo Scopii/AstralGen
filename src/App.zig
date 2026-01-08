@@ -131,7 +131,7 @@ pub const App = struct {
                 break;
             };
             if (windowMan.inputEvents.len > 0) eventMan.mapKeyEvents(windowMan.consumeKeyEvents());
-            if (windowMan.mouseMovements.len > 0) eventMan.mapMouseMovements(windowMan.consumeMouseMovements());
+            if (windowMan.mouseMoves.len > 0) eventMan.mapMouseMovements(windowMan.consumeMouseMovements());
 
             // Process Window Changes
             if (windowMan.changedWindows.len > 0) {
