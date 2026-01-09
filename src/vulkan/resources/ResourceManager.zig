@@ -87,7 +87,6 @@ pub const ResourceManager = struct {
 
     pub fn queueBufferUpload(self: *ResourceManager, bufInf: Buffer.BufInf, bufId: Buffer.BufId, data: anytype) !void {
         const DataType = @TypeOf(data);
-        const dataSize = @sizeOf(bufInf.dataTyp);
         const typeInfo = @typeInfo(DataType);
 
         // Convert anytype to a byte slice safely
@@ -112,7 +111,7 @@ pub const ResourceManager = struct {
         });
 
         var buffer = try self.getBufferPtr(bufId);
-        buffer.count = @intCast(bytes.len / dataSize);
+        buffer.count = @intCast(bytes.len / bufInf.elementSize);
 
         // Align the offset to 16 bytes for GPU safety
         self.stagingOffset += (bytes.len + 15) & ~@as(u64, 15);
@@ -143,7 +142,7 @@ pub const ResourceManager = struct {
         std.debug.print("Buffer ID {} -> BindlessIndex {} created\n", .{ bufInf.id.val, bindlessIndex });
         if (bufInf.typ == .Indirect) {
             try self.indirectBufIds.append(bufInf.id);
-            std.debug.print("and added to Indirect List\n", .{ });
+            std.debug.print("and added to Indirect List\n", .{});
         } else std.debug.print("\n", .{});
     }
 
@@ -184,15 +183,15 @@ pub const ResourceManager = struct {
             };
 
             // Calculate element count
-            const elementCount = dataBytes.len / bufInf.dataSize;
-            if (dataBytes.len % bufInf.dataSize != 0) {
-                std.debug.print("Error: Data size {} not aligned to element size {}\n", .{ dataBytes.len, bufInf.dataSize });
+            const elementCount = dataBytes.len / bufInf.elementSize;
+            if (dataBytes.len % bufInf.elementSize != 0) {
+                std.debug.print("Error: Data size {} not aligned to element size {}\n", .{ dataBytes.len, bufInf.elementSize });
                 return error.TypeMismatch;
             }
 
             var buffer = try self.getBufferPtr(bufInf.id);
 
-            const pMappedData = buffer.allocInf.pMappedData orelse return error.BufferNotMapped;
+            const pMappedData = buffer.mappedPtr orelse return error.BufferNotMapped;
 
             // Copy bytes
             const destBytes: [*]u8 = @ptrCast(pMappedData);
@@ -215,8 +214,6 @@ pub const ResourceManager = struct {
         oldTex.* = newTex;
         std.debug.print("Texture {} Resized/Replaced at Slot {}\n", .{ texId.val, slotIndex });
     }
-
-    
 
     pub fn destroyTexture(self: *ResourceManager, texId: Texture.TexId) void {
         if (self.textures.isKeyUsed(texId.val) != true) {

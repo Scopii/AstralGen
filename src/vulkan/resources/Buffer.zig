@@ -19,7 +19,7 @@ pub const Buffer = struct {
     pub const BufInf = struct {
         id: BufId,
         mem: vh.MemUsage,
-        dataTyp: type,
+        elementSize: u32,
         len: u32,
         typ: vh.BufferType,
     };

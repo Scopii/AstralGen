@@ -34,7 +34,7 @@ pub const ShaderManager = struct {
         return self.shaders.isKeyUsed(shaderId);
     }
 
-    pub fn createShaders(self: *ShaderManager, loadedShaders: []LoadedShader) !void {
+    pub fn createShaders(self: *ShaderManager, loadedShaders: []const LoadedShader) !void {
         for (loadedShaders) |loadedShader| {
             const shaderObj = try ShaderObject.init(self.gpi, loadedShader, self.descLayout);
             const id = loadedShader.shaderInf.id.val;

@@ -63,19 +63,10 @@ pub const App = struct {
         shaderCompiler.freeFreshShaders();
 
         // RENDERING SET UP
-        try renderer.createBuffer(rc.objectSB);
+        try renderer.createBuffers(rc.buffers);
+        try renderer.createTexture(rc.textures);
+        try renderer.createPasses(rc.passes);
         try renderer.updateBuffer(rc.objectSB, ecs.getObjects());
-        try renderer.createBuffer(rc.cameraUB);
-        try renderer.createBuffer(rc.indirectSB);
-
-        try renderer.createTexture(rc.compTex);
-        try renderer.createTexture(rc.grapTex);
-        try renderer.createTexture(rc.meshTex);
-        try renderer.createTexture(rc.taskTex);
-        try renderer.createTexture(rc.testTex);
-        try renderer.createTexture(rc.depthTex);
-
-        try renderer.createPasses(rc.renderSequence);
 
         return .{
             .cam = Camera.init(.{}),

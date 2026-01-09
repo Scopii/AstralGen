@@ -52,7 +52,7 @@ pub const GpuAllocator = struct {
     }
 
     pub fn allocDefinedBuffer(self: *const GpuAllocator, bufInf: Buffer.BufInf, memUse: vh.MemUsage) !Buffer {
-        const dataSize = @sizeOf(bufInf.dataTyp);
+        const dataSize = bufInf.elementSize;
 
         if (dataSize == 0) {
             std.debug.print("Binding Info has invalid element size\n", .{});

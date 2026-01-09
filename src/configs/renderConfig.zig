@@ -36,10 +36,10 @@ pub const bindingRegistry: []const struct { binding: u32, descType: vk.VkDescrip
     .{ .binding = SAMPLED_IMG_BINDING, .descType = vk.VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, .len = GPU_IMG_MAX },
 };
 
-pub const objectSB = Buffer.create(.{ .id = .{ .val = 1 }, .mem = .Gpu, .typ = .Storage, .len = 100, .dataTyp = Object });
-pub const cameraUB = Buffer.create(.{ .id = .{ .val = 40 }, .mem = .Gpu, .typ = .Storage, .len = 1, .dataTyp = CameraData });
-
-pub const indirectSB = Buffer.create(.{ .id = .{ .val = 41 }, .mem = .Gpu, .typ = .Indirect, .len = 1, .dataTyp = struct { x: u32, y: u32, z: u32, count: u32 } });
+pub const objectSB = Buffer.create(.{ .id = .{ .val = 1 }, .mem = .Gpu, .typ = .Storage, .len = 100, .elementSize = @sizeOf(Object) });
+pub const cameraUB = Buffer.create(.{ .id = .{ .val = 40 }, .mem = .Gpu, .typ = .Storage, .len = 1, .elementSize = @sizeOf(CameraData) });
+pub const indirectSB = Buffer.create(.{ .id = .{ .val = 41 }, .mem = .Gpu, .typ = .Indirect, .len = 1, .elementSize = @sizeOf(struct { x: u32, y: u32, z: u32, count: u32 }) });
+pub const buffers: []const Buffer.BufInf = &.{ objectSB, cameraUB, indirectSB };
 
 pub const compTex = Texture.create(.{ .id = .{ .val = 1 }, .mem = .Gpu, .typ = .Color, .width = 500, .height = 500 });
 pub const grapTex = Texture.create(.{ .id = .{ .val = 2 }, .mem = .Gpu, .typ = .Color, .width = 300, .height = 300 });
@@ -47,6 +47,7 @@ pub const meshTex = Texture.create(.{ .id = .{ .val = 3 }, .mem = .Gpu, .typ = .
 pub const taskTex = Texture.create(.{ .id = .{ .val = 4 }, .mem = .Gpu, .typ = .Color, .width = 1920, .height = 1920 });
 pub const testTex = Texture.create(.{ .id = .{ .val = 5 }, .mem = .Gpu, .typ = .Color, .width = 1920, .height = 1920 });
 pub const depthTex = Texture.create(.{ .id = .{ .val = 11 }, .mem = .Gpu, .typ = .Depth, .width = 1920, .height = 1920 });
+pub const textures: []const Texture.TexInf = &.{ compTex, grapTex, meshTex, taskTex, testTex, depthTex };
 
 pub const computeTest: Pass = .{
     .shaderIds = &.{sc.t1Comp.id},
@@ -125,7 +126,7 @@ pub const indirectCompTest: Pass = .{
 };
 
 const indirectMeshTest: Pass = .{
-    .shaderIds = &.{ sc.indirectTask.id, sc.indirectMesh.id, sc.indirectFrag.id }, 
+    .shaderIds = &.{ sc.indirectTask.id, sc.indirectMesh.id, sc.indirectFrag.id },
     .typ = Pass.taskOrMeshIndirect(.{
         .mainTexId = taskTex.id,
         .indirectBuf = .{ .id = indirectSB.id, .offset = 0 },
@@ -137,4 +138,4 @@ const indirectMeshTest: Pass = .{
     },
 };
 
-pub const renderSequence: []const Pass = &.{ computeTest, graphicsTest, meshTest, taskTest, gridTest, indirectCompTest, indirectMeshTest };
+pub const passes: []const Pass = &.{ computeTest, graphicsTest, meshTest, taskTest, gridTest, indirectCompTest, indirectMeshTest };

@@ -137,7 +137,7 @@ pub const Renderer = struct {
         try self.context.graphicsQ.submit(waitInfos[0..targets.len], cmd.createSubmitInfo(), signalInfos[0 .. targets.len + 1]);
     }
 
-    pub fn addShaders(self: *Renderer, loadedShaders: []LoadedShader) !void {
+    pub fn addShaders(self: *Renderer, loadedShaders: []const LoadedShader) !void {
         for (loadedShaders) |loadedShader| {
             if (self.shaderMan.isShaderIdUsed(loadedShader.shaderInf.id.val) == true) {
                 _ = vk.vkDeviceWaitIdle(self.context.gpi);
@@ -147,16 +147,16 @@ pub const Renderer = struct {
         try self.shaderMan.createShaders(loadedShaders);
     }
 
-    pub fn createBuffer(self: *Renderer, bufInf: Buffer.BufInf) !void {
-        try self.resMan.createBuffer(bufInf);
+    pub fn createBuffers(self: *Renderer, bufInfos: []const Buffer.BufInf) !void {
+        for (bufInfos) |bufInf| try self.resMan.createBuffer(bufInf);
     }
 
     pub fn updateBuffer(self: *Renderer, bufInf: Buffer.BufInf, data: anytype) !void {
         try self.resMan.updateBuffer(bufInf, data);
     }
 
-    pub fn createTexture(self: *Renderer, texInf: Texture.TexInf) !void {
-        try self.resMan.createTexture(texInf);
+    pub fn createTexture(self: *Renderer, texInfos: []const Texture.TexInf) !void {
+        for (texInfos) |texInf| try self.resMan.createTexture(texInf);
     }
 };
 
