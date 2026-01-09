@@ -35,20 +35,16 @@ pub const Renderer = struct {
         const alloc = memoryMan.getAllocator();
         const context = try Context.init(alloc);
         const resMan = try ResourceManager.init(alloc, &context);
-        const renderGraph = try RenderGraph.init(alloc, &context, &resMan);
-        const scheduler = try Scheduler.init(&context, rc.MAX_IN_FLIGHT);
-        const shaderMan = try ShaderManager.init(alloc, &context, &resMan);
-        const swapMan = try SwapchainManager.init(alloc, &context);
 
         return .{
             .alloc = alloc,
             .arenaAlloc = memoryMan.getGlobalArena(),
             .context = context,
             .resMan = resMan,
-            .renderGraph = renderGraph,
-            .shaderMan = shaderMan,
-            .scheduler = scheduler,
-            .swapMan = swapMan,
+            .renderGraph = try RenderGraph.init(alloc, &context, &resMan),
+            .shaderMan = try ShaderManager.init(alloc, &context, &resMan),
+            .scheduler = try Scheduler.init(&context, rc.MAX_IN_FLIGHT),
+            .swapMan = try SwapchainManager.init(alloc, &context),
             .passes = std.array_list.Managed(Pass).init(alloc),
         };
     }
