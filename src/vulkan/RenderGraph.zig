@@ -8,7 +8,7 @@ const ShaderObject = @import("ShaderObject.zig").ShaderObject;
 const ShaderManager = @import("ShaderManager.zig").ShaderManager;
 const CmdManager = @import("CmdManager.zig").CmdManager;
 const PushConstants = @import("resources/Resource.zig").PushConstants;
-const SwapchainManager = @import("SwapchainManager.zig");
+const Swapchain = @import("Swapchain.zig").Swapchain;
 const Command = @import("Command.zig").Command;
 const vh = @import("Helpers.zig");
 const RendererData = @import("../App.zig").RendererData;
@@ -53,8 +53,7 @@ pub const RenderGraph = struct {
         frameInFlight: u8,
         resMan: *ResourceManager,
         rendererData: RendererData,
-        targets: []const u32,
-        swapchainMap: *SwapchainManager.SwapchainMap,
+        targets: []const *Swapchain,
         passes: []Pass,
         shaderMan: *ShaderManager,
     ) !Command {
@@ -73,7 +72,7 @@ pub const RenderGraph = struct {
             try self.recordPass(&cmd, pass, rendererData, shaders, resMan);
         }
 
-        try self.recordSwapchainBlits(&cmd, targets, swapchainMap, resMan);
+        try self.recordSwapchainBlits(&cmd, targets, resMan);
         try cmd.endRecording();
 
         return cmd;
@@ -242,31 +241,22 @@ pub const RenderGraph = struct {
         cmd.endRendering();
     }
 
-    pub fn recordSwapchainBlits(self: *RenderGraph, cmd: *const Command, targets: []const u32, swapchainMap: *SwapchainManager.SwapchainMap, resMan: *ResourceManager) !void {
+    pub fn recordSwapchainBlits(self: *RenderGraph, cmd: *const Command, swapchains: []const *Swapchain,  resMan: *ResourceManager) !void {
         // Render Image and Swapchain Preperations
-        for (targets) |index| {
-            const swapchain = swapchainMap.getPtrAtIndex(index);
+        for (swapchains) |swapchain| {
             const renderTex = try resMan.getTexturePtr(swapchain.renderTexId);
             try self.imageBarrierIfNeeded(&renderTex.base, .{ .stage = .Transfer, .access = .TransferRead, .layout = .TransferSrc });
-
-            const presentTex = &swapchain.textures[swapchain.curIndex];
-            try self.imageBarrierIfNeeded(presentTex, .{ .stage = .Transfer, .access = .TransferWrite, .layout = .TransferDst });
+            try self.imageBarrierIfNeeded(&swapchain.textures[swapchain.curIndex], .{ .stage = .Transfer, .access = .TransferWrite, .layout = .TransferDst });
         }
         self.bakeBarriers(cmd);
-
         // Blits
-        for (targets) |index| {
-            const swapchain = swapchainMap.getPtrAtIndex(index);
-            const extent = vk.VkExtent3D{ .height = swapchain.extent.height, .width = swapchain.extent.width, .depth = 1 };
+        for (swapchains) |swapchain| {
             const renderTex = try resMan.getTexturePtr(swapchain.renderTexId);
-            cmd.copyImageToImage(renderTex.base.img, renderTex.base.extent, swapchain.textures[swapchain.curIndex].img, extent, rc.RENDER_IMG_STRETCH);
+            cmd.copyImageToImage(renderTex.base.img, renderTex.base.extent, swapchain.getCurTexture().img, swapchain.getExtent3D(), rc.RENDER_IMG_STRETCH);
         }
-
         // Swapchain Presentation Barriers
-        for (targets) |index| {
-            const swapchain = swapchainMap.getPtrAtIndex(index);
-            const presentTex = &swapchain.textures[swapchain.curIndex];
-            try self.imageBarrierIfNeeded(presentTex, .{ .stage = .BotOfPipe, .access = .None, .layout = .PresentSrc });
+        for (swapchains) |swapchain| {
+            try self.imageBarrierIfNeeded(swapchain.getCurTexture(), .{ .stage = .BotOfPipe, .access = .None, .layout = .PresentSrc });
         }
         self.bakeBarriers(cmd);
     }

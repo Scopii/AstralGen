@@ -3,22 +3,6 @@ const vk = @import("../modules/vk.zig").c;
 const TexId = @import("../vulkan/resources/Texture.zig").Texture.TexId;
 const std = @import("std");
 
-pub const WindowOLD = struct {
-    pub const WindowState = enum { active, inactive, needCreation, needUpdate, needDelete, needInactive, needActive };
-    handle: *sdl.SDL_Window,
-    state: WindowState = .needCreation,
-    renderTexId: TexId,
-    extent: vk.VkExtent2D,
-    id: WindowId,
-
-    pub const WindowId = packed struct { val: u32 };
-
-    pub fn init(id: u32, sdlWindow: *sdl.SDL_Window, renderTexId: TexId, extent: vk.VkExtent2D) !Window {
-        return Window{ .handle = sdlWindow, .renderTexId = renderTexId, .extent = extent, .id = .{ .val = id } };
-    }
-};
-
-
 pub const Window = struct {
     pub const WindowState = enum { active, inactive, needCreation, needUpdate, needDelete, needInactive, needActive };
     handle: *sdl.SDL_Window,
@@ -26,16 +10,17 @@ pub const Window = struct {
     renderTexId: TexId,
     extent: vk.VkExtent2D,
     id: WindowId,
+    resizeTex: bool,
 
     pub const WindowId = packed struct { val: u32 };
 
-    pub fn init(windowProps: sdl.SDL_PropertiesID, renderTexId: TexId, extent: vk.VkExtent2D) !Window {
+    pub fn init(windowProps: sdl.SDL_PropertiesID, renderTexId: TexId, extent: vk.VkExtent2D, resizeTex: bool) !Window {
         const winHandle = sdl.SDL_CreateWindowWithProperties(windowProps) orelse {
             std.log.err("SDL_CreateWindowWithProperties failed: {s}\n", .{sdl.SDL_GetError()});
             return error.WindowInitFailed;
         };
         const windowId = sdl.SDL_GetWindowID(winHandle);
-        return Window{ .handle = winHandle, .renderTexId = renderTexId, .extent = extent, .id = .{ .val = windowId } };
+        return Window{ .handle = winHandle, .renderTexId = renderTexId, .extent = extent, .id = .{ .val = windowId }, .resizeTex = resizeTex };
     }
 
     pub fn deinit(self: *const Window) void {
@@ -74,7 +59,22 @@ pub const Window = struct {
         _ = sdl.SDL_SetWindowRelativeMouseMode(self.handle, val);
     }
 
-    pub fn setFullscreen(self: *Window, val: bool) void {
+    pub fn setFullscreenExclusive(self: *Window, val: bool) void {
+        const displayID = sdl.SDL_GetDisplayForWindow(self.handle);
+        var closestMode: sdl.SDL_DisplayMode = undefined;
+
+        const fullscreenMode = sdl.SDL_GetDesktopDisplayMode(displayID);
+        if (fullscreenMode == null) {
+            std.log.err("Failed to get display mode: {s}", .{sdl.SDL_GetError()});
+            return;
+        }
+        _ = sdl.SDL_GetClosestFullscreenDisplayMode(displayID, fullscreenMode.*.w, fullscreenMode.*.h, 0.0, true, &closestMode);
+        _ = sdl.SDL_SetWindowFullscreenMode(self.handle, &closestMode);
+        _ = sdl.SDL_SetWindowFullscreen(self.handle, val);
+    }
+
+    pub fn setFullscreenBorderless(self: *Window, val: bool) void {
+        _ = sdl.SDL_SetWindowFullscreenMode(self.handle, null);
         _ = sdl.SDL_SetWindowFullscreen(self.handle, val);
     }
 

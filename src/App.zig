@@ -98,10 +98,10 @@ pub const App = struct {
     }
 
     pub fn initWindows(self: *App) !void {
-        try self.windowMan.addWindow("Task", 16 * 52, 9 * 52, rc.taskTex.id, 120, 50);
-        try self.windowMan.addWindow("Mesh", 16 * 52, 9 * 52, rc.meshTex.id, 120, 550);
-        try self.windowMan.addWindow("Compute", 16 * 52, 9 * 52, rc.compTex.id, 960, 50);
-        try self.windowMan.addWindow("Graphics", 16 * 52, 9 * 52, rc.grapTex.id, 960, 550);
+        try self.windowMan.addWindow("Task", 16 * 52, 9 * 52, rc.taskTex.id, 120, 50, true);
+        try self.windowMan.addWindow("Mesh", 16 * 52, 9 * 52, rc.meshTex.id, 120, 550, true);
+        try self.windowMan.addWindow("Compute", 16 * 52, 9 * 52, rc.compTex.id, 960, 50, true);
+        try self.windowMan.addWindow("Graphics", 16 * 52, 9 * 52, rc.grapTex.id, 960, 550, true);
     }
 
     pub fn run(self: *App) !void {

@@ -134,6 +134,22 @@ pub const Swapchain = struct {
         alloc.free(self.imgRdySems);
         alloc.free(self.renderDoneSems);
     }
+
+    pub fn acquireNextImage(self: *Swapchain, gpi: vk.VkDevice, frameInFlight: u8) vk.VkResult {
+        return vk.vkAcquireNextImageKHR(gpi, self.handle, 0, self.imgRdySems[frameInFlight], null, &self.curIndex);
+    }
+
+    pub fn getCurTexture(self: *Swapchain) *TextureBase {
+        return &self.textures[self.curIndex];
+    }
+
+    pub fn getExtent2D(self: *Swapchain) vk.VkExtent2D {
+        return vk.VkExtent2D{ .height = self.extent.height, .width = self.extent.width};
+    }
+
+    pub fn getExtent3D(self: *Swapchain) vk.VkExtent3D {
+        return vk.VkExtent3D{ .height = self.extent.height, .width = self.extent.width, .depth = 1};
+    }
 };
 
 fn pickExtent(caps: *const vk.VkSurfaceCapabilitiesKHR, curExtent: vk.VkExtent2D) vk.VkExtent2D {

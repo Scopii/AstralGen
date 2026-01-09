@@ -53,7 +53,7 @@ pub const WindowManager = struct {
         for (self.windows.getElements()) |*win| win.setOpacity(1.0);
     }
 
-    pub fn addWindow(self: *WindowManager, title: [*c]const u8, width: c_int, height: c_int, renderTexId: TexId, xPos: c_int, yPos: c_int) !void {
+    pub fn addWindow(self: *WindowManager, title: [*c]const u8, width: c_int, height: c_int, renderTexId: TexId, xPos: c_int, yPos: c_int, resizeTex: bool) !void {
         const props = self.windowProps;
         const flags = sdl.SDL_WINDOW_VULKAN | sdl.SDL_WINDOW_RESIZABLE | sdl.SDL_WINDOW_HIDDEN;
         _ = sdl.SDL_SetNumberProperty(props, sdl.SDL_PROP_WINDOW_CREATE_FLAGS_NUMBER, @intCast(flags));
@@ -63,7 +63,7 @@ pub const WindowManager = struct {
         _ = sdl.SDL_SetNumberProperty(props, sdl.SDL_PROP_WINDOW_CREATE_HEIGHT_NUMBER, @intCast(height));
         _ = sdl.SDL_SetStringProperty(props, sdl.SDL_PROP_WINDOW_CREATE_TITLE_STRING, title);
 
-        const window = try Window.init(props, renderTexId, vk.VkExtent2D{ .width = @intCast(width), .height = @intCast(height) });
+        const window = try Window.init(props, renderTexId, vk.VkExtent2D{ .width = @intCast(width), .height = @intCast(height) }, resizeTex);
         window.setOpacity(0.0);
         window.setRelativeMouseMode(true);
 
@@ -133,11 +133,11 @@ pub const WindowManager = struct {
             if (window.isFullscreen() == false) {
                 window.setBordered(false);
                 window.setOpacity(0);
-                window.setFullscreen(true);
+                window.setFullscreenBorderless(true);
             } else {
                 window.setBordered(true);
                 window.setOpacity(0);
-                window.setFullscreen(false);
+                window.setFullscreenBorderless(false);
             }
             window.setOpacity(1.0);
         }

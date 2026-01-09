@@ -208,12 +208,15 @@ pub const ResourceManager = struct {
         const slotIndex = oldTex.bindlessIndex;
 
         self.gpuAlloc.freeTexture(oldTex.*);
-        const newTex = try self.gpuAlloc.allocTexture(nexTexInf, .Gpu);
+        var newTex = try self.gpuAlloc.allocTexture(nexTexInf, .Gpu);
+        newTex.bindlessIndex = slotIndex;
         try self.descMan.updateTextureDescriptor(newTex.base.view, rc.STORAGE_IMG_BINDING, slotIndex);
 
         oldTex.* = newTex;
         std.debug.print("Texture {} Resized/Replaced at Slot {}\n", .{ texId.val, slotIndex });
     }
+
+    
 
     pub fn destroyTexture(self: *ResourceManager, texId: Texture.TexId) void {
         if (self.textures.isKeyUsed(texId.val) != true) {
