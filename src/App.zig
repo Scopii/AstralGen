@@ -13,6 +13,7 @@ const Camera = @import("core/Camera.zig").Camera;
 const CameraData = @import("core/Camera.zig").CameraData;
 const shaderCon = @import("configs/shaderConfig.zig");
 const rc = @import("configs/renderConfig.zig");
+const ic = @import("configs/inputConfig.zig");
 const FixedList = @import("structures/FixedList.zig").FixedList;
 const Window = @import("platform/Window.zig").Window;
 
@@ -121,19 +122,20 @@ pub const App = struct {
                 std.log.err("Error in pollEvents(): {}", .{err});
                 break;
             };
+
             if (windowMan.inputEvents.len > 0) eventMan.mapKeyEvents(windowMan.consumeKeyEvents());
-            if (windowMan.mouseMoves.len > 0) eventMan.mapMouseMovements(windowMan.consumeMouseMovements());
+            if (windowMan.mouseMoveX != 0 or windowMan.mouseMoveY != 0) {
+                // Handle Mouse Input
+                cam.rotate(windowMan.mouseMoveX, windowMan.mouseMoveY);
+                if (ic.MOUSE_MOVEMENT_INFO == true) std.debug.print("Mouse Total Movement x:{} y:{}\n", .{ windowMan.mouseMoveX, windowMan.mouseMoveY });
+                windowMan.mouseMoveX = 0;
+                windowMan.mouseMoveY = 0;
+            }
 
             // Process Window Changes
             if (windowMan.changedWindows.len > 0) {
                 try renderer.updateWindowStates(windowMan.getChangedWindows());
                 windowMan.cleanupWindows();
-            }
-
-            // Handle Mouse Input
-            if (eventMan.mouseMoved() == true) {
-                cam.rotate(self.eventMan.mouseMoveX, self.eventMan.mouseMoveY);
-                eventMan.resetMouseChange();
             }
 
             // Close Or Idle

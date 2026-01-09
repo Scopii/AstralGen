@@ -2,7 +2,7 @@ const std = @import("std");
 const CreateMapArray = @import("../structures/MapArray.zig").CreateMapArray;
 const FixedList = @import("../structures/FixedList.zig").FixedList;
 
-const inputCon = @import("../configs/inputConfig.zig");
+const ic = @import("../configs/inputConfig.zig");
 const AppEvent = @import("../configs/appConfig.zig").AppEvent;
 
 pub const KeyState = enum { pressed, released };
@@ -23,8 +23,6 @@ pub const SDL_MOUSE_MAX = 24;
 pub const EventManager = struct {
     keyStates: CreateMapArray(KeyState, SDL_KEY_MAX + SDL_MOUSE_MAX, c_uint, SDL_KEY_MAX + SDL_MOUSE_MAX, 0) = .{}, // 512 SDL Keys, 24 for Mouse
     appEvents: FixedList(AppEvent, 127) = .{},
-    mouseMoveX: f32 = 0,
-    mouseMoveY: f32 = 0,
 
     pub fn mapKeyEvents(self: *EventManager, keyEvents: []KeyEvent) void {
         for (keyEvents) |keyEvent| {
@@ -33,29 +31,13 @@ pub const EventManager = struct {
                 continue;
             }
             self.keyStates.set(keyEvent.key, if (keyEvent.event == .pressed) .pressed else .released);
-
-            if (inputCon.KEY_EVENT_INFO == true) std.debug.print("Key {} pressed \n", .{keyEvent.key});
+            if (ic.KEY_EVENT_INFO == true) std.debug.print("Key {} pressed \n", .{keyEvent.key});
         }
-        if (inputCon.KEY_EVENT_INFO == true) std.debug.print("KeyStates {}\n", .{self.keyStates.count});
-    }
-
-    pub fn mapMouseMovements(self: *EventManager, movements: []MouseMovement) void {
-        for (movements) |movement| {
-            self.mouseMoveX += movement.xChange;
-            self.mouseMoveY += movement.yChange;
-
-            if (inputCon.MOUSE_MOVEMENT_INFO == true) std.debug.print("Mouse Moved x:{} y:{}\n", .{ movement.xChange, movement.yChange });
-        }
-        if (inputCon.MOUSE_MOVEMENT_INFO == true)
-            std.debug.print("Mouse Total Movement x:{} y:{}, processed {} movements\n", .{ self.mouseMoveX, self.mouseMoveY, movements.len });
-    }
-
-    pub fn mouseMoved(self: *EventManager) bool {
-        return if (self.mouseMoveX != 0 or self.mouseMoveY != 0) true else false;
+        if (ic.KEY_EVENT_INFO == true) std.debug.print("KeyStates {}\n", .{self.keyStates.count});
     }
 
     pub fn getAppEvents(self: *EventManager) []AppEvent {
-        for (inputCon.keyMap) |assignment| {
+        for (ic.keyMap) |assignment| {
             const actualKey = switch (assignment.device) {
                 .keyboard => assignment.key,
                 .mouse => assignment.key + SDL_KEY_MAX,
@@ -82,8 +64,4 @@ pub const EventManager = struct {
         self.appEvents.clear();
     }
 
-    pub fn resetMouseChange(self: *EventManager) void {
-        self.mouseMoveX = 0;
-        self.mouseMoveY = 0;
-    }
 };

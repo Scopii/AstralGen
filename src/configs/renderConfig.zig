@@ -108,7 +108,7 @@ const gridTest: Pass = .{
     .typ = Pass.taskOrMesh(.{
         .mainTexId = taskTex.id,
         .workgroups = .{ .x = 1, .y = 1, .z = 1 },
-        .colorAtts = &.{Attachment.init(taskTex.id, .ColorAtt, .ColorAttWrite, false)},
+        .colorAtts = &.{Attachment.init(taskTex.id, .ColorAtt, .ColorAttWrite, true)},
     }),
     .bufUses = &.{
         BufferUse.init(cameraUB.id, .TaskShader, .ShaderRead, 0),

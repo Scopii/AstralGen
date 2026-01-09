@@ -19,7 +19,8 @@ pub const WindowManager = struct {
     windowProps: sdl.SDL_PropertiesID,
 
     inputEvents: FixedList(KeyEvent, 127) = .{},
-    mouseMoves: FixedList(MouseMovement, 510) = .{},
+    mouseMoveX: f32 = 0,
+    mouseMoveY: f32 = 0,
 
     pub fn init() !WindowManager {
         if (sdl.SDL_Init(sdl.SDL_INIT_VIDEO) != true) {
@@ -227,10 +228,8 @@ pub const WindowManager = struct {
             => self.processKeyEvent(event),
 
             sdl.SDL_EVENT_MOUSE_MOTION => {
-                const mouseMove = MouseMovement{ .xChange = event.motion.xrel, .yChange = event.motion.yrel };
-                self.mouseMoves.append(mouseMove) catch |err| {
-                    std.debug.print("WindowManager: mouseMovements append failed {}\n", .{err});
-                };
+                self.mouseMoveX += event.motion.xrel;
+                self.mouseMoveY += event.motion.yrel;
             },
             else => {},
         }
