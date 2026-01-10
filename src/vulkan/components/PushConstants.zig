@@ -10,7 +10,7 @@ pub const PushConstants = extern struct {
     deltaTime: f32 = 0,
     width: u32 = 0,
     height: u32 = 0,
-    resourceSlots: [14]ResourceSlot = undefined, 
+    resourceSlots: [14]ResourceSlot = undefined,
 
     pub fn init(resMan: *ResourceManager, pass: Pass, frameData: FrameData) !PushConstants {
         var pcs = PushConstants{ .runTime = frameData.runTime, .deltaTime = frameData.deltaTime };
@@ -23,7 +23,7 @@ pub const PushConstants = extern struct {
 
             if (shaderSlot) |slot| {
                 if (mask[slot.val] == false) {
-                    resourceSlots[slot.val] = resMan.getBufferResourceSlot(bufUse.bufId);
+                    resourceSlots[slot.val] = try resMan.getBufferResourceSlot(bufUse.bufId);
                     mask[slot.val] = true;
                 } else std.debug.print("Pass Shader Slot {} already used\n", .{slot.val});
             }
@@ -34,7 +34,7 @@ pub const PushConstants = extern struct {
 
             if (shaderSlot) |slot| {
                 if (mask[slot.val] == false) {
-                    resourceSlots[slot.val] = resMan.getTextureResourceSlot(texUse.texId);
+                    resourceSlots[slot.val] = try resMan.getTextureResourceSlot(texUse.texId);
                     mask[slot.val] = true;
                 } else std.debug.print("Pass Shader Slot {} already used\n", .{slot.val});
             }
