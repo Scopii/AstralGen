@@ -102,9 +102,12 @@ pub const Renderer = struct {
 
     pub fn createPasses(self: *Renderer, passes: []const Pass) !void {
         for (passes) |pass| {
-            if (true == true) { //self.shaderMan.isPassValid(pass)
+            if (self.shaderMan.isPassValid(pass) == true) {
                 try self.passes.append(pass);
-            } else std.debug.print("Error: Pass ShaderLayout does not match Pass Type -> not appended\n", .{});
+            } else {
+                std.debug.print("Error: Pass ShaderLayout does not match Pass Type -> not appended\n", .{});
+                return error.PassNotValid;
+            }
         }
     }
 
