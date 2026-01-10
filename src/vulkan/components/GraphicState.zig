@@ -1,9 +1,4 @@
-const vk = @import("../modules/vk.zig").c;
-const vkFn = @import("../modules/vk.zig");
-const ResourceManager = @import("resources/ResourceManager.zig").ResourceManager;
-const ShaderObject = @import("ShaderObject.zig").ShaderObject;
-const PendingTransfer = @import("resources/ResourceManager.zig").PendingTransfer;
-const vh = @import("Helpers.zig");
+const vk = @import("../../modules/vk.zig").c;
 
 pub const GraphicState = struct {
     // Rasterization & Geometry

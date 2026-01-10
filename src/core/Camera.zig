@@ -1,6 +1,6 @@
+const inputCon = @import("../configs/inputConfig.zig");
 const std = @import("std");
 const zm = @import("zmath");
-const inputCon = @import("../configs/inputConfig.zig");
 
 const M_PI = 3.14159; //3.1415927
 const TWO_PI = 2 * M_PI;

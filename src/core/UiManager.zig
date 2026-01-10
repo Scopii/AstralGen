@@ -1,7 +1,8 @@
-const std = @import("std");
-const Allocator = std.mem.Allocator;
-const zm = @import("zmath");
 const CreateMapArray = @import("../structures/MapArray.zig").CreateMapArray;
+const Allocator = std.mem.Allocator;
+const std = @import("std");
+const zm = @import("zmath");
+
 
 pub const Alignment = enum { left, right, top, bot, center, topRight, topLeft, botRight, botLeft, none };
 pub const Ruleset = enum { rightRow, leftRow, topColumn, bottomColumn, none };

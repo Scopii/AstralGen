@@ -1,10 +1,5 @@
-const std = @import("std");
-const vk = @import("../modules/vk.zig").c;
-const vkFn = @import("../modules/vk.zig");
-const sdl = @import("../modules/sdl.zig").c;
-const Allocator = std.mem.Allocator;
-const appCon = @import("../configs/appConfig.zig");
-const vh = @import("Helpers.zig");
+const vk = @import("../../modules/vk.zig").c;
+const vh = @import("../systems/Helpers.zig");
 
 pub const Queue = struct {
     handle: vk.VkQueue = undefined,
@@ -12,7 +7,6 @@ pub const Queue = struct {
     pub fn init(gpi: vk.VkDevice, family: u32, index: u32) Queue {
         var queue: vk.VkQueue = undefined;
         vk.vkGetDeviceQueue(gpi, family, index, &queue);
-
         return .{ .handle = queue };
     }
 

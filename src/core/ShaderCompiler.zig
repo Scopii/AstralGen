@@ -1,7 +1,8 @@
-const std = @import("std");
-const Allocator = std.mem.Allocator;
+
 const sc = @import("../configs/shaderConfig.zig");
+const Allocator = std.mem.Allocator;
 const ShaderInf = sc.ShaderInf;
+const std = @import("std");
 
 pub const LoadedShader = struct {
     const alignedShader = []align(@alignOf(u32)) u8;

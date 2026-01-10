@@ -1,10 +1,9 @@
-const std = @import("std");
-const vk = @import("../modules/vk.zig").c;
-const Allocator = std.mem.Allocator;
+const Command = @import("../components/Command.zig").Command;
 const Context = @import("Context.zig").Context;
-const ResourceManager = @import("resources/ResourceManager.zig").ResourceManager;
+const vk = @import("../../modules/vk.zig").c;
+const Allocator = std.mem.Allocator;
 const vh = @import("Helpers.zig");
-const Command = @import("Command.zig").Command;
+const std = @import("std");
 
 pub const CmdManager = struct {
     alloc: Allocator,
@@ -15,11 +14,8 @@ pub const CmdManager = struct {
     pub fn init(alloc: Allocator, context: *const Context, maxInFlight: u32) !CmdManager {
         const gpi = context.gpi;
         const pool = try createCmdPool(gpi, context.families.graphics);
-
         const cmds = try alloc.alloc(Command, maxInFlight);
-        for (0..maxInFlight) |i| {
-            cmds[i] = try Command.init(try createCmd(gpi, pool, vk.VK_COMMAND_BUFFER_LEVEL_PRIMARY));
-        }
+        for (0..maxInFlight) |i| cmds[i] = try Command.init(try createCmd(gpi, pool, vk.VK_COMMAND_BUFFER_LEVEL_PRIMARY));
 
         return .{
             .alloc = alloc,

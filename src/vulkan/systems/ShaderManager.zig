@@ -1,13 +1,13 @@
-const std = @import("std");
-const vk = @import("../modules/vk.zig").c;
-const Allocator = std.mem.Allocator;
-const shaderCon = @import("../configs/shaderConfig.zig");
+const CreateMapArray = @import("../../structures/MapArray.zig").CreateMapArray;
+const ShaderObject = @import("../components/ShaderObject.zig").ShaderObject;
+const LoadedShader = @import("../../core/ShaderCompiler.zig").LoadedShader;
+const ResourceManager = @import("ResourceManager.zig").ResourceManager;
+const shaderCon = @import("../../configs/shaderConfig.zig");
+const Pass = @import("../components/Pass.zig").Pass;
 const Context = @import("Context.zig").Context;
-const ResourceManager = @import("resources/ResourceManager.zig").ResourceManager;
-const CreateMapArray = @import("../structures/MapArray.zig").CreateMapArray;
-const LoadedShader = @import("../core/ShaderCompiler.zig").LoadedShader;
-const ShaderObject = @import("ShaderObject.zig").ShaderObject;
-const Pass = @import("Pass.zig").Pass;
+const vk = @import("../../modules/vk.zig").c;
+const Allocator = std.mem.Allocator;
+const std = @import("std");
 
 pub const ShaderManager = struct {
     alloc: Allocator,

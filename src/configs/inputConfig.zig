@@ -1,5 +1,6 @@
-const sdl = @import("../modules/sdl.zig").c;
 const KeyMapping = @import("../core/EventManager.zig").KeyMapping;
+const sdl = @import("../modules/sdl.zig").c;
+
 
 pub const MOUSE_MOVEMENT_INFO = false;
 pub const KEY_EVENT_INFO = false;

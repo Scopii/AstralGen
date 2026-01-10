@@ -1,21 +1,17 @@
-// Imports
-const std = @import("std");
 const WindowManager = @import("platform/WindowManager.zig").WindowManager;
-const MemoryManager = @import("core/MemoryManager.zig").MemoryManager;
-const Renderer = @import("vulkan/Renderer.zig").Renderer;
-const EventManager = @import("core/EventManager.zig").EventManager;
-const TimeManager = @import("core/TimeManager.zig").TimeManager;
 const ShaderCompiler = @import("core/ShaderCompiler.zig").ShaderCompiler;
+const MemoryManager = @import("core/MemoryManager.zig").MemoryManager;
 const EntityManager = @import("ecs/EntityManager.zig").EntityManager;
-const UiManager = @import("core/UiManager.zig").UiManager;
+const EventManager = @import("core/EventManager.zig").EventManager;
+const Renderer = @import("vulkan/systems/Renderer.zig").Renderer;
+const TimeManager = @import("core/TimeManager.zig").TimeManager;
 const RNGenerator = @import("core/RNGenerator.zig").RNGenerator;
-const Camera = @import("core/Camera.zig").Camera;
-const CameraData = @import("core/Camera.zig").CameraData;
 const shaderCon = @import("configs/shaderConfig.zig");
+const Window = @import("platform/Window.zig").Window;
+const Camera = @import("core/Camera.zig").Camera;
 const rc = @import("configs/renderConfig.zig");
 const ic = @import("configs/inputConfig.zig");
-const FixedList = @import("structures/FixedList.zig").FixedList;
-const Window = @import("platform/Window.zig").Window;
+const std = @import("std");
 
 pub const App = struct {
     memoryMan: *MemoryManager,

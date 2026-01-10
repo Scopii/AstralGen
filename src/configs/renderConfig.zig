@@ -1,15 +1,14 @@
-const vk = @import("../modules/vk.zig").c;
-const Object = @import("../ecs/EntityManager.zig").Object;
+const Attachment = @import("../vulkan/components/Pass.zig").Attachment;
+const TextureUse = @import("../vulkan/components/Pass.zig").TextureUse;
+const BufferUse = @import("../vulkan/components/Pass.zig").BufferUse;
+const Texture = @import("../vulkan/components/Texture.zig").Texture;
+const Buffer = @import("../vulkan/components/Buffer.zig").Buffer;
 const CameraData = @import("../core/Camera.zig").CameraData;
-const Buffer = @import("../vulkan/resources/Buffer.zig").Buffer;
-const Texture = @import("../vulkan/resources/Texture.zig").Texture;
-const ResourceState = @import("../vulkan/RenderGraph.zig").ResourceState;
-const Pass = @import("../vulkan/Pass.zig").Pass;
-const Attachment = @import("../vulkan/Pass.zig").Attachment;
-const TextureUse = @import("../vulkan/Pass.zig").TextureUse;
-const BufferUse = @import("../vulkan/Pass.zig").BufferUse;
+const Pass = @import("../vulkan/components/Pass.zig").Pass;
+const Object = @import("../ecs/EntityManager.zig").Object;
+const ve = @import("../vulkan/systems/Helpers.zig");
+const vk = @import("../modules/vk.zig").c;
 const sc = @import("shaderConfig.zig");
-const ve = @import("../vulkan/Helpers.zig");
 
 // Rendering, Swapchains and Windows
 pub const MAX_IN_FLIGHT: u8 = 2; // (Frames)

@@ -1,13 +1,11 @@
-const std = @import("std");
+const PushConstants = @import("../components/PushConstants.zig").PushConstants;
+const GpuAllocator = @import("GpuAllocator.zig").GpuAllocator;
+const rc = @import("../../configs/renderConfig.zig");
 const vk = @import("../../modules/vk.zig").c;
 const vkFn = @import("../../modules/vk.zig");
 const Allocator = std.mem.Allocator;
-const GpuAllocator = @import("GpuAllocator.zig").GpuAllocator;
-const PushConstants = @import("PushConstants.zig").PushConstants;
-const Texture = @import("Texture.zig").Texture;
-const Buffer = @import("Buffer.zig").Buffer;
-const vh = @import("../Helpers.zig");
-const rc = @import("../../configs/renderConfig.zig");
+const vh = @import("Helpers.zig");
+const std = @import("std");
 
 pub const DescriptorBuffer = struct {
     allocation: vk.VmaAllocation,
@@ -25,8 +23,8 @@ pub const DescriptorManager = struct {
 
     descBufferProps: vk.VkPhysicalDeviceDescriptorBufferPropertiesEXT,
     descLayout: vk.VkDescriptorSetLayout,
-    descBuffer: DescriptorBuffer,
     pipeLayout: vk.VkPipelineLayout,
+    descBuffer: DescriptorBuffer,
 
     pub fn init(cpuAlloc: Allocator, gpuAlloc: GpuAllocator, gpi: vk.VkDevice, gpu: vk.VkPhysicalDevice) !DescriptorManager {
         // Create Descriptor Layouts
@@ -87,11 +85,11 @@ pub const DescriptorManager = struct {
         try self.updateDescriptor(&getInf, binding, arrayIndex, self.descBufferProps.sampledImageDescriptorSize);
     }
 
-    pub fn updateBufferDescriptor(self: *DescriptorManager, buffer: Buffer, binding: u8, arrayIndex: u32) !void {
+    pub fn updateBufferDescriptor(self: *DescriptorManager, gpuAddress: u64, size: u64, binding: u8, arrayIndex: u32) !void {
         const addressInf = vk.VkDescriptorAddressInfoEXT{
             .sType = vk.VK_STRUCTURE_TYPE_DESCRIPTOR_ADDRESS_INFO_EXT,
-            .address = buffer.gpuAddress,
-            .range = buffer.size,
+            .address = gpuAddress,
+            .range = size,
             .format = vk.VK_FORMAT_UNDEFINED,
         };
         const getInf = vk.VkDescriptorGetInfoEXT{

@@ -1,6 +1,6 @@
+const TexId = @import("../vulkan/components/Texture.zig").Texture.TexId;
 const sdl = @import("../modules/sdl.zig").c;
 const vk = @import("../modules/vk.zig").c;
-const TexId = @import("../vulkan/resources/Texture.zig").Texture.TexId;
 const std = @import("std");
 
 pub const Window = struct {

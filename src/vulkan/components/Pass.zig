@@ -1,9 +1,8 @@
-const ResourceSlot = @import("resources/PushConstants.zig").ResourceSlot;
-const Texture = @import("resources/Texture.zig").Texture;
-const TextureBase = @import("resources/TextureBase.zig").TextureBase;
-const Buffer = @import("resources/Buffer.zig").Buffer;
-const vh = @import("../vulkan/Helpers.zig");
-const ShaderId = @import("../configs/shaderConfig.zig").ShaderInf.ShaderId;
+const ShaderId = @import("../../configs/shaderConfig.zig").ShaderInf.ShaderId;
+const TextureBase = @import("TextureBase.zig").TextureBase;
+const Texture = @import("Texture.zig").Texture;
+const Buffer = @import("Buffer.zig").Buffer;
+const vh = @import("../systems/Helpers.zig");
 
 pub const Pass = struct {
     shaderIds: []const ShaderId,

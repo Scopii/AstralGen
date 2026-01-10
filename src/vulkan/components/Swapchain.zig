@@ -1,14 +1,11 @@
-const std = @import("std");
-const vk = @import("../modules/vk.zig").c;
-const sdl = @import("../modules/sdl.zig").c;
+const createSemaphore = @import("../systems/Scheduler.zig").createSemaphore;
+const TextureBase = @import("TextureBase.zig").TextureBase;
+const rc = @import("../../configs/renderConfig.zig");
+const TexId = @import("Texture.zig").Texture.TexId;
+const vk = @import("../../modules/vk.zig").c;
+const vh = @import("../systems/Helpers.zig");
 const Allocator = std.mem.Allocator;
-const Context = @import("Context.zig").Context;
-const Window = @import("../platform/Window.zig").Window;
-const vh = @import("Helpers.zig");
-const createSemaphore = @import("Scheduler.zig").createSemaphore;
-const rc = @import("../configs/renderConfig.zig");
-const TextureBase = @import("resources/TextureBase.zig").TextureBase;
-const TexId = @import("resources/Texture.zig").Texture.TexId;
+const std = @import("std");
 
 pub const Swapchain = struct {
     surface: vk.VkSurfaceKHR,

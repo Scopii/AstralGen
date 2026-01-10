@@ -1,17 +1,15 @@
-const std = @import("std");
-const vk = @import("../modules/vk.zig").c;
-const sdl = @import("../modules/sdl.zig").c;
-const Allocator = std.mem.Allocator;
-const Context = @import("Context.zig").Context;
-const Window = @import("../platform/Window.zig").Window;
-const CreateMapArray = @import("../structures/MapArray.zig").CreateMapArray;
-const FixedList = @import("../structures/FixedList.zig").FixedList;
-const vh = @import("Helpers.zig");
+const CreateMapArray = @import("../../structures/MapArray.zig").CreateMapArray;
+const Swapchain = @import("../components/Swapchain.zig").Swapchain;
+const TexId = @import("../components/Texture.zig").Texture.TexId;
 const createSemaphore = @import("Scheduler.zig").createSemaphore;
-const rc = @import("../configs/renderConfig.zig");
-const TextureBase = @import("resources/Texture.zig").TextureBase;
-const TexId = @import("resources/Texture.zig").Texture.TexId;
-const Swapchain = @import("Swapchain.zig").Swapchain;
+const Window = @import("../../platform/Window.zig").Window;
+const rc = @import("../../configs/renderConfig.zig");
+const Context = @import("Context.zig").Context;
+const sdl = @import("../../modules/sdl.zig").c;
+const vk = @import("../../modules/vk.zig").c;
+const Allocator = std.mem.Allocator;
+const vh = @import("Helpers.zig");
+const std = @import("std");
 
 pub const SwapchainManager = struct {
     alloc: Allocator,

@@ -1,24 +1,23 @@
-const std = @import("std");
-const vk = @import("../modules/vk.zig").c;
-const Allocator = std.mem.Allocator;
-const rc = @import("../configs/renderConfig.zig");
-const ResourceManager = @import("resources/ResourceManager.zig").ResourceManager;
-const Context = @import("Context.zig").Context;
-const ShaderObject = @import("ShaderObject.zig").ShaderObject;
+const PushConstants = @import("../components//PushConstants.zig").PushConstants;
+const ResourceSlot = @import("../components//PushConstants.zig").ResourceSlot;
+const ShaderObject = @import("../components/ShaderObject.zig").ShaderObject;
+const TextureBase = @import("../components/TextureBase.zig").TextureBase;
+const ResourceManager = @import("ResourceManager.zig").ResourceManager;
+const Swapchain = @import("../components/Swapchain.zig").Swapchain;
 const ShaderManager = @import("ShaderManager.zig").ShaderManager;
+const TexId = @import("../components/Texture.zig").Texture.TexId;
+const Attachment = @import("../components/Pass.zig").Attachment;
+const Command = @import("../components/Command.zig").Command;
+const Buffer = @import("../components//Buffer.zig").Buffer;
 const CmdManager = @import("CmdManager.zig").CmdManager;
-const PushConstants = @import("resources/PushConstants.zig").PushConstants;
-const Swapchain = @import("Swapchain.zig").Swapchain;
-const Command = @import("Command.zig").Command;
+const rc = @import("../../configs/renderConfig.zig");
+const FrameData = @import("../../App.zig").FrameData;
+const Pass = @import("../components/Pass.zig").Pass;
+const Context = @import("Context.zig").Context;
+const vk = @import("../../modules/vk.zig").c;
+const Allocator = std.mem.Allocator;
 const vh = @import("Helpers.zig");
-const FrameData = @import("../App.zig").FrameData;
-const Pass = @import("Pass.zig").Pass;
-const Attachment = @import("Pass.zig").Attachment;
-const TextureBase = @import("resources/TextureBase.zig").TextureBase;
-const TexId = @import("resources/Texture.zig").Texture.TexId;
-const Buffer = @import("resources/Buffer.zig").Buffer;
-const ResourceSlot = @import("resources/PushConstants.zig").ResourceSlot;
-
+const std = @import("std");
 
 pub const RenderGraph = struct {
     alloc: Allocator,
@@ -78,7 +77,7 @@ pub const RenderGraph = struct {
 
         for (resMan.pendingTransfers.items) |transfer| {
             const buffer = try resMan.getBufferPtr(transfer.dstResId);
-            try self.bufferBarrierIfNeeded(buffer, .{ .stage = .Transfer, .access = .TransferWrite});
+            try self.bufferBarrierIfNeeded(buffer, .{ .stage = .Transfer, .access = .TransferWrite });
             cmd.copyBuffer(resMan.stagingBuffer.handle, &transfer, buffer.handle);
         }
         resMan.resetTransfers();
@@ -152,16 +151,7 @@ pub const RenderGraph = struct {
         }
     }
 
-    fn recordGraphics(
-        cmd: *const Command,
-        colorAtts: []const Attachment,
-        depthAtt: ?Attachment,
-        stencilAtt: ?Attachment,
-        width: u32,
-        height: u32,
-        pass: Pass,
-        resMan: *ResourceManager,
-    ) !void {
+    fn recordGraphics(cmd: *const Command, colorAtts: []const Attachment, depthAtt: ?Attachment, stencilAtt: ?Attachment, width: u32, height: u32, pass: Pass, resMan: *ResourceManager) !void {
         if (colorAtts.len > 8) return error.TooManyAttachments;
 
         const depthInf: ?vk.VkRenderingAttachmentInfo = if (depthAtt) |depth| blk: {
@@ -184,7 +174,6 @@ pub const RenderGraph = struct {
         cmd.beginRendering(width, height, colorInfs[0..colorAtts.len], depthInf, stencilInf);
 
         switch (pass.typ) {
-            .compute, .computeOnTex => return error.ComputeLandedInGraphicsPass,
             .taskOrMesh => |taskOrMesh| cmd.drawMeshTasks(taskOrMesh.workgroups.x, taskOrMesh.workgroups.y, taskOrMesh.workgroups.z),
             .taskOrMeshIndirect => |tmIndirect| {
                 const buffer = try resMan.getBufferPtr(tmIndirect.indirectBuf.id);
@@ -194,6 +183,7 @@ pub const RenderGraph = struct {
                 cmd.setEmptyVertexInput();
                 cmd.draw(graphics.draw.vertices, graphics.draw.instances, 0, 0);
             },
+            .compute, .computeOnTex => return error.ComputeLandedInGraphicsPass,
         }
         cmd.endRendering();
     }

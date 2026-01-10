@@ -1,24 +1,24 @@
-const std = @import("std");
-const vk = @import("../modules/vk.zig").c;
-const Context = @import("Context.zig").Context;
-const Scheduler = @import("Scheduler.zig").Scheduler;
-const Window = @import("../platform/Window.zig").Window;
-const LoadedShader = @import("../core/ShaderCompiler.zig").LoadedShader;
-const ShaderManager = @import("ShaderManager.zig").ShaderManager;
+const MemoryManager = @import("../../core/MemoryManager.zig").MemoryManager;
+const LoadedShader = @import("../../core/ShaderCompiler.zig").LoadedShader;
 const SwapchainManager = @import("SwapchainManager.zig").SwapchainManager;
-const ResourceManager = @import("resources/ResourceManager.zig").ResourceManager;
-const MemoryManager = @import("../core/MemoryManager.zig").MemoryManager;
-const createInstance = @import("Context.zig").createInstance;
+const ResourceManager = @import("ResourceManager.zig").ResourceManager;
+const Swapchain = @import("../components/Swapchain.zig").Swapchain;
+const ShaderManager = @import("ShaderManager.zig").ShaderManager;
+const Texture = @import("../components//Texture.zig").Texture;
+const Command = @import("../components/Command.zig").Command;
+const Window = @import("../../platform/Window.zig").Window;
 const RenderGraph = @import("RenderGraph.zig").RenderGraph;
-const FrameData = @import("../App.zig").FrameData;
-const rc = @import("../configs/renderConfig.zig");
+const Buffer = @import("../components//Buffer.zig").Buffer;
+const rc = @import("../../configs/renderConfig.zig");
+const FrameData = @import("../../App.zig").FrameData;
+const Scheduler = @import("Scheduler.zig").Scheduler;
+const Pass = @import("../components/Pass.zig").Pass;
+const Context = @import("Context.zig").Context;
+const vk = @import("../../modules/vk.zig").c;
 const Allocator = std.mem.Allocator;
-const Command = @import("Command.zig").Command;
 const vh = @import("Helpers.zig");
-const Pass = @import("Pass.zig").Pass;
-const Texture = @import("resources/Texture.zig").Texture;
-const Buffer = @import("resources/Buffer.zig").Buffer;
-const Swapchain = @import("Swapchain.zig").Swapchain;
+const std = @import("std");
+
 
 pub const Renderer = struct {
     alloc: Allocator,
@@ -67,8 +67,7 @@ pub const Renderer = struct {
                 break;
             }
         }
-
-        var dirtyImgIds: [rc.MAX_WINDOWS]?Texture.TexId = .{null} ** rc.MAX_WINDOWS;
+        var texIds: [rc.MAX_WINDOWS]?Texture.TexId = .{null} ** rc.MAX_WINDOWS;
 
         for (tempWindows, 0..) |tempWindow, i| {
             switch (tempWindow.state) {
@@ -77,14 +76,14 @@ pub const Renderer = struct {
                 .needDelete => self.swapMan.removeSwapchain(&.{tempWindow}),
                 else => std.debug.print("Warning: Window State {s} cant be handled in Renderer\n", .{@tagName(tempWindow.state)}),
             }
-            if (tempWindow.resizeTex == true) dirtyImgIds[i] = tempWindow.renderTexId;
+            if (tempWindow.resizeTex == true) texIds[i] = tempWindow.renderTexId;
         }
 
         if (rc.RENDER_TEX_AUTO_RESIZE == true) {
-            for (0..dirtyImgIds.len) |i| {
-                if (dirtyImgIds[i] == null) break;
+            for (0..texIds.len) |i| {
+                if (texIds[i] == null) break;
 
-                const texId = dirtyImgIds[i].?;
+                const texId = texIds[i].?;
                 const passImg = try self.resMan.getTexturePtr(texId);
                 try self.updateRenderTexture(texId, passImg);
             }

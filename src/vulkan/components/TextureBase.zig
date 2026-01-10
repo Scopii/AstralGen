@@ -1,7 +1,5 @@
 const vk = @import("../../modules/vk.zig").c;
-const ResourceSlot = @import("PushConstants.zig").ResourceSlot;
-const rc = @import("../../configs/renderConfig.zig");
-const vh = @import("../Helpers.zig");
+const vh = @import("../systems/Helpers.zig");
 
 pub const TextureBase = struct {
     img: vk.VkImage,
@@ -11,11 +9,23 @@ pub const TextureBase = struct {
     extent: vk.VkExtent3D,
     state: TextureState = .{},
 
-    pub const TextureState = struct {
-        stage: vh.PipeStage = .TopOfPipe,
-        access: vh.PipeAccess = .None,
-        layout: vh.ImageLayout = .Undefined,
-    };
+    pub const TextureState = struct { stage: vh.PipeStage = .TopOfPipe, access: vh.PipeAccess = .None, layout: vh.ImageLayout = .Undefined };
+
+    pub fn createAttachment(self: *const TextureBase, clear: bool) vk.VkRenderingAttachmentInfo {
+        const clearValue: vk.VkClearValue = switch (self.texType) {
+            .Color => .{ .color = .{ .float32 = .{ 0.0, 0.0, 0.1, 1.0 } } },
+            .Depth, .Stencil => .{ .depthStencil = .{ .depth = 1.0, .stencil = 0 } },
+        };
+
+        return vk.VkRenderingAttachmentInfo{
+            .sType = vk.VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+            .imageView = self.view,
+            .imageLayout = vk.VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
+            .loadOp = if (clear) vk.VK_ATTACHMENT_LOAD_OP_CLEAR else vk.VK_ATTACHMENT_LOAD_OP_LOAD,
+            .storeOp = vk.VK_ATTACHMENT_STORE_OP_STORE,
+            .clearValue = clearValue,
+        };
+    }
 
     pub fn createImageBarrier(self: *TextureBase, newState: TextureState) vk.VkImageMemoryBarrier2 {
         const aspectMask: vk.VkImageAspectFlagBits = switch (self.texType) {
@@ -40,24 +50,7 @@ pub const TextureBase = struct {
         self.state = newState;
         return barrier;
     }
-
-    pub fn createAttachment(self: *const TextureBase, clear: bool) vk.VkRenderingAttachmentInfo {
-        const clearValue: vk.VkClearValue = switch (self.texType) {
-            .Color => .{ .color = .{ .float32 = .{ 0.0, 0.0, 0.1, 1.0 } } },
-            .Depth, .Stencil => .{ .depthStencil = .{ .depth = 1.0, .stencil = 0 } },
-        };
-
-        return vk.VkRenderingAttachmentInfo{
-            .sType = vk.VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-            .imageView = self.view,
-            .imageLayout = vk.VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
-            .loadOp = if (clear) vk.VK_ATTACHMENT_LOAD_OP_CLEAR else vk.VK_ATTACHMENT_LOAD_OP_LOAD,
-            .storeOp = vk.VK_ATTACHMENT_STORE_OP_STORE,
-            .clearValue = clearValue,
-        };
-    }
 };
-
 
 fn createSubresourceRange(mask: u32, mipLevel: u32, levelCount: u32, arrayLayer: u32, layerCount: u32) vk.VkImageSubresourceRange {
     return vk.VkImageSubresourceRange{ .aspectMask = mask, .baseMipLevel = mipLevel, .levelCount = levelCount, .baseArrayLayer = arrayLayer, .layerCount = layerCount };

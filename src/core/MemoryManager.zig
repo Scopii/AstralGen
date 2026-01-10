@@ -1,5 +1,5 @@
-const std = @import("std");
 const Allocator = std.mem.Allocator;
+const std = @import("std");
 
 pub const MemoryManager = struct {
     alloc: std.mem.Allocator,

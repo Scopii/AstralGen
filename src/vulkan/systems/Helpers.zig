@@ -1,4 +1,4 @@
-const vk = @import("../modules/vk.zig").c;
+const vk = @import("../../modules/vk.zig").c;
 const std = @import("std");
 
 pub const TextureType = enum { Color, Depth, Stencil };
@@ -113,19 +113,3 @@ pub fn Handle(comptime _: type) type {
         // }
     };
 }
-
-// pub const TexId = Handle(struct {});
-// pub const BufferId = Handle(struct {});
-// pub const ShaderId = Handle(struct {});
-// pub const WindowId = Handle(struct {});
-// pub const SwapchainId = Handle(struct {});
-
-// pub fn setDebugName(self: *Context, handle: u64, type_: vk.VkObjectType, name: []const u8) void {
-//     if (appCon.DEBUG_MODE) {
-//         // ... call vkSetDebugUtilsObjectNameEXT ...
-//     }
-// }
-
-// if (info.name) |n| {
-//     ctx.setDebugName(@intFromEnum(handle), .VK_OBJECT_TYPE_IMAGE, n);
-// }

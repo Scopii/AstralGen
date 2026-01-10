@@ -1,5 +1,5 @@
+const vh = @import("../vulkan/systems/Helpers.zig");
 const vk = @import("../modules/vk.zig").c;
-const vh = @import("../vulkan/Helpers.zig");
 
 // Shader Compilation
 pub const SHADER_HOTLOAD = true;

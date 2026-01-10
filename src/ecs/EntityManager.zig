@@ -1,5 +1,5 @@
-const std = @import("std");
 const RNGenerator = @import("../core/RNGenerator.zig").RNGenerator;
+const std = @import("std");
 
 const objCount = 30;
 

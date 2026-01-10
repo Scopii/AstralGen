@@ -1,18 +1,17 @@
-const std = @import("std");
+const CreateMapArray = @import("../../structures/MapArray.zig").CreateMapArray;
+const PushConstants = @import("../components/PushConstants.zig").PushConstants;
+const DescriptorManager = @import("DescriptorManager.zig").DescriptorManager;
+const ResourceSlot = @import("../components/PushConstants.zig").ResourceSlot;
+const GpuAllocator = @import("GpuAllocator.zig").GpuAllocator;
+const Texture = @import("../components/Texture.zig").Texture;
+const Buffer = @import("../components/Buffer.zig").Buffer;
+const rc = @import("../../configs/renderConfig.zig");
+const FrameData = @import("../../App.zig").FrameData;
+const Pass = @import("../components/Pass.zig").Pass;
+const Context = @import("Context.zig").Context;
 const vk = @import("../../modules/vk.zig").c;
 const Allocator = std.mem.Allocator;
-const Context = @import("../Context.zig").Context;
-const Texture = @import("Texture.zig").Texture;
-const Buffer = @import("Buffer.zig").Buffer;
-const DescriptorManager = @import("DescriptorManager.zig").DescriptorManager;
-const GpuAllocator = @import("GpuAllocator.zig").GpuAllocator;
-const PushConstants = @import("PushConstants.zig").PushConstants;
-const ResourceSlot = @import("PushConstants.zig").ResourceSlot;
-const FrameData = @import("../../App.zig").FrameData;
-const Pass = @import("../Pass.zig").Pass;
-const rc = @import("../../configs/renderConfig.zig");
-const vh = @import("../Helpers.zig");
-const CreateMapArray = @import("../../structures/MapArray.zig").CreateMapArray;
+const std = @import("std");
 
 pub const PendingTransfer = struct {
     srcOffset: u64,
@@ -133,7 +132,7 @@ pub const ResourceManager = struct {
 
         var buffer = try self.gpuAlloc.allocDefinedBuffer(bufInf, bufInf.mem);
         buffer.bindlessIndex = bindlessIndex;
-        try self.descMan.updateBufferDescriptor(buffer, rc.STORAGE_BUF_BINDING, bindlessIndex);
+        try self.descMan.updateBufferDescriptor(buffer.gpuAddress, buffer.size, rc.STORAGE_BUF_BINDING, bindlessIndex);
 
         self.gpuAlloc.printMemoryLocation(buffer.allocation, self.gpu);
         self.buffers.set(bufInf.id.val, buffer);

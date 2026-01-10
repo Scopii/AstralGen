@@ -1,9 +1,8 @@
-const std = @import("std");
 const CreateMapArray = @import("../structures/MapArray.zig").CreateMapArray;
 const FixedList = @import("../structures/FixedList.zig").FixedList;
-
-const ic = @import("../configs/inputConfig.zig");
 const AppEvent = @import("../configs/appConfig.zig").AppEvent;
+const ic = @import("../configs/inputConfig.zig");
+const std = @import("std");
 
 pub const KeyState = enum { pressed, released };
 pub const KeyEvent = struct { key: c_uint, event: KeyState };

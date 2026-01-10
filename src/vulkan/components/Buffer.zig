@@ -1,7 +1,6 @@
-const vk = @import("../../modules/vk.zig").c;
 const ResourceSlot = @import("PushConstants.zig").ResourceSlot;
-const rc = @import("../../configs/renderConfig.zig");
-const vh = @import("../Helpers.zig");
+const vk = @import("../../modules/vk.zig").c;
+const vh = @import("../systems/Helpers.zig");
 
 pub const Buffer = struct {
     handle: vk.VkBuffer,
@@ -13,23 +12,16 @@ pub const Buffer = struct {
     bindlessIndex: u32 = 0,
     state: BufferState = .{},
 
-    pub const BufferState = struct {
-        stage: vh.PipeStage = .TopOfPipe,
-        access: vh.PipeAccess = .None,
-    };
-
     pub const BufId = packed struct { val: u32 };
-
-    pub const BufInf = struct {
-        id: BufId,
-        mem: vh.MemUsage,
-        elementSize: u32,
-        len: u32,
-        typ: vh.BufferType,
-    };
+    pub const BufferState = struct { stage: vh.PipeStage = .TopOfPipe, access: vh.PipeAccess = .None };
+    pub const BufInf = struct { id: BufId, mem: vh.MemUsage, elementSize: u32, len: u32, typ: vh.BufferType };
 
     pub fn create(bufInf: BufInf) BufInf {
         return bufInf;
+    }
+
+    pub fn getResourceSlot(self: *const Buffer) ResourceSlot {
+        return ResourceSlot{ .index = self.bindlessIndex, .count = self.count };
     }
 
     pub fn createBufferBarrier(self: *Buffer, newState: BufferState) vk.VkBufferMemoryBarrier2 {
@@ -47,9 +39,5 @@ pub const Buffer = struct {
         };
         self.state = newState;
         return barrier;
-    }
-
-    pub fn getResourceSlot(self: *const Buffer) ResourceSlot {
-        return ResourceSlot{ .index = self.bindlessIndex, .count = self.count };
     }
 };

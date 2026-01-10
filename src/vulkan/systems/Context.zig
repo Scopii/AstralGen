@@ -1,11 +1,11 @@
-const std = @import("std");
-const vk = @import("../modules/vk.zig").c;
-const vkFn = @import("../modules/vk.zig");
-const sdl = @import("../modules/sdl.zig").c;
+const Queue = @import("../components/Queue.zig").Queue;
+const appCon = @import("../../configs/appConfig.zig");
+const sdl = @import("../../modules/sdl.zig").c;
+const vk = @import("../../modules/vk.zig").c;
+const vkFn = @import("../../modules/vk.zig");
 const Allocator = std.mem.Allocator;
-const appCon = @import("../configs/appConfig.zig");
 const vh = @import("Helpers.zig");
-const Queue = @import("Queue.zig").Queue;
+const std = @import("std");
 
 pub const QueueFamilies = struct {
     graphics: u32,

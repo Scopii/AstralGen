@@ -1,7 +1,7 @@
-const std = @import("std");
-const App = @import("App.zig").App;
-const MemoryManager = @import("core/MemoryManager.zig").MemoryManager;
 const CLOSE_WITH_CONSOLE = @import("configs/appConfig.zig").CLOSE_WITH_CONSOLE;
+const MemoryManager = @import("core/MemoryManager.zig").MemoryManager;
+const App = @import("App.zig").App;
+const std = @import("std");
 
 pub fn main() void {
     std.debug.print("AstralGen Started\n", .{});

@@ -1,10 +1,9 @@
-const vk = @import("../modules/vk.zig").c;
-const vkFn = @import("../modules/vk.zig");
-const ResourceManager = @import("resources/ResourceManager.zig").ResourceManager;
+const PendingTransfer = @import("../systems/ResourceManager.zig").PendingTransfer;
 const ShaderObject = @import("ShaderObject.zig").ShaderObject;
-const PendingTransfer = @import("resources/ResourceManager.zig").PendingTransfer;
-const vh = @import("Helpers.zig");
 const GraphicState = @import("GraphicState.zig").GraphicState;
+const vk = @import("../../modules/vk.zig").c;
+const vkFn = @import("../../modules/vk.zig");
+const vh = @import("../systems/Helpers.zig");
 
 pub const Command = struct {
     handle: vk.VkCommandBuffer,
