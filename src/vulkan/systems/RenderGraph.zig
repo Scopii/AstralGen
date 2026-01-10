@@ -44,7 +44,7 @@ pub const RenderGraph = struct {
         self.tempBufBarriers.deinit();
     }
 
-    pub fn recordFrame(self: *RenderGraph, flightId: u8, resMan: *ResourceManager, frameData: FrameData, targets: []const *Swapchain, passes: []Pass, shaderMan: *ShaderManager) !Command {
+    pub fn recordFrame(self: *RenderGraph, passes: []Pass, flightId: u8, frameData: FrameData, targets: []const *Swapchain, resMan: *ResourceManager, shaderMan: *ShaderManager) !Command {
         const cmd = try self.cmdMan.getCmd(flightId);
         try cmd.begin();
 
@@ -101,27 +101,22 @@ pub const RenderGraph = struct {
             const buffer = try resMan.getBufferPtr(bufUse.bufId);
             try self.bufferBarrierIfNeeded(buffer, bufUse.getNeededState());
         }
-
         for (pass.texUses) |texUse| {
             const tex = try resMan.getTexturePtr(texUse.texId);
             try self.imageBarrierIfNeeded(&tex.base, texUse.getNeededState());
         }
-
         for (pass.getColorAtts()) |colorAtt| {
             const tex = try resMan.getTexturePtr(colorAtt.texId);
             try self.imageBarrierIfNeeded(&tex.base, colorAtt.getNeededState());
         }
-
         if (pass.getDepthAtt()) |depthAtt| {
             const tex = try resMan.getTexturePtr(depthAtt.texId);
             try self.imageBarrierIfNeeded(&tex.base, depthAtt.getNeededState());
         }
-
         if (pass.getStencilAtt()) |stencilAtt| {
             const tex = try resMan.getTexturePtr(stencilAtt.texId);
             try self.imageBarrierIfNeeded(&tex.base, stencilAtt.getNeededState());
         }
-
         self.bakeBarriers(cmd);
     }
 
@@ -185,20 +180,18 @@ pub const RenderGraph = struct {
     }
 
     pub fn recordSwapchainBlits(self: *RenderGraph, cmd: *const Command, swapchains: []const *Swapchain, resMan: *ResourceManager) !void {
-        // Render Texture and Swapchain Preperations
-        for (swapchains) |swapchain| {
+        for (swapchains) |swapchain| { // Render Texture and Swapchain Preperations
             const renderTex = try resMan.getTexturePtr(swapchain.renderTexId);
             try self.imageBarrierIfNeeded(&renderTex.base, .{ .stage = .Transfer, .access = .TransferRead, .layout = .TransferSrc });
             try self.imageBarrierIfNeeded(&swapchain.textures[swapchain.curIndex], .{ .stage = .Transfer, .access = .TransferWrite, .layout = .TransferDst });
         }
         self.bakeBarriers(cmd);
-        // Blits
-        for (swapchains) |swapchain| {
+        
+        for (swapchains) |swapchain| { // Blits
             const renderTex = try resMan.getTexturePtr(swapchain.renderTexId);
             cmd.copyImageToImage(renderTex.base.img, renderTex.base.extent, swapchain.getCurTexture().img, swapchain.getExtent3D(), rc.RENDER_TEX_STRETCH);
         }
-        // Swapchain Presentation Barriers
-        for (swapchains) |swapchain| {
+        for (swapchains) |swapchain| { // Swapchain Presentation Barriers
             try self.imageBarrierIfNeeded(swapchain.getCurTexture(), .{ .stage = .BotOfPipe, .access = .None, .layout = .PresentSrc });
         }
         self.bakeBarriers(cmd);

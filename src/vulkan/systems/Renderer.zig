@@ -68,14 +68,14 @@ pub const Renderer = struct {
         }
         var texIds: [rc.MAX_WINDOWS]?Texture.TexId = .{null} ** rc.MAX_WINDOWS;
 
-        for (tempWindows, 0..) |tempWindow, i| {
-            switch (tempWindow.state) {
-                .needUpdate, .needCreation => try self.swapMan.createSwapchain(&self.context, .{ .window = tempWindow }),
-                .needActive, .needInactive => self.swapMan.changeState(tempWindow.id, if (tempWindow.state == .needActive) true else false),
-                .needDelete => self.swapMan.removeSwapchain(&.{tempWindow}),
-                else => std.debug.print("Warning: Window State {s} cant be handled in Renderer\n", .{@tagName(tempWindow.state)}),
+        for (tempWindows, 0..) |window, i| {
+            switch (window.state) {
+                .needUpdate, .needCreation => try self.swapMan.createSwapchain(&self.context, .{ .window = window }),
+                .needActive, .needInactive => self.swapMan.changeState(window.id, if (window.state == .needActive) true else false),
+                .needDelete => self.swapMan.removeSwapchain(&.{window}),
+                else => std.debug.print("Warning: Window State {s} cant be handled in Renderer\n", .{@tagName(window.state)}),
             }
-            if (tempWindow.resizeTex == true) texIds[i] = tempWindow.renderTexId;
+            if (window.resizeTex == true) texIds[i] = window.renderTexId;
         }
 
         if (rc.RENDER_TEX_AUTO_RESIZE == true) {
@@ -115,7 +115,8 @@ pub const Renderer = struct {
         if (try self.swapMan.updateTargets(flightId, &self.context) == false) return;
         const targets = self.swapMan.getTargets();
 
-        const cmd = try self.renderGraph.recordFrame(flightId, &self.resMan, frameData, targets, self.passes.items, &self.shaderMan);
+        // const cmd = try self.renderGraph.recordFrame(flightId, &self.resMan, frameData, targets, self.passes.items, &self.shaderMan);
+        const cmd = try self.renderGraph.recordFrame(self.passes.items, flightId, frameData, targets, &self.resMan, &self.shaderMan);
 
         try self.queueSubmit(&cmd, targets, flightId);
         try self.swapMan.present(targets, self.context.presentQ.handle);
