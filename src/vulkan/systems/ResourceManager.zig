@@ -13,7 +13,7 @@ const vk = @import("../../modules/vk.zig").c;
 const Allocator = std.mem.Allocator;
 const std = @import("std");
 
-pub const PendingTransfer = struct {
+pub const Transfer = struct {
     srcOffset: u64,
     dstResId: Buffer.BufId,
     size: u64,
@@ -34,9 +34,9 @@ pub const ResourceManager = struct {
     descMan: DescriptorManager,
 
     stagingBuffer: Buffer,
-    stagingPtr: [*]u8, // Mapped pointer for fast copying
     stagingOffset: u64 = 0,
-    pendingTransfers: std.array_list.Managed(PendingTransfer),
+    transfers: std.array_list.Managed(Transfer),
+
     indirectBufIds: std.array_list.Managed(Buffer.BufId),
 
     pub fn init(alloc: Allocator, context: *const Context) !ResourceManager {
@@ -44,23 +44,14 @@ pub const ResourceManager = struct {
         const gpu = context.gpu;
         const gpuAlloc = try GpuAllocator.init(context.instance, context.gpi, context.gpu);
 
-        const stagingSize = 32 * 1024 * 1024;
-        const staging = try gpuAlloc.allocBuffer(
-            stagingSize,
-            vk.VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-            vk.VMA_MEMORY_USAGE_CPU_ONLY,
-            vk.VMA_ALLOCATION_CREATE_MAPPED_BIT | vk.VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT,
-        );
-
         return .{
             .cpuAlloc = alloc,
             .gpuAlloc = gpuAlloc,
             .gpi = gpi,
             .gpu = gpu,
             .descMan = try DescriptorManager.init(alloc, gpuAlloc, gpi, gpu),
-            .stagingBuffer = staging,
-            .stagingPtr = @ptrCast(staging.mappedPtr.?),
-            .pendingTransfers = std.array_list.Managed(PendingTransfer).init(alloc),
+            .stagingBuffer = try gpuAlloc.allocStagingBuffer(rc.STAGING_BUF_SIZE),
+            .transfers = std.array_list.Managed(Transfer).init(alloc),
             .indirectBufIds = std.array_list.Managed(Buffer.BufId).init(alloc),
         };
     }
@@ -73,7 +64,7 @@ pub const ResourceManager = struct {
             self.destroyTexture(.{ .val = self.textures.getKeyFromIndex(0) });
         }
         self.descMan.deinit();
-        self.pendingTransfers.deinit();
+        self.transfers.deinit();
         self.gpuAlloc.freeBuffer(self.stagingBuffer.handle, self.stagingBuffer.allocation);
         self.indirectBufIds.deinit();
         self.gpuAlloc.deinit();
@@ -81,14 +72,14 @@ pub const ResourceManager = struct {
 
     pub fn resetTransfers(self: *ResourceManager) void {
         self.stagingOffset = 0;
-        self.pendingTransfers.clearRetainingCapacity();
+        self.transfers.clearRetainingCapacity();
     }
 
     pub fn queueBufferUpload(self: *ResourceManager, bufInf: Buffer.BufInf, bufId: Buffer.BufId, data: anytype) !void {
         const DataType = @TypeOf(data);
         const typeInfo = @typeInfo(DataType);
 
-        // Convert anytype to a byte slice safely
+        // Convert anytype to a byte slice
         const bytes: []const u8 = switch (typeInfo) {
             .pointer => |ptr| switch (ptr.size) {
                 .one => std.mem.asBytes(data), // For &singleStruct
@@ -98,15 +89,12 @@ pub const ResourceManager = struct {
             else => return error.ExpectedPointer,
         };
 
-        if (self.stagingOffset + bytes.len > 1 * 1024 * 1024) return error.StagingBufferFull;
-        // Copy CPU data into the staging area
-        @memcpy(self.stagingPtr[self.stagingOffset..][0..bytes.len], bytes);
+        if (self.stagingOffset + bytes.len > rc.STAGING_BUF_SIZE) return error.StagingBufferFull;
 
-        try self.pendingTransfers.append(.{
-            .srcOffset = self.stagingOffset,
-            .dstResId = bufId,
-            .size = bytes.len,
-        });
+        const stagingPtr: [*]u8 = @ptrCast(self.stagingBuffer.mappedPtr);
+        @memcpy(stagingPtr[self.stagingOffset..][0..bytes.len], bytes);
+
+        try self.transfers.append(Transfer{ .srcOffset = self.stagingOffset, .dstResId = bufId, .size = bytes.len });
 
         var buffer = try self.getBufferPtr(bufId);
         buffer.count = @intCast(bytes.len / bufInf.elementSize);
@@ -231,47 +219,5 @@ pub const ResourceManager = struct {
         const buffer = self.buffers.getPtr(bufId);
         self.gpuAlloc.freeBuffer(buffer.handle, buffer.allocation);
         self.buffers.removeAtKey(bufId);
-    }
-
-    pub fn createPushConstants(self: *ResourceManager, pass: Pass, frameData: FrameData) !PushConstants {
-        var pcs = PushConstants{ .runTime = frameData.runTime, .deltaTime = frameData.deltaTime };
-
-        var mask: [14]bool = .{false} ** 14;
-        var resourceSlots: [14]ResourceSlot = undefined;
-
-        for (pass.bufUses) |bufUse| {
-            const shaderSlot = bufUse.shaderSlot;
-
-            if (shaderSlot) |slot| {
-                if (mask[slot.val] == false) {
-                    const buffer = try self.getBufferPtr(bufUse.bufId);
-                    resourceSlots[slot.val] = buffer.getResourceSlot();
-                    mask[slot.val] = true;
-                } else std.debug.print("Pass Shader Slot {} already used\n", .{slot.val});
-            }
-        }
-
-        for (pass.texUses) |texUse| {
-            const shaderSlot = texUse.shaderSlot;
-
-            if (shaderSlot) |slot| {
-                if (mask[slot.val] == false) {
-                    const tex = try self.getTexturePtr(texUse.texId);
-                    resourceSlots[slot.val] = tex.getResourceSlot();
-                    mask[slot.val] = true;
-                } else std.debug.print("Pass Shader Slot {} already used\n", .{slot.val});
-            }
-        }
-
-        pcs.resourceSlots = resourceSlots;
-
-        const mainTexId = pass.getMainTexId();
-        if (mainTexId) |texId| {
-            const mainTex = try self.getTexturePtr(texId);
-            pcs.width = mainTex.base.extent.width;
-            pcs.height = mainTex.base.extent.height;
-        }
-
-        return pcs;
     }
 };

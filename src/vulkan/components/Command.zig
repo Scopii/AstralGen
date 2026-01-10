@@ -1,4 +1,4 @@
-const PendingTransfer = @import("../systems/ResourceManager.zig").PendingTransfer;
+const PendingTransfer = @import("../systems/ResourceManager.zig").Transfer;
 const ShaderObject = @import("ShaderObject.zig").ShaderObject;
 const GraphicState = @import("GraphicState.zig").GraphicState;
 const vk = @import("../../modules/vk.zig").c;

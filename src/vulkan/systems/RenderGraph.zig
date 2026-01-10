@@ -1,12 +1,9 @@
-const PushConstants = @import("../components//PushConstants.zig").PushConstants;
-const ResourceSlot = @import("../components//PushConstants.zig").ResourceSlot;
-const ShaderObject = @import("../components/ShaderObject.zig").ShaderObject;
+const PushConstants = @import("../components/PushConstants.zig").PushConstants;
 const TextureBase = @import("../components/TextureBase.zig").TextureBase;
 const ResourceManager = @import("ResourceManager.zig").ResourceManager;
 const Swapchain = @import("../components/Swapchain.zig").Swapchain;
 const ShaderManager = @import("ShaderManager.zig").ShaderManager;
 const TexId = @import("../components/Texture.zig").Texture.TexId;
-const Attachment = @import("../components/Pass.zig").Attachment;
 const Command = @import("../components/Command.zig").Command;
 const Buffer = @import("../components//Buffer.zig").Buffer;
 const CmdManager = @import("CmdManager.zig").CmdManager;
@@ -16,7 +13,6 @@ const Pass = @import("../components/Pass.zig").Pass;
 const Context = @import("Context.zig").Context;
 const vk = @import("../../modules/vk.zig").c;
 const Allocator = std.mem.Allocator;
-const vh = @import("Helpers.zig");
 const std = @import("std");
 
 pub const RenderGraph = struct {
@@ -73,9 +69,9 @@ pub const RenderGraph = struct {
     }
 
     pub fn recordTransfers(self: *RenderGraph, cmd: *const Command, resMan: *ResourceManager) !void {
-        if (resMan.pendingTransfers.items.len == 0) return;
+        if (resMan.transfers.items.len == 0) return;
 
-        for (resMan.pendingTransfers.items) |transfer| {
+        for (resMan.transfers.items) |transfer| {
             const buffer = try resMan.getBufferPtr(transfer.dstResId);
             try self.bufferBarrierIfNeeded(buffer, .{ .stage = .Transfer, .access = .TransferWrite });
             cmd.copyBuffer(resMan.stagingBuffer.handle, &transfer, buffer.handle);
@@ -132,7 +128,7 @@ pub const RenderGraph = struct {
     }
 
     pub fn recordPass(self: *RenderGraph, cmd: *const Command, pass: Pass, frameData: FrameData, resMan: *ResourceManager) !void {
-        const pcs = try resMan.createPushConstants(pass, frameData);
+        const pcs = try PushConstants.init(resMan, pass, frameData);
         cmd.setPushConstants(self.pipeLayout, vk.VK_SHADER_STAGE_ALL, 0, @sizeOf(PushConstants), &pcs);
 
         try self.recordPassBarriers(cmd, pass, resMan);
@@ -186,7 +182,7 @@ pub const RenderGraph = struct {
             try self.imageBarrierIfNeeded(&swapchain.textures[swapchain.curIndex], .{ .stage = .Transfer, .access = .TransferWrite, .layout = .TransferDst });
         }
         self.bakeBarriers(cmd);
-        
+
         for (swapchains) |swapchain| { // Blits
             const renderTex = try resMan.getTexturePtr(swapchain.renderTexId);
             cmd.copyImageToImage(renderTex.base.img, renderTex.base.extent, swapchain.getCurTexture().img, swapchain.getExtent3D(), rc.RENDER_TEX_STRETCH);

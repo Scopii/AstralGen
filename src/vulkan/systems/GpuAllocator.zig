@@ -37,6 +37,11 @@ pub const GpuAllocator = struct {
         return .{ .allocation = buffer.allocation, .mappedPtr = buffer.mappedPtr, .size = size, .handle = buffer.handle, .gpuAddress = buffer.gpuAddress };
     }
 
+    pub fn allocStagingBuffer(self: *const GpuAllocator, size: vk.VkDeviceSize) !Buffer {
+        const memFlags = vk.VMA_ALLOCATION_CREATE_MAPPED_BIT | vk.VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+        return try self.allocBuffer(size, vk.VK_BUFFER_USAGE_TRANSFER_SRC_BIT, vk.VMA_MEMORY_USAGE_CPU_ONLY, memFlags); // TEST CPU_TO_GPU and AUTO
+    }
+
     pub fn printMemoryLocation(self: *const GpuAllocator, allocation: vk.VmaAllocation, gpu: vk.VkPhysicalDevice) void {
         var allocInf: vk.VmaAllocationInfo = undefined;
         vk.vmaGetAllocationInfo(self.handle, allocation, &allocInf);

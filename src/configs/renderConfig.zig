@@ -19,6 +19,7 @@ pub const MAX_WINDOWS: u8 = 8;
 pub const BUF_MAX = 64;
 pub const TEX_MAX = 32;
 pub const GPU_RESOURCE_MAX = BUF_MAX + TEX_MAX;
+pub const STAGING_BUF_SIZE = 32 * 1024 * 1024;
 
 pub const TEX_COLOR_FORMAT = vk.VK_FORMAT_R16G16B16A16_SFLOAT;
 pub const TEX_DEPTH_FORMAT = vk.VK_FORMAT_D32_SFLOAT;

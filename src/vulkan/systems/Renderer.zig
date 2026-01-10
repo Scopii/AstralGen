@@ -115,7 +115,6 @@ pub const Renderer = struct {
         if (try self.swapMan.updateTargets(flightId, &self.context) == false) return;
         const targets = self.swapMan.getTargets();
 
-        // const cmd = try self.renderGraph.recordFrame(flightId, &self.resMan, frameData, targets, self.passes.items, &self.shaderMan);
         const cmd = try self.renderGraph.recordFrame(self.passes.items, flightId, frameData, targets, &self.resMan, &self.shaderMan);
 
         try self.queueSubmit(&cmd, targets, flightId);
