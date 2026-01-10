@@ -48,6 +48,10 @@ pub const Command = struct {
         vk.vkCmdDraw(self.handle, vertexCount, instanceCount, firstVertex, firstInstance);
     }
 
+    pub fn drawIndirect(self: *const Command, buffer: vk.VkBuffer, offset: u64, drawCount: u32, stride: u32) void {
+        vk.vkCmdDrawIndirect(self.handle, buffer, offset, drawCount, stride);
+    }
+
     pub fn drawMeshTasks(self: *const Command, workgroupsX: u32, workgroupsY: u32, workgroupsZ: u32) void {
         vkFn.vkCmdDrawMeshTasksEXT.?(self.handle, workgroupsX, workgroupsY, workgroupsZ);
     }

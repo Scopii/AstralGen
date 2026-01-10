@@ -33,24 +33,15 @@ pub const Pass = struct {
 
     pub const ClassicTyp = union(enum) {
         graphics: Graphics,
-        taskOrMesh: TaskOrMesh,
-        taskOrMeshIndirect: TaskOrMeshIndirect,
+        taskMesh: TaskMesh,
 
-        const TaskOrMesh = struct {
+        const TaskMesh = struct {
             workgroups: Dispatch,
+            indirectBuf: ?struct { id: Buffer.BufId, offset: u64 = 0 } = null,
         };
 
-        pub fn taskMeshData(data: TaskOrMesh) ClassicTyp {
-            return .{ .taskOrMesh = data };
-        }
-
-        const TaskOrMeshIndirect = struct {
-            workgroups: Dispatch,
-            indirectBuf: struct { id: Buffer.BufId, offset: u64 = 0 },
-        };
-
-        pub fn taskMeshIndirectData(data: TaskOrMeshIndirect) ClassicTyp {
-            return .{ .taskOrMeshIndirect = data };
+        pub fn taskMeshData(data: TaskMesh) ClassicTyp {
+            return .{ .taskMesh = data };
         }
 
         const Graphics = struct {

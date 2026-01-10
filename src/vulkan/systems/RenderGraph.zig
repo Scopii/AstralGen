@@ -162,10 +162,13 @@ pub const RenderGraph = struct {
         cmd.beginRendering(width, height, colorInfs[0..passData.colorAtts.len], depthInf, stencilInf);
 
         switch (passData.classicTyp) {
-            .taskOrMesh => |taskOrMesh| cmd.drawMeshTasks(taskOrMesh.workgroups.x, taskOrMesh.workgroups.y, taskOrMesh.workgroups.z),
-            .taskOrMeshIndirect => |tmIndirect| {
-                const buffer = try resMan.getBufferPtr(tmIndirect.indirectBuf.id);
-                cmd.drawMeshTasksIndirect(buffer.handle, 0, 1, 16); // 16 bytes 4x u32
+            .taskMesh => |taskMesh| {
+                if (taskMesh.indirectBuf) |indirectBuf| {
+                    const buffer = try resMan.getBufferPtr(indirectBuf.id);
+                    cmd.drawMeshTasksIndirect(buffer.handle, 0, 1, 16); // 16 bytes 4x u32
+                } else {
+                    cmd.drawMeshTasks(taskMesh.workgroups.x, taskMesh.workgroups.y, taskMesh.workgroups.z);
+                }
             },
             .graphics => |graphics| {
                 cmd.setEmptyVertexInput();

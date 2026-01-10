@@ -129,7 +129,7 @@ pub const indirectCompTest: Pass = .{
 const indirectMeshTest: Pass = .{
     .shaderIds = &.{ sc.indirectTask.id, sc.indirectMesh.id, sc.indirectFrag.id },
     .typ = Pass.createClassic(.{
-        .classicTyp = Pass.ClassicTyp.taskMeshIndirectData(.{
+        .classicTyp = Pass.ClassicTyp.taskMeshData(.{
             .workgroups = .{ .x = 1, .y = 1, .z = 1 },
             .indirectBuf = .{ .id = indirectSB.id, .offset = 0 },
         }),
