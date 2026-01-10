@@ -105,8 +105,7 @@ pub const App = struct {
         const cam = &self.cam;
 
         var firstFrame = true;
-
-        var rendererData: RendererData = undefined;
+        var frameData: FrameData = undefined;
 
         // Main loop
         while (true) {
@@ -123,9 +122,10 @@ pub const App = struct {
                 break;
             };
 
+            // Handle Inputs
             if (windowMan.inputEvents.len > 0) eventMan.mapKeyEvents(windowMan.consumeKeyEvents());
+
             if (windowMan.mouseMoveX != 0 or windowMan.mouseMoveY != 0) {
-                // Handle Mouse Input
                 cam.rotate(windowMan.mouseMoveX, windowMan.mouseMoveY);
                 if (ic.MOUSE_MOVEMENT_INFO == true) std.debug.print("Mouse Total Movement x:{} y:{}\n", .{ windowMan.mouseMoveX, windowMan.mouseMoveY });
                 windowMan.mouseMoveX = 0;
@@ -144,6 +144,8 @@ pub const App = struct {
 
             // Update Time
             timeMan.update();
+            frameData.runTime = timeMan.getRuntime(.seconds, f32);
+            frameData.deltaTime = timeMan.getDeltaTime(.seconds, f32);
             const dt = timeMan.getDeltaTime(.nano, f64);
 
             // Generate and Process and clear Events
@@ -167,33 +169,29 @@ pub const App = struct {
             }
             eventMan.clearAppEvents();
 
-            if (firstFrame) windowMan.showAllWindows();
-
-            rendererData.runTime = timeMan.getRuntime(.seconds, f32);
-            rendererData.deltaTime = timeMan.getDeltaTime(.seconds, f32);
-
             if (cam.needsUpdate == true) {
                 const camData = cam.getCameraData();
                 try renderer.updateBuffer(rc.cameraUB, &camData);
                 cam.needsUpdate = false;
             }
 
+            if (firstFrame) windowMan.showAllWindows();
+
             // Draw and reset Frame Arena
-            renderer.draw(rendererData) catch |err| {
+            renderer.draw(frameData) catch |err| {
                 std.log.err("Error in renderer.draw(): {}", .{err});
                 break;
             };
             defer memoryMan.*.resetArena();
 
-            if (firstFrame) {
-                windowMan.showOpacityAllWindows();
-                firstFrame = false;
-            }
+            if (firstFrame == false) continue;
+            windowMan.showOpacityAllWindows();
+            firstFrame = false;
         }
     }
 };
 
-pub const RendererData = struct {
+pub const FrameData = struct {
     runTime: f32,
     deltaTime: f32,
 };

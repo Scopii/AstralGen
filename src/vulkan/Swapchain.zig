@@ -7,7 +7,7 @@ const Window = @import("../platform/Window.zig").Window;
 const vh = @import("Helpers.zig");
 const createSemaphore = @import("Scheduler.zig").createSemaphore;
 const rc = @import("../configs/renderConfig.zig");
-const TextureBase = @import("resources/Texture.zig").TextureBase;
+const TextureBase = @import("resources/TextureBase.zig").TextureBase;
 const TexId = @import("resources/Texture.zig").Texture.TexId;
 
 pub const Swapchain = struct {
@@ -35,19 +35,19 @@ pub const Swapchain = struct {
         const mode = rc.DISPLAY_MODE; //try context.pickPresentMode();
         const realExtent = pickExtent(&caps, extent);
 
-        var desiredImgCount: u32 = rc.DESIRED_SWAPCHAIN_IMAGES;
-        if (caps.maxImageCount < desiredImgCount) {
-            std.debug.print("Swapchain does not support {} Images({}-{}), using {}\n", .{ rc.DESIRED_SWAPCHAIN_IMAGES, caps.minImageCount, caps.maxImageCount, caps.maxImageCount });
-            desiredImgCount = caps.maxImageCount;
+        var desired: u32 = rc.DESIRED_SWAPCHAIN_IMAGES;
+        if (caps.maxImageCount < desired) {
+            std.debug.print("Swapchain does not support {} Images({}-{}), using {}\n", .{ desired, caps.minImageCount, caps.maxImageCount, caps.maxImageCount });
+            desired = caps.maxImageCount;
         } else if (rc.DESIRED_SWAPCHAIN_IMAGES < caps.minImageCount) {
-            std.debug.print("Swapchain does not support {} Images ({}-{}), using {}\n", .{ rc.DESIRED_SWAPCHAIN_IMAGES, caps.minImageCount, caps.maxImageCount, caps.minImageCount });
-            desiredImgCount = caps.minImageCount;
+            std.debug.print("Swapchain does not support {} Images ({}-{}), using {}\n", .{ desired, caps.minImageCount, caps.maxImageCount, caps.minImageCount });
+            desired = caps.minImageCount;
         }
 
         const swapchainInf = vk.VkSwapchainCreateInfoKHR{
             .sType = vk.VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
             .surface = surface,
-            .minImageCount = desiredImgCount,
+            .minImageCount = desired,
             .imageFormat = surfaceFormat.format,
             .imageColorSpace = surfaceFormat.colorSpace,
             .imageExtent = realExtent,
@@ -135,8 +135,8 @@ pub const Swapchain = struct {
         alloc.free(self.renderDoneSems);
     }
 
-    pub fn acquireNextImage(self: *Swapchain, gpi: vk.VkDevice, frameInFlight: u8) vk.VkResult {
-        return vk.vkAcquireNextImageKHR(gpi, self.handle, 0, self.imgRdySems[frameInFlight], null, &self.curIndex);
+    pub fn acquireNextImage(self: *Swapchain, gpi: vk.VkDevice, flightId: u8) vk.VkResult {
+        return vk.vkAcquireNextImageKHR(gpi, self.handle, 0, self.imgRdySems[flightId], null, &self.curIndex);
     }
 
     pub fn getCurTexture(self: *Swapchain) *TextureBase {

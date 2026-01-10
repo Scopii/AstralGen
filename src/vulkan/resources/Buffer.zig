@@ -1,6 +1,5 @@
 const vk = @import("../../modules/vk.zig").c;
-const ResourceSlot = @import("Resource.zig").ResourceSlot;
-const ResourceState = @import("../RenderGraph.zig").ResourceState;
+const ResourceSlot = @import("PushConstants.zig").ResourceSlot;
 const rc = @import("../../configs/renderConfig.zig");
 const vh = @import("../Helpers.zig");
 
@@ -12,7 +11,12 @@ pub const Buffer = struct {
     size: vk.VkDeviceSize,
     count: u32 = 0,
     bindlessIndex: u32 = 0,
-    state: ResourceState = .{},
+    state: BufferState = .{},
+
+    pub const BufferState = struct {
+        stage: vh.PipeStage = .TopOfPipe,
+        access: vh.PipeAccess = .None,
+    };
 
     pub const BufId = packed struct { val: u32 };
 
@@ -28,7 +32,7 @@ pub const Buffer = struct {
         return bufInf;
     }
 
-    pub fn createBufferBarrier(self: *Buffer, newState: ResourceState) vk.VkBufferMemoryBarrier2 {
+    pub fn createBufferBarrier(self: *Buffer, newState: BufferState) vk.VkBufferMemoryBarrier2 {
         const barrier = vk.VkBufferMemoryBarrier2{
             .sType = vk.VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2,
             .srcStageMask = @intFromEnum(self.state.stage),

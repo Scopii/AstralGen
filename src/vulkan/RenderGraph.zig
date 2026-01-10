@@ -7,36 +7,33 @@ const Context = @import("Context.zig").Context;
 const ShaderObject = @import("ShaderObject.zig").ShaderObject;
 const ShaderManager = @import("ShaderManager.zig").ShaderManager;
 const CmdManager = @import("CmdManager.zig").CmdManager;
-const PushConstants = @import("resources/Resource.zig").PushConstants;
+const PushConstants = @import("resources/PushConstants.zig").PushConstants;
 const Swapchain = @import("Swapchain.zig").Swapchain;
 const Command = @import("Command.zig").Command;
 const vh = @import("Helpers.zig");
-const RendererData = @import("../App.zig").RendererData;
+const FrameData = @import("../App.zig").FrameData;
 const Pass = @import("Pass.zig").Pass;
 const Attachment = @import("Pass.zig").Attachment;
-const TextureBase = @import("resources/Texture.zig").TextureBase;
+const TextureBase = @import("resources/TextureBase.zig").TextureBase;
 const TexId = @import("resources/Texture.zig").Texture.TexId;
 const Buffer = @import("resources/Buffer.zig").Buffer;
-const ResourceSlot = @import("resources/Resource.zig").ResourceSlot;
+const ResourceSlot = @import("resources/PushConstants.zig").ResourceSlot;
 
-pub const ResourceState = struct {
-    stage: vh.PipeStage = .TopOfPipe,
-    access: vh.PipeAccess = .None,
-    layout: vh.ImageLayout = .Undefined,
-};
 
 pub const RenderGraph = struct {
     alloc: Allocator,
     cmdMan: CmdManager,
     pipeLayout: vk.VkPipelineLayout,
+    descLayoutAddress: u64,
     tempImgBarriers: std.array_list.Managed(vk.VkImageMemoryBarrier2),
     tempBufBarriers: std.array_list.Managed(vk.VkBufferMemoryBarrier2),
 
     pub fn init(alloc: Allocator, context: *const Context, resMan: *const ResourceManager) !RenderGraph {
         return .{
             .alloc = alloc,
-            .cmdMan = try CmdManager.init(alloc, context, rc.MAX_IN_FLIGHT, resMan),
+            .cmdMan = try CmdManager.init(alloc, context, rc.MAX_IN_FLIGHT),
             .pipeLayout = resMan.descMan.pipeLayout,
+            .descLayoutAddress = resMan.descMan.descBuffer.gpuAddress,
             .tempImgBarriers = try std.array_list.Managed(vk.VkImageMemoryBarrier2).initCapacity(alloc, 30),
             .tempBufBarriers = try std.array_list.Managed(vk.VkBufferMemoryBarrier2).initCapacity(alloc, 30),
         };
@@ -48,16 +45,13 @@ pub const RenderGraph = struct {
         self.tempBufBarriers.deinit();
     }
 
-    pub fn recordFrame(
-        self: *RenderGraph,
-        frameInFlight: u8,
-        resMan: *ResourceManager,
-        rendererData: RendererData,
-        targets: []const *Swapchain,
-        passes: []Pass,
-        shaderMan: *ShaderManager,
-    ) !Command {
-        const cmd = try self.cmdMan.getAndBeginCommand(frameInFlight);
+    pub fn recordFrame(self: *RenderGraph, flightId: u8, resMan: *ResourceManager, frameData: FrameData, targets: []const *Swapchain, passes: []Pass, shaderMan: *ShaderManager) !Command {
+        const cmd = try self.cmdMan.getCmd(flightId);
+        try cmd.begin();
+
+        cmd.bindDescriptorBuffer(self.descLayoutAddress);
+        cmd.setDescriptorBufferOffset(vk.VK_PIPELINE_BIND_POINT_COMPUTE, self.pipeLayout);
+        cmd.setDescriptorBufferOffset(vk.VK_PIPELINE_BIND_POINT_GRAPHICS, self.pipeLayout);
         cmd.setGraphicsState(.{});
 
         for (resMan.indirectBufIds.items) |id| {
@@ -69,12 +63,13 @@ pub const RenderGraph = struct {
 
         for (passes) |pass| {
             const shaders = shaderMan.getShaders(pass.shaderIds)[0..pass.shaderIds.len];
-            try self.recordPass(&cmd, pass, rendererData, shaders, resMan);
+            cmd.bindShaders(shaders);
+            try self.recordPass(&cmd, pass, frameData, resMan);
         }
 
         try self.recordSwapchainBlits(&cmd, targets, resMan);
-        try cmd.endRecording();
 
+        try cmd.end();
         return cmd;
     }
 
@@ -83,20 +78,20 @@ pub const RenderGraph = struct {
 
         for (resMan.pendingTransfers.items) |transfer| {
             const buffer = try resMan.getBufferPtr(transfer.dstResId);
-            try self.bufferBarrierIfNeeded(buffer, .{ .stage = .Transfer, .access = .TransferWrite, .layout = .TransferDst });
-            cmd.copyBuffer(resMan.stagingBuffer.handle, &transfer, buffer.handle); // MAYBE POINTER DEREFERNCE?
+            try self.bufferBarrierIfNeeded(buffer, .{ .stage = .Transfer, .access = .TransferWrite});
+            cmd.copyBuffer(resMan.stagingBuffer.handle, &transfer, buffer.handle);
         }
         resMan.resetTransfers();
         self.bakeBarriers(cmd);
     }
 
-    fn imageBarrierIfNeeded(self: *RenderGraph, tex: *TextureBase, neededState: ResourceState) !void {
+    fn imageBarrierIfNeeded(self: *RenderGraph, tex: *TextureBase, neededState: TextureBase.TextureState) !void {
         const state = tex.state;
         if (state.stage == neededState.stage and state.access == neededState.access and state.layout == neededState.layout) return;
         try self.tempImgBarriers.append(tex.createImageBarrier(neededState));
     }
 
-    fn bufferBarrierIfNeeded(self: *RenderGraph, buffer: *Buffer, neededState: ResourceState) !void {
+    fn bufferBarrierIfNeeded(self: *RenderGraph, buffer: *Buffer, neededState: Buffer.BufferState) !void {
         const state = buffer.state;
         if (state.stage == neededState.stage and state.access == neededState.access) return;
         try self.tempBufBarriers.append(buffer.createBufferBarrier(neededState));
@@ -142,49 +137,11 @@ pub const RenderGraph = struct {
         } else cmd.dispatch(dispatch.x, dispatch.y, dispatch.z);
     }
 
-    pub fn recordPass(self: *RenderGraph, cmd: *const Command, pass: Pass, rendererData: RendererData, validShaders: []const ShaderObject, resMan: *ResourceManager) !void {
-        try self.recordPassBarriers(cmd, pass, resMan);
-
-        var pcs = PushConstants{ .runTime = rendererData.runTime, .deltaTime = rendererData.deltaTime };
-
-        var mask: [14]bool = .{false} ** 14;
-        var resourceSlots: [14]ResourceSlot = undefined;
-
-        for (pass.bufUses) |bufUse| {
-            const shaderSlot = bufUse.shaderSlot;
-
-            if (shaderSlot) |slot| {
-                if (mask[slot.val] == false) {
-                    const buffer = try resMan.getBufferPtr(bufUse.bufId);
-                    resourceSlots[slot.val] = buffer.getResourceSlot();
-                    mask[slot.val] = true;
-                } else std.debug.print("Pass Shader Slot {} already used\n", .{slot.val});
-            }
-        }
-
-        for (pass.texUses) |texUse| {
-            const shaderSlot = texUse.shaderSlot;
-
-            if (shaderSlot) |slot| {
-                if (mask[slot.val] == false) {
-                    const tex = try resMan.getTexturePtr(texUse.texId);
-                    resourceSlots[slot.val] = tex.getResourceSlot();
-                    mask[slot.val] = true;
-                } else std.debug.print("Pass Shader Slot {} already used\n", .{slot.val});
-            }
-        }
-
-        pcs.resourceSlots = resourceSlots;
-
-        const mainTexId = pass.getMainTexId();
-        if (mainTexId) |texId| {
-            const mainTex = try resMan.getTexturePtr(texId);
-            pcs.width = mainTex.base.extent.width;
-            pcs.height = mainTex.base.extent.height;
-        }
-
+    pub fn recordPass(self: *RenderGraph, cmd: *const Command, pass: Pass, frameData: FrameData, resMan: *ResourceManager) !void {
+        const pcs = try resMan.createPushConstants(pass, frameData);
         cmd.setPushConstants(self.pipeLayout, vk.VK_SHADER_STAGE_ALL, 0, @sizeOf(PushConstants), &pcs);
-        cmd.bindShaders(validShaders);
+
+        try self.recordPassBarriers(cmd, pass, resMan);
 
         switch (pass.typ) {
             .compute => |comp| try recordCompute(cmd, comp.workgroups, null, resMan),
@@ -241,7 +198,7 @@ pub const RenderGraph = struct {
         cmd.endRendering();
     }
 
-    pub fn recordSwapchainBlits(self: *RenderGraph, cmd: *const Command, swapchains: []const *Swapchain,  resMan: *ResourceManager) !void {
+    pub fn recordSwapchainBlits(self: *RenderGraph, cmd: *const Command, swapchains: []const *Swapchain, resMan: *ResourceManager) !void {
         // Render Image and Swapchain Preperations
         for (swapchains) |swapchain| {
             const renderTex = try resMan.getTexturePtr(swapchain.renderTexId);
@@ -252,7 +209,7 @@ pub const RenderGraph = struct {
         // Blits
         for (swapchains) |swapchain| {
             const renderTex = try resMan.getTexturePtr(swapchain.renderTexId);
-            cmd.copyImageToImage(renderTex.base.img, renderTex.base.extent, swapchain.getCurTexture().img, swapchain.getExtent3D(), rc.RENDER_IMG_STRETCH);
+            cmd.copyImageToImage(renderTex.base.img, renderTex.base.extent, swapchain.getCurTexture().img, swapchain.getExtent3D(), rc.RENDER_TEX_STRETCH);
         }
         // Swapchain Presentation Barriers
         for (swapchains) |swapchain| {
@@ -262,8 +219,10 @@ pub const RenderGraph = struct {
     }
 
     fn bakeBarriers(self: *RenderGraph, cmd: *const Command) void {
-        cmd.bakeBarriers(self.tempImgBarriers.items, self.tempBufBarriers.items);
-        self.tempImgBarriers.clearRetainingCapacity();
-        self.tempBufBarriers.clearRetainingCapacity();
+        if (self.tempImgBarriers.items.len != 0 or self.tempBufBarriers.items.len != 0) {
+            cmd.bakeBarriers(self.tempImgBarriers.items, self.tempBufBarriers.items);
+            self.tempImgBarriers.clearRetainingCapacity();
+            self.tempBufBarriers.clearRetainingCapacity();
+        }
     }
 };

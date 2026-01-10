@@ -1,6 +1,6 @@
 const vk = @import("../modules/vk.zig").c;
 const vkFn = @import("../modules/vk.zig");
-const PushConstants = @import("resources/Resource.zig").PushConstants;
+const PushConstants = @import("resources/PushConstants.zig").PushConstants;
 const LoadedShader = @import("../core/ShaderCompiler.zig").LoadedShader;
 const vh = @import("Helpers.zig");
 

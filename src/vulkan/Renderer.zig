@@ -10,7 +10,7 @@ const ResourceManager = @import("resources/ResourceManager.zig").ResourceManager
 const MemoryManager = @import("../core/MemoryManager.zig").MemoryManager;
 const createInstance = @import("Context.zig").createInstance;
 const RenderGraph = @import("RenderGraph.zig").RenderGraph;
-const RendererData = @import("../App.zig").RendererData;
+const FrameData = @import("../App.zig").FrameData;
 const rc = @import("../configs/renderConfig.zig");
 const Allocator = std.mem.Allocator;
 const Command = @import("Command.zig").Command;
@@ -80,7 +80,7 @@ pub const Renderer = struct {
             if (tempWindow.resizeTex == true) dirtyImgIds[i] = tempWindow.renderTexId;
         }
 
-        if (rc.RENDER_IMG_AUTO_RESIZE == true) {
+        if (rc.RENDER_TEX_AUTO_RESIZE == true) {
             for (0..dirtyImgIds.len) |i| {
                 if (dirtyImgIds[i] == null) break;
 
@@ -91,12 +91,12 @@ pub const Renderer = struct {
         }
     }
 
-    pub fn updateRenderTexture(self: *Renderer, texId: Texture.TexId, img: *Texture) !void {
-        const old = img.base.extent;
+    pub fn updateRenderTexture(self: *Renderer, texId: Texture.TexId, tex: *Texture) !void {
+        const old = tex.base.extent;
         const new = self.swapMan.getMaxRenderExtent(texId);
 
         if (new.width != old.width or new.height != old.height) {
-            const imgInf = Texture.TexInf{ .id = texId, .width = new.width, .height = new.height, .depth = 1, .typ = img.base.texType, .mem = .Gpu };
+            const imgInf = Texture.TexInf{ .id = texId, .width = new.width, .height = new.height, .depth = 1, .typ = tex.base.texType, .mem = .Gpu };
             try self.resMan.replaceTexture(texId, imgInf);
             std.debug.print("Render Texture ID {} recreated {}x{} to {}x{}\n", .{ texId.val, old.width, old.height, new.width, new.height });
         }
@@ -110,28 +110,28 @@ pub const Renderer = struct {
         }
     }
 
-    pub fn draw(self: *Renderer, rendererData: RendererData) !void {
+    pub fn draw(self: *Renderer, frameData: FrameData) !void {
         try self.scheduler.waitForGPU();
-        const frameInFlight = self.scheduler.frameInFlight;
+        const flightId = self.scheduler.flightId;
 
-        if (try self.swapMan.updateTargets(frameInFlight, &self.context) == false) return;
+        if (try self.swapMan.updateTargets(flightId, &self.context) == false) return;
         const targets = self.swapMan.getTargets();
 
-        const cmd = try self.renderGraph.recordFrame(frameInFlight, &self.resMan, rendererData, targets, self.passes.items, &self.shaderMan);
+        const cmd = try self.renderGraph.recordFrame(flightId, &self.resMan, frameData, targets, self.passes.items, &self.shaderMan);
 
-        try self.queueSubmit(&cmd, targets, frameInFlight);
+        try self.queueSubmit(&cmd, targets, flightId);
         try self.swapMan.present(targets, self.context.presentQ.handle);
 
         self.scheduler.nextFrame();
     }
 
-    fn queueSubmit(self: *Renderer, cmd: *const Command, targets: []const *Swapchain, frameInFlight: u8) !void {
+    fn queueSubmit(self: *Renderer, cmd: *const Command, targets: []const *Swapchain, flightId: u8) !void {
         var waitInfos: [rc.MAX_WINDOWS]vk.VkSemaphoreSubmitInfo = undefined;
         var signalInfos: [rc.MAX_WINDOWS + 1]vk.VkSemaphoreSubmitInfo = undefined;
         signalInfos[targets.len] = createSemaphoreSubmitInfo(self.scheduler.cpuSyncTimeline, .AllCmds, self.scheduler.totalFrames + 1);
 
         for (targets, 0..) |swapchain, i| {
-            waitInfos[i] = createSemaphoreSubmitInfo(swapchain.imgRdySems[frameInFlight], .Transfer, 0);
+            waitInfos[i] = createSemaphoreSubmitInfo(swapchain.imgRdySems[flightId], .Transfer, 0);
             signalInfos[i] = createSemaphoreSubmitInfo(swapchain.renderDoneSems[swapchain.curIndex], .AllCmds, 0);
         }
         try self.context.graphicsQ.submit(waitInfos[0..targets.len], cmd.createSubmitInfo(), signalInfos[0 .. targets.len + 1]);

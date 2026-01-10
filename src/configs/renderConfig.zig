@@ -17,23 +17,23 @@ pub const DESIRED_SWAPCHAIN_IMAGES: u8 = 3;
 pub const DISPLAY_MODE = vk.VK_PRESENT_MODE_IMMEDIATE_KHR;
 pub const MAX_WINDOWS: u8 = 8;
 
-pub const GPU_BUF_MAX = 64;
-pub const GPU_IMG_MAX = 32;
-pub const GPU_RESOURCE_MAX = GPU_BUF_MAX + GPU_IMG_MAX;
+pub const BUF_MAX = 64;
+pub const TEX_MAX = 32;
+pub const GPU_RESOURCE_MAX = BUF_MAX + TEX_MAX;
 
 pub const TEX_COLOR_FORMAT = vk.VK_FORMAT_R16G16B16A16_SFLOAT;
 pub const TEX_DEPTH_FORMAT = vk.VK_FORMAT_D32_SFLOAT;
-pub const RENDER_IMG_AUTO_RESIZE = true;
-pub const RENDER_IMG_STRETCH = true; // Ignored on AUTO_RESIZE
+pub const RENDER_TEX_AUTO_RESIZE = true;
+pub const RENDER_TEX_STRETCH = true; // Ignored on AUTO_RESIZE
 
-pub const STORAGE_IMG_BINDING = 0;
+pub const STORAGE_TEX_BINDING = 0;
 pub const STORAGE_BUF_BINDING = 1;
-pub const SAMPLED_IMG_BINDING = 2;
+pub const SAMPLED_TEX_BINDING = 2;
 
 pub const bindingRegistry: []const struct { binding: u32, descType: vk.VkDescriptorType, len: u32 } = &.{
-    .{ .binding = STORAGE_IMG_BINDING, .descType = vk.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, .len = GPU_IMG_MAX },
-    .{ .binding = STORAGE_BUF_BINDING, .descType = vk.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, .len = GPU_BUF_MAX },
-    .{ .binding = SAMPLED_IMG_BINDING, .descType = vk.VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, .len = GPU_IMG_MAX },
+    .{ .binding = STORAGE_TEX_BINDING, .descType = vk.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, .len = TEX_MAX },
+    .{ .binding = STORAGE_BUF_BINDING, .descType = vk.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, .len = BUF_MAX },
+    .{ .binding = SAMPLED_TEX_BINDING, .descType = vk.VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, .len = TEX_MAX },
 };
 
 pub const objectSB = Buffer.create(.{ .id = .{ .val = 1 }, .mem = .Gpu, .typ = .Storage, .len = 100, .elementSize = @sizeOf(Object) });
@@ -49,7 +49,7 @@ pub const testTex = Texture.create(.{ .id = .{ .val = 5 }, .mem = .Gpu, .typ = .
 pub const depthTex = Texture.create(.{ .id = .{ .val = 11 }, .mem = .Gpu, .typ = .Depth, .width = 1920, .height = 1920 });
 pub const textures: []const Texture.TexInf = &.{ compTex, grapTex, meshTex, taskTex, testTex, depthTex };
 
-pub const computeTest: Pass = .{
+pub const compTest: Pass = .{
     .shaderIds = &.{sc.t1Comp.id},
     .typ = Pass.computeOnImage(.{
         .mainTexId = compTex.id,
@@ -64,7 +64,7 @@ pub const computeTest: Pass = .{
     },
 };
 
-const graphicsTest: Pass = .{
+const grapTest: Pass = .{
     .shaderIds = &.{ sc.t2Frag.id, sc.t2Vert.id },
     .typ = Pass.graphics(.{
         .mainTexId = grapTex.id,
@@ -138,4 +138,4 @@ const indirectMeshTest: Pass = .{
     },
 };
 
-pub const passes: []const Pass = &.{ computeTest, graphicsTest, meshTest, taskTest, gridTest, indirectCompTest, indirectMeshTest };
+pub const passes: []const Pass = &.{ compTest, grapTest, meshTest, taskTest, gridTest, indirectCompTest, indirectMeshTest };

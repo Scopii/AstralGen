@@ -11,10 +11,8 @@ pub const CmdManager = struct {
     gpi: vk.VkDevice,
     pool: vk.VkCommandPool,
     cmds: []Command,
-    pipeLayout: vk.VkPipelineLayout,
-    descLayoutAddress: u64,
 
-    pub fn init(alloc: Allocator, context: *const Context, maxInFlight: u32, resMan: *const ResourceManager) !CmdManager {
+    pub fn init(alloc: Allocator, context: *const Context, maxInFlight: u32) !CmdManager {
         const gpi = context.gpi;
         const pool = try createCmdPool(gpi, context.families.graphics);
 
@@ -28,8 +26,6 @@ pub const CmdManager = struct {
             .gpi = gpi,
             .pool = pool,
             .cmds = cmds,
-            .pipeLayout = resMan.descMan.pipeLayout,
-            .descLayoutAddress = resMan.descMan.descBuffer.gpuAddress,
         };
     }
 
@@ -38,21 +34,9 @@ pub const CmdManager = struct {
         vk.vkDestroyCommandPool(self.gpi, self.pool, null);
     }
 
-    pub fn getAndBeginCommand(self: *CmdManager, frameInFlight: u8) !Command {
-        const cmd = self.cmds[frameInFlight];
+    pub fn getCmd(self: *CmdManager, flightId: u8) !Command {
+        const cmd = self.cmds[flightId];
         try vh.check(vk.vkResetCommandBuffer(cmd.handle, 0), "could not reset command buffer"); // Might be optional
-
-        const beginInf = vk.VkCommandBufferBeginInfo{
-            .sType = vk.VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-            .flags = vk.VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT, //vk.VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT
-            .pInheritanceInfo = null,
-        };
-        try vh.check(vk.vkBeginCommandBuffer(cmd.handle, &beginInf), "could not Begin CmdBuffer");
-
-        cmd.bindDescriptorBuffer(self.descLayoutAddress);
-        cmd.setDescriptorBufferOffset(vk.VK_PIPELINE_BIND_POINT_COMPUTE, self.pipeLayout);
-        cmd.setDescriptorBufferOffset(vk.VK_PIPELINE_BIND_POINT_GRAPHICS, self.pipeLayout);
-
         return cmd;
     }
 };

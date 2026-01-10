@@ -64,14 +64,14 @@ pub const SwapchainManager = struct {
         }
     }
 
-    pub fn updateTargets(self: *SwapchainManager, frameInFlight: u8, context: *Context) !bool {
+    pub fn updateTargets(self: *SwapchainManager, flightId: u8, context: *Context) !bool {
         var count: u8 = 0;
 
         for (0..self.swapchains.getCount()) |i| {
             const swapchain = self.swapchains.getPtrAtIndex(@intCast(i));
             if (swapchain.inUse == false) continue;
 
-            const result1 = swapchain.acquireNextImage(self.gpi, frameInFlight);
+            const result1 = swapchain.acquireNextImage(self.gpi, flightId);
             switch (result1) {
                 vk.VK_SUCCESS => {
                     self.targetPtrs[count] = swapchain;
@@ -84,7 +84,7 @@ pub const SwapchainManager = struct {
                 vk.VK_ERROR_OUT_OF_DATE_KHR, vk.VK_SUBOPTIMAL_KHR => {
                     const windowID = self.swapchains.getKeyFromIndex(@intCast(i));
                     try self.createSwapchain(context, .{ .id = windowID });
-                    const result2 = swapchain.acquireNextImage(self.gpi, frameInFlight);
+                    const result2 = swapchain.acquireNextImage(self.gpi, flightId);
 
                     if (result2 == vk.VK_SUCCESS) {
                         self.targetPtrs[count] = swapchain;

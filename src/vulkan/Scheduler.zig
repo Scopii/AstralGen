@@ -5,7 +5,7 @@ const vh = @import("Helpers.zig");
 
 pub const Scheduler = struct {
     gpi: vk.VkDevice,
-    frameInFlight: u8 = 0,
+    flightId: u8 = 0,
     maxInFlight: u8,
     cpuSyncTimeline: vk.VkSemaphore,
     totalFrames: u64 = 0,
@@ -13,7 +13,6 @@ pub const Scheduler = struct {
 
     pub fn init(context: *const Context, maxInFlight: u8) !Scheduler {
         std.debug.print("Scheduler: In Flight {}\n", .{maxInFlight});
-
         return Scheduler{
             .gpi = context.gpi,
             .cpuSyncTimeline = try createTimeline(context.gpi),
@@ -45,7 +44,7 @@ pub const Scheduler = struct {
     }
 
     pub fn nextFrame(self: *Scheduler) void {
-        self.frameInFlight = (self.frameInFlight + 1) % self.maxInFlight;
+        self.flightId = (self.flightId + 1) % self.maxInFlight;
         self.totalFrames += 1;
     }
 };

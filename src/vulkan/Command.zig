@@ -13,8 +13,17 @@ pub const Command = struct {
         return .{ .handle = cmd };
     }
 
-    pub fn endRecording(self: *const Command) !void {
-        try vh.check(vk.vkEndCommandBuffer(self.handle), "Could not End Cmd Buffer");
+    pub fn begin(self: *const Command) !void {
+        const beginInf = vk.VkCommandBufferBeginInfo{
+            .sType = vk.VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+            .flags = vk.VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT, //vk.VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT
+            .pInheritanceInfo = null,
+        };
+        try vh.check(vk.vkBeginCommandBuffer(self.handle, &beginInf), "could not Begin CmdBuffer");
+    }
+
+    pub fn end(self: *const Command) !void {
+        try vh.check(vk.vkEndCommandBuffer(self.handle), "Could not End CmdBuffer");
     }
 
     pub fn bakeBarriers(self: *const Command, imgBarriers: []const vk.VkImageMemoryBarrier2, bufBarriers: []const vk.VkBufferMemoryBarrier2) void {
@@ -229,7 +238,7 @@ pub const Command = struct {
 
         vkFn.vkCmdSetAlphaToOneEnableEXT.?(cmd, state.alphaToOne);
         vkFn.vkCmdSetAlphaToCoverageEnableEXT.?(cmd, state.alphaToCoverage);
-        
+
         vkFn.vkCmdSetLogicOpEnableEXT.?(cmd, state.logicOp);
         vkFn.vkCmdSetLogicOpEXT.?(cmd, state.logicOpType);
 

@@ -1,7 +1,6 @@
 const vk = @import("../../modules/vk.zig").c;
 const std = @import("std");
 const DescriptorBuffer = @import("DescriptorManager.zig").DescriptorBuffer;
-const ResourceInf = @import("Resource.zig").ResourceInf;
 const Texture = @import("Texture.zig").Texture;
 const Buffer = @import("Buffer.zig").Buffer;
 const rc = @import("../../configs/renderConfig.zig");

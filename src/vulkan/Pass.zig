@@ -1,6 +1,6 @@
-const ResourceState = @import("../vulkan/RenderGraph.zig").ResourceState;
-const ResourceSlot = @import("resources/Resource.zig").ResourceSlot;
+const ResourceSlot = @import("resources/PushConstants.zig").ResourceSlot;
 const Texture = @import("resources/Texture.zig").Texture;
+const TextureBase = @import("resources/TextureBase.zig").TextureBase;
 const Buffer = @import("resources/Buffer.zig").Buffer;
 const vh = @import("../vulkan/Helpers.zig");
 const ShaderId = @import("../configs/shaderConfig.zig").ShaderInf.ShaderId;
@@ -42,7 +42,7 @@ pub const Pass = struct {
         depthAtt: ?Attachment = null,
         stencilAtt: ?Attachment = null,
         workgroups: Dispatch,
-        indirectBuf: struct { id: Buffer.BufId, offset: u64 = 0},
+        indirectBuf: struct { id: Buffer.BufId, offset: u64 = 0 },
     };
 
     const Graphics = struct {
@@ -79,7 +79,8 @@ pub const Pass = struct {
             .graphics => |g| g.mainTexId,
             .taskOrMeshIndirect => |i| i.mainTexId,
             .computeOnTex => |c| c.mainTexId,
-            .compute, => null,
+            .compute,
+            => null,
         };
     }
 
@@ -120,7 +121,7 @@ pub const Attachment = struct {
     layout: vh.ImageLayout = .General,
     clear: bool,
 
-    pub fn getNeededState(self: *const Attachment) ResourceState {
+    pub fn getNeededState(self: *const Attachment) TextureBase.TextureState {
         return .{ .stage = self.stage, .access = self.access, .layout = self.layout };
     }
 
@@ -138,7 +139,7 @@ pub const TextureUse = struct {
     layout: vh.ImageLayout = .General,
     shaderSlot: ?ShaderSlot = null,
 
-    pub fn getNeededState(self: *const TextureUse) ResourceState {
+    pub fn getNeededState(self: *const TextureUse) TextureBase.TextureState {
         return .{ .stage = self.stage, .access = self.access, .layout = self.layout };
     }
 
@@ -153,8 +154,8 @@ pub const BufferUse = struct {
     access: vh.PipeAccess = .None,
     shaderSlot: ?ShaderSlot = null,
 
-    pub fn getNeededState(self: *const BufferUse) ResourceState {
-        return .{ .stage = self.stage, .access = self.access, .layout = .General };
+    pub fn getNeededState(self: *const BufferUse) Buffer.BufferState {
+        return .{ .stage = self.stage, .access = self.access};
     }
 
     pub fn init(bufId: Buffer.BufId, stage: vh.PipeStage, access: vh.PipeAccess, shaderSlot: ?u8) BufferUse {

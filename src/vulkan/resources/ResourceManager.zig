@@ -6,6 +6,10 @@ const Texture = @import("Texture.zig").Texture;
 const Buffer = @import("Buffer.zig").Buffer;
 const DescriptorManager = @import("DescriptorManager.zig").DescriptorManager;
 const GpuAllocator = @import("GpuAllocator.zig").GpuAllocator;
+const PushConstants = @import("PushConstants.zig").PushConstants;
+const ResourceSlot = @import("PushConstants.zig").ResourceSlot;
+const FrameData = @import("../../App.zig").FrameData;
+const Pass = @import("../Pass.zig").Pass;
 const rc = @import("../../configs/renderConfig.zig");
 const vh = @import("../Helpers.zig");
 const CreateMapArray = @import("../../structures/MapArray.zig").CreateMapArray;
@@ -22,8 +26,8 @@ pub const ResourceManager = struct {
     gpi: vk.VkDevice,
     gpu: vk.VkPhysicalDevice,
 
-    buffers: CreateMapArray(Buffer, rc.GPU_BUF_MAX, u32, rc.GPU_BUF_MAX, 0) = .{},
-    textures: CreateMapArray(Texture, rc.GPU_IMG_MAX, u32, rc.GPU_IMG_MAX, 0) = .{},
+    buffers: CreateMapArray(Buffer, rc.BUF_MAX, u32, rc.BUF_MAX, 0) = .{},
+    textures: CreateMapArray(Texture, rc.TEX_MAX, u32, rc.TEX_MAX, 0) = .{},
 
     nextTextureIndex: u32 = 0,
     nextBufferIndex: u32 = 0,
@@ -69,14 +73,10 @@ pub const ResourceManager = struct {
         while (self.textures.getCount() > 0) {
             self.destroyTexture(.{ .val = self.textures.getKeyFromIndex(0) });
         }
-
         self.descMan.deinit();
-
         self.pendingTransfers.deinit();
         self.gpuAlloc.freeBuffer(self.stagingBuffer.handle, self.stagingBuffer.allocation);
-
         self.indirectBufIds.deinit();
-
         self.gpuAlloc.deinit();
     }
 
@@ -100,7 +100,6 @@ pub const ResourceManager = struct {
         };
 
         if (self.stagingOffset + bytes.len > 1 * 1024 * 1024) return error.StagingBufferFull;
-
         // Copy CPU data into the staging area
         @memcpy(self.stagingPtr[self.stagingOffset..][0..bytes.len], bytes);
 
@@ -112,7 +111,6 @@ pub const ResourceManager = struct {
 
         var buffer = try self.getBufferPtr(bufId);
         buffer.count = @intCast(bytes.len / bufInf.elementSize);
-
         // Align the offset to 16 bytes for GPU safety
         self.stagingOffset += (bytes.len + 15) & ~@as(u64, 15);
     }
@@ -140,6 +138,7 @@ pub const ResourceManager = struct {
         self.gpuAlloc.printMemoryLocation(buffer.allocation, self.gpu);
         self.buffers.set(bufInf.id.val, buffer);
         std.debug.print("Buffer ID {} -> BindlessIndex {} created\n", .{ bufInf.id.val, bindlessIndex });
+
         if (bufInf.typ == .Indirect) {
             try self.indirectBufIds.append(bufInf.id);
             std.debug.print("and added to Indirect List\n", .{});
@@ -153,11 +152,11 @@ pub const ResourceManager = struct {
         if (texInf.typ == .Color) {
             bindlessIndex = self.nextTextureIndex;
             self.nextTextureIndex += 1;
-            try self.descMan.updateTextureDescriptor(tex.base.view, rc.STORAGE_IMG_BINDING, bindlessIndex);
+            try self.descMan.updateTextureDescriptor(tex.base.view, rc.STORAGE_TEX_BINDING, bindlessIndex);
         } else {
             bindlessIndex = self.nextSampledTextureIndex;
             self.nextSampledTextureIndex += 1;
-            try self.descMan.updateSampledTextureDescriptor(tex.base.view, rc.SAMPLED_IMG_BINDING, bindlessIndex);
+            try self.descMan.updateSampledTextureDescriptor(tex.base.view, rc.SAMPLED_TEX_BINDING, bindlessIndex);
         }
         tex.bindlessIndex = bindlessIndex;
 
@@ -209,7 +208,7 @@ pub const ResourceManager = struct {
         self.gpuAlloc.freeTexture(oldTex.*);
         var newTex = try self.gpuAlloc.allocTexture(nexTexInf, .Gpu);
         newTex.bindlessIndex = slotIndex;
-        try self.descMan.updateTextureDescriptor(newTex.base.view, rc.STORAGE_IMG_BINDING, slotIndex);
+        try self.descMan.updateTextureDescriptor(newTex.base.view, rc.STORAGE_TEX_BINDING, slotIndex);
 
         oldTex.* = newTex;
         std.debug.print("Texture {} Resized/Replaced at Slot {}\n", .{ texId.val, slotIndex });
@@ -233,5 +232,47 @@ pub const ResourceManager = struct {
         const buffer = self.buffers.getPtr(bufId);
         self.gpuAlloc.freeBuffer(buffer.handle, buffer.allocation);
         self.buffers.removeAtKey(bufId);
+    }
+
+    pub fn createPushConstants(self: *ResourceManager, pass: Pass, frameData: FrameData) !PushConstants {
+        var pcs = PushConstants{ .runTime = frameData.runTime, .deltaTime = frameData.deltaTime };
+
+        var mask: [14]bool = .{false} ** 14;
+        var resourceSlots: [14]ResourceSlot = undefined;
+
+        for (pass.bufUses) |bufUse| {
+            const shaderSlot = bufUse.shaderSlot;
+
+            if (shaderSlot) |slot| {
+                if (mask[slot.val] == false) {
+                    const buffer = try self.getBufferPtr(bufUse.bufId);
+                    resourceSlots[slot.val] = buffer.getResourceSlot();
+                    mask[slot.val] = true;
+                } else std.debug.print("Pass Shader Slot {} already used\n", .{slot.val});
+            }
+        }
+
+        for (pass.texUses) |texUse| {
+            const shaderSlot = texUse.shaderSlot;
+
+            if (shaderSlot) |slot| {
+                if (mask[slot.val] == false) {
+                    const tex = try self.getTexturePtr(texUse.texId);
+                    resourceSlots[slot.val] = tex.getResourceSlot();
+                    mask[slot.val] = true;
+                } else std.debug.print("Pass Shader Slot {} already used\n", .{slot.val});
+            }
+        }
+
+        pcs.resourceSlots = resourceSlots;
+
+        const mainTexId = pass.getMainTexId();
+        if (mainTexId) |texId| {
+            const mainTex = try self.getTexturePtr(texId);
+            pcs.width = mainTex.base.extent.width;
+            pcs.height = mainTex.base.extent.height;
+        }
+
+        return pcs;
     }
 };
