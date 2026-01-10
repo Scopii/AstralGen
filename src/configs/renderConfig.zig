@@ -67,7 +67,7 @@ pub const compTest: Pass = .{
 const grapTest: Pass = .{
     .shaderIds = &.{ sc.t2Frag.id, sc.t2Vert.id },
     .typ = Pass.createClassic(.{
-        .classicTyp = Pass.graphicsData(.{}),
+        .classicTyp = Pass.ClassicTyp.graphicsData(.{}),
         .mainTexId = grapTex.id,
         .colorAtts = &.{Attachment.init(grapTex.id, .ColorAtt, .ColorAttWrite, false)},
         .depthAtt = Attachment.init(depthTex.id, .EarlyFragTest, .DepthStencilRead, false),
@@ -81,7 +81,7 @@ const grapTest: Pass = .{
 const meshTest: Pass = .{
     .shaderIds = &.{ sc.t3Mesh.id, sc.t3Frag.id },
     .typ = Pass.createClassic(.{
-        .classicTyp = Pass.taskMeshData(.{ .workgroups = .{ .x = 1, .y = 1, .z = 1 } }),
+        .classicTyp = Pass.ClassicTyp.taskMeshData(.{ .workgroups = .{ .x = 1, .y = 1, .z = 1 } }),
         .mainTexId = meshTex.id,
         .colorAtts = &.{Attachment.init(meshTex.id, .ColorAtt, .ColorAttWrite, false)},
     }),
@@ -94,7 +94,7 @@ const meshTest: Pass = .{
 const taskTest: Pass = .{
     .shaderIds = &.{ sc.t4Task.id, sc.t4Mesh.id, sc.t4Frag.id },
     .typ = Pass.createClassic(.{
-        .classicTyp = Pass.taskMeshData(.{ .workgroups = .{ .x = 1, .y = 1, .z = 1 } }),
+        .classicTyp = Pass.ClassicTyp.taskMeshData(.{ .workgroups = .{ .x = 1, .y = 1, .z = 1 } }),
         .mainTexId = taskTex.id,
         .colorAtts = &.{Attachment.init(taskTex.id, .ColorAtt, .ColorAttWrite, false)},
     }),
@@ -107,7 +107,7 @@ const taskTest: Pass = .{
 const gridTest: Pass = .{
     .shaderIds = &.{ sc.gridTask.id, sc.gridMesh.id, sc.gridFrag.id },
     .typ = Pass.createClassic(.{
-        .classicTyp = Pass.taskMeshData(.{ .workgroups = .{ .x = 1, .y = 1, .z = 1 } }),
+        .classicTyp = Pass.ClassicTyp.taskMeshData(.{ .workgroups = .{ .x = 1, .y = 1, .z = 1 } }),
         .mainTexId = taskTex.id,
         .colorAtts = &.{Attachment.init(taskTex.id, .ColorAtt, .ColorAttWrite, false)},
     }),
@@ -129,7 +129,7 @@ pub const indirectCompTest: Pass = .{
 const indirectMeshTest: Pass = .{
     .shaderIds = &.{ sc.indirectTask.id, sc.indirectMesh.id, sc.indirectFrag.id },
     .typ = Pass.createClassic(.{
-        .classicTyp = Pass.taskMeshIndirectData(.{
+        .classicTyp = Pass.ClassicTyp.taskMeshIndirectData(.{
             .workgroups = .{ .x = 1, .y = 1, .z = 1 },
             .indirectBuf = .{ .id = indirectSB.id, .offset = 0 },
         }),

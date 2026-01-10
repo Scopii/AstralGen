@@ -134,8 +134,8 @@ pub const RenderGraph = struct {
         try self.recordPassBarriers(cmd, pass, resMan);
 
         switch (pass.typ) {
-            .computePass => |comp| try recordCompute(cmd, comp.workgroups, comp.mainTexId, resMan),
-            .classicPass => |classic| try recordGraphics(cmd, pcs.width, pcs.height, classic, resMan),
+            .compute => |comp| try recordCompute(cmd, comp.workgroups, comp.mainTexId, resMan),
+            .classic => |classic| try recordGraphics(cmd, pcs.width, pcs.height, classic, resMan),
         }
     }
 
