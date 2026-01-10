@@ -23,8 +23,7 @@ pub const PushConstants = extern struct {
 
             if (shaderSlot) |slot| {
                 if (mask[slot.val] == false) {
-                    const buffer = try resMan.getBufferPtr(bufUse.bufId);
-                    resourceSlots[slot.val] = buffer.getResourceSlot();
+                    resourceSlots[slot.val] = resMan.getBufferResourceSlot(bufUse.bufId);
                     mask[slot.val] = true;
                 } else std.debug.print("Pass Shader Slot {} already used\n", .{slot.val});
             }
@@ -35,8 +34,7 @@ pub const PushConstants = extern struct {
 
             if (shaderSlot) |slot| {
                 if (mask[slot.val] == false) {
-                    const tex = try resMan.getTexturePtr(texUse.texId);
-                    resourceSlots[slot.val] = tex.getResourceSlot();
+                    resourceSlots[slot.val] = resMan.getTextureResourceSlot(texUse.texId);
                     mask[slot.val] = true;
                 } else std.debug.print("Pass Shader Slot {} already used\n", .{slot.val});
             }

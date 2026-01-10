@@ -175,7 +175,7 @@ pub const GpuAllocator = struct {
         vk.vmaDestroyBuffer(self.handle, buffer, allocation);
     }
 
-    pub fn freeTexture(self: *const GpuAllocator, tex: Texture) void {
+    pub fn freeTexture(self: *const GpuAllocator, tex: *Texture) void {
         vk.vkDestroyImageView(self.gpi, tex.base.view, null);
         vk.vmaDestroyImage(self.handle, tex.base.img, tex.allocation);
     }

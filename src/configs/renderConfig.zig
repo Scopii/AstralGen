@@ -82,7 +82,7 @@ const meshTest: Pass = .{
     .shaderIds = &.{ sc.t3Mesh.id, sc.t3Frag.id },
     .typ = Pass.createClassic(.{
         .classicTyp = Pass.taskMeshData(.{ .workgroups = .{ .x = 1, .y = 1, .z = 1 } }),
-        .mainTexId = grapTex.id,
+        .mainTexId = meshTex.id,
         .colorAtts = &.{Attachment.init(meshTex.id, .ColorAtt, .ColorAttWrite, false)},
     }),
     .bufUses = &.{

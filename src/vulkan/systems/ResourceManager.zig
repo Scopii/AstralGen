@@ -1,4 +1,4 @@
-const CreateMapArray = @import("../../structures/MapArray.zig").CreateMapArray;
+const CreateStableMapArray = @import("../../structures/StableMapArray.zig").CreateStableMapArray;
 const PushConstants = @import("../components/PushConstants.zig").PushConstants;
 const DescriptorManager = @import("DescriptorManager.zig").DescriptorManager;
 const ResourceSlot = @import("../components/PushConstants.zig").ResourceSlot;
@@ -25,12 +25,9 @@ pub const ResourceManager = struct {
     gpi: vk.VkDevice,
     gpu: vk.VkPhysicalDevice,
 
-    buffers: CreateMapArray(Buffer, rc.BUF_MAX, u32, rc.BUF_MAX, 0) = .{},
-    textures: CreateMapArray(Texture, rc.TEX_MAX, u32, rc.TEX_MAX, 0) = .{},
+    buffers: CreateStableMapArray(Buffer, rc.BUF_MAX, u32, rc.BUF_MAX, 0) = .{},
+    textures: CreateStableMapArray(Texture, rc.TEX_MAX, u32, rc.TEX_MAX, 0) = .{},
 
-    nextTextureIndex: u32 = 0,
-    nextBufferIndex: u32 = 0,
-    nextSampledTextureIndex: u32 = 0,
     descMan: DescriptorManager,
 
     stagingBuffer: Buffer,
@@ -53,21 +50,38 @@ pub const ResourceManager = struct {
             .stagingBuffer = try gpuAlloc.allocStagingBuffer(rc.STAGING_BUF_SIZE),
             .transfers = std.array_list.Managed(Transfer).init(alloc),
             .indirectBufIds = std.array_list.Managed(Buffer.BufId).init(alloc),
+            .textures = comptime CreateStableMapArray(Texture, rc.TEX_MAX, u32, rc.TEX_MAX, 0).init(),
+            .buffers = comptime CreateStableMapArray(Buffer, rc.BUF_MAX, u32, rc.BUF_MAX, 0).init(),
         };
     }
 
     pub fn deinit(self: *ResourceManager) void {
-        while (self.buffers.getCount() > 0) {
-            self.destroyBuffer(self.buffers.getKeyFromIndex(0));
+        var bufIter = self.buffers.iterator();
+        while (bufIter.next()) |key| {
+            const buf = self.buffers.getPtr(key);
+            self.gpuAlloc.freeBuffer(buf.handle, buf.allocation);
         }
-        while (self.textures.getCount() > 0) {
-            self.destroyTexture(.{ .val = self.textures.getKeyFromIndex(0) });
+        var texIter = self.textures.iterator();
+        while (texIter.next()) |key| {
+            const tex = self.textures.getPtr(key);
+            self.gpuAlloc.freeTexture(tex);
         }
         self.descMan.deinit();
         self.transfers.deinit();
         self.gpuAlloc.freeBuffer(self.stagingBuffer.handle, self.stagingBuffer.allocation);
         self.indirectBufIds.deinit();
         self.gpuAlloc.deinit();
+    }
+
+    pub fn getBufferResourceSlot(self: *ResourceManager, bufId: Buffer.BufId) ResourceSlot {
+        const bindlessIndex = self.buffers.getIndex(bufId.val);
+        const buffer = self.buffers.getPtr(bufId.val);
+        return ResourceSlot{ .index = bindlessIndex, .count = buffer.count };
+    }
+
+    pub fn getTextureResourceSlot(self: *ResourceManager, texId: Texture.TexId) ResourceSlot {
+        const bindlessIndex = self.textures.getIndex(texId.val);
+        return ResourceSlot{ .index = bindlessIndex, .count = 1 };
     }
 
     pub fn resetTransfers(self: *ResourceManager) void {
@@ -79,11 +93,10 @@ pub const ResourceManager = struct {
         const DataType = @TypeOf(data);
         const typeInfo = @typeInfo(DataType);
 
-        // Convert anytype to a byte slice
         const bytes: []const u8 = switch (typeInfo) {
             .pointer => |ptr| switch (ptr.size) {
-                .one => std.mem.asBytes(data), // For &singleStruct
-                .slice => std.mem.sliceAsBytes(data), // For slices/arrays
+                .one => std.mem.asBytes(data),
+                .slice => std.mem.sliceAsBytes(data),
                 else => return error.UnsupportedPointerType,
             },
             else => return error.ExpectedPointer,
@@ -98,8 +111,7 @@ pub const ResourceManager = struct {
 
         var buffer = try self.getBufferPtr(bufId);
         buffer.count = @intCast(bytes.len / bufInf.elementSize);
-        // Align the offset to 16 bytes for GPU safety
-        self.stagingOffset += (bytes.len + 15) & ~@as(u64, 15);
+        self.stagingOffset += (bytes.len + 15) & ~@as(u64, 15); // Align the offset to 16 bytes for GPU safety
     }
 
     pub fn getTexturePtr(self: *ResourceManager, texId: Texture.TexId) !*Texture {
@@ -115,15 +127,11 @@ pub const ResourceManager = struct {
     }
 
     pub fn createBuffer(self: *ResourceManager, bufInf: Buffer.BufInf) !void {
-        const bindlessIndex = self.nextBufferIndex;
-        self.nextBufferIndex += 1;
-
-        var buffer = try self.gpuAlloc.allocDefinedBuffer(bufInf, bufInf.mem);
-        buffer.bindlessIndex = bindlessIndex;
+        const buffer = try self.gpuAlloc.allocDefinedBuffer(bufInf, bufInf.mem);
+        const bindlessIndex = try self.buffers.insert(bufInf.id.val, buffer);
         try self.descMan.updateBufferDescriptor(buffer.gpuAddress, buffer.size, rc.STORAGE_BUF_BINDING, bindlessIndex);
 
         self.gpuAlloc.printMemoryLocation(buffer.allocation, self.gpu);
-        self.buffers.set(bufInf.id.val, buffer);
         std.debug.print("Buffer ID {} -> BindlessIndex {} created\n", .{ bufInf.id.val, bindlessIndex });
 
         if (bufInf.typ == .Indirect) {
@@ -133,21 +141,14 @@ pub const ResourceManager = struct {
     }
 
     pub fn createTexture(self: *ResourceManager, texInf: Texture.TexInf) !void {
-        var bindlessIndex: u32 = undefined;
-        var tex = try self.gpuAlloc.allocTexture(texInf, texInf.mem);
+        const tex = try self.gpuAlloc.allocTexture(texInf, texInf.mem);
+        const bindlessIndex = try self.textures.insert(texInf.id.val, tex);
 
         if (texInf.typ == .Color) {
-            bindlessIndex = self.nextTextureIndex;
-            self.nextTextureIndex += 1;
             try self.descMan.updateTextureDescriptor(tex.base.view, rc.STORAGE_TEX_BINDING, bindlessIndex);
         } else {
-            bindlessIndex = self.nextSampledTextureIndex;
-            self.nextSampledTextureIndex += 1;
             try self.descMan.updateSampledTextureDescriptor(tex.base.view, rc.SAMPLED_TEX_BINDING, bindlessIndex);
         }
-        tex.bindlessIndex = bindlessIndex;
-
-        self.textures.set(texInf.id.val, tex);
         std.debug.print("Texture ID {} -> BindlessIndex {} created\n", .{ texInf.id.val, bindlessIndex });
     }
 
@@ -158,16 +159,14 @@ pub const ResourceManager = struct {
             const DataType = @TypeOf(data);
             const typeInfo = @typeInfo(DataType);
 
-            // Convert to byte slice based on input type
             const dataBytes: []const u8 = switch (typeInfo) {
                 .pointer => |ptr| switch (ptr.size) {
-                    .one => std.mem.asBytes(data), // *T or *[N]T
-                    .slice => std.mem.sliceAsBytes(data), // []T
+                    .one => std.mem.asBytes(data),
+                    .slice => std.mem.sliceAsBytes(data),
                     else => return error.UnsupportedPointerType,
                 },
                 else => return error.ExpectedPointer,
             };
-
             // Calculate element count
             const elementCount = dataBytes.len / bufInf.elementSize;
             if (dataBytes.len % bufInf.elementSize != 0) {
@@ -176,13 +175,9 @@ pub const ResourceManager = struct {
             }
 
             var buffer = try self.getBufferPtr(bufInf.id);
-
             const pMappedData = buffer.mappedPtr orelse return error.BufferNotMapped;
-
-            // Copy bytes
             const destBytes: [*]u8 = @ptrCast(pMappedData);
             @memcpy(destBytes[0..dataBytes.len], dataBytes);
-
             buffer.count = @intCast(elementCount);
         }
     }
@@ -190,34 +185,33 @@ pub const ResourceManager = struct {
     pub fn replaceTexture(self: *ResourceManager, texId: Texture.TexId, nexTexInf: Texture.TexInf) !void {
         var oldTex = try self.getTexturePtr(texId);
         oldTex.base.state = .{};
-        const slotIndex = oldTex.bindlessIndex;
+        self.gpuAlloc.freeTexture(oldTex);
 
-        self.gpuAlloc.freeTexture(oldTex.*);
-        var newTex = try self.gpuAlloc.allocTexture(nexTexInf, .Gpu);
-        newTex.bindlessIndex = slotIndex;
-        try self.descMan.updateTextureDescriptor(newTex.base.view, rc.STORAGE_TEX_BINDING, slotIndex);
+        const newTex = try self.gpuAlloc.allocTexture(nexTexInf, .Gpu);
+        const bindlessIndex = self.textures.getIndex(texId.val);
+        try self.descMan.updateTextureDescriptor(newTex.base.view, rc.STORAGE_TEX_BINDING, bindlessIndex);
 
         oldTex.* = newTex;
-        std.debug.print("Texture {} Resized/Replaced at Slot {}\n", .{ texId.val, slotIndex });
+        std.debug.print("Texture {} Resized/Replaced at Slot {}\n", .{ texId.val, bindlessIndex });
     }
 
     pub fn destroyTexture(self: *ResourceManager, texId: Texture.TexId) void {
-        if (self.textures.isKeyUsed(texId.val) != true) {
+        if (self.textures.isKeyUsed(texId.val) == false) {
             std.debug.print("Warning: Tried to destroy empty Texture ID {}\n", .{texId});
             return;
         }
         const tex = self.textures.getPtr(texId.val);
-        self.gpuAlloc.freeTexture(tex.*);
-        self.textures.removeAtKey(texId.val);
+        self.gpuAlloc.freeTexture(tex);
+        self.textures.remove(texId.val);
     }
 
-    pub fn destroyBuffer(self: *ResourceManager, bufId: u32) void {
-        if (self.buffers.isKeyUsed(bufId) != true) {
+    pub fn destroyBuffer(self: *ResourceManager, bufId: Buffer.BufId) void {
+        if (self.buffers.isKeyUsed(bufId.val) == false) {
             std.debug.print("Warning: Tried to destroy empty Buffer ID {}\n", .{bufId});
             return;
         }
-        const buffer = self.buffers.getPtr(bufId);
+        const buffer = self.buffers.getPtr(bufId.val);
         self.gpuAlloc.freeBuffer(buffer.handle, buffer.allocation);
-        self.buffers.removeAtKey(bufId);
+        self.buffers.remove(bufId.val);
     }
 };
