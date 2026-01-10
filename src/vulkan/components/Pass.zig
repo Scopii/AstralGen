@@ -11,102 +11,88 @@ pub const Pass = struct {
     typ: PassType,
 
     pub const PassType = union(enum) {
-        compute: Compute,
-        computeOnTex: ComputeOnTex,
-        taskOrMesh: TaskOrMesh,
-        taskOrMeshIndirect: TaskOrMeshIndirect,
-        graphics: Graphics,
+        computePass: ComputePass,
+        classicPass: ClassicPass,
     };
 
-    const Compute = struct {
+    const ComputePass = struct {
         workgroups: Dispatch,
+        mainTexId: ?Texture.TexId = null,
     };
 
-    const ComputeOnTex = struct {
-        mainTexId: Texture.TexId,
-        workgroups: Dispatch,
-    };
-
-    const TaskOrMesh = struct {
+    pub const ClassicPass = struct {
         mainTexId: Texture.TexId,
         colorAtts: []const Attachment,
         depthAtt: ?Attachment = null,
         stencilAtt: ?Attachment = null,
+
+        classicTyp: ClassicData,
+    };
+
+    pub const ClassicData = union(enum) {
+        graphics: Graphics,
+        taskOrMesh: TaskOrMesh,
+        taskOrMeshIndirect: TaskOrMeshIndirect,
+    };
+
+    const TaskOrMesh = struct {
         workgroups: Dispatch,
     };
 
     const TaskOrMeshIndirect = struct {
-        mainTexId: Texture.TexId,
-        colorAtts: []const Attachment,
-        depthAtt: ?Attachment = null,
-        stencilAtt: ?Attachment = null,
         workgroups: Dispatch,
         indirectBuf: struct { id: Buffer.BufId, offset: u64 = 0 },
     };
 
     const Graphics = struct {
-        mainTexId: Texture.TexId,
-        colorAtts: []const Attachment,
-        depthAtt: ?Attachment = null,
-        stencilAtt: ?Attachment = null,
         draw: struct { vertices: u32, instances: u32 } = .{ .vertices = 3, .instances = 1 },
     };
 
-    pub fn computeOnImage(data: ComputeOnTex) Pass.PassType {
-        return .{ .computeOnTex = data };
+    pub fn createClassic(data: ClassicPass) Pass.PassType {
+        return .{ .classicPass = data };
     }
 
-    pub fn compute(data: Compute) Pass.PassType {
-        return .{ .compute = .{ .workgroups = data.workgroups } };
+    pub fn createCompute(data: ComputePass) Pass.PassType {
+        return .{ .computePass = data };
     }
 
-    pub fn graphics(data: Graphics) Pass.PassType {
+    pub fn graphicsData(data: Graphics) ClassicData {
         return .{ .graphics = data };
     }
 
-    pub fn taskOrMesh(data: TaskOrMesh) Pass.PassType {
+    pub fn taskMeshData(data: TaskOrMesh) ClassicData {
         return .{ .taskOrMesh = data };
     }
 
-    pub fn taskOrMeshIndirect(data: TaskOrMeshIndirect) Pass.PassType {
+    pub fn taskMeshIndirectData(data: TaskOrMeshIndirect) ClassicData {
         return .{ .taskOrMeshIndirect = data };
     }
 
     pub fn getMainTexId(self: *const Pass) ?Texture.TexId {
         return switch (self.typ) {
-            .taskOrMesh => |t| t.mainTexId,
-            .graphics => |g| g.mainTexId,
-            .taskOrMeshIndirect => |i| i.mainTexId,
-            .computeOnTex => |c| c.mainTexId,
-            .compute,
-            => null,
+            .classicPass => |classic| classic.mainTexId,
+            .computePass => |compute| compute.mainTexId,
         };
     }
 
     pub fn getColorAtts(self: *const Pass) []const Attachment {
         return switch (self.typ) {
-            .taskOrMesh => |t| t.colorAtts,
-            .graphics => |g| g.colorAtts,
-            .taskOrMeshIndirect => |i| i.colorAtts,
-            .compute, .computeOnTex => &[_]Attachment{},
+            .classicPass => |classic| classic.colorAtts,
+            .computePass => &[_]Attachment{},
         };
     }
 
     pub fn getDepthAtt(self: *const Pass) ?Attachment {
         return switch (self.typ) {
-            .taskOrMesh => |t| t.depthAtt,
-            .graphics => |g| g.depthAtt,
-            .taskOrMeshIndirect => |i| i.depthAtt,
-            .compute, .computeOnTex => null,
+            .classicPass => |classic| classic.depthAtt,
+            .computePass => null,
         };
     }
 
     pub fn getStencilAtt(self: *const Pass) ?Attachment {
         return switch (self.typ) {
-            .taskOrMesh => |t| t.stencilAtt,
-            .graphics => |g| g.stencilAtt,
-            .taskOrMeshIndirect => |i| i.stencilAtt,
-            .compute, .computeOnTex => null,
+            .classicPass => |classic| classic.stencilAtt,
+            .computePass => null,
         };
     }
 
@@ -154,7 +140,7 @@ pub const BufferUse = struct {
     shaderSlot: ?ShaderSlot = null,
 
     pub fn getNeededState(self: *const BufferUse) Buffer.BufferState {
-        return .{ .stage = self.stage, .access = self.access};
+        return .{ .stage = self.stage, .access = self.access };
     }
 
     pub fn init(bufId: Buffer.BufId, stage: vh.PipeStage, access: vh.PipeAccess, shaderSlot: ?u8) BufferUse {

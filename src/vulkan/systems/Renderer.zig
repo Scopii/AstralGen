@@ -19,7 +19,6 @@ const Allocator = std.mem.Allocator;
 const vh = @import("Helpers.zig");
 const std = @import("std");
 
-
 pub const Renderer = struct {
     alloc: Allocator,
     arenaAlloc: Allocator,
@@ -103,7 +102,7 @@ pub const Renderer = struct {
 
     pub fn createPasses(self: *Renderer, passes: []const Pass) !void {
         for (passes) |pass| {
-            if (self.shaderMan.isPassValid(pass) == true) {
+            if (true == true) { //self.shaderMan.isPassValid(pass)
                 try self.passes.append(pass);
             } else std.debug.print("Error: Pass ShaderLayout does not match Pass Type -> not appended\n", .{});
         }

@@ -126,8 +126,8 @@ pub const RenderGraph = struct {
     }
 
     fn recordCompute(cmd: *const Command, dispatch: Pass.Dispatch, renderTexId: ?TexId, resMan: *ResourceManager) !void {
-        if (renderTexId) |imgId| {
-            const tex = try resMan.getTexturePtr(imgId);
+        if (renderTexId) |texId| {
+            const tex = try resMan.getTexturePtr(texId);
             cmd.dispatch(
                 (tex.base.extent.width + dispatch.x - 1) / dispatch.x,
                 (tex.base.extent.height + dispatch.y - 1) / dispatch.y,
@@ -143,37 +143,34 @@ pub const RenderGraph = struct {
         try self.recordPassBarriers(cmd, pass, resMan);
 
         switch (pass.typ) {
-            .compute => |comp| try recordCompute(cmd, comp.workgroups, null, resMan),
-            .computeOnTex => |compOnImg| try recordCompute(cmd, compOnImg.workgroups, compOnImg.mainTexId, resMan),
-            .graphics => |graphics| try recordGraphics(cmd, graphics.colorAtts, graphics.depthAtt, graphics.stencilAtt, pcs.width, pcs.height, pass, resMan),
-            .taskOrMesh => |taskMesh| try recordGraphics(cmd, taskMesh.colorAtts, taskMesh.depthAtt, taskMesh.stencilAtt, pcs.width, pcs.height, pass, resMan),
-            .taskOrMeshIndirect => |indirect| try recordGraphics(cmd, indirect.colorAtts, indirect.depthAtt, indirect.stencilAtt, pcs.width, pcs.height, pass, resMan),
+            .computePass => |comp| try recordCompute(cmd, comp.workgroups, comp.mainTexId, resMan),
+            .classicPass => |classic| try recordGraphics(cmd, pcs.width, pcs.height, classic, resMan),
         }
     }
 
-    fn recordGraphics(cmd: *const Command, colorAtts: []const Attachment, depthAtt: ?Attachment, stencilAtt: ?Attachment, width: u32, height: u32, pass: Pass, resMan: *ResourceManager) !void {
-        if (colorAtts.len > 8) return error.TooManyAttachments;
+    fn recordGraphics(cmd: *const Command, width: u32, height: u32, passData: Pass.ClassicPass, resMan: *ResourceManager) !void {
+        if (passData.colorAtts.len > 8) return error.TooManyAttachments;
 
-        const depthInf: ?vk.VkRenderingAttachmentInfo = if (depthAtt) |depth| blk: {
+        const depthInf: ?vk.VkRenderingAttachmentInfo = if (passData.depthAtt) |depth| blk: {
             const tex = try resMan.getTexturePtr(depth.texId);
             break :blk tex.base.createAttachment(depth.clear);
         } else null;
 
-        const stencilInf: ?vk.VkRenderingAttachmentInfo = if (stencilAtt) |stencil| blk: {
+        const stencilInf: ?vk.VkRenderingAttachmentInfo = if (passData.stencilAtt) |stencil| blk: {
             const tex = try resMan.getTexturePtr(stencil.texId);
             break :blk tex.base.createAttachment(stencil.clear);
         } else null;
 
         var colorInfs: [8]vk.VkRenderingAttachmentInfo = undefined;
-        for (0..colorAtts.len) |i| {
-            const color = colorAtts[i];
+        for (0..passData.colorAtts.len) |i| {
+            const color = passData.colorAtts[i];
             const tex = try resMan.getTexturePtr(color.texId);
             colorInfs[i] = tex.base.createAttachment(color.clear);
         }
 
-        cmd.beginRendering(width, height, colorInfs[0..colorAtts.len], depthInf, stencilInf);
+        cmd.beginRendering(width, height, colorInfs[0..passData.colorAtts.len], depthInf, stencilInf);
 
-        switch (pass.typ) {
+        switch (passData.classicTyp) {
             .taskOrMesh => |taskOrMesh| cmd.drawMeshTasks(taskOrMesh.workgroups.x, taskOrMesh.workgroups.y, taskOrMesh.workgroups.z),
             .taskOrMeshIndirect => |tmIndirect| {
                 const buffer = try resMan.getBufferPtr(tmIndirect.indirectBuf.id);
@@ -183,13 +180,12 @@ pub const RenderGraph = struct {
                 cmd.setEmptyVertexInput();
                 cmd.draw(graphics.draw.vertices, graphics.draw.instances, 0, 0);
             },
-            .compute, .computeOnTex => return error.ComputeLandedInGraphicsPass,
         }
         cmd.endRendering();
     }
 
     pub fn recordSwapchainBlits(self: *RenderGraph, cmd: *const Command, swapchains: []const *Swapchain, resMan: *ResourceManager) !void {
-        // Render Image and Swapchain Preperations
+        // Render Texture and Swapchain Preperations
         for (swapchains) |swapchain| {
             const renderTex = try resMan.getTexturePtr(swapchain.renderTexId);
             try self.imageBarrierIfNeeded(&renderTex.base, .{ .stage = .Transfer, .access = .TransferRead, .layout = .TransferSrc });

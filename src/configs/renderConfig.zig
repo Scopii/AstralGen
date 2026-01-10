@@ -50,7 +50,7 @@ pub const textures: []const Texture.TexInf = &.{ compTex, grapTex, meshTex, task
 
 pub const compTest: Pass = .{
     .shaderIds = &.{sc.t1Comp.id},
-    .typ = Pass.computeOnImage(.{
+    .typ = Pass.createCompute(.{
         .mainTexId = compTex.id,
         .workgroups = .{ .x = 8, .y = 8, .z = 1 },
     }),
@@ -65,7 +65,8 @@ pub const compTest: Pass = .{
 
 const grapTest: Pass = .{
     .shaderIds = &.{ sc.t2Frag.id, sc.t2Vert.id },
-    .typ = Pass.graphics(.{
+    .typ = Pass.createClassic(.{
+        .classicTyp = Pass.graphicsData(.{}),
         .mainTexId = grapTex.id,
         .colorAtts = &.{Attachment.init(grapTex.id, .ColorAtt, .ColorAttWrite, false)},
         .depthAtt = Attachment.init(depthTex.id, .EarlyFragTest, .DepthStencilRead, false),
@@ -78,9 +79,9 @@ const grapTest: Pass = .{
 
 const meshTest: Pass = .{
     .shaderIds = &.{ sc.t3Mesh.id, sc.t3Frag.id },
-    .typ = Pass.taskOrMesh(.{
-        .mainTexId = meshTex.id,
-        .workgroups = .{ .x = 1, .y = 1, .z = 1 },
+    .typ = Pass.createClassic(.{
+        .classicTyp = Pass.taskMeshData(.{ .workgroups = .{ .x = 1, .y = 1, .z = 1 } }),
+        .mainTexId = grapTex.id,
         .colorAtts = &.{Attachment.init(meshTex.id, .ColorAtt, .ColorAttWrite, false)},
     }),
     .bufUses = &.{
@@ -91,9 +92,9 @@ const meshTest: Pass = .{
 
 const taskTest: Pass = .{
     .shaderIds = &.{ sc.t4Task.id, sc.t4Mesh.id, sc.t4Frag.id },
-    .typ = Pass.taskOrMesh(.{
+    .typ = Pass.createClassic(.{
+        .classicTyp = Pass.taskMeshData(.{ .workgroups = .{ .x = 1, .y = 1, .z = 1 } }),
         .mainTexId = taskTex.id,
-        .workgroups = .{ .x = 1, .y = 1, .z = 1 },
         .colorAtts = &.{Attachment.init(taskTex.id, .ColorAtt, .ColorAttWrite, false)},
     }),
     .bufUses = &.{
@@ -104,10 +105,10 @@ const taskTest: Pass = .{
 
 const gridTest: Pass = .{
     .shaderIds = &.{ sc.gridTask.id, sc.gridMesh.id, sc.gridFrag.id },
-    .typ = Pass.taskOrMesh(.{
+    .typ = Pass.createClassic(.{
+        .classicTyp = Pass.taskMeshData(.{ .workgroups = .{ .x = 1, .y = 1, .z = 1 } }),
         .mainTexId = taskTex.id,
-        .workgroups = .{ .x = 1, .y = 1, .z = 1 },
-        .colorAtts = &.{Attachment.init(taskTex.id, .ColorAtt, .ColorAttWrite, true)},
+        .colorAtts = &.{Attachment.init(taskTex.id, .ColorAtt, .ColorAttWrite, false)},
     }),
     .bufUses = &.{
         BufferUse.init(cameraUB.id, .TaskShader, .ShaderRead, 0),
@@ -116,7 +117,7 @@ const gridTest: Pass = .{
 
 pub const indirectCompTest: Pass = .{
     .shaderIds = &.{sc.indirectComp.id},
-    .typ = Pass.compute(.{
+    .typ = Pass.createCompute(.{
         .workgroups = .{ .x = 1, .y = 1, .z = 1 },
     }),
     .bufUses = &.{
@@ -126,10 +127,12 @@ pub const indirectCompTest: Pass = .{
 
 const indirectMeshTest: Pass = .{
     .shaderIds = &.{ sc.indirectTask.id, sc.indirectMesh.id, sc.indirectFrag.id },
-    .typ = Pass.taskOrMeshIndirect(.{
+    .typ = Pass.createClassic(.{
+        .classicTyp = Pass.taskMeshIndirectData(.{
+            .workgroups = .{ .x = 1, .y = 1, .z = 1 },
+            .indirectBuf = .{ .id = indirectSB.id, .offset = 0 },
+        }),
         .mainTexId = taskTex.id,
-        .indirectBuf = .{ .id = indirectSB.id, .offset = 0 },
-        .workgroups = .{ .x = 1, .y = 1, .z = 1 },
         .colorAtts = &.{Attachment.init(taskTex.id, .ColorAtt, .ColorAttWrite, false)},
     }),
     .bufUses = &.{
