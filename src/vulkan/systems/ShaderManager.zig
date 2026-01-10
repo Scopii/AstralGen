@@ -59,7 +59,7 @@ pub const ShaderManager = struct {
         const shaders = self.getShaders(pass.shaderIds)[0..pass.shaderIds.len];
 
         const layoutType = checkShaderLayout(shaders) catch |err| {
-            std.debug.print("Pass {} Shader Layout invalid", .{err});
+            std.debug.print("Pass {} Shader Layout invalid\n", .{err});
             return false;
         };
 
@@ -72,7 +72,7 @@ pub const ShaderManager = struct {
                 }
             },
         }
-        std.debug.print("Error: ShaderLayout {s} does not fit Pass", .{@tagName(layoutType),});
+        std.debug.print("Error: ShaderLayout {s} does not fit Pass\n", .{@tagName(layoutType),});
         return false;
     }
 };
