@@ -7,7 +7,6 @@ struct VertexOut {
 [outputtopology("triangle")]
 [numthreads(1, 1, 1)]
 void main(
-    // Output Arrays
     out vertices VertexOut verts[3],
     out indices uint3 tris[1]
 ) {

@@ -1,10 +1,9 @@
-// Vertex.slang
 
 struct VSOutput {
     float4 pos : SV_Position;
 };
 
-// (CCW winding: Bottom-Left, Bottom-Right, Top-Left)
+// (CCW Bottom-Left, Bottom-Right, Top-Left)
 static const float2 positions[3] = {
     float2(-1, -1),
     float2(-1, 3),

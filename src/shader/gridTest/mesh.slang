@@ -1,3 +1,4 @@
+
 struct VertexOut {
     float4 pos : SV_Position;
     float3 color : COLOR0;
@@ -7,7 +8,6 @@ struct TaskPayload {
     float3 baseOffset;
 };
 
-// Define Unit Cube Corners (Size 2.0 from -1 to 1)
 static const float3 cubeVerts[8] = {
     float3(-1, -1, -1), 
     float3( 1, -1, -1), 
@@ -56,7 +56,7 @@ struct PushConstants {
 [numthreads(1, 1, 1)]
 void main(
     in payload TaskPayload p,
-    uint3 gid: SV_GroupID, // <--- THIS tells cube ID!
+    uint3 gid: SV_GroupID, // cube ID
     out vertices VertexOut verts[8],
     out indices uint3 tris[12]
 ) {
@@ -73,7 +73,7 @@ void main(
         float4 worldPos = float4(localPos + worldPosOffset, 1.0);
 
         verts[i].pos = mul(cam.viewProj, worldPos);
-        // Color based on grid position for debugging
+
         verts[i].color = myGridPos / 10.0;
     }
 

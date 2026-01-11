@@ -64,11 +64,8 @@ MapResult map(float3 pos, StructuredBuffer<Object> objectBuffer) {
 
     uint objectCount = pc.resources[0].count;
 
-    // Loop over the Object Buffer
     for (uint i = 0; i < objectCount; i++) {
-        // 2. Read from that specific buffer
         Object obj = objectBuffer[i];
-
         float3 objPos = float3(obj.posX, obj.posY, obj.posZ);
 
         float dist = MAX_DIST;

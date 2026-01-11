@@ -69,8 +69,7 @@ pub fn CreateStableMapArray(comptime elementType: type, comptime size: u32, comp
         }
         
         pub fn isKeyUsed(self: *const Self, key: keyType) bool {
-            // Safety check for bounds
-            if (key < keyMin or key > keyMax) return false;
+            if (key < keyMin or key > keyMax) return false; // Safety check for bounds
             return self.keys[@intCast(key - keyMin)] != sentinel;
         }
         

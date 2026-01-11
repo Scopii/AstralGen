@@ -6,7 +6,7 @@ struct TaskPayload {
 groupshared TaskPayload payload; // Data for Mesh Shader, Groupshared Memory!!
 
 [shader("amplification")]
-[numthreads(1, 1, 1)] // Launch 1 Thread per Task Workgroup
+[numthreads(1, 1, 1)] // 1 Thread launch per Task Workgroup
 void main(uint3 gid: SV_GroupID) {
     bool draw = true;
 

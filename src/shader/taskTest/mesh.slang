@@ -13,13 +13,13 @@ struct TaskPayload {
 [outputtopology("triangle")]
 [numthreads(1, 1, 1)]
 void main(
-    in payload TaskPayload p, // Receive payload from Task Shader
+    in payload TaskPayload payload, // payload from Task Shader
     out vertices VertexOut verts[3],
     out indices uint3 tris[1]
 ) {
     SetMeshOutputCounts(3, 1);
 
-    float3 posOffset = p.offset;
+    float3 posOffset = payload.offset;
 
     // Vertex 1
     verts[0].pos = float4(float3(-1.0, -1.0, 0.0) + posOffset, 1.0);

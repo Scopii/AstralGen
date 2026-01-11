@@ -1,13 +1,11 @@
+
 struct VertexOut {
     float4 pos : SV_Position;
-    float3 color : COLOR0; // <--- Input from Mesh Shader
+    float3 color : COLOR0; // Mesh Shader Input
 };
 
 [shader("fragment")]
 float4 main(VertexOut pin) : SV_Target {
-    // ONLY if code if hit Cube.
-    // background is vkCmdBeginRendering info.clearValue.
-    
-    // Output the color from the Mesh Shader
+    // ONLY if cube is hit.
     return float4(pin.color, 0.5); 
 }

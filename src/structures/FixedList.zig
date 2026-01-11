@@ -17,7 +17,6 @@ pub fn FixedList(comptime T: type, comptime capacity: usize) type {
             self.len += 1;
         }
 
-        // Add an item, assert (crash) if full (Faster if you know bounds)
         pub fn appendAssumeCapacity(self: *Self, item: T) void {
             std.debug.assert(self.len < capacity);
             self.buffer[self.len] = item;

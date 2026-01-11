@@ -81,8 +81,6 @@ pub fn CreateMapArray(comptime elementType: type, comptime size: u32, comptime k
 
         pub fn clear(self: *Self) void {
             self.count = 0;
-            //for (0..usedKeyCount) |i| self.keys[i] = sentinel;
-            //for (0..size) |i| self.links[i] = sentinel;
             @memset(&self.keys, sentinel);
             @memset(&self.links, sentinel);
         }
