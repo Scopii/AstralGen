@@ -128,7 +128,8 @@ pub const Renderer = struct {
             waitInfos[i] = createSemaphoreSubmitInfo(swapchain.imgRdySems[flightId], .Transfer, 0);
             signalInfos[i] = createSemaphoreSubmitInfo(swapchain.renderDoneSems[swapchain.curIndex], .AllCmds, 0);
         }
-        try queue.submit(waitInfos[0..targets.len], cmd.createSubmitInfo(), signalInfos[0 .. targets.len + 1]);
+        const cmdSlice = &[_]vk.VkCommandBufferSubmitInfo{cmd.createSubmitInfo()};
+        try queue.submit(waitInfos[0..targets.len], cmdSlice, signalInfos[0 .. targets.len + 1]);
     }
 
     fn present(_: *Renderer, targets: []const *const Swapchain, queue: Queue) !void {

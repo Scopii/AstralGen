@@ -12,13 +12,13 @@ pub const Queue = struct {
         return .{ .handle = queue };
     }
 
-    pub fn submit(self: *const Queue, waitSemInfos: []vk.VkSemaphoreSubmitInfo, cmdSubmitInf: vk.VkCommandBufferSubmitInfo, signalSemInfos: []vk.VkSemaphoreSubmitInfo) !void {
+    pub fn submit(self: *const Queue, waitSemInfos: []const vk.VkSemaphoreSubmitInfo, cmdSubmitInf: []const vk.VkCommandBufferSubmitInfo, signalSemInfos: []const vk.VkSemaphoreSubmitInfo) !void {
         const submitInf = vk.VkSubmitInfo2{
             .sType = vk.VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
             .waitSemaphoreInfoCount = @intCast(waitSemInfos.len),
             .pWaitSemaphoreInfos = waitSemInfos.ptr,
-            .commandBufferInfoCount = 1,
-            .pCommandBufferInfos = &cmdSubmitInf,
+            .commandBufferInfoCount = @intCast(cmdSubmitInf.len),
+            .pCommandBufferInfos = cmdSubmitInf.ptr,
             .signalSemaphoreInfoCount = @intCast(signalSemInfos.len),
             .pSignalSemaphoreInfos = signalSemInfos.ptr,
         };
