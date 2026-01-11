@@ -41,6 +41,7 @@ struct PushConstants {
 [shader("compute")] 
 [numthreads(1, 1, 1)]
 void main(uint3 id: SV_DispatchThreadID) {
+    //printf("Hello from GPU! ID: %d\n", 1);
     uint bufIndex = pc.resources[0].index;
 
     globalIndirectBuffers[bufIndex][0].groupX = 3;

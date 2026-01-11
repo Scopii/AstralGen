@@ -89,11 +89,13 @@ pub fn createInstance(alloc: Allocator) !vk.VkInstance {
             vk.VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT,
             vk.VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_RESERVE_BINDING_SLOT_EXT,
             vk.VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT,
+            vk.VK_VALIDATION_FEATURE_ENABLE_DEBUG_PRINTF_EXT,
         } else [_]vk.VkValidationFeatureEnableEXT{vk.VK_VALIDATION_FEATURE_ENABLE_BEST_PRACTICES_EXT},
         false => [_]vk.VkValidationFeatureEnableEXT{
             vk.VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT,
             vk.VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_RESERVE_BINDING_SLOT_EXT, // ?? Needs Descriptor ?
             vk.VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT,
+            vk.VK_VALIDATION_FEATURE_ENABLE_DEBUG_PRINTF_EXT,
         },
     };
 
@@ -346,6 +348,7 @@ fn createGPI(alloc: Allocator, gpu: vk.VkPhysicalDevice, families: QueueFamilies
         "VK_EXT_extended_dynamic_state3",
         "VK_EXT_conservative_rasterization",
         "VK_KHR_fragment_shading_rate",
+        "VK_KHR_shader_non_semantic_info",
     };
 
     const createInf = vk.VkDeviceCreateInfo{
