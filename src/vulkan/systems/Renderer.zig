@@ -100,20 +100,11 @@ pub const Renderer = struct {
         }
     }
 
-    pub fn createPasses(self: *Renderer, passes: []const Pass) !void {
-        for (passes) |pass| {
-            if (self.shaderMan.isPassValid(pass) == true) {
-                try self.passes.append(pass);
-            } else {
-                std.debug.print("Error: Pass ShaderLayout does not match Pass Type -> not appended\n", .{});
-                return error.PassNotValid;
-            }
-        }
-    }
-
     pub fn draw(self: *Renderer, frameData: FrameData) !void {
         try self.scheduler.waitForGPU();
         const flightId = self.scheduler.flightId;
+
+        try self.renderGraph.cmdMan.getQueryResults(flightId);
 
         if (try self.swapMan.updateTargets(flightId, &self.context) == false) return;
         const targets = self.swapMan.getTargets();
@@ -136,6 +127,17 @@ pub const Renderer = struct {
             signalInfos[i] = createSemaphoreSubmitInfo(swapchain.renderDoneSems[swapchain.curIndex], .AllCmds, 0);
         }
         try self.context.graphicsQ.submit(waitInfos[0..targets.len], cmd.createSubmitInfo(), signalInfos[0 .. targets.len + 1]);
+    }
+
+    pub fn createPasses(self: *Renderer, passes: []const Pass) !void {
+        for (passes) |pass| {
+            if (self.shaderMan.isPassValid(pass) == true) {
+                try self.passes.append(pass);
+            } else {
+                std.debug.print("Error: Pass ShaderLayout does not match Pass Type -> not appended\n", .{});
+                return error.PassNotValid;
+            }
+        }
     }
 
     pub fn addShaders(self: *Renderer, loadedShaders: []const LoadedShader) !void {

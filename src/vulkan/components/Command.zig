@@ -25,6 +25,10 @@ pub const Command = struct {
         try vh.check(vk.vkEndCommandBuffer(self.handle), "Could not End CmdBuffer");
     }
 
+    pub fn writeTimestamp(self: *const Command, pool: vk.VkQueryPool, stage: vk.VkPipelineStageFlagBits2, queryIndex: u32) void {
+        vk.vkCmdWriteTimestamp2(self.handle, stage, pool, queryIndex);
+    }
+
     pub fn bakeBarriers(self: *const Command, imgBarriers: []const vk.VkImageMemoryBarrier2, bufBarriers: []const vk.VkBufferMemoryBarrier2) void {
         const depInf = vk.VkDependencyInfo{
             .sType = vk.VK_STRUCTURE_TYPE_DEPENDENCY_INFO,

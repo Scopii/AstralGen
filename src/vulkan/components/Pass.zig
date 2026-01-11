@@ -5,6 +5,7 @@ const Buffer = @import("Buffer.zig").Buffer;
 const vh = @import("../systems/Helpers.zig");
 
 pub const Pass = struct {
+    name: []const u8,
     shaderIds: []const ShaderId,
     bufUses: []const BufferUse = &.{},
     texUses: []const TextureUse = &.{},

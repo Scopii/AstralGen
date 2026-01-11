@@ -50,6 +50,7 @@ pub const depthTex = Texture.create(.{ .id = .{ .val = 11 }, .mem = .Gpu, .typ =
 pub const textures: []const Texture.TexInf = &.{ compTex, grapTex, meshTex, taskTex, testTex, depthTex };
 
 pub const compTest: Pass = .{
+    .name = "CompTest",
     .shaderIds = &.{sc.t1Comp.id},
     .typ = Pass.createCompute(.{
         .mainTexId = compTex.id,
@@ -65,6 +66,7 @@ pub const compTest: Pass = .{
 };
 
 const grapTest: Pass = .{
+    .name = "GrapTest",
     .shaderIds = &.{ sc.t2Frag.id, sc.t2Vert.id },
     .typ = Pass.createClassic(.{
         .classicTyp = Pass.ClassicTyp.graphicsData(.{}),
@@ -79,6 +81,7 @@ const grapTest: Pass = .{
 };
 
 const meshTest: Pass = .{
+    .name = "MeshTest",
     .shaderIds = &.{ sc.t3Mesh.id, sc.t3Frag.id },
     .typ = Pass.createClassic(.{
         .classicTyp = Pass.ClassicTyp.taskMeshData(.{ .workgroups = .{ .x = 1, .y = 1, .z = 1 } }),
@@ -92,6 +95,7 @@ const meshTest: Pass = .{
 };
 
 const taskTest: Pass = .{
+    .name = "TaskTest",
     .shaderIds = &.{ sc.t4Task.id, sc.t4Mesh.id, sc.t4Frag.id },
     .typ = Pass.createClassic(.{
         .classicTyp = Pass.ClassicTyp.taskMeshData(.{ .workgroups = .{ .x = 1, .y = 1, .z = 1 } }),
@@ -105,6 +109,7 @@ const taskTest: Pass = .{
 };
 
 const gridTest: Pass = .{
+    .name = "GridTest",
     .shaderIds = &.{ sc.gridTask.id, sc.gridMesh.id, sc.gridFrag.id },
     .typ = Pass.createClassic(.{
         .classicTyp = Pass.ClassicTyp.taskMeshData(.{ .workgroups = .{ .x = 1, .y = 1, .z = 1 } }),
@@ -117,6 +122,7 @@ const gridTest: Pass = .{
 };
 
 pub const indirectCompTest: Pass = .{
+    .name = "IndirectCompTest",
     .shaderIds = &.{sc.indirectComp.id},
     .typ = Pass.createCompute(.{
         .workgroups = .{ .x = 1, .y = 1, .z = 1 },
@@ -126,7 +132,8 @@ pub const indirectCompTest: Pass = .{
     },
 };
 
-const indirectMeshTest: Pass = .{
+const indirectTaskTest: Pass = .{
+    .name = "IndirectTaskTest",
     .shaderIds = &.{ sc.indirectTask.id, sc.indirectMesh.id, sc.indirectFrag.id },
     .typ = Pass.createClassic(.{
         .classicTyp = Pass.ClassicTyp.taskMeshData(.{
@@ -141,4 +148,4 @@ const indirectMeshTest: Pass = .{
     },
 };
 
-pub const passes: []const Pass = &.{ compTest, grapTest, meshTest, taskTest, gridTest, indirectCompTest, indirectMeshTest };
+pub const passes: []const Pass = &.{ compTest, grapTest, meshTest, taskTest, gridTest, indirectCompTest, indirectTaskTest };

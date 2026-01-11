@@ -44,6 +44,12 @@ pub const RenderGraph = struct {
         const cmd = try self.cmdMan.getCmd(flightId);
         try cmd.begin();
 
+        self.cmdMan.resetQuerys();
+        self.cmdMan.resetQueryPool(&cmd, flightId);
+
+        self.cmdMan.registerQuery(33, "FrameTime");
+        self.cmdMan.startQuery(&cmd, flightId, .TopOfPipe, 33);
+
         cmd.bindDescriptorBuffer(self.descLayoutAddress);
         cmd.setDescriptorBufferOffset(vk.VK_PIPELINE_BIND_POINT_COMPUTE, self.pipeLayout);
         cmd.setDescriptorBufferOffset(vk.VK_PIPELINE_BIND_POINT_GRAPHICS, self.pipeLayout);
@@ -54,16 +60,25 @@ pub const RenderGraph = struct {
             cmd.fillBuffer(indirectBuf.handle, 0, 16, 0);
         }
 
+        self.cmdMan.registerQuery(40, "Transfers");
+        self.cmdMan.startQuery(&cmd, flightId, .TopOfPipe, 40);
         try self.recordTransfers(&cmd, resMan);
+        self.cmdMan.endQuery(&cmd, flightId, .BotOfPipe, 40);
 
-        for (passes) |pass| {
+        for (passes, 0..) |pass, i| {
+            self.cmdMan.registerQuery(@intCast(i), pass.name);
+            self.cmdMan.startQuery(&cmd, flightId, .TopOfPipe, @intCast(i));
+
             const shaders = shaderMan.getShaders(pass.shaderIds)[0..pass.shaderIds.len];
             cmd.bindShaders(shaders);
             try self.recordPass(&cmd, pass, frameData, resMan);
+
+            self.cmdMan.endQuery(&cmd, flightId, .BotOfPipe, @intCast(i));
         }
 
         try self.recordSwapchainBlits(&cmd, targets, resMan);
 
+        self.cmdMan.endQuery(&cmd, flightId, .BotOfPipe, 33);
         try cmd.end();
         return cmd;
     }

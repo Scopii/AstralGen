@@ -97,7 +97,7 @@ pub const ResourceManager = struct {
         self.transfers.clearRetainingCapacity();
     }
 
-    pub fn queueBufferUpload(self: *ResourceManager, bufInf: Buffer.BufInf, bufId: Buffer.BufId, data: anytype) !void {
+    pub fn queueBufferUpload(self: *ResourceManager, bufInf: Buffer.BufInf, data: anytype) !void {
         const DataType = @TypeOf(data);
         const typeInfo = @typeInfo(DataType);
 
@@ -115,9 +115,9 @@ pub const ResourceManager = struct {
         const stagingPtr: [*]u8 = @ptrCast(self.stagingBuffer.mappedPtr);
         @memcpy(stagingPtr[self.stagingOffset..][0..bytes.len], bytes);
 
-        try self.transfers.append(Transfer{ .srcOffset = self.stagingOffset, .dstResId = bufId, .size = bytes.len });
+        try self.transfers.append(Transfer{ .srcOffset = self.stagingOffset, .dstResId = bufInf.id, .size = bytes.len });
 
-        var buffer = try self.getBufferPtr(bufId);
+        var buffer = try self.getBufferPtr(bufInf.id);
         buffer.count = @intCast(bytes.len / bufInf.elementSize);
         self.stagingOffset += (bytes.len + 15) & ~@as(u64, 15); // Align the offset to 16 bytes for GPU safety
     }
@@ -140,11 +140,11 @@ pub const ResourceManager = struct {
         try self.descMan.updateBufferDescriptor(buffer.gpuAddress, buffer.size, rc.STORAGE_BUF_BINDING, bindlessIndex);
 
         self.gpuAlloc.printMemoryLocation(buffer.allocation, self.gpu);
-        std.debug.print("Buffer ID {} -> BindlessIndex {} created\n", .{ bufInf.id.val, bindlessIndex });
+        std.debug.print("Buffer ID {} -> BindlessIndex {} created", .{ bufInf.id.val, bindlessIndex });
 
         if (bufInf.typ == .Indirect) {
             try self.indirectBufIds.append(bufInf.id);
-            std.debug.print("and added to Indirect List\n", .{});
+            std.debug.print(" and added to Indirect List\n", .{});
         } else std.debug.print("\n", .{});
     }
 
@@ -162,7 +162,7 @@ pub const ResourceManager = struct {
 
     pub fn updateBuffer(self: *ResourceManager, bufInf: Buffer.BufInf, data: anytype) !void {
         if (bufInf.mem == .Gpu) {
-            try self.queueBufferUpload(bufInf, bufInf.id, data);
+            try self.queueBufferUpload(bufInf, data);
         } else {
             const DataType = @TypeOf(data);
             const typeInfo = @typeInfo(DataType);
