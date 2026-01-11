@@ -9,6 +9,7 @@ const Command = @import("../components/Command.zig").Command;
 const Window = @import("../../platform/Window.zig").Window;
 const RenderGraph = @import("RenderGraph.zig").RenderGraph;
 const Buffer = @import("../components//Buffer.zig").Buffer;
+const Queue = @import("../components/Queue.zig").Queue;
 const rc = @import("../../configs/renderConfig.zig");
 const FrameData = @import("../../App.zig").FrameData;
 const Scheduler = @import("Scheduler.zig").Scheduler;
@@ -70,9 +71,10 @@ pub const Renderer = struct {
 
         for (tempWindows, 0..) |window, i| {
             switch (window.state) {
-                .needUpdate, .needCreation => try self.swapMan.createSwapchain(&self.context, .{ .window = window }),
+                .needCreation => try self.swapMan.createSwapchain(window),
+                .needUpdate => try self.swapMan.recreateSwapchain(window.id, window.extent),
+                .needDelete => self.swapMan.removeSwapchains(window.id),
                 .needActive, .needInactive => self.swapMan.changeState(window.id, if (window.state == .needActive) true else false),
-                .needDelete => self.swapMan.removeSwapchain(&.{window}),
                 else => std.debug.print("Warning: Window State {s} cant be handled in Renderer\n", .{@tagName(window.state)}),
             }
             if (window.resizeTex == true) texIds[i] = window.renderTexId;
@@ -106,18 +108,31 @@ pub const Renderer = struct {
 
         try self.renderGraph.cmdMan.getQueryResults(flightId);
 
-        if (try self.swapMan.updateTargets(flightId, &self.context) == false) return;
+        if (try self.swapMan.updateTargets(flightId) == false) return;
         const targets = self.swapMan.getTargets();
 
         const cmd = try self.renderGraph.recordFrame(self.passes.items, flightId, frameData, targets, &self.resMan, &self.shaderMan);
 
-        try self.queueSubmit(&cmd, targets, flightId);
-        try self.swapMan.present(targets, self.context.presentQ.handle);
+        try self.queueSubmit(&cmd, targets, flightId, self.context.graphicsQ);
+        try self.present(targets, self.context.presentQ);
 
         self.scheduler.nextFrame();
     }
 
-    fn queueSubmit(self: *Renderer, cmd: *const Command, targets: []const *Swapchain, flightId: u8) !void {
+    fn present(_: *Renderer, targets: []const *const Swapchain, queue: Queue) !void {
+        var handles: [rc.MAX_WINDOWS]vk.VkSwapchainKHR = undefined;
+        var imgIndices: [rc.MAX_WINDOWS]u32 = undefined;
+        var waitSems: [rc.MAX_WINDOWS]vk.VkSemaphore = undefined;
+
+        for (targets, 0..) |swapchain, i| {
+            handles[i] = swapchain.handle;
+            imgIndices[i] = swapchain.curIndex;
+            waitSems[i] = swapchain.renderDoneSems[swapchain.curIndex];
+        }
+        try queue.present(handles[0..targets.len], imgIndices[0..targets.len], waitSems[0..targets.len]);
+    }
+
+    fn queueSubmit(self: *Renderer, cmd: *const Command, targets: []const *Swapchain, flightId: u8, queue: Queue) !void {
         var waitInfos: [rc.MAX_WINDOWS]vk.VkSemaphoreSubmitInfo = undefined;
         var signalInfos: [rc.MAX_WINDOWS + 1]vk.VkSemaphoreSubmitInfo = undefined;
         signalInfos[targets.len] = createSemaphoreSubmitInfo(self.scheduler.cpuSyncTimeline, .AllCmds, self.scheduler.totalFrames + 1);
@@ -126,7 +141,7 @@ pub const Renderer = struct {
             waitInfos[i] = createSemaphoreSubmitInfo(swapchain.imgRdySems[flightId], .Transfer, 0);
             signalInfos[i] = createSemaphoreSubmitInfo(swapchain.renderDoneSems[swapchain.curIndex], .AllCmds, 0);
         }
-        try self.context.graphicsQ.submit(waitInfos[0..targets.len], cmd.createSubmitInfo(), signalInfos[0 .. targets.len + 1]);
+        try queue.submit(waitInfos[0..targets.len], cmd.createSubmitInfo(), signalInfos[0 .. targets.len + 1]);
     }
 
     pub fn createPasses(self: *Renderer, passes: []const Pass) !void {

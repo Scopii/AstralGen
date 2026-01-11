@@ -19,18 +19,11 @@ pub const Swapchain = struct {
     surfaceFormat: vk.VkSurfaceFormatKHR,
     inUse: bool = true,
 
-    pub fn init(
-        alloc: Allocator,
-        gpi: vk.VkDevice,
-        surfaceFormat: vk.VkSurfaceFormatKHR,
-        surface: vk.VkSurfaceKHR,
-        extent: vk.VkExtent2D,
-        caps: vk.VkSurfaceCapabilitiesKHR,
-        renderTexId: TexId,
-        oldHandle: ?vk.VkSwapchainKHR,
-    ) !Swapchain {
+    pub fn init(alloc: Allocator, gpi: vk.VkDevice, surface: vk.VkSurfaceKHR, extent: vk.VkExtent2D, gpu: vk.VkPhysicalDevice, renderTexId: TexId, oldHandle: ?vk.VkSwapchainKHR) !Swapchain {
         const mode = rc.DISPLAY_MODE; //try context.pickPresentMode();
+        const caps = try getSurfaceCaps(gpu, surface);
         const realExtent = pickExtent(&caps, extent);
+        const surfaceFormat = try pickSurfaceFormat(alloc, gpu, surface);
 
         var desired: u32 = rc.DESIRED_SWAPCHAIN_IMAGES;
         if (caps.maxImageCount < desired) {
@@ -132,6 +125,12 @@ pub const Swapchain = struct {
         alloc.free(self.renderDoneSems);
     }
 
+    pub fn recreate(self: *Swapchain, alloc: Allocator, gpi: vk.VkDevice, gpu: vk.VkPhysicalDevice, instance: vk.VkInstance, newExtent: vk.VkExtent2D) !void {
+        const swapchain = try Swapchain.init(alloc, gpi, self.surface, newExtent, gpu, self.renderTexId, self.handle);
+        self.deinit(alloc, gpi, instance, .withoutSurface);
+        self.* = swapchain;
+    }
+
     pub fn acquireNextImage(self: *Swapchain, gpi: vk.VkDevice, flightId: u8) vk.VkResult {
         return vk.vkAcquireNextImageKHR(gpi, self.handle, 0, self.imgRdySems[flightId], null, &self.curIndex);
     }
@@ -141,11 +140,11 @@ pub const Swapchain = struct {
     }
 
     pub fn getExtent2D(self: *Swapchain) vk.VkExtent2D {
-        return vk.VkExtent2D{ .height = self.extent.height, .width = self.extent.width};
+        return vk.VkExtent2D{ .height = self.extent.height, .width = self.extent.width };
     }
 
     pub fn getExtent3D(self: *Swapchain) vk.VkExtent3D {
-        return vk.VkExtent3D{ .height = self.extent.height, .width = self.extent.width, .depth = 1};
+        return vk.VkExtent3D{ .height = self.extent.height, .width = self.extent.width, .depth = 1 };
     }
 };
 
@@ -155,4 +154,30 @@ fn pickExtent(caps: *const vk.VkSurfaceCapabilitiesKHR, curExtent: vk.VkExtent2D
         .width = std.math.clamp(curExtent.width, caps.minImageExtent.width, caps.maxImageExtent.width),
         .height = std.math.clamp(curExtent.height, caps.minImageExtent.height, caps.maxImageExtent.height),
     };
+}
+
+fn getSurfaceCaps(gpu: vk.VkPhysicalDevice, surface: vk.VkSurfaceKHR) !vk.VkSurfaceCapabilitiesKHR {
+    var caps: vk.VkSurfaceCapabilitiesKHR = undefined;
+    try vh.check(vk.vkGetPhysicalDeviceSurfaceCapabilitiesKHR(gpu, surface, &caps), "Failed to get surface capabilities");
+    return caps;
+}
+
+fn pickSurfaceFormat(alloc: Allocator, gpu: vk.VkPhysicalDevice, surface: vk.VkSurfaceKHR) !vk.VkSurfaceFormatKHR {
+    var formatCount: u32 = 0;
+    try vh.check(vk.vkGetPhysicalDeviceSurfaceFormatsKHR(gpu, surface, &formatCount, null), "Failed to get format count");
+    if (formatCount == 0) return error.NoSurfaceFormats;
+
+    const formats = try alloc.alloc(vk.VkSurfaceFormatKHR, formatCount);
+    defer alloc.free(formats);
+
+    try vh.check(vk.vkGetPhysicalDeviceSurfaceFormatsKHR(gpu, surface, &formatCount, formats.ptr), "Failed to get surface formats");
+    // Return preferred format if available otherwise first one
+    if (formats.len == 1 and formats[0].format == vk.VK_FORMAT_UNDEFINED) {
+        return vk.VkSurfaceFormatKHR{ .format = vk.VK_FORMAT_B8G8R8A8_UNORM, .colorSpace = vk.VK_COLOR_SPACE_SRGB_NONLINEAR_KHR };
+    }
+
+    for (formats) |format| {
+        if (format.format == vk.VK_FORMAT_B8G8R8A8_UNORM and format.colorSpace == vk.VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) return format;
+    }
+    return formats[0];
 }

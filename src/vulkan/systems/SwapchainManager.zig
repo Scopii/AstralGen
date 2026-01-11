@@ -1,7 +1,6 @@
 const CreateMapArray = @import("../../structures/MapArray.zig").CreateMapArray;
 const Swapchain = @import("../components/Swapchain.zig").Swapchain;
 const TexId = @import("../components/Texture.zig").Texture.TexId;
-const createSemaphore = @import("Scheduler.zig").createSemaphore;
 const Window = @import("../../platform/Window.zig").Window;
 const rc = @import("../../configs/renderConfig.zig");
 const Context = @import("Context.zig").Context;
@@ -14,6 +13,7 @@ const std = @import("std");
 pub const SwapchainManager = struct {
     alloc: Allocator,
     gpi: vk.VkDevice,
+    gpu: vk.VkPhysicalDevice,
     instance: vk.VkInstance,
     swapchains: CreateMapArray(Swapchain, rc.MAX_WINDOWS, u32, rc.MAX_WINDOWS, 0) = .{},
     targetPtrs: [rc.MAX_WINDOWS]*Swapchain = undefined,
@@ -23,6 +23,7 @@ pub const SwapchainManager = struct {
         return .{
             .alloc = alloc,
             .gpi = context.gpi,
+            .gpu = context.gpu,
             .instance = context.instance,
         };
     }
@@ -37,32 +38,7 @@ pub const SwapchainManager = struct {
         return self.targetPtrs[0..self.targetCount];
     }
 
-    pub fn present(_: *SwapchainManager, targets: []const *Swapchain, presentQueue: vk.VkQueue) !void {
-        var handles: [rc.MAX_WINDOWS]vk.VkSwapchainKHR = undefined;
-        var imgIndices: [rc.MAX_WINDOWS]u32 = undefined;
-        var waitSems: [rc.MAX_WINDOWS]vk.VkSemaphore = undefined;
-
-        for (targets, 0..) |swapchain, i| {
-            handles[i] = swapchain.handle;
-            imgIndices[i] = swapchain.curIndex;
-            waitSems[i] = swapchain.renderDoneSems[swapchain.curIndex];
-        }
-        const presentInf = vk.VkPresentInfoKHR{
-            .sType = vk.VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
-            .waitSemaphoreCount = @intCast(targets.len),
-            .pWaitSemaphores = &waitSems,
-            .swapchainCount = @intCast(targets.len),
-            .pSwapchains = &handles,
-            .pImageIndices = &imgIndices,
-        };
-
-        const result = vk.vkQueuePresentKHR(presentQueue, &presentInf);
-        if (result != vk.VK_SUCCESS and result != vk.VK_ERROR_OUT_OF_DATE_KHR and result != vk.VK_SUBOPTIMAL_KHR) {
-            try vh.check(result, "Failed to present swapchain image");
-        }
-    }
-
-    pub fn updateTargets(self: *SwapchainManager, flightId: u8, context: *Context) !bool {
+    pub fn updateTargets(self: *SwapchainManager, flightId: u8) !bool {
         var count: u8 = 0;
 
         for (0..self.swapchains.getCount()) |i| {
@@ -80,8 +56,7 @@ pub const SwapchainManager = struct {
                     continue;
                 },
                 vk.VK_ERROR_OUT_OF_DATE_KHR, vk.VK_SUBOPTIMAL_KHR => {
-                    const windowID = self.swapchains.getKeyFromIndex(@intCast(i));
-                    try self.createSwapchain(context, .{ .id = windowID });
+                    try swapchain.recreate(self.alloc, self.gpi, self.gpu, self.instance, swapchain.extent);
                     const result2 = swapchain.acquireNextImage(self.gpi, flightId);
 
                     if (result2 == vk.VK_SUCCESS) {
@@ -114,64 +89,29 @@ pub const SwapchainManager = struct {
         return vk.VkExtent2D{ .width = maxWidth, .height = maxHeight };
     }
 
-    pub fn removeSwapchain(self: *SwapchainManager, windows: []const Window) void {
-        for (windows) |window| {
-            const key = window.id.val;
-
-            if (self.swapchains.isKeyValid(key) == true) {
-                const swapchain = self.swapchains.getPtr(key);
-                swapchain.deinit(self.alloc, self.gpi, self.instance, .withSurface);
-                self.swapchains.removeAtKey(key);
-
-                std.debug.print("Swapchain Key {} destroyed\n", .{key});
-            } else std.debug.print("Cant Swapchain to destroy missing.\n", .{});
-        }
+    pub fn createSwapchain(self: *SwapchainManager, window: Window) !void {
+        const surface = try createSurface(window.handle, self.instance);
+        const swapchain = try Swapchain.init(self.alloc, self.gpi, surface, window.extent, self.gpu, window.renderTexId, null);
+        self.swapchains.set(window.id.val, swapchain);
+        std.debug.print("Swapchain added to Window {}\n", .{window.id.val});
     }
 
-    pub fn createSwapchain(self: *SwapchainManager, context: *const Context, input: union(enum) { window: Window, id: u32 }) !void {
-        const alloc = self.alloc;
-        const gpu = context.gpu;
-        const gpi = context.gpi;
-        var extent: vk.VkExtent2D = undefined;
-        var swapchainPtr: *Swapchain = undefined;
+    pub fn recreateSwapchain(self: *SwapchainManager, windowId: Window.WindowId, newExtent: vk.VkExtent2D) !void {
+        const swapchainPtr = self.swapchains.getPtr(windowId.val);
+        try swapchainPtr.recreate(self.alloc, self.gpi, self.gpu, self.instance, newExtent);
+        std.debug.print("Swapchain recreated\n", .{});
+    }
 
-        switch (input) {
-            .window => |window| if (window.state == .needCreation) {
-                extent = window.extent;
-                const surface = try createSurface(window.handle, self.instance);
-                const caps = try getSurfaceCaps(gpu, surface);
-                const surfaceFormat = try pickSurfaceFormat(alloc, gpu, surface);
+    pub fn removeSwapchains(self: *SwapchainManager, windowId: Window.WindowId) void {
+        if (self.swapchains.isKeyValid(windowId.val) == true) {
+            const swapchain = self.swapchains.getPtr(windowId.val);
+            swapchain.deinit(self.alloc, self.gpi, self.instance, .withSurface);
+            self.swapchains.removeAtKey(windowId.val);
 
-                const swapchain = try Swapchain.init(alloc, self.gpi, surfaceFormat, surface, extent, caps, window.renderTexId, null);
-                self.swapchains.set(window.id.val, swapchain);
-                std.debug.print("Swapchain added to Window {}\n", .{window.id.val});
-                return;
-            } else {
-                swapchainPtr = self.swapchains.getPtr(window.id.val);
-                extent = window.extent;
-                std.debug.print("Swapchain recreated\n", .{});
-            },
-            .id => |windowId| {
-                swapchainPtr = self.swapchains.getPtr(windowId);
-                extent = swapchainPtr.extent;
-                std.debug.print("Swapchain Error resolved\n", .{});
-            },
-        }
-
-        const surface = swapchainPtr.surface;
-        const caps = try getSurfaceCaps(gpu, surface);
-        const surfaceFormat = try pickSurfaceFormat(alloc, gpu, surface);
-        const swapchain = try Swapchain.init(alloc, gpi, surfaceFormat, surface, extent, caps, swapchainPtr.renderTexId, swapchainPtr.handle);
-        swapchainPtr.deinit(alloc, self.gpi, self.instance, .withoutSurface);
-        swapchainPtr.* = swapchain;
+            std.debug.print("Swapchain Key {} destroyed\n", .{windowId.val});
+        } else std.debug.print("Swapchain to destroy missing.\n", .{});
     }
 };
-
-fn getSurfaceCaps(gpu: vk.VkPhysicalDevice, surface: vk.VkSurfaceKHR) !vk.VkSurfaceCapabilitiesKHR {
-    var caps: vk.VkSurfaceCapabilitiesKHR = undefined;
-    try vh.check(vk.vkGetPhysicalDeviceSurfaceCapabilitiesKHR(gpu, surface, &caps), "Failed to get surface capabilities");
-    return caps;
-}
 
 fn createSurface(window: *sdl.SDL_Window, instance: vk.VkInstance) !vk.VkSurfaceKHR {
     var surface: vk.VkSurfaceKHR = undefined;
@@ -180,24 +120,4 @@ fn createSurface(window: *sdl.SDL_Window, instance: vk.VkInstance) !vk.VkSurface
         return error.VkSurface;
     }
     return surface;
-}
-
-fn pickSurfaceFormat(alloc: Allocator, gpu: vk.VkPhysicalDevice, surface: vk.VkSurfaceKHR) !vk.VkSurfaceFormatKHR {
-    var formatCount: u32 = 0;
-    try vh.check(vk.vkGetPhysicalDeviceSurfaceFormatsKHR(gpu, surface, &formatCount, null), "Failed to get format count");
-    if (formatCount == 0) return error.NoSurfaceFormats;
-
-    const formats = try alloc.alloc(vk.VkSurfaceFormatKHR, formatCount);
-    defer alloc.free(formats);
-
-    try vh.check(vk.vkGetPhysicalDeviceSurfaceFormatsKHR(gpu, surface, &formatCount, formats.ptr), "Failed to get surface formats");
-    // Return preferred format if available otherwise first one
-    if (formats.len == 1 and formats[0].format == vk.VK_FORMAT_UNDEFINED) {
-        return vk.VkSurfaceFormatKHR{ .format = vk.VK_FORMAT_B8G8R8A8_UNORM, .colorSpace = vk.VK_COLOR_SPACE_SRGB_NONLINEAR_KHR };
-    }
-
-    for (formats) |format| {
-        if (format.format == vk.VK_FORMAT_B8G8R8A8_UNORM and format.colorSpace == vk.VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) return format;
-    }
-    return formats[0];
 }

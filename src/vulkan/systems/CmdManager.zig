@@ -75,18 +75,14 @@ pub const CmdManager = struct {
         return cmd;
     }
 
-    pub fn registerQuery(self: *CmdManager, id: u8, name: []const u8) void {
-        self.querys.set(id, .{ .name = name });
-    }
-
     pub fn resetQueryPool(self: *CmdManager, cmd: *const Command, flightId: u8) void {
         vk.vkCmdResetQueryPool(cmd.handle, self.queryPools[flightId], 0, self.maxQueries);
         self.queryCounters[flightId] = 0;
     }
 
-    pub fn startQuery(self: *CmdManager, cmd: *const Command, flightId: u8, pipeStage: vh.PipeStage, queryId: u8) void {
-        if (self.querys.isKeyUsed(queryId) == false) {
-            std.debug.print("Error: QueryId {} not registered", .{queryId});
+    pub fn startQuery(self: *CmdManager, cmd: *const Command, flightId: u8, pipeStage: vh.PipeStage, queryId: u8, name: []const u8) void {
+        if (self.querys.isKeyUsed(queryId) == true) {
+            std.debug.print("Warning: Query ID {} in use by {s}!", .{ queryId, self.querys.getPtr(queryId).name });
             return;
         }
 
@@ -94,8 +90,7 @@ pub const CmdManager = struct {
         if (idx >= self.maxQueries) return; // Safety check
 
         cmd.writeTimestamp(self.queryPools[flightId], @intFromEnum(pipeStage), idx);
-        const query = self.querys.getPtr(queryId);
-        query.startQueryIndex = idx;
+        self.querys.set(queryId, .{ .name = name, .startQueryIndex = idx });
         self.queryCounters[flightId] += 1;
     }
 

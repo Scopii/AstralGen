@@ -47,27 +47,27 @@ pub const RenderGraph = struct {
         self.cmdMan.resetQuerys();
         self.cmdMan.resetQueryPool(&cmd, flightId);
 
-        self.cmdMan.registerQuery(33, "FrameTime");
-        self.cmdMan.startQuery(&cmd, flightId, .TopOfPipe, 33);
+        self.cmdMan.startQuery(&cmd, flightId, .TopOfPipe, 33, "FrameTime");
 
         cmd.bindDescriptorBuffer(self.descLayoutAddress);
         cmd.setDescriptorBufferOffset(vk.VK_PIPELINE_BIND_POINT_COMPUTE, self.pipeLayout);
         cmd.setDescriptorBufferOffset(vk.VK_PIPELINE_BIND_POINT_GRAPHICS, self.pipeLayout);
         cmd.setGraphicsState(.{});
 
+        self.cmdMan.startQuery(&cmd, flightId, .TopOfPipe, 40, "Transfers");
+
         for (resMan.indirectBufIds.items) |id| {
             const indirectBuf = try resMan.getBufferPtr(id);
             cmd.fillBuffer(indirectBuf.handle, 0, 16, 0);
+            try self.tempBufBarriers.append(indirectBuf.createBufferBarrier(Buffer.BufferState{ .access = .TransferReadWrite, .stage = .ComputeShader }));
+            self.bakeBarriers(&cmd);
         }
-
-        self.cmdMan.registerQuery(40, "Transfers");
-        self.cmdMan.startQuery(&cmd, flightId, .TopOfPipe, 40);
         try self.recordTransfers(&cmd, resMan);
+        
         self.cmdMan.endQuery(&cmd, flightId, .BotOfPipe, 40);
 
         for (passes, 0..) |pass, i| {
-            self.cmdMan.registerQuery(@intCast(i), pass.name);
-            self.cmdMan.startQuery(&cmd, flightId, .TopOfPipe, @intCast(i));
+            self.cmdMan.startQuery(&cmd, flightId, .TopOfPipe, @intCast(i), pass.name);
 
             const shaders = shaderMan.getShaders(pass.shaderIds)[0..pass.shaderIds.len];
             cmd.bindShaders(shaders);
@@ -76,7 +76,9 @@ pub const RenderGraph = struct {
             self.cmdMan.endQuery(&cmd, flightId, .BotOfPipe, @intCast(i));
         }
 
+        self.cmdMan.startQuery(&cmd, flightId, .TopOfPipe, 55, "Blits");
         try self.recordSwapchainBlits(&cmd, targets, resMan);
+        self.cmdMan.endQuery(&cmd, flightId, .BotOfPipe, 55);
 
         self.cmdMan.endQuery(&cmd, flightId, .BotOfPipe, 33);
         try cmd.end();
