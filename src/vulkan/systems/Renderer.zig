@@ -119,6 +119,18 @@ pub const Renderer = struct {
         self.scheduler.nextFrame();
     }
 
+    fn queueSubmit(self: *Renderer, cmd: *const Command, targets: []const *Swapchain, flightId: u8, queue: Queue) !void {
+        var waitInfos: [rc.MAX_WINDOWS]vk.VkSemaphoreSubmitInfo = undefined;
+        var signalInfos: [rc.MAX_WINDOWS + 1]vk.VkSemaphoreSubmitInfo = undefined;
+        signalInfos[targets.len] = createSemaphoreSubmitInfo(self.scheduler.cpuSyncTimeline, .AllCmds, self.scheduler.totalFrames + 1);
+
+        for (targets, 0..) |swapchain, i| {
+            waitInfos[i] = createSemaphoreSubmitInfo(swapchain.imgRdySems[flightId], .Transfer, 0);
+            signalInfos[i] = createSemaphoreSubmitInfo(swapchain.renderDoneSems[swapchain.curIndex], .AllCmds, 0);
+        }
+        try queue.submit(waitInfos[0..targets.len], cmd.createSubmitInfo(), signalInfos[0 .. targets.len + 1]);
+    }
+
     fn present(_: *Renderer, targets: []const *const Swapchain, queue: Queue) !void {
         var handles: [rc.MAX_WINDOWS]vk.VkSwapchainKHR = undefined;
         var imgIndices: [rc.MAX_WINDOWS]u32 = undefined;
@@ -130,18 +142,6 @@ pub const Renderer = struct {
             waitSems[i] = swapchain.renderDoneSems[swapchain.curIndex];
         }
         try queue.present(handles[0..targets.len], imgIndices[0..targets.len], waitSems[0..targets.len]);
-    }
-
-    fn queueSubmit(self: *Renderer, cmd: *const Command, targets: []const *Swapchain, flightId: u8, queue: Queue) !void {
-        var waitInfos: [rc.MAX_WINDOWS]vk.VkSemaphoreSubmitInfo = undefined;
-        var signalInfos: [rc.MAX_WINDOWS + 1]vk.VkSemaphoreSubmitInfo = undefined;
-        signalInfos[targets.len] = createSemaphoreSubmitInfo(self.scheduler.cpuSyncTimeline, .AllCmds, self.scheduler.totalFrames + 1);
-
-        for (targets, 0..) |swapchain, i| {
-            waitInfos[i] = createSemaphoreSubmitInfo(swapchain.imgRdySems[flightId], .Transfer, 0);
-            signalInfos[i] = createSemaphoreSubmitInfo(swapchain.renderDoneSems[swapchain.curIndex], .AllCmds, 0);
-        }
-        try queue.submit(waitInfos[0..targets.len], cmd.createSubmitInfo(), signalInfos[0 .. targets.len + 1]);
     }
 
     pub fn createPasses(self: *Renderer, passes: []const Pass) !void {

@@ -1,7 +1,6 @@
 const CreateStableMapArray = @import("../../structures/StableMapArray.zig").CreateStableMapArray;
 const PushConstants = @import("../components/PushConstants.zig").PushConstants;
 const DescriptorManager = @import("DescriptorManager.zig").DescriptorManager;
-const ResourceSlot = @import("../components/PushConstants.zig").ResourceSlot;
 const GpuAllocator = @import("GpuAllocator.zig").GpuAllocator;
 const Texture = @import("../components/Texture.zig").Texture;
 const Buffer = @import("../components/Buffer.zig").Buffer;
@@ -74,23 +73,23 @@ pub const ResourceManager = struct {
         self.gpuAlloc.deinit();
     }
 
-    pub fn getBufferResourceSlot(self: *ResourceManager, bufId: Buffer.BufId) !ResourceSlot {
+    pub fn getBufferResourceSlot(self: *ResourceManager, bufId: Buffer.BufId) !PushConstants.ResourceSlot {
         if (self.buffers.isKeyUsed(bufId.val) != true) {
             std.debug.print("Tried getting Buffer ResourceSlot {} but its empty\n", .{bufId.val});
             return error.NoResourceSlot;
         }
         const bindlessIndex = self.buffers.getIndex(bufId.val);
         const buffer = self.buffers.getPtr(bufId.val);
-        return ResourceSlot{ .index = bindlessIndex, .count = buffer.count };
+        return .{ .index = bindlessIndex, .count = buffer.count };
     }
 
-    pub fn getTextureResourceSlot(self: *ResourceManager, texId: Texture.TexId) !ResourceSlot {
+    pub fn getTextureResourceSlot(self: *ResourceManager, texId: Texture.TexId) !PushConstants.ResourceSlot {
         if (self.textures.isKeyUsed(texId.val) != true) {
             std.debug.print("Tried getting Texture ResourceSlot {} but its empty\n", .{texId.val});
             return error.NoResourceSlot;
         }
         const bindlessIndex = self.textures.getIndex(texId.val);
-        return ResourceSlot{ .index = bindlessIndex, .count = 1 };
+        return .{ .index = bindlessIndex, .count = 1 };
     }
 
     pub fn resetTransfers(self: *ResourceManager) void {

@@ -59,11 +59,11 @@ pub const RenderGraph = struct {
         for (resMan.indirectBufIds.items) |id| {
             const indirectBuf = try resMan.getBufferPtr(id);
             cmd.fillBuffer(indirectBuf.handle, 0, 16, 0);
-            try self.tempBufBarriers.append(indirectBuf.createBufferBarrier(Buffer.BufferState{ .access = .TransferReadWrite, .stage = .ComputeShader }));
+            try self.tempBufBarriers.append(indirectBuf.createBufferBarrier(Buffer.BufferState{ .access = .TransferReadWrite, .stage = .Transfer }));
             self.bakeBarriers(&cmd);
         }
         try self.recordTransfers(&cmd, resMan);
-        
+
         self.cmdMan.endQuery(&cmd, flightId, .BotOfPipe, 40);
 
         for (passes, 0..) |pass, i| {
