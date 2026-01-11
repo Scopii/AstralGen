@@ -11,6 +11,7 @@ const Pass = @import("../components/Pass.zig").Pass;
 const Context = @import("Context.zig").Context;
 const vk = @import("../../modules/vk.zig").c;
 const Allocator = std.mem.Allocator;
+const vh = @import("Helpers.zig");
 const std = @import("std");
 
 pub const Transfer = struct {

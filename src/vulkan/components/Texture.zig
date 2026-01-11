@@ -9,7 +9,7 @@ pub const Texture = struct {
     base: TextureBase,
 
     pub const TexId = packed struct { val: u32 };
-    pub const TexInf = struct { id: TexId, mem: vh.MemUsage, typ: vh.TextureType, width: u32, height: u32, depth: u32 = 1 };
+    pub const TexInf = struct { id: TexId, mem: vh.MemUsage, typ: vh.TextureType, width: u32, height: u32, depth: u32 = 1};
 
     pub fn create(texInf: TexInf) TexInf {
         return texInf;

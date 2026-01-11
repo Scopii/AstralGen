@@ -1,4 +1,5 @@
 const vk = @import("../../modules/vk.zig").c;
+const vkFn = @import("../../modules/vk.zig");
 const std = @import("std");
 
 pub const TextureType = enum { Color, Depth, Stencil };
@@ -113,3 +114,24 @@ pub fn Handle(comptime _: type) type {
         // }
     };
 }
+
+
+pub fn setObjectName(device: vk.VkDevice, handle: anytype, objectType: vk.VkObjectType, name: []const u8) void {
+    if (vkFn.vkSetDebugUtilsObjectNameEXT == null) return;
+
+    var nameBuffer: [64]u8 = undefined;
+    const len = @min(name.len, 63);
+    @memcpy(nameBuffer[0..len], name[0..len]);
+    nameBuffer[len] = 0; // Null terminate
+
+    const nameInfo = vk.VkDebugUtilsObjectNameInfoEXT{
+        .sType = vk.VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+        .objectType = objectType,
+        .objectHandle = @intFromPtr(handle), // Cast handle (pointer) to u64
+        .pObjectName = &nameBuffer,
+    };
+
+    _ = vkFn.vkSetDebugUtilsObjectNameEXT.?(device, &nameInfo);
+}
+// USAGE:
+// vh.setObjectName(self.gpi, buffer.handle, vk.VK_OBJECT_TYPE_BUFFER, buffer.name);

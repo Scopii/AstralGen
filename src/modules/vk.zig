@@ -63,3 +63,4 @@ pub var vkCmdSetScissorWithCount: c.PFN_vkCmdSetScissorWithCount = null;
 pub var vkCmdSetLineWidth: c.PFN_vkCmdSetLineWidth = null;
 pub var vkCmdSetConservativeRasterizationModeEXT: c.PFN_vkCmdSetConservativeRasterizationModeEXT = null;
 pub var vkCmdSetFragmentShadingRateKHR: c.PFN_vkCmdSetFragmentShadingRateKHR = null;
+pub var vkSetDebugUtilsObjectNameEXT: c.PFN_vkSetDebugUtilsObjectNameEXT = null;
