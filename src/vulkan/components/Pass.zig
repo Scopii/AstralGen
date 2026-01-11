@@ -107,17 +107,15 @@ pub const Attachment = struct {
     }
 };
 
-pub const ShaderSlot = packed struct { val: u32 };
-
 pub const TextureUse = struct {
     texId: Texture.TexId,
     stage: vh.PipeStage = .TopOfPipe,
     access: vh.PipeAccess = .None,
     layout: vh.ImageLayout = .General,
-    shaderSlot: ?ShaderSlot = null,
+    shaderSlot: ?u32 = null,
 
     pub fn init(id: Texture.TexId, stage: vh.PipeStage, access: vh.PipeAccess, layout: vh.ImageLayout, shaderSlot: ?u8) TextureUse {
-        return .{ .texId = id, .stage = stage, .access = access, .layout = layout, .shaderSlot = if (shaderSlot) |slot| .{ .val = slot } else null };
+        return .{ .texId = id, .stage = stage, .access = access, .layout = layout, .shaderSlot = if (shaderSlot) |slot| slot else null };
     }
 
     pub fn getNeededState(self: *const TextureUse) TextureBase.TextureState {
@@ -129,10 +127,10 @@ pub const BufferUse = struct {
     bufId: Buffer.BufId,
     stage: vh.PipeStage = .TopOfPipe,
     access: vh.PipeAccess = .None,
-    shaderSlot: ?ShaderSlot = null,
+    shaderSlot: ?u32 = null,
 
     pub fn init(bufId: Buffer.BufId, stage: vh.PipeStage, access: vh.PipeAccess, shaderSlot: ?u8) BufferUse {
-        return .{ .bufId = bufId, .stage = stage, .access = access, .shaderSlot = if (shaderSlot) |slot| .{ .val = slot } else null };
+        return .{ .bufId = bufId, .stage = stage, .access = access, .shaderSlot = if (shaderSlot) |slot| slot else null };
     }
 
     pub fn getNeededState(self: *const BufferUse) Buffer.BufferState {

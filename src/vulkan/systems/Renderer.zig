@@ -106,7 +106,7 @@ pub const Renderer = struct {
         try self.scheduler.waitForGPU();
         const flightId = self.scheduler.flightId;
 
-        try self.renderGraph.cmdMan.getQueryResults(flightId);
+        try self.renderGraph.cmdMan.printQueryResults(flightId);
 
         if (try self.swapMan.updateTargets(flightId) == false) return;
         const targets = self.swapMan.getTargets();

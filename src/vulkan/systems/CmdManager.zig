@@ -113,7 +113,7 @@ pub const CmdManager = struct {
         self.querys.clear();
     }
 
-    pub fn getQueryResults(self: *CmdManager, flightId: u8) !void {
+    pub fn printQueryResults(self: *CmdManager, flightId: u8) !void {
         const count = self.queryCounters[flightId];
         if (count == 0 or count > self.maxQueries) return;
 

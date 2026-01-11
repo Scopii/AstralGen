@@ -68,10 +68,6 @@ pub const Command = struct {
         vk.vkCmdEndRendering(self.handle);
     }
 
-    pub fn getHandle(self: *const Command) vk.VkCommandBuffer {
-        return self.handle;
-    }
-
     pub fn bindDescriptorBuffer(self: *const Command, gpuAddress: u64) void {
         const bufferBindingInf = vk.VkDescriptorBufferBindingInfoEXT{
             .sType = vk.VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT,
