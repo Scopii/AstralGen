@@ -1,13 +1,13 @@
 const CreateStableMapArray = @import("../../structures/StableMapArray.zig").CreateStableMapArray;
 const PushConstants = @import("../types/res/PushConstants.zig").PushConstants;
 const DescriptorMan = @import("DescriptorMan.zig").DescriptorMan;
-const GpuAllocator = @import("GpuAllocator.zig").GpuAllocator;
 const Texture = @import("../types/res/Texture.zig").Texture;
 const Buffer = @import("../types/res/Buffer.zig").Buffer;
 const rc = @import("../../configs/renderConfig.zig");
 const Context = @import("Context.zig").Context;
 const vk = @import("../../modules/vk.zig").c;
 const Allocator = std.mem.Allocator;
+const Vma = @import("Vma.zig").Vma;
 const std = @import("std");
 
 pub const Transfer = struct {
@@ -17,8 +17,8 @@ pub const Transfer = struct {
 };
 
 pub const ResourceMan = struct {
-    cpuAlloc: Allocator,
-    gpuAlloc: GpuAllocator,
+    alloc: Allocator,
+    vma: Vma,
     gpi: vk.VkDevice,
     gpu: vk.VkPhysicalDevice,
 
@@ -36,11 +36,11 @@ pub const ResourceMan = struct {
     pub fn init(alloc: Allocator, context: *const Context) !ResourceMan {
         const gpi = context.gpi;
         const gpu = context.gpu;
-        const gpuAlloc = try GpuAllocator.init(context.instance, context.gpi, context.gpu);
+        const gpuAlloc = try Vma.init(context.instance, context.gpi, context.gpu);
 
         return .{
-            .cpuAlloc = alloc,
-            .gpuAlloc = gpuAlloc,
+            .alloc = alloc,
+            .vma = gpuAlloc,
             .gpi = gpi,
             .gpu = gpu,
             .descMan = try DescriptorMan.init(alloc, gpuAlloc, gpi, gpu),
@@ -56,18 +56,18 @@ pub const ResourceMan = struct {
         var bufIter = self.buffers.iterator();
         while (bufIter.next()) |key| {
             const buf = self.buffers.getPtr(key);
-            self.gpuAlloc.freeBuffer(buf.handle, buf.allocation);
+            self.vma.freeBuffer(buf.handle, buf.allocation);
         }
         var texIter = self.textures.iterator();
         while (texIter.next()) |key| {
             const tex = self.textures.getPtr(key);
-            self.gpuAlloc.freeTexture(tex);
+            self.vma.freeTexture(tex);
         }
         self.descMan.deinit();
         self.transfers.deinit();
-        self.gpuAlloc.freeBuffer(self.stagingBuffer.handle, self.stagingBuffer.allocation);
+        self.vma.freeBuffer(self.stagingBuffer.handle, self.stagingBuffer.allocation);
         self.indirectBufIds.deinit();
-        self.gpuAlloc.deinit();
+        self.vma.deinit();
     }
 
     pub fn getBufferResourceSlot(self: *ResourceMan, bufId: Buffer.BufId) !PushConstants.ResourceSlot {
@@ -132,11 +132,11 @@ pub const ResourceMan = struct {
     }
 
     pub fn createBuffer(self: *ResourceMan, bufInf: Buffer.BufInf) !void {
-        const buffer = try self.gpuAlloc.allocDefinedBuffer(bufInf, bufInf.mem);
+        const buffer = try self.vma.allocDefinedBuffer(bufInf, bufInf.mem);
         const bindlessIndex = try self.buffers.insert(bufInf.id.val, buffer);
         try self.descMan.updateBufferDescriptor(buffer.gpuAddress, buffer.size, rc.STORAGE_BUF_BINDING, bindlessIndex);
 
-        self.gpuAlloc.printMemoryLocation(buffer.allocation, self.gpu);
+        self.vma.printMemoryLocation(buffer.allocation, self.gpu);
         std.debug.print("Buffer ID {} -> BindlessIndex {} created", .{ bufInf.id.val, bindlessIndex });
 
         if (bufInf.typ == .Indirect) {
@@ -146,7 +146,7 @@ pub const ResourceMan = struct {
     }
 
     pub fn createTexture(self: *ResourceMan, texInf: Texture.TexInf) !void {
-        const tex = try self.gpuAlloc.allocTexture(texInf, texInf.mem);
+        const tex = try self.vma.allocTexture(texInf, texInf.mem);
         const bindlessIndex = try self.textures.insert(texInf.id.val, tex);
 
         if (texInf.typ == .Color) {
@@ -190,9 +190,9 @@ pub const ResourceMan = struct {
     pub fn replaceTexture(self: *ResourceMan, texId: Texture.TexId, nexTexInf: Texture.TexInf) !void {
         var oldTex = try self.getTexturePtr(texId);
         oldTex.base.state = .{};
-        self.gpuAlloc.freeTexture(oldTex);
+        self.vma.freeTexture(oldTex);
 
-        const newTex = try self.gpuAlloc.allocTexture(nexTexInf, .Gpu);
+        const newTex = try self.vma.allocTexture(nexTexInf, .Gpu);
         const bindlessIndex = self.textures.getIndex(texId.val);
         try self.descMan.updateTextureDescriptor(newTex.base.view, rc.STORAGE_TEX_BINDING, bindlessIndex);
 
@@ -206,7 +206,7 @@ pub const ResourceMan = struct {
             return;
         }
         const tex = self.textures.getPtr(texId.val);
-        self.gpuAlloc.freeTexture(tex);
+        self.vma.freeTexture(tex);
         self.textures.remove(texId.val);
     }
 
@@ -216,7 +216,7 @@ pub const ResourceMan = struct {
             return;
         }
         const buffer = self.buffers.getPtr(bufId.val);
-        self.gpuAlloc.freeBuffer(buffer.handle, buffer.allocation);
+        self.vma.freeBuffer(buffer.handle, buffer.allocation);
         self.buffers.remove(bufId.val);
     }
 };

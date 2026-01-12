@@ -7,11 +7,11 @@ const vk = @import("../../modules/vk.zig").c;
 const vhE = @import("../help/Enums.zig");
 const std = @import("std");
 
-pub const GpuAllocator = struct {
+pub const Vma = struct {
     handle: vk.VmaAllocator,
     gpi: vk.VkDevice,
 
-    pub fn init(instance: vk.VkInstance, gpi: vk.VkDevice, gpu: vk.VkPhysicalDevice) !GpuAllocator {
+    pub fn init(instance: vk.VkInstance, gpi: vk.VkDevice, gpu: vk.VkPhysicalDevice) !Vma {
         const vulkanFunctions = vk.VmaVulkanFunctions{
             .vkGetInstanceProcAddr = vk.vkGetInstanceProcAddr,
             .vkGetDeviceProcAddr = vk.vkGetDeviceProcAddr,
@@ -28,22 +28,22 @@ pub const GpuAllocator = struct {
         return .{ .handle = vmaAlloc, .gpi = gpi };
     }
 
-    pub fn deinit(self: *const GpuAllocator) void {
+    pub fn deinit(self: *const Vma) void {
         vk.vmaDestroyAllocator(self.handle);
     }
 
-    pub fn allocDescriptorBuffer(self: *const GpuAllocator, size: vk.VkDeviceSize) !DescriptorBuffer {
+    pub fn allocDescriptorBuffer(self: *const Vma, size: vk.VkDeviceSize) !DescriptorBuffer {
         const bufUsage = vk.VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT | vk.VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
         const buffer = try self.allocBuffer(size, bufUsage, vk.VMA_MEMORY_USAGE_CPU_TO_GPU, vk.VMA_ALLOCATION_CREATE_MAPPED_BIT);
         return .{ .allocation = buffer.allocation, .mappedPtr = buffer.mappedPtr, .size = size, .handle = buffer.handle, .gpuAddress = buffer.gpuAddress };
     }
 
-    pub fn allocStagingBuffer(self: *const GpuAllocator, size: vk.VkDeviceSize) !Buffer {
+    pub fn allocStagingBuffer(self: *const Vma, size: vk.VkDeviceSize) !Buffer {
         const memFlags = vk.VMA_ALLOCATION_CREATE_MAPPED_BIT | vk.VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
         return try self.allocBuffer(size, vk.VK_BUFFER_USAGE_TRANSFER_SRC_BIT, vk.VMA_MEMORY_USAGE_CPU_ONLY, memFlags); // TEST CPU_TO_GPU and AUTO
     }
 
-    pub fn printMemoryLocation(self: *const GpuAllocator, allocation: vk.VmaAllocation, gpu: vk.VkPhysicalDevice) void {
+    pub fn printMemoryLocation(self: *const Vma, allocation: vk.VmaAllocation, gpu: vk.VkPhysicalDevice) void {
         var allocInf: vk.VmaAllocationInfo = undefined;
         vk.vmaGetAllocationInfo(self.handle, allocation, &allocInf);
         var memProps: vk.VkPhysicalDeviceMemoryProperties = undefined;
@@ -55,7 +55,7 @@ pub const GpuAllocator = struct {
         std.debug.print("Allocation is in VRAM: {}, CPU Visible: {}\n", .{ isVram, isCpuVisible });
     }
 
-    pub fn allocDefinedBuffer(self: *const GpuAllocator, bufInf: Buffer.BufInf, memUse: vhE.MemUsage) !Buffer {
+    pub fn allocDefinedBuffer(self: *const Vma, bufInf: Buffer.BufInf, memUse: vhE.MemUsage) !Buffer {
         const dataSize = bufInf.elementSize;
 
         if (dataSize == 0) {
@@ -93,7 +93,7 @@ pub const GpuAllocator = struct {
         return try self.allocBuffer(bufferByteSize, bufferBits, memType, memFlags);
     }
 
-    pub fn allocBuffer(self: *const GpuAllocator, size: vk.VkDeviceSize, bufUsage: vk.VkBufferUsageFlags, memUse: vk.VmaMemoryUsage, memFlags: vk.VmaAllocationCreateFlags) !Buffer {
+    pub fn allocBuffer(self: *const Vma, size: vk.VkDeviceSize, bufUsage: vk.VkBufferUsageFlags, memUse: vk.VmaMemoryUsage, memFlags: vk.VmaAllocationCreateFlags) !Buffer {
         const bufInf = vk.VkBufferCreateInfo{
             .sType = vk.VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
             .size = size,
@@ -121,7 +121,7 @@ pub const GpuAllocator = struct {
         };
     }
 
-    pub fn allocTexture(self: *GpuAllocator, texInf: Texture.TexInf, memUse: vhE.MemUsage) !Texture {
+    pub fn allocTexture(self: *Vma, texInf: Texture.TexInf, memUse: vhE.MemUsage) !Texture {
         const memType: vk.VmaMemoryUsage = switch (memUse) {
             .Gpu => vk.VMA_MEMORY_USAGE_GPU_ONLY,
             .CpuWrite => vk.VMA_MEMORY_USAGE_CPU_TO_GPU,
@@ -166,17 +166,17 @@ pub const GpuAllocator = struct {
         };
     }
 
-    pub fn getAllocationInfo(self: *const GpuAllocator, allocation: vk.VmaAllocation) vk.VmaAllocationInfo {
+    pub fn getAllocationInfo(self: *const Vma, allocation: vk.VmaAllocation) vk.VmaAllocationInfo {
         var allocVmaInf: vk.VmaAllocationInfo = undefined;
         vk.vmaGetAllocationInfo(self.handle, allocation, &allocVmaInf);
         return allocVmaInf;
     }
 
-    pub fn freeBuffer(self: *const GpuAllocator, buffer: vk.VkBuffer, allocation: vk.VmaAllocation) void {
+    pub fn freeBuffer(self: *const Vma, buffer: vk.VkBuffer, allocation: vk.VmaAllocation) void {
         vk.vmaDestroyBuffer(self.handle, buffer, allocation);
     }
 
-    pub fn freeTexture(self: *const GpuAllocator, tex: *Texture) void {
+    pub fn freeTexture(self: *const Vma, tex: *Texture) void {
         vk.vkDestroyImageView(self.gpi, tex.base.view, null);
         vk.vmaDestroyImage(self.handle, tex.base.img, tex.allocation);
     }

@@ -1,11 +1,11 @@
 const PushConstants = @import("../types/res/PushConstants.zig").PushConstants;
-const GpuAllocator = @import("GpuAllocator.zig").GpuAllocator;
 const rc = @import("../../configs/renderConfig.zig");
 const vhF = @import("../help/Functions.zig");
 const vk = @import("../../modules/vk.zig").c;
 const vkFn = @import("../../modules/vk.zig");
 const vhE = @import("../help/Enums.zig");
 const Allocator = std.mem.Allocator;
+const Vma = @import("Vma.zig").Vma;
 const std = @import("std");
 
 pub const DescriptorBuffer = struct {
@@ -17,8 +17,8 @@ pub const DescriptorBuffer = struct {
 };
 
 pub const DescriptorMan = struct {
-    cpuAlloc: Allocator,
-    gpuAlloc: GpuAllocator, // deinit() in ResourceManager
+    alloc: Allocator,
+    vma: Vma, // deinit() in ResourceManager
     gpi: vk.VkDevice,
     gpu: vk.VkPhysicalDevice,
 
@@ -27,7 +27,7 @@ pub const DescriptorMan = struct {
     pipeLayout: vk.VkPipelineLayout,
     descBuffer: DescriptorBuffer,
 
-    pub fn init(cpuAlloc: Allocator, gpuAlloc: GpuAllocator, gpi: vk.VkDevice, gpu: vk.VkPhysicalDevice) !DescriptorMan {
+    pub fn init(cpuAlloc: Allocator, gpuAlloc: Vma, gpi: vk.VkDevice, gpu: vk.VkPhysicalDevice) !DescriptorMan {
         // Create Descriptor Layouts
         var bindings: [rc.bindingRegistry.len]vk.VkDescriptorSetLayoutBinding = undefined;
         for (0..bindings.len) |i| {
@@ -41,8 +41,8 @@ pub const DescriptorMan = struct {
         vkFn.vkGetDescriptorSetLayoutSizeEXT.?(gpi, descLayout, &layoutSize);
 
         return .{
-            .cpuAlloc = cpuAlloc,
-            .gpuAlloc = gpuAlloc,
+            .alloc = cpuAlloc,
+            .vma = gpuAlloc,
             .gpi = gpi,
             .gpu = gpu,
             .descBufferProps = getDescriptorBufferProperties(gpu),
@@ -53,7 +53,7 @@ pub const DescriptorMan = struct {
     }
 
     pub fn deinit(self: *DescriptorMan) void {
-        self.gpuAlloc.freeBuffer(self.descBuffer.handle, self.descBuffer.allocation);
+        self.vma.freeBuffer(self.descBuffer.handle, self.descBuffer.allocation);
         vk.vkDestroyDescriptorSetLayout(self.gpi, self.descLayout, null);
         vk.vkDestroyPipelineLayout(self.gpi, self.pipeLayout, null);
     }
