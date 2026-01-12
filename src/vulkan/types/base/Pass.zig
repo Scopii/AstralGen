@@ -1,8 +1,8 @@
-const ShaderId = @import("../../configs/shaderConfig.zig").ShaderInf.ShaderId;
-const TextureBase = @import("TextureBase.zig").TextureBase;
-const Texture = @import("Texture.zig").Texture;
-const Buffer = @import("Buffer.zig").Buffer;
-const vh = @import("../systems/Helpers.zig");
+const ShaderId = @import("../../../configs/shaderConfig.zig").ShaderInf.ShaderId;
+const TextureBase = @import("../res/TextureBase.zig").TextureBase;
+const Texture = @import("../res/Texture.zig").Texture;
+const Buffer = @import("../res/Buffer.zig").Buffer;
+const vhE = @import("../../help/Enums.zig");
 
 pub const Pass = struct {
     name: []const u8,
@@ -11,7 +11,11 @@ pub const Pass = struct {
     texUses: []const TextureUse = &.{},
     typ: PassType,
 
-    pub const Dispatch = struct { x: u32, y: u32, z: u32 };
+    pub const Dispatch = struct {
+        x: u32,
+        y: u32,
+        z: u32,
+    };
 
     pub const PassType = union(enum) {
         compute: ComputePass,
@@ -93,12 +97,12 @@ pub const Pass = struct {
 
 pub const Attachment = struct {
     texId: Texture.TexId,
-    stage: vh.PipeStage = .TopOfPipe,
-    access: vh.PipeAccess = .None,
-    layout: vh.ImageLayout = .General,
+    stage: vhE.PipeStage = .TopOfPipe,
+    access: vhE.PipeAccess = .None,
+    layout: vhE.ImageLayout = .General,
     clear: bool,
 
-    pub fn init(id: Texture.TexId, stage: vh.PipeStage, access: vh.PipeAccess, clear: bool) Attachment {
+    pub fn init(id: Texture.TexId, stage: vhE.PipeStage, access: vhE.PipeAccess, clear: bool) Attachment {
         return .{ .texId = id, .stage = stage, .access = access, .layout = .Attachment, .clear = clear };
     }
 
@@ -109,12 +113,12 @@ pub const Attachment = struct {
 
 pub const TextureUse = struct {
     texId: Texture.TexId,
-    stage: vh.PipeStage = .TopOfPipe,
-    access: vh.PipeAccess = .None,
-    layout: vh.ImageLayout = .General,
+    stage: vhE.PipeStage = .TopOfPipe,
+    access: vhE.PipeAccess = .None,
+    layout: vhE.ImageLayout = .General,
     shaderSlot: ?u32 = null,
 
-    pub fn init(id: Texture.TexId, stage: vh.PipeStage, access: vh.PipeAccess, layout: vh.ImageLayout, shaderSlot: ?u8) TextureUse {
+    pub fn init(id: Texture.TexId, stage: vhE.PipeStage, access: vhE.PipeAccess, layout: vhE.ImageLayout, shaderSlot: ?u8) TextureUse {
         return .{ .texId = id, .stage = stage, .access = access, .layout = layout, .shaderSlot = if (shaderSlot) |slot| slot else null };
     }
 
@@ -125,11 +129,11 @@ pub const TextureUse = struct {
 
 pub const BufferUse = struct {
     bufId: Buffer.BufId,
-    stage: vh.PipeStage = .TopOfPipe,
-    access: vh.PipeAccess = .None,
+    stage: vhE.PipeStage = .TopOfPipe,
+    access: vhE.PipeAccess = .None,
     shaderSlot: ?u32 = null,
 
-    pub fn init(bufId: Buffer.BufId, stage: vh.PipeStage, access: vh.PipeAccess, shaderSlot: ?u8) BufferUse {
+    pub fn init(bufId: Buffer.BufId, stage: vhE.PipeStage, access: vhE.PipeAccess, shaderSlot: ?u8) BufferUse {
         return .{ .bufId = bufId, .stage = stage, .access = access, .shaderSlot = if (shaderSlot) |slot| slot else null };
     }
 

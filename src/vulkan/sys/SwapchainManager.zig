@@ -1,13 +1,13 @@
 const CreateMapArray = @import("../../structures/MapArray.zig").CreateMapArray;
-const Swapchain = @import("../components/Swapchain.zig").Swapchain;
-const TexId = @import("../components/Texture.zig").Texture.TexId;
+const Swapchain = @import("../types/base/Swapchain.zig").Swapchain;
+const TexId = @import("../types/res/Texture.zig").Texture.TexId;
 const Window = @import("../../platform/Window.zig").Window;
 const rc = @import("../../configs/renderConfig.zig");
+const vhF = @import("../help/Functions.zig");
 const Context = @import("Context.zig").Context;
 const sdl = @import("../../modules/sdl.zig").c;
 const vk = @import("../../modules/vk.zig").c;
 const Allocator = std.mem.Allocator;
-const vh = @import("Helpers.zig");
 const std = @import("std");
 
 pub const SwapchainManager = struct {
@@ -65,7 +65,7 @@ pub const SwapchainManager = struct {
                         std.debug.print("Resolved Error for Swapchain {}", .{swapchain.*});
                     } else std.debug.print("Could not Resolve Swapchain Error {}", .{swapchain.*});
                 },
-                else => try vh.check(result1, "Could not acquire swapchain image with unknown error"),
+                else => try vhF.check(result1, "Could not acquire swapchain image with unknown error"),
             }
         }
         self.targetCount = count;

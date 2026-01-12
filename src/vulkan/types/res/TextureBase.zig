@@ -1,15 +1,15 @@
-const vk = @import("../../modules/vk.zig").c;
-const vh = @import("../systems/Helpers.zig");
+const vk = @import("../../../modules/vk.zig").c;
+const vhE = @import("../../help/Enums.zig");
 
 pub const TextureBase = struct {
     img: vk.VkImage,
     view: vk.VkImageView,
     format: c_uint,
-    texType: vh.TextureType,
+    texType: vhE.TextureType,
     extent: vk.VkExtent3D,
     state: TextureState = .{},
 
-    pub const TextureState = struct { stage: vh.PipeStage = .TopOfPipe, access: vh.PipeAccess = .None, layout: vh.ImageLayout = .Undefined };
+    pub const TextureState = struct { stage: vhE.PipeStage = .TopOfPipe, access: vhE.PipeAccess = .None, layout: vhE.ImageLayout = .Undefined };
 
     pub fn createAttachment(self: *const TextureBase, clear: bool) vk.VkRenderingAttachmentInfo {
         const clearValue: vk.VkClearValue = switch (self.texType) {

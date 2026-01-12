@@ -1,16 +1,17 @@
-const LoadedShader = @import("../../core/ShaderCompiler.zig").LoadedShader;
-const PushConstants = @import("PushConstants.zig").PushConstants;
-const vk = @import("../../modules/vk.zig").c;
-const vh = @import("../systems/Helpers.zig");
-const vkFn = @import("../../modules/vk.zig");
+const LoadedShader = @import("../../../core/ShaderCompiler.zig").LoadedShader;
+const PushConstants = @import("../res/PushConstants.zig").PushConstants;
+const vk = @import("../../../modules/vk.zig").c;
+const vhF = @import("../../help/Functions.zig");
+const vhE = @import("../../help/Enums.zig");
+const vkFn = @import("../../../modules/vk.zig");
 
 pub const ShaderObject = struct {
     handle: vk.VkShaderEXT,
-    stage: vh.ShaderStage,
+    stage: vhE.ShaderStage,
 
     pub fn init(gpi: vk.VkDevice, shader: LoadedShader, descLayout: vk.VkDescriptorSetLayout) !ShaderObject {
         const stageEnum = shader.shaderInf.typ;
-        const vkStage = vh.getShaderBit(stageEnum);
+        const vkStage = vhF.getShaderBit(stageEnum);
 
         var flags: vk.VkShaderCreateFlagsEXT = 0;
         if (stageEnum == .meshNoTask) flags |= vk.VK_SHADER_CREATE_NO_TASK_SHADER_BIT_EXT;
@@ -40,7 +41,7 @@ pub const ShaderObject = struct {
             },
         };
         var handle: vk.VkShaderEXT = undefined;
-        try vh.check(vkFn.vkCreateShadersEXT.?(gpi, 1, &shaderInf, null, &handle), "Shader Creation Failed");
+        try vhF.check(vkFn.vkCreateShadersEXT.?(gpi, 1, &shaderInf, null, &handle), "Shader Creation Failed");
 
         return .{
             .handle = handle,

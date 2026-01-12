@@ -1,23 +1,23 @@
+const Swapchain = @import("../types/base/Swapchain.zig").Swapchain;
 const MemoryManager = @import("../../core/MemoryManager.zig").MemoryManager;
 const LoadedShader = @import("../../core/ShaderCompiler.zig").LoadedShader;
 const SwapchainManager = @import("SwapchainManager.zig").SwapchainManager;
 const ResourceManager = @import("ResourceManager.zig").ResourceManager;
-const Swapchain = @import("../components/Swapchain.zig").Swapchain;
+const Texture = @import("../types/res/Texture.zig").Texture;
+const Command = @import("../types/base/Command.zig").Command;
+const Buffer = @import("../types/res/Buffer.zig").Buffer;
 const ShaderManager = @import("ShaderManager.zig").ShaderManager;
-const Texture = @import("../components//Texture.zig").Texture;
-const Command = @import("../components/Command.zig").Command;
+const Pass = @import("../types/base/Pass.zig").Pass;
 const Window = @import("../../platform/Window.zig").Window;
 const RenderGraph = @import("RenderGraph.zig").RenderGraph;
-const Buffer = @import("../components//Buffer.zig").Buffer;
-const Queue = @import("../components/Queue.zig").Queue;
+const Queue = @import("../types/base/Queue.zig").Queue;
 const rc = @import("../../configs/renderConfig.zig");
 const FrameData = @import("../../App.zig").FrameData;
 const Scheduler = @import("Scheduler.zig").Scheduler;
-const Pass = @import("../components/Pass.zig").Pass;
 const Context = @import("Context.zig").Context;
 const vk = @import("../../modules/vk.zig").c;
+const vkE = @import("../help/Enums.zig");
 const Allocator = std.mem.Allocator;
-const vh = @import("Helpers.zig");
 const std = @import("std");
 
 pub const Renderer = struct {
@@ -179,6 +179,6 @@ pub const Renderer = struct {
     }
 };
 
-fn createSemaphoreSubmitInfo(semaphore: vk.VkSemaphore, pipeStage: vh.PipeStage, value: u64) vk.VkSemaphoreSubmitInfo {
+fn createSemaphoreSubmitInfo(semaphore: vk.VkSemaphore, pipeStage: vkE.PipeStage, value: u64) vk.VkSemaphoreSubmitInfo {
     return .{ .sType = vk.VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO, .semaphore = semaphore, .stageMask = @intFromEnum(pipeStage), .value = value };
 }

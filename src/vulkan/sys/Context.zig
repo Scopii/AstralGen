@@ -1,10 +1,11 @@
-const Queue = @import("../components/Queue.zig").Queue;
+const Queue = @import("../types/base/Queue.zig").Queue;
 const appCon = @import("../../configs/appConfig.zig");
+const vhF = @import("../help/Functions.zig");
 const sdl = @import("../../modules/sdl.zig").c;
 const vk = @import("../../modules/vk.zig").c;
 const vkFn = @import("../../modules/vk.zig");
+const vhE = @import("../help/Enums.zig");
 const Allocator = std.mem.Allocator;
-const vh = @import("Helpers.zig");
 const std = @import("std");
 
 pub const QueueFamilies = struct {
@@ -52,13 +53,13 @@ pub const Context = struct {
         const surface = self.surface;
 
         var modeCount: u32 = 0;
-        try vh.check(vk.vkGetPhysicalDeviceSurfacePresentModesKHR(gpu, surface, &modeCount, null), "Failed to get present mode count");
+        try vhE.check(vk.vkGetPhysicalDeviceSurfacePresentModesKHR(gpu, surface, &modeCount, null), "Failed to get present mode count");
         if (modeCount == 0) return vk.VK_PRESENT_MODE_FIFO_KHR; // FIFO is always supported
 
         const modes = try self.alloc.alloc(vk.VkPresentModeKHR, modeCount);
         defer self.alloc.free(modes);
 
-        try vh.check(vk.vkGetPhysicalDeviceSurfacePresentModesKHR(gpu, surface, &modeCount, modes.ptr), "Failed to get present modes");
+        try vhE.check(vk.vkGetPhysicalDeviceSurfacePresentModesKHR(gpu, surface, &modeCount, modes.ptr), "Failed to get present modes");
         // Prefer mailbox (triple buffering), then immediate, fallback to FIFO
         for (modes) |mode| if (mode == vk.VK_PRESENT_MODE_MAILBOX_KHR) return mode;
         for (modes) |mode| if (mode == vk.VK_PRESENT_MODE_IMMEDIATE_KHR) return mode;
@@ -132,7 +133,7 @@ pub fn createInstance(alloc: Allocator) !vk.VkInstance {
     };
 
     var instance: vk.VkInstance = undefined;
-    try vh.check(vk.vkCreateInstance(&instanceInf, null, &instance), "Unable to create Vulkan instance!");
+    try vhF.check(vk.vkCreateInstance(&instanceInf, null, &instance), "Unable to create Vulkan instance!");
     return instance;
 }
 
@@ -140,12 +141,12 @@ pub fn createInstance(alloc: Allocator) !vk.VkInstance {
 
 fn pickGPU(alloc: Allocator, instance: vk.VkInstance) !vk.VkPhysicalDevice {
     var gpuCount: u32 = 0;
-    try vh.check(vk.vkEnumeratePhysicalDevices(instance, &gpuCount, null), "Failed to enumerate GPUs");
+    try vhF.check(vk.vkEnumeratePhysicalDevices(instance, &gpuCount, null), "Failed to enumerate GPUs");
     if (gpuCount == 0) return error.NoDevice;
 
     const gpus = try alloc.alloc(vk.VkPhysicalDevice, gpuCount);
     defer alloc.free(gpus);
-    try vh.check(vk.vkEnumeratePhysicalDevices(instance, &gpuCount, gpus.ptr), "Failed to get GPUs");
+    try vhF.check(vk.vkEnumeratePhysicalDevices(instance, &gpuCount, gpus.ptr), "Failed to get GPUs");
 
     var chosen: ?vk.VkPhysicalDevice = null;
     for (gpus) |gpu| {
@@ -177,11 +178,11 @@ pub fn checkGPU(gpu: vk.VkPhysicalDevice) bool {
 
 fn checkGPUfeatures(alloc: Allocator, gpu: vk.VkPhysicalDevice) !bool {
     var extensions: u32 = 0;
-    try vh.check(vk.vkEnumerateDeviceExtensionProperties(gpu, null, &extensions, null), "Failed to enumerate device extensions");
+    try vhF.check(vk.vkEnumerateDeviceExtensionProperties(gpu, null, &extensions, null), "Failed to enumerate device extensions");
 
     const supported = try alloc.alloc(vk.VkExtensionProperties, extensions);
     defer alloc.free(supported);
-    try vh.check(vk.vkEnumerateDeviceExtensionProperties(gpu, null, &extensions, supported.ptr), "Failed to get device extensions");
+    try vhF.check(vk.vkEnumerateDeviceExtensionProperties(gpu, null, &extensions, supported.ptr), "Failed to get device extensions");
 
     const required = [_][]const u8{"VK_KHR_swapchain"};
     var matched: u32 = 0;
@@ -364,7 +365,7 @@ fn createGPI(alloc: Allocator, gpu: vk.VkPhysicalDevice, families: QueueFamilies
     };
     std.debug.print("Queues: {}\n", .{queueInfos.items.len});
     var gpi: vk.VkDevice = undefined;
-    try vh.check(vk.vkCreateDevice(gpu, &createInf, null, &gpi), "Unable to create Vulkan device!");
+    try vhF.check(vk.vkCreateDevice(gpu, &createInf, null, &gpi), "Unable to create Vulkan device!");
 
     // 1. Draw Commands
     try loadVkProc(gpi, &vkFn.vkCmdDrawMeshTasksEXT, "vkCmdDrawMeshTasksEXT");

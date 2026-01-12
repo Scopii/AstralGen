@@ -1,4 +1,4 @@
-const TexId = @import("../vulkan/components/Texture.zig").Texture.TexId;
+const TexId = @import("../vulkan/types/res/Texture.zig").Texture.TexId;
 const sdl = @import("../modules/sdl.zig").c;
 const vk = @import("../modules/vk.zig").c;
 const std = @import("std");

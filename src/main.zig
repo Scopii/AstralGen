@@ -11,7 +11,6 @@ pub fn main() void {
             _ = std.io.getStdIn().reader().readByte() catch {};
         }
     }
-
     // Memory Setup
     var debugAlloc = std.heap.DebugAllocator(.{}).init;
     defer std.debug.print("Memory: {any}\n", .{debugAlloc.deinit()});

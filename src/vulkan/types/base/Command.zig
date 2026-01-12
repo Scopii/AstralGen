@@ -1,9 +1,9 @@
-const PendingTransfer = @import("../systems/ResourceManager.zig").Transfer;
+const PendingTransfer = @import("../../sys/ResourceManager.zig").Transfer;
 const ShaderObject = @import("ShaderObject.zig").ShaderObject;
 const GraphicState = @import("GraphicState.zig").GraphicState;
-const vk = @import("../../modules/vk.zig").c;
-const vkFn = @import("../../modules/vk.zig");
-const vh = @import("../systems/Helpers.zig");
+const vk = @import("../../../modules/vk.zig").c;
+const vkFn = @import("../../../modules/vk.zig");
+const vhF = @import("../../help/Functions.zig");
 
 pub const Command = struct {
     handle: vk.VkCommandBuffer,
@@ -18,11 +18,11 @@ pub const Command = struct {
             .flags = vk.VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT, //vk.VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT
             .pInheritanceInfo = null,
         };
-        try vh.check(vk.vkBeginCommandBuffer(self.handle, &beginInf), "could not Begin CmdBuffer");
+        try vhF.check(vk.vkBeginCommandBuffer(self.handle, &beginInf), "could not Begin CmdBuffer");
     }
 
     pub fn end(self: *const Command) !void {
-        try vh.check(vk.vkEndCommandBuffer(self.handle), "Could not End CmdBuffer");
+        try vhF.check(vk.vkEndCommandBuffer(self.handle), "Could not End CmdBuffer");
     }
 
     pub fn writeTimestamp(self: *const Command, pool: vk.VkQueryPool, stage: vk.VkPipelineStageFlagBits2, queryIndex: u32) void {
@@ -159,7 +159,7 @@ pub const Command = struct {
         var handles: [8]vk.VkShaderEXT = .{null} ** 8;
 
         for (shaders) |shader| {
-            const activeStageBit = vh.getShaderBit(shader.stage);
+            const activeStageBit = vhF.getShaderBit(shader.stage);
 
             for (0..8) |i| {
                 if (allStages[i] == activeStageBit) {

@@ -1,12 +1,25 @@
 const vk = @import("../../modules/vk.zig").c;
-const vkFn = @import("../../modules/vk.zig");
-const std = @import("std");
 
-pub const TextureType = enum { Color, Depth, Stencil };
+pub const TextureType = enum {
+    Color,
+    Depth,
+    Stencil,
+};
 
-pub const MemUsage = enum { Gpu, CpuWrite, CpuRead };
+pub const MemUsage = enum {
+    Gpu,
+    CpuWrite,
+    CpuRead,
+};
 
-pub const BufferType = enum { Storage, Uniform, Index, Vertex, Staging, Indirect };
+pub const BufferType = enum {
+    Storage,
+    Uniform,
+    Index,
+    Vertex,
+    Staging,
+    Indirect,
+};
 
 pub const ImageLayout = enum(vk.VkImageLayout) {
     Undefined = vk.VK_IMAGE_LAYOUT_UNDEFINED,
@@ -73,65 +86,3 @@ pub const ShaderStage = enum(vk.VkShaderStageFlagBits) {
     meshNoTask,
     frag,
 };
-
-pub fn getShaderBit(stageEnum: ShaderStage) vk.VkShaderStageFlagBits {
-    return switch (stageEnum) {
-        .comp => vk.VK_SHADER_STAGE_COMPUTE_BIT,
-        .vert => vk.VK_SHADER_STAGE_VERTEX_BIT,
-        .tessControl => vk.VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT,
-        .tessEval => vk.VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT,
-        .geometry => vk.VK_SHADER_STAGE_GEOMETRY_BIT,
-        .task => vk.VK_SHADER_STAGE_TASK_BIT_EXT,
-        .mesh => vk.VK_SHADER_STAGE_MESH_BIT_EXT,
-        .meshNoTask => vk.VK_SHADER_STAGE_MESH_BIT_EXT,
-        .frag => vk.VK_SHADER_STAGE_FRAGMENT_BIT,
-    };
-}
-
-pub fn check(result: vk.VkResult, comptime msg: []const u8) !void {
-    if (result == vk.VK_SUCCESS) return;
-    try errorHandle(result, msg);
-}
-
-fn errorHandle(result: vk.VkResult, comptime msg: []const u8) !void {
-    switch (result) {
-        vk.VK_TIMEOUT => std.log.err("{s} - Timeout", .{msg}),
-        vk.VK_ERROR_OUT_OF_HOST_MEMORY => std.log.err("{s} - Out of Memory", .{msg}),
-        vk.VK_ERROR_OUT_OF_DEVICE_MEMORY => std.log.err("{s} - Out of GPU Memory", .{msg}),
-        vk.VK_ERROR_INITIALIZATION_FAILED => std.log.err("{s} - Initialization failed", .{msg}),
-        vk.VK_ERROR_DEVICE_LOST => std.log.err("{s} - GPU lost", .{msg}),
-        vk.VK_ERROR_MEMORY_MAP_FAILED => std.log.err("{s} - Memory Map Failed", .{msg}),
-        else => std.log.err("{s} - Reason: {}", .{ msg, result }),
-    }
-    return error.VulkanError;
-}
-
-pub fn Handle(comptime _: type) type {
-    return packed struct {
-        id: u32,
-        // pub inline fn raw(self: @This()) u32 {
-        //     return self.id;
-        // }
-    };
-}
-
-
-pub fn setObjectName(device: vk.VkDevice, handle: anytype, objectType: vk.VkObjectType, name: []const u8) void {
-    if (vkFn.vkSetDebugUtilsObjectNameEXT == null) return;
-
-    var nameBuffer: [64]u8 = undefined;
-    const len = @min(name.len, 63);
-    @memcpy(nameBuffer[0..len], name[0..len]);
-    nameBuffer[len] = 0; // Null terminate
-
-    const nameInfo = vk.VkDebugUtilsObjectNameInfoEXT{
-        .sType = vk.VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
-        .objectType = objectType,
-        .objectHandle = @intFromPtr(handle), // Cast handle (pointer) to u64
-        .pObjectName = &nameBuffer,
-    };
-
-    _ = vkFn.vkSetDebugUtilsObjectNameEXT.?(device, &nameInfo);
-}
-// USAGE:
-// vh.setObjectName(self.gpi, buffer.handle, vk.VK_OBJECT_TYPE_BUFFER, buffer.name);

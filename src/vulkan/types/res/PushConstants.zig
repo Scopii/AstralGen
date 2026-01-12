@@ -1,6 +1,6 @@
-const ResourceManager = @import("../systems/ResourceManager.zig").ResourceManager;
-const FrameData = @import("../../App.zig").FrameData;
-const Pass = @import("../components/Pass.zig").Pass;
+const ResourceManager = @import("../../sys/ResourceManager.zig").ResourceManager;
+const FrameData = @import("../../../App.zig").FrameData;
+const Pass = @import("../../types/base/Pass.zig").Pass;
 const std = @import("std");
 
 pub const PushConstants = extern struct {

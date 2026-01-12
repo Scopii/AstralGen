@@ -1,16 +1,13 @@
 const CreateStableMapArray = @import("../../structures/StableMapArray.zig").CreateStableMapArray;
-const PushConstants = @import("../components/PushConstants.zig").PushConstants;
+const PushConstants = @import("../types/res/PushConstants.zig").PushConstants;
 const DescriptorManager = @import("DescriptorManager.zig").DescriptorManager;
 const GpuAllocator = @import("GpuAllocator.zig").GpuAllocator;
-const Texture = @import("../components/Texture.zig").Texture;
-const Buffer = @import("../components/Buffer.zig").Buffer;
+const Texture = @import("../types/res/Texture.zig").Texture;
+const Buffer = @import("../types/res/Buffer.zig").Buffer;
 const rc = @import("../../configs/renderConfig.zig");
-const FrameData = @import("../../App.zig").FrameData;
-const Pass = @import("../components/Pass.zig").Pass;
 const Context = @import("Context.zig").Context;
 const vk = @import("../../modules/vk.zig").c;
 const Allocator = std.mem.Allocator;
-const vh = @import("Helpers.zig");
 const std = @import("std");
 
 pub const Transfer = struct {

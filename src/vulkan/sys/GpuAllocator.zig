@@ -1,9 +1,10 @@
 const DescriptorBuffer = @import("DescriptorManager.zig").DescriptorBuffer;
-const Texture = @import("../components/Texture.zig").Texture;
-const Buffer = @import("../components/Buffer.zig").Buffer;
+const Texture = @import("../types/res/Texture.zig").Texture;
+const Buffer = @import("../types/res/Buffer.zig").Buffer;
 const rc = @import("../../configs/renderConfig.zig");
+const vhF = @import("../help/Functions.zig");
 const vk = @import("../../modules/vk.zig").c;
-const vh = @import("Helpers.zig");
+const vhE = @import("../help/Enums.zig");
 const std = @import("std");
 
 pub const GpuAllocator = struct {
@@ -23,7 +24,7 @@ pub const GpuAllocator = struct {
             .pVulkanFunctions = &vulkanFunctions, // Passing Function Pointers
         };
         var vmaAlloc: vk.VmaAllocator = undefined;
-        try vh.check(vk.vmaCreateAllocator(&createInf, &vmaAlloc), "Failed to create VMA/Gpu allocator");
+        try vhF.check(vk.vmaCreateAllocator(&createInf, &vmaAlloc), "Failed to create VMA/Gpu allocator");
         return .{ .handle = vmaAlloc, .gpi = gpi };
     }
 
@@ -54,7 +55,7 @@ pub const GpuAllocator = struct {
         std.debug.print("Allocation is in VRAM: {}, CPU Visible: {}\n", .{ isVram, isCpuVisible });
     }
 
-    pub fn allocDefinedBuffer(self: *const GpuAllocator, bufInf: Buffer.BufInf, memUse: vh.MemUsage) !Buffer {
+    pub fn allocDefinedBuffer(self: *const GpuAllocator, bufInf: Buffer.BufInf, memUse: vhE.MemUsage) !Buffer {
         const dataSize = bufInf.elementSize;
 
         if (dataSize == 0) {
@@ -103,7 +104,7 @@ pub const GpuAllocator = struct {
         var allocation: vk.VmaAllocation = undefined;
         var allocVmaInf: vk.VmaAllocationInfo = undefined;
         const allocCreateInf = vk.VmaAllocationCreateInfo{ .usage = memUse, .flags = memFlags };
-        try vh.check(vk.vmaCreateBuffer(self.handle, &bufInf, &allocCreateInf, &buffer, &allocation, &allocVmaInf), "Failed to create Gpu Buffer");
+        try vhF.check(vk.vmaCreateBuffer(self.handle, &bufInf, &allocCreateInf, &buffer, &allocation, &allocVmaInf), "Failed to create Gpu Buffer");
 
         var gpuAddress: u64 = 0;
         if ((bufUsage & vk.VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT) != 0) {
@@ -120,7 +121,7 @@ pub const GpuAllocator = struct {
         };
     }
 
-    pub fn allocTexture(self: *GpuAllocator, texInf: Texture.TexInf, memUse: vh.MemUsage) !Texture {
+    pub fn allocTexture(self: *GpuAllocator, texInf: Texture.TexInf, memUse: vhE.MemUsage) !Texture {
         const memType: vk.VmaMemoryUsage = switch (memUse) {
             .Gpu => vk.VMA_MEMORY_USAGE_GPU_ONLY,
             .CpuWrite => vk.VMA_MEMORY_USAGE_CPU_TO_GPU,
@@ -148,7 +149,7 @@ pub const GpuAllocator = struct {
 
         const imgInf = createAllocatedImageInf(format, use, extent);
         const imgAllocInf = vk.VmaAllocationCreateInfo{ .usage = memType, .requiredFlags = vk.VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT };
-        try vh.check(vk.vmaCreateImage(self.handle, &imgInf, &imgAllocInf, &img, &allocation, null), "Could not create Render Image");
+        try vhF.check(vk.vmaCreateImage(self.handle, &imgInf, &imgAllocInf, &img, &allocation, null), "Could not create Render Image");
 
         const aspectMask: vk.VkImageAspectFlags = switch (texInf.typ) {
             .Color => vk.VK_IMAGE_ASPECT_COLOR_BIT,
@@ -157,7 +158,7 @@ pub const GpuAllocator = struct {
         };
         var view: vk.VkImageView = undefined;
         const viewInf = createAllocatedImageViewInf(format, img, aspectMask);
-        try vh.check(vk.vkCreateImageView(self.gpi, &viewInf, null, &view), "Could not create Render Image View");
+        try vhF.check(vk.vkCreateImageView(self.gpi, &viewInf, null, &view), "Could not create Render Image View");
 
         return .{
             .allocation = allocation,

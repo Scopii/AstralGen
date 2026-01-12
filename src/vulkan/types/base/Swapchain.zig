@@ -1,9 +1,8 @@
-const createSemaphore = @import("../systems/Scheduler.zig").createSemaphore;
-const TextureBase = @import("TextureBase.zig").TextureBase;
-const rc = @import("../../configs/renderConfig.zig");
-const TexId = @import("Texture.zig").Texture.TexId;
-const vk = @import("../../modules/vk.zig").c;
-const vh = @import("../systems/Helpers.zig");
+const TextureBase = @import("../res/TextureBase.zig").TextureBase;
+const rc = @import("../../../configs/renderConfig.zig");
+const TexId = @import("../res/Texture.zig").Texture.TexId;
+const vk = @import("../../../modules/vk.zig").c;
+const vhF = @import("../../help/Functions.zig");
 const Allocator = std.mem.Allocator;
 const std = @import("std");
 
@@ -53,14 +52,14 @@ pub const Swapchain = struct {
             .oldSwapchain = if (oldHandle != null) oldHandle.? else null,
         };
         var handle: vk.VkSwapchainKHR = undefined;
-        try vh.check(vk.vkCreateSwapchainKHR(gpi, &swapchainInf, null, &handle), "Could not create Swapchain Handle");
+        try vhF.check(vk.vkCreateSwapchainKHR(gpi, &swapchainInf, null, &handle), "Could not create Swapchain Handle");
 
         var realImgCount: u32 = 0;
         _ = vk.vkGetSwapchainImagesKHR(gpi, handle, &realImgCount, null);
 
         const images = try alloc.alloc(vk.VkImage, realImgCount);
         defer alloc.free(images);
-        try vh.check(vk.vkGetSwapchainImagesKHR(gpi, handle, &realImgCount, images.ptr), "Could not get Swapchain Images");
+        try vhF.check(vk.vkGetSwapchainImagesKHR(gpi, handle, &realImgCount, images.ptr), "Could not get Swapchain Images");
 
         const baseTextures = try alloc.alloc(TextureBase, realImgCount);
         errdefer alloc.free(baseTextures);
@@ -81,7 +80,7 @@ pub const Swapchain = struct {
             };
 
             var view: vk.VkImageView = undefined;
-            try vh.check(vk.vkCreateImageView(gpi, &viewInf, null, &view), "Failed to create image view");
+            try vhF.check(vk.vkCreateImageView(gpi, &viewInf, null, &view), "Failed to create image view");
 
             baseTextures[i] = TextureBase{
                 .img = images[i],
@@ -95,11 +94,11 @@ pub const Swapchain = struct {
 
         const renderDoneSems = try alloc.alloc(vk.VkSemaphore, realImgCount);
         errdefer alloc.free(renderDoneSems);
-        for (0..realImgCount) |i| renderDoneSems[i] = try createSemaphore(gpi);
+        for (0..realImgCount) |i| renderDoneSems[i] = try vhF.createSemaphore(gpi);
 
         const imgRdySems = try alloc.alloc(vk.VkSemaphore, rc.MAX_IN_FLIGHT);
         errdefer alloc.free(imgRdySems);
-        for (0..rc.MAX_IN_FLIGHT) |i| imgRdySems[i] = try createSemaphore(gpi);
+        for (0..rc.MAX_IN_FLIGHT) |i| imgRdySems[i] = try vhF.createSemaphore(gpi);
 
         return .{
             .surface = surface,
@@ -158,19 +157,19 @@ fn pickExtent(caps: *const vk.VkSurfaceCapabilitiesKHR, curExtent: vk.VkExtent2D
 
 fn getSurfaceCaps(gpu: vk.VkPhysicalDevice, surface: vk.VkSurfaceKHR) !vk.VkSurfaceCapabilitiesKHR {
     var caps: vk.VkSurfaceCapabilitiesKHR = undefined;
-    try vh.check(vk.vkGetPhysicalDeviceSurfaceCapabilitiesKHR(gpu, surface, &caps), "Failed to get surface capabilities");
+    try vhF.check(vk.vkGetPhysicalDeviceSurfaceCapabilitiesKHR(gpu, surface, &caps), "Failed to get surface capabilities");
     return caps;
 }
 
 fn pickSurfaceFormat(alloc: Allocator, gpu: vk.VkPhysicalDevice, surface: vk.VkSurfaceKHR) !vk.VkSurfaceFormatKHR {
     var formatCount: u32 = 0;
-    try vh.check(vk.vkGetPhysicalDeviceSurfaceFormatsKHR(gpu, surface, &formatCount, null), "Failed to get format count");
+    try vhF.check(vk.vkGetPhysicalDeviceSurfaceFormatsKHR(gpu, surface, &formatCount, null), "Failed to get format count");
     if (formatCount == 0) return error.NoSurfaceFormats;
 
     const formats = try alloc.alloc(vk.VkSurfaceFormatKHR, formatCount);
     defer alloc.free(formats);
 
-    try vh.check(vk.vkGetPhysicalDeviceSurfaceFormatsKHR(gpu, surface, &formatCount, formats.ptr), "Failed to get surface formats");
+    try vhF.check(vk.vkGetPhysicalDeviceSurfaceFormatsKHR(gpu, surface, &formatCount, formats.ptr), "Failed to get surface formats");
     // Return preferred format if available otherwise first one
     if (formats.len == 1 and formats[0].format == vk.VK_FORMAT_UNDEFINED) {
         return vk.VkSurfaceFormatKHR{ .format = vk.VK_FORMAT_B8G8R8A8_UNORM, .colorSpace = vk.VK_COLOR_SPACE_SRGB_NONLINEAR_KHR };

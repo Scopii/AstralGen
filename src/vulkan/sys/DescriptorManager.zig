@@ -1,10 +1,11 @@
-const PushConstants = @import("../components/PushConstants.zig").PushConstants;
+const PushConstants = @import("../types/res/PushConstants.zig").PushConstants;
 const GpuAllocator = @import("GpuAllocator.zig").GpuAllocator;
 const rc = @import("../../configs/renderConfig.zig");
+const vhF = @import("../help/Functions.zig");
 const vk = @import("../../modules/vk.zig").c;
 const vkFn = @import("../../modules/vk.zig");
+const vhE = @import("../help/Enums.zig");
 const Allocator = std.mem.Allocator;
-const vh = @import("Helpers.zig");
 const std = @import("std");
 
 pub const DescriptorBuffer = struct {
@@ -152,7 +153,7 @@ fn createDescriptorLayout(gpi: vk.VkDevice, layoutBindings: []const vk.VkDescrip
         .flags = vk.VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT,
     };
     var layout: vk.VkDescriptorSetLayout = undefined;
-    try vh.check(vk.vkCreateDescriptorSetLayout(gpi, &layoutInf, null, &layout), "Failed to create descriptor set layout");
+    try vhF.check(vk.vkCreateDescriptorSetLayout(gpi, &layoutInf, null, &layout), "Failed to create descriptor set layout");
     return layout;
 }
 
@@ -166,6 +167,6 @@ fn createPipelineLayout(gpi: vk.VkDevice, descLayout: vk.VkDescriptorSetLayout, 
         .pPushConstantRanges = if (size > 0) &pcRange else null,
     };
     var layout: vk.VkPipelineLayout = undefined;
-    try vh.check(vk.vkCreatePipelineLayout(gpi, &pipeLayoutInf, null, &layout), "Failed to create pipeline layout");
+    try vhF.check(vk.vkCreatePipelineLayout(gpi, &pipeLayoutInf, null, &layout), "Failed to create pipeline layout");
     return layout;
 }

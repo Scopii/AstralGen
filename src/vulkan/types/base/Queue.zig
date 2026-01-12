@@ -1,7 +1,7 @@
-const Swapchain = @import("../components/Swapchain.zig").Swapchain;
-const rc = @import("../../configs/renderConfig.zig");
-const vk = @import("../../modules/vk.zig").c;
-const vh = @import("../systems/Helpers.zig");
+const Swapchain = @import("../../types/base/Swapchain.zig").Swapchain;
+const rc = @import("../../../configs/renderConfig.zig");
+const vk = @import("../../../modules/vk.zig").c;
+const vhF = @import("../../help/Functions.zig");
 
 pub const Queue = struct {
     handle: vk.VkQueue = undefined,
@@ -22,7 +22,7 @@ pub const Queue = struct {
             .signalSemaphoreInfoCount = @intCast(signalSemInfos.len),
             .pSignalSemaphoreInfos = signalSemInfos.ptr,
         };
-        try vh.check(vk.vkQueueSubmit2(self.handle, 1, &submitInf, null), "Failed main submission");
+        try vhF.check(vk.vkQueueSubmit2(self.handle, 1, &submitInf, null), "Failed main submission");
     }
 
     pub fn present(self: *const Queue, handles: []vk.VkSwapchainKHR, imgIndices: []u32, waitSems: []vk.VkSemaphore) !void {
@@ -37,7 +37,7 @@ pub const Queue = struct {
 
         const result = vk.vkQueuePresentKHR(self.handle, &presentInf);
         if (result != vk.VK_SUCCESS and result != vk.VK_ERROR_OUT_OF_DATE_KHR and result != vk.VK_SUBOPTIMAL_KHR) {
-            try vh.check(result, "Failed to present swapchain image");
+            try vhF.check(result, "Failed to present swapchain image");
         }
     }
 };

@@ -1,4 +1,4 @@
-const vk = @import("../../modules/vk.zig").c;
+const vk = @import("../../../modules/vk.zig").c;
 
 pub const GraphicState = struct {
     // Rasterization & Geometry

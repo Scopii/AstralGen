@@ -1,5 +1,4 @@
-const vh = @import("../vulkan/systems/Helpers.zig");
-const vk = @import("../modules/vk.zig").c;
+const vkE = @import("../vulkan/help/Enums.zig");
 
 // Shader Compilation
 pub const SHADER_HOTLOAD = true;
@@ -14,7 +13,7 @@ pub const ShaderInf = struct {
     pub const ShaderId = packed struct { val: u8 };
 
     id: ShaderId,
-    typ: vh.ShaderStage,
+    typ: vkE.ShaderStage,
     glslFile: []const u8,
     spvFile: []const u8,
 };
