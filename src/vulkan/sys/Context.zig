@@ -1,5 +1,5 @@
 const Queue = @import("../types/base/Queue.zig").Queue;
-const appCon = @import("../../configs/appConfig.zig");
+const rc = @import("../../configs/renderConfig.zig");
 const sdl = @import("../../modules/sdl.zig").c;
 const vhF = @import("../help/Functions.zig");
 const vk = @import("../../modules/vk.zig").c;
@@ -78,14 +78,14 @@ pub fn createInstance(alloc: Allocator) !vk.VkInstance {
     const reqExtensions = sdl.SDL_Vulkan_GetInstanceExtensions(&extCount);
     for (0..extCount) |i| try extensions.append(reqExtensions[i]);
 
-    if (appCon.VULKAN_VALIDATION) {
+    if (rc.VULKAN_VALIDATION) {
         try extensions.append("VK_EXT_debug_utils");
         try layers.append("VK_LAYER_KHRONOS_validation");
         try layers.append("VK_LAYER_KHRONOS_synchronization2");
     }
 
-    var extraValidationFeatures = switch (appCon.BEST_PRACTICES) {
-        true => if (appCon.EXTRA_VALIDATION == true) [_]vk.VkValidationFeatureEnableEXT{
+    var extraValidationFeatures = switch (rc.BEST_PRACTICES) {
+        true => if (rc.EXTRA_VALIDATION == true) [_]vk.VkValidationFeatureEnableEXT{
             vk.VK_VALIDATION_FEATURE_ENABLE_BEST_PRACTICES_EXT,
             vk.VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT,
             vk.VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_RESERVE_BINDING_SLOT_EXT,
@@ -123,7 +123,7 @@ pub fn createInstance(alloc: Allocator) !vk.VkInstance {
 
     const instanceInf = vk.VkInstanceCreateInfo{
         .sType = vk.VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
-        .pNext = if (appCon.EXTRA_VALIDATION or appCon.BEST_PRACTICES) @ptrCast(&extraValidationExtensions) else null,
+        .pNext = if (rc.EXTRA_VALIDATION or rc.BEST_PRACTICES) @ptrCast(&extraValidationExtensions) else null,
         .flags = 0,
         .pApplicationInfo = &appInf,
         .enabledLayerCount = @intCast(layers.items.len),
@@ -427,7 +427,7 @@ fn createGPI(alloc: Allocator, gpu: vk.VkPhysicalDevice, families: QueueFamilies
     try loadVkProc(gpi, &vkFn.vkCmdSetLineWidth, "vkCmdSetLineWidth");
     try loadVkProc(gpi, &vkFn.vkCmdSetConservativeRasterizationModeEXT, "vkCmdSetConservativeRasterizationModeEXT");
     try loadVkProc(gpi, &vkFn.vkCmdSetFragmentShadingRateKHR, "vkCmdSetFragmentShadingRateKHR");
-    try loadVkProc(gpi, &vkFn.vkSetDebugUtilsObjectNameEXT, "vkSetDebugUtilsObjectNameEXT");
+    if (rc.VULKAN_VALIDATION == true) try loadVkProc(gpi, &vkFn.vkSetDebugUtilsObjectNameEXT, "vkSetDebugUtilsObjectNameEXT");
 
     return gpi;
 }

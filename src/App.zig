@@ -10,7 +10,7 @@ const shaderCon = @import("configs/shaderConfig.zig");
 const Window = @import("platform/Window.zig").Window;
 const Camera = @import("core/Camera.zig").Camera;
 const rc = @import("configs/renderConfig.zig");
-const ic = @import("configs/inputConfig.zig");
+const ac = @import("configs/appConfig.zig");
 const std = @import("std");
 
 pub const App = struct {
@@ -123,7 +123,7 @@ pub const App = struct {
 
             if (windowMan.mouseMoveX != 0 or windowMan.mouseMoveY != 0) {
                 cam.rotate(windowMan.mouseMoveX, windowMan.mouseMoveY);
-                if (ic.MOUSE_MOVEMENT_INFO == true) std.debug.print("Mouse Total Movement x:{} y:{}\n", .{ windowMan.mouseMoveX, windowMan.mouseMoveY });
+                if (ac.MOUSE_MOVEMENT_INFO == true) std.debug.print("Mouse Total Movement x:{} y:{}\n", .{ windowMan.mouseMoveX, windowMan.mouseMoveY });
                 windowMan.mouseMoveX = 0;
                 windowMan.mouseMoveY = 0;
             }

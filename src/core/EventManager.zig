@@ -1,7 +1,7 @@
 const CreateMapArray = @import("../structures/MapArray.zig").CreateMapArray;
 const FixedList = @import("../structures/FixedList.zig").FixedList;
 const AppEvent = @import("../configs/appConfig.zig").AppEvent;
-const ic = @import("../configs/inputConfig.zig");
+const ac = @import("../configs/appConfig.zig");
 const std = @import("std");
 
 pub const KeyState = enum { pressed, released };
@@ -30,13 +30,13 @@ pub const EventManager = struct {
                 continue;
             }
             self.keyStates.set(keyEvent.key, if (keyEvent.event == .pressed) .pressed else .released);
-            if (ic.KEY_EVENT_INFO == true) std.debug.print("Key {} pressed \n", .{keyEvent.key});
+            if (ac.KEY_EVENT_INFO == true) std.debug.print("Key {} pressed \n", .{keyEvent.key});
         }
-        if (ic.KEY_EVENT_INFO == true) std.debug.print("KeyStates {}\n", .{self.keyStates.count});
+        if (ac.KEY_EVENT_INFO == true) std.debug.print("KeyStates {}\n", .{self.keyStates.count});
     }
 
     pub fn getAppEvents(self: *EventManager) []AppEvent {
-        for (ic.keyMap) |assignment| {
+        for (ac.keyMap) |assignment| {
             const actualKey = switch (assignment.device) {
                 .keyboard => assignment.key,
                 .mouse => assignment.key + SDL_KEY_MAX,
