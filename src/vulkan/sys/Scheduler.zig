@@ -1,5 +1,5 @@
-const vhF = @import("../help/Functions.zig");
 const Context = @import("Context.zig").Context;
+const vhF = @import("../help/Functions.zig");
 const vk = @import("../../modules/vk.zig").c;
 const std = @import("std");
 

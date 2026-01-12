@@ -2,8 +2,8 @@ const LoadedShader = @import("../../../core/ShaderCompiler.zig").LoadedShader;
 const PushConstants = @import("../res/PushConstants.zig").PushConstants;
 const vk = @import("../../../modules/vk.zig").c;
 const vhF = @import("../../help/Functions.zig");
-const vhE = @import("../../help/Enums.zig");
 const vkFn = @import("../../../modules/vk.zig");
+const vhE = @import("../../help/Enums.zig");
 
 pub const ShaderObject = struct {
     handle: vk.VkShaderEXT,
