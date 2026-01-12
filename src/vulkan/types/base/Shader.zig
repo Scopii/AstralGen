@@ -5,11 +5,11 @@ const vhF = @import("../../help/Functions.zig");
 const vkFn = @import("../../../modules/vk.zig");
 const vhE = @import("../../help/Enums.zig");
 
-pub const ShaderObject = struct {
+pub const Shader = struct {
     handle: vk.VkShaderEXT,
     stage: vhE.ShaderStage,
 
-    pub fn init(gpi: vk.VkDevice, shader: LoadedShader, descLayout: vk.VkDescriptorSetLayout) !ShaderObject {
+    pub fn init(gpi: vk.VkDevice, shader: LoadedShader, descLayout: vk.VkDescriptorSetLayout) !Shader {
         const stageEnum = shader.shaderInf.typ;
         const vkStage = vhF.getShaderBit(stageEnum);
 
@@ -49,7 +49,7 @@ pub const ShaderObject = struct {
         };
     }
 
-    pub fn deinit(self: *ShaderObject, gpi: vk.VkDevice) void {
+    pub fn deinit(self: *Shader, gpi: vk.VkDevice) void {
         vkFn.vkDestroyShaderEXT.?(gpi, self.handle, null);
     }
 };

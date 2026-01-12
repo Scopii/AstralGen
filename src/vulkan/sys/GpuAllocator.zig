@@ -1,4 +1,4 @@
-const DescriptorBuffer = @import("DescriptorManager.zig").DescriptorBuffer;
+const DescriptorBuffer = @import("DescriptorMan.zig").DescriptorBuffer;
 const Texture = @import("../types/res/Texture.zig").Texture;
 const Buffer = @import("../types/res/Buffer.zig").Buffer;
 const rc = @import("../../configs/renderConfig.zig");

@@ -1,6 +1,6 @@
 const vk = @import("../../../modules/vk.zig").c;
 
-pub const GraphicState = struct {
+pub const RenderState = struct {
     // Rasterization & Geometry
     polygonMode: u32 = vk.VK_POLYGON_MODE_FILL,
     cullMode: u32 = vk.VK_CULL_MODE_FRONT_BIT,

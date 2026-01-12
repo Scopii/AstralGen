@@ -1,18 +1,18 @@
-const PendingTransfer = @import("../../sys/ResourceManager.zig").Transfer;
-const ShaderObject = @import("ShaderObject.zig").ShaderObject;
-const GraphicState = @import("GraphicState.zig").GraphicState;
+const Transfer = @import("../../sys/ResourceMan.zig").Transfer;
+const RenderState = @import("RenderState.zig").RenderState;
 const vk = @import("../../../modules/vk.zig").c;
 const vkFn = @import("../../../modules/vk.zig");
 const vhF = @import("../../help/Functions.zig");
+const Shader = @import("Shader.zig").Shader;
 
-pub const Command = struct {
+pub const Cmd = struct {
     handle: vk.VkCommandBuffer,
 
-    pub fn init(cmd: vk.VkCommandBuffer) !Command {
+    pub fn init(cmd: vk.VkCommandBuffer) !Cmd {
         return .{ .handle = cmd };
     }
 
-    pub fn begin(self: *const Command) !void {
+    pub fn begin(self: *const Cmd) !void {
         const beginInf = vk.VkCommandBufferBeginInfo{
             .sType = vk.VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
             .flags = vk.VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT, //vk.VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT
@@ -21,15 +21,15 @@ pub const Command = struct {
         try vhF.check(vk.vkBeginCommandBuffer(self.handle, &beginInf), "could not Begin CmdBuffer");
     }
 
-    pub fn end(self: *const Command) !void {
+    pub fn end(self: *const Cmd) !void {
         try vhF.check(vk.vkEndCommandBuffer(self.handle), "Could not End CmdBuffer");
     }
 
-    pub fn writeTimestamp(self: *const Command, pool: vk.VkQueryPool, stage: vk.VkPipelineStageFlagBits2, queryIndex: u32) void {
+    pub fn writeTimestamp(self: *const Cmd, pool: vk.VkQueryPool, stage: vk.VkPipelineStageFlagBits2, queryIndex: u32) void {
         vk.vkCmdWriteTimestamp2(self.handle, stage, pool, queryIndex);
     }
 
-    pub fn bakeBarriers(self: *const Command, imgBarriers: []const vk.VkImageMemoryBarrier2, bufBarriers: []const vk.VkBufferMemoryBarrier2) void {
+    pub fn bakeBarriers(self: *const Cmd, imgBarriers: []const vk.VkImageMemoryBarrier2, bufBarriers: []const vk.VkBufferMemoryBarrier2) void {
         const depInf = vk.VkDependencyInfo{
             .sType = vk.VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
             .imageMemoryBarrierCount = @intCast(imgBarriers.len),
@@ -40,35 +40,35 @@ pub const Command = struct {
         vk.vkCmdPipelineBarrier2(self.handle, &depInf);
     }
 
-    pub fn setPushConstants(self: *const Command, layout: vk.VkPipelineLayout, stageFlags: vk.VkShaderStageFlags, offset: u32, size: u32, pcs: ?*const anyopaque) void {
+    pub fn setPushConstants(self: *const Cmd, layout: vk.VkPipelineLayout, stageFlags: vk.VkShaderStageFlags, offset: u32, size: u32, pcs: ?*const anyopaque) void {
         vk.vkCmdPushConstants(self.handle, layout, stageFlags, offset, size, pcs);
     }
 
-    pub fn setEmptyVertexInput(self: *const Command) void {
+    pub fn setEmptyVertexInput(self: *const Cmd) void {
         vkFn.vkCmdSetVertexInputEXT.?(self.handle, 0, null, 0, null);
     }
 
-    pub fn draw(self: *const Command, vertexCount: u32, instanceCount: u32, firstVertex: u32, firstInstance: u32) void {
+    pub fn draw(self: *const Cmd, vertexCount: u32, instanceCount: u32, firstVertex: u32, firstInstance: u32) void {
         vk.vkCmdDraw(self.handle, vertexCount, instanceCount, firstVertex, firstInstance);
     }
 
-    pub fn drawIndirect(self: *const Command, buffer: vk.VkBuffer, offset: u64, drawCount: u32, stride: u32) void {
+    pub fn drawIndirect(self: *const Cmd, buffer: vk.VkBuffer, offset: u64, drawCount: u32, stride: u32) void {
         vk.vkCmdDrawIndirect(self.handle, buffer, offset, drawCount, stride);
     }
 
-    pub fn drawMeshTasks(self: *const Command, workgroupsX: u32, workgroupsY: u32, workgroupsZ: u32) void {
+    pub fn drawMeshTasks(self: *const Cmd, workgroupsX: u32, workgroupsY: u32, workgroupsZ: u32) void {
         vkFn.vkCmdDrawMeshTasksEXT.?(self.handle, workgroupsX, workgroupsY, workgroupsZ);
     }
 
-    pub fn drawMeshTasksIndirect(self: *const Command, buffer: vk.VkBuffer, offset: u64, drawCount: u32, stride: u32) void {
+    pub fn drawMeshTasksIndirect(self: *const Cmd, buffer: vk.VkBuffer, offset: u64, drawCount: u32, stride: u32) void {
         vkFn.vkCmdDrawMeshTasksIndirectEXT.?(self.handle, buffer, offset, drawCount, stride);
     }
 
-    pub fn endRendering(self: *const Command) void {
+    pub fn endRendering(self: *const Cmd) void {
         vk.vkCmdEndRendering(self.handle);
     }
 
-    pub fn bindDescriptorBuffer(self: *const Command, gpuAddress: u64) void {
+    pub fn bindDescriptorBuffer(self: *const Cmd, gpuAddress: u64) void {
         const bufferBindingInf = vk.VkDescriptorBufferBindingInfoEXT{
             .sType = vk.VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT,
             .address = gpuAddress,
@@ -77,13 +77,13 @@ pub const Command = struct {
         vkFn.vkCmdBindDescriptorBuffersEXT.?(self.handle, 1, &bufferBindingInf);
     }
 
-    pub fn setDescriptorBufferOffset(self: *const Command, bindPoint: vk.VkPipelineBindPoint, pipeLayout: vk.VkPipelineLayout) void {
+    pub fn setDescriptorBufferOffset(self: *const Cmd, bindPoint: vk.VkPipelineBindPoint, pipeLayout: vk.VkPipelineLayout) void {
         const bufferIndex: u32 = 0;
         const descOffset: vk.VkDeviceSize = 0;
         vkFn.vkCmdSetDescriptorBufferOffsetsEXT.?(self.handle, bindPoint, pipeLayout, 0, 1, &bufferIndex, &descOffset);
     }
 
-    pub fn copyImageToImage(self: *const Command, srcImg: vk.VkImage, srcExtent: vk.VkExtent3D, dstImg: vk.VkImage, dstExtent: vk.VkExtent3D, stretch: bool) void {
+    pub fn copyImageToImage(self: *const Cmd, srcImg: vk.VkImage, srcExtent: vk.VkExtent3D, dstImg: vk.VkImage, dstExtent: vk.VkExtent3D, stretch: bool) void {
         const blitOffsets = calculateBlitOffsets(srcExtent, dstExtent, stretch);
 
         const blitRegion = vk.VkImageBlit2{
@@ -107,7 +107,7 @@ pub const Command = struct {
     }
 
     pub fn beginRendering(
-        self: *const Command,
+        self: *const Cmd,
         width: u32,
         height: u32,
         colorInfs: []vk.VkRenderingAttachmentInfo,
@@ -145,7 +145,7 @@ pub const Command = struct {
         vk.vkCmdBeginRendering(self.handle, &renderInf);
     }
 
-    pub fn bindShaders(self: *const Command, shaders: []const ShaderObject) void {
+    pub fn bindShaders(self: *const Cmd, shaders: []const Shader) void {
         const allStages = [_]vk.VkShaderStageFlagBits{
             vk.VK_SHADER_STAGE_VERTEX_BIT,
             vk.VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT,
@@ -171,20 +171,20 @@ pub const Command = struct {
         vkFn.vkCmdBindShadersEXT.?(self.handle, 8, &allStages, &handles);
     }
 
-    pub fn dispatch(self: *const Command, groupCountX: u32, groupCountY: u32, groupCountZ: u32) void {
+    pub fn dispatch(self: *const Cmd, groupCountX: u32, groupCountY: u32, groupCountZ: u32) void {
         vk.vkCmdDispatch(self.handle, groupCountX, groupCountY, groupCountZ);
     }
 
-    pub fn fillBuffer(self: *const Command, buffer: vk.VkBuffer, offset: u64, size: u64, data: u32) void {
+    pub fn fillBuffer(self: *const Cmd, buffer: vk.VkBuffer, offset: u64, size: u64, data: u32) void {
         vk.vkCmdFillBuffer(self.handle, buffer, offset, size, data);
     }
 
-    pub fn copyBuffer(self: *const Command, srcBuffer: vk.VkBuffer, transfer: *const PendingTransfer, dstBuffer: vk.VkBuffer) void {
+    pub fn copyBuffer(self: *const Cmd, srcBuffer: vk.VkBuffer, transfer: *const Transfer, dstBuffer: vk.VkBuffer) void {
         const copy = vk.VkBufferCopy{ .srcOffset = transfer.srcOffset, .dstOffset = 0, .size = transfer.size };
         vk.vkCmdCopyBuffer(self.handle, srcBuffer, dstBuffer, 1, &copy);
     }
 
-    pub fn setGraphicsState(self: *const Command, state: GraphicState) void {
+    pub fn setGraphicsState(self: *const Cmd, state: RenderState) void {
         const cmd = self.handle;
 
         // Rasterization & Geometry
@@ -253,7 +253,7 @@ pub const Command = struct {
         vkFn.vkCmdSetFragmentShadingRateKHR.?(cmd, &.{ .width = state.fragShadingRate.width, .height = state.fragShadingRate.height }, &combinerOps);
     }
 
-    pub fn createSubmitInfo(self: *const Command) vk.VkCommandBufferSubmitInfo {
+    pub fn createSubmitInfo(self: *const Cmd) vk.VkCommandBufferSubmitInfo {
         return vk.VkCommandBufferSubmitInfo{ .sType = vk.VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO, .commandBuffer = self.handle };
     }
 };

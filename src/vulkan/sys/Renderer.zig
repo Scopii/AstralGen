@@ -1,19 +1,19 @@
 const Swapchain = @import("../types/base/Swapchain.zig").Swapchain;
 const MemoryManager = @import("../../core/MemoryManager.zig").MemoryManager;
 const LoadedShader = @import("../../core/ShaderCompiler.zig").LoadedShader;
-const SwapchainManager = @import("SwapchainManager.zig").SwapchainManager;
-const ResourceManager = @import("ResourceManager.zig").ResourceManager;
-const ShaderManager = @import("ShaderManager.zig").ShaderManager;
-const Command = @import("../types/base/Command.zig").Command;
+const SwapchainMan = @import("SwapchainMan.zig").SwapchainMan;
+const ResourceMan = @import("ResourceMan.zig").ResourceMan;
 const Texture = @import("../types/res/Texture.zig").Texture;
 const Window = @import("../../platform/Window.zig").Window;
 const RenderGraph = @import("RenderGraph.zig").RenderGraph;
 const Buffer = @import("../types/res/Buffer.zig").Buffer;
 const Queue = @import("../types/base/Queue.zig").Queue;
-const Pass = @import("../types/base/Pass.zig").Pass;
+const ShaderMan = @import("ShaderMan.zig").ShaderMan;
 const rc = @import("../../configs/renderConfig.zig");
 const FrameData = @import("../../App.zig").FrameData;
 const Scheduler = @import("Scheduler.zig").Scheduler;
+const Pass = @import("../types/base/Pass.zig").Pass;
+const Cmd = @import("../types/base/Cmd.zig").Cmd;
 const Context = @import("Context.zig").Context;
 const vk = @import("../../modules/vk.zig").c;
 const vkE = @import("../help/Enums.zig");
@@ -24,17 +24,17 @@ pub const Renderer = struct {
     alloc: Allocator,
     arenaAlloc: Allocator,
     context: Context,
-    resMan: ResourceManager,
+    resMan: ResourceMan,
     renderGraph: RenderGraph,
-    shaderMan: ShaderManager,
-    swapMan: SwapchainManager,
+    shaderMan: ShaderMan,
+    swapMan: SwapchainMan,
     scheduler: Scheduler,
     passes: std.array_list.Managed(Pass),
 
     pub fn init(memoryMan: *MemoryManager) !Renderer {
         const alloc = memoryMan.getAllocator();
         const context = try Context.init(alloc);
-        const resMan = try ResourceManager.init(alloc, &context);
+        const resMan = try ResourceMan.init(alloc, &context);
 
         return .{
             .alloc = alloc,
@@ -42,9 +42,9 @@ pub const Renderer = struct {
             .context = context,
             .resMan = resMan,
             .renderGraph = try RenderGraph.init(alloc, &context, &resMan),
-            .shaderMan = try ShaderManager.init(alloc, &context, &resMan),
+            .shaderMan = try ShaderMan.init(alloc, &context, &resMan),
             .scheduler = try Scheduler.init(&context, rc.MAX_IN_FLIGHT),
-            .swapMan = try SwapchainManager.init(alloc, &context),
+            .swapMan = try SwapchainMan.init(alloc, &context),
             .passes = std.array_list.Managed(Pass).init(alloc),
         };
     }
@@ -119,7 +119,7 @@ pub const Renderer = struct {
         self.scheduler.nextFrame();
     }
 
-    fn queueSubmit(self: *Renderer, cmd: *const Command, targets: []const *Swapchain, flightId: u8, queue: Queue) !void {
+    fn queueSubmit(self: *Renderer, cmd: *const Cmd, targets: []const *Swapchain, flightId: u8, queue: Queue) !void {
         var waitInfos: [rc.MAX_WINDOWS]vk.VkSemaphoreSubmitInfo = undefined;
         var signalInfos: [rc.MAX_WINDOWS + 1]vk.VkSemaphoreSubmitInfo = undefined;
         signalInfos[targets.len] = createSemaphoreSubmitInfo(self.scheduler.cpuSyncTimeline, .AllCmds, self.scheduler.totalFrames + 1);

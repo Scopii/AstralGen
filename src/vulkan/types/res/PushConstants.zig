@@ -1,4 +1,4 @@
-const ResourceManager = @import("../../sys/ResourceManager.zig").ResourceManager;
+const ResourceMan = @import("../../sys/ResourceMan.zig").ResourceMan;
 const FrameData = @import("../../../App.zig").FrameData;
 const Pass = @import("../../types/base/Pass.zig").Pass;
 const std = @import("std");
@@ -15,7 +15,7 @@ pub const PushConstants = extern struct {
         count: u32 = 0,
     };
 
-    pub fn init(resMan: *ResourceManager, pass: Pass, frameData: FrameData) !PushConstants {
+    pub fn init(resMan: *ResourceMan, pass: Pass, frameData: FrameData) !PushConstants {
         var pcs = PushConstants{ .runTime = frameData.runTime, .deltaTime = frameData.deltaTime };
         var mask: [14]bool = .{false} ** 14;
 

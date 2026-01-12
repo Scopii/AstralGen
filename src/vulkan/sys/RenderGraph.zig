@@ -1,15 +1,15 @@
 const PushConstants = @import("../types/res/PushConstants.zig").PushConstants;
 const TextureBase = @import("../types/res/TextureBase.zig").TextureBase;
-const ResourceManager = @import("ResourceManager.zig").ResourceManager;
 const Swapchain = @import("../types/base/Swapchain.zig").Swapchain;
-const ShaderManager = @import("ShaderManager.zig").ShaderManager;
 const TexId = @import("../types/res/Texture.zig").Texture.TexId;
-const Command = @import("../types/base/Command.zig").Command;
+const ResourceMan = @import("ResourceMan.zig").ResourceMan;
+const ShaderManager = @import("ShaderMan.zig").ShaderMan;
 const Buffer = @import("../types/res/Buffer.zig").Buffer;
-const CmdManager = @import("CmdManager.zig").CmdManager;
 const rc = @import("../../configs/renderConfig.zig");
 const FrameData = @import("../../App.zig").FrameData;
 const Pass = @import("../types/base/Pass.zig").Pass;
+const Cmd = @import("../types/base/Cmd.zig").Cmd;
+const CmdManager = @import("CmdMan.zig").CmdMan;
 const Context = @import("Context.zig").Context;
 const vk = @import("../../modules/vk.zig").c;
 const Allocator = std.mem.Allocator;
@@ -23,7 +23,7 @@ pub const RenderGraph = struct {
     tempImgBarriers: std.array_list.Managed(vk.VkImageMemoryBarrier2),
     tempBufBarriers: std.array_list.Managed(vk.VkBufferMemoryBarrier2),
 
-    pub fn init(alloc: Allocator, context: *const Context, resMan: *const ResourceManager) !RenderGraph {
+    pub fn init(alloc: Allocator, context: *const Context, resMan: *const ResourceMan) !RenderGraph {
         return .{
             .alloc = alloc,
             .cmdMan = try CmdManager.init(alloc, context, rc.MAX_IN_FLIGHT),
@@ -40,7 +40,7 @@ pub const RenderGraph = struct {
         self.tempBufBarriers.deinit();
     }
 
-    pub fn recordFrame(self: *RenderGraph, passes: []Pass, flightId: u8, frameData: FrameData, targets: []const *Swapchain, resMan: *ResourceManager, shaderMan: *ShaderManager) !Command {
+    pub fn recordFrame(self: *RenderGraph, passes: []Pass, flightId: u8, frameData: FrameData, targets: []const *Swapchain, resMan: *ResourceMan, shaderMan: *ShaderManager) !Cmd {
         const cmd = try self.cmdMan.getCmd(flightId);
         try cmd.begin();
 
@@ -85,7 +85,7 @@ pub const RenderGraph = struct {
         return cmd;
     }
 
-    pub fn recordTransfers(self: *RenderGraph, cmd: *const Command, resMan: *ResourceManager) !void {
+    pub fn recordTransfers(self: *RenderGraph, cmd: *const Cmd, resMan: *ResourceMan) !void {
         if (resMan.transfers.items.len == 0) return;
 
         for (resMan.transfers.items) |transfer| {
@@ -109,7 +109,7 @@ pub const RenderGraph = struct {
         try self.tempBufBarriers.append(buffer.createBufferBarrier(neededState));
     }
 
-    pub fn recordPassBarriers(self: *RenderGraph, cmd: *const Command, pass: Pass, resMan: *ResourceManager) !void {
+    pub fn recordPassBarriers(self: *RenderGraph, cmd: *const Cmd, pass: Pass, resMan: *ResourceMan) !void {
         for (pass.bufUses) |bufUse| {
             const buffer = try resMan.getBufferPtr(bufUse.bufId);
             try self.bufferBarrierIfNeeded(buffer, bufUse.getNeededState());
@@ -133,7 +133,7 @@ pub const RenderGraph = struct {
         self.bakeBarriers(cmd);
     }
 
-    fn recordCompute(cmd: *const Command, dispatch: Pass.Dispatch, renderTexId: ?TexId, resMan: *ResourceManager) !void {
+    fn recordCompute(cmd: *const Cmd, dispatch: Pass.Dispatch, renderTexId: ?TexId, resMan: *ResourceMan) !void {
         if (renderTexId) |texId| {
             const tex = try resMan.getTexturePtr(texId);
             cmd.dispatch(
@@ -144,7 +144,7 @@ pub const RenderGraph = struct {
         } else cmd.dispatch(dispatch.x, dispatch.y, dispatch.z);
     }
 
-    pub fn recordPass(self: *RenderGraph, cmd: *const Command, pass: Pass, frameData: FrameData, resMan: *ResourceManager) !void {
+    pub fn recordPass(self: *RenderGraph, cmd: *const Cmd, pass: Pass, frameData: FrameData, resMan: *ResourceMan) !void {
         const pcs = try PushConstants.init(resMan, pass, frameData);
         cmd.setPushConstants(self.pipeLayout, vk.VK_SHADER_STAGE_ALL, 0, @sizeOf(PushConstants), &pcs);
 
@@ -156,7 +156,7 @@ pub const RenderGraph = struct {
         }
     }
 
-    fn recordGraphics(cmd: *const Command, width: u32, height: u32, passData: Pass.ClassicPass, resMan: *ResourceManager) !void {
+    fn recordGraphics(cmd: *const Cmd, width: u32, height: u32, passData: Pass.ClassicPass, resMan: *ResourceMan) !void {
         if (passData.colorAtts.len > 8) return error.TooManyAttachments;
 
         const depthInf: ?vk.VkRenderingAttachmentInfo = if (passData.depthAtt) |depth| blk: {
@@ -195,7 +195,7 @@ pub const RenderGraph = struct {
         cmd.endRendering();
     }
 
-    pub fn recordSwapchainBlits(self: *RenderGraph, cmd: *const Command, swapchains: []const *Swapchain, resMan: *ResourceManager) !void {
+    pub fn recordSwapchainBlits(self: *RenderGraph, cmd: *const Cmd, swapchains: []const *Swapchain, resMan: *ResourceMan) !void {
         for (swapchains) |swapchain| { // Render Texture and Swapchain Preperations
             const renderTex = try resMan.getTexturePtr(swapchain.renderTexId);
             try self.imageBarrierIfNeeded(&renderTex.base, .{ .stage = .Transfer, .access = .TransferRead, .layout = .TransferSrc });
@@ -213,7 +213,7 @@ pub const RenderGraph = struct {
         self.bakeBarriers(cmd);
     }
 
-    fn bakeBarriers(self: *RenderGraph, cmd: *const Command) void {
+    fn bakeBarriers(self: *RenderGraph, cmd: *const Cmd) void {
         if (self.tempImgBarriers.items.len != 0 or self.tempBufBarriers.items.len != 0) {
             cmd.bakeBarriers(self.tempImgBarriers.items, self.tempBufBarriers.items);
             self.tempImgBarriers.clearRetainingCapacity();

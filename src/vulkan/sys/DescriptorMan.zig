@@ -16,7 +16,7 @@ pub const DescriptorBuffer = struct {
     gpuAddress: u64,
 };
 
-pub const DescriptorManager = struct {
+pub const DescriptorMan = struct {
     cpuAlloc: Allocator,
     gpuAlloc: GpuAllocator, // deinit() in ResourceManager
     gpi: vk.VkDevice,
@@ -27,7 +27,7 @@ pub const DescriptorManager = struct {
     pipeLayout: vk.VkPipelineLayout,
     descBuffer: DescriptorBuffer,
 
-    pub fn init(cpuAlloc: Allocator, gpuAlloc: GpuAllocator, gpi: vk.VkDevice, gpu: vk.VkPhysicalDevice) !DescriptorManager {
+    pub fn init(cpuAlloc: Allocator, gpuAlloc: GpuAllocator, gpi: vk.VkDevice, gpu: vk.VkPhysicalDevice) !DescriptorMan {
         // Create Descriptor Layouts
         var bindings: [rc.bindingRegistry.len]vk.VkDescriptorSetLayoutBinding = undefined;
         for (0..bindings.len) |i| {
@@ -52,13 +52,13 @@ pub const DescriptorManager = struct {
         };
     }
 
-    pub fn deinit(self: *DescriptorManager) void {
+    pub fn deinit(self: *DescriptorMan) void {
         self.gpuAlloc.freeBuffer(self.descBuffer.handle, self.descBuffer.allocation);
         vk.vkDestroyDescriptorSetLayout(self.gpi, self.descLayout, null);
         vk.vkDestroyPipelineLayout(self.gpi, self.pipeLayout, null);
     }
 
-    pub fn updateTextureDescriptor(self: *DescriptorManager, view: vk.VkImageView, binding: u8, arrayIndex: u32) !void {
+    pub fn updateTextureDescriptor(self: *DescriptorMan, view: vk.VkImageView, binding: u8, arrayIndex: u32) !void {
         const imgInf = vk.VkDescriptorImageInfo{
             .sampler = null,
             .imageView = view,
@@ -72,7 +72,7 @@ pub const DescriptorManager = struct {
         try self.updateDescriptor(&getInf, binding, arrayIndex, self.descBufferProps.storageImageDescriptorSize);
     }
 
-    pub fn updateSampledTextureDescriptor(self: *DescriptorManager, view: vk.VkImageView, binding: u8, arrayIndex: u32) !void {
+    pub fn updateSampledTextureDescriptor(self: *DescriptorMan, view: vk.VkImageView, binding: u8, arrayIndex: u32) !void {
         const imgInf = vk.VkDescriptorImageInfo{
             .sampler = null,
             .imageView = view,
@@ -86,7 +86,7 @@ pub const DescriptorManager = struct {
         try self.updateDescriptor(&getInf, binding, arrayIndex, self.descBufferProps.sampledImageDescriptorSize);
     }
 
-    pub fn updateBufferDescriptor(self: *DescriptorManager, gpuAddress: u64, size: u64, binding: u8, arrayIndex: u32) !void {
+    pub fn updateBufferDescriptor(self: *DescriptorMan, gpuAddress: u64, size: u64, binding: u8, arrayIndex: u32) !void {
         const addressInf = vk.VkDescriptorAddressInfoEXT{
             .sType = vk.VK_STRUCTURE_TYPE_DESCRIPTOR_ADDRESS_INFO_EXT,
             .address = gpuAddress,
@@ -101,7 +101,7 @@ pub const DescriptorManager = struct {
         try self.updateDescriptor(&getInf, binding, arrayIndex, self.descBufferProps.storageBufferDescriptorSize);
     }
 
-    pub fn updateDescriptor(self: *DescriptorManager, descGetInf: *const vk.VkDescriptorGetInfoEXT, binding: u32, arrayIndex: u32, descSize: usize) !void {
+    pub fn updateDescriptor(self: *DescriptorMan, descGetInf: *const vk.VkDescriptorGetInfoEXT, binding: u32, arrayIndex: u32, descSize: usize) !void {
         // Get Descriptor Data
         var descData: [64]u8 = undefined; // safe buffer size
         if (descSize > descData.len) return error.DescriptorSizeTooLarge;

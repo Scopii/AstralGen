@@ -1,21 +1,21 @@
 const CreateMapArray = @import("../../structures/MapArray.zig").CreateMapArray;
-const ShaderObject = @import("../types/base/ShaderObject.zig").ShaderObject;
 const LoadedShader = @import("../../core/ShaderCompiler.zig").LoadedShader;
-const ResourceManager = @import("ResourceManager.zig").ResourceManager;
 const shaderCon = @import("../../configs/shaderConfig.zig");
+const ResourceMan = @import("ResourceMan.zig").ResourceMan;
+const Shader = @import("../types/base/Shader.zig").Shader;
 const Pass = @import("../types/base/Pass.zig").Pass;
 const Context = @import("Context.zig").Context;
 const vk = @import("../../modules/vk.zig").c;
 const Allocator = std.mem.Allocator;
 const std = @import("std");
 
-pub const ShaderManager = struct {
+pub const ShaderMan = struct {
     alloc: Allocator,
     descLayout: vk.VkDescriptorSetLayout,
     gpi: vk.VkDevice,
-    shaders: CreateMapArray(ShaderObject, shaderCon.SHADER_MAX, u8, shaderCon.SHADER_MAX, 0) = .{},
+    shaders: CreateMapArray(Shader, shaderCon.SHADER_MAX, u8, shaderCon.SHADER_MAX, 0) = .{},
 
-    pub fn init(alloc: Allocator, context: *const Context, resourceManager: *const ResourceManager) !ShaderManager {
+    pub fn init(alloc: Allocator, context: *const Context, resourceManager: *const ResourceMan) !ShaderMan {
         return .{
             .alloc = alloc,
             .descLayout = resourceManager.descMan.descLayout,
@@ -23,20 +23,20 @@ pub const ShaderManager = struct {
         };
     }
 
-    pub fn deinit(self: *ShaderManager) void {
+    pub fn deinit(self: *ShaderMan) void {
         const gpi = self.gpi;
         for (self.shaders.getElements()) |*shader| {
             shader.deinit(gpi);
         }
     }
 
-    pub fn isShaderIdUsed(self: *ShaderManager, shaderId: u8) bool {
+    pub fn isShaderIdUsed(self: *ShaderMan, shaderId: u8) bool {
         return self.shaders.isKeyUsed(shaderId);
     }
 
-    pub fn createShaders(self: *ShaderManager, loadedShaders: []const LoadedShader) !void {
+    pub fn createShaders(self: *ShaderMan, loadedShaders: []const LoadedShader) !void {
         for (loadedShaders) |loadedShader| {
-            const shaderObj = try ShaderObject.init(self.gpi, loadedShader, self.descLayout);
+            const shaderObj = try Shader.init(self.gpi, loadedShader, self.descLayout);
             const id = loadedShader.shaderInf.id.val;
 
             if (self.shaders.isKeyUsed(id) == true) {
@@ -47,15 +47,15 @@ pub const ShaderManager = struct {
         }
     }
 
-    pub fn getShaders(self: *ShaderManager, shaderIds: []const shaderCon.ShaderInf.ShaderId) [8]ShaderObject {
-        var shaders: [8]ShaderObject = undefined;
+    pub fn getShaders(self: *ShaderMan, shaderIds: []const shaderCon.ShaderInf.ShaderId) [8]Shader {
+        var shaders: [8]Shader = undefined;
         for (0..shaderIds.len) |i| {
             shaders[i] = self.shaders.get(shaderIds[i].val);
         }
         return shaders;
     }
 
-    pub fn isPassValid(self: *ShaderManager, pass: Pass) bool {
+    pub fn isPassValid(self: *ShaderMan, pass: Pass) bool {
         const shaders = self.getShaders(pass.shaderIds)[0..pass.shaderIds.len];
 
         const layoutType = checkShaderLayout(shaders) catch |err| {
@@ -72,12 +72,14 @@ pub const ShaderManager = struct {
                 }
             },
         }
-        std.debug.print("Error: ShaderLayout {s} does not fit Pass\n", .{@tagName(layoutType),});
+        std.debug.print("Error: ShaderLayout {s} does not fit Pass\n", .{
+            @tagName(layoutType),
+        });
         return false;
     }
 };
 
-fn checkShaderLayout(shaders: []const ShaderObject) !enum { computePass, graphicsPass, meshPass, taskMeshPass, vertexPass } {
+fn checkShaderLayout(shaders: []const Shader) !enum { computePass, graphicsPass, meshPass, taskMeshPass, vertexPass } {
     var shdr: [9]u8 = .{0} ** 9;
     var prevIndex: i8 = -1;
 

@@ -1,5 +1,5 @@
 const CreateMapArray = @import("../../structures/MapArray.zig").CreateMapArray;
-const Command = @import("../types/base/Command.zig").Command;
+const Cmd = @import("../types/base/Cmd.zig").Cmd;
 const Context = @import("Context.zig").Context;
 const vk = @import("../../modules/vk.zig").c;
 const vhF = @import("../help/Functions.zig");
@@ -13,11 +13,11 @@ pub const Query = struct {
     endQueryIndex: u32 = 0,
 };
 
-pub const CmdManager = struct {
+pub const CmdMan = struct {
     alloc: Allocator,
     gpi: vk.VkDevice,
     cmdPool: vk.VkCommandPool,
-    cmds: []Command,
+    cmds: []Cmd,
 
     queryPools: []vk.VkQueryPool,
     timestampPeriod: f32,
@@ -25,12 +25,12 @@ pub const CmdManager = struct {
     queryCounters: []u32,
     querys: CreateMapArray(Query, 128, u8, 128, 0) = .{},
 
-    pub fn init(alloc: Allocator, context: *const Context, maxInFlight: u32) !CmdManager {
+    pub fn init(alloc: Allocator, context: *const Context, maxInFlight: u32) !CmdMan {
         const gpi = context.gpi;
         const cmdPool = try createCmdPool(gpi, context.families.graphics);
 
-        const cmds = try alloc.alloc(Command, maxInFlight);
-        for (0..maxInFlight) |i| cmds[i] = try Command.init(try createCmd(gpi, cmdPool, vk.VK_COMMAND_BUFFER_LEVEL_PRIMARY));
+        const cmds = try alloc.alloc(Cmd, maxInFlight);
+        for (0..maxInFlight) |i| cmds[i] = try Cmd.init(try createCmd(gpi, cmdPool, vk.VK_COMMAND_BUFFER_LEVEL_PRIMARY));
 
         var props: vk.VkPhysicalDeviceProperties = undefined;
         vk.vkGetPhysicalDeviceProperties(context.gpu, &props);
@@ -61,7 +61,7 @@ pub const CmdManager = struct {
         };
     }
 
-    pub fn deinit(self: *CmdManager) void {
+    pub fn deinit(self: *CmdMan) void {
         self.alloc.free(self.cmds);
         vk.vkDestroyCommandPool(self.gpi, self.cmdPool, null);
 
@@ -70,18 +70,18 @@ pub const CmdManager = struct {
         self.alloc.free(self.queryCounters);
     }
 
-    pub fn getCmd(self: *CmdManager, flightId: u8) !Command {
+    pub fn getCmd(self: *CmdMan, flightId: u8) !Cmd {
         const cmd = self.cmds[flightId];
         try vhF.check(vk.vkResetCommandBuffer(cmd.handle, 0), "could not reset command buffer"); // Might be optional
         return cmd;
     }
 
-    pub fn resetQueryPool(self: *CmdManager, cmd: *const Command, flightId: u8) void {
+    pub fn resetQueryPool(self: *CmdMan, cmd: *const Cmd, flightId: u8) void {
         vk.vkCmdResetQueryPool(cmd.handle, self.queryPools[flightId], 0, self.maxQueries);
         self.queryCounters[flightId] = 0;
     }
 
-    pub fn startQuery(self: *CmdManager, cmd: *const Command, flightId: u8, pipeStage: vhE.PipeStage, queryId: u8, name: []const u8) void {
+    pub fn startQuery(self: *CmdMan, cmd: *const Cmd, flightId: u8, pipeStage: vhE.PipeStage, queryId: u8, name: []const u8) void {
         if (self.querys.isKeyUsed(queryId) == true) {
             std.debug.print("Warning: Query ID {} in use by {s}!", .{ queryId, self.querys.getPtr(queryId).name });
             return;
@@ -95,7 +95,7 @@ pub const CmdManager = struct {
         self.queryCounters[flightId] += 1;
     }
 
-    pub fn endQuery(self: *CmdManager, cmd: *const Command, flightId: u8, pipeStage: vhE.PipeStage, queryId: u8) void {
+    pub fn endQuery(self: *CmdMan, cmd: *const Cmd, flightId: u8, pipeStage: vhE.PipeStage, queryId: u8) void {
         if (self.querys.isKeyUsed(queryId) == false) {
             std.debug.print("Error: QueryId {} not registered", .{queryId});
             return;
@@ -110,11 +110,11 @@ pub const CmdManager = struct {
         self.queryCounters[flightId] += 1;
     }
 
-    pub fn resetQuerys(self: *CmdManager) void {
+    pub fn resetQuerys(self: *CmdMan) void {
         self.querys.clear();
     }
 
-    pub fn printQueryResults(self: *CmdManager, flightId: u8) !void {
+    pub fn printQueryResults(self: *CmdMan, flightId: u8) !void {
         const count = self.queryCounters[flightId];
         if (count == 0 or count > self.maxQueries) return;
 

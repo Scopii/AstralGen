@@ -10,7 +10,7 @@ const vhF = @import("../help/Functions.zig");
 const Allocator = std.mem.Allocator;
 const std = @import("std");
 
-pub const SwapchainManager = struct {
+pub const SwapchainMan = struct {
     alloc: Allocator,
     gpi: vk.VkDevice,
     gpu: vk.VkPhysicalDevice,
@@ -19,7 +19,7 @@ pub const SwapchainManager = struct {
     targetPtrs: [rc.MAX_WINDOWS]*Swapchain = undefined,
     targetCount: u8 = 0,
 
-    pub fn init(alloc: Allocator, context: *const Context) !SwapchainManager {
+    pub fn init(alloc: Allocator, context: *const Context) !SwapchainMan {
         return .{
             .alloc = alloc,
             .gpi = context.gpi,
@@ -28,17 +28,17 @@ pub const SwapchainManager = struct {
         };
     }
 
-    pub fn deinit(self: *SwapchainManager) void {
+    pub fn deinit(self: *SwapchainMan) void {
         for (self.swapchains.getElements()) |*swapchain| {
             swapchain.deinit(self.alloc, self.gpi, self.instance, .withSurface);
         }
     }
 
-    pub fn getTargets(self: *SwapchainManager) []*Swapchain {
+    pub fn getTargets(self: *SwapchainMan) []*Swapchain {
         return self.targetPtrs[0..self.targetCount];
     }
 
-    pub fn updateTargets(self: *SwapchainManager, flightId: u8) !bool {
+    pub fn updateTargets(self: *SwapchainMan, flightId: u8) !bool {
         var count: u8 = 0;
 
         for (0..self.swapchains.getCount()) |i| {
@@ -72,11 +72,11 @@ pub const SwapchainManager = struct {
         return if (count != 0) true else false;
     }
 
-    pub fn changeState(self: *SwapchainManager, windowId: Window.WindowId, inUse: bool) void {
+    pub fn changeState(self: *SwapchainMan, windowId: Window.WindowId, inUse: bool) void {
         self.swapchains.getPtr(windowId.val).inUse = inUse;
     }
 
-    pub fn getMaxRenderExtent(self: *SwapchainManager, texId: TexId) vk.VkExtent2D {
+    pub fn getMaxRenderExtent(self: *SwapchainMan, texId: TexId) vk.VkExtent2D {
         var maxWidth: u32 = 1;
         var maxHeight: u32 = 1;
 
@@ -89,20 +89,20 @@ pub const SwapchainManager = struct {
         return vk.VkExtent2D{ .width = maxWidth, .height = maxHeight };
     }
 
-    pub fn createSwapchain(self: *SwapchainManager, window: Window) !void {
+    pub fn createSwapchain(self: *SwapchainMan, window: Window) !void {
         const surface = try createSurface(window.handle, self.instance);
         const swapchain = try Swapchain.init(self.alloc, self.gpi, surface, window.extent, self.gpu, window.renderTexId, null);
         self.swapchains.set(window.id.val, swapchain);
         std.debug.print("Swapchain added to Window {}\n", .{window.id.val});
     }
 
-    pub fn recreateSwapchain(self: *SwapchainManager, windowId: Window.WindowId, newExtent: vk.VkExtent2D) !void {
+    pub fn recreateSwapchain(self: *SwapchainMan, windowId: Window.WindowId, newExtent: vk.VkExtent2D) !void {
         const swapchainPtr = self.swapchains.getPtr(windowId.val);
         try swapchainPtr.recreate(self.alloc, self.gpi, self.gpu, self.instance, newExtent);
         std.debug.print("Swapchain recreated\n", .{});
     }
 
-    pub fn removeSwapchains(self: *SwapchainManager, windowId: Window.WindowId) void {
+    pub fn removeSwapchains(self: *SwapchainMan, windowId: Window.WindowId) void {
         if (self.swapchains.isKeyValid(windowId.val) == true) {
             const swapchain = self.swapchains.getPtr(windowId.val);
             swapchain.deinit(self.alloc, self.gpi, self.instance, .withSurface);
