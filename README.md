@@ -7,7 +7,7 @@ This is also the next logical step for my personal growth towards becomming a pr
 
 ## Techstack used
 
-*   **Zig** `0.14.1`
+*   **Zig** `0.15.2`
 *   **SDL 3** (c imported)
 *   **Vulkan** `1.3` (c imported)
 *   **VMA** integration (c++ imported)
