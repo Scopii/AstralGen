@@ -10,9 +10,11 @@ const vk = @import("../modules/vk.zig").c;
 const sc = @import("shaderConfig.zig");
 
 // Vulkan Validation Layers
-pub const VULKAN_VALIDATION = true;
+pub const VULKAN_VALIDATION = false;
 pub const EXTRA_VALIDATION = false;
 pub const BEST_PRACTICES = false;
+
+pub const VULKAN_PROFILING = true;
 
 // Rendering, Swapchains and Windows
 pub const MAX_IN_FLIGHT: u8 = 2; // (Frames)

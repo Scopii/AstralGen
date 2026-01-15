@@ -6,9 +6,10 @@ const std = @import("std");
 pub fn main() void {
     std.debug.print("AstralGen Started\n", .{});
     defer {
-        if (CLOSE_WITH_CONSOLE) {
-            std.debug.print("Press Any Key to exit...\n", .{});
-            _ = std.io.getStdIn().reader().readByte() catch {};
+        if (CLOSE_WITH_CONSOLE == true) {
+            std.debug.print("Press Enter to exit...\n", .{});
+            var buf: [1]u8 = undefined;
+            _ = std.fs.File.stdin().read(&buf) catch {};
         }
     }
     // Memory Setup

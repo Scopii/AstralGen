@@ -39,25 +39,4 @@ pub const indirectTask = ShaderInf{ .id = .{ .val = 12 }, .typ = .task, .glslFil
 pub const indirectMesh = ShaderInf{ .id = .{ .val = 13 }, .typ = .mesh, .glslFile = "indirectTest/mesh.slang", .spvFile = "indirectMesh.spv" };
 pub const indirectFrag = ShaderInf{ .id = .{ .val = 14 }, .typ = .frag, .glslFile = "indirectTest/frag.slang", .spvFile = "indirectFrag.spv" };
 
-pub const shadersToCompile: []const ShaderInf = &.{
-    t1Comp,
-
-    t2Vert,
-    t2Frag,
-
-    t3Mesh,
-    t3Frag,
-
-    t4Task,
-    t4Mesh,
-    t4Frag,
-
-    gridTask,
-    gridMesh,
-    gridFrag,
-    
-    indirectComp,
-    indirectTask,
-    indirectMesh,
-    indirectFrag
-};
+pub const shadersToCompile: []const ShaderInf = &.{ t1Comp, t2Vert, t2Frag, t3Mesh, t3Frag, t4Task, t4Mesh, t4Frag, gridTask, gridMesh, gridFrag, indirectComp, indirectTask, indirectMesh, indirectFrag };

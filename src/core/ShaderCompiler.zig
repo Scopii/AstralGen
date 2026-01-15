@@ -222,6 +222,10 @@ fn compileSLANG(alloc: Allocator, srcPath: []const u8, spvPath: []const u8) !voi
             "-profile",
             "sm_6_6",
             "-stage",
+
+            "-fvk-use-scalar-layout",
+            "-matrix-layout-column-major",
+
             stage,
             "-entry",
             "main",

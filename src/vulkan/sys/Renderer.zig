@@ -106,7 +106,7 @@ pub const Renderer = struct {
         try self.scheduler.waitForGPU();
         const flightId = self.scheduler.flightId;
 
-        if (rc.VULKAN_VALIDATION == true) try self.renderGraph.cmdMan.printQueryResults(flightId);
+        if (rc.VULKAN_PROFILING == true) try self.renderGraph.cmdMan.printQueryResults(flightId);
 
         if (try self.swapMan.updateTargets(flightId) == false) return;
         const targets = self.swapMan.getTargets();
