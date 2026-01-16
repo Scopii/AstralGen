@@ -20,8 +20,8 @@ pub const RenderGraph = struct {
     cmdMan: CmdManager,
     pipeLayout: vk.VkPipelineLayout,
     descLayoutAddress: u64,
-    tempImgBarriers: std.array_list.Managed(vk.VkImageMemoryBarrier2),
-    tempBufBarriers: std.array_list.Managed(vk.VkBufferMemoryBarrier2),
+    imgBarriers: std.array_list.Managed(vk.VkImageMemoryBarrier2),
+    bufBarriers: std.array_list.Managed(vk.VkBufferMemoryBarrier2),
 
     pub fn init(alloc: Allocator, context: *const Context, resMan: *const ResourceMan) !RenderGraph {
         return .{
@@ -29,15 +29,15 @@ pub const RenderGraph = struct {
             .cmdMan = try CmdManager.init(alloc, context, rc.MAX_IN_FLIGHT),
             .pipeLayout = resMan.descMan.pipeLayout,
             .descLayoutAddress = resMan.descMan.descBuffer.gpuAddress,
-            .tempImgBarriers = try std.array_list.Managed(vk.VkImageMemoryBarrier2).initCapacity(alloc, 30),
-            .tempBufBarriers = try std.array_list.Managed(vk.VkBufferMemoryBarrier2).initCapacity(alloc, 30),
+            .imgBarriers = try std.array_list.Managed(vk.VkImageMemoryBarrier2).initCapacity(alloc, 30),
+            .bufBarriers = try std.array_list.Managed(vk.VkBufferMemoryBarrier2).initCapacity(alloc, 30),
         };
     }
 
     pub fn deinit(self: *RenderGraph) void {
         self.cmdMan.deinit();
-        self.tempImgBarriers.deinit();
-        self.tempBufBarriers.deinit();
+        self.imgBarriers.deinit();
+        self.bufBarriers.deinit();
     }
 
     pub fn recordFrame(self: *RenderGraph, passes: []Pass, flightId: u8, frameData: FrameData, targets: []const *Swapchain, resMan: *ResourceMan, shaderMan: *ShaderManager) !Cmd {
@@ -59,7 +59,7 @@ pub const RenderGraph = struct {
         for (resMan.indirectBufIds.items) |id| {
             const indirectBuf = try resMan.getBufferPtr(id);
             cmd.fillBuffer(indirectBuf.handle, 0, 16, 0);
-            try self.tempBufBarriers.append(indirectBuf.createBufferBarrier(Buffer.BufferState{ .access = .TransferReadWrite, .stage = .Transfer }));
+            try self.bufBarriers.append(indirectBuf.createBufferBarrier(Buffer.BufferState{ .access = .TransferReadWrite, .stage = .Transfer }));
             self.bakeBarriers(&cmd);
         }
         try self.recordTransfers(&cmd, resMan);
@@ -100,13 +100,13 @@ pub const RenderGraph = struct {
     fn imageBarrierIfNeeded(self: *RenderGraph, tex: *TextureBase, neededState: TextureBase.TextureState) !void {
         const state = tex.state;
         if (state.stage == neededState.stage and state.access == neededState.access and state.layout == neededState.layout) return;
-        try self.tempImgBarriers.append(tex.createImageBarrier(neededState));
+        try self.imgBarriers.append(tex.createImageBarrier(neededState));
     }
 
     fn bufferBarrierIfNeeded(self: *RenderGraph, buffer: *Buffer, neededState: Buffer.BufferState) !void {
         const state = buffer.state;
         if (state.stage == neededState.stage and state.access == neededState.access) return;
-        try self.tempBufBarriers.append(buffer.createBufferBarrier(neededState));
+        try self.bufBarriers.append(buffer.createBufferBarrier(neededState));
     }
 
     pub fn recordPassBarriers(self: *RenderGraph, cmd: *const Cmd, pass: Pass, resMan: *ResourceMan) !void {
@@ -214,10 +214,10 @@ pub const RenderGraph = struct {
     }
 
     fn bakeBarriers(self: *RenderGraph, cmd: *const Cmd) void {
-        if (self.tempImgBarriers.items.len != 0 or self.tempBufBarriers.items.len != 0) {
-            cmd.bakeBarriers(self.tempImgBarriers.items, self.tempBufBarriers.items);
-            self.tempImgBarriers.clearRetainingCapacity();
-            self.tempBufBarriers.clearRetainingCapacity();
+        if (self.imgBarriers.items.len != 0 or self.bufBarriers.items.len != 0) {
+            cmd.bakeBarriers(self.imgBarriers.items, self.bufBarriers.items);
+            self.imgBarriers.clearRetainingCapacity();
+            self.bufBarriers.clearRetainingCapacity();
         }
     }
 };
