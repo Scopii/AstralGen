@@ -262,6 +262,7 @@ fn createGPI(alloc: Allocator, gpu: vk.VkPhysicalDevice, families: QueueFamilies
 
     var features: vk.VkPhysicalDeviceFeatures = undefined;
     vk.vkGetPhysicalDeviceFeatures(gpu, &features);
+    features.shaderInt64 = vk.VK_TRUE; 
 
     var dynamicState3Features = vk.VkPhysicalDeviceExtendedDynamicState3FeaturesEXT{
         .sType = vk.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_3_FEATURES_EXT,
@@ -315,6 +316,9 @@ fn createGPI(alloc: Allocator, gpu: vk.VkPhysicalDevice, families: QueueFamilies
         .sType = vk.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES,
         .pNext = &descBufferFeatures,
         .shaderDrawParameters = vk.VK_TRUE,
+
+        .storageBuffer16BitAccess = vk.VK_TRUE, // Allows reading/writing 16-bit values to SSBOs
+        .uniformAndStorageBuffer16BitAccess = vk.VK_TRUE, // UBOs too
     };
 
     const vk12Features = vk.VkPhysicalDeviceVulkan12Features{
@@ -328,6 +332,8 @@ fn createGPI(alloc: Allocator, gpu: vk.VkPhysicalDevice, families: QueueFamilies
         .runtimeDescriptorArray = vk.VK_TRUE,
         .shaderStorageImageArrayNonUniformIndexing = vk.VK_TRUE,
         .shaderSampledImageArrayNonUniformIndexing = vk.VK_TRUE,
+        .shaderFloat16 = vk.VK_TRUE,
+        .shaderBufferInt64Atomics = vk.VK_TRUE,
         .pNext = &vk11Features,
     };
 

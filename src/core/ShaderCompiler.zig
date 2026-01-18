@@ -1,4 +1,3 @@
-
 const sc = @import("../configs/shaderConfig.zig");
 const Allocator = std.mem.Allocator;
 const ShaderInf = sc.ShaderInf;
@@ -221,11 +220,9 @@ fn compileSLANG(alloc: Allocator, srcPath: []const u8, spvPath: []const u8) !voi
             "spirv",
             "-profile",
             "sm_6_6",
-            "-stage",
-
             "-fvk-use-scalar-layout",
             "-matrix-layout-column-major",
-
+            "-stage",
             stage,
             "-entry",
             "main",
