@@ -1,3 +1,4 @@
+import Globals;
 
 struct VertexOut {
     float4 pos : SV_Position;
@@ -13,25 +14,6 @@ static const float3 positions[3] = {
     float3(-0.5, 0.5, 0.0),
     float3(0.5, 0.5, 0.0),
     float3(0.0, -0.5, 0.0)
-};
-
-struct CameraData {
-    float4x4 viewProj;
-    float4 camPosAndFov;
-    float4 camDir;
-};
-
-struct Resource {
-    uint index;
-    uint count;
-};
-
-struct PushConstants {
-    float runtime;
-    float deltaTime;
-    uint width;
-    uint height;
-    Resource resources[14];
 };
 
 [[vk::binding(0, 0)]] RWTexture2D<float4> globalImages[];

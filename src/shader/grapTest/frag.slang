@@ -1,28 +1,4 @@
-
-struct Object {
-    float posX; float posY; float posZ; float size;     
-    float colorR; float colorG; float colorB; uint sdfId; 
-    uint4 _padding; 
-};
-
-struct CameraData {
-    float4x4 viewProj;
-    float4 camPosAndFov;
-    float4 camDir;
-};
-
-struct Resource {
-    uint index;
-    uint count;
-};
-
-struct PushConstants {
-    float runtime;
-    float deltaTime;
-    uint width;
-    uint height;
-    Resource resources[14];
-};
+import Globals;
 
 [[vk::binding(0, 0)]] RWTexture2D<float4> globalImages[];
 [[vk::binding(1, 0)]] StructuredBuffer<Object> globalObjectBuffers[];
@@ -36,28 +12,6 @@ static const float MAX_DIST = 200.0;
 // Other Constants
 static const float EPSILON = 0.001;
 
-
-// SDFs
-float sdSphere(float3 pos, float radius) { 
-    return length(pos) - radius; 
-}
-float sdBox(float3 p, float3 b) {
-    float3 q = abs(p) - b;
-    return length(max(q, 0.0)) + min(max(q.x, max(q.y, q.z)), 0.0);
-}
-float sdTorus(float3 p, float2 t) {
-    float2 q = float2(length(p.xz) - t.x, p.y);
-    return length(q) - t.y;
-}
-// Ray March Operations
-float3 opRep(float3 x, float3 y) {
-    return x - y * floor(x / y);
-}
-
-struct MapResult {
-    float dist;
-    int index;
-};
 
 MapResult map(float3 pos, StructuredBuffer<Object> objectBuffer) {
     float closestDist = MAX_DIST;

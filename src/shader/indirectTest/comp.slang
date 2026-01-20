@@ -1,35 +1,4 @@
-
-struct Object {
-    float posX; float posY; float posZ; float size;     
-    float colorR; float colorG; float colorB; uint sdfId; 
-    uint4 _padding; 
-};
-
-struct CameraData {
-    float4x4 viewProj;
-    float4 camPosAndFov;
-    float4 camDir;
-};
-
-struct Resource {
-    uint index;
-    uint count;
-};
-
-struct IndirectCommand {
-    uint groupX;
-    uint groupY;
-    uint groupZ;
-    uint count; 
-};
-
-struct PushConstants {
-    float runtime;
-    float deltaTime;
-    uint width;
-    uint height;
-    Resource resources[14];
-};
+import Globals;
 
 [[vk::binding(0, 0)]] RWTexture2D<float4> globalImages[];
 [[vk::binding(1, 0)]] StructuredBuffer<Object> globalObjectBuffers[];
