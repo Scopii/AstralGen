@@ -38,11 +38,12 @@ pub const ShaderMan = struct {
         for (loadedShaders) |loadedShader| {
             const shaderObj = try Shader.init(self.gpi, loadedShader, self.descLayout);
             const id = loadedShader.shaderInf.id.val;
+            const name = loadedShader.shaderInf.spvFile;
 
             if (self.shaders.isKeyUsed(id) == true) {
                 self.shaders.getPtr(id).*.deinit(self.gpi);
-                std.debug.print("Shader {} Updated\n", .{id});
-            } else std.debug.print("Shader {} Created\n", .{id});
+                std.debug.print("Shader {} updated ({s})\n", .{id, name});
+            } else std.debug.print("Shader {} created ({s})\n", .{id, name});
             self.shaders.set(id, shaderObj);
         }
     }
