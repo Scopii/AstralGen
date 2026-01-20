@@ -6,6 +6,7 @@ const Buffer = @import("../vulkan/types/res/Buffer.zig").Buffer;
 const CameraData = @import("../core/Camera.zig").CameraData;
 const Pass = @import("../vulkan/types/base/Pass.zig").Pass;
 const Object = @import("../ecs/EntityManager.zig").Object;
+const vhT = @import("../vulkan/help/Types.zig");
 const vk = @import("../modules/vk.zig").c;
 const sc = @import("shaderConfig.zig");
 
@@ -15,6 +16,7 @@ pub const EXTRA_VALIDATION = false;
 pub const BEST_PRACTICES = false;
 
 pub const VULKAN_PROFILING = false;
+pub const VULKAN_READBACK = false;
 
 // Rendering, Swapchains and Windows
 pub const MAX_IN_FLIGHT: u8 = 2; // (Frames)
@@ -44,8 +46,9 @@ pub const bindingRegistry: []const struct { binding: u32, descType: vk.VkDescrip
 
 pub const objectSB = Buffer.create(.{ .id = .{ .val = 1 }, .mem = .Gpu, .typ = .Storage, .len = 100, .elementSize = @sizeOf(Object) });
 pub const cameraUB = Buffer.create(.{ .id = .{ .val = 40 }, .mem = .Gpu, .typ = .Storage, .len = 1, .elementSize = @sizeOf(CameraData) });
-pub const indirectSB = Buffer.create(.{ .id = .{ .val = 41 }, .mem = .Gpu, .typ = .Indirect, .len = 1, .elementSize = @sizeOf(struct { x: u32, y: u32, z: u32, count: u32 }) });
-pub const buffers: []const Buffer.BufInf = &.{ objectSB, cameraUB, indirectSB };
+pub const indirectSB = Buffer.create(.{ .id = .{ .val = 41 }, .mem = .Gpu, .typ = .Indirect, .len = 1, .elementSize = @sizeOf(vhT.IndirectData) });
+pub const readbackSB = Buffer.create(.{ .id = .{ .val = 45 }, .mem = .CpuRead, .typ = .Storage, .len = 1, .elementSize = @sizeOf(vhT.ReadbackData) });
+pub const buffers: []const Buffer.BufInf = &.{ objectSB, cameraUB, indirectSB, readbackSB };
 
 pub const compTex = Texture.create(.{ .id = .{ .val = 1 }, .mem = .Gpu, .typ = .Color, .width = 500, .height = 500 });
 pub const grapTex = Texture.create(.{ .id = .{ .val = 2 }, .mem = .Gpu, .typ = .Color, .width = 300, .height = 300 });
@@ -65,6 +68,7 @@ pub const compTest: Pass = .{
     .bufUses = &.{
         BufferUse.init(objectSB.id, .ComputeShader, .ShaderRead, 0),
         BufferUse.init(cameraUB.id, .ComputeShader, .ShaderRead, 1),
+        BufferUse.init(readbackSB.id, .ComputeShader, .ShaderWrite, 3),
     },
     .texUses = &.{
         TextureUse.init(compTex.id, .ComputeShader, .ShaderWrite, .General, 2),

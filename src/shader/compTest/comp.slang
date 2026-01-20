@@ -1,4 +1,11 @@
 
+struct ReadbackData {
+    float runtime;
+    float deltaTime;
+    uint width;
+    uint height;
+}
+
 struct Object {
     float posX; float posY; float posZ; float size;     
     float colorR; float colorG; float colorB; uint sdfId; 
@@ -26,6 +33,7 @@ struct PushConstants {
 
 [[vk::binding(0, 0)]] RWTexture2D<float4> globalImages[];
 [[vk::binding(1, 0)]] StructuredBuffer<Object> globalObjectBuffers[];
+[[vk::binding(1, 0)]] RWStructuredBuffer<ReadbackData> globalReadbacks[];
 [[vk::binding(1, 0)]] StructuredBuffer<CameraData> globalCameraBuffers[];
 [[vk::push_constant]] ConstantBuffer<PushConstants> pc;
 
@@ -97,7 +105,13 @@ float3 getNormal(float3 pos, StructuredBuffer<Object> objectBuffer) {
 // SHADER
 [shader("compute")] 
 [numthreads(8, 8, 1)]
-void main(uint3 id : SV_DispatchThreadID) {
+void main(uint3 id: SV_DispatchThreadID) {
+    RWStructuredBuffer<ReadbackData> readback = globalReadbacks[pc.resources[3].index];
+    readback[0].runtime = pc.runtime;
+    readback[0].deltaTime = pc.deltaTime;
+    readback[0].width = pc.width;
+    readback[0].height = pc.height;
+
     RWTexture2D<float4> renderImg = globalImages[pc.resources[2].index];
     StructuredBuffer<Object> objectBuffer = globalObjectBuffers[pc.resources[0].index];
     StructuredBuffer<CameraData> camData = globalCameraBuffers[pc.resources[1].index];

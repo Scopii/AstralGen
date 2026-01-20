@@ -12,6 +12,7 @@ const Cmd = @import("../types/base/Cmd.zig").Cmd;
 const CmdManager = @import("CmdMan.zig").CmdMan;
 const Context = @import("Context.zig").Context;
 const vk = @import("../../modules/vk.zig").c;
+const vhT = @import("../help/Types.zig");
 const Allocator = std.mem.Allocator;
 const std = @import("std");
 
@@ -58,7 +59,7 @@ pub const RenderGraph = struct {
 
         for (resMan.indirectBufIds.items) |id| {
             const indirectBuf = try resMan.getBufferPtr(id);
-            cmd.fillBuffer(indirectBuf.handle, 0, 16, 0);
+            cmd.fillBuffer(indirectBuf.handle, 0, @sizeOf(vhT.IndirectData), 0);
             try self.bufBarriers.append(indirectBuf.createBufferBarrier(Buffer.BufferState{ .access = .TransferReadWrite, .stage = .Transfer }));
             self.bakeBarriers(&cmd);
         }
@@ -182,7 +183,7 @@ pub const RenderGraph = struct {
             .taskMesh => |taskMesh| {
                 if (taskMesh.indirectBuf) |indirectBuf| {
                     const buffer = try resMan.getBufferPtr(indirectBuf.id);
-                    cmd.drawMeshTasksIndirect(buffer.handle, 0, 1, 16); // 16 bytes 4x u32
+                    cmd.drawMeshTasksIndirect(buffer.handle, 0, 1, @sizeOf(vhT.IndirectData)); 
                 } else {
                     cmd.drawMeshTasks(taskMesh.workgroups.x, taskMesh.workgroups.y, taskMesh.workgroups.z);
                 }

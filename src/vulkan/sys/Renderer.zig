@@ -17,6 +17,7 @@ const Cmd = @import("../types/base/Cmd.zig").Cmd;
 const Context = @import("Context.zig").Context;
 const vk = @import("../../modules/vk.zig").c;
 const vkE = @import("../help/Enums.zig");
+const vkT = @import("../help/Types.zig");
 const Allocator = std.mem.Allocator;
 const std = @import("std");
 
@@ -107,6 +108,11 @@ pub const Renderer = struct {
         const flightId = self.scheduler.flightId;
 
         if (rc.VULKAN_PROFILING == true) try self.renderGraph.cmdMan.printQueryResults(flightId);
+
+        if (rc.VULKAN_READBACK == true) {
+            const readbackPtr = try self.resMan.getBufferDataPtr(.{ .val = 45 }, vkT.ReadbackData);
+            std.debug.print("Readback: {}\n", .{readbackPtr.*});
+        }
 
         if (try self.swapMan.updateTargets(flightId) == false) return;
         const targets = self.swapMan.getTargets();

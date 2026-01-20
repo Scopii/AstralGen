@@ -157,6 +157,12 @@ pub const ResourceMan = struct {
         std.debug.print("Texture ID {} -> BindlessIndex {} created\n", .{ texInf.id.val, bindlessIndex });
     }
 
+    pub fn getBufferDataPtr(self: *ResourceMan, bufId: Buffer.BufId, comptime T: type) !*T {
+        const buffer = try self.getBufferPtr(bufId);
+        if (buffer.mappedPtr) |ptr| return @as(*T, @ptrCast(@alignCast(ptr)));
+        return error.BufferNotHostVisible;
+    }
+
     pub fn updateBuffer(self: *ResourceMan, bufInf: Buffer.BufInf, data: anytype) !void {
         if (bufInf.mem == .Gpu) {
             try self.queueBufferUpload(bufInf, data);
