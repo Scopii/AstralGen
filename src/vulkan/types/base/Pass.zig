@@ -1,4 +1,5 @@
 const ShaderId = @import("../../../configs/shaderConfig.zig").ShaderInf.ShaderId;
+const RenderState = @import("../base/RenderState.zig").RenderState;
 const TextureBase = @import("../res/TextureBase.zig").TextureBase;
 const Texture = @import("../res/Texture.zig").Texture;
 const Buffer = @import("../res/Buffer.zig").Buffer;
@@ -28,6 +29,7 @@ pub const Pass = struct {
     };
 
     pub const ClassicPass = struct {
+        state: RenderState = .{},
         mainTexId: Texture.TexId,
         colorAtts: []const Attachment,
         depthAtt: ?Attachment = null,

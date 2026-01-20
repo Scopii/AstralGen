@@ -53,7 +53,6 @@ pub const RenderGraph = struct {
         cmd.bindDescriptorBuffer(self.descLayoutAddress);
         cmd.setDescriptorBufferOffset(vk.VK_PIPELINE_BIND_POINT_COMPUTE, self.pipeLayout);
         cmd.setDescriptorBufferOffset(vk.VK_PIPELINE_BIND_POINT_GRAPHICS, self.pipeLayout);
-        cmd.setGraphicsState(.{});
 
         self.cmdMan.startQuery(&cmd, flightId, .TopOfPipe, 40, "Transfers");
 
@@ -69,6 +68,11 @@ pub const RenderGraph = struct {
 
         for (passes, 0..) |pass, i| {
             self.cmdMan.startQuery(&cmd, flightId, .TopOfPipe, @intCast(i), pass.name);
+
+            switch (pass.typ) {
+                .classic => |classic| cmd.setGraphicsState(classic.state),
+                else => {},
+            }
 
             const shaders = shaderMan.getShaders(pass.shaderIds)[0..pass.shaderIds.len];
             cmd.bindShaders(shaders);
@@ -183,7 +187,7 @@ pub const RenderGraph = struct {
             .taskMesh => |taskMesh| {
                 if (taskMesh.indirectBuf) |indirectBuf| {
                     const buffer = try resMan.getBufferPtr(indirectBuf.id);
-                    cmd.drawMeshTasksIndirect(buffer.handle, 0, 1, @sizeOf(vhT.IndirectData)); 
+                    cmd.drawMeshTasksIndirect(buffer.handle, 0, 1, @sizeOf(vhT.IndirectData));
                 } else {
                     cmd.drawMeshTasks(taskMesh.workgroups.x, taskMesh.workgroups.y, taskMesh.workgroups.z);
                 }
