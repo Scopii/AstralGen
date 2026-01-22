@@ -48,7 +48,7 @@ pub const RenderGraph = struct {
         self.cmdMan.resetQuerys();
         self.cmdMan.resetQueryPool(&cmd, flightId);
 
-        self.cmdMan.startQuery(&cmd, flightId, .TopOfPipe, 33, "FrameTime");
+        self.cmdMan.startQuery(&cmd, flightId, .TopOfPipe, 33, "");
 
         cmd.bindDescriptorBuffer(self.descLayoutAddress);
         cmd.setDescriptorBufferOffset(vk.VK_PIPELINE_BIND_POINT_COMPUTE, self.pipeLayout);

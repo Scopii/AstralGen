@@ -114,7 +114,7 @@ pub const CmdMan = struct {
         self.querys.clear();
     }
 
-    pub fn printQueryResults(self: *CmdMan, flightId: u8) !void {
+    pub fn printQueryResults(self: *CmdMan, flightId: u8, totalFrames: u64) !void {
         const count = self.queryCounters[flightId];
         if (count == 0 or count > self.maxQueries) return;
 
@@ -126,7 +126,7 @@ pub const CmdMan = struct {
             const diff = results[query.endQueryIndex] - results[query.startQueryIndex];
             const gpuTimeMs = (@as(f64, @floatFromInt(diff)) * self.timestampPeriod) / 1_000_000.0;
 
-            std.debug.print("GPU: {d:.3} ms {s} \n", .{ gpuTimeMs, query.name });
+            std.debug.print("GPU Frame {}: {d:.3} ms {s} \n", .{ totalFrames - 1, gpuTimeMs, query.name });
         }
         std.debug.print("\n", .{});
     }

@@ -1,4 +1,3 @@
-const Swapchain = @import("../types/base/Swapchain.zig").Swapchain;
 const MemoryManager = @import("../../core/MemoryManager.zig").MemoryManager;
 const LoadedShader = @import("../../core/ShaderCompiler.zig").LoadedShader;
 const SwapchainMan = @import("SwapchainMan.zig").SwapchainMan;
@@ -7,16 +6,13 @@ const Texture = @import("../types/res/Texture.zig").Texture;
 const Window = @import("../../platform/Window.zig").Window;
 const RenderGraph = @import("RenderGraph.zig").RenderGraph;
 const Buffer = @import("../types/res/Buffer.zig").Buffer;
-const Queue = @import("../types/base/Queue.zig").Queue;
 const ShaderMan = @import("ShaderMan.zig").ShaderMan;
 const rc = @import("../../configs/renderConfig.zig");
 const FrameData = @import("../../App.zig").FrameData;
 const Scheduler = @import("Scheduler.zig").Scheduler;
 const Pass = @import("../types/base/Pass.zig").Pass;
-const Cmd = @import("../types/base/Cmd.zig").Cmd;
 const Context = @import("Context.zig").Context;
 const vk = @import("../../modules/vk.zig").c;
-const vkE = @import("../help/Enums.zig");
 const vkT = @import("../help/Types.zig");
 const Allocator = std.mem.Allocator;
 const std = @import("std");
@@ -104,51 +100,18 @@ pub const Renderer = struct {
     }
 
     pub fn draw(self: *Renderer, frameData: FrameData) !void {
-        try self.scheduler.waitForGPU();
-        const flightId = self.scheduler.flightId;
-
-        if (rc.VULKAN_PROFILING == true) try self.renderGraph.cmdMan.printQueryResults(flightId);
-
-        if (rc.VULKAN_READBACK == true) {
-            const readbackPtr = try self.resMan.getBufferDataPtr(.{ .val = 45 }, vkT.ReadbackData);
-            std.debug.print("Readback: {}\n", .{readbackPtr.*});
-        }
-
+        const flightId = try self.scheduler.beginFrame();
         if (try self.swapMan.updateTargets(flightId) == false) return;
+
+        if (rc.VULKAN_READBACK == true) try self.resMan.printReadback(.{ .val = 45 }, vkT.ReadbackData);
+        if (rc.VULKAN_PROFILING == true) try self.renderGraph.cmdMan.printQueryResults(flightId, self.scheduler.totalFrames);
+
         const targets = self.swapMan.getTargets();
-
         const cmd = try self.renderGraph.recordFrame(self.passes.items, flightId, frameData, targets, &self.resMan, &self.shaderMan);
+        try self.scheduler.queueSubmit(&cmd, targets, self.context.graphicsQ);
+        try self.scheduler.queuePresent(targets, self.context.presentQ);
 
-        try self.queueSubmit(&cmd, targets, flightId, self.context.graphicsQ);
-        try self.present(targets, self.context.presentQ);
-
-        self.scheduler.nextFrame();
-    }
-
-    fn queueSubmit(self: *Renderer, cmd: *const Cmd, targets: []const *Swapchain, flightId: u8, queue: Queue) !void {
-        var waitInfos: [rc.MAX_WINDOWS]vk.VkSemaphoreSubmitInfo = undefined;
-        var signalInfos: [rc.MAX_WINDOWS + 1]vk.VkSemaphoreSubmitInfo = undefined;
-        signalInfos[targets.len] = createSemaphoreSubmitInfo(self.scheduler.cpuSyncTimeline, .AllCmds, self.scheduler.totalFrames + 1);
-
-        for (targets, 0..) |swapchain, i| {
-            waitInfos[i] = createSemaphoreSubmitInfo(swapchain.imgRdySems[flightId], .Transfer, 0);
-            signalInfos[i] = createSemaphoreSubmitInfo(swapchain.renderDoneSems[swapchain.curIndex], .AllCmds, 0);
-        }
-        const cmdSlice = &[_]vk.VkCommandBufferSubmitInfo{cmd.createSubmitInfo()};
-        try queue.submit(waitInfos[0..targets.len], cmdSlice, signalInfos[0 .. targets.len + 1]);
-    }
-
-    fn present(_: *Renderer, targets: []const *const Swapchain, queue: Queue) !void {
-        var handles: [rc.MAX_WINDOWS]vk.VkSwapchainKHR = undefined;
-        var imgIndices: [rc.MAX_WINDOWS]u32 = undefined;
-        var waitSems: [rc.MAX_WINDOWS]vk.VkSemaphore = undefined;
-
-        for (targets, 0..) |swapchain, i| {
-            handles[i] = swapchain.handle;
-            imgIndices[i] = swapchain.curIndex;
-            waitSems[i] = swapchain.renderDoneSems[swapchain.curIndex];
-        }
-        try queue.present(handles[0..targets.len], imgIndices[0..targets.len], waitSems[0..targets.len]);
+        self.scheduler.endFrame();
     }
 
     pub fn createPasses(self: *Renderer, passes: []const Pass) !void {
@@ -184,7 +147,3 @@ pub const Renderer = struct {
         for (texInfos) |texInf| try self.resMan.createTexture(texInf);
     }
 };
-
-fn createSemaphoreSubmitInfo(semaphore: vk.VkSemaphore, pipeStage: vkE.PipeStage, value: u64) vk.VkSemaphoreSubmitInfo {
-    return .{ .sType = vk.VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO, .semaphore = semaphore, .stageMask = @intFromEnum(pipeStage), .value = value };
-}

@@ -163,6 +163,11 @@ pub const ResourceMan = struct {
         return error.BufferNotHostVisible;
     }
 
+    pub fn printReadback(self: *ResourceMan, bufId: Buffer.BufId, comptime T: type) !void {
+        const readbackPtr = try self.getBufferDataPtr(bufId, T); 
+        std.debug.print("Readback: {}\n", .{readbackPtr.*});
+    }
+
     pub fn updateBuffer(self: *ResourceMan, bufInf: Buffer.BufInf, data: anytype) !void {
         if (bufInf.mem == .Gpu) {
             try self.queueBufferUpload(bufInf, data);
