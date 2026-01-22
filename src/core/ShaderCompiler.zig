@@ -1,8 +1,20 @@
 const sc = @import("../configs/shaderConfig.zig");
 const vkE = @import("../vulkan/help/Enums.zig");
 const Allocator = std.mem.Allocator;
-const ShaderInf = sc.ShaderInf;
 const std = @import("std");
+
+pub const ShaderInf = struct {
+    pub const ShaderId = packed struct { val: u8 };
+
+    id: ShaderId,
+    typ: vkE.ShaderStage,
+    file: []const u8,
+    spvFile: []const u8,
+
+    pub fn init(id: u32, typ: vkE.ShaderStage, file: []const u8, spvFile: []const u8) ShaderInf {
+        return .{ .id = .{ .val = id }, .typ = typ, .file = file, .spvFile = spvFile };
+    }
+};
 
 pub const LoadedShader = struct {
     const alignedShader = []align(@alignOf(u32)) u8;

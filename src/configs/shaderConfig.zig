@@ -1,4 +1,5 @@
 const vkE = @import("../vulkan/help/Enums.zig");
+const ShaderInf = @import("../core/ShaderCompiler.zig").ShaderInf;
 
 // Shader Compilation
 pub const SHADER_HOTLOAD = true;
@@ -8,19 +9,6 @@ pub const SHADER_MAX = 100;
 pub const rootPath: []const u8 = "../..";
 pub const glslPath: []const u8 = "/src/shader";
 pub const sprvPath: []const u8 = "/zig-out/shader";
-
-pub const ShaderInf = struct {
-    pub const ShaderId = packed struct { val: u8 };
-
-    id: ShaderId,
-    typ: vkE.ShaderStage,
-    file: []const u8,
-    spvFile: []const u8,
-
-    pub fn init(id: u32, typ: vkE.ShaderStage, file: []const u8, spvFile: []const u8) ShaderInf {
-        return .{ .id = .{ .val = id }, .typ = typ, .file = file, .spvFile = spvFile };
-    }
-};
 
 pub const t1Comp = ShaderInf.init(0, .comp, "compTest/comp.slang", "t1Comp.spv");
 
