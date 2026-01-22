@@ -1,4 +1,5 @@
 const CreateMapArray = @import("../../structures/MapArray.zig").CreateMapArray;
+const ShaderId = @import("../../core/ShaderCompiler.zig").ShaderInf.ShaderId;
 const LoadedShader = @import("../../core/ShaderCompiler.zig").LoadedShader;
 const shaderCon = @import("../../configs/shaderConfig.zig");
 const ResourceMan = @import("ResourceMan.zig").ResourceMan;
@@ -48,7 +49,7 @@ pub const ShaderMan = struct {
         }
     }
 
-    pub fn getShaders(self: *ShaderMan, shaderIds: []const shaderCon.ShaderInf.ShaderId) [8]Shader {
+    pub fn getShaders(self: *ShaderMan, shaderIds: []const ShaderId) [8]Shader {
         var shaders: [8]Shader = undefined;
         for (0..shaderIds.len) |i| {
             shaders[i] = self.shaders.get(shaderIds[i].val);

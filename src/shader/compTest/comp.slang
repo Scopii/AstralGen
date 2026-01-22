@@ -1,5 +1,9 @@
 import Globals;
 
+[[vk::constant_id(0)]] const uint THREAD_X = 8;
+[[vk::constant_id(1)]] const uint THREAD_Y = 8;
+[[vk::constant_id(2)]] const uint THREAD_Z = 1;
+
 [[vk::binding(0, 0)]] RWTexture2D<float4> globalImages[];
 [[vk::binding(1, 0)]] StructuredBuffer<Object> globalObjectBuffers[];
 [[vk::binding(1, 0)]] RWStructuredBuffer<ReadbackData> globalReadbacks[];
@@ -50,8 +54,8 @@ float3 getNormal(float3 pos, StructuredBuffer<Object> objectBuffer) {
 }
 
 // SHADER
-[shader("compute")] 
-[numthreads(8, 8, 1)]
+[shader("compute")]
+[numthreads(THREAD_X, THREAD_Y, THREAD_Z)]
 void main(uint3 id: SV_DispatchThreadID) {
     RWStructuredBuffer<ReadbackData> readback = globalReadbacks[pc.resources[3].index];
     readback[0].runtime = pc.runtime;

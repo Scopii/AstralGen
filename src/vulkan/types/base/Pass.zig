@@ -1,4 +1,4 @@
-const ShaderId = @import("../../../configs/shaderConfig.zig").ShaderInf.ShaderId;
+const ShaderId = @import("../../../core/ShaderCompiler.zig").ShaderInf.ShaderId;
 const RenderState = @import("../base/RenderState.zig").RenderState;
 const TextureBase = @import("../res/TextureBase.zig").TextureBase;
 const Texture = @import("../res/Texture.zig").Texture;

@@ -1,5 +1,6 @@
 const LoadedShader = @import("../../../core/ShaderCompiler.zig").LoadedShader;
 const PushConstants = @import("../res/PushConstants.zig").PushConstants;
+const SpecData = @import("../../help/Types.zig").SpecData;
 const vk = @import("../../../modules/vk.zig").c;
 const vhF = @import("../../help/Functions.zig");
 const vkFn = @import("../../../modules/vk.zig");
@@ -22,6 +23,25 @@ pub const Shader = struct {
             else => 0,
         };
 
+        var entries = [_]vk.VkSpecializationMapEntry{
+            .{ .constantID = 0, .offset = @offsetOf(SpecData, "threadX"), .size = @sizeOf(u32) },
+            .{ .constantID = 1, .offset = @offsetOf(SpecData, "threadY"), .size = @sizeOf(u32) },
+            .{ .constantID = 2, .offset = @offsetOf(SpecData, "threadZ"), .size = @sizeOf(u32) },
+        };
+
+        const specData = SpecData{
+            .threadX = 8,
+            .threadY = 8,
+            .threadZ = 1
+        };
+
+        const specInf = vk.VkSpecializationInfo{
+            .mapEntryCount = entries.len,
+            .pMapEntries = &entries,
+            .dataSize = @sizeOf(SpecData),
+            .pData = &specData,
+        };
+
         const shaderInf = vk.VkShaderCreateInfoEXT{
             .sType = vk.VK_STRUCTURE_TYPE_SHADER_CREATE_INFO_EXT,
             .flags = flags,
@@ -39,6 +59,7 @@ pub const Shader = struct {
                 .offset = 0,
                 .size = @sizeOf(PushConstants),
             },
+            .pSpecializationInfo = &specInf,
         };
         var handle: vk.VkShaderEXT = undefined;
         try vhF.check(vkFn.vkCreateShadersEXT.?(gpi, 1, &shaderInf, null, &handle), "Shader Creation Failed");
