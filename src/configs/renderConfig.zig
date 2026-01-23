@@ -12,8 +12,8 @@ const sc = @import("shaderConfig.zig");
 
 // Vulkan Validation Layers
 pub const VULKAN_VALIDATION = true;
-pub const EXTRA_VALIDATION = false;
-pub const BEST_PRACTICES = false;
+pub const EXTRA_VALIDATION = true;
+pub const BEST_PRACTICES = true;
 
 pub const VULKAN_PROFILING = false;
 pub const VULKAN_READBACK = false;
@@ -81,12 +81,12 @@ const grapTest: Pass = .{
     .typ = Pass.createClassic(.{
         .classicTyp = Pass.ClassicTyp.graphicsData(.{}),
         .mainTexId = grapTex.id,
-        .colorAtts = &.{Attachment.init(grapTex.id, .ColorAtt, .ColorAttWrite, false)},
+        .colorAtts = &.{Attachment.init(grapTex.id, .ColorAtt, .ColorAttReadWrite, false)},
         .depthAtt = Attachment.init(depthTex.id, .EarlyFragTest, .DepthStencilRead, false),
     }),
     .bufUses = &.{
         BufferUse.init(objectSB.id, .FragShader, .ShaderRead, 0),
-        BufferUse.init(cameraUB.id, .ComputeShader, .ShaderRead, 1),
+        BufferUse.init(cameraUB.id, .FragShader, .ShaderRead, 1),
     },
 };
 
@@ -96,11 +96,11 @@ const meshTest: Pass = .{
     .typ = Pass.createClassic(.{
         .classicTyp = Pass.ClassicTyp.taskMeshData(.{ .workgroups = .{ .x = 1, .y = 1, .z = 1 } }),
         .mainTexId = meshTex.id,
-        .colorAtts = &.{Attachment.init(meshTex.id, .ColorAtt, .ColorAttWrite, false)},
+        .colorAtts = &.{Attachment.init(meshTex.id, .ColorAtt, .ColorAttReadWrite, false)},
     }),
     .bufUses = &.{
         BufferUse.init(objectSB.id, .FragShader, .ShaderRead, 0),
-        BufferUse.init(cameraUB.id, .ComputeShader, .ShaderRead, 1),
+        BufferUse.init(cameraUB.id, .FragShader, .ShaderRead, 1),
     },
 };
 
@@ -110,11 +110,11 @@ const taskTest: Pass = .{
     .typ = Pass.createClassic(.{
         .classicTyp = Pass.ClassicTyp.taskMeshData(.{ .workgroups = .{ .x = 1, .y = 1, .z = 1 } }),
         .mainTexId = taskTex.id,
-        .colorAtts = &.{Attachment.init(taskTex.id, .ColorAtt, .ColorAttWrite, false)},
+        .colorAtts = &.{Attachment.init(taskTex.id, .ColorAtt, .ColorAttReadWrite, false)},
     }),
     .bufUses = &.{
         BufferUse.init(objectSB.id, .FragShader, .ShaderRead, 0),
-        BufferUse.init(cameraUB.id, .ComputeShader, .ShaderRead, 1),
+        BufferUse.init(cameraUB.id, .FragShader, .ShaderRead, 1),
     },
 };
 
@@ -124,7 +124,7 @@ const gridTest: Pass = .{
     .typ = Pass.createClassic(.{
         .classicTyp = Pass.ClassicTyp.taskMeshData(.{ .workgroups = .{ .x = 1, .y = 1, .z = 1 } }),
         .mainTexId = taskTex.id,
-        .colorAtts = &.{Attachment.init(taskTex.id, .ColorAtt, .ColorAttWrite, false)},
+        .colorAtts = &.{Attachment.init(taskTex.id, .ColorAtt, .ColorAttReadWrite, false)},
     }),
     .bufUses = &.{
         BufferUse.init(cameraUB.id, .TaskShader, .ShaderRead, 0),
@@ -151,7 +151,7 @@ const indirectTaskTest: Pass = .{
             .indirectBuf = .{ .id = indirectSB.id, .offset = 0 },
         }),
         .mainTexId = taskTex.id,
-        .colorAtts = &.{Attachment.init(taskTex.id, .ColorAtt, .ColorAttWrite, false)},
+        .colorAtts = &.{Attachment.init(taskTex.id, .ColorAtt, .ColorAttReadWrite, false)},
     }),
     .bufUses = &.{
         BufferUse.init(indirectSB.id, .DrawIndirect, .IndirectRead, null),

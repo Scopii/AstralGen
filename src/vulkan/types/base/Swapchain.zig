@@ -88,7 +88,7 @@ pub const Swapchain = struct {
                 .format = surfaceFormat.format,
                 .texType = .Color,
                 .extent = .{ .width = realExtent.width, .height = realExtent.height, .depth = 1 },
-                .state = .{ .layout = .Undefined, .stage = .TopOfPipe, .access = .None },
+                .state = .{ .layout = .Undefined, .stage = .ColorAtt, .access = .None },
             };
         }
 
@@ -131,7 +131,7 @@ pub const Swapchain = struct {
     }
 
     pub fn acquireNextImage(self: *Swapchain, gpi: vk.VkDevice, flightId: u8) vk.VkResult {
-        return vk.vkAcquireNextImageKHR(gpi, self.handle, 0, self.imgRdySems[flightId], null, &self.curIndex);
+        return vk.vkAcquireNextImageKHR(gpi, self.handle, std.math.maxInt(u64), self.imgRdySems[flightId], null, &self.curIndex);
     }
 
     pub fn getCurTexture(self: *Swapchain) *TextureBase {

@@ -81,7 +81,6 @@ pub fn createInstance(alloc: Allocator) !vk.VkInstance {
     if (rc.VULKAN_VALIDATION) {
         try extensions.append("VK_EXT_debug_utils");
         try layers.append("VK_LAYER_KHRONOS_validation");
-        try layers.append("VK_LAYER_KHRONOS_synchronization2");
     }
 
     var extraValidationFeatures = switch (rc.BEST_PRACTICES) {
@@ -99,6 +98,10 @@ pub fn createInstance(alloc: Allocator) !vk.VkInstance {
             vk.VK_VALIDATION_FEATURE_ENABLE_DEBUG_PRINTF_EXT,
         },
     };
+
+    std.debug.print("Vulkan Validation: {}\n", .{rc.VULKAN_VALIDATION});
+    std.debug.print("Extra Validation: {}\n", .{rc.EXTRA_VALIDATION});
+    std.debug.print("Best Practices: {}\n", .{rc.BEST_PRACTICES});
 
     var extraValidationExtensions = vk.VkValidationFeaturesEXT{
         .sType = vk.VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT,

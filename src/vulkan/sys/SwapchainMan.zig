@@ -48,6 +48,7 @@ pub const SwapchainMan = struct {
             const result1 = swapchain.acquireNextImage(self.gpi, flightId);
             switch (result1) {
                 vk.VK_SUCCESS => {
+                    swapchain.getCurTexture().state = .{ .layout = .Undefined, .stage = .Transfer, .access = .None };
                     self.targetPtrs[count] = swapchain;
                     count += 1;
                 },
@@ -60,6 +61,7 @@ pub const SwapchainMan = struct {
                     const result2 = swapchain.acquireNextImage(self.gpi, flightId);
 
                     if (result2 == vk.VK_SUCCESS) {
+                        swapchain.getCurTexture().state = .{ .layout = .Undefined, .stage = .Transfer, .access = .None };
                         self.targetPtrs[count] = swapchain;
                         count += 1;
                         std.debug.print("Resolved Error for Swapchain {}", .{swapchain.*});

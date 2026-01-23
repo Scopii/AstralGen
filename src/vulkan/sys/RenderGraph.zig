@@ -58,10 +58,15 @@ pub const RenderGraph = struct {
 
         for (resMan.indirectBufIds.items) |id| {
             const indirectBuf = try resMan.getBufferPtr(id);
-            cmd.fillBuffer(indirectBuf.handle, 0, @sizeOf(vhT.IndirectData), 0);
-            try self.bufBarriers.append(indirectBuf.createBufferBarrier(Buffer.BufferState{ .access = .TransferReadWrite, .stage = .Transfer }));
-            self.bakeBarriers(&cmd);
+            try self.bufBarriers.append(indirectBuf.createBufferBarrier(.{ .stage = .Transfer, .access = .TransferWrite }));
         }
+        self.bakeBarriers(&cmd);
+
+        for (resMan.indirectBufIds.items) |id| {
+            const indirectBuf = try resMan.getBufferPtr(id);
+            cmd.fillBuffer(indirectBuf.handle, 0, @sizeOf(vhT.IndirectData), 0);
+        }
+        
         try self.recordTransfers(&cmd, resMan);
 
         self.cmdMan.endQuery(&cmd, flightId, .BotOfPipe, 40);
@@ -110,7 +115,11 @@ pub const RenderGraph = struct {
 
     fn bufferBarrierIfNeeded(self: *RenderGraph, buffer: *Buffer, neededState: Buffer.BufferState) !void {
         const state = buffer.state;
-        if (state.stage == neededState.stage and state.access == neededState.access) return;
+        const isReadToRead = (state.access == .ShaderRead or state.access == .IndirectRead) and
+            (neededState.access == .ShaderRead or neededState.access == .IndirectRead);
+
+        if (state.stage == neededState.stage and state.access == neededState.access or isReadToRead) return;
+
         try self.bufBarriers.append(buffer.createBufferBarrier(neededState));
     }
 
@@ -213,7 +222,7 @@ pub const RenderGraph = struct {
             cmd.copyImageToImage(renderTex.base.img, renderTex.base.extent, swapchain.getCurTexture().img, swapchain.getExtent3D(), rc.RENDER_TEX_STRETCH);
         }
         for (swapchains) |swapchain| { // Swapchain Presentation Barriers
-            try self.imageBarrierIfNeeded(swapchain.getCurTexture(), .{ .stage = .BotOfPipe, .access = .None, .layout = .PresentSrc });
+            try self.imageBarrierIfNeeded(swapchain.getCurTexture(), .{ .stage = .ColorAtt, .access = .None, .layout = .PresentSrc });
         }
         self.bakeBarriers(cmd);
     }
