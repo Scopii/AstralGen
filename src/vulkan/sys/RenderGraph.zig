@@ -222,7 +222,7 @@ pub const RenderGraph = struct {
             cmd.copyImageToImage(renderTex.base.img, renderTex.base.extent, swapchain.getCurTexture().img, swapchain.getExtent3D(), rc.RENDER_TEX_STRETCH);
         }
         for (swapchains) |swapchain| { // Swapchain Presentation Barriers
-            try self.imageBarrierIfNeeded(swapchain.getCurTexture(), .{ .stage = .ColorAtt, .access = .None, .layout = .PresentSrc });
+            try self.imageBarrierIfNeeded(swapchain.getCurTexture(), .{ .stage = .AllCmds, .access = .None, .layout = .PresentSrc });
         }
         self.bakeBarriers(cmd);
     }
