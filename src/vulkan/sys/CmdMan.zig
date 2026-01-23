@@ -9,8 +9,8 @@ const std = @import("std");
 
 pub const Query = struct {
     name: []const u8,
-    startQueryIndex: u32 = 0,
-    endQueryIndex: u32 = 0,
+    startQueryIndex: u8 = 0,
+    endQueryIndex: u8 = 0,
 };
 
 pub const CmdMan = struct {
@@ -21,11 +21,11 @@ pub const CmdMan = struct {
 
     queryPools: []vk.VkQueryPool,
     timestampPeriod: f32,
-    maxQueries: u32 = 128,
-    queryCounters: []u32,
+    maxQueries: u8 = 128,
+    queryCounters: []u8,
     querys: CreateMapArray(Query, 128, u8, 128, 0) = .{},
 
-    pub fn init(alloc: Allocator, context: *const Context, maxInFlight: u32) !CmdMan {
+    pub fn init(alloc: Allocator, context: *const Context, maxInFlight: u8) !CmdMan {
         const gpi = context.gpi;
         const cmdPool = try createCmdPool(gpi, context.families.graphics);
 
@@ -47,7 +47,7 @@ pub const CmdMan = struct {
             try vhF.check(vk.vkCreateQueryPool(context.gpi, &poolInfo, null, &queryPools[i]), "Could not init QueryPool");
         }
 
-        const queryCounters = try alloc.alloc(u32, maxInFlight);
+        const queryCounters = try alloc.alloc(u8, maxInFlight);
         @memset(queryCounters, 0);
 
         return .{
@@ -122,11 +122,24 @@ pub const CmdMan = struct {
         const flags = vk.VK_QUERY_RESULT_64_BIT | vk.VK_QUERY_RESULT_WAIT_BIT;
         try vhF.check(vk.vkGetQueryPoolResults(self.gpi, self.queryPools[flightId], 0, count, @sizeOf(u64) * 128, &results, @sizeOf(u64), flags), "Failed getting Queries");
 
+        const frameStartIndex = self.querys.getAtIndex(0).startQueryIndex;
+        const frameStart = results[frameStartIndex];
+        var frameEnd: u64 = 0;
+
+        for (self.querys.getElements()) |query| {
+            const endTime = results[query.endQueryIndex];
+            if (endTime > frameEnd) frameEnd = endTime;
+        }
+
+        const frameTime = frameEnd - frameStart;
+        const gpuFrameMs = (@as(f64, @floatFromInt(frameTime)) * self.timestampPeriod) / 1_000_000.0;
+        std.debug.print("GPU {}: {d:.3} ms ({d:.1} FPS)\n", .{ totalFrames - 1, gpuFrameMs, 1000.0 / gpuFrameMs });
+
         for (self.querys.getElements()) |query| {
             const diff = results[query.endQueryIndex] - results[query.startQueryIndex];
-            const gpuTimeMs = (@as(f64, @floatFromInt(diff)) * self.timestampPeriod) / 1_000_000.0;
+            const gpuQueryMs = (@as(f64, @floatFromInt(diff)) * self.timestampPeriod) / 1_000_000.0;
 
-            std.debug.print("GPU Frame {}: {d:.3} ms {s} \n", .{ totalFrames - 1, gpuTimeMs, query.name });
+            std.debug.print("        {d:.3} ms {d:6.2} % {s} \n", .{ gpuQueryMs, (gpuQueryMs / gpuFrameMs) * 100, query.name });
         }
         std.debug.print("\n", .{});
     }

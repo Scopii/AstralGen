@@ -12,10 +12,10 @@ const sc = @import("shaderConfig.zig");
 
 // Vulkan Validation Layers
 pub const VULKAN_VALIDATION = true;
-pub const EXTRA_VALIDATION = true;
-pub const BEST_PRACTICES = true;
+pub const EXTRA_VALIDATION = false;
+pub const BEST_PRACTICES = false;
 
-pub const VULKAN_PROFILING = false;
+pub const VULKAN_PROFILING = true;
 pub const VULKAN_READBACK = false;
 
 // Rendering, Swapchains and Windows

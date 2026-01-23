@@ -48,8 +48,6 @@ pub const RenderGraph = struct {
         self.cmdMan.resetQuerys();
         self.cmdMan.resetQueryPool(&cmd, flightId);
 
-        self.cmdMan.startQuery(&cmd, flightId, .TopOfPipe, 33, "");
-
         cmd.bindDescriptorBuffer(self.descLayoutAddress);
         cmd.setDescriptorBufferOffset(vk.VK_PIPELINE_BIND_POINT_COMPUTE, self.pipeLayout);
         cmd.setDescriptorBufferOffset(vk.VK_PIPELINE_BIND_POINT_GRAPHICS, self.pipeLayout);
@@ -90,7 +88,6 @@ pub const RenderGraph = struct {
         try self.recordSwapchainBlits(&cmd, targets, resMan);
         self.cmdMan.endQuery(&cmd, flightId, .BotOfPipe, 55);
 
-        self.cmdMan.endQuery(&cmd, flightId, .BotOfPipe, 33);
         try cmd.end();
         return cmd;
     }
