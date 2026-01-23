@@ -11,7 +11,7 @@ const MAX_WINDOWS = @import("../configs/renderConfig.zig").MAX_WINDOWS;
 const SDL_KEY_MAX = @import("../core/EventManager.zig").SDL_KEY_MAX;
 
 pub const WindowManager = struct {
-    windows: CreateMapArray(Window, MAX_WINDOWS, u32, MAX_WINDOWS, 0) = .{},
+    windows: CreateMapArray(Window, MAX_WINDOWS, u32, 32 + MAX_WINDOWS, 0) = .{},
     mainWindow: ?*Window = null,
     changedWindows: FixedList(Window, MAX_WINDOWS) = .{},
     openWindows: u8 = 0,
