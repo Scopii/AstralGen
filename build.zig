@@ -40,15 +40,13 @@ pub fn build(b: *std.Build) void {
     // });
     // exe.root_module.addImport("vulkan-zig", vulkan_zig_dep.module("vulkan-zig"));
 
-    // Windows Exe Metadata
-    exe.addObjectFile(b.path("AstralGen.res"));
-
     exe.addLibraryPath(b.path("libs/SDL3"));
     exe.linkSystemLibrary("SDL3");
 
     exe.addLibraryPath(b.path("libs/vulkan"));
     // Link Vulkan library
     if (target.result.os.tag == .windows) {
+        exe.addObjectFile(b.path("AstralGen.res")); // Windows Exe Metadata
         exe.linkSystemLibrary("vulkan-1");
     } else {
         exe.linkSystemLibrary("vulkan");
