@@ -42,7 +42,7 @@ pub const RenderGraph = struct {
     }
 
     pub fn recordIndirectReset(self: *RenderGraph, cmd: *const Cmd, resMan: *ResourceMan) !void {
-        self.cmdMan.startQuery(cmd, .TopOfPipe, 66, "Indirect Reset");
+        self.cmdMan.startQuery(cmd, .TopOfPipe, 66, "Indirect-Reset");
 
         for (resMan.indirectBufIds.items) |id| {
             const indirectBuf = try resMan.getBufferPtr(id);
@@ -64,7 +64,7 @@ pub const RenderGraph = struct {
         self.cmdMan.resetQuerys();
         self.cmdMan.resetQueryPool(&cmd);
 
-        self.cmdMan.startQuery(&cmd, .TopOfPipe, 76, "Setup");
+        self.cmdMan.startQuery(&cmd, .TopOfPipe, 76, "Cmd-Setup");
         cmd.bindDescriptorBuffer(self.descLayoutAddress);
         cmd.setDescriptorBufferOffset(vk.VK_PIPELINE_BIND_POINT_COMPUTE, self.pipeLayout);
         cmd.setDescriptorBufferOffset(vk.VK_PIPELINE_BIND_POINT_GRAPHICS, self.pipeLayout);

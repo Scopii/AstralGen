@@ -77,7 +77,12 @@ pub const Scheduler = struct {
             self.lastChecked = waitVal;
             return;
         }
+        
+        const before = std.time.milliTimestamp();
         try vhF.waitForTimeline(gpi, self.cpuSyncTimeline, waitVal, 1_000_000_000); // Only wait if GPU is behind
+        const after = std.time.milliTimestamp();
+
+        std.debug.print("Cpu Waiting {} ms for Frame {}", .{after - before,waitVal});
     }
 
     pub fn waitForFrame(self: *Scheduler, gpi: vk.VkDevice, frameIndex: u64) !void {
