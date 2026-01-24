@@ -16,6 +16,7 @@ pub const EXTRA_VALIDATION = false;
 pub const BEST_PRACTICES = false;
 
 pub const VULKAN_PROFILING = true;
+pub const PROFILING_QUERYS = 32;
 pub const VULKAN_READBACK = false;
 
 // Rendering, Swapchains and Windows
