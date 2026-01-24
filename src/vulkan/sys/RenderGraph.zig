@@ -41,52 +41,39 @@ pub const RenderGraph = struct {
         self.bufBarriers.deinit();
     }
 
-    pub fn recordFrame(self: *RenderGraph, passes: []Pass, flightId: u8, frameData: FrameData, targets: []const *Swapchain, resMan: *ResourceMan, shaderMan: *ShaderManager) !Cmd {
-        const cmd = try self.cmdMan.getCmd(flightId);
-        try cmd.begin();
-
-        self.cmdMan.resetQuerys();
-        self.cmdMan.resetQueryPool(&cmd, flightId);
-
-        cmd.bindDescriptorBuffer(self.descLayoutAddress);
-        cmd.setDescriptorBufferOffset(vk.VK_PIPELINE_BIND_POINT_COMPUTE, self.pipeLayout);
-        cmd.setDescriptorBufferOffset(vk.VK_PIPELINE_BIND_POINT_GRAPHICS, self.pipeLayout);
-
-        self.cmdMan.startQuery(&cmd, flightId, .TopOfPipe, 40, "Transfers");
+    pub fn recordIndirectReset(self: *RenderGraph, cmd: *const Cmd, resMan: *ResourceMan) !void {
+        self.cmdMan.startQuery(cmd, .TopOfPipe, 66, "Indirect Reset");
 
         for (resMan.indirectBufIds.items) |id| {
             const indirectBuf = try resMan.getBufferPtr(id);
             try self.bufBarriers.append(indirectBuf.createBufferBarrier(.{ .stage = .Transfer, .access = .TransferWrite }));
         }
-        self.bakeBarriers(&cmd);
+        self.bakeBarriers(cmd);
 
         for (resMan.indirectBufIds.items) |id| {
             const indirectBuf = try resMan.getBufferPtr(id);
             cmd.fillBuffer(indirectBuf.handle, 0, @sizeOf(vhT.IndirectData), 0);
         }
-        
+        self.cmdMan.endQuery(cmd, .BotOfPipe, 66);
+    }
+
+    pub fn recordFrame(self: *RenderGraph, passes: []Pass, flightId: u8, frameData: FrameData, targets: []const *Swapchain, resMan: *ResourceMan, shaderMan: *ShaderManager) !Cmd {
+        const cmd = try self.cmdMan.getCmd(flightId);
+        try cmd.begin();
+
+        self.cmdMan.resetQuerys();
+        self.cmdMan.resetQueryPool(&cmd);
+
+        self.cmdMan.startQuery(&cmd, .TopOfPipe, 76, "Setup");
+        cmd.bindDescriptorBuffer(self.descLayoutAddress);
+        cmd.setDescriptorBufferOffset(vk.VK_PIPELINE_BIND_POINT_COMPUTE, self.pipeLayout);
+        cmd.setDescriptorBufferOffset(vk.VK_PIPELINE_BIND_POINT_GRAPHICS, self.pipeLayout);
+        self.cmdMan.endQuery(&cmd, .BotOfPipe, 76);
+
         try self.recordTransfers(&cmd, resMan);
-
-        self.cmdMan.endQuery(&cmd, flightId, .BotOfPipe, 40);
-
-        for (passes, 0..) |pass, i| {
-            self.cmdMan.startQuery(&cmd, flightId, .TopOfPipe, @intCast(i), pass.name);
-
-            switch (pass.typ) {
-                .classic => |classic| cmd.setGraphicsState(classic.state),
-                else => {},
-            }
-
-            const shaders = shaderMan.getShaders(pass.shaderIds)[0..pass.shaderIds.len];
-            cmd.bindShaders(shaders);
-            try self.recordPass(&cmd, pass, frameData, resMan);
-
-            self.cmdMan.endQuery(&cmd, flightId, .BotOfPipe, @intCast(i));
-        }
-
-        self.cmdMan.startQuery(&cmd, flightId, .TopOfPipe, 55, "Blits");
+        try self.recordIndirectReset(&cmd, resMan);
+        try self.recordPasses(&cmd, passes, frameData, resMan, shaderMan);
         try self.recordSwapchainBlits(&cmd, targets, resMan);
-        self.cmdMan.endQuery(&cmd, flightId, .BotOfPipe, 55);
 
         try cmd.end();
         return cmd;
@@ -94,6 +81,7 @@ pub const RenderGraph = struct {
 
     pub fn recordTransfers(self: *RenderGraph, cmd: *const Cmd, resMan: *ResourceMan) !void {
         if (resMan.transfers.items.len == 0) return;
+        self.cmdMan.startQuery(cmd, .TopOfPipe, 40, "Transfers");
 
         for (resMan.transfers.items) |transfer| {
             const buffer = try resMan.getBufferPtr(transfer.dstResId);
@@ -102,6 +90,7 @@ pub const RenderGraph = struct {
         }
         resMan.resetTransfers();
         self.bakeBarriers(cmd);
+        self.cmdMan.endQuery(cmd, .BotOfPipe, 40);
     }
 
     fn imageBarrierIfNeeded(self: *RenderGraph, tex: *TextureBase, neededState: TextureBase.TextureState) !void {
@@ -155,15 +144,26 @@ pub const RenderGraph = struct {
         } else cmd.dispatch(dispatch.x, dispatch.y, dispatch.z);
     }
 
-    pub fn recordPass(self: *RenderGraph, cmd: *const Cmd, pass: Pass, frameData: FrameData, resMan: *ResourceMan) !void {
-        const pcs = try PushConstants.init(resMan, pass, frameData);
-        cmd.setPushConstants(self.pipeLayout, vk.VK_SHADER_STAGE_ALL, 0, @sizeOf(PushConstants), &pcs);
+    pub fn recordPasses(self: *RenderGraph, cmd: *const Cmd, passes: []Pass, frameData: FrameData, resMan: *ResourceMan, shaderMan: *ShaderManager) !void {
+        for (passes, 0..) |pass, i| {
+            self.cmdMan.startQuery(cmd, .TopOfPipe, @intCast(i), pass.name);
 
-        try self.recordPassBarriers(cmd, pass, resMan);
+            switch (pass.typ) {
+                .classic => |classic| cmd.setGraphicsState(classic.state),
+                else => {},
+            }
+            const shaders = shaderMan.getShaders(pass.shaderIds)[0..pass.shaderIds.len];
+            cmd.bindShaders(shaders);
+            const pcs = try PushConstants.init(resMan, pass, frameData);
+            cmd.setPushConstants(self.pipeLayout, vk.VK_SHADER_STAGE_ALL, 0, @sizeOf(PushConstants), &pcs);
 
-        switch (pass.typ) {
-            .compute => |comp| try recordCompute(cmd, comp.workgroups, comp.mainTexId, resMan),
-            .classic => |classic| try recordGraphics(cmd, pcs.width, pcs.height, classic, resMan),
+            try self.recordPassBarriers(cmd, pass, resMan);
+
+            switch (pass.typ) {
+                .compute => |comp| try recordCompute(cmd, comp.workgroups, comp.mainTexId, resMan),
+                .classic => |classic| try recordGraphics(cmd, pcs.width, pcs.height, classic, resMan),
+            }
+            self.cmdMan.endQuery(cmd, .BotOfPipe, @intCast(i));
         }
     }
 
@@ -207,6 +207,8 @@ pub const RenderGraph = struct {
     }
 
     pub fn recordSwapchainBlits(self: *RenderGraph, cmd: *const Cmd, swapchains: []const *Swapchain, resMan: *ResourceMan) !void {
+        self.cmdMan.startQuery(cmd, .TopOfPipe, 55, "Blits");
+
         for (swapchains) |swapchain| { // Render Texture and Swapchain Preperations
             const renderTex = try resMan.getTexturePtr(swapchain.renderTexId);
             try self.imageBarrierIfNeeded(&renderTex.base, .{ .stage = .Transfer, .access = .TransferRead, .layout = .TransferSrc });
@@ -222,6 +224,7 @@ pub const RenderGraph = struct {
             try self.imageBarrierIfNeeded(swapchain.getCurTexture(), .{ .stage = .AllCmds, .access = .None, .layout = .PresentSrc });
         }
         self.bakeBarriers(cmd);
+        self.cmdMan.endQuery(cmd, .BotOfPipe, 55);
     }
 
     fn bakeBarriers(self: *RenderGraph, cmd: *const Cmd) void {

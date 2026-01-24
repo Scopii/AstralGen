@@ -24,6 +24,7 @@ pub const CmdMan = struct {
     maxQueries: u8 = 128,
     queryCounters: []u8,
     querys: CreateMapArray(Query, 128, u8, 128, 0) = .{},
+    curFlightId: u8 = 0,
 
     pub fn init(alloc: Allocator, context: *const Context, maxInFlight: u8) !CmdMan {
         const gpi = context.gpi;
@@ -71,22 +72,24 @@ pub const CmdMan = struct {
     }
 
     pub fn getCmd(self: *CmdMan, flightId: u8) !Cmd {
+        self.curFlightId = flightId;
         const cmd = self.cmds[flightId];
         try vhF.check(vk.vkResetCommandBuffer(cmd.handle, 0), "could not reset command buffer"); // Might be optional
         return cmd;
     }
 
-    pub fn resetQueryPool(self: *CmdMan, cmd: *const Cmd, flightId: u8) void {
+    pub fn resetQueryPool(self: *CmdMan, cmd: *const Cmd) void {
+        const flightId = self.curFlightId;
         vk.vkCmdResetQueryPool(cmd.handle, self.queryPools[flightId], 0, self.maxQueries);
         self.queryCounters[flightId] = 0;
     }
 
-    pub fn startQuery(self: *CmdMan, cmd: *const Cmd, flightId: u8, pipeStage: vhE.PipeStage, queryId: u8, name: []const u8) void {
+    pub fn startQuery(self: *CmdMan, cmd: *const Cmd, pipeStage: vhE.PipeStage, queryId: u8, name: []const u8) void {
         if (self.querys.isKeyUsed(queryId) == true) {
             std.debug.print("Warning: Query ID {} in use by {s}!", .{ queryId, self.querys.getPtr(queryId).name });
             return;
         }
-
+        const flightId = self.curFlightId;
         const idx = self.queryCounters[flightId];
         if (idx >= self.maxQueries) return; // Safety check
 
@@ -95,7 +98,9 @@ pub const CmdMan = struct {
         self.queryCounters[flightId] += 1;
     }
 
-    pub fn endQuery(self: *CmdMan, cmd: *const Cmd, flightId: u8, pipeStage: vhE.PipeStage, queryId: u8) void {
+    pub fn endQuery(self: *CmdMan, cmd: *const Cmd, pipeStage: vhE.PipeStage, queryId: u8) void {
+        const flightId = self.curFlightId;
+
         if (self.querys.isKeyUsed(queryId) == false) {
             std.debug.print("Error: QueryId {} not registered", .{queryId});
             return;
@@ -133,14 +138,17 @@ pub const CmdMan = struct {
 
         const frameTime = frameEnd - frameStart;
         const gpuFrameMs = (@as(f64, @floatFromInt(frameTime)) * self.timestampPeriod) / 1_000_000.0;
-        std.debug.print("GPU Frame {}: {d:.3} ms ({d:.1} FPS)\n", .{ totalFrames - 1, gpuFrameMs, 1000.0 / gpuFrameMs });
+        std.debug.print("GPU Frame {}: {d:.3} ms ({d:.1} FPS) {}/128 Queries\n", .{ totalFrames - 1, gpuFrameMs, 1000.0 / gpuFrameMs, self.querys.getCount() * 2 });
+
+        var untrackedMs: f64 = gpuFrameMs;
 
         for (self.querys.getElements()) |query| {
             const diff = results[query.endQueryIndex] - results[query.startQueryIndex];
             const gpuQueryMs = (@as(f64, @floatFromInt(diff)) * self.timestampPeriod) / 1_000_000.0;
-
+            untrackedMs -= gpuQueryMs;
             std.debug.print(" {d:.3} ms ({d:5.2} %) {s} \n", .{ gpuQueryMs, (gpuQueryMs / gpuFrameMs) * 100, query.name });
         }
+        std.debug.print("Untracked {d:5.2} % {d:.3} ms\n", .{untrackedMs * 100, untrackedMs});
         std.debug.print("\n", .{});
     }
 };
