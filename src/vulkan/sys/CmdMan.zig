@@ -133,13 +133,13 @@ pub const CmdMan = struct {
 
         const frameTime = frameEnd - frameStart;
         const gpuFrameMs = (@as(f64, @floatFromInt(frameTime)) * self.timestampPeriod) / 1_000_000.0;
-        std.debug.print("GPU {}: {d:.3} ms ({d:.1} FPS)\n", .{ totalFrames - 1, gpuFrameMs, 1000.0 / gpuFrameMs });
+        std.debug.print("GPU Frame {}: {d:.3} ms ({d:.1} FPS)\n", .{ totalFrames - 1, gpuFrameMs, 1000.0 / gpuFrameMs });
 
         for (self.querys.getElements()) |query| {
             const diff = results[query.endQueryIndex] - results[query.startQueryIndex];
             const gpuQueryMs = (@as(f64, @floatFromInt(diff)) * self.timestampPeriod) / 1_000_000.0;
 
-            std.debug.print("        {d:.3} ms {d:6.2} % {s} \n", .{ gpuQueryMs, (gpuQueryMs / gpuFrameMs) * 100, query.name });
+            std.debug.print(" {d:.3} ms ({d:5.2} %) {s} \n", .{ gpuQueryMs, (gpuQueryMs / gpuFrameMs) * 100, query.name });
         }
         std.debug.print("\n", .{});
     }
