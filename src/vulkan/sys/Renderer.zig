@@ -99,9 +99,18 @@ pub const Renderer = struct {
         }
     }
 
+    pub fn waitForGpu(self: *Renderer) !void {
+        try self.scheduler.waitForGPU();
+    }
+
     pub fn draw(self: *Renderer, frameData: FrameData) !void {
         const flightId = try self.scheduler.beginFrame();
-        std.debug.print("Frame In Flight {}\n", .{flightId});
+
+        const depth = try self.scheduler.getBackpressure();
+        if (depth == rc.MAX_IN_FLIGHT) std.debug.print("Cpu Blocked, Flight Depth: {}/{}, FlightId {}\n", .{depth, rc.MAX_IN_FLIGHT, flightId}) else {
+            std.debug.print("Cpu Not Blocked, Flight Depth: {}/{}\n", .{depth, rc.MAX_IN_FLIGHT});
+        }
+
         if (try self.swapMan.updateTargets(flightId) == false) return;
 
         if (rc.VULKAN_READBACK == true) try self.resMan.printReadback(.{ .val = 45 }, vkT.ReadbackData);

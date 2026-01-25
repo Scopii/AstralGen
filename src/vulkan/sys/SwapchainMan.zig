@@ -45,12 +45,18 @@ pub const SwapchainMan = struct {
             const swapchain = self.swapchains.getPtrAtIndex(@intCast(i));
             if (swapchain.inUse == false) continue;
 
+            const start = std.time.microTimestamp();
             const result1 = swapchain.acquireNextImage(self.gpi, flightId);
+
             switch (result1) {
                 vk.VK_SUCCESS => {
                     swapchain.getCurTexture().state = .{ .layout = .Undefined, .stage = .Transfer, .access = .None };
                     self.targetPtrs[count] = swapchain;
                     count += 1;
+
+                    const end = std.time.microTimestamp();
+                    const duration = @as(f64, @floatFromInt(end - start)) / 1_000.0;
+                    std.debug.print("Swapchain Blocked for {d:.3} ms\n", .{duration});
                 },
                 vk.VK_TIMEOUT, vk.VK_NOT_READY => {
                     std.debug.print("OS could not provide Swapchain Image in Time \n", .{});
@@ -64,8 +70,13 @@ pub const SwapchainMan = struct {
                         swapchain.getCurTexture().state = .{ .layout = .Undefined, .stage = .Transfer, .access = .None };
                         self.targetPtrs[count] = swapchain;
                         count += 1;
-                        std.debug.print("Resolved Error for Swapchain {}", .{swapchain.*});
-                    } else std.debug.print("Could not Resolve Swapchain Error {}", .{swapchain.*});
+                        std.debug.print("Resolved Error for Swapchain (ID {}) {}", .{self.swapchains.getKeyFromIndex(@intCast(i)), swapchain.*});
+
+                        const end = std.time.microTimestamp();
+                        const duration = @as(f64, @floatFromInt(end - start)) / 1_000.0;
+                        std.debug.print("Swapchain Blocked for {d:.3} ms\n", .{duration});
+                    } 
+                    else std.debug.print("Could not Resolve Swapchain Error (ID {}) {}", .{self.swapchains.getKeyFromIndex(@intCast(i)), swapchain.*});
                 },
                 else => try vhF.check(result1, "Could not acquire swapchain image with unknown error"),
             }

@@ -112,6 +112,8 @@ pub const App = struct {
                 self.shaderCompiler.freeFreshShaders();
             }
 
+            if (rc.EARLY_GPU_WAIT == true) try renderer.waitForGpu();
+
             // Poll Inputs
             windowMan.pollEvents() catch |err| {
                 std.log.err("Error in pollEvents(): {}", .{err});
@@ -173,6 +175,7 @@ pub const App = struct {
 
             if (firstFrame) windowMan.showAllWindows();
 
+            if (rc.EARLY_GPU_WAIT == false) try renderer.waitForGpu();
             // Draw and reset Frame Arena
             renderer.draw(frameData) catch |err| {
                 std.log.err("Error in renderer.draw(): {}", .{err});

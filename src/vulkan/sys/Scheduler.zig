@@ -30,7 +30,6 @@ pub const Scheduler = struct {
     }
 
     pub fn beginFrame(self: *Scheduler) !u8 {
-        try self.waitForGPU();
         return self.flightId;
     }
 
@@ -77,13 +76,18 @@ pub const Scheduler = struct {
             self.lastChecked = waitVal;
             return;
         }
-        self.flightId = 0;
 
-        const before = std.time.milliTimestamp();
+        const before = std.time.microTimestamp();
         try vhF.waitForTimeline(gpi, self.cpuSyncTimeline, waitVal, 1_000_000_000); // Only wait if GPU is behind
-        const after = std.time.milliTimestamp();
+        const after = std.time.microTimestamp();
 
-        std.debug.print("Cpu Waiting {} ms for Frame {}\n", .{ after - before, waitVal });
+        std.debug.print("Cpu Waiting {d:.3} ms for Frame {}\n", .{ @as(f64, @floatFromInt(after - before)) * 0.001, waitVal });
+    }
+
+    pub fn getBackpressure(self: *Scheduler) !u64 {
+        const gpuCompletedCount = try vhF.getTimelineVal(self.gpi, self.cpuSyncTimeline);
+        if (self.totalFrames < gpuCompletedCount) return 0; // Should not happen
+        return self.totalFrames - gpuCompletedCount;
     }
 
     pub fn waitForFrame(self: *Scheduler, gpi: vk.VkDevice, frameIndex: u64) !void {
