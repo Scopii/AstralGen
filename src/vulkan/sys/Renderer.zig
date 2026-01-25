@@ -101,6 +101,7 @@ pub const Renderer = struct {
 
     pub fn draw(self: *Renderer, frameData: FrameData) !void {
         const flightId = try self.scheduler.beginFrame();
+        std.debug.print("Frame In Flight {}\n", .{flightId});
         if (try self.swapMan.updateTargets(flightId) == false) return;
 
         if (rc.VULKAN_READBACK == true) try self.resMan.printReadback(.{ .val = 45 }, vkT.ReadbackData);

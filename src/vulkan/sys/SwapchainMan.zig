@@ -15,7 +15,7 @@ pub const SwapchainMan = struct {
     gpi: vk.VkDevice,
     gpu: vk.VkPhysicalDevice,
     instance: vk.VkInstance,
-    swapchains: CreateMapArray(Swapchain, rc.MAX_WINDOWS, u32, rc.MAX_WINDOWS, 0) = .{},
+    swapchains: CreateMapArray(Swapchain, rc.MAX_WINDOWS, u32, 32 + rc.MAX_WINDOWS, 0) = .{},
     targetPtrs: [rc.MAX_WINDOWS]*Swapchain = undefined,
     targetCount: u8 = 0,
 
