@@ -19,6 +19,8 @@ pub const VULKAN_PROFILING = true;
 pub const PROFILING_QUERYS = 64;
 pub const VULKAN_READBACK = false;
 
+pub const EARLY_GPU_WAIT = true; // Lower Latency, more CPU Stutters (Reflex Mode)
+
 // Rendering, Swapchains and Windows
 pub const MAX_IN_FLIGHT: u8 = 2; // (Frames)
 pub const DESIRED_SWAPCHAIN_IMAGES: u8 = 3;
@@ -125,7 +127,7 @@ const gridTest: Pass = .{
     .typ = Pass.createClassic(.{
         .classicTyp = Pass.ClassicTyp.taskMeshData(.{ .workgroups = .{ .x = 1, .y = 1, .z = 1 } }),
         .mainTexId = taskTex.id,
-        .colorAtts = &.{Attachment.init(taskTex.id, .ColorAtt, .ColorAttReadWrite, false)},
+        .colorAtts = &.{Attachment.init(taskTex.id, .ColorAtt, .ColorAttReadWrite, true)},
     }),
     .bufUses = &.{
         BufferUse.init(cameraUB.id, .TaskShader, .ShaderRead, 0),
@@ -159,4 +161,5 @@ const indirectTaskTest: Pass = .{
     },
 };
 
-pub const passes: []const Pass = &.{ compTest, grapTest, meshTest, taskTest, gridTest, indirectCompTest, indirectTaskTest };
+pub const passes: []const Pass = &.{ compTest, gridTest, grapTest, meshTest, taskTest, indirectCompTest, indirectTaskTest };
+// pub const passes: []const Pass = &.{ gridTest};
