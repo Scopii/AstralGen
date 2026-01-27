@@ -145,6 +145,7 @@ pub const App = struct {
             frameData.runTime = timeMan.getRuntime(.seconds, f32);
             frameData.deltaTime = timeMan.getDeltaTime(.seconds, f32);
             const dt = timeMan.getDeltaTime(.nano, f64);
+            if (rc.VULKAN_PROFILING == true) std.debug.print("Cpu Delta {d:.3} ms, ({d:.1} Real FPS)\n", .{ dt * 0.000001, 1.0 / (dt * 0.000000001) });
 
             // Generate and Process and clear Events
             for (eventMan.getAppEvents()) |appEvent| {

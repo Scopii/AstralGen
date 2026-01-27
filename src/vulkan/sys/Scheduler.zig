@@ -15,7 +15,7 @@ pub const Scheduler = struct {
     cpuSyncTimeline: vk.VkSemaphore,
     totalFrames: u64 = 0,
     lastChecked: u64 = 0,
-
+    
     pub fn init(context: *const Context, maxInFlight: u8) !Scheduler {
         std.debug.print("Scheduler: In Flight {}\n", .{maxInFlight});
         return Scheduler{

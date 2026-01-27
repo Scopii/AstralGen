@@ -148,7 +148,7 @@ pub const CmdMan = struct {
             untrackedMs -= gpuQueryMs;
             std.debug.print(" {d:.3} ms ({d:5.2} %) {s} \n", .{ gpuQueryMs, (gpuQueryMs / gpuFrameMs) * 100, query.name });
         }
-        std.debug.print("Untracked {d:5.2} % {d:.3} ms\n", .{ untrackedMs * 100, untrackedMs });
+        std.debug.print("Untracked {d:.3} ms ({d:5.2} %) \n", .{ untrackedMs, untrackedMs * 100 });
         std.debug.print("\n", .{});
     }
 };

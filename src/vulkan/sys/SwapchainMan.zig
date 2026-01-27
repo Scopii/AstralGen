@@ -67,7 +67,7 @@ pub const SwapchainMan = struct {
 
             if (rc.VULKAN_PROFILING == true) {
                 const end = std.time.microTimestamp();
-                std.debug.print("Swapchain Blocked for {d:.3} ms\n", .{@as(f64, @floatFromInt(end - start)) / 1_000.0});
+                std.debug.print("Swapchain (ID {}) Acquire {d:.3} ms\n", .{self.swapchains.getKeyFromIndex(@intCast(i)) ,@as(f64, @floatFromInt(end - start)) / 1_000.0});
             }
         }
         return self.targetPtrs[0..count];
