@@ -33,11 +33,11 @@ pub const ShaderCompiler = struct {
 
     pub fn init(alloc: Allocator) !ShaderCompiler {
         // Assign paths
-        const root = try resolveProjectRoot(alloc, sc.rootPath);
+        const root = try resolveProjectRoot(alloc, sc.ROOT_PATH);
         std.debug.print("Root Path {s}\n", .{root});
-        const shaderPath = try joinPath(alloc, root, sc.glslPath);
+        const shaderPath = try joinPath(alloc, root, sc.SHADER_PATH);
         std.debug.print("Shader Path {s}\n", .{shaderPath});
-        const shaderOutputPath = try joinPath(alloc, root, sc.sprvPath);
+        const shaderOutputPath = try joinPath(alloc, root, sc.SPRV_PATH);
         std.debug.print("Shader Output Path {s}\n", .{shaderOutputPath});
 
         return .{
@@ -239,7 +239,8 @@ fn compileSLANG(alloc: Allocator, srcPath: []const u8, spvPath: []const u8, stag
             stageString,
             "-entry",
             "main",
-            "-I", includePath, 
+            "-I",
+            includePath,
             "-o",
             spvPath,
             "-fvk-use-entrypoint-name",

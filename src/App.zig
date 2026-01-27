@@ -38,7 +38,7 @@ pub const App = struct {
         };
         errdefer shaderCompiler.deinit();
 
-        try shaderCompiler.loadShaders(shaderCon.shadersToCompile);
+        try shaderCompiler.loadShaders(shaderCon.COMPILING_SHADERS);
 
         var rng = RNGenerator.init(std.Random.Xoshiro256, 1000);
 
@@ -60,9 +60,9 @@ pub const App = struct {
         shaderCompiler.freeFreshShaders();
 
         // RENDERING SET UP
-        try renderer.createBuffers(rc.buffers);
-        try renderer.createTexture(rc.textures);
-        try renderer.createPasses(rc.passes);
+        try renderer.createBuffers(rc.BUFFERS);
+        try renderer.createTexture(rc.TEXTURES);
+        try renderer.createPasses(rc.PASSES);
         try renderer.updateBuffer(rc.objectSB, ecs.getObjects());
 
         return .{
@@ -86,10 +86,12 @@ pub const App = struct {
     }
 
     pub fn initWindows(self: *App) !void {
-        try self.windowMan.addWindow("Task", 16 * 52, 9 * 52, rc.taskTex.id, 120, 50, true);
-        try self.windowMan.addWindow("Mesh", 16 * 52, 9 * 52, rc.meshTex.id, 120, 550, true);
-        try self.windowMan.addWindow("Compute", 16 * 52, 9 * 52, rc.compTex.id, 960, 50, true);
-        try self.windowMan.addWindow("Graphics", 16 * 52, 9 * 52, rc.grapTex.id, 960, 550, true);
+        // try self.windowMan.addWindow("Task", 16 * 52, 9 * 52, rc.taskTex.id, 120, 50, true);
+        // try self.windowMan.addWindow("Mesh", 16 * 52, 9 * 52, rc.meshTex.id, 120, 550, true);
+        // try self.windowMan.addWindow("Compute", 16 * 52, 9 * 52, rc.compTex.id, 960, 50, true);
+        // try self.windowMan.addWindow("Graphics", 16 * 52, 9 * 52, rc.grapTex.id, 960, 550, true);
+
+        try self.windowMan.addWindow("Main Rendering", 16 * 80, 9 * 80, rc.quantumTex.id, 300, 200, true);
     }
 
     pub fn run(self: *App) !void {
