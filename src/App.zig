@@ -91,7 +91,7 @@ pub const App = struct {
         // try self.windowMan.addWindow("Compute", 16 * 52, 9 * 52, rc.compTex.id, 960, 50, true);
         // try self.windowMan.addWindow("Graphics", 16 * 52, 9 * 52, rc.grapTex.id, 960, 550, true);
 
-        try self.windowMan.addWindow("Main Rendering", 16 * 80, 9 * 80, rc.quantumTex.id, 300, 200, true);
+        try self.windowMan.addWindow("Main Rendering", 16 * 80, 9 * 80, rc.quantTex.id, 300, 200, true);
     }
 
     pub fn run(self: *App) !void {

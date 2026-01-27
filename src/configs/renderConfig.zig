@@ -58,14 +58,14 @@ pub const readbackSB = Buffer.create(.{ .id = .{ .val = 45 }, .mem = .CpuRead, .
 pub const BUFFERS: []const Buffer.BufInf = &.{ objectSB, cameraUB, indirectSB, readbackSB };
 
 // Textures
-pub const quantumTex = Texture.create(.{ .id = .{ .val = 5 }, .mem = .Gpu, .typ = .Color, .width = 1920, .height = 1920 });
-pub const quantumDepthTex = Texture.create(.{ .id = .{ .val = 11 }, .mem = .Gpu, .typ = .Depth, .width = 1920, .height = 1920 });
-pub const TEXTURES: []const Texture.TexInf = &.{ quantumTex, quantumDepthTex };
+pub const quantTex = Texture.create(.{ .id = .{ .val = 5 }, .mem = .Gpu, .typ = .Color, .width = 1920, .height = 1920 });
+pub const quantDepthTex = Texture.create(.{ .id = .{ .val = 11 }, .mem = .Gpu, .typ = .Depth, .width = 1920, .height = 1920 });
+pub const TEXTURES: []const Texture.TexInf = &.{ quantTex, quantDepthTex };
 
 // Passes
-pub const PASSES: []const Pass = &.{ quantumComp, quantum };
+pub const PASSES: []const Pass = &.{ quantComp, quant };
 
-pub const quantumComp: Pass = .{
+pub const quantComp: Pass = .{
     .name = "Quantum-Comp",
     .shaderIds = &.{sc.quantComp.id},
     .typ = Pass.createCompute(.{
@@ -76,7 +76,7 @@ pub const quantumComp: Pass = .{
     },
 };
 
-const quantum: Pass = .{
+const quant: Pass = .{
     .name = "Quantum",
     .shaderIds = &.{ sc.quantTask.id, sc.quantMesh.id, sc.quantFrag.id },
     .typ = Pass.createClassic(.{
@@ -84,8 +84,8 @@ const quantum: Pass = .{
             .workgroups = .{ .x = 1, .y = 1, .z = 1 },
             .indirectBuf = .{ .id = indirectSB.id, .offset = 0 },
         }),
-        .mainTexId = quantumTex.id,
-        .colorAtts = &.{Attachment.init(quantumTex.id, .ColorAtt, .ColorAttReadWrite, false)},
+        .mainTexId = quantTex.id,
+        .colorAtts = &.{Attachment.init(quantTex.id, .ColorAtt, .ColorAttReadWrite, false)},
     }),
     .bufUses = &.{
         BufferUse.init(indirectSB.id, .DrawIndirect, .IndirectRead, null),
