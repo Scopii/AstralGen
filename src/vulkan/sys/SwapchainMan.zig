@@ -40,7 +40,7 @@ pub const SwapchainMan = struct {
             const swapchain = self.swapchains.getPtrAtIndex(@intCast(i));
             if (swapchain.inUse == false) continue;
 
-            const start = if (rc.VULKAN_PROFILING == true) std.time.microTimestamp() else 0;
+            const start = if (rc.SWAPCHAIN_PROFILING == true) std.time.microTimestamp() else 0;
             const result1 = swapchain.acquireNextImage(self.gpi, flightId);
 
             switch (result1) {
@@ -65,9 +65,9 @@ pub const SwapchainMan = struct {
             self.targetPtrs[count] = swapchain;
             count += 1;
 
-            if (rc.VULKAN_PROFILING == true) {
+            if (rc.SWAPCHAIN_PROFILING == true) {
                 const end = std.time.microTimestamp();
-                std.debug.print("Swapchain (ID {}) Acquire {d:.3} ms\n", .{self.swapchains.getKeyFromIndex(@intCast(i)) ,@as(f64, @floatFromInt(end - start)) / 1_000.0});
+                std.debug.print("Swapchain (ID {}) Acquire {d:.3} ms\n", .{ self.swapchains.getKeyFromIndex(@intCast(i)), @as(f64, @floatFromInt(end - start)) / 1_000.0 });
             }
         }
         return self.targetPtrs[0..count];

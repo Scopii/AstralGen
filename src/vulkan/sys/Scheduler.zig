@@ -15,7 +15,7 @@ pub const Scheduler = struct {
     cpuSyncTimeline: vk.VkSemaphore,
     totalFrames: u64 = 0,
     lastChecked: u64 = 0,
-    
+
     pub fn init(context: *const Context, maxInFlight: u8) !Scheduler {
         std.debug.print("Scheduler: In Flight {}\n", .{maxInFlight});
         return Scheduler{
@@ -30,7 +30,7 @@ pub const Scheduler = struct {
     }
 
     pub fn beginFrame(self: *Scheduler) !u8 {
-        if (rc.VULKAN_PROFILING == true) {
+        if (rc.CPU_PROFILING == true) {
             const depth = try self.getBackpressure();
             if (depth == rc.MAX_IN_FLIGHT) std.debug.print("Frame In Flight: {}/{} BLOCKING, FlightId {}\n", .{ depth, rc.MAX_IN_FLIGHT, self.flightId }) else {
                 std.debug.print("Frame In Flight: {}/{}, FlightId {}\n", .{ depth, rc.MAX_IN_FLIGHT, self.flightId });
@@ -83,10 +83,10 @@ pub const Scheduler = struct {
             return;
         }
 
-        const before = if (rc.VULKAN_PROFILING == true) std.time.microTimestamp() else 0;
+        const before = if (rc.CPU_PROFILING == true) std.time.microTimestamp() else 0;
         try vhF.waitForTimeline(gpi, self.cpuSyncTimeline, waitVal, 1_000_000_000); // Only wait if GPU is behind
-        const after = if (rc.VULKAN_PROFILING == true) std.time.microTimestamp() else 0;
-        if (rc.VULKAN_PROFILING == true) std.debug.print("Cpu Waiting {d:.3} ms for Frame {}\n", .{ @as(f64, @floatFromInt(after - before)) * 0.001, waitVal });
+        const after = if (rc.CPU_PROFILING == true) std.time.microTimestamp() else 0;
+        if (rc.CPU_PROFILING == true) std.debug.print("Cpu Waiting {d:.3} ms for Frame {}\n", .{ @as(f64, @floatFromInt(after - before)) * 0.001, waitVal });
     }
 
     pub fn getBackpressure(self: *Scheduler) !u64 {

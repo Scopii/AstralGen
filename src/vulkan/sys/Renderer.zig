@@ -106,8 +106,8 @@ pub const Renderer = struct {
         const targets = try self.swapMan.getUpdatedTargets(flightId);
         if (targets.len == 0) return;
 
-        if (rc.VULKAN_READBACK == true) try self.resMan.printReadback(.{ .val = 45 }, vkT.ReadbackData);
-        if (rc.VULKAN_PROFILING == true) try self.renderGraph.cmdMan.printQueryResults(flightId, self.scheduler.totalFrames);
+        if (rc.GPU_READBACK == true) try self.resMan.printReadback(.{ .val = 45 }, vkT.ReadbackData);
+        if (rc.GPU_PROFILING == true) try self.renderGraph.cmdMan.printQueryResults(flightId, self.scheduler.totalFrames);
 
         const cmd = try self.renderGraph.recordFrame(self.passes.items, flightId, frameData, targets, &self.resMan, &self.shaderMan);
         try self.scheduler.queueSubmit(&cmd, targets, self.context.graphicsQ);

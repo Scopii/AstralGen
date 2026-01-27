@@ -11,19 +11,21 @@ const vk = @import("../modules/vk.zig").c;
 const sc = @import("shaderConfig.zig");
 
 // Vulkan Validation Layers
-pub const VULKAN_VALIDATION = true;
+pub const VULKAN_VALIDATION = false;
 pub const EXTRA_VALIDATION = false;
 pub const BEST_PRACTICES = false;
 
-pub const VULKAN_PROFILING = true;
-pub const PROFILING_QUERYS = 64;
-pub const VULKAN_READBACK = false;
+pub const SWAPCHAIN_PROFILING = false;
+pub const CPU_PROFILING = true;
+pub const GPU_PROFILING = false;
+pub const GPU_QUERYS = 64;
+pub const GPU_READBACK = false;
 
 pub const EARLY_GPU_WAIT = true; // Lower Latency, more CPU Stutters (Reflex Mode)
 
 // Rendering, Swapchains and Windows
 pub const MAX_IN_FLIGHT: u8 = 2; // (Frames)
-pub const DESIRED_SWAPCHAIN_IMAGES: u8 = 3;
+pub const DESIRED_SWAPCHAIN_IMAGES: u8 = 2;
 pub const DISPLAY_MODE = vk.VK_PRESENT_MODE_IMMEDIATE_KHR;
 pub const MAX_WINDOWS: u8 = 8;
 
@@ -161,5 +163,5 @@ const indirectTaskTest: Pass = .{
     },
 };
 
-pub const passes: []const Pass = &.{ compTest, taskTest, gridTest, grapTest, meshTest, indirectCompTest, indirectTaskTest };
+pub const passes: []const Pass = &.{};
 // pub const passes: []const Pass = &.{ gridTest};

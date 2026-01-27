@@ -23,7 +23,7 @@ pub const CmdMan = struct {
     queryPools: []vk.VkQueryPool,
     timestampPeriod: f32,
     queryCounters: []u8,
-    querys: CreateMapArray(Query, rc.PROFILING_QUERYS, u8, rc.PROFILING_QUERYS * 2, 0) = .{},
+    querys: CreateMapArray(Query, rc.GPU_QUERYS, u8, rc.GPU_QUERYS * 2, 0) = .{},
     curFlightId: u8 = 0,
 
     pub fn init(alloc: Allocator, context: *const Context, maxInFlight: u8) !CmdMan {
@@ -40,7 +40,7 @@ pub const CmdMan = struct {
         const poolInfo = vk.VkQueryPoolCreateInfo{
             .sType = vk.VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO,
             .queryType = vk.VK_QUERY_TYPE_TIMESTAMP,
-            .queryCount = rc.PROFILING_QUERYS * 2,
+            .queryCount = rc.GPU_QUERYS * 2,
         };
 
         const queryPools = try alloc.alloc(vk.VkQueryPool, maxInFlight);
@@ -80,7 +80,7 @@ pub const CmdMan = struct {
 
     pub fn resetQueryPool(self: *CmdMan, cmd: *const Cmd) void {
         const flightId = self.curFlightId;
-        vk.vkCmdResetQueryPool(cmd.handle, self.queryPools[flightId], 0, rc.PROFILING_QUERYS);
+        vk.vkCmdResetQueryPool(cmd.handle, self.queryPools[flightId], 0, rc.GPU_QUERYS);
         self.queryCounters[flightId] = 0;
     }
 
@@ -91,7 +91,7 @@ pub const CmdMan = struct {
         }
         const flightId = self.curFlightId;
         const idx = self.queryCounters[flightId];
-        if (idx >= rc.PROFILING_QUERYS) return; // Safety check
+        if (idx >= rc.GPU_QUERYS) return; // Safety check
 
         cmd.writeTimestamp(self.queryPools[flightId], @intFromEnum(pipeStage), idx);
         self.querys.set(queryId, .{ .name = name, .startIndex = idx });
@@ -107,7 +107,7 @@ pub const CmdMan = struct {
         }
 
         const idx = self.queryCounters[flightId];
-        if (idx >= rc.PROFILING_QUERYS) return; // Safety check
+        if (idx >= rc.GPU_QUERYS) return; // Safety check
 
         cmd.writeTimestamp(self.queryPools[flightId], @intFromEnum(pipeStage), idx);
         const query = self.querys.getPtr(queryId);
@@ -121,9 +121,9 @@ pub const CmdMan = struct {
 
     pub fn printQueryResults(self: *CmdMan, flightId: u8, totalFrames: u64) !void {
         const count = self.queryCounters[flightId];
-        if (count == 0 or count > rc.PROFILING_QUERYS) return;
+        if (count == 0 or count > rc.GPU_QUERYS) return;
 
-        var results: [rc.PROFILING_QUERYS * 2]u64 = undefined;
+        var results: [rc.GPU_QUERYS * 2]u64 = undefined;
         const flags = vk.VK_QUERY_RESULT_64_BIT | vk.VK_QUERY_RESULT_WAIT_BIT;
         try vhF.check(vk.vkGetQueryPoolResults(self.gpi, self.queryPools[flightId], 0, count, @sizeOf(u64) * 128, &results, @sizeOf(u64), flags), "Failed getting Queries");
 
@@ -138,7 +138,7 @@ pub const CmdMan = struct {
 
         const frameTime = frameEnd - frameStart;
         const gpuFrameMs = (@as(f64, @floatFromInt(frameTime)) * self.timestampPeriod) / 1_000_000.0;
-        std.debug.print("GPU Frame {}: {d:.3} ms ({d:.1} FPS) {}/{} Queries\n", .{ totalFrames - 1, gpuFrameMs, 1000.0 / gpuFrameMs, self.querys.getCount(), rc.PROFILING_QUERYS });
+        std.debug.print("GPU Frame {}: {d:.3} ms ({d:.1} FPS) {}/{} Queries\n", .{ totalFrames - 1, gpuFrameMs, 1000.0 / gpuFrameMs, self.querys.getCount(), rc.GPU_QUERYS });
 
         var untrackedMs: f64 = gpuFrameMs;
 
@@ -149,7 +149,6 @@ pub const CmdMan = struct {
             std.debug.print(" {d:.3} ms ({d:5.2} %) {s} \n", .{ gpuQueryMs, (gpuQueryMs / gpuFrameMs) * 100, query.name });
         }
         std.debug.print("Untracked {d:.3} ms ({d:5.2} %) \n", .{ untrackedMs, untrackedMs * 100 });
-        std.debug.print("\n", .{});
     }
 };
 
