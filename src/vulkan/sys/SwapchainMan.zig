@@ -17,7 +17,6 @@ pub const SwapchainMan = struct {
     instance: vk.VkInstance,
     swapchains: CreateMapArray(Swapchain, rc.MAX_WINDOWS, u32, 32 + rc.MAX_WINDOWS, 0) = .{},
     targetPtrs: [rc.MAX_WINDOWS]*Swapchain = undefined,
-    targetCount: u8 = 0,
 
     pub fn init(alloc: Allocator, context: *const Context) !SwapchainMan {
         return .{
@@ -34,30 +33,18 @@ pub const SwapchainMan = struct {
         }
     }
 
-    pub fn getTargets(self: *SwapchainMan) []*Swapchain {
-        return self.targetPtrs[0..self.targetCount];
-    }
-
-    pub fn updateTargets(self: *SwapchainMan, flightId: u8) !bool {
+    pub fn getUpdatedTargets(self: *SwapchainMan, flightId: u8) ![]*Swapchain {
         var count: u8 = 0;
 
         for (0..self.swapchains.getCount()) |i| {
             const swapchain = self.swapchains.getPtrAtIndex(@intCast(i));
             if (swapchain.inUse == false) continue;
 
-            const start = std.time.microTimestamp();
+            const start = if (rc.VULKAN_PROFILING == true) std.time.microTimestamp() else 0;
             const result1 = swapchain.acquireNextImage(self.gpi, flightId);
 
             switch (result1) {
-                vk.VK_SUCCESS => {
-                    swapchain.getCurTexture().state = .{ .layout = .Undefined, .stage = .Transfer, .access = .None };
-                    self.targetPtrs[count] = swapchain;
-                    count += 1;
-
-                    const end = std.time.microTimestamp();
-                    const duration = @as(f64, @floatFromInt(end - start)) / 1_000.0;
-                    std.debug.print("Swapchain Blocked for {d:.3} ms\n", .{duration});
-                },
+                vk.VK_SUCCESS => {},
                 vk.VK_TIMEOUT, vk.VK_NOT_READY => {
                     std.debug.print("OS could not provide Swapchain Image in Time \n", .{});
                     continue;
@@ -66,23 +53,24 @@ pub const SwapchainMan = struct {
                     try swapchain.recreate(self.alloc, self.gpi, self.gpu, self.instance, swapchain.extent);
                     const result2 = swapchain.acquireNextImage(self.gpi, flightId);
 
-                    if (result2 == vk.VK_SUCCESS) {
-                        swapchain.getCurTexture().state = .{ .layout = .Undefined, .stage = .Transfer, .access = .None };
-                        self.targetPtrs[count] = swapchain;
-                        count += 1;
-                        std.debug.print("Resolved Error for Swapchain (ID {}) {}", .{self.swapchains.getKeyFromIndex(@intCast(i)), swapchain.*});
-
-                        const end = std.time.microTimestamp();
-                        const duration = @as(f64, @floatFromInt(end - start)) / 1_000.0;
-                        std.debug.print("Swapchain Blocked for {d:.3} ms\n", .{duration});
-                    } 
-                    else std.debug.print("Could not Resolve Swapchain Error (ID {}) {}", .{self.swapchains.getKeyFromIndex(@intCast(i)), swapchain.*});
+                    if (result2 != vk.VK_SUCCESS) {
+                        std.debug.print("Could not Resolve Swapchain Error {} (ID {}) {}", .{ result2, self.swapchains.getKeyFromIndex(@intCast(i)), swapchain.* });
+                        continue;
+                    } else std.debug.print("Resolved Error for Swapchain {} (ID {}) {}", .{ result2, self.swapchains.getKeyFromIndex(@intCast(i)), swapchain.* });
                 },
                 else => try vhF.check(result1, "Could not acquire swapchain image with unknown error"),
             }
+
+            swapchain.getCurTexture().state = .{ .layout = .Undefined, .stage = .Transfer, .access = .None };
+            self.targetPtrs[count] = swapchain;
+            count += 1;
+
+            if (rc.VULKAN_PROFILING == true) {
+                const end = std.time.microTimestamp();
+                std.debug.print("Swapchain Blocked for {d:.3} ms\n", .{@as(f64, @floatFromInt(end - start)) / 1_000.0});
+            }
         }
-        self.targetCount = count;
-        return if (count != 0) true else false;
+        return self.targetPtrs[0..count];
     }
 
     pub fn changeState(self: *SwapchainMan, windowId: Window.WindowId, inUse: bool) void {

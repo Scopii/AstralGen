@@ -11,11 +11,10 @@ pub const Swapchain = struct {
     handle: vk.VkSwapchainKHR,
     curIndex: u32 = 0,
     renderTexId: TexId,
-    imgRdySems: []vk.VkSemaphore, // indexed by max-in-flight.
-    renderDoneSems: []vk.VkSemaphore, // indexed by swapchain images
+    acquireSems: []vk.VkSemaphore, // indexed by max-in-flight.
+    renderSems: []vk.VkSemaphore, // indexed by swapchain images
     textures: []TextureBase, // indexed by swapchain images
     extent: vk.VkExtent2D,
-    surfaceFormat: vk.VkSurfaceFormatKHR,
     inUse: bool = true,
 
     pub fn init(alloc: Allocator, gpi: vk.VkDevice, surface: vk.VkSurfaceKHR, extent: vk.VkExtent2D, gpu: vk.VkPhysicalDevice, renderTexId: TexId, oldHandle: ?vk.VkSwapchainKHR) !Swapchain {
@@ -102,26 +101,25 @@ pub const Swapchain = struct {
 
         return .{
             .surface = surface,
-            .surfaceFormat = surfaceFormat,
             .extent = realExtent,
             .handle = handle,
             .textures = baseTextures,
-            .imgRdySems = imgRdySems,
-            .renderDoneSems = renderDoneSems,
+            .acquireSems = imgRdySems,
+            .renderSems = renderDoneSems,
             .renderTexId = renderTexId,
         };
     }
 
     pub fn deinit(self: *Swapchain, alloc: Allocator, gpi: vk.VkDevice, instance: vk.VkInstance, deleteMode: enum { withSurface, withoutSurface }) void {
         for (self.textures) |tex| vk.vkDestroyImageView(gpi, tex.view, null);
-        for (self.imgRdySems) |sem| vk.vkDestroySemaphore(gpi, sem, null);
-        for (self.renderDoneSems) |sem| vk.vkDestroySemaphore(gpi, sem, null);
+        for (self.acquireSems) |sem| vk.vkDestroySemaphore(gpi, sem, null);
+        for (self.renderSems) |sem| vk.vkDestroySemaphore(gpi, sem, null);
         vk.vkDestroySwapchainKHR(gpi, self.handle, null);
         if (deleteMode == .withSurface) vk.vkDestroySurfaceKHR(instance, self.surface, null);
 
         alloc.free(self.textures);
-        alloc.free(self.imgRdySems);
-        alloc.free(self.renderDoneSems);
+        alloc.free(self.acquireSems);
+        alloc.free(self.renderSems);
     }
 
     pub fn recreate(self: *Swapchain, alloc: Allocator, gpi: vk.VkDevice, gpu: vk.VkPhysicalDevice, instance: vk.VkInstance, newExtent: vk.VkExtent2D) !void {
@@ -131,7 +129,7 @@ pub const Swapchain = struct {
     }
 
     pub fn acquireNextImage(self: *Swapchain, gpi: vk.VkDevice, flightId: u8) vk.VkResult {
-        return vk.vkAcquireNextImageKHR(gpi, self.handle, std.math.maxInt(u64), self.imgRdySems[flightId], null, &self.curIndex);
+        return vk.vkAcquireNextImageKHR(gpi, self.handle, std.math.maxInt(u64), self.acquireSems[flightId], null, &self.curIndex);
     }
 
     pub fn getCurTexture(self: *Swapchain) *TextureBase {

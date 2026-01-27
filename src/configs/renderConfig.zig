@@ -161,5 +161,5 @@ const indirectTaskTest: Pass = .{
     },
 };
 
-pub const passes: []const Pass = &.{ compTest, gridTest, grapTest, meshTest, taskTest, indirectCompTest, indirectTaskTest };
+pub const passes: []const Pass = &.{ compTest, taskTest, gridTest, grapTest, meshTest, indirectCompTest, indirectTaskTest };
 // pub const passes: []const Pass = &.{ gridTest};

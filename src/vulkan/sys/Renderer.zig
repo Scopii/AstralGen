@@ -80,21 +80,19 @@ pub const Renderer = struct {
         if (rc.RENDER_TEX_AUTO_RESIZE == true) {
             for (0..texIds.len) |i| {
                 if (texIds[i] == null) break;
-
                 const texId = texIds[i].?;
-                const passImg = try self.resMan.getTexturePtr(texId);
-                try self.updateRenderTexture(texId, passImg);
+                try self.updateRenderTexture(texId);
             }
         }
     }
 
-    pub fn updateRenderTexture(self: *Renderer, texId: Texture.TexId, tex: *Texture) !void {
+    pub fn updateRenderTexture(self: *Renderer, texId: Texture.TexId) !void {
+        const tex = try self.resMan.getTexturePtr(texId);
         const old = tex.base.extent;
         const new = self.swapMan.getMaxRenderExtent(texId);
 
         if (new.width != old.width or new.height != old.height) {
-            const imgInf = Texture.TexInf{ .id = texId, .width = new.width, .height = new.height, .depth = 1, .typ = tex.base.texType, .mem = .Gpu };
-            try self.resMan.replaceTexture(texId, imgInf);
+            try self.resMan.replaceTexture(texId, .{ .id = texId, .width = new.width, .height = new.height, .depth = 1, .typ = tex.base.texType, .mem = .Gpu });
             std.debug.print("Render Texture ID {} recreated {}x{} to {}x{}\n", .{ texId.val, old.width, old.height, new.width, new.height });
         }
     }
@@ -105,18 +103,12 @@ pub const Renderer = struct {
 
     pub fn draw(self: *Renderer, frameData: FrameData) !void {
         const flightId = try self.scheduler.beginFrame();
-
-        const depth = try self.scheduler.getBackpressure();
-        if (depth == rc.MAX_IN_FLIGHT) std.debug.print("Cpu Blocked, Flight Depth: {}/{}, FlightId {}\n", .{depth, rc.MAX_IN_FLIGHT, flightId}) else {
-            std.debug.print("Cpu Not Blocked, Flight Depth: {}/{}\n", .{depth, rc.MAX_IN_FLIGHT});
-        }
-
-        if (try self.swapMan.updateTargets(flightId) == false) return;
+        const targets = try self.swapMan.getUpdatedTargets(flightId);
+        if (targets.len == 0) return;
 
         if (rc.VULKAN_READBACK == true) try self.resMan.printReadback(.{ .val = 45 }, vkT.ReadbackData);
         if (rc.VULKAN_PROFILING == true) try self.renderGraph.cmdMan.printQueryResults(flightId, self.scheduler.totalFrames);
 
-        const targets = self.swapMan.getTargets();
         const cmd = try self.renderGraph.recordFrame(self.passes.items, flightId, frameData, targets, &self.resMan, &self.shaderMan);
         try self.scheduler.queueSubmit(&cmd, targets, self.context.graphicsQ);
         try self.scheduler.queuePresent(targets, self.context.presentQ);
@@ -126,12 +118,11 @@ pub const Renderer = struct {
 
     pub fn createPasses(self: *Renderer, passes: []const Pass) !void {
         for (passes) |pass| {
-            if (self.shaderMan.isPassValid(pass) == true) {
-                try self.passes.append(pass);
-            } else {
+            if (self.shaderMan.isPassValid(pass) == false) {
                 std.debug.print("Error: Pass ShaderLayout does not match Pass Type -> not appended\n", .{});
                 return error.PassNotValid;
             }
+            try self.passes.append(pass);
         }
     }
 

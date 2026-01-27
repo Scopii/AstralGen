@@ -30,6 +30,12 @@ pub const Scheduler = struct {
     }
 
     pub fn beginFrame(self: *Scheduler) !u8 {
+        if (rc.VULKAN_PROFILING == true) {
+            const depth = try self.getBackpressure();
+            if (depth == rc.MAX_IN_FLIGHT) std.debug.print("Frame In Flight: {}/{} BLOCKING, FlightId {}\n", .{ depth, rc.MAX_IN_FLIGHT, self.flightId }) else {
+                std.debug.print("Frame In Flight: {}/{}, FlightId {}\n", .{ depth, rc.MAX_IN_FLIGHT, self.flightId });
+            }
+        }
         return self.flightId;
     }
 
@@ -44,8 +50,8 @@ pub const Scheduler = struct {
         signalInfos[targets.len] = createSemaphoreSubmitInfo(self.cpuSyncTimeline, .AllCmds, self.totalFrames + 1);
 
         for (targets, 0..) |swapchain, i| {
-            waitInfos[i] = createSemaphoreSubmitInfo(swapchain.imgRdySems[self.flightId], .Transfer, 0);
-            signalInfos[i] = createSemaphoreSubmitInfo(swapchain.renderDoneSems[swapchain.curIndex], .AllCmds, 0);
+            waitInfos[i] = createSemaphoreSubmitInfo(swapchain.acquireSems[self.flightId], .Transfer, 0);
+            signalInfos[i] = createSemaphoreSubmitInfo(swapchain.renderSems[swapchain.curIndex], .AllCmds, 0);
         }
         const cmdSlice = &[_]vk.VkCommandBufferSubmitInfo{cmd.createSubmitInfo()};
         try queue.submit(waitInfos[0..targets.len], cmdSlice, signalInfos[0 .. targets.len + 1]);
@@ -59,7 +65,7 @@ pub const Scheduler = struct {
         for (targets, 0..) |swapchain, i| {
             handles[i] = swapchain.handle;
             imgIndices[i] = swapchain.curIndex;
-            waitSems[i] = swapchain.renderDoneSems[swapchain.curIndex];
+            waitSems[i] = swapchain.renderSems[swapchain.curIndex];
         }
         try queue.present(handles[0..targets.len], imgIndices[0..targets.len], waitSems[0..targets.len]);
     }
@@ -77,11 +83,10 @@ pub const Scheduler = struct {
             return;
         }
 
-        const before = std.time.microTimestamp();
+        const before = if (rc.VULKAN_PROFILING == true) std.time.microTimestamp() else 0;
         try vhF.waitForTimeline(gpi, self.cpuSyncTimeline, waitVal, 1_000_000_000); // Only wait if GPU is behind
-        const after = std.time.microTimestamp();
-
-        std.debug.print("Cpu Waiting {d:.3} ms for Frame {}\n", .{ @as(f64, @floatFromInt(after - before)) * 0.001, waitVal });
+        const after = if (rc.VULKAN_PROFILING == true) std.time.microTimestamp() else 0;
+        if (rc.VULKAN_PROFILING == true) std.debug.print("Cpu Waiting {d:.3} ms for Frame {}\n", .{ @as(f64, @floatFromInt(after - before)) * 0.001, waitVal });
     }
 
     pub fn getBackpressure(self: *Scheduler) !u64 {
