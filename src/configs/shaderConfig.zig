@@ -2,7 +2,7 @@ const vkE = @import("../vulkan/help/Enums.zig");
 const ShaderInf = @import("../core/ShaderCompiler.zig").ShaderInf;
 
 // Shader Compilation
-pub const SHADER_HOTLOAD = false;
+pub const SHADER_HOTLOAD = true;
 pub const SHADER_STARTUP_COMPILATION = true;
 pub const SHADER_MAX = 100;
 // Paths

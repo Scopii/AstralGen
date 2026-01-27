@@ -78,13 +78,13 @@ pub fn createInstance(alloc: Allocator) !vk.VkInstance {
     const reqExtensions = sdl.SDL_Vulkan_GetInstanceExtensions(&extCount);
     for (0..extCount) |i| try extensions.append(reqExtensions[i]);
 
-    if (rc.VULKAN_VALIDATION) {
+    if (rc.VALIDATION) {
         try extensions.append("VK_EXT_debug_utils");
         try layers.append("VK_LAYER_KHRONOS_validation");
     }
 
     var extraValidationFeatures = switch (rc.BEST_PRACTICES) {
-        true => if (rc.EXTRA_VALIDATION == true) [_]vk.VkValidationFeatureEnableEXT{
+        true => if (rc.GPU_VALIDATION == true) [_]vk.VkValidationFeatureEnableEXT{
             vk.VK_VALIDATION_FEATURE_ENABLE_BEST_PRACTICES_EXT,
             vk.VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT,
             vk.VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_RESERVE_BINDING_SLOT_EXT,
@@ -99,8 +99,8 @@ pub fn createInstance(alloc: Allocator) !vk.VkInstance {
         },
     };
 
-    std.debug.print("Vulkan Validation: {}\n", .{rc.VULKAN_VALIDATION});
-    std.debug.print("Extra Validation: {}\n", .{rc.EXTRA_VALIDATION});
+    std.debug.print("Vulkan Validation: {}\n", .{rc.VALIDATION});
+    std.debug.print("Extra Validation: {}\n", .{rc.GPU_VALIDATION});
     std.debug.print("Best Practices: {}\n", .{rc.BEST_PRACTICES});
 
     var extraValidationExtensions = vk.VkValidationFeaturesEXT{
@@ -126,7 +126,7 @@ pub fn createInstance(alloc: Allocator) !vk.VkInstance {
 
     const instanceInf = vk.VkInstanceCreateInfo{
         .sType = vk.VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
-        .pNext = if (rc.EXTRA_VALIDATION or rc.BEST_PRACTICES) @ptrCast(&extraValidationExtensions) else null,
+        .pNext = if (rc.GPU_VALIDATION or rc.BEST_PRACTICES) @ptrCast(&extraValidationExtensions) else null,
         .flags = 0,
         .pApplicationInfo = &appInf,
         .enabledLayerCount = @intCast(layers.items.len),
@@ -265,7 +265,7 @@ fn createGPI(alloc: Allocator, gpu: vk.VkPhysicalDevice, families: QueueFamilies
 
     var features: vk.VkPhysicalDeviceFeatures = undefined;
     vk.vkGetPhysicalDeviceFeatures(gpu, &features);
-    features.shaderInt64 = vk.VK_TRUE; 
+    features.shaderInt64 = vk.VK_TRUE;
 
     var dynamicState3Features = vk.VkPhysicalDeviceExtendedDynamicState3FeaturesEXT{
         .sType = vk.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_3_FEATURES_EXT,
@@ -415,7 +415,7 @@ fn createGPI(alloc: Allocator, gpu: vk.VkPhysicalDevice, families: QueueFamilies
     try loadVkProc(gpi, &vkFn.vkCmdSetStencilTestEnable, "vkCmdSetStencilTestEnable");
     try loadVkProc(gpi, &vkFn.vkCmdSetStencilOp, "vkCmdSetStencilOp");
     try loadVkProc(gpi, &vkFn.vkCmdSetStencilCompareMask, "vkCmdSetStencilCompareMask");
-    try loadVkProc(gpi, &vkFn.vkCmdSetStencilWriteMask, "vkCmdSetStencilWriteMask"); 
+    try loadVkProc(gpi, &vkFn.vkCmdSetStencilWriteMask, "vkCmdSetStencilWriteMask");
     try loadVkProc(gpi, &vkFn.vkCmdSetStencilReference, "vkCmdSetStencilReference");
 
     // 6. Color & Blending
@@ -436,7 +436,7 @@ fn createGPI(alloc: Allocator, gpu: vk.VkPhysicalDevice, families: QueueFamilies
     try loadVkProc(gpi, &vkFn.vkCmdSetLineWidth, "vkCmdSetLineWidth");
     try loadVkProc(gpi, &vkFn.vkCmdSetConservativeRasterizationModeEXT, "vkCmdSetConservativeRasterizationModeEXT");
     try loadVkProc(gpi, &vkFn.vkCmdSetFragmentShadingRateKHR, "vkCmdSetFragmentShadingRateKHR");
-    if (rc.VULKAN_VALIDATION == true) try loadVkProc(gpi, &vkFn.vkSetDebugUtilsObjectNameEXT, "vkSetDebugUtilsObjectNameEXT");
+    if (rc.VALIDATION == true) try loadVkProc(gpi, &vkFn.vkSetDebugUtilsObjectNameEXT, "vkSetDebugUtilsObjectNameEXT");
 
     return gpi;
 }

@@ -11,13 +11,13 @@ const vk = @import("../modules/vk.zig").c;
 const sc = @import("shaderConfig.zig");
 
 // Vulkan Validation Layers
-pub const VULKAN_VALIDATION = false;
-pub const EXTRA_VALIDATION = false;
+pub const VALIDATION = true;
+pub const GPU_VALIDATION = false;
 pub const BEST_PRACTICES = false;
 
 pub const SWAPCHAIN_PROFILING = false;
 pub const CPU_PROFILING = true;
-pub const GPU_PROFILING = false;
+pub const GPU_PROFILING = true;
 pub const GPU_QUERYS = 64;
 pub const GPU_READBACK = false;
 
@@ -163,5 +163,5 @@ const indirectTaskTest: Pass = .{
     },
 };
 
-pub const passes: []const Pass = &.{};
+pub const passes: []const Pass = &.{ compTest, taskTest, gridTest, grapTest, meshTest, indirectCompTest, indirectTaskTest };
 // pub const passes: []const Pass = &.{ gridTest};

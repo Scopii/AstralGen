@@ -32,8 +32,8 @@ pub const Scheduler = struct {
     pub fn beginFrame(self: *Scheduler) !u8 {
         if (rc.CPU_PROFILING == true) {
             const depth = try self.getBackpressure();
-            if (depth == rc.MAX_IN_FLIGHT) std.debug.print("Frame In Flight: {}/{} BLOCKING, FlightId {}\n", .{ depth, rc.MAX_IN_FLIGHT, self.flightId }) else {
-                std.debug.print("Frame In Flight: {}/{}, FlightId {}\n", .{ depth, rc.MAX_IN_FLIGHT, self.flightId });
+            if (depth == rc.MAX_IN_FLIGHT) std.debug.print("Frames In Flight: {}/{} BLOCKING, FlightId {}\n", .{ depth + 1, rc.MAX_IN_FLIGHT, self.flightId }) else {
+                std.debug.print("Frames In Flight: {}/{}, FlightId {}\n", .{ depth + 1, rc.MAX_IN_FLIGHT, self.flightId });
             }
         }
         return self.flightId;
@@ -91,7 +91,6 @@ pub const Scheduler = struct {
 
     pub fn getBackpressure(self: *Scheduler) !u64 {
         const gpuCompletedCount = try vhF.getTimelineVal(self.gpi, self.cpuSyncTimeline);
-        if (self.totalFrames < gpuCompletedCount) return 0; // Should not happen
         return self.totalFrames - gpuCompletedCount;
     }
 
