@@ -18,6 +18,4 @@ void main(uint3 id: SV_DispatchThreadID) {
     globalIndirectBuffers[bufIndex][0].groupX = 3;
     globalIndirectBuffers[bufIndex][0].groupY = 1;
     globalIndirectBuffers[bufIndex][0].groupZ = 1;
-
-    globalIndirectBuffers[bufIndex][0].count = 3; // debug count
 }

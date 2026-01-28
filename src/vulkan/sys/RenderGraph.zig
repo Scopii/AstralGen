@@ -101,10 +101,9 @@ pub const RenderGraph = struct {
 
     fn bufferBarrierIfNeeded(self: *RenderGraph, buffer: *Buffer, neededState: Buffer.BufferState) !void {
         const state = buffer.state;
-        const isReadToRead = (state.access == .ShaderRead or state.access == .IndirectRead) and
-            (neededState.access == .ShaderRead or neededState.access == .IndirectRead);
-
-        if (state.stage == neededState.stage and state.access == neededState.access or isReadToRead) return;
+        if ((state.stage == neededState.stage and state.access == neededState.access) or
+            (state.access == .ShaderRead or state.access == .IndirectRead and
+            neededState.access == .ShaderRead or neededState.access == .IndirectRead)) return;
 
         try self.bufBarriers.append(buffer.createBufferBarrier(neededState));
     }

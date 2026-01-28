@@ -10,7 +10,7 @@
                 "isDefault": true
             },
             "presentation": {
-                "reveal": "always", //or always
+                "reveal": "silent", //or always
                 "panel": "shared",
                 "showReuseMessage": false,
                 "clear": true,
@@ -28,7 +28,7 @@
                 "isDefault": true
             },
             "presentation": {
-                "reveal": "always", //or always
+                "reveal": "silent", //or always
                 "panel": "shared",
                 "showReuseMessage": false,
                 "clear": true,

@@ -10,7 +10,6 @@ pub const IndirectData = extern struct {
     x: u32,
     y: u32,
     z: u32,
-    count: u32,
 };
 
 pub const SpecData = extern struct {

@@ -44,7 +44,6 @@ public struct IndirectCommand {
     public uint groupX;
     public uint groupY;
     public uint groupZ;
-    public uint count;
 };
 
 public struct MapResult {
