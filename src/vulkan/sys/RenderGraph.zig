@@ -41,22 +41,6 @@ pub const RenderGraph = struct {
         self.bufBarriers.deinit();
     }
 
-    pub fn recordIndirectResets(self: *RenderGraph, cmd: *const Cmd, resMan: *ResourceMan) !void {
-        self.cmdMan.startQuery(cmd, .TopOfPipe, 66, "Indirect-Reset");
-
-        for (resMan.indirectBufIds.items) |id| {
-            const indirectBuf = try resMan.getBufferPtr(id);
-            try self.bufBarriers.append(indirectBuf.createBufferBarrier(.{ .stage = .Transfer, .access = .TransferWrite }));
-        }
-        self.bakeBarriers(cmd);
-
-        for (resMan.indirectBufIds.items) |id| {
-            const indirectBuf = try resMan.getBufferPtr(id);
-            cmd.fillBuffer(indirectBuf.handle, 0, @sizeOf(vhT.IndirectData), 0);
-        }
-        self.cmdMan.endQuery(cmd, .BotOfPipe, 66);
-    }
-
     pub fn recordFrame(self: *RenderGraph, passes: []Pass, flightId: u8, frameData: FrameData, targets: []const *Swapchain, resMan: *ResourceMan, shaderMan: *ShaderManager) !*Cmd {
         var cmd = try self.cmdMan.getCmd(flightId);
         try cmd.begin();
@@ -90,6 +74,22 @@ pub const RenderGraph = struct {
         resMan.resetTransfers();
         self.bakeBarriers(cmd);
         cmd.endQuery(.BotOfPipe, 40);
+    }
+
+    pub fn recordIndirectResets(self: *RenderGraph, cmd: *const Cmd, resMan: *ResourceMan) !void {
+        cmd.startQuery(.TopOfPipe, 66, "Indirect-Reset");
+
+        for (resMan.indirectBufIds.items) |id| {
+            const indirectBuf = try resMan.getBufferPtr(id);
+            try self.bufBarriers.append(indirectBuf.createBufferBarrier(.{ .stage = .Transfer, .access = .TransferWrite }));
+        }
+        self.bakeBarriers(cmd);
+
+        for (resMan.indirectBufIds.items) |id| {
+            const indirectBuf = try resMan.getBufferPtr(id);
+            cmd.fillBuffer(indirectBuf.handle, 0, @sizeOf(vhT.IndirectData), 0);
+        }
+        cmd.endQuery(.BotOfPipe, 66);
     }
 
     fn imageBarrierIfNeeded(self: *RenderGraph, tex: *TextureBase, neededState: TextureBase.TextureState) !void {
