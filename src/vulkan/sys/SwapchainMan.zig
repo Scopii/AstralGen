@@ -61,7 +61,7 @@ pub const SwapchainMan = struct {
                 else => try vhF.check(result1, "Could not acquire swapchain image with unknown error"),
             }
 
-            swapchain.getCurTexture().state = .{ .layout = .Undefined, .stage = .Transfer, .access = .None };
+            swapchain.getCurTexture().state = .{ .layout = .Undefined, .stage = .ColorAtt, .access = .None }; // Transfer -> TopOfPipe or ColorAttachmentOutput?
             self.targetPtrs[count] = swapchain;
             count += 1;
 

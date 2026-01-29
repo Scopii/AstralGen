@@ -16,8 +16,8 @@ pub const GPU_VALIDATION = false;
 pub const BEST_PRACTICES = false;
 
 pub const SWAPCHAIN_PROFILING = false;
-pub const CPU_PROFILING = true;
-pub const GPU_PROFILING = true;
+pub const CPU_PROFILING = false;
+pub const GPU_PROFILING = false;
 pub const GPU_QUERYS = 63;
 pub const GPU_READBACK = false;
 
@@ -25,7 +25,7 @@ pub const EARLY_GPU_WAIT = true; // Lower Latency, more CPU Stutters (Reflex Mod
 
 // Rendering, Swapchains and Windows
 pub const MAX_IN_FLIGHT: u8 = 2; // (Frames)
-pub const DESIRED_SWAPCHAIN_IMAGES: u8 = 2;
+pub const DESIRED_SWAPCHAIN_IMAGES: u8 = 3;
 pub const DISPLAY_MODE = vk.VK_PRESENT_MODE_IMMEDIATE_KHR;
 pub const MAX_WINDOWS: u8 = 8;
 
@@ -66,7 +66,7 @@ pub const TEXTURES: []const Texture.TexInf = &.{ quantTex, quantDepthTex };
 pub const PASSES: []const Pass = &.{ quantComp, quant };
 
 pub const quantComp: Pass = .{
-    .name = "Quantum-Comp",
+    .name = "Quant-Comp",
     .shaderIds = &.{sc.quantComp.id},
     .typ = Pass.createCompute(.{
         .workgroups = .{ .x = 1, .y = 1, .z = 1 },
@@ -77,18 +77,29 @@ pub const quantComp: Pass = .{
 };
 
 const quant: Pass = .{
-    .name = "Quantum",
-    .shaderIds = &.{ sc.quantTask.id, sc.quantMesh.id, sc.quantFrag.id },
+    .name = "Quant",
+    .shaderIds = &.{ sc.quantMesh.id, sc.quantFrag.id },
     .typ = Pass.createClassic(.{
         .classicTyp = Pass.ClassicTyp.taskMeshData(.{
             .workgroups = .{ .x = 1, .y = 1, .z = 1 },
             .indirectBuf = .{ .id = indirectSB.id, .offset = 0 },
         }),
         .mainTexId = quantTex.id,
-        .colorAtts = &.{Attachment.init(quantTex.id, .ColorAtt, .ColorAttReadWrite, false)},
+        .colorAtts = &.{Attachment.init(quantTex.id, .ColorAtt, .ColorAttReadWrite, true)},
+        .depthAtt = Attachment.init(quantDepthTex.id, .EarlyFragTest, .DepthStencilWrite, true),
+        .state = .{
+            // .polygonMode = vk.VK_PRIMITIVE_TOPOLOGY_LINE_LIST,
+            // .lineWidth = 2.0,
+            .depthTest = vk.VK_TRUE,
+            .depthWrite = vk.VK_TRUE,
+            .depthCompare = vk.VK_COMPARE_OP_LESS,
+            .cullMode = vk.VK_CULL_MODE_NONE,
+            // .frontFace = vk.VK_FRONT_FACE_COUNTER_CLOCKWISE,
+        },
     }),
     .bufUses = &.{
         BufferUse.init(indirectSB.id, .DrawIndirect, .IndirectRead, null),
+        BufferUse.init(cameraUB.id, .FragShader, .ShaderRead, 1),
     },
 };
 

@@ -195,7 +195,7 @@ fn compileGLSL(alloc: Allocator, srcPath: []const u8, spvPath: []const u8, stage
     var stageString: []const u8 = "compute";
     if (stage == .vert) stageString = "vertex";
     if (stage == .frag) stageString = "fragment";
-    if (stage == .mesh or stage == .meshNoTask) stageString = "mesh";
+    if (stage == .meshWithTask or stage == .meshNoTask) stageString = "mesh";
     if (stage == .task) stageString = "task";
 
     const stageFlag = try std.fmt.allocPrint(alloc, "-fshader-stage={s}", .{stageString});
@@ -221,7 +221,7 @@ fn compileSLANG(alloc: Allocator, srcPath: []const u8, spvPath: []const u8, stag
     var stageString: []const u8 = "compute";
     if (stage == .vert) stageString = "vertex";
     if (stage == .frag) stageString = "fragment";
-    if (stage == .mesh or stage == .meshNoTask) stageString = "mesh";
+    if (stage == .meshWithTask or stage == .meshNoTask) stageString = "mesh";
     if (stage == .task) stageString = "task";
 
     const result = std.process.Child.run(.{
@@ -280,7 +280,7 @@ fn compileHLSL(alloc: Allocator, srcPath: []const u8, spvPath: []const u8, stage
     var profile: []const u8 = "cs_6_6"; // default compute
     if (stage == .vert) profile = "vs_6_6";
     if (stage == .frag) profile = "ps_6_6";
-    if (stage == .mesh or stage == .meshNoTask) profile = "ms_6_6";
+    if (stage == .meshWithTask or stage == .meshNoTask) profile = "ms_6_6";
     if (stage == .task) profile = "as_6_6";
 
     const result = std.process.Child.run(.{

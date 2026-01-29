@@ -83,7 +83,7 @@ pub const ShaderStage = enum(vk.VkShaderStageFlagBits) {
     tessEval,
     geometry,
     task,
-    mesh,
+    meshWithTask,
     meshNoTask,
     frag,
 };

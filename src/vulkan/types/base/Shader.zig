@@ -18,7 +18,7 @@ pub const Shader = struct {
         if (stageEnum == .meshNoTask) flags |= vk.VK_SHADER_CREATE_NO_TASK_SHADER_BIT_EXT;
 
         const nextStage: vk.VkShaderStageFlagBits = switch (stageEnum) {
-            .vert, .mesh, .meshNoTask => vk.VK_SHADER_STAGE_FRAGMENT_BIT,
+            .vert, .meshWithTask, .meshNoTask => vk.VK_SHADER_STAGE_FRAGMENT_BIT,
             .task => vk.VK_SHADER_STAGE_MESH_BIT_EXT,
             else => 0,
         };
@@ -29,11 +29,7 @@ pub const Shader = struct {
             .{ .constantID = 2, .offset = @offsetOf(SpecData, "threadZ"), .size = @sizeOf(u32) },
         };
 
-        const specData = SpecData{
-            .threadX = 8,
-            .threadY = 8,
-            .threadZ = 1
-        };
+        const specData = SpecData{ .threadX = 8, .threadY = 8, .threadZ = 1 };
 
         const specInf = vk.VkSpecializationInfo{
             .mapEntryCount = entries.len,

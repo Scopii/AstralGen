@@ -71,7 +71,7 @@ pub const RenderGraph = struct {
         self.cmdMan.endQuery(&cmd, .BotOfPipe, 76);
 
         try self.recordTransfers(&cmd, resMan);
-        try self.recordIndirectReset(&cmd, resMan);
+        // try self.recordIndirectReset(&cmd, resMan);
         try self.recordPasses(&cmd, passes, frameData, resMan, shaderMan);
         try self.recordSwapchainBlits(&cmd, targets, resMan);
 
@@ -103,7 +103,7 @@ pub const RenderGraph = struct {
         const state = buffer.state;
         if ((state.stage == neededState.stage and state.access == neededState.access) or
             (state.access == .ShaderRead or state.access == .IndirectRead and
-            neededState.access == .ShaderRead or neededState.access == .IndirectRead)) return;
+                neededState.access == .ShaderRead or neededState.access == .IndirectRead)) return;
 
         try self.bufBarriers.append(buffer.createBufferBarrier(neededState));
     }
@@ -220,7 +220,7 @@ pub const RenderGraph = struct {
             cmd.copyImageToImage(renderTex.base.img, renderTex.base.extent, swapchain.getCurTexture().img, swapchain.getExtent3D(), rc.RENDER_TEX_STRETCH);
         }
         for (swapchains) |swapchain| { // Swapchain Presentation Barriers
-            try self.imageBarrierIfNeeded(swapchain.getCurTexture(), .{ .stage = .AllCmds, .access = .None, .layout = .PresentSrc });
+            try self.imageBarrierIfNeeded(swapchain.getCurTexture(), .{ .stage = .ColorAtt, .access = .None, .layout = .PresentSrc });
         }
         self.bakeBarriers(cmd);
         self.cmdMan.endQuery(cmd, .BotOfPipe, 55);

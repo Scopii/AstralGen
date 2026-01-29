@@ -104,7 +104,11 @@ pub const Renderer = struct {
     pub fn draw(self: *Renderer, frameData: FrameData) !void {
         const flightId = try self.scheduler.beginFrame();
         const targets = try self.swapMan.getUpdatedTargets(flightId);
-        if (targets.len == 0) return;
+
+        if (targets.len == 0){
+            std.debug.print("\n\nFRAME SKIPPED!!\n\n", .{});
+            return;
+        }
 
         if (rc.GPU_READBACK == true) try self.resMan.printReadback(.{ .val = 45 }, vkT.ReadbackData);
         if (rc.GPU_PROFILING == true) try self.renderGraph.cmdMan.printQueryResults(flightId, self.scheduler.totalFrames);

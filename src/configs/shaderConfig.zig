@@ -12,13 +12,11 @@ pub const SPRV_PATH: []const u8 = "/zig-out/shader";
 
 // Shaders
 pub const quantComp = ShaderInf.init(20, .comp, "quant/comp.slang", "quantComp.spv");
-pub const quantTask = ShaderInf.init(21, .task, "quant/task.slang", "quantTask.spv");
-pub const quantMesh = ShaderInf.init(22, .mesh, "quant/mesh.slang", "quantMesh.spv");
+pub const quantMesh = ShaderInf.init(22, .meshNoTask, "quant/mesh.slang", "quantMesh.spv");
 pub const quantFrag = ShaderInf.init(23, .frag, "quant/frag.slang", "quantFrag.spv");
 
 pub const COMPILING_SHADERS: []const ShaderInf = &.{
     quantComp,
-    quantTask,
     quantMesh,
     quantFrag,
 };

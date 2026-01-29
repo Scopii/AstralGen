@@ -43,8 +43,8 @@ pub const ShaderMan = struct {
 
             if (self.shaders.isKeyUsed(id) == true) {
                 self.shaders.getPtr(id).*.deinit(self.gpi);
-                std.debug.print("Shader {} updated ({s})\n", .{id, name});
-            } else std.debug.print("Shader {} created ({s})\n", .{id, name});
+                std.debug.print("Shader {} updated ({s})\n", .{ id, name });
+            } else std.debug.print("Shader {} created ({s})\n", .{ id, name });
             self.shaders.set(id, shaderObj);
         }
     }
@@ -93,7 +93,7 @@ fn checkShaderLayout(shaders: []const Shader) !enum { computePass, graphicsPass,
             .tessEval => 3,
             .geometry => 4,
             .task => 5,
-            .mesh => 6,
+            .meshWithTask => 6,
             .meshNoTask => 6,
             .frag => 7,
         };
