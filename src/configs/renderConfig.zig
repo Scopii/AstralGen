@@ -17,7 +17,7 @@ pub const BEST_PRACTICES = false;
 
 pub const SWAPCHAIN_PROFILING = false;
 pub const CPU_PROFILING = false;
-pub const GPU_PROFILING = false;
+pub const GPU_PROFILING = true;
 pub const GPU_QUERYS = 63;
 pub const GPU_READBACK = false;
 

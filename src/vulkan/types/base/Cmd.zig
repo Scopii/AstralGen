@@ -1,15 +1,52 @@
+const CreateMapArray = @import("../../../structures/MapArray.zig").CreateMapArray;
 const Transfer = @import("../../sys/ResourceMan.zig").Transfer;
 const RenderState = @import("RenderState.zig").RenderState;
+const rc = @import("../../../configs/renderConfig.zig");
 const vk = @import("../../../modules/vk.zig").c;
 const vkFn = @import("../../../modules/vk.zig");
 const vhF = @import("../../help/Functions.zig");
+const vhE = @import("../../help/Enums.zig");
 const Shader = @import("Shader.zig").Shader;
+const std = @import("std");
+
+pub const Query = struct {
+    name: []const u8,
+    startIndex: u8 = 0,
+    endIndex: u8 = 0,
+};
 
 pub const Cmd = struct {
     handle: vk.VkCommandBuffer,
+    queryPool: vk.VkQueryPool,
+    queryCounter: u8 = 0,
+    querys: CreateMapArray(Query, rc.GPU_QUERYS, u8, rc.GPU_QUERYS * 2, 0) = .{},
 
-    pub fn init(cmd: vk.VkCommandBuffer) !Cmd {
-        return .{ .handle = cmd };
+    pub fn init(cmdPool: vk.VkCommandPool, level: vk.VkCommandBufferLevel, gpi: vk.VkDevice) !Cmd {
+        const allocInf = vk.VkCommandBufferAllocateInfo{
+            .sType = vk.VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+            .commandPool = cmdPool,
+            .level = level,
+            .commandBufferCount = 1,
+        };
+        var cmd: vk.VkCommandBuffer = undefined;
+        try vhF.check(vk.vkAllocateCommandBuffers(gpi, &allocInf, &cmd), "Could not create Cmd Buffer");
+
+        const poolInfo = vk.VkQueryPoolCreateInfo{
+            .sType = vk.VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO,
+            .queryType = vk.VK_QUERY_TYPE_TIMESTAMP,
+            .queryCount = rc.GPU_QUERYS * 2,
+        };
+        var queryPool: vk.VkQueryPool = undefined;
+        try vhF.check(vk.vkCreateQueryPool(gpi, &poolInfo, null, &queryPool), "Could not init QueryPool");
+
+        return .{
+            .handle = cmd,
+            .queryPool = queryPool,
+        };
+    }
+
+    pub fn deinit(self: *const Cmd, gpi: vk.VkDevice) void {
+        vk.vkDestroyQueryPool(gpi, self.queryPool, null);
     }
 
     pub fn begin(self: *const Cmd) !void {
@@ -25,8 +62,77 @@ pub const Cmd = struct {
         try vhF.check(vk.vkEndCommandBuffer(self.handle), "Could not End CmdBuffer");
     }
 
-    pub fn writeTimestamp(self: *const Cmd, pool: vk.VkQueryPool, stage: vk.VkPipelineStageFlagBits2, queryIndex: u32) void {
+    fn writeTimestamp(self: *const Cmd, pool: vk.VkQueryPool, stage: vk.VkPipelineStageFlagBits2, queryIndex: u32) void {
         vk.vkCmdWriteTimestamp2(self.handle, stage, pool, queryIndex);
+    }
+
+    pub fn startQuery(self: *Cmd, pipeStage: vhE.PipeStage, queryId: u8, name: []const u8) void {
+        if (self.querys.isKeyUsed(queryId) == true) {
+            std.debug.print("Warning: Query ID {} in use by {s}!", .{ queryId, self.querys.getPtr(queryId).name });
+            return;
+        }
+        const idx = self.queryCounter;
+        if (idx >= rc.GPU_QUERYS) return; // Safety check
+
+        self.writeTimestamp(self.queryPool, @intFromEnum(pipeStage), idx);
+        self.querys.set(queryId, .{ .name = name, .startIndex = idx });
+        self.queryCounter += 1;
+    }
+
+    pub fn endQuery(self: *Cmd, pipeStage: vhE.PipeStage, queryId: u8) void {
+        if (self.querys.isKeyUsed(queryId) == false) {
+            std.debug.print("Error: QueryId {} not registered", .{queryId});
+            return;
+        }
+
+        const idx = self.queryCounter;
+        if (idx >= rc.GPU_QUERYS) return; // Safety check
+
+        self.writeTimestamp(self.queryPool, @intFromEnum(pipeStage), idx);
+        const query = self.querys.getPtr(queryId);
+        query.endIndex = idx;
+        self.queryCounter += 1;
+    }
+
+    pub fn printQueryResults(self: *Cmd, gpi: vk.VkDevice, totalFrames: u64, timestampPeriod: f32) !void {
+        const count = self.queryCounter;
+        if (count == 0 or count > rc.GPU_QUERYS) {
+            std.debug.print("No Querys in Cmd to print\n", .{});
+            return;
+        }
+
+        var results: [rc.GPU_QUERYS * 2]u64 = undefined;
+        const flags = vk.VK_QUERY_RESULT_64_BIT | vk.VK_QUERY_RESULT_WAIT_BIT;
+        try vhF.check(vk.vkGetQueryPoolResults(gpi, self.queryPool, 0, count, @sizeOf(u64) * 128, &results, @sizeOf(u64), flags), "Failed getting Queries");
+
+        const frameStartIndex = self.querys.getAtIndex(0).startIndex;
+        const frameStart = results[frameStartIndex];
+        var frameEnd: u64 = 0;
+
+        for (self.querys.getElements()) |query| {
+            const endTime = results[query.endIndex];
+            if (endTime > frameEnd) frameEnd = endTime;
+        }
+
+        const frameTime = frameEnd - frameStart;
+        const gpuFrameMs = (@as(f64, @floatFromInt(frameTime)) * timestampPeriod) / 1_000_000.0;
+        std.debug.print("GPU Frame {}: {d:.3} ms ({d:.1} FPS) {}/{} Queries\n", .{ totalFrames - 1, gpuFrameMs, 1000.0 / gpuFrameMs, self.querys.getCount(), rc.GPU_QUERYS });
+
+        var untrackedMs: f64 = gpuFrameMs;
+
+        for (self.querys.getElements()) |query| {
+            const diff = results[query.endIndex] - results[query.startIndex];
+            const gpuQueryMs = (@as(f64, @floatFromInt(diff)) * timestampPeriod) / 1_000_000.0;
+            untrackedMs -= gpuQueryMs;
+            std.debug.print(" {d:.3} ms ({d:5.2} %) {s} \n", .{ gpuQueryMs, (gpuQueryMs / gpuFrameMs) * 100, query.name });
+        }
+        std.debug.print("Untracked {d:.3} ms ({d:5.2} %) \n", .{ untrackedMs, untrackedMs * 100 });
+    }
+
+    pub fn resetQuerys(self: *Cmd) void {
+        vk.vkCmdResetQueryPool(self.handle, self.queryPool, 0, rc.GPU_QUERYS * 2);
+        self.queryCounter = 0;
+        self.querys.clear();
     }
 
     pub fn bakeBarriers(self: *const Cmd, imgBarriers: []const vk.VkImageMemoryBarrier2, bufBarriers: []const vk.VkBufferMemoryBarrier2) void {

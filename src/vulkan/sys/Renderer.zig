@@ -114,7 +114,7 @@ pub const Renderer = struct {
         if (rc.GPU_PROFILING == true) try self.renderGraph.cmdMan.printQueryResults(flightId, self.scheduler.totalFrames);
 
         const cmd = try self.renderGraph.recordFrame(self.passes.items, flightId, frameData, targets, &self.resMan, &self.shaderMan);
-        try self.scheduler.queueSubmit(&cmd, targets, self.context.graphicsQ);
+        try self.scheduler.queueSubmit(cmd, targets, self.context.graphicsQ);
         try self.scheduler.queuePresent(targets, self.context.presentQ);
 
         self.scheduler.endFrame();
