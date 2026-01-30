@@ -1,5 +1,11 @@
 const vk = @import("../../modules/vk.zig").c;
 
+pub const UpdateType = enum {
+    None, // Resource once in Memory, updates blocked
+    PerFrame, // Resource Created for Every Frame in Flight, updates done per Frame via Staging Buffer
+    Async, // Resource Created Twice, Cycling Between Front and Back Representations to start next batch update when previous update is done
+};
+
 pub const TextureType = enum {
     Color,
     Depth,

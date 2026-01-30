@@ -20,6 +20,8 @@ pub const Cmd = struct {
     queryPool: vk.VkQueryPool,
     queryCounter: u8 = 0,
     querys: CreateMapArray(Query, rc.GPU_QUERYS, u8, rc.GPU_QUERYS * 2, 0) = .{},
+    flightId: u8 = 0,
+    frame: u64 = 0,
 
     pub fn init(cmdPool: vk.VkCommandPool, level: vk.VkCommandBufferLevel, gpi: vk.VkDevice) !Cmd {
         const allocInf = vk.VkCommandBufferAllocateInfo{
@@ -49,12 +51,14 @@ pub const Cmd = struct {
         vk.vkDestroyQueryPool(gpi, self.queryPool, null);
     }
 
-    pub fn begin(self: *const Cmd) !void {
+    pub fn begin(self: *Cmd, flightId: u8, frame: u64) !void {
         const beginInf = vk.VkCommandBufferBeginInfo{
             .sType = vk.VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
             .flags = vk.VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT, //vk.VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT
             .pInheritanceInfo = null,
         };
+        self.flightId = flightId;
+        self.frame = frame;
         try vhF.check(vk.vkBeginCommandBuffer(self.handle, &beginInf), "could not Begin CmdBuffer");
     }
 
@@ -94,7 +98,7 @@ pub const Cmd = struct {
         self.queryCounter += 1;
     }
 
-    pub fn printQueryResults(self: *Cmd, gpi: vk.VkDevice, totalFrames: u64, timestampPeriod: f32) !void {
+    pub fn printQueryResults(self: *Cmd, gpi: vk.VkDevice, timestampPeriod: f32) !void {
         const count = self.queryCounter;
         if (count == 0 or count > rc.GPU_QUERYS) {
             std.debug.print("No Querys in Cmd to print\n", .{});
@@ -116,7 +120,7 @@ pub const Cmd = struct {
 
         const frameTime = frameEnd - frameStart;
         const gpuFrameMs = (@as(f64, @floatFromInt(frameTime)) * timestampPeriod) / 1_000_000.0;
-        std.debug.print("GPU Frame {}: {d:.3} ms ({d:.1} FPS) {}/{} Queries\n", .{ totalFrames - 1, gpuFrameMs, 1000.0 / gpuFrameMs, self.querys.getCount(), rc.GPU_QUERYS });
+        std.debug.print("GPU Frame {} (flight {}): {d:.3} ms ({d:.1} FPS) {}/{} Queries\n", .{ self.frame, self.flightId, gpuFrameMs, 1000.0 / gpuFrameMs, self.querys.getCount(), rc.GPU_QUERYS });
 
         var untrackedMs: f64 = gpuFrameMs;
 

@@ -14,7 +14,6 @@ pub const CmdMan = struct {
     cmds: []Cmd,
 
     timestampPeriod: f32,
-    curFlightId: u8 = 0,
 
     pub fn init(alloc: Allocator, context: *const Context, maxInFlight: u8) !CmdMan {
         const gpi = context.gpi;
@@ -43,15 +42,14 @@ pub const CmdMan = struct {
     }
 
     pub fn getCmd(self: *CmdMan, flightId: u8) !*Cmd {
-        self.curFlightId = flightId;
         const cmd = &self.cmds[flightId];
         try vhF.check(vk.vkResetCommandBuffer(cmd.handle, 0), "could not reset command buffer"); // Might be optional
         return cmd;
     }
 
-    pub fn printQueryResults(self: *CmdMan, flightId: u8, totalFrames: u64) !void {
+    pub fn printQueryResults(self: *CmdMan, flightId: u8) !void {
         var cmd = self.cmds[flightId];
-        try cmd.printQueryResults(self.gpi, totalFrames, self.timestampPeriod);
+        try cmd.printQueryResults(self.gpi, self.timestampPeriod);
     }
 };
 

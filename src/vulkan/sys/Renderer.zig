@@ -105,15 +105,15 @@ pub const Renderer = struct {
         const flightId = try self.scheduler.beginFrame();
         const targets = try self.swapMan.getUpdatedTargets(flightId);
 
-        if (targets.len == 0){
+        if (targets.len == 0) {
             std.debug.print("\n\nFRAME SKIPPED!!\n\n", .{});
             return;
         }
 
         if (rc.GPU_READBACK == true) try self.resMan.printReadback(.{ .val = 45 }, vkT.ReadbackData);
-        if (rc.GPU_PROFILING == true) try self.renderGraph.cmdMan.printQueryResults(flightId, self.scheduler.totalFrames);
+        if (rc.GPU_PROFILING == true) try self.renderGraph.cmdMan.printQueryResults(flightId);
 
-        const cmd = try self.renderGraph.recordFrame(self.passes.items, flightId, frameData, targets, &self.resMan, &self.shaderMan);
+        const cmd = try self.renderGraph.recordFrame(self.passes.items, flightId, self.scheduler.totalFrames, frameData, targets, &self.resMan, &self.shaderMan);
         try self.scheduler.queueSubmit(cmd, targets, self.context.graphicsQ);
         try self.scheduler.queuePresent(targets, self.context.presentQ);
 

@@ -41,9 +41,9 @@ pub const RenderGraph = struct {
         self.bufBarriers.deinit();
     }
 
-    pub fn recordFrame(self: *RenderGraph, passes: []Pass, flightId: u8, frameData: FrameData, targets: []const *Swapchain, resMan: *ResourceMan, shaderMan: *ShaderManager) !*Cmd {
+    pub fn recordFrame(self: *RenderGraph, passes: []Pass, flightId: u8, frame: u64, frameData: FrameData, targets: []const *Swapchain, resMan: *ResourceMan, shaderMan: *ShaderManager) !*Cmd {
         var cmd = try self.cmdMan.getCmd(flightId);
-        try cmd.begin();
+        try cmd.begin(flightId, frame);
 
         cmd.resetQuerys();
 
@@ -191,7 +191,7 @@ pub const RenderGraph = struct {
             .taskMesh => |taskMesh| {
                 if (taskMesh.indirectBuf) |indirectBuf| {
                     const buffer = try resMan.getBufferPtr(indirectBuf.id);
-                    cmd.drawMeshTasksIndirect(buffer.handle, 0, 1, @sizeOf(vhT.IndirectData));
+                    cmd.drawMeshTasksIndirect(buffer.handle, 0 + @sizeOf(vhT.IndirectData), 1, @sizeOf(vhT.IndirectData)); // * cmd.flightId
                 } else {
                     cmd.drawMeshTasks(taskMesh.workgroups.x, taskMesh.workgroups.y, taskMesh.workgroups.z);
                 }
