@@ -41,27 +41,24 @@ pub const DescriptorMan = struct {
         vkFn.vkGetDescriptorSetLayoutSizeEXT.?(gpi, descLayout, &layoutSize);
 
         var storageBufBindingOffset: vk.VkDeviceSize = 0;
-        vkFn.vkGetDescriptorSetLayoutBindingOffsetEXT.?(gpi, descLayout, rc.STORAGE_BUF_BINDING, &storageBufBindingOffset);
         var storageImgBindingOffset: vk.VkDeviceSize = 0;
-        vkFn.vkGetDescriptorSetLayoutBindingOffsetEXT.?(gpi, descLayout, rc.STORAGE_TEX_BINDING, &storageImgBindingOffset);
         var sampledImgBindingOffset: vk.VkDeviceSize = 0;
+        vkFn.vkGetDescriptorSetLayoutBindingOffsetEXT.?(gpi, descLayout, rc.STORAGE_BUF_BINDING, &storageBufBindingOffset);
+        vkFn.vkGetDescriptorSetLayoutBindingOffsetEXT.?(gpi, descLayout, rc.STORAGE_TEX_BINDING, &storageImgBindingOffset);
         vkFn.vkGetDescriptorSetLayoutBindingOffsetEXT.?(gpi, descLayout, rc.SAMPLED_TEX_BINDING, &sampledImgBindingOffset);
 
         const descBufferProps = getDescriptorBufferProperties(gpu);
-        const storageBufDescSize = descBufferProps.storageBufferDescriptorSize;
-        const storageImgDescSize = descBufferProps.storageImageDescriptorSize;
-        const sampledImgDescSize = descBufferProps.sampledImageDescriptorSize;
-        if (storageBufDescSize != @sizeOf(u64) * 2) return error.StorageDescSizeDoesntMatch; // For fast Function Validation
+        if (descBufferProps.storageBufferDescriptorSize != @sizeOf(u64) * 2) return error.StorageDescSizeDoesntMatch; // For fast Function Validation
 
         return .{
             .gpi = gpi,
             .descLayout = descLayout,
             .descBuffer = try vma.allocDescriptorBuffer(layoutSize),
-            .storageBufDescSize = storageBufDescSize,
+            .storageBufDescSize = descBufferProps.storageBufferDescriptorSize,
             .storageBufBindingOffset = storageBufBindingOffset,
-            .storageImgDescSize = storageImgDescSize,
+            .storageImgDescSize = descBufferProps.storageImageDescriptorSize,
             .storageImgBindingOffset = storageImgBindingOffset,
-            .sampledImgDescSize = sampledImgDescSize,
+            .sampledImgDescSize =  descBufferProps.sampledImageDescriptorSize,
             .sampledImgBindingOffset = sampledImgBindingOffset,
         };
     }

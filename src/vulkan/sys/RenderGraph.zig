@@ -21,8 +21,8 @@ pub const RenderGraph = struct {
     alloc: Allocator,
     gpi: vk.VkDevice,
     cmdMan: CmdManager,
-    pipeLayout: vk.VkPipelineLayout,
     descLayoutAddress: u64,
+    pipeLayout: vk.VkPipelineLayout,
     imgBarriers: std.array_list.Managed(vk.VkImageMemoryBarrier2),
     bufBarriers: std.array_list.Managed(vk.VkBufferMemoryBarrier2),
 
@@ -31,8 +31,8 @@ pub const RenderGraph = struct {
             .alloc = alloc,
             .gpi = context.gpi,
             .cmdMan = try CmdManager.init(alloc, context, rc.MAX_IN_FLIGHT),
-            .pipeLayout = try createPipelineLayout(context.gpi, resMan.descMan.descLayout, vk.VK_SHADER_STAGE_ALL, @sizeOf(PushConstants)),
             .descLayoutAddress = resMan.descMan.descBuffer.gpuAddress,
+            .pipeLayout = try createPipelineLayout(context.gpi, resMan.descMan.descLayout, vk.VK_SHADER_STAGE_ALL, @sizeOf(PushConstants)),
             .imgBarriers = try std.array_list.Managed(vk.VkImageMemoryBarrier2).initCapacity(alloc, 30),
             .bufBarriers = try std.array_list.Managed(vk.VkBufferMemoryBarrier2).initCapacity(alloc, 30),
         };
@@ -58,7 +58,6 @@ pub const RenderGraph = struct {
         cmd.endQuery(.BotOfPipe, 76);
 
         try self.recordTransfers(cmd, resMan);
-        // try self.recordIndirectResets(cmd, resMan);
         try self.recordPasses(cmd, passes, frameData, resMan, shaderMan);
         try self.recordSwapchainBlits(cmd, targets, resMan);
 
@@ -78,22 +77,6 @@ pub const RenderGraph = struct {
         resMan.resetTransfers();
         self.bakeBarriers(cmd);
         cmd.endQuery(.BotOfPipe, 40);
-    }
-
-    pub fn recordIndirectResets(self: *RenderGraph, cmd: *const Cmd, resMan: *ResourceMan) !void {
-        cmd.startQuery(.TopOfPipe, 66, "Indirect-Reset");
-
-        for (resMan.indirectBufIds.items) |id| {
-            const indirectBuf = try resMan.getBufferPtr(id);
-            try self.bufBarriers.append(indirectBuf.createBufferBarrier(.{ .stage = .Transfer, .access = .TransferWrite }));
-        }
-        self.bakeBarriers(cmd);
-
-        for (resMan.indirectBufIds.items) |id| {
-            const indirectBuf = try resMan.getBufferPtr(id);
-            cmd.fillBuffer(indirectBuf.handle, 0, @sizeOf(vhT.IndirectData), 0);
-        }
-        cmd.endQuery(.BotOfPipe, 66);
     }
 
     fn imageBarrierIfNeeded(self: *RenderGraph, tex: *TextureBase, neededState: TextureBase.TextureState) !void {
