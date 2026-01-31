@@ -3,7 +3,6 @@ const rc = @import("../../configs/renderConfig.zig");
 const vhF = @import("../help/Functions.zig");
 const vk = @import("../../modules/vk.zig").c;
 const vkFn = @import("../../modules/vk.zig");
-const vhE = @import("../help/Enums.zig");
 const Allocator = std.mem.Allocator;
 const Vma = @import("Vma.zig").Vma;
 const std = @import("std");
@@ -20,12 +19,15 @@ pub const DescriptorMan = struct {
     alloc: Allocator,
     vma: Vma, // deinit() in ResourceManager
     gpi: vk.VkDevice,
-    gpu: vk.VkPhysicalDevice,
-
-    descBufferProps: vk.VkPhysicalDeviceDescriptorBufferPropertiesEXT,
     descLayout: vk.VkDescriptorSetLayout,
-    pipeLayout: vk.VkPipelineLayout,
     descBuffer: DescriptorBuffer,
+
+    storageBufDescSize: u64,
+    storageBufBindingOffset: u64,
+    storageImgDescSize: u64,
+    storageImgBindingOffset: u64,
+    sampledImgDescSize: u64,
+    sampledImgBindingOffset: u64,
 
     pub fn init(cpuAlloc: Allocator, gpuAlloc: Vma, gpi: vk.VkDevice, gpu: vk.VkPhysicalDevice) !DescriptorMan {
         // Create Descriptor Layouts
@@ -36,29 +38,44 @@ pub const DescriptorMan = struct {
         }
         const descLayout = try createDescriptorLayout(gpi, &bindings);
         errdefer vk.vkDestroyDescriptorSetLayout(gpi, descLayout, null);
-        // Get exact size for this layout from the driver
+
         var layoutSize: vk.VkDeviceSize = undefined;
         vkFn.vkGetDescriptorSetLayoutSizeEXT.?(gpi, descLayout, &layoutSize);
+
+        var storageBufBindingOffset: vk.VkDeviceSize = 0;
+        vkFn.vkGetDescriptorSetLayoutBindingOffsetEXT.?(gpi, descLayout, rc.STORAGE_BUF_BINDING, &storageBufBindingOffset);
+        var storageImgBindingOffset: vk.VkDeviceSize = 0;
+        vkFn.vkGetDescriptorSetLayoutBindingOffsetEXT.?(gpi, descLayout, rc.STORAGE_TEX_BINDING, &storageImgBindingOffset);
+        var sampledImgBindingOffset: vk.VkDeviceSize = 0;
+        vkFn.vkGetDescriptorSetLayoutBindingOffsetEXT.?(gpi, descLayout, rc.SAMPLED_TEX_BINDING, &sampledImgBindingOffset);
+
+        const descBufferProps = getDescriptorBufferProperties(gpu);
+        const storageBufDescSize = descBufferProps.storageBufferDescriptorSize;
+        const storageImgDescSize = descBufferProps.storageImageDescriptorSize;
+        const sampledImgDescSize = descBufferProps.sampledImageDescriptorSize;
+        if (storageBufDescSize != @sizeOf(u64) * 2) return error.StorageDescSizeDoesntMatch; // For fast Function Validation
 
         return .{
             .alloc = cpuAlloc,
             .vma = gpuAlloc,
             .gpi = gpi,
-            .gpu = gpu,
-            .descBufferProps = getDescriptorBufferProperties(gpu),
             .descLayout = descLayout,
             .descBuffer = try gpuAlloc.allocDescriptorBuffer(layoutSize),
-            .pipeLayout = try createPipelineLayout(gpi, descLayout, vk.VK_SHADER_STAGE_ALL, @sizeOf(PushConstants)),
+            .storageBufDescSize = storageBufDescSize,
+            .storageBufBindingOffset = storageBufBindingOffset,
+            .storageImgDescSize = storageImgDescSize,
+            .storageImgBindingOffset = storageImgBindingOffset,
+            .sampledImgDescSize = sampledImgDescSize,
+            .sampledImgBindingOffset = sampledImgBindingOffset,
         };
     }
 
     pub fn deinit(self: *DescriptorMan) void {
         self.vma.freeBuffer(self.descBuffer.handle, self.descBuffer.allocation);
         vk.vkDestroyDescriptorSetLayout(self.gpi, self.descLayout, null);
-        vk.vkDestroyPipelineLayout(self.gpi, self.pipeLayout, null);
     }
 
-    pub fn updateTextureDescriptor(self: *DescriptorMan, view: vk.VkImageView, binding: u8, arrayIndex: u32) !void {
+    pub fn updateTextureDescriptor(self: *DescriptorMan, view: vk.VkImageView, arrayIndex: u32) !void {
         const imgInf = vk.VkDescriptorImageInfo{
             .sampler = null,
             .imageView = view,
@@ -69,10 +86,10 @@ pub const DescriptorMan = struct {
             .type = vk.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
             .data = .{ .pStorageImage = &imgInf },
         };
-        try self.updateDescriptor(&getInf, binding, arrayIndex, self.descBufferProps.storageImageDescriptorSize);
+        try self.updateDescriptor(&getInf, self.storageImgBindingOffset, arrayIndex, self.storageImgDescSize);
     }
 
-    pub fn updateSampledTextureDescriptor(self: *DescriptorMan, view: vk.VkImageView, binding: u8, arrayIndex: u32) !void {
+    pub fn updateSampledTextureDescriptor(self: *DescriptorMan, view: vk.VkImageView, arrayIndex: u32) !void {
         const imgInf = vk.VkDescriptorImageInfo{
             .sampler = null,
             .imageView = view,
@@ -83,32 +100,37 @@ pub const DescriptorMan = struct {
             .type = vk.VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
             .data = .{ .pSampledImage = &imgInf },
         };
-        try self.updateDescriptor(&getInf, binding, arrayIndex, self.descBufferProps.sampledImageDescriptorSize);
+        try self.updateDescriptor(&getInf, self.sampledImgBindingOffset, arrayIndex, self.sampledImgDescSize);
     }
 
-    pub fn updateBufferDescriptor(self: *DescriptorMan, gpuAddress: u64, size: u64, binding: u8, arrayIndex: u32) !void {
-        const addressInf = vk.VkDescriptorAddressInfoEXT{
-            .sType = vk.VK_STRUCTURE_TYPE_DESCRIPTOR_ADDRESS_INFO_EXT,
-            .address = gpuAddress,
-            .range = size,
-            .format = vk.VK_FORMAT_UNDEFINED,
-        };
-        const getInf = vk.VkDescriptorGetInfoEXT{
-            .sType = vk.VK_STRUCTURE_TYPE_DESCRIPTOR_GET_INFO_EXT,
-            .type = vk.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-            .data = .{ .pStorageBuffer = &addressInf },
-        };
-        try self.updateDescriptor(&getInf, binding, arrayIndex, self.descBufferProps.storageBufferDescriptorSize);
+    pub fn updateBufferDescriptorFast(self: *DescriptorMan, gpuAddress: u64, size: u64, arrayIndex: u32) void {
+        const finalOffset = self.storageBufBindingOffset + (arrayIndex * self.storageBufDescSize);
+        const mappedData = @as([*]u8, @ptrCast(self.descBuffer.mappedPtr));
+
+        const destPtr = @as(*extern struct { address: u64, range: u64 }, @ptrCast(@alignCast(mappedData + finalOffset)));
+        destPtr.* = .{ .address = gpuAddress, .range = size };
     }
 
-    pub fn updateDescriptor(self: *DescriptorMan, descGetInf: *const vk.VkDescriptorGetInfoEXT, binding: u32, arrayIndex: u32, descSize: usize) !void {
+    // pub fn updateBufferDescriptor(self: *DescriptorMan, gpuAddress: u64, size: u64, arrayIndex: u32) !void {
+    //     const addressInf = vk.VkDescriptorAddressInfoEXT{
+    //         .sType = vk.VK_STRUCTURE_TYPE_DESCRIPTOR_ADDRESS_INFO_EXT,
+    //         .address = gpuAddress,
+    //         .range = size,
+    //         .format = vk.VK_FORMAT_UNDEFINED,
+    //     };
+    //     const getInf = vk.VkDescriptorGetInfoEXT{
+    //         .sType = vk.VK_STRUCTURE_TYPE_DESCRIPTOR_GET_INFO_EXT,
+    //         .type = vk.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+    //         .data = .{ .pStorageBuffer = &addressInf },
+    //     };
+    //     try self.updateDescriptor(&getInf, self.storageBufBindingOffset, arrayIndex, self.storageBufDescSize);
+    // }
+
+    pub fn updateDescriptor(self: *DescriptorMan, descGetInf: *const vk.VkDescriptorGetInfoEXT, bindingOffset: u64, arrayIndex: u32, descSize: usize) !void {
         // Get Descriptor Data
         var descData: [64]u8 = undefined; // safe buffer size
         if (descSize > descData.len) return error.DescriptorSizeTooLarge;
         vkFn.vkGetDescriptorEXT.?(self.gpi, descGetInf, descSize, &descData);
-
-        var bindingOffset: vk.VkDeviceSize = 0;
-        vkFn.vkGetDescriptorSetLayoutBindingOffsetEXT.?(self.gpi, self.descLayout, binding, &bindingOffset);
 
         const mappedData = @as([*]u8, @ptrCast(self.descBuffer.mappedPtr));
         const finalOffset = bindingOffset + (arrayIndex * descSize); // Base Offset of the Array + (Index * Size of one Element)
@@ -154,19 +176,5 @@ fn createDescriptorLayout(gpi: vk.VkDevice, layoutBindings: []const vk.VkDescrip
     };
     var layout: vk.VkDescriptorSetLayout = undefined;
     try vhF.check(vk.vkCreateDescriptorSetLayout(gpi, &layoutInf, null, &layout), "Failed to create descriptor set layout");
-    return layout;
-}
-
-fn createPipelineLayout(gpi: vk.VkDevice, descLayout: vk.VkDescriptorSetLayout, stageFlags: vk.VkShaderStageFlags, size: u32) !vk.VkPipelineLayout {
-    const pcRange = vk.VkPushConstantRange{ .stageFlags = stageFlags, .offset = 0, .size = size };
-    const pipeLayoutInf = vk.VkPipelineLayoutCreateInfo{
-        .sType = vk.VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-        .setLayoutCount = if (descLayout != null) 1 else 0,
-        .pSetLayouts = if (descLayout != null) &descLayout else null,
-        .pushConstantRangeCount = if (size > 0) 1 else 0,
-        .pPushConstantRanges = if (size > 0) &pcRange else null,
-    };
-    var layout: vk.VkPipelineLayout = undefined;
-    try vhF.check(vk.vkCreatePipelineLayout(gpi, &pipeLayoutInf, null, &layout), "Failed to create pipeline layout");
     return layout;
 }

@@ -16,10 +16,10 @@ pub const ShaderMan = struct {
     gpi: vk.VkDevice,
     shaders: CreateMapArray(Shader, shaderCon.SHADER_MAX, u8, shaderCon.SHADER_MAX, 0) = .{},
 
-    pub fn init(alloc: Allocator, context: *const Context, resourceManager: *const ResourceMan) !ShaderMan {
+    pub fn init(alloc: Allocator, context: *const Context, resMan: *const ResourceMan) !ShaderMan {
         return .{
             .alloc = alloc,
-            .descLayout = resourceManager.descMan.descLayout,
+            .descLayout = resMan.descMan.descLayout,
             .gpi = context.gpi,
         };
     }

@@ -134,7 +134,7 @@ pub const ResourceMan = struct {
     pub fn createBuffer(self: *ResourceMan, bufInf: Buffer.BufInf) !void {
         const buffer = try self.vma.allocDefinedBuffer(bufInf, bufInf.mem);
         const bindlessIndex = try self.buffers.insert(bufInf.id.val, buffer);
-        try self.descMan.updateBufferDescriptor(buffer.gpuAddress, buffer.size, rc.STORAGE_BUF_BINDING, bindlessIndex);
+        self.descMan.updateBufferDescriptorFast(buffer.gpuAddress, buffer.size, bindlessIndex);
 
         self.vma.printMemoryLocation(buffer.allocation, self.gpu);
         std.debug.print("Buffer ID {} -> BindlessIndex {} created", .{ bufInf.id.val, bindlessIndex });
@@ -150,9 +150,9 @@ pub const ResourceMan = struct {
         const bindlessIndex = try self.textures.insert(texInf.id.val, tex);
 
         if (texInf.typ == .Color) {
-            try self.descMan.updateTextureDescriptor(tex.base.view, rc.STORAGE_TEX_BINDING, bindlessIndex);
+            try self.descMan.updateTextureDescriptor(tex.base.view, bindlessIndex);
         } else {
-            try self.descMan.updateSampledTextureDescriptor(tex.base.view, rc.SAMPLED_TEX_BINDING, bindlessIndex);
+            try self.descMan.updateSampledTextureDescriptor(tex.base.view, bindlessIndex);
         }
         std.debug.print("Texture ID {} -> BindlessIndex {} created\n", .{ texInf.id.val, bindlessIndex });
     }
@@ -164,7 +164,7 @@ pub const ResourceMan = struct {
     }
 
     pub fn printReadback(self: *ResourceMan, bufId: Buffer.BufId, comptime T: type) !void {
-        const readbackPtr = try self.getBufferDataPtr(bufId, T); 
+        const readbackPtr = try self.getBufferDataPtr(bufId, T);
         std.debug.print("Readback: {}\n", .{readbackPtr.*});
     }
 
@@ -205,7 +205,7 @@ pub const ResourceMan = struct {
 
         const newTex = try self.vma.allocTexture(nexTexInf, .Gpu);
         const bindlessIndex = self.textures.getIndex(texId.val);
-        try self.descMan.updateTextureDescriptor(newTex.base.view, rc.STORAGE_TEX_BINDING, bindlessIndex);
+        try self.descMan.updateTextureDescriptor(newTex.base.view, bindlessIndex);
 
         oldTex.* = newTex;
         std.debug.print("Texture {} Resized/Replaced at Slot {}\n", .{ texId.val, bindlessIndex });
