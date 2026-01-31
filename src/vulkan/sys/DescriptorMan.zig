@@ -16,8 +16,6 @@ pub const DescriptorBuffer = struct {
 };
 
 pub const DescriptorMan = struct {
-    alloc: Allocator,
-    vma: Vma, // deinit() in ResourceManager
     gpi: vk.VkDevice,
     descLayout: vk.VkDescriptorSetLayout,
     descBuffer: DescriptorBuffer,
@@ -29,7 +27,7 @@ pub const DescriptorMan = struct {
     sampledImgDescSize: u64,
     sampledImgBindingOffset: u64,
 
-    pub fn init(cpuAlloc: Allocator, gpuAlloc: Vma, gpi: vk.VkDevice, gpu: vk.VkPhysicalDevice) !DescriptorMan {
+    pub fn init(vma: Vma, gpi: vk.VkDevice, gpu: vk.VkPhysicalDevice) !DescriptorMan {
         // Create Descriptor Layouts
         var bindings: [rc.bindingRegistry.len]vk.VkDescriptorSetLayoutBinding = undefined;
         for (0..bindings.len) |i| {
@@ -56,11 +54,9 @@ pub const DescriptorMan = struct {
         if (storageBufDescSize != @sizeOf(u64) * 2) return error.StorageDescSizeDoesntMatch; // For fast Function Validation
 
         return .{
-            .alloc = cpuAlloc,
-            .vma = gpuAlloc,
             .gpi = gpi,
             .descLayout = descLayout,
-            .descBuffer = try gpuAlloc.allocDescriptorBuffer(layoutSize),
+            .descBuffer = try vma.allocDescriptorBuffer(layoutSize),
             .storageBufDescSize = storageBufDescSize,
             .storageBufBindingOffset = storageBufBindingOffset,
             .storageImgDescSize = storageImgDescSize,
@@ -70,8 +66,8 @@ pub const DescriptorMan = struct {
         };
     }
 
-    pub fn deinit(self: *DescriptorMan) void {
-        self.vma.freeBuffer(self.descBuffer.handle, self.descBuffer.allocation);
+    pub fn deinit(self: *DescriptorMan, vma: Vma) void {
+        vma.freeBuffer(self.descBuffer.handle, self.descBuffer.allocation);
         vk.vkDestroyDescriptorSetLayout(self.gpi, self.descLayout, null);
     }
 

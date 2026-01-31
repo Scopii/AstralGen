@@ -19,34 +19,24 @@ pub const Transfer = struct {
 pub const ResourceMan = struct {
     alloc: Allocator,
     vma: Vma,
-    gpi: vk.VkDevice,
-    gpu: vk.VkPhysicalDevice,
+    descMan: DescriptorMan,
 
     buffers: CreateStableMapArray(Buffer, rc.BUF_MAX, u32, rc.BUF_MAX, 0) = .{},
     textures: CreateStableMapArray(Texture, rc.TEX_MAX, u32, rc.TEX_MAX, 0) = .{},
-
-    descMan: DescriptorMan,
 
     stagingBuffer: Buffer,
     stagingOffset: u64 = 0,
     transfers: std.array_list.Managed(Transfer),
 
-    indirectBufIds: std.array_list.Managed(Buffer.BufId),
-
     pub fn init(alloc: Allocator, context: *const Context) !ResourceMan {
-        const gpi = context.gpi;
-        const gpu = context.gpu;
-        const gpuAlloc = try Vma.init(context.instance, context.gpi, context.gpu);
+        const vma = try Vma.init(context.instance, context.gpi, context.gpu);
 
         return .{
             .alloc = alloc,
-            .vma = gpuAlloc,
-            .gpi = gpi,
-            .gpu = gpu,
-            .descMan = try DescriptorMan.init(alloc, gpuAlloc, gpi, gpu),
-            .stagingBuffer = try gpuAlloc.allocStagingBuffer(rc.STAGING_BUF_SIZE),
+            .vma = vma,
+            .descMan = try DescriptorMan.init(vma, context.gpi, context.gpu),
+            .stagingBuffer = try vma.allocStagingBuffer(rc.STAGING_BUF_SIZE),
             .transfers = std.array_list.Managed(Transfer).init(alloc),
-            .indirectBufIds = std.array_list.Managed(Buffer.BufId).init(alloc),
             .textures = comptime CreateStableMapArray(Texture, rc.TEX_MAX, u32, rc.TEX_MAX, 0).init(),
             .buffers = comptime CreateStableMapArray(Buffer, rc.BUF_MAX, u32, rc.BUF_MAX, 0).init(),
         };
@@ -63,10 +53,9 @@ pub const ResourceMan = struct {
             const tex = self.textures.getPtr(key);
             self.vma.freeTexture(tex);
         }
-        self.descMan.deinit();
+        self.descMan.deinit(self.vma);
         self.transfers.deinit();
         self.vma.freeBuffer(self.stagingBuffer.handle, self.stagingBuffer.allocation);
-        self.indirectBufIds.deinit();
         self.vma.deinit();
     }
 
@@ -136,13 +125,8 @@ pub const ResourceMan = struct {
         const bindlessIndex = try self.buffers.insert(bufInf.id.val, buffer);
         self.descMan.updateBufferDescriptorFast(buffer.gpuAddress, buffer.size, bindlessIndex);
 
-        self.vma.printMemoryLocation(buffer.allocation, self.gpu);
-        std.debug.print("Buffer ID {} -> BindlessIndex {} created", .{ bufInf.id.val, bindlessIndex });
-
-        if (bufInf.typ == .Indirect) {
-            try self.indirectBufIds.append(bufInf.id);
-            std.debug.print(" and added to Indirect List\n", .{});
-        } else std.debug.print("\n", .{});
+        self.vma.printMemoryInfo(buffer.allocation);
+        std.debug.print("Buffer ID {} Type {} -> BindlessIndex {} created! ", .{ bufInf.id.val, bufInf.typ, bindlessIndex });
     }
 
     pub fn createTexture(self: *ResourceMan, texInf: Texture.TexInf) !void {
@@ -151,10 +135,10 @@ pub const ResourceMan = struct {
 
         if (texInf.typ == .Color) {
             try self.descMan.updateTextureDescriptor(tex.base.view, bindlessIndex);
-        } else {
-            try self.descMan.updateSampledTextureDescriptor(tex.base.view, bindlessIndex);
-        }
-        std.debug.print("Texture ID {} -> BindlessIndex {} created\n", .{ texInf.id.val, bindlessIndex });
+        } else try self.descMan.updateSampledTextureDescriptor(tex.base.view, bindlessIndex);
+
+        self.vma.printMemoryInfo(tex.allocation);
+        std.debug.print("Texture ID {} Type {} -> BindlessIndex {} created! ", .{ texInf.id.val, texInf.typ, bindlessIndex });
     }
 
     pub fn getBufferDataPtr(self: *ResourceMan, bufId: Buffer.BufId, comptime T: type) !*T {

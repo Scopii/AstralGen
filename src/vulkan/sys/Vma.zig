@@ -10,6 +10,7 @@ const std = @import("std");
 pub const Vma = struct {
     handle: vk.VmaAllocator,
     gpi: vk.VkDevice,
+    gpu: vk.VkPhysicalDevice,
 
     pub fn init(instance: vk.VkInstance, gpi: vk.VkDevice, gpu: vk.VkPhysicalDevice) !Vma {
         const vulkanFunctions = vk.VmaVulkanFunctions{
@@ -25,7 +26,12 @@ pub const Vma = struct {
         };
         var vmaAlloc: vk.VmaAllocator = undefined;
         try vhF.check(vk.vmaCreateAllocator(&createInf, &vmaAlloc), "Failed to create VMA/Gpu allocator");
-        return .{ .handle = vmaAlloc, .gpi = gpi };
+
+        return .{
+            .handle = vmaAlloc,
+            .gpi = gpi,
+            .gpu = gpu,
+        };
     }
 
     pub fn deinit(self: *const Vma) void {
@@ -43,11 +49,11 @@ pub const Vma = struct {
         return try self.allocBuffer(size, vk.VK_BUFFER_USAGE_TRANSFER_SRC_BIT, vk.VMA_MEMORY_USAGE_CPU_ONLY, memFlags); // TEST CPU_TO_GPU and AUTO
     }
 
-    pub fn printMemoryLocation(self: *const Vma, allocation: vk.VmaAllocation, gpu: vk.VkPhysicalDevice) void {
+    pub fn printMemoryInfo(self: *const Vma, allocation: vk.VmaAllocation) void {
         var allocInf: vk.VmaAllocationInfo = undefined;
         vk.vmaGetAllocationInfo(self.handle, allocation, &allocInf);
         var memProps: vk.VkPhysicalDeviceMemoryProperties = undefined;
-        vk.vkGetPhysicalDeviceMemoryProperties(gpu, &memProps);
+        vk.vkGetPhysicalDeviceMemoryProperties(self.gpu, &memProps);
 
         const flags = memProps.memoryTypes[allocInf.memoryType].propertyFlags;
         const isVram = (flags & vk.VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) != 0;
