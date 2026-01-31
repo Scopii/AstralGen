@@ -61,7 +61,7 @@ pub const ResourceMan = struct {
 
     pub fn getBufferResourceSlot(self: *ResourceMan, bufId: Buffer.BufId) !PushConstants.ResourceSlot {
         if (self.buffers.isKeyUsed(bufId.val) != true) {
-            std.debug.print("Tried getting Buffer ResourceSlot {} but its empty\n", .{bufId.val});
+            std.debug.print("Tried getting Buffer ID {} ResourceSlot but ID empty\n", .{bufId.val});
             return error.NoResourceSlot;
         }
         const bindlessIndex = self.buffers.getIndex(bufId.val);
@@ -71,7 +71,7 @@ pub const ResourceMan = struct {
 
     pub fn getTextureResourceSlot(self: *ResourceMan, texId: Texture.TexId) !PushConstants.ResourceSlot {
         if (self.textures.isKeyUsed(texId.val) != true) {
-            std.debug.print("Tried getting Texture ResourceSlot {} but its empty\n", .{texId.val});
+            std.debug.print("Tried getting Texture ID {} ResourceSlot but ID empty\n", .{texId.val});
             return error.NoResourceSlot;
         }
         const bindlessIndex = self.textures.getIndex(texId.val);

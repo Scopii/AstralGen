@@ -40,9 +40,9 @@ pub const RenderGraph = struct {
 
     pub fn deinit(self: *RenderGraph) void {
         vk.vkDestroyPipelineLayout(self.gpi, self.pipeLayout, null);
-        self.cmdMan.deinit();
         self.imgBarriers.deinit();
         self.bufBarriers.deinit();
+        self.cmdMan.deinit();
     }
 
     pub fn recordFrame(self: *RenderGraph, passes: []Pass, flightId: u8, frame: u64, frameData: FrameData, targets: []const *Swapchain, resMan: *ResourceMan, shaderMan: *ShaderManager) !*Cmd {
@@ -71,7 +71,7 @@ pub const RenderGraph = struct {
 
         for (resMan.transfers.items) |transfer| {
             const buffer = try resMan.getBufferPtr(transfer.dstResId);
-            try self.bufferBarrierIfNeeded(buffer, .{ .stage = .Transfer, .access = .TransferWrite });
+            try self.checkBufferState(buffer, .{ .stage = .Transfer, .access = .TransferWrite });
             cmd.copyBuffer(resMan.stagingBuffer.handle, &transfer, buffer.handle);
         }
         resMan.resetTransfers();
@@ -79,13 +79,13 @@ pub const RenderGraph = struct {
         cmd.endQuery(.BotOfPipe, 40);
     }
 
-    fn imageBarrierIfNeeded(self: *RenderGraph, tex: *TextureBase, neededState: TextureBase.TextureState) !void {
+    fn checkImageState(self: *RenderGraph, tex: *TextureBase, neededState: TextureBase.TextureState) !void {
         const state = tex.state;
         if (state.stage == neededState.stage and state.access == neededState.access and state.layout == neededState.layout) return;
         try self.imgBarriers.append(tex.createImageBarrier(neededState));
     }
 
-    fn bufferBarrierIfNeeded(self: *RenderGraph, buffer: *Buffer, neededState: Buffer.BufferState) !void {
+    fn checkBufferState(self: *RenderGraph, buffer: *Buffer, neededState: Buffer.BufferState) !void {
         const state = buffer.state;
         if ((state.stage == neededState.stage and state.access == neededState.access) or
             (state.access == .ShaderRead or state.access == .IndirectRead and
@@ -97,23 +97,23 @@ pub const RenderGraph = struct {
     pub fn recordPassBarriers(self: *RenderGraph, cmd: *const Cmd, pass: Pass, resMan: *ResourceMan) !void {
         for (pass.bufUses) |bufUse| {
             const buffer = try resMan.getBufferPtr(bufUse.bufId);
-            try self.bufferBarrierIfNeeded(buffer, bufUse.getNeededState());
+            try self.checkBufferState(buffer, bufUse.getNeededState());
         }
         for (pass.texUses) |texUse| {
             const tex = try resMan.getTexturePtr(texUse.texId);
-            try self.imageBarrierIfNeeded(&tex.base, texUse.getNeededState());
+            try self.checkImageState(&tex.base, texUse.getNeededState());
         }
         for (pass.getColorAtts()) |colorAtt| {
             const tex = try resMan.getTexturePtr(colorAtt.texId);
-            try self.imageBarrierIfNeeded(&tex.base, colorAtt.getNeededState());
+            try self.checkImageState(&tex.base, colorAtt.getNeededState());
         }
         if (pass.getDepthAtt()) |depthAtt| {
             const tex = try resMan.getTexturePtr(depthAtt.texId);
-            try self.imageBarrierIfNeeded(&tex.base, depthAtt.getNeededState());
+            try self.checkImageState(&tex.base, depthAtt.getNeededState());
         }
         if (pass.getStencilAtt()) |stencilAtt| {
             const tex = try resMan.getTexturePtr(stencilAtt.texId);
-            try self.imageBarrierIfNeeded(&tex.base, stencilAtt.getNeededState());
+            try self.checkImageState(&tex.base, stencilAtt.getNeededState());
         }
         self.bakeBarriers(cmd);
     }
@@ -133,10 +133,6 @@ pub const RenderGraph = struct {
         for (passes, 0..) |pass, i| {
             cmd.startQuery(.TopOfPipe, @intCast(i), pass.name);
 
-            switch (pass.typ) {
-                .classic => |classic| cmd.setGraphicsState(classic.state),
-                else => {},
-            }
             const shaders = shaderMan.getShaders(pass.shaderIds)[0..pass.shaderIds.len];
             cmd.bindShaders(shaders);
             const pcs = try PushConstants.init(resMan, pass, frameData);
@@ -145,8 +141,11 @@ pub const RenderGraph = struct {
             try self.recordPassBarriers(cmd, pass, resMan);
 
             switch (pass.typ) {
+                .classic => |classic| {
+                    cmd.setGraphicsState(classic.state);
+                    try recordGraphics(cmd, pcs.width, pcs.height, classic, resMan);
+                },
                 .compute => |comp| try recordCompute(cmd, comp.workgroups, comp.mainTexId, resMan),
-                .classic => |classic| try recordGraphics(cmd, pcs.width, pcs.height, classic, resMan),
             }
             cmd.endQuery(.BotOfPipe, @intCast(i));
         }
@@ -167,9 +166,9 @@ pub const RenderGraph = struct {
 
         var colorInfs: [8]vk.VkRenderingAttachmentInfo = undefined;
         for (0..passData.colorAtts.len) |i| {
-            const color = passData.colorAtts[i];
-            const tex = try resMan.getTexturePtr(color.texId);
-            colorInfs[i] = tex.base.createAttachment(color.clear);
+            const colorAtt = passData.colorAtts[i];
+            const tex = try resMan.getTexturePtr(colorAtt.texId);
+            colorInfs[i] = tex.base.createAttachment(colorAtt.clear);
         }
 
         cmd.beginRendering(width, height, colorInfs[0..passData.colorAtts.len], depthInf, stencilInf);
@@ -196,17 +195,15 @@ pub const RenderGraph = struct {
 
         for (swapchains) |swapchain| { // Render Texture and Swapchain Preperations
             const renderTex = try resMan.getTexturePtr(swapchain.renderTexId);
-            try self.imageBarrierIfNeeded(&renderTex.base, .{ .stage = .Transfer, .access = .TransferRead, .layout = .TransferSrc });
-            try self.imageBarrierIfNeeded(&swapchain.textures[swapchain.curIndex], .{ .stage = .Transfer, .access = .TransferWrite, .layout = .TransferDst });
+            try self.checkImageState(&renderTex.base, .{ .stage = .Transfer, .access = .TransferRead, .layout = .TransferSrc });
+            try self.checkImageState(&swapchain.textures[swapchain.curIndex], .{ .stage = .Transfer, .access = .TransferWrite, .layout = .TransferDst });
         }
         self.bakeBarriers(cmd);
 
-        for (swapchains) |swapchain| { // Blits
+        for (swapchains) |swapchain| { // Blits + Swapchain Presentation Barriers
             const renderTex = try resMan.getTexturePtr(swapchain.renderTexId);
             cmd.copyImageToImage(renderTex.base.img, renderTex.base.extent, swapchain.getCurTexture().img, swapchain.getExtent3D(), rc.RENDER_TEX_STRETCH);
-        }
-        for (swapchains) |swapchain| { // Swapchain Presentation Barriers
-            try self.imageBarrierIfNeeded(swapchain.getCurTexture(), .{ .stage = .ColorAtt, .access = .None, .layout = .PresentSrc });
+            try self.checkImageState(swapchain.getCurTexture(), .{ .stage = .ColorAtt, .access = .None, .layout = .PresentSrc });
         }
         self.bakeBarriers(cmd);
         cmd.endQuery(.BotOfPipe, 55);
