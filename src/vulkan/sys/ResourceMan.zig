@@ -28,19 +28,25 @@ pub const ResourceMan = struct {
     buffers: CreateMapArray(Buffer, rc.BUF_MAX, u32, rc.BUF_MAX, 0) = .{},
     textures2: CreateMapArray(Texture, rc.TEX_MAX, u32, rc.TEX_MAX, 0) = .{},
 
-    stagingBuffer: Buffer,
-    stagingOffset: u64 = 0,
-    transfers: std.array_list.Managed(Transfer),
+    stagingBuffers: [rc.MAX_IN_FLIGHT]Buffer,
+    stagingOffsets: [rc.MAX_IN_FLIGHT]u64 = .{0} ** rc.MAX_IN_FLIGHT,
+    transfers: [rc.MAX_IN_FLIGHT]std.array_list.Managed(Transfer),
 
     pub fn init(alloc: Allocator, context: *const Context) !ResourceMan {
         const vma = try Vma.init(context.instance, context.gpi, context.gpu);
+
+        var stagingBuffers: [rc.MAX_IN_FLIGHT]Buffer = undefined;
+        for (0..stagingBuffers.len) |i| stagingBuffers[i] = try vma.allocStagingBuffer(rc.STAGING_BUF_SIZE);
+
+        var transfers: [rc.MAX_IN_FLIGHT]std.array_list.Managed(Transfer) = undefined;
+        for (0..transfers.len) |i| transfers[i] = std.array_list.Managed(Transfer).init(alloc);
 
         return .{
             .alloc = alloc,
             .vma = vma,
             .descMan = try DescriptorMan.init(vma, context.gpi, context.gpu),
-            .stagingBuffer = try vma.allocStagingBuffer(rc.STAGING_BUF_SIZE),
-            .transfers = std.array_list.Managed(Transfer).init(alloc),
+            .stagingBuffers = stagingBuffers,
+            .transfers = transfers,
             .textures = comptime CreateStableMapArray(Texture, rc.TEX_MAX, u32, rc.TEX_MAX, 0).init(),
         };
     }
@@ -57,8 +63,8 @@ pub const ResourceMan = struct {
             self.vma.freeTexture(tex);
         }
         self.descMan.deinit(self.vma);
-        self.transfers.deinit();
-        self.vma.freeBuffer(self.stagingBuffer.handle, self.stagingBuffer.allocation);
+        for (&self.transfers) |*transferList| transferList.deinit();
+        for (&self.stagingBuffers) |*stagingBuffer| self.vma.freeBuffer(stagingBuffer.handle, stagingBuffer.allocation);
         self.vma.deinit();
     }
 
@@ -81,9 +87,9 @@ pub const ResourceMan = struct {
         return .{ .index = bindlessIndex, .count = 1 };
     }
 
-    pub fn resetTransfers(self: *ResourceMan) void {
-        self.stagingOffset = 0;
-        self.transfers.clearRetainingCapacity();
+    pub fn resetTransfers(self: *ResourceMan, flightId: u8) void {
+        self.stagingOffsets[flightId] = 0;
+        self.transfers[flightId].clearRetainingCapacity();
     }
 
     pub fn queueBufferUpload(self: *ResourceMan, bufInf: Buffer.BufInf, data: anytype, flightId: u8) !void {
@@ -99,11 +105,14 @@ pub const ResourceMan = struct {
             else => return error.ExpectedPointer,
         };
 
-        if (self.stagingOffset + bytes.len > rc.STAGING_BUF_SIZE) return error.StagingBufferFull;
+        const stagingOffset = self.stagingOffsets[flightId];
+        const stagingBuffer = self.stagingBuffers[flightId];
+
+        if (stagingOffset + bytes.len > rc.STAGING_BUF_SIZE) return error.StagingBufferFull;
 
         // Copy to Staging
-        const stagingPtr: [*]u8 = @ptrCast(self.stagingBuffer.mappedPtr);
-        @memcpy(stagingPtr[self.stagingOffset..][0..bytes.len], bytes);
+        const stagingPtr: [*]u8 = @ptrCast(stagingBuffer.mappedPtr);
+        @memcpy(stagingPtr[stagingOffset..][0..bytes.len], bytes);
 
         // Calculate Destination Offset Logic (NEW)
         var dstOffset: u64 = 0;
@@ -115,19 +124,14 @@ pub const ResourceMan = struct {
             dstOffset = @as(u64, flightId) * sliceSize; // Offset = FrameIndex * SliceSize
         }
         // Add to list with dstOffset
-        try self.transfers.append(Transfer{
-            .srcOffset = self.stagingOffset,
-            .dstResId = bufInf.id,
-            .dstOffset = dstOffset,
-            .size = bytes.len,
-        });
+        try self.transfers[flightId].append(Transfer{ .srcOffset = stagingOffset, .dstResId = bufInf.id, .dstOffset = dstOffset, .size = bytes.len });
         // Update the buffer object CPU-side tracking
         var buffer = try self.getBufferPtr(bufInf.id);
         buffer.count = @intCast(bytes.len / bufInf.elementSize);
 
         buffer.lastUpdatedFlightId = flightId;
 
-        self.stagingOffset += (bytes.len + 15) & ~@as(u64, 15);
+        self.stagingOffsets[flightId] += (bytes.len + 15) & ~@as(u64, 15);
     }
 
     pub fn getTexturePtr(self: *ResourceMan, texId: Texture.TexId) !*Texture {

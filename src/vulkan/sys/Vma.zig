@@ -45,6 +45,7 @@ pub const Vma = struct {
     }
 
     pub fn allocStagingBuffer(self: *const Vma, size: vk.VkDeviceSize) !Buffer {
+        defer std.debug.print("Created Staging Buffer\n", .{});
         const memFlags = vk.VMA_ALLOCATION_CREATE_MAPPED_BIT | vk.VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
         return try self.allocBuffer(size, vk.VK_BUFFER_USAGE_TRANSFER_SRC_BIT, vk.VMA_MEMORY_USAGE_CPU_ONLY, memFlags); // TEST CPU_TO_GPU and AUTO
     }
