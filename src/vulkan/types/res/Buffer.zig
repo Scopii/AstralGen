@@ -1,4 +1,5 @@
 const PushConstants = @import("PushConstants.zig").PushConstants;
+const rc = @import("../../../configs/renderConfig.zig");
 const vk = @import("../../../modules/vk.zig").c;
 const vhE = @import("../../help/Enums.zig");
 
@@ -9,19 +10,22 @@ pub const Buffer = struct {
     gpuAddress: u64,
     size: vk.VkDeviceSize,
     count: u32 = 0,
-    bindlessIndex: u32 = 0,
+    bindlessIndices: [rc.MAX_IN_FLIGHT]u32 = .{0} ** rc.MAX_IN_FLIGHT,
+    lastUpdatedFlightId: u8 = 0,
     state: BufferState = .{},
+    typ: vhE.BufferType = .Storage,
+    update: vhE.UpdateType = .Overwrite,
 
     pub const BufId = packed struct { val: u32 };
     pub const BufferState = struct { stage: vhE.PipeStage = .TopOfPipe, access: vhE.PipeAccess = .None };
-    pub const BufInf = struct { id: BufId, mem: vhE.MemUsage, elementSize: u32, len: u32, typ: vhE.BufferType };
+    pub const BufInf = struct { id: BufId, mem: vhE.MemUsage, elementSize: u32, len: u32, typ: vhE.BufferType, update: vhE.UpdateType };
 
     pub fn create(bufInf: BufInf) BufInf {
         return bufInf;
     }
 
     pub fn getResourceSlot(self: *const Buffer) PushConstants.ResourceSlot {
-        return .{ .index = self.bindlessIndex, .count = self.count };
+        return .{ .index = self.bindlessIndices, .count = self.count };
     }
 
     pub fn createBufferBarrier(self: *Buffer, newState: BufferState) vk.VkBufferMemoryBarrier2 {

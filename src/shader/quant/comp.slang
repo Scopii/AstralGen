@@ -12,7 +12,6 @@ import Globals;
 void main(uint3 id: SV_DispatchThreadID) {
 
     //printf("test ID: %d\n", 1);
-
     uint bufIndex = pc.resources[0].index;
     RWStructuredBuffer<IndirectCommand> indirectBuffer = globalIndirectBuffers[bufIndex];
 

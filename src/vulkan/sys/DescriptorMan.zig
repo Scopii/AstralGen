@@ -1,8 +1,11 @@
 const PushConstants = @import("../types/res/PushConstants.zig").PushConstants;
+const Texture = @import("../types/res/Texture.zig").Texture;
+const Buffer = @import("../types/res/Buffer.zig").Buffer;
 const rc = @import("../../configs/renderConfig.zig");
 const vhF = @import("../help/Functions.zig");
 const vk = @import("../../modules/vk.zig").c;
 const vkFn = @import("../../modules/vk.zig");
+const vhE = @import("../help/Enums.zig");
 const Allocator = std.mem.Allocator;
 const Vma = @import("Vma.zig").Vma;
 const std = @import("std");
@@ -20,10 +23,18 @@ pub const DescriptorMan = struct {
     descLayout: vk.VkDescriptorSetLayout,
     descBuffer: DescriptorBuffer,
 
+    storageBufCount: u32 = 0,
+    storageBufMap: [rc.MAX_IN_FLIGHT * rc.BUF_MAX]u32 = undefined,
     storageBufDescSize: u64,
     storageBufBindingOffset: u64,
+
+    storageImgCount: u32 = 0,
+    storageImgMap: [rc.MAX_IN_FLIGHT * rc.STORAGE_TEX_MAX]u32 = undefined,
     storageImgDescSize: u64,
     storageImgBindingOffset: u64,
+
+    sampledImgCount: u32 = 0,
+    sampledImgMap: [rc.MAX_IN_FLIGHT * rc.SAMPLED_TEX_MAX]u32 = undefined,
     sampledImgDescSize: u64,
     sampledImgBindingOffset: u64,
 
@@ -32,7 +43,7 @@ pub const DescriptorMan = struct {
         var bindings: [rc.bindingRegistry.len]vk.VkDescriptorSetLayoutBinding = undefined;
         for (0..bindings.len) |i| {
             const binding = rc.bindingRegistry[i];
-            bindings[i] = createDescriptorLayoutBinding(binding.binding, binding.descType, binding.len, vk.VK_SHADER_STAGE_ALL);
+            bindings[i] = createDescriptorLayoutBinding(binding.binding, binding.descType, binding.len * rc.MAX_IN_FLIGHT, vk.VK_SHADER_STAGE_ALL);
         }
         const descLayout = try createDescriptorLayout(gpi, &bindings);
         errdefer vk.vkDestroyDescriptorSetLayout(gpi, descLayout, null);
@@ -58,7 +69,7 @@ pub const DescriptorMan = struct {
             .storageBufBindingOffset = storageBufBindingOffset,
             .storageImgDescSize = descBufferProps.storageImageDescriptorSize,
             .storageImgBindingOffset = storageImgBindingOffset,
-            .sampledImgDescSize =  descBufferProps.sampledImageDescriptorSize,
+            .sampledImgDescSize = descBufferProps.sampledImageDescriptorSize,
             .sampledImgBindingOffset = sampledImgBindingOffset,
         };
     }
@@ -68,7 +79,7 @@ pub const DescriptorMan = struct {
         vk.vkDestroyDescriptorSetLayout(self.gpi, self.descLayout, null);
     }
 
-    pub fn updateTextureDescriptor(self: *DescriptorMan, view: vk.VkImageView, arrayIndex: u32) !void {
+    pub fn updateStorageTextureDescriptor(self: *DescriptorMan, view: vk.VkImageView, bindingIndex: u32) !void {
         const imgInf = vk.VkDescriptorImageInfo{
             .sampler = null,
             .imageView = view,
@@ -79,10 +90,10 @@ pub const DescriptorMan = struct {
             .type = vk.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
             .data = .{ .pStorageImage = &imgInf },
         };
-        try self.updateDescriptor(&getInf, self.storageImgBindingOffset, arrayIndex, self.storageImgDescSize);
+        try self.updateDescriptor(&getInf, self.storageImgBindingOffset, bindingIndex, self.storageImgDescSize);
     }
 
-    pub fn updateSampledTextureDescriptor(self: *DescriptorMan, view: vk.VkImageView, arrayIndex: u32) !void {
+    pub fn updateSampledTextureDescriptor(self: *DescriptorMan, view: vk.VkImageView, bindingIndex: u32) !void {
         const imgInf = vk.VkDescriptorImageInfo{
             .sampler = null,
             .imageView = view,
@@ -93,15 +104,20 @@ pub const DescriptorMan = struct {
             .type = vk.VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
             .data = .{ .pSampledImage = &imgInf },
         };
-        try self.updateDescriptor(&getInf, self.sampledImgBindingOffset, arrayIndex, self.sampledImgDescSize);
+        try self.updateDescriptor(&getInf, self.sampledImgBindingOffset, bindingIndex, self.sampledImgDescSize);
     }
 
-    pub fn updateBufferDescriptorFast(self: *DescriptorMan, gpuAddress: u64, size: u64, arrayIndex: u32) void {
-        const finalOffset = self.storageBufBindingOffset + (arrayIndex * self.storageBufDescSize);
+    pub fn updateBufferDescriptorFast(self: *DescriptorMan, gpuAddress: u64, size: u64) u32 {
+        const bindlessIndex = self.storageBufCount;
+
+        const finalOffset = self.storageBufBindingOffset + (bindlessIndex * self.storageBufDescSize);
         const mappedData = @as([*]u8, @ptrCast(self.descBuffer.mappedPtr));
 
         const destPtr = @as(*extern struct { address: u64, range: u64 }, @ptrCast(@alignCast(mappedData + finalOffset)));
         destPtr.* = .{ .address = gpuAddress, .range = size };
+
+        self.storageBufCount += 1;
+        return bindlessIndex;
     }
 
     // pub fn updateBufferDescriptor(self: *DescriptorMan, gpuAddress: u64, size: u64, arrayIndex: u32) !void {

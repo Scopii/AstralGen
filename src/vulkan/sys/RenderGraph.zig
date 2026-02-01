@@ -72,7 +72,14 @@ pub const RenderGraph = struct {
         for (resMan.transfers.items) |transfer| {
             const buffer = try resMan.getBufferPtr(transfer.dstResId);
             try self.checkBufferState(buffer, .{ .stage = .Transfer, .access = .TransferWrite });
-            cmd.copyBuffer(resMan.stagingBuffer.handle, &transfer, buffer.handle);
+
+            const copyRegion = vk.VkBufferCopy{
+                .srcOffset = transfer.srcOffset,
+                .dstOffset = transfer.dstOffset,
+                .size = transfer.size,
+            };
+            // standard vkCmdCopyBuffer, passing the region
+            vk.vkCmdCopyBuffer(cmd.handle, resMan.stagingBuffer.handle, buffer.handle, 1, &copyRegion);
         }
         resMan.resetTransfers();
         self.bakeBarriers(cmd);
@@ -135,7 +142,7 @@ pub const RenderGraph = struct {
 
             const shaders = shaderMan.getShaders(pass.shaderIds)[0..pass.shaderIds.len];
             cmd.bindShaders(shaders);
-            const pcs = try PushConstants.init(resMan, pass, frameData);
+            const pcs = try PushConstants.init(resMan, pass, frameData, cmd.flightId);
             cmd.setPushConstants(self.pipeLayout, vk.VK_SHADER_STAGE_ALL, 0, @sizeOf(PushConstants), &pcs);
 
             try self.recordPassBarriers(cmd, pass, resMan);
@@ -177,7 +184,7 @@ pub const RenderGraph = struct {
             .taskMesh => |taskMesh| {
                 if (taskMesh.indirectBuf) |indirectBuf| {
                     const buffer = try resMan.getBufferPtr(indirectBuf.id);
-                    cmd.drawMeshTasksIndirect(buffer.handle, indirectBuf.offset, 1, @sizeOf(vhT.IndirectData)); //  + @sizeOf(vhT.IndirectData) * cmd.flightId
+                    cmd.drawMeshTasksIndirect(buffer.handle, indirectBuf.offset + @sizeOf(vhT.IndirectData) * cmd.flightId, 1, @sizeOf(vhT.IndirectData)); //  + @sizeOf(vhT.IndirectData) * cmd.flightId
                 } else {
                     cmd.drawMeshTasks(taskMesh.workgroups.x, taskMesh.workgroups.y, taskMesh.workgroups.z);
                 }

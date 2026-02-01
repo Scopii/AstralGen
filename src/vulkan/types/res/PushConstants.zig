@@ -15,7 +15,7 @@ pub const PushConstants = extern struct {
         count: u32 = 0,
     };
 
-    pub fn init(resMan: *ResourceMan, pass: Pass, frameData: FrameData) !PushConstants {
+    pub fn init(resMan: *ResourceMan, pass: Pass, frameData: FrameData, flightId: u8) !PushConstants {
         var pcs = PushConstants{ .runTime = frameData.runTime, .deltaTime = frameData.deltaTime };
         var mask: [14]bool = .{false} ** 14;
 
@@ -24,7 +24,7 @@ pub const PushConstants = extern struct {
 
             if (shaderSlot) |slot| {
                 if (mask[slot] == false) {
-                    pcs.resourceSlots[slot] = try resMan.getBufferResourceSlot(bufUse.bufId);
+                    pcs.resourceSlots[slot] = try resMan.getBufferResourceSlot(bufUse.bufId, flightId);
                     mask[slot] = true;
                 } else std.debug.print("Pass Shader Slot {} already used\n", .{slot});
             }

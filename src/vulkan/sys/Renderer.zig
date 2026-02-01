@@ -145,7 +145,7 @@ pub const Renderer = struct {
     }
 
     pub fn updateBuffer(self: *Renderer, bufInf: Buffer.BufInf, data: anytype) !void {
-        try self.resMan.updateBuffer(bufInf, data);
+        try self.resMan.updateBuffer(bufInf, data, @intCast(self.scheduler.totalFrames % @as(u64, rc.MAX_IN_FLIGHT)));
     }
 
     pub fn createTexture(self: *Renderer, texInfos: []const Texture.TexInf) !void {

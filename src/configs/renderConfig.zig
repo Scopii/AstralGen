@@ -17,7 +17,7 @@ pub const BEST_PRACTICES = false;
 
 pub const SWAPCHAIN_PROFILING = false;
 pub const CPU_PROFILING = false;
-pub const GPU_PROFILING = false;
+pub const GPU_PROFILING = true;
 pub const GPU_QUERYS = 63;
 pub const GPU_READBACK = false;
 
@@ -30,8 +30,9 @@ pub const DISPLAY_MODE = vk.VK_PRESENT_MODE_IMMEDIATE_KHR;
 pub const MAX_WINDOWS: u8 = 8;
 
 pub const BUF_MAX = 63;
-pub const TEX_MAX = 31;
-pub const GPU_RESOURCE_MAX = BUF_MAX + TEX_MAX;
+pub const STORAGE_TEX_MAX = 31;
+pub const SAMPLED_TEX_MAX = 31;
+pub const TEX_MAX = STORAGE_TEX_MAX + SAMPLED_TEX_MAX;
 pub const STAGING_BUF_SIZE = 32 * 1024 * 1024;
 
 pub const TEX_COLOR_FORMAT = vk.VK_FORMAT_R16G16B16A16_SFLOAT;
@@ -45,17 +46,17 @@ pub const STORAGE_BUF_BINDING = 1;
 pub const SAMPLED_TEX_BINDING = 2;
 
 pub const bindingRegistry: []const struct { binding: u32, descType: vk.VkDescriptorType, len: u32 } = &.{
-    .{ .binding = STORAGE_TEX_BINDING, .descType = vk.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, .len = TEX_MAX },
+    .{ .binding = STORAGE_TEX_BINDING, .descType = vk.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, .len = STORAGE_TEX_MAX },
     .{ .binding = STORAGE_BUF_BINDING, .descType = vk.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, .len = BUF_MAX },
-    .{ .binding = SAMPLED_TEX_BINDING, .descType = vk.VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, .len = TEX_MAX },
+    .{ .binding = SAMPLED_TEX_BINDING, .descType = vk.VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, .len = SAMPLED_TEX_MAX },
 };
 
 // Buffers
-pub const indirectSB = Buffer.create(.{ .id = .{ .val = 41 }, .mem = .Gpu, .typ = .Indirect, .len = 1, .elementSize = @sizeOf(vhT.IndirectData) });
-pub const readbackSB = Buffer.create(.{ .id = .{ .val = 45 }, .mem = .CpuRead, .typ = .Storage, .len = 1, .elementSize = @sizeOf(vhT.ReadbackData) });
+pub const indirectSB = Buffer.create(.{ .id = .{ .val = 41 }, .mem = .Gpu, .typ = .Indirect, .len = 1, .elementSize = @sizeOf(vhT.IndirectData), .update = .PerFrame });
+pub const readbackSB = Buffer.create(.{ .id = .{ .val = 45 }, .mem = .Gpu, .typ = .Storage, .len = 1, .elementSize = @sizeOf(vhT.ReadbackData), .update = .Overwrite });
 
-pub const objectSB = Buffer.create(.{ .id = .{ .val = 1 }, .mem = .Gpu, .typ = .Storage, .len = 100, .elementSize = @sizeOf(Object) });
-pub const cameraUB = Buffer.create(.{ .id = .{ .val = 40 }, .mem = .Gpu, .typ = .Storage, .len = 1, .elementSize = @sizeOf(CameraData) });
+pub const objectSB = Buffer.create(.{ .id = .{ .val = 1 }, .mem = .Gpu, .typ = .Storage, .len = 100, .elementSize = @sizeOf(Object), .update = .Overwrite });
+pub const cameraUB = Buffer.create(.{ .id = .{ .val = 40 }, .mem = .Gpu, .typ = .Storage, .len = 1, .elementSize = @sizeOf(CameraData), .update = .PerFrame });
 pub const BUFFERS: []const Buffer.BufInf = &.{ objectSB, cameraUB, indirectSB, readbackSB };
 
 // Textures

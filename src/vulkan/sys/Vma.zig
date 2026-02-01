@@ -96,7 +96,10 @@ pub const Vma = struct {
         };
         if (bufInf.typ == .Staging) memFlags |= vk.VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
 
-        return try self.allocBuffer(bufferByteSize, bufferBits, memType, memFlags);
+        var buffer = try self.allocBuffer(bufferByteSize, bufferBits, memType, memFlags);
+        buffer.update = bufInf.update;
+        buffer.typ = bufInf.typ;
+        return buffer;
     }
 
     pub fn allocBuffer(self: *const Vma, size: vk.VkDeviceSize, bufUsage: vk.VkBufferUsageFlags, memUse: vk.VmaMemoryUsage, memFlags: vk.VmaAllocationCreateFlags) !Buffer {
