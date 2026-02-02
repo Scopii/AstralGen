@@ -3,6 +3,7 @@ const DescriptorBuffer = @import("DescriptorMan.zig").DescriptorBuffer;
 const Texture = @import("../types/res/Texture.zig").Texture;
 const Buffer = @import("../types/res/Buffer.zig").Buffer;
 const rc = @import("../../configs/renderConfig.zig");
+const vkFn = @import("../../modules/vk.zig");
 const vhF = @import("../help/Functions.zig");
 const vk = @import("../../modules/vk.zig").c;
 const vhE = @import("../help/Enums.zig");
@@ -39,7 +40,10 @@ pub const Vma = struct {
         vk.vmaDestroyAllocator(self.handle);
     }
 
-    pub fn allocDescriptorBuffer(self: *const Vma, size: vk.VkDeviceSize) !DescriptorBuffer {
+    pub fn allocDescriptorBuffer(self: *const Vma, descLayout: vk.VkDescriptorSetLayout) !DescriptorBuffer {
+        var size: vk.VkDeviceSize = undefined;
+        vkFn.vkGetDescriptorSetLayoutSizeEXT.?(self.gpi, descLayout, &size);
+
         const bufUsage = vk.VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT | vk.VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
         const buffer = try self.allocBuffer(size, bufUsage, vk.VMA_MEMORY_USAGE_CPU_TO_GPU, vk.VMA_ALLOCATION_CREATE_MAPPED_BIT);
         return .{ .allocation = buffer.allocation, .mappedPtr = buffer.mappedPtr, .size = size, .handle = buffer.handle, .gpuAddress = buffer.gpuAddress };
