@@ -1,3 +1,4 @@
+const CreateMapArray = @import("../../structures/MapArray.zig").CreateMapArray;
 const PushConstants = @import("../types/res/PushConstants.zig").PushConstants;
 const Texture = @import("../types/res/Texture.zig").Texture;
 const Buffer = @import("../types/res/Buffer.zig").Buffer;
@@ -24,17 +25,17 @@ pub const DescriptorMan = struct {
     descBuffer: DescriptorBuffer,
 
     storageBufCount: u32 = 0,
-    storageBufMap: [rc.MAX_IN_FLIGHT * rc.BUF_MAX]u32 = undefined,
+    storageBufMap: CreateMapArray(u32, rc.MAX_IN_FLIGHT * rc.BUF_MAX, u32, rc.MAX_IN_FLIGHT * rc.BUF_MAX, 0) = .{},
     storageBufDescSize: u64,
     storageBufBindingOffset: u64,
 
     storageImgCount: u32 = 0,
-    storageImgMap: [rc.MAX_IN_FLIGHT * rc.STORAGE_TEX_MAX]u32 = undefined,
+    storageImgMap: CreateMapArray(u32, rc.MAX_IN_FLIGHT * rc.STORAGE_TEX_MAX, u32, rc.MAX_IN_FLIGHT * rc.STORAGE_TEX_MAX, 0) = .{},
     storageImgDescSize: u64,
     storageImgBindingOffset: u64,
 
     sampledImgCount: u32 = 0,
-    sampledImgMap: [rc.MAX_IN_FLIGHT * rc.SAMPLED_TEX_MAX]u32 = undefined,
+    sampledImgMap: CreateMapArray(u32, rc.MAX_IN_FLIGHT * rc.SAMPLED_TEX_MAX, u32, rc.MAX_IN_FLIGHT * rc.SAMPLED_TEX_MAX, 0) = .{},
     sampledImgDescSize: u64,
     sampledImgBindingOffset: u64,
 
@@ -51,26 +52,19 @@ pub const DescriptorMan = struct {
         var layoutSize: vk.VkDeviceSize = undefined;
         vkFn.vkGetDescriptorSetLayoutSizeEXT.?(gpi, descLayout, &layoutSize);
 
-        var storageBufBindingOffset: vk.VkDeviceSize = 0;
-        var storageImgBindingOffset: vk.VkDeviceSize = 0;
-        var sampledImgBindingOffset: vk.VkDeviceSize = 0;
-        vkFn.vkGetDescriptorSetLayoutBindingOffsetEXT.?(gpi, descLayout, rc.STORAGE_BUF_BINDING, &storageBufBindingOffset);
-        vkFn.vkGetDescriptorSetLayoutBindingOffsetEXT.?(gpi, descLayout, rc.STORAGE_TEX_BINDING, &storageImgBindingOffset);
-        vkFn.vkGetDescriptorSetLayoutBindingOffsetEXT.?(gpi, descLayout, rc.SAMPLED_TEX_BINDING, &sampledImgBindingOffset);
-
-        const descBufferProps = getDescriptorBufferProperties(gpu);
-        if (descBufferProps.storageBufferDescriptorSize != @sizeOf(u64) * 2) return error.StorageDescSizeDoesntMatch; // For fast Function Validation
+        const descProps = getDescriptorBufferProperties(gpu);
+        if (descProps.storageBufferDescriptorSize != @sizeOf(u64) * 2) return error.StorageDescSizeDoesNotMatch; // For fast Function Validation
 
         return .{
             .gpi = gpi,
             .descLayout = descLayout,
             .descBuffer = try vma.allocDescriptorBuffer(layoutSize),
-            .storageBufDescSize = descBufferProps.storageBufferDescriptorSize,
-            .storageBufBindingOffset = storageBufBindingOffset,
-            .storageImgDescSize = descBufferProps.storageImageDescriptorSize,
-            .storageImgBindingOffset = storageImgBindingOffset,
-            .sampledImgDescSize = descBufferProps.sampledImageDescriptorSize,
-            .sampledImgBindingOffset = sampledImgBindingOffset,
+            .storageBufDescSize = descProps.storageBufferDescriptorSize,
+            .storageBufBindingOffset = getDescriptorBindingOffset(gpi, descLayout, rc.STORAGE_BUF_BINDING,),
+            .storageImgDescSize = descProps.storageImageDescriptorSize,
+            .storageImgBindingOffset = getDescriptorBindingOffset(gpi, descLayout, rc.STORAGE_TEX_BINDING),
+            .sampledImgDescSize = descProps.sampledImageDescriptorSize,
+            .sampledImgBindingOffset = getDescriptorBindingOffset(gpi, descLayout, rc.SAMPLED_TEX_BINDING),
         };
     }
 
@@ -90,10 +84,9 @@ pub const DescriptorMan = struct {
             .type = vk.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
             .data = .{ .pStorageImage = &imgInf },
         };
-        const descIndex = self.storageImgCount;
-        self.storageImgCount += 1;
         try self.updateDescriptor(&getInf, self.storageImgBindingOffset, rc.STORAGE_TEX_BINDING, self.storageImgDescSize);
-        return descIndex;
+        self.storageImgCount += 1;
+        return self.storageImgCount - 1;
     }
 
     pub fn updateSampledTextureDescriptor(self: *DescriptorMan, view: vk.VkImageView) !u32 {
@@ -107,15 +100,13 @@ pub const DescriptorMan = struct {
             .type = vk.VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
             .data = .{ .pSampledImage = &imgInf },
         };
-        const descIndex = self.sampledImgCount;
-        self.sampledImgCount += 1;
         try self.updateDescriptor(&getInf, self.sampledImgBindingOffset, rc.SAMPLED_TEX_BINDING, self.sampledImgDescSize);
-        return descIndex;
+        self.sampledImgCount += 1;
+        return self.sampledImgCount - 1;
     }
 
-    pub fn updateBufferDescriptorFast(self: *DescriptorMan, gpuAddress: u64, size: u64) u32 {
+    pub fn updateStorageBufferDescriptorFast(self: *DescriptorMan, gpuAddress: u64, size: u64) u32 {
         const descIndex = self.storageBufCount;
-
         const finalOffset = self.storageBufBindingOffset + (descIndex * self.storageBufDescSize);
         const mappedData = @as([*]u8, @ptrCast(self.descBuffer.mappedPtr));
 
@@ -126,33 +117,38 @@ pub const DescriptorMan = struct {
         return descIndex;
     }
 
-    // pub fn updateBufferDescriptor(self: *DescriptorMan, gpuAddress: u64, size: u64, arrayIndex: u32) !void {
-    //     const addressInf = vk.VkDescriptorAddressInfoEXT{
-    //         .sType = vk.VK_STRUCTURE_TYPE_DESCRIPTOR_ADDRESS_INFO_EXT,
-    //         .address = gpuAddress,
-    //         .range = size,
-    //         .format = vk.VK_FORMAT_UNDEFINED,
-    //     };
-    //     const getInf = vk.VkDescriptorGetInfoEXT{
-    //         .sType = vk.VK_STRUCTURE_TYPE_DESCRIPTOR_GET_INFO_EXT,
-    //         .type = vk.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-    //         .data = .{ .pStorageBuffer = &addressInf },
-    //     };
-    //     try self.updateDescriptor(&getInf, self.storageBufBindingOffset, arrayIndex, self.storageBufDescSize);
-    // }
+    pub fn updateStorageBufferDescriptor(self: *DescriptorMan, gpuAddress: u64, size: u64) !void {
+        const addressInf = vk.VkDescriptorAddressInfoEXT{
+            .sType = vk.VK_STRUCTURE_TYPE_DESCRIPTOR_ADDRESS_INFO_EXT,
+            .address = gpuAddress,
+            .range = size,
+            .format = vk.VK_FORMAT_UNDEFINED,
+        };
+        const getInf = vk.VkDescriptorGetInfoEXT{
+            .sType = vk.VK_STRUCTURE_TYPE_DESCRIPTOR_GET_INFO_EXT,
+            .type = vk.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+            .data = .{ .pStorageBuffer = &addressInf },
+        };
+        try self.updateDescriptor(&getInf, self.storageBufBindingOffset, rc.STORAGE_BUF_BINDING, self.storageBufDescSize);
+    }
 
-    pub fn updateDescriptor(self: *DescriptorMan, descGetInf: *const vk.VkDescriptorGetInfoEXT, bindingOffset: u64, arrayIndex: u32, descSize: usize) !void {
-        // Get Descriptor Data
+    pub fn updateDescriptor(self: *DescriptorMan, descGetInf: *const vk.VkDescriptorGetInfoEXT, bindOffset: u64, bindSlot: u32, descSize: usize) !void {
         var descData: [64]u8 = undefined; // safe buffer size
         if (descSize > descData.len) return error.DescriptorSizeTooLarge;
-        vkFn.vkGetDescriptorEXT.?(self.gpi, descGetInf, descSize, &descData);
+        vkFn.vkGetDescriptorEXT.?(self.gpi, descGetInf, descSize, &descData); // Getting Desc Data
 
         const mappedData = @as([*]u8, @ptrCast(self.descBuffer.mappedPtr));
-        const finalOffset = bindingOffset + (arrayIndex * descSize); // Base Offset of the Array + (Index * Size of one Element)
+        const finalOffset = bindOffset + (bindSlot * descSize); // Base Offset of the Array + (Index * Size of one Element)
         const destPtr = mappedData + finalOffset;
         @memcpy(destPtr[0..descSize], descData[0..descSize]);
     }
 };
+
+fn getDescriptorBindingOffset(gpi: vk.VkDevice, descLayout: vk.VkDescriptorSetLayout, bind: u32) vk.VkDeviceSize {
+    var bindOffset: vk.VkDeviceSize = 0;
+    vkFn.vkGetDescriptorSetLayoutBindingOffsetEXT.?(gpi, descLayout, bind, &bindOffset);
+    return bindOffset;
+}
 
 fn createDescriptorLayoutBinding(binding: u32, descType: vk.VkDescriptorType, count: u32, stageFlags: vk.VkShaderStageFlags) vk.VkDescriptorSetLayoutBinding {
     return vk.VkDescriptorSetLayoutBinding{

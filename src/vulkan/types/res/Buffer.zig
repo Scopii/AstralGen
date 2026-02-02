@@ -11,7 +11,7 @@ pub const Buffer = struct {
     size: vk.VkDeviceSize,
     count: u32 = 0,
     descIndex: [rc.MAX_IN_FLIGHT]u32 = .{0} ** rc.MAX_IN_FLIGHT,
-    lastUpdatedFlightId: u8 = 0,
+    lastUpdateFlightId: u8 = 0,
     state: BufferState = .{},
     typ: vhE.BufferType = .Storage,
     update: vhE.UpdateType = .Overwrite,

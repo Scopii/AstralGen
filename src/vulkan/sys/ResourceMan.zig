@@ -1,4 +1,3 @@
-const CreateStableMapArray = @import("../../structures/StableMapArray.zig").CreateStableMapArray;
 const CreateMapArray = @import("../../structures/MapArray.zig").CreateMapArray;
 const PushConstants = @import("../types/res/PushConstants.zig").PushConstants;
 const DescriptorMan = @import("DescriptorMan.zig").DescriptorMan;
@@ -19,10 +18,8 @@ pub const Transfer = struct {
 };
 
 pub const ResourceMan = struct {
-    alloc: Allocator,
     vma: Vma,
     descMan: DescriptorMan,
-
     buffers: CreateMapArray(Buffer, rc.BUF_MAX, u32, rc.BUF_MAX, 0) = .{},
     textures: CreateMapArray(Texture, rc.TEX_MAX, u32, rc.TEX_MAX, 0) = .{},
 
@@ -34,13 +31,12 @@ pub const ResourceMan = struct {
         const vma = try Vma.init(context.instance, context.gpi, context.gpu);
 
         var stagingBuffers: [rc.MAX_IN_FLIGHT]Buffer = undefined;
-        for (0..stagingBuffers.len) |i| stagingBuffers[i] = try vma.allocStagingBuffer(rc.STAGING_BUF_SIZE);
+        for (0..rc.MAX_IN_FLIGHT) |i| stagingBuffers[i] = try vma.allocStagingBuffer(rc.STAGING_BUF_SIZE);
 
         var transfers: [rc.MAX_IN_FLIGHT]std.array_list.Managed(Transfer) = undefined;
-        for (0..transfers.len) |i| transfers[i] = std.array_list.Managed(Transfer).init(alloc);
+        for (0..rc.MAX_IN_FLIGHT) |i| transfers[i] = std.array_list.Managed(Transfer).init(alloc);
 
         return .{
-            .alloc = alloc,
             .vma = vma,
             .descMan = try DescriptorMan.init(vma, context.gpi, context.gpu),
             .stagingBuffers = stagingBuffers,
@@ -49,39 +45,22 @@ pub const ResourceMan = struct {
     }
 
     pub fn deinit(self: *ResourceMan) void {
-        const bufCount = self.buffers.getCount();
-        for (0..bufCount) |i| {
-            const buf = self.buffers.getPtrAtIndex(@intCast(i));
-            self.vma.freeBuffer(buf.handle, buf.allocation);
-        }
-        const texCount = self.textures.getCount();
-        for (0..texCount) |i| {
-            const tex = self.textures.getPtrAtIndex(@intCast(i));
-            self.vma.freeTexture(tex);
-        }
-
-        self.descMan.deinit(self.vma);
-        for (&self.transfers) |*transferList| transferList.deinit();
+        for (self.buffers.getElements()) |*buf| self.vma.freeBuffer(buf.handle, buf.allocation);
+        for (self.textures.getElements()) |*tex| self.vma.freeTexture(tex);
         for (&self.stagingBuffers) |*stagingBuffer| self.vma.freeBuffer(stagingBuffer.handle, stagingBuffer.allocation);
+        for (&self.transfers) |*transferList| transferList.deinit();
+        self.descMan.deinit(self.vma);
         self.vma.deinit();
     }
 
     pub fn getBufferResourceSlot(self: *ResourceMan, bufId: Buffer.BufId, flightId: u8) !PushConstants.ResourceSlot {
-        if (self.buffers.isKeyUsed(bufId.val) != true) {
-            std.debug.print("Tried getting Buffer ID {} ResourceSlot but ID empty\n", .{bufId.val});
-            return error.NoResourceSlot;
-        }
-        const buffer = self.buffers.getPtr(bufId.val);
-        const updateFlightId = if (buffer.typ == .Indirect) flightId else buffer.lastUpdatedFlightId;
-        return .{ .index = buffer.descIndex[updateFlightId], .count = buffer.count };
+        const buf = try self.getBufferPtr(bufId);
+        const updateFlightId = if (buf.typ == .Indirect) flightId else buf.lastUpdateFlightId;
+        return .{ .index = buf.descIndex[updateFlightId], .count = buf.count };
     }
 
     pub fn getTextureResourceSlot(self: *ResourceMan, texId: Texture.TexId, flightId: u8) !PushConstants.ResourceSlot {
-        if (self.textures.isKeyUsed(texId.val) != true) {
-            std.debug.print("Tried getting Texture ID {} ResourceSlot but ID empty\n", .{texId.val});
-            return error.NoResourceSlot;
-        }
-        const tex = self.textures.getPtr(texId.val);
+        const tex = try self.getTexturePtr(texId);
         return .{ .index = tex.descIndex[flightId], .count = 1 };
     }
 
@@ -92,9 +71,8 @@ pub const ResourceMan = struct {
 
     pub fn queueBufferUpload(self: *ResourceMan, bufInf: Buffer.BufInf, data: anytype, flightId: u8) !void {
         const DataType = @TypeOf(data);
-        const typeInfo = @typeInfo(DataType);
 
-        const bytes: []const u8 = switch (typeInfo) {
+        const bytes: []const u8 = switch (@typeInfo(DataType)) {
             .pointer => |ptr| switch (ptr.size) {
                 .one => std.mem.asBytes(data),
                 .slice => std.mem.sliceAsBytes(data),
@@ -108,47 +86,39 @@ pub const ResourceMan = struct {
 
         if (stagingOffset + bytes.len > rc.STAGING_BUF_SIZE) return error.StagingBufferFull;
 
-        // Copy to Staging
         const stagingPtr: [*]u8 = @ptrCast(stagingBuffer.mappedPtr);
         @memcpy(stagingPtr[stagingOffset..][0..bytes.len], bytes);
 
-        // Calculate Destination Offset Logic (NEW)
         var dstOffset: u64 = 0;
 
         if (bufInf.update == .PerFrame) {
-            // Calculate size of one slice
-            // bufInf.len is per frame length in config
             const sliceSize = @as(u64, bufInf.elementSize) * bufInf.len;
             dstOffset = @as(u64, flightId) * sliceSize; // Offset = FrameIndex * SliceSize
         }
-        // Add to list with dstOffset
+
         try self.transfers[flightId].append(Transfer{ .srcOffset = stagingOffset, .dstResId = bufInf.id, .dstOffset = dstOffset, .size = bytes.len });
-        // Update the buffer object CPU-side tracking
+
         var buffer = try self.getBufferPtr(bufInf.id);
         buffer.count = @intCast(bytes.len / bufInf.elementSize);
 
-        buffer.lastUpdatedFlightId = flightId;
+        buffer.lastUpdateFlightId = flightId;
 
         self.stagingOffsets[flightId] += (bytes.len + 15) & ~@as(u64, 15);
     }
 
     pub fn getTexturePtr(self: *ResourceMan, texId: Texture.TexId) !*Texture {
-        if (self.textures.isKeyUsed(texId.val) == true) {
-            return self.textures.getPtr(texId.val);
-        } else return error.TextureIdNotUsed;
+        if (self.textures.isKeyUsed(texId.val) == true) return self.textures.getPtr(texId.val) else return error.TextureIdNotUsed;
     }
 
     pub fn getBufferPtr(self: *ResourceMan, bufId: Buffer.BufId) !*Buffer {
-        if (self.buffers.isKeyUsed(bufId.val) == true) {
-            return self.buffers.getPtr(bufId.val);
-        } else return error.BufferIdNotUsed;
+        if (self.buffers.isKeyUsed(bufId.val) == true) return self.buffers.getPtr(bufId.val) else return error.BufferIdNotUsed;
     }
 
     pub fn createBuffer(self: *ResourceMan, bufInf: Buffer.BufInf) !void {
         switch (bufInf.update) {
             .Overwrite => {
                 var buffer = try self.vma.allocDefinedBuffer(bufInf, bufInf.mem);
-                const bindlessIndex = self.descMan.updateBufferDescriptorFast(buffer.gpuAddress, buffer.size);
+                const bindlessIndex = self.descMan.updateStorageBufferDescriptorFast(buffer.gpuAddress, buffer.size);
                 for (&buffer.descIndex) |*index| {
                     index.* = bindlessIndex;
                 }
@@ -167,7 +137,7 @@ pub const ResourceMan = struct {
 
                 for (&buffer.descIndex, 0..) |*index, i| {
                     const offset = @as(u64, i) * sliceSize;
-                    const bindlessIndex = self.descMan.updateBufferDescriptorFast(buffer.gpuAddress + offset, sliceSize);
+                    const bindlessIndex = self.descMan.updateStorageBufferDescriptorFast(buffer.gpuAddress + offset, sliceSize);
                     index.* = bindlessIndex;
                 }
                 self.buffers.set(realBufInf.id.val, buffer);
@@ -176,7 +146,6 @@ pub const ResourceMan = struct {
                 for (buffer.descIndex) |index| std.debug.print("{} ", .{index});
                 self.vma.printMemoryInfo(buffer.allocation);
             },
-            .Async => {},
         }
     }
 
@@ -262,7 +231,7 @@ pub const ResourceMan = struct {
 
                 @memcpy(destPtr[0..dataBytes.len], dataBytes);
 
-                buffer.lastUpdatedFlightId = flightId;
+                buffer.lastUpdateFlightId = flightId;
                 // Update count (this updates the tracked count for the object)
                 buffer.count = @intCast(elementCount);
             },
@@ -270,23 +239,15 @@ pub const ResourceMan = struct {
         }
     }
 
-    pub fn destroyTexture(self: *ResourceMan, texId: Texture.TexId) void {
-        if (self.textures.isKeyUsed(texId.val) == false) {
-            std.debug.print("Warning: Tried to destroy empty Texture ID {}\n", .{texId});
-            return;
-        }
-        const tex = self.textures.getPtr(texId.val);
+    pub fn destroyTexture(self: *ResourceMan, texId: Texture.TexId) !void {
+        const tex = try self.getTexturePtr(texId);
         self.vma.freeTexture(tex);
         self.textures.removeAtKey(texId.val);
     }
 
-    pub fn destroyBuffer(self: *ResourceMan, bufId: Buffer.BufId) void {
-        if (self.buffers.isKeyUsed(bufId.val) == false) {
-            std.debug.print("Warning: Tried to destroy empty Buffer ID {}\n", .{bufId});
-            return;
-        }
-        const buffer = self.buffers.getPtr(bufId.val);
-        self.vma.freeBuffer(buffer.handle, buffer.allocation);
+    pub fn destroyBuffer(self: *ResourceMan, bufId: Buffer.BufId) !void {
+        const buf = try self.getBufferPtr(bufId);
+        self.vma.freeBuffer(buf.handle, buf.allocation);
         self.buffers.removeAtKey(bufId.val);
     }
 };

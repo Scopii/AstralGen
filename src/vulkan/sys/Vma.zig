@@ -65,7 +65,6 @@ pub const Vma = struct {
 
     pub fn allocDefinedBuffer(self: *const Vma, bufInf: Buffer.BufInf, memUse: vhE.MemUsage) !Buffer {
         const dataSize = bufInf.elementSize;
-
         if (dataSize == 0) {
             std.debug.print("Binding Info has invalid element size\n", .{});
             return error.AllocDefinedBufferFailed;
@@ -81,10 +80,7 @@ pub const Vma = struct {
             .Indirect => vk.VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | vk.VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
         };
 
-        if (bufInf.typ != .Staging) {
-            bufferBits |= vk.VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-            bufferBits |= vk.VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
-        }
+        if (bufInf.typ != .Staging) bufferBits |= vk.VK_BUFFER_USAGE_TRANSFER_DST_BIT | vk.VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
 
         const memType: vk.VmaMemoryUsage = switch (memUse) {
             .Gpu => vk.VMA_MEMORY_USAGE_GPU_ONLY,
@@ -104,11 +100,11 @@ pub const Vma = struct {
         return buffer;
     }
 
-    pub fn allocBuffer(self: *const Vma, size: vk.VkDeviceSize, bufUsage: vk.VkBufferUsageFlags, memUse: vk.VmaMemoryUsage, memFlags: vk.VmaAllocationCreateFlags) !Buffer {
+    pub fn allocBuffer(self: *const Vma, size: vk.VkDeviceSize, bufUse: vk.VkBufferUsageFlags, memUse: vk.VmaMemoryUsage, memFlags: vk.VmaAllocationCreateFlags) !Buffer {
         const bufInf = vk.VkBufferCreateInfo{
             .sType = vk.VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
             .size = size,
-            .usage = bufUsage,
+            .usage = bufUse,
             .sharingMode = vk.VK_SHARING_MODE_EXCLUSIVE,
         };
         var buffer: vk.VkBuffer = undefined;
@@ -118,7 +114,7 @@ pub const Vma = struct {
         try vhF.check(vk.vmaCreateBuffer(self.handle, &bufInf, &allocCreateInf, &buffer, &allocation, &allocVmaInf), "Failed to create Gpu Buffer");
 
         var gpuAddress: u64 = 0;
-        if ((bufUsage & vk.VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT) != 0) {
+        if ((bufUse & vk.VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT) != 0) {
             const addressInf = vk.VkBufferDeviceAddressInfo{ .sType = vk.VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO, .buffer = buffer };
             gpuAddress = vk.vkGetBufferDeviceAddress(self.gpi, &addressInf);
         }
@@ -138,24 +134,18 @@ pub const Vma = struct {
         view: vk.VkImageView,
     };
 
-    fn allocImagePacket(self: *Vma, memType: vk.VmaMemoryUsage, use: vk.VkImageUsageFlags, aspectMask: vk.VkImageAspectFlags, format: c_uint, extent: vk.VkExtent3D) !Image {
-        // Allocation from GPU local memory
+    fn allocImagePacket(self: *Vma, memType: vk.VmaMemoryUsage, imgUse: vk.VkImageUsageFlags, aspectFlags: vk.VkImageAspectFlags, format: c_uint, extent: vk.VkExtent3D) !Image {
         var img: vk.VkImage = undefined;
         var allocation: vk.VmaAllocation = undefined;
-
-        const imgInf = createAllocatedImageInf(format, use, extent);
+        const imgInf = createAllocatedImageInf(format, imgUse, extent);
         const imgAllocInf = vk.VmaAllocationCreateInfo{ .usage = memType, .requiredFlags = vk.VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT };
         try vhF.check(vk.vmaCreateImage(self.handle, &imgInf, &imgAllocInf, &img, &allocation, null), "Could not create Render Image");
 
         var view: vk.VkImageView = undefined;
-        const viewInf = createAllocatedImageViewInf(format, img, aspectMask);
+        const viewInf = createAllocatedImageViewInf(format, img, aspectFlags);
         try vhF.check(vk.vkCreateImageView(self.gpi, &viewInf, null, &view), "Could not create Render Image View");
 
-        return .{
-            .allocation = allocation,
-            .img = img,
-            .view = view,
-        };
+        return .{ .allocation = allocation, .img = img, .view = view };
     }
 
     pub fn allocTexture(self: *Vma, texInf: Texture.TexInf) !Texture {
@@ -164,14 +154,11 @@ pub const Vma = struct {
             .CpuWrite => vk.VMA_MEMORY_USAGE_CPU_TO_GPU,
             .CpuRead => vk.VMA_MEMORY_USAGE_GPU_TO_CPU,
         };
-        var use: vk.VkImageUsageFlags = vk.VK_IMAGE_USAGE_TRANSFER_SRC_BIT | vk.VK_IMAGE_USAGE_TRANSFER_DST_BIT | vk.VK_IMAGE_USAGE_SAMPLED_BIT;
 
+        var texUse: vk.VkImageUsageFlags = vk.VK_IMAGE_USAGE_TRANSFER_SRC_BIT | vk.VK_IMAGE_USAGE_TRANSFER_DST_BIT | vk.VK_IMAGE_USAGE_SAMPLED_BIT;
         switch (texInf.typ) {
-            .Color => {
-                use |= vk.VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-                use |= vk.VK_IMAGE_USAGE_STORAGE_BIT; // Compute Write
-            },
-            .Depth, .Stencil => use |= vk.VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, // Depth usually CANNOT be Storage!
+            .Color => texUse |= vk.VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | vk.VK_IMAGE_USAGE_STORAGE_BIT,
+            .Depth, .Stencil => texUse |= vk.VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, // Depth usually CANNOT be Storage!
         }
 
         const format: c_uint = switch (texInf.typ) {
@@ -192,7 +179,7 @@ pub const Vma = struct {
 
         switch (texInf.update) {
             .Overwrite => {
-                const imagePacket = try self.allocImagePacket(memType, use, aspectMask, format, extent);
+                const imagePacket = try self.allocImagePacket(memType, texUse, aspectMask, format, extent);
                 for (0..rc.MAX_IN_FLIGHT) |i| {
                     tempAllocations[i] = imagePacket.allocation;
                     tempBase[i] = .{ .extent = extent, .format = format, .texType = texInf.typ, .img = imagePacket.img, .view = imagePacket.view };
@@ -200,13 +187,10 @@ pub const Vma = struct {
             },
             .PerFrame => {
                 for (0..rc.MAX_IN_FLIGHT) |i| {
-                    const imagePacket = try self.allocImagePacket(memType, use, aspectMask, format, extent);
+                    const imagePacket = try self.allocImagePacket(memType, texUse, aspectMask, format, extent);
                     tempAllocations[i] = imagePacket.allocation;
                     tempBase[i] = .{ .extent = extent, .format = format, .texType = texInf.typ, .img = imagePacket.img, .view = imagePacket.view };
                 }
-            },
-            .Async => {
-                return error.AsyncNotConfigured;
             },
         }
 
@@ -217,29 +201,18 @@ pub const Vma = struct {
         };
     }
 
-    pub fn getAllocationInfo(self: *const Vma, allocation: vk.VmaAllocation) vk.VmaAllocationInfo {
-        var allocVmaInf: vk.VmaAllocationInfo = undefined;
-        vk.vmaGetAllocationInfo(self.handle, allocation, &allocVmaInf);
-        return allocVmaInf;
-    }
-
     pub fn freeBuffer(self: *const Vma, buffer: vk.VkBuffer, allocation: vk.VmaAllocation) void {
         vk.vmaDestroyBuffer(self.handle, buffer, allocation);
     }
 
-    pub fn freeTexture(self: *const Vma, tex: *Texture) void {
-        switch (tex.update) {
-            .Overwrite => {
-                vk.vkDestroyImageView(self.gpi, tex.base[0].view, null);
-                vk.vmaDestroyImage(self.handle, tex.base[0].img, tex.allocation[0]);
-            },
-            .PerFrame => {
-                for (0..tex.base.len) |i| {
-                    vk.vkDestroyImageView(self.gpi, tex.base[@intCast(i)].view, null);
-                    vk.vmaDestroyImage(self.handle, tex.base[@intCast(i)].img, tex.allocation[@intCast(i)]);
-                }
-            },
-            .Async => {},
+    pub fn freeTexture(self: *const Vma, tex: *const Texture) void {
+        const count = switch (tex.update) {
+            .Overwrite => 1,
+            .PerFrame => rc.MAX_IN_FLIGHT,
+        };
+        for (0..count) |i| {
+            vk.vkDestroyImageView(self.gpi, tex.base[@intCast(i)].view, null);
+            vk.vmaDestroyImage(self.handle, tex.base[@intCast(i)].img, tex.allocation[@intCast(i)]);
         }
     }
 };

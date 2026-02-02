@@ -60,7 +60,7 @@ pub const cameraUB = Buffer.create(.{ .id = .{ .val = 40 }, .mem = .Gpu, .typ = 
 pub const BUFFERS: []const Buffer.BufInf = &.{ objectSB, cameraUB, indirectSB, readbackSB };
 
 // Textures
-pub const quantTex = Texture.create(.{ .id = .{ .val = 5 }, .mem = .Gpu, .typ = .Color, .width = 16 * 10, .height = 9 * 10, .update = .PerFrame });
+pub const quantTex = Texture.create(.{ .id = .{ .val = 5 }, .mem = .Gpu, .typ = .Color, .width = 1920, .height = 1080, .update = .PerFrame });
 pub const quantDepthTex = Texture.create(.{ .id = .{ .val = 11 }, .mem = .Gpu, .typ = .Depth, .width = 1920, .height = 1080, .update = .PerFrame });
 pub const TEXTURES: []const Texture.TexInf = &.{ quantTex, quantDepthTex };
 

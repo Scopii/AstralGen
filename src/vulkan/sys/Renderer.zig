@@ -93,7 +93,7 @@ pub const Renderer = struct {
         const new = self.swapMan.getMaxRenderExtent(texId);
 
         if (new.width != old.width or new.height != old.height) {
-            self.resMan.destroyTexture(texId);
+            try self.resMan.destroyTexture(texId);
             try self.resMan.createTexture(.{ .id = texId, .width = new.width, .height = new.height, .depth = 1, .typ = oldType, .mem = .Gpu, .update = .PerFrame });
             std.debug.print("Render Texture ID {} recreated {}x{} to {}x{}\n", .{ texId.val, old.width, old.height, new.width, new.height });
         }
