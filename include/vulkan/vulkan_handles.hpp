@@ -1097,9 +1097,6 @@ namespace VULKAN_HPP_NAMESPACE
   struct PhysicalDeviceImageViewImageFormatInfoEXT;
   struct FilterCubicImageViewImageFormatPropertiesEXT;
 
-  //=== VK_QCOM_cooperative_matrix_conversion ===
-  struct PhysicalDeviceCooperativeMatrixConversionFeaturesQCOM;
-
   //=== VK_EXT_external_memory_host ===
   struct ImportMemoryHostPointerInfoEXT;
   struct MemoryHostPointerPropertiesEXT;
