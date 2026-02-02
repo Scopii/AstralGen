@@ -23,10 +23,8 @@ pub const ResourceMan = struct {
     vma: Vma,
     descMan: DescriptorMan,
 
-    textures: CreateStableMapArray(Texture, rc.TEX_MAX, u32, rc.TEX_MAX, 0) = .{},
-
     buffers: CreateMapArray(Buffer, rc.BUF_MAX, u32, rc.BUF_MAX, 0) = .{},
-    textures2: CreateMapArray(Texture, rc.TEX_MAX, u32, rc.TEX_MAX, 0) = .{},
+    textures: CreateMapArray(Texture, rc.TEX_MAX, u32, rc.TEX_MAX, 0) = .{},
 
     stagingBuffers: [rc.MAX_IN_FLIGHT]Buffer,
     stagingOffsets: [rc.MAX_IN_FLIGHT]u64 = .{0} ** rc.MAX_IN_FLIGHT,
@@ -47,21 +45,21 @@ pub const ResourceMan = struct {
             .descMan = try DescriptorMan.init(vma, context.gpi, context.gpu),
             .stagingBuffers = stagingBuffers,
             .transfers = transfers,
-            .textures = comptime CreateStableMapArray(Texture, rc.TEX_MAX, u32, rc.TEX_MAX, 0).init(),
         };
     }
 
     pub fn deinit(self: *ResourceMan) void {
         const bufCount = self.buffers.getCount();
         for (0..bufCount) |i| {
-            const buf = self.buffers.getAtIndex(@intCast(i));
+            const buf = self.buffers.getPtrAtIndex(@intCast(i));
             self.vma.freeBuffer(buf.handle, buf.allocation);
         }
-        var texIter = self.textures.iterator();
-        while (texIter.next()) |key| {
-            const tex = self.textures.getPtr(key);
+        const texCount = self.textures.getCount();
+        for (0..texCount) |i| {
+            const tex = self.textures.getPtrAtIndex(@intCast(i));
             self.vma.freeTexture(tex);
         }
+
         self.descMan.deinit(self.vma);
         for (&self.transfers) |*transferList| transferList.deinit();
         for (&self.stagingBuffers) |*stagingBuffer| self.vma.freeBuffer(stagingBuffer.handle, stagingBuffer.allocation);
@@ -75,16 +73,16 @@ pub const ResourceMan = struct {
         }
         const buffer = self.buffers.getPtr(bufId.val);
         const updateFlightId = if (buffer.typ == .Indirect) flightId else buffer.lastUpdatedFlightId;
-        return .{ .index = buffer.bindlessIndices[updateFlightId], .count = buffer.count };
+        return .{ .index = buffer.descIndex[updateFlightId], .count = buffer.count };
     }
 
-    pub fn getTextureResourceSlot(self: *ResourceMan, texId: Texture.TexId) !PushConstants.ResourceSlot {
+    pub fn getTextureResourceSlot(self: *ResourceMan, texId: Texture.TexId, flightId: u8) !PushConstants.ResourceSlot {
         if (self.textures.isKeyUsed(texId.val) != true) {
             std.debug.print("Tried getting Texture ID {} ResourceSlot but ID empty\n", .{texId.val});
             return error.NoResourceSlot;
         }
-        const bindlessIndex = self.textures.getIndex(texId.val);
-        return .{ .index = bindlessIndex, .count = 1 };
+        const tex = self.textures.getPtr(texId.val);
+        return .{ .index = tex.descIndex[flightId], .count = 1 };
     }
 
     pub fn resetTransfers(self: *ResourceMan, flightId: u8) void {
@@ -151,12 +149,12 @@ pub const ResourceMan = struct {
             .Overwrite => {
                 var buffer = try self.vma.allocDefinedBuffer(bufInf, bufInf.mem);
                 const bindlessIndex = self.descMan.updateBufferDescriptorFast(buffer.gpuAddress, buffer.size);
-                for (&buffer.bindlessIndices) |*index| {
+                for (&buffer.descIndex) |*index| {
                     index.* = bindlessIndex;
                 }
                 self.buffers.set(bufInf.id.val, buffer);
 
-                std.debug.print("Buffer ID {} Type {} Update: {} created! ", .{ bufInf.id.val, bufInf.typ, bufInf.update });
+                std.debug.print("Buffer ID {}, Type {}, Update: {} created! Descriptor Index {} ", .{ bufInf.id.val, bufInf.typ, bufInf.update, bindlessIndex });
                 self.vma.printMemoryInfo(buffer.allocation);
             },
             .PerFrame => {
@@ -167,14 +165,15 @@ pub const ResourceMan = struct {
                 const totalSize = buffer.size;
                 const sliceSize = totalSize / rc.MAX_IN_FLIGHT;
 
-                for (&buffer.bindlessIndices, 0..) |*index, i| {
+                for (&buffer.descIndex, 0..) |*index, i| {
                     const offset = @as(u64, i) * sliceSize;
                     const bindlessIndex = self.descMan.updateBufferDescriptorFast(buffer.gpuAddress + offset, sliceSize);
                     index.* = bindlessIndex;
                 }
                 self.buffers.set(realBufInf.id.val, buffer);
 
-                std.debug.print("Buffer ID {} Type {} Update: {} created! ", .{ realBufInf.id.val, realBufInf.typ, realBufInf.update });
+                std.debug.print("Buffer ID {}, Type {}, Update {} created! Descriptor Indices ", .{ realBufInf.id.val, realBufInf.typ, realBufInf.update });
+                for (buffer.descIndex) |index| std.debug.print("{} ", .{index});
                 self.vma.printMemoryInfo(buffer.allocation);
             },
             .Async => {},
@@ -182,15 +181,27 @@ pub const ResourceMan = struct {
     }
 
     pub fn createTexture(self: *ResourceMan, texInf: Texture.TexInf) !void {
-        const tex = try self.vma.allocTexture(texInf, texInf.mem);
-        const bindlessIndex = try self.textures.insert(texInf.id.val, tex);
+        var tex = try self.vma.allocTexture(texInf);
 
-        if (texInf.typ == .Color) {
-            try self.descMan.updateStorageTextureDescriptor(tex.base.view, bindlessIndex);
-        } else try self.descMan.updateSampledTextureDescriptor(tex.base.view, bindlessIndex);
+        switch (texInf.typ) {
+            .Color => {
+                for (0..tex.descIndex.len) |i| {
+                    const bindlessIndex = try self.descMan.updateStorageTextureDescriptor(tex.base[i].view);
+                    tex.descIndex[i] = bindlessIndex;
+                }
+            },
+            .Depth, .Stencil => {
+                for (0..tex.descIndex.len) |i| {
+                    const bindlessIndex = try self.descMan.updateSampledTextureDescriptor(tex.base[i].view);
+                    tex.descIndex[i] = bindlessIndex;
+                }
+            },
+        }
+        std.debug.print("Texture ID {}, Type {}, Update {} created! Descriptor Indices ", .{ texInf.id.val, texInf.typ, texInf.update });
+        for (tex.descIndex) |index| std.debug.print("{} ", .{index});
 
-        std.debug.print("Texture ID {} Type {} -> BindlessIndex {} created! ", .{ texInf.id.val, texInf.typ, bindlessIndex });
-        self.vma.printMemoryInfo(tex.allocation);
+        self.vma.printMemoryInfo(tex.allocation[0]);
+        self.textures.set(texInf.id.val, tex);
     }
 
     pub fn getBufferDataPtr(self: *ResourceMan, bufId: Buffer.BufId, comptime T: type) !*T {
@@ -199,7 +210,7 @@ pub const ResourceMan = struct {
         return error.BufferNotHostVisible;
     }
 
-    pub fn printReadback(self: *ResourceMan, bufId: Buffer.BufId, comptime T: type) !void {
+    pub fn printReadbackBuffer(self: *ResourceMan, bufId: Buffer.BufId, comptime T: type) !void {
         const readbackPtr = try self.getBufferDataPtr(bufId, T);
         std.debug.print("Readback: {}\n", .{readbackPtr.*});
     }
@@ -259,19 +270,6 @@ pub const ResourceMan = struct {
         }
     }
 
-    pub fn replaceTexture(self: *ResourceMan, texId: Texture.TexId, nexTexInf: Texture.TexInf) !void {
-        var oldTex = try self.getTexturePtr(texId);
-        oldTex.base.state = .{};
-        self.vma.freeTexture(oldTex);
-
-        const newTex = try self.vma.allocTexture(nexTexInf, .Gpu);
-        const bindlessIndex = self.textures.getIndex(texId.val);
-        try self.descMan.updateStorageTextureDescriptor(newTex.base.view, bindlessIndex);
-
-        oldTex.* = newTex;
-        std.debug.print("Texture {} Resized/Replaced at Slot {}\n", .{ texId.val, bindlessIndex });
-    }
-
     pub fn destroyTexture(self: *ResourceMan, texId: Texture.TexId) void {
         if (self.textures.isKeyUsed(texId.val) == false) {
             std.debug.print("Warning: Tried to destroy empty Texture ID {}\n", .{texId});
@@ -279,7 +277,7 @@ pub const ResourceMan = struct {
         }
         const tex = self.textures.getPtr(texId.val);
         self.vma.freeTexture(tex);
-        self.textures.remove(texId.val);
+        self.textures.removeAtKey(texId.val);
     }
 
     pub fn destroyBuffer(self: *ResourceMan, bufId: Buffer.BufId) void {

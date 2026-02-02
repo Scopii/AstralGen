@@ -1,3 +1,4 @@
+const TextureBase = @import("../types/res/TextureBase.zig").TextureBase;
 const DescriptorBuffer = @import("DescriptorMan.zig").DescriptorBuffer;
 const Texture = @import("../types/res/Texture.zig").Texture;
 const Buffer = @import("../types/res/Buffer.zig").Buffer;
@@ -131,8 +132,34 @@ pub const Vma = struct {
         };
     }
 
-    pub fn allocTexture(self: *Vma, texInf: Texture.TexInf, memUse: vhE.MemUsage) !Texture {
-        const memType: vk.VmaMemoryUsage = switch (memUse) {
+    pub const Image = struct {
+        img: vk.VkImage = undefined,
+        allocation: vk.VmaAllocation,
+        view: vk.VkImageView,
+    };
+
+    fn allocImagePacket(self: *Vma, memType: vk.VmaMemoryUsage, use: vk.VkImageUsageFlags, aspectMask: vk.VkImageAspectFlags, format: c_uint, extent: vk.VkExtent3D) !Image {
+        // Allocation from GPU local memory
+        var img: vk.VkImage = undefined;
+        var allocation: vk.VmaAllocation = undefined;
+
+        const imgInf = createAllocatedImageInf(format, use, extent);
+        const imgAllocInf = vk.VmaAllocationCreateInfo{ .usage = memType, .requiredFlags = vk.VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT };
+        try vhF.check(vk.vmaCreateImage(self.handle, &imgInf, &imgAllocInf, &img, &allocation, null), "Could not create Render Image");
+
+        var view: vk.VkImageView = undefined;
+        const viewInf = createAllocatedImageViewInf(format, img, aspectMask);
+        try vhF.check(vk.vkCreateImageView(self.gpi, &viewInf, null, &view), "Could not create Render Image View");
+
+        return .{
+            .allocation = allocation,
+            .img = img,
+            .view = view,
+        };
+    }
+
+    pub fn allocTexture(self: *Vma, texInf: Texture.TexInf) !Texture {
+        const memType: vk.VmaMemoryUsage = switch (texInf.mem) {
             .Gpu => vk.VMA_MEMORY_USAGE_GPU_ONLY,
             .CpuWrite => vk.VMA_MEMORY_USAGE_CPU_TO_GPU,
             .CpuRead => vk.VMA_MEMORY_USAGE_GPU_TO_CPU,
@@ -152,27 +179,41 @@ pub const Vma = struct {
             .Depth, .Stencil => rc.TEX_DEPTH_FORMAT,
         };
 
-        // Allocation from GPU local memory
-        var img: vk.VkImage = undefined;
-        var allocation: vk.VmaAllocation = undefined;
-        const extent = vk.VkExtent3D{ .width = texInf.width, .height = texInf.height, .depth = texInf.depth };
-
-        const imgInf = createAllocatedImageInf(format, use, extent);
-        const imgAllocInf = vk.VmaAllocationCreateInfo{ .usage = memType, .requiredFlags = vk.VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT };
-        try vhF.check(vk.vmaCreateImage(self.handle, &imgInf, &imgAllocInf, &img, &allocation, null), "Could not create Render Image");
-
         const aspectMask: vk.VkImageAspectFlags = switch (texInf.typ) {
             .Color => vk.VK_IMAGE_ASPECT_COLOR_BIT,
             .Depth => vk.VK_IMAGE_ASPECT_DEPTH_BIT,
             .Stencil => vk.VK_IMAGE_ASPECT_STENCIL_BIT,
         };
-        var view: vk.VkImageView = undefined;
-        const viewInf = createAllocatedImageViewInf(format, img, aspectMask);
-        try vhF.check(vk.vkCreateImageView(self.gpi, &viewInf, null, &view), "Could not create Render Image View");
+
+        const extent = vk.VkExtent3D{ .width = texInf.width, .height = texInf.height, .depth = texInf.depth };
+
+        var tempAllocations: [rc.MAX_IN_FLIGHT]vk.VmaAllocation = undefined;
+        var tempBase: [rc.MAX_IN_FLIGHT]TextureBase = undefined;
+
+        switch (texInf.update) {
+            .Overwrite => {
+                const imagePacket = try self.allocImagePacket(memType, use, aspectMask, format, extent);
+                for (0..rc.MAX_IN_FLIGHT) |i| {
+                    tempAllocations[i] = imagePacket.allocation;
+                    tempBase[i] = .{ .extent = extent, .format = format, .texType = texInf.typ, .img = imagePacket.img, .view = imagePacket.view };
+                }
+            },
+            .PerFrame => {
+                for (0..rc.MAX_IN_FLIGHT) |i| {
+                    const imagePacket = try self.allocImagePacket(memType, use, aspectMask, format, extent);
+                    tempAllocations[i] = imagePacket.allocation;
+                    tempBase[i] = .{ .extent = extent, .format = format, .texType = texInf.typ, .img = imagePacket.img, .view = imagePacket.view };
+                }
+            },
+            .Async => {
+                return error.AsyncNotConfigured;
+            },
+        }
 
         return .{
-            .allocation = allocation,
-            .base = .{ .extent = extent, .format = format, .texType = texInf.typ, .img = img, .view = view },
+            .allocation = tempAllocations,
+            .base = tempBase,
+            .update = texInf.update,
         };
     }
 
@@ -187,8 +228,19 @@ pub const Vma = struct {
     }
 
     pub fn freeTexture(self: *const Vma, tex: *Texture) void {
-        vk.vkDestroyImageView(self.gpi, tex.base.view, null);
-        vk.vmaDestroyImage(self.handle, tex.base.img, tex.allocation);
+        switch (tex.update) {
+            .Overwrite => {
+                vk.vkDestroyImageView(self.gpi, tex.base[0].view, null);
+                vk.vmaDestroyImage(self.handle, tex.base[0].img, tex.allocation[0]);
+            },
+            .PerFrame => {
+                for (0..tex.base.len) |i| {
+                    vk.vkDestroyImageView(self.gpi, tex.base[@intCast(i)].view, null);
+                    vk.vmaDestroyImage(self.handle, tex.base[@intCast(i)].img, tex.allocation[@intCast(i)]);
+                }
+            },
+            .Async => {},
+        }
     }
 };
 

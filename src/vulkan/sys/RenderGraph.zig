@@ -108,19 +108,19 @@ pub const RenderGraph = struct {
         }
         for (pass.texUses) |texUse| {
             const tex = try resMan.getTexturePtr(texUse.texId);
-            try self.checkImageState(&tex.base, texUse.getNeededState());
+            try self.checkImageState(&tex.base[cmd.flightId], texUse.getNeededState());
         }
         for (pass.getColorAtts()) |colorAtt| {
             const tex = try resMan.getTexturePtr(colorAtt.texId);
-            try self.checkImageState(&tex.base, colorAtt.getNeededState());
+            try self.checkImageState(&tex.base[cmd.flightId], colorAtt.getNeededState());
         }
         if (pass.getDepthAtt()) |depthAtt| {
             const tex = try resMan.getTexturePtr(depthAtt.texId);
-            try self.checkImageState(&tex.base, depthAtt.getNeededState());
+            try self.checkImageState(&tex.base[cmd.flightId], depthAtt.getNeededState());
         }
         if (pass.getStencilAtt()) |stencilAtt| {
             const tex = try resMan.getTexturePtr(stencilAtt.texId);
-            try self.checkImageState(&tex.base, stencilAtt.getNeededState());
+            try self.checkImageState(&tex.base[cmd.flightId], stencilAtt.getNeededState());
         }
         self.bakeBarriers(cmd);
     }
@@ -129,9 +129,9 @@ pub const RenderGraph = struct {
         if (renderTexId) |texId| {
             const tex = try resMan.getTexturePtr(texId);
             cmd.dispatch(
-                (tex.base.extent.width + dispatch.x - 1) / dispatch.x,
-                (tex.base.extent.height + dispatch.y - 1) / dispatch.y,
-                (tex.base.extent.depth + dispatch.z - 1) / dispatch.z,
+                (tex.base[cmd.flightId].extent.width + dispatch.x - 1) / dispatch.x,
+                (tex.base[cmd.flightId].extent.height + dispatch.y - 1) / dispatch.y,
+                (tex.base[cmd.flightId].extent.depth + dispatch.z - 1) / dispatch.z,
             );
         } else cmd.dispatch(dispatch.x, dispatch.y, dispatch.z);
     }
@@ -163,19 +163,19 @@ pub const RenderGraph = struct {
 
         const depthInf: ?vk.VkRenderingAttachmentInfo = if (passData.depthAtt) |depth| blk: {
             const tex = try resMan.getTexturePtr(depth.texId);
-            break :blk tex.base.createAttachment(depth.clear);
+            break :blk tex.base[cmd.flightId].createAttachment(depth.clear);
         } else null;
 
         const stencilInf: ?vk.VkRenderingAttachmentInfo = if (passData.stencilAtt) |stencil| blk: {
             const tex = try resMan.getTexturePtr(stencil.texId);
-            break :blk tex.base.createAttachment(stencil.clear);
+            break :blk tex.base[cmd.flightId].createAttachment(stencil.clear);
         } else null;
 
         var colorInfs: [8]vk.VkRenderingAttachmentInfo = undefined;
         for (0..passData.colorAtts.len) |i| {
             const colorAtt = passData.colorAtts[i];
             const tex = try resMan.getTexturePtr(colorAtt.texId);
-            colorInfs[i] = tex.base.createAttachment(colorAtt.clear);
+            colorInfs[i] = tex.base[cmd.flightId].createAttachment(colorAtt.clear);
         }
 
         cmd.beginRendering(width, height, colorInfs[0..passData.colorAtts.len], depthInf, stencilInf);
@@ -202,14 +202,14 @@ pub const RenderGraph = struct {
 
         for (swapchains) |swapchain| { // Render Texture and Swapchain Preperations
             const renderTex = try resMan.getTexturePtr(swapchain.renderTexId);
-            try self.checkImageState(&renderTex.base, .{ .stage = .Transfer, .access = .TransferRead, .layout = .TransferSrc });
+            try self.checkImageState(&renderTex.base[cmd.flightId], .{ .stage = .Transfer, .access = .TransferRead, .layout = .TransferSrc });
             try self.checkImageState(&swapchain.textures[swapchain.curIndex], .{ .stage = .Transfer, .access = .TransferWrite, .layout = .TransferDst });
         }
         self.bakeBarriers(cmd);
 
         for (swapchains) |swapchain| { // Blits + Swapchain Presentation Barriers
             const renderTex = try resMan.getTexturePtr(swapchain.renderTexId);
-            cmd.copyImageToImage(renderTex.base.img, renderTex.base.extent, swapchain.getCurTexture().img, swapchain.getExtent3D(), rc.RENDER_TEX_STRETCH);
+            cmd.copyImageToImage(renderTex.base[cmd.flightId].img, renderTex.base[cmd.flightId].extent, swapchain.getCurTexture().img, swapchain.getExtent3D(), rc.RENDER_TEX_STRETCH);
             try self.checkImageState(swapchain.getCurTexture(), .{ .stage = .ColorAtt, .access = .None, .layout = .PresentSrc });
         }
         self.bakeBarriers(cmd);

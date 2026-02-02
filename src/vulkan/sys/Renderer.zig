@@ -88,11 +88,13 @@ pub const Renderer = struct {
 
     pub fn updateRenderTexture(self: *Renderer, texId: Texture.TexId) !void {
         const tex = try self.resMan.getTexturePtr(texId);
-        const old = tex.base.extent;
+        const old = tex.base[0].extent;
+        const oldType = tex.base[0].texType;
         const new = self.swapMan.getMaxRenderExtent(texId);
 
         if (new.width != old.width or new.height != old.height) {
-            try self.resMan.replaceTexture(texId, .{ .id = texId, .width = new.width, .height = new.height, .depth = 1, .typ = tex.base.texType, .mem = .Gpu });
+            self.resMan.destroyTexture(texId);
+            try self.resMan.createTexture(.{ .id = texId, .width = new.width, .height = new.height, .depth = 1, .typ = oldType, .mem = .Gpu, .update = .PerFrame });
             std.debug.print("Render Texture ID {} recreated {}x{} to {}x{}\n", .{ texId.val, old.width, old.height, new.width, new.height });
         }
     }
@@ -110,7 +112,7 @@ pub const Renderer = struct {
             return;
         }
 
-        if (rc.GPU_READBACK == true) try self.resMan.printReadback(.{ .val = 45 }, vkT.ReadbackData);
+        if (rc.GPU_READBACK == true) try self.resMan.printReadbackBuffer(.{ .val = 45 }, vkT.ReadbackData);
         if (rc.GPU_PROFILING == true) try self.renderGraph.cmdMan.printQueryResults(flightId);
 
         const cmd = try self.renderGraph.recordFrame(self.passes.items, flightId, self.scheduler.totalFrames, frameData, targets, &self.resMan, &self.shaderMan);

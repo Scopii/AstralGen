@@ -10,7 +10,7 @@ pub const Buffer = struct {
     gpuAddress: u64,
     size: vk.VkDeviceSize,
     count: u32 = 0,
-    bindlessIndices: [rc.MAX_IN_FLIGHT]u32 = .{0} ** rc.MAX_IN_FLIGHT,
+    descIndex: [rc.MAX_IN_FLIGHT]u32 = .{0} ** rc.MAX_IN_FLIGHT,
     lastUpdatedFlightId: u8 = 0,
     state: BufferState = .{},
     typ: vhE.BufferType = .Storage,
@@ -25,7 +25,7 @@ pub const Buffer = struct {
     }
 
     pub fn getResourceSlot(self: *const Buffer) PushConstants.ResourceSlot {
-        return .{ .index = self.bindlessIndices, .count = self.count };
+        return .{ .index = self.descIndex, .count = self.count };
     }
 
     pub fn createBufferBarrier(self: *Buffer, newState: BufferState) vk.VkBufferMemoryBarrier2 {
