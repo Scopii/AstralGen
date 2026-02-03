@@ -267,9 +267,40 @@ fn createGPI(alloc: Allocator, gpu: vk.VkPhysicalDevice, families: QueueFamilies
     vk.vkGetPhysicalDeviceFeatures(gpu, &features);
     features.shaderInt64 = vk.VK_TRUE;
 
+    var vk14Features = vk.VkPhysicalDeviceVulkan14Features{
+        .sType = vk.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_4_FEATURES,
+        .maintenance5 = vk.VK_TRUE,
+        .pNext = null,
+    };
+
+    var descUntypedFeatures = vk.VkPhysicalDeviceShaderUntypedPointersFeaturesKHR{
+        .sType = vk.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_UNTYPED_POINTERS_FEATURES_KHR,
+        .pNext = &vk14Features,
+        .shaderUntypedPointers = vk.VK_TRUE,
+    };
+
+    var descHeapFeatures = vk.VkPhysicalDeviceDescriptorHeapFeaturesEXT{
+        .sType = vk.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_HEAP_FEATURES_EXT,
+        .pNext = &descUntypedFeatures,
+        .descriptorHeap = vk.VK_TRUE,
+        .descriptorHeapCaptureReplay = vk.VK_FALSE,
+    };
+
+    var features2 = vk.VkPhysicalDeviceFeatures2{
+        .sType = vk.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
+        .pNext = &descHeapFeatures,
+    };
+    vk.vkGetPhysicalDeviceFeatures2(gpu, &features2);
+
+    if (descHeapFeatures.descriptorHeap == vk.VK_TRUE) {
+        std.debug.print("Descriptor heaps supported!\n", .{});
+    } else {
+        std.debug.print("Descriptor heaps NOT supported - stick with descriptor buffers\n", .{});
+    }
+
     var dynamicState3Features = vk.VkPhysicalDeviceExtendedDynamicState3FeaturesEXT{
         .sType = vk.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_3_FEATURES_EXT,
-        .pNext = null,
+        .pNext = &descHeapFeatures,
         .extendedDynamicState3ColorBlendEnable = vk.VK_TRUE,
         .extendedDynamicState3ColorWriteMask = vk.VK_TRUE,
     };
@@ -324,7 +355,7 @@ fn createGPI(alloc: Allocator, gpu: vk.VkPhysicalDevice, families: QueueFamilies
         .uniformAndStorageBuffer16BitAccess = vk.VK_TRUE, // UBOs too
     };
 
-    const vk12Features = vk.VkPhysicalDeviceVulkan12Features{
+    var vk12Features = vk.VkPhysicalDeviceVulkan12Features{
         .sType = vk.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
         .bufferDeviceAddress = vk.VK_TRUE,
         .descriptorIndexing = vk.VK_TRUE,
@@ -345,7 +376,7 @@ fn createGPI(alloc: Allocator, gpu: vk.VkPhysicalDevice, families: QueueFamilies
         .dynamicRendering = vk.VK_TRUE,
         .synchronization2 = vk.VK_TRUE,
         .maintenance4 = vk.VK_TRUE,
-        .pNext = @ptrCast(@constCast(&vk12Features)),
+        .pNext = &vk12Features,
     };
 
     const gpuExtensions = [_][*c]const u8{
@@ -359,6 +390,9 @@ fn createGPI(alloc: Allocator, gpu: vk.VkPhysicalDevice, families: QueueFamilies
         "VK_EXT_conservative_rasterization",
         "VK_KHR_fragment_shading_rate",
         "VK_KHR_shader_non_semantic_info",
+        "VK_EXT_descriptor_heap",
+        "VK_KHR_shader_untyped_pointers",
+        "VK_KHR_maintenance5",
     };
 
     const createInf = vk.VkDeviceCreateInfo{
@@ -391,6 +425,13 @@ fn createGPI(alloc: Allocator, gpu: vk.VkPhysicalDevice, families: QueueFamilies
     try loadVkProc(gpi, &vkFn.vkGetDescriptorEXT, "vkGetDescriptorEXT");
     try loadVkProc(gpi, &vkFn.vkGetDescriptorSetLayoutSizeEXT, "vkGetDescriptorSetLayoutSizeEXT");
     try loadVkProc(gpi, &vkFn.vkGetDescriptorSetLayoutBindingOffsetEXT, "vkGetDescriptorSetLayoutBindingOffsetEXT");
+
+    // Descriptor Heaps
+    try loadVkProc(gpi, &vkFn.vkWriteResourceDescriptorsEXT, "vkWriteResourceDescriptorsEXT");
+    try loadVkProc(gpi, &vkFn.vkWriteSamplerDescriptorsEXT, "vkWriteSamplerDescriptorsEXT");
+    try loadVkProc(gpi, &vkFn.vkCmdBindResourceHeapEXT, "vkCmdBindResourceHeapEXT");
+    try loadVkProc(gpi, &vkFn.vkCmdBindSamplerHeapEXT, "vkCmdBindSamplerHeapEXT");
+    try loadVkProc(gpi, &vkFn.vkCmdPushDataEXT, "vkCmdPushDataEXT");
 
     // 4. Rasterization & Geometry
     try loadVkProc(gpi, &vkFn.vkCmdSetPolygonModeEXT, "vkCmdSetPolygonModeEXT");

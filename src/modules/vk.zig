@@ -19,6 +19,12 @@ pub var vkGetDescriptorEXT: c.PFN_vkGetDescriptorEXT = null;
 pub var vkGetDescriptorSetLayoutSizeEXT: c.PFN_vkGetDescriptorSetLayoutSizeEXT = null;
 pub var vkGetDescriptorSetLayoutBindingOffsetEXT: c.PFN_vkGetDescriptorSetLayoutBindingOffsetEXT = null;
 
+pub var vkWriteResourceDescriptorsEXT: c.PFN_vkWriteResourceDescriptorsEXT = null;
+pub var vkWriteSamplerDescriptorsEXT: c.PFN_vkWriteSamplerDescriptorsEXT = null;
+pub var vkCmdBindResourceHeapEXT: c.PFN_vkCmdBindResourceHeapEXT = null;
+pub var vkCmdBindSamplerHeapEXT: c.PFN_vkCmdBindSamplerHeapEXT = null;
+pub var vkCmdPushDataEXT: c.PFN_vkCmdPushDataEXT = null;
+
 // Rasterization & Geometry State
 pub var vkCmdSetPolygonModeEXT: c.PFN_vkCmdSetPolygonModeEXT = null;
 pub var vkCmdSetCullMode: c.PFN_vkCmdSetCullMode = null;
