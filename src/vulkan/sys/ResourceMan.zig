@@ -1,6 +1,6 @@
 const CreateMapArray = @import("../../structures/MapArray.zig").CreateMapArray;
-const PushConstants = @import("../types/res/PushConstants.zig").PushConstants;
 const DescriptorMan = @import("DescriptorMan.zig").DescriptorMan;
+const PushData = @import("../types/res/PushData.zig").PushData;
 const Texture = @import("../types/res/Texture.zig").Texture;
 const Buffer = @import("../types/res/Buffer.zig").Buffer;
 const rc = @import("../../configs/renderConfig.zig");
@@ -53,13 +53,13 @@ pub const ResourceMan = struct {
         self.vma.deinit();
     }
 
-    pub fn getBufferResourceSlot(self: *ResourceMan, bufId: Buffer.BufId, flightId: u8) !PushConstants.ResourceSlot {
+    pub fn getBufferResourceSlot(self: *ResourceMan, bufId: Buffer.BufId, flightId: u8) !PushData.ResourceSlot {
         const buf = try self.getBufferPtr(bufId);
         const updateFlightId = if (buf.typ == .Indirect) flightId else buf.lastUpdateFlightId;
         return .{ .index = buf.descIndex[updateFlightId], .count = buf.count };
     }
 
-    pub fn getTextureResourceSlot(self: *ResourceMan, texId: Texture.TexId, flightId: u8) !PushConstants.ResourceSlot {
+    pub fn getTextureResourceSlot(self: *ResourceMan, texId: Texture.TexId, flightId: u8) !PushData.ResourceSlot {
         const tex = try self.getTexturePtr(texId);
         return .{ .index = tex.descIndex[flightId], .count = 1 };
     }

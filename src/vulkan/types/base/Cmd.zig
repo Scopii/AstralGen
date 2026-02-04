@@ -154,11 +154,11 @@ pub const Cmd = struct {
         vk.vkCmdPushConstants(self.handle, layout, stageFlags, offset, size, pcs);
     }
 
-    pub fn setPushData(self: *const Cmd, pcs: ?*const anyopaque, size: u32, offset: u32) void {
+    pub fn setPushData(self: *const Cmd, dataPtr: ?*const anyopaque, size: u32, offset: u32) void {
         const pushDataInf = vk.VkPushDataInfoEXT{
             .sType = vk.VK_STRUCTURE_TYPE_PUSH_DATA_INFO_EXT,
             .offset = offset,
-            .data = .{ .address = pcs, .size = size },
+            .data = .{ .address = dataPtr, .size = size },
         };
         vkFn.vkCmdPushDataEXT.?(self.handle, &pushDataInf);
     }

@@ -1,7 +1,7 @@
-const PushConstants = @import("../types/res/PushConstants.zig").PushConstants;
 const TextureBase = @import("../types/res/TextureBase.zig").TextureBase;
 const Swapchain = @import("../types/base/Swapchain.zig").Swapchain;
 const TexId = @import("../types/res/Texture.zig").Texture.TexId;
+const PushData = @import("../types/res/PushData.zig").PushData;
 const ResourceMan = @import("ResourceMan.zig").ResourceMan;
 const ShaderManager = @import("ShaderMan.zig").ShaderMan;
 const Buffer = @import("../types/res/Buffer.zig").Buffer;
@@ -135,15 +135,15 @@ pub const RenderGraph = struct {
             const shaders = shaderMan.getShaders(pass.shaderIds)[0..pass.shaderIds.len];
             cmd.bindShaders(shaders);
 
-            const pcs = try PushConstants.init(resMan, pass, frameData, cmd.flightId);
-            cmd.setPushData(&pcs, @sizeOf(PushConstants), 0);
+            const pushData = try PushData.init(resMan, pass, frameData, cmd.flightId);
+            cmd.setPushData(&pushData, @sizeOf(PushData), 0);
 
             try self.recordPassBarriers(cmd, pass, resMan);
 
             switch (pass.typ) {
                 .classic => |classic| {
                     cmd.setGraphicsState(classic.state);
-                    try recordGraphics(cmd, pcs.width, pcs.height, classic, resMan);
+                    try recordGraphics(cmd, pushData.width, pushData.height, classic, resMan);
                 },
                 .compute => |comp| try recordCompute(cmd, comp.workgroups, comp.mainTexId, resMan),
             }

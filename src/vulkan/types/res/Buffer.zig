@@ -1,5 +1,5 @@
-const PushConstants = @import("PushConstants.zig").PushConstants;
 const rc = @import("../../../configs/renderConfig.zig");
+const PushData = @import("PushData.zig").PushData;
 const vk = @import("../../../modules/vk.zig").c;
 const vhE = @import("../../help/Enums.zig");
 
@@ -24,7 +24,7 @@ pub const Buffer = struct {
         return bufInf;
     }
 
-    pub fn getResourceSlot(self: *const Buffer) PushConstants.ResourceSlot {
+    pub fn getResourceSlot(self: *const Buffer) PushData.ResourceSlot {
         return .{ .index = self.descIndex, .count = self.count };
     }
 

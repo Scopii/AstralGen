@@ -1,6 +1,6 @@
-const PushConstants = @import("PushConstants.zig").PushConstants;
 const TextureBase = @import("TextureBase.zig").TextureBase;
 const rc = @import("../../../configs/renderConfig.zig");
+const PushData = @import("PushData.zig").PushData;
 const vk = @import("../../../modules/vk.zig").c;
 const vhE = @import("../../help/Enums.zig");
 
@@ -17,7 +17,7 @@ pub const Texture = struct {
         return texInf;
     }
 
-    pub fn getResourceSlot(self: *const Texture) PushConstants.ResourceSlot {
+    pub fn getResourceSlot(self: *const Texture) PushData.ResourceSlot {
         return .{ .index = self.descIndex, .count = 1 };
     }
 };

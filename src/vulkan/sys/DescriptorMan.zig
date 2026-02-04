@@ -1,5 +1,4 @@
 const CreateMapArray = @import("../../structures/MapArray.zig").CreateMapArray;
-const PushConstants = @import("../types/res/PushConstants.zig").PushConstants;
 const TextureBase = @import("../types/res/TextureBase.zig").TextureBase;
 const Texture = @import("../types/res/Texture.zig").Texture;
 const Buffer = @import("../types/res/Buffer.zig").Buffer;
