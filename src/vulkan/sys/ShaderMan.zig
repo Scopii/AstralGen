@@ -1,6 +1,7 @@
 const CreateMapArray = @import("../../structures/MapArray.zig").CreateMapArray;
 const ShaderId = @import("../../core/ShaderCompiler.zig").ShaderInf.ShaderId;
 const LoadedShader = @import("../../core/ShaderCompiler.zig").LoadedShader;
+const DescriptorMan = @import("../sys/DescriptorMan.zig").DescriptorMan;
 const shaderCon = @import("../../configs/shaderConfig.zig");
 const ResourceMan = @import("ResourceMan.zig").ResourceMan;
 const Shader = @import("../types/base/Shader.zig").Shader;
@@ -11,33 +12,25 @@ const Allocator = std.mem.Allocator;
 const std = @import("std");
 
 pub const ShaderMan = struct {
-    alloc: Allocator,
-    descLayout: vk.VkDescriptorSetLayout,
     gpi: vk.VkDevice,
     shaders: CreateMapArray(Shader, shaderCon.SHADER_MAX, u8, shaderCon.SHADER_MAX, 0) = .{},
 
-    pub fn init(alloc: Allocator, context: *const Context, resMan: *const ResourceMan) !ShaderMan {
-        return .{
-            .alloc = alloc,
-            .descLayout = resMan.descMan.descLayout,
-            .gpi = context.gpi,
-        };
+    pub fn init(context: *const Context) !ShaderMan {
+        return .{ .gpi = context.gpi };
     }
 
     pub fn deinit(self: *ShaderMan) void {
         const gpi = self.gpi;
-        for (self.shaders.getElements()) |*shader| {
-            shader.deinit(gpi);
-        }
+        for (self.shaders.getElements()) |*shader| shader.deinit(gpi);
     }
 
     pub fn isShaderIdUsed(self: *ShaderMan, shaderId: u8) bool {
         return self.shaders.isKeyUsed(shaderId);
     }
 
-    pub fn createShaders(self: *ShaderMan, loadedShaders: []const LoadedShader) !void {
+    pub fn createShaders(self: *ShaderMan, loadedShaders: []const LoadedShader, descMan: *const DescriptorMan) !void {
         for (loadedShaders) |loadedShader| {
-            const shaderObj = try Shader.init(self.gpi, loadedShader, self.descLayout);
+            const shaderObj = try Shader.init(self.gpi, loadedShader, descMan);
             const id = loadedShader.shaderInf.id.val;
             const name = loadedShader.shaderInf.spvFile;
 
@@ -74,9 +67,7 @@ pub const ShaderMan = struct {
                 }
             },
         }
-        std.debug.print("Error: ShaderLayout {s} does not fit Pass\n", .{
-            @tagName(layoutType),
-        });
+        std.debug.print("Error: ShaderLayout {s} does not fit Pass\n", .{@tagName(layoutType)});
         return false;
     }
 };

@@ -38,8 +38,8 @@ pub const Renderer = struct {
             .arenaAlloc = memoryMan.getGlobalArena(),
             .context = context,
             .resMan = resMan,
-            .renderGraph = try RenderGraph.init(alloc, &context, &resMan),
-            .shaderMan = try ShaderMan.init(alloc, &context, &resMan),
+            .renderGraph = try RenderGraph.init(alloc, &context),
+            .shaderMan = try ShaderMan.init(&context),
             .scheduler = try Scheduler.init(&context, rc.MAX_IN_FLIGHT),
             .swapMan = try SwapchainMan.init(alloc, &context),
             .passes = std.array_list.Managed(Pass).init(alloc),
@@ -139,7 +139,7 @@ pub const Renderer = struct {
                 break;
             }
         }
-        try self.shaderMan.createShaders(loadedShaders);
+        try self.shaderMan.createShaders(loadedShaders, &self.resMan.descMan);
     }
 
     pub fn createBuffers(self: *Renderer, bufInfos: []const Buffer.BufInf) !void {

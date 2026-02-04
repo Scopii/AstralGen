@@ -1,4 +1,5 @@
 const LoadedShader = @import("../../../core/ShaderCompiler.zig").LoadedShader;
+const DescriptorMan = @import("../../sys/DescriptorMan.zig").DescriptorMan;
 const PushConstants = @import("../res/PushConstants.zig").PushConstants;
 const SpecData = @import("../../help/Types.zig").SpecData;
 const vk = @import("../../../modules/vk.zig").c;
@@ -10,11 +11,11 @@ pub const Shader = struct {
     handle: vk.VkShaderEXT,
     stage: vhE.ShaderStage,
 
-    pub fn init(gpi: vk.VkDevice, shader: LoadedShader, descLayout: vk.VkDescriptorSetLayout) !Shader {
+    pub fn init(gpi: vk.VkDevice, shader: LoadedShader, descMan: *const DescriptorMan) !Shader {
         const stageEnum = shader.shaderInf.typ;
         const vkStage = vhF.getShaderBit(stageEnum);
 
-        var flags: vk.VkShaderCreateFlagsEXT = 0;
+        var flags: vk.VkShaderCreateFlagsEXT = vk.VK_SHADER_CREATE_DESCRIPTOR_HEAP_BIT_EXT;
         if (stageEnum == .meshNoTask) flags |= vk.VK_SHADER_CREATE_NO_TASK_SHADER_BIT_EXT;
 
         const nextStage: vk.VkShaderStageFlagBits = switch (stageEnum) {
@@ -38,8 +39,57 @@ pub const Shader = struct {
             .pData = &specData,
         };
 
+        const imgMapping = vk.VkDescriptorSetAndBindingMappingEXT{
+            .sType = vk.VK_STRUCTURE_TYPE_DESCRIPTOR_SET_AND_BINDING_MAPPING_EXT,
+            .descriptorSet = 0,
+            .firstBinding = 0,
+            .bindingCount = 1,
+            .resourceMask = vk.VK_SPIRV_RESOURCE_TYPE_SAMPLED_IMAGE_BIT_EXT | vk.VK_SPIRV_RESOURCE_TYPE_READ_WRITE_IMAGE_BIT_EXT,
+
+            .source = vk.VK_DESCRIPTOR_MAPPING_SOURCE_HEAP_WITH_CONSTANT_OFFSET_EXT,
+
+            .sourceData = .{
+                .constantOffset = .{ 
+                    .heapOffset = @intCast(descMan.storageImgOffset),
+                    .heapArrayStride = @intCast(descMan.storageImgDescSize),
+                    .pEmbeddedSampler = null,
+                    .samplerHeapOffset = 0,
+                    .samplerHeapArrayStride = 0,
+                },
+            },
+        };
+
+        const bufMapping = vk.VkDescriptorSetAndBindingMappingEXT{
+            .sType = vk.VK_STRUCTURE_TYPE_DESCRIPTOR_SET_AND_BINDING_MAPPING_EXT,
+            .descriptorSet = 0,
+            .firstBinding = 1,
+            .bindingCount = 1,
+            .resourceMask = vk.VK_SPIRV_RESOURCE_TYPE_UNIFORM_BUFFER_BIT_EXT | vk.VK_SPIRV_RESOURCE_TYPE_READ_WRITE_STORAGE_BUFFER_BIT_EXT | vk.VK_SPIRV_RESOURCE_TYPE_READ_ONLY_STORAGE_BUFFER_BIT_EXT,
+
+            .source = vk.VK_DESCRIPTOR_MAPPING_SOURCE_HEAP_WITH_CONSTANT_OFFSET_EXT,
+
+            .sourceData = .{ 
+                .constantOffset = .{
+                    .heapOffset = @intCast(descMan.storageBufOffset),
+                    .heapArrayStride = @intCast(descMan.storageBufDescSize),
+                    .pEmbeddedSampler = null,
+                    .samplerHeapOffset = 0,
+                    .samplerHeapArrayStride = 0,
+                } 
+            },
+        };
+
+        const mappings = [_]vk.VkDescriptorSetAndBindingMappingEXT{ imgMapping, bufMapping };
+
+        const mappingInf = vk.VkShaderDescriptorSetAndBindingMappingInfoEXT{
+            .sType = vk.VK_STRUCTURE_TYPE_SHADER_DESCRIPTOR_SET_AND_BINDING_MAPPING_INFO_EXT,
+            .mappingCount = mappings.len,
+            .pMappings = &mappings,
+        };
+
         const shaderInf = vk.VkShaderCreateInfoEXT{
             .sType = vk.VK_STRUCTURE_TYPE_SHADER_CREATE_INFO_EXT,
+            .pNext = &mappingInf,
             .flags = flags,
             .stage = vkStage,
             .nextStage = nextStage,
@@ -47,14 +97,10 @@ pub const Shader = struct {
             .codeSize = shader.data.len,
             .pCode = @ptrCast(shader.data.ptr),
             .pName = "main",
-            .setLayoutCount = if (descLayout != null) 1 else 0,
-            .pSetLayouts = if (descLayout != null) &descLayout else null,
-            .pushConstantRangeCount = 1,
-            .pPushConstantRanges = &vk.VkPushConstantRange{
-                .stageFlags = vk.VK_SHADER_STAGE_ALL,
-                .offset = 0,
-                .size = @sizeOf(PushConstants),
-            },
+            .setLayoutCount = 0,
+            .pSetLayouts = null,
+            .pushConstantRangeCount = 0,
+            .pPushConstantRanges = null,
             .pSpecializationInfo = &specInf,
         };
         var handle: vk.VkShaderEXT = undefined;

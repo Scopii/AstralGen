@@ -84,10 +84,10 @@ pub const Swapchain = struct {
             baseTextures[i] = TextureBase{
                 .img = images[i],
                 .view = view,
-                .format = surfaceFormat.format,
                 .texType = .Color,
                 .extent = .{ .width = realExtent.width, .height = realExtent.height, .depth = 1 },
                 .state = .{ .layout = .Undefined, .stage = .ColorAtt, .access = .None },
+                .viewInfo = viewInf,
             };
         }
 

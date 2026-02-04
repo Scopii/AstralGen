@@ -118,13 +118,13 @@ pub const ResourceMan = struct {
         switch (bufInf.update) {
             .Overwrite => {
                 var buffer = try self.vma.allocDefinedBuffer(bufInf, bufInf.mem);
-                const bindlessIndex = self.descMan.updateStorageBufferDescriptorFast(buffer.gpuAddress, buffer.size);
+                const descIndex = try self.descMan.updateStorageBuffer(buffer.gpuAddress, buffer.size);
                 for (&buffer.descIndex) |*index| {
-                    index.* = bindlessIndex;
+                    index.* = descIndex;
                 }
                 self.buffers.set(bufInf.id.val, buffer);
 
-                std.debug.print("Buffer ID {}, Type {}, Update: {} created! Descriptor Index {} ", .{ bufInf.id.val, bufInf.typ, bufInf.update, bindlessIndex });
+                std.debug.print("Buffer ID {}, Type {}, Update: {} created! Descriptor Index {} ", .{ bufInf.id.val, bufInf.typ, bufInf.update, descIndex });
                 self.vma.printMemoryInfo(buffer.allocation);
             },
             .PerFrame => {
@@ -137,8 +137,8 @@ pub const ResourceMan = struct {
 
                 for (&buffer.descIndex, 0..) |*index, i| {
                     const offset = @as(u64, i) * sliceSize;
-                    const bindlessIndex = self.descMan.updateStorageBufferDescriptorFast(buffer.gpuAddress + offset, sliceSize);
-                    index.* = bindlessIndex;
+                    const descIndex = try self.descMan.updateStorageBuffer(buffer.gpuAddress + offset, sliceSize);
+                    index.* = descIndex;
                 }
                 self.buffers.set(realBufInf.id.val, buffer);
 
@@ -154,15 +154,31 @@ pub const ResourceMan = struct {
 
         switch (texInf.typ) {
             .Color => {
-                for (0..tex.descIndex.len) |i| {
-                    const bindlessIndex = try self.descMan.updateStorageTextureDescriptor(tex.base[i].view);
-                    tex.descIndex[i] = bindlessIndex;
+                switch (texInf.update) {
+                    .Overwrite => {
+                        const descIndex = try self.descMan.updateStorageTexture(&tex.base[0]);
+                        for (&tex.descIndex) |*index| index.* = descIndex;
+                    },
+                    .PerFrame => {
+                        for (0..tex.descIndex.len) |i| {
+                            const descIndex = try self.descMan.updateStorageTexture(&tex.base[i]);
+                            tex.descIndex[i] = descIndex;
+                        }
+                    },
                 }
             },
             .Depth, .Stencil => {
-                for (0..tex.descIndex.len) |i| {
-                    const bindlessIndex = try self.descMan.updateSampledTextureDescriptor(tex.base[i].view);
-                    tex.descIndex[i] = bindlessIndex;
+                switch (texInf.update) {
+                    .Overwrite => {
+                        const descIndex = try self.descMan.updateSampledTextureDescriptor(&tex.base[0]);
+                        for (&tex.descIndex) |*index| index.* = descIndex;
+                    },
+                    .PerFrame => {
+                        for (0..tex.descIndex.len) |i| {
+                            const descIndex = try self.descMan.updateSampledTextureDescriptor(&tex.base[i]);
+                            tex.descIndex[i] = descIndex;
+                        }
+                    },
                 }
             },
         }

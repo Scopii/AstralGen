@@ -40,13 +40,34 @@ pub const Vma = struct {
         vk.vmaDestroyAllocator(self.handle);
     }
 
-    pub fn allocDescriptorBuffer(self: *const Vma, descLayout: vk.VkDescriptorSetLayout) !DescriptorBuffer {
-        var size: vk.VkDeviceSize = undefined;
-        vkFn.vkGetDescriptorSetLayoutSizeEXT.?(self.gpi, descLayout, &size);
+    pub fn allocDescriptorHeap(self: *const Vma, size: u64) !DescriptorBuffer {
+        const bufInf = vk.VkBufferCreateInfo{
+            .sType = vk.VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+            .size = size,
+            .usage = vk.VK_BUFFER_USAGE_DESCRIPTOR_HEAP_BIT_EXT |
+                vk.VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+            .sharingMode = vk.VK_SHARING_MODE_EXCLUSIVE,
+        };
+        const allocInf = vk.VmaAllocationCreateInfo{
+            .usage = vk.VMA_MEMORY_USAGE_CPU_TO_GPU,
+            .flags = vk.VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
+                vk.VMA_ALLOCATION_CREATE_MAPPED_BIT,
+        };
 
-        const bufUsage = vk.VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT | vk.VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
-        const buffer = try self.allocBuffer(size, bufUsage, vk.VMA_MEMORY_USAGE_CPU_TO_GPU, vk.VMA_ALLOCATION_CREATE_MAPPED_BIT);
-        return .{ .allocation = buffer.allocation, .mappedPtr = buffer.mappedPtr, .size = size, .handle = buffer.handle, .gpuAddress = buffer.gpuAddress };
+        var buffer: vk.VkBuffer = undefined;
+        var allocation: vk.VmaAllocation = undefined;
+        var allocInfo: vk.VmaAllocationInfo = undefined;
+
+        try vhF.check(vk.vmaCreateBuffer(self.handle, &bufInf, &allocInf, &buffer, &allocation, &allocInfo), "Failed to allocate descriptor heap");
+        const addressInf = vk.VkBufferDeviceAddressInfo{ .sType = vk.VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO, .buffer = buffer };
+
+        return DescriptorBuffer{
+            .handle = buffer,
+            .allocation = allocation,
+            .mappedPtr = allocInfo.pMappedData,
+            .size = size,
+            .gpuAddress = vk.vkGetBufferDeviceAddress(self.gpi, &addressInf),
+        };
     }
 
     pub fn allocStagingBuffer(self: *const Vma, size: vk.VkDeviceSize) !Buffer {
@@ -162,12 +183,13 @@ pub const Vma = struct {
         var texUse: vk.VkImageUsageFlags = vk.VK_IMAGE_USAGE_TRANSFER_SRC_BIT | vk.VK_IMAGE_USAGE_TRANSFER_DST_BIT | vk.VK_IMAGE_USAGE_SAMPLED_BIT;
         switch (texInf.typ) {
             .Color => texUse |= vk.VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | vk.VK_IMAGE_USAGE_STORAGE_BIT,
-            .Depth, .Stencil => texUse |= vk.VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, // Depth usually CANNOT be Storage!
+            .Depth, .Stencil => texUse |= vk.VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
         }
 
-        const format: c_uint = switch (texInf.typ) {
+        const format: vk.VkFormat = switch (texInf.typ) {
             .Color => rc.TEX_COLOR_FORMAT,
-            .Depth, .Stencil => rc.TEX_DEPTH_FORMAT,
+            .Depth => rc.TEX_DEPTH_FORMAT,
+            .Stencil => vk.VK_FORMAT_S8_UINT,
         };
 
         const aspectMask: vk.VkImageAspectFlags = switch (texInf.typ) {
@@ -175,25 +197,39 @@ pub const Vma = struct {
             .Depth => vk.VK_IMAGE_ASPECT_DEPTH_BIT,
             .Stencil => vk.VK_IMAGE_ASPECT_STENCIL_BIT,
         };
-
+        
         const extent = vk.VkExtent3D{ .width = texInf.width, .height = texInf.height, .depth = texInf.depth };
 
         var tempAllocations: [rc.MAX_IN_FLIGHT]vk.VmaAllocation = undefined;
         var tempBase: [rc.MAX_IN_FLIGHT]TextureBase = undefined;
 
         switch (texInf.update) {
-            .Overwrite => {
+            .Overwrite => { // Single image shared across all frames
                 const imagePacket = try self.allocImagePacket(memType, texUse, aspectMask, format, extent);
+
                 for (0..rc.MAX_IN_FLIGHT) |i| {
                     tempAllocations[i] = imagePacket.allocation;
-                    tempBase[i] = .{ .extent = extent, .format = format, .texType = texInf.typ, .img = imagePacket.img, .view = imagePacket.view };
+                    tempBase[i] = .{
+                        .img = imagePacket.img,
+                        .view = imagePacket.view,
+                        .texType = texInf.typ,
+                        .extent = extent,
+                        .viewInfo = getViewCreateInfo(imagePacket.img, vk.VK_IMAGE_VIEW_TYPE_2D, format, aspectMask),
+                    };
                 }
             },
-            .PerFrame => {
+            .PerFrame => { // Separate image per frame
                 for (0..rc.MAX_IN_FLIGHT) |i| {
                     const imagePacket = try self.allocImagePacket(memType, texUse, aspectMask, format, extent);
+
                     tempAllocations[i] = imagePacket.allocation;
-                    tempBase[i] = .{ .extent = extent, .format = format, .texType = texInf.typ, .img = imagePacket.img, .view = imagePacket.view };
+                    tempBase[i] = .{
+                        .img = imagePacket.img,
+                        .view = imagePacket.view,
+                        .texType = texInf.typ,
+                        .extent = extent,
+                        .viewInfo = getViewCreateInfo(imagePacket.img, vk.VK_IMAGE_VIEW_TYPE_2D, format, aspectMask),
+                    };
                 }
             },
         }
@@ -220,6 +256,30 @@ pub const Vma = struct {
         }
     }
 };
+
+fn getViewCreateInfo(image: vk.VkImage, viewType: vk.VkImageViewType, format: vk.VkFormat, aspectMask: vk.VkImageAspectFlags) vk.VkImageViewCreateInfo {
+    return vk.VkImageViewCreateInfo{
+        .sType = vk.VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+        .pNext = null,
+        .flags = 0,
+        .image = image,
+        .viewType = viewType,
+        .format = format,
+        .components = .{
+            .r = vk.VK_COMPONENT_SWIZZLE_IDENTITY,
+            .g = vk.VK_COMPONENT_SWIZZLE_IDENTITY,
+            .b = vk.VK_COMPONENT_SWIZZLE_IDENTITY,
+            .a = vk.VK_COMPONENT_SWIZZLE_IDENTITY,
+        },
+        .subresourceRange = .{
+            .aspectMask = aspectMask,
+            .baseMipLevel = 0,
+            .levelCount = 1,
+            .baseArrayLayer = 0,
+            .layerCount = 1,
+        },
+    };
+}
 
 fn createAllocatedImageInf(format: vk.VkFormat, usageFlags: vk.VkImageUsageFlags, extent3d: vk.VkExtent3D) vk.VkImageCreateInfo {
     return vk.VkImageCreateInfo{

@@ -21,25 +21,20 @@ pub const RenderGraph = struct {
     alloc: Allocator,
     gpi: vk.VkDevice,
     cmdMan: CmdManager,
-    descLayoutAddress: u64,
-    pipeLayout: vk.VkPipelineLayout,
     imgBarriers: std.array_list.Managed(vk.VkImageMemoryBarrier2),
     bufBarriers: std.array_list.Managed(vk.VkBufferMemoryBarrier2),
 
-    pub fn init(alloc: Allocator, context: *const Context, resMan: *const ResourceMan) !RenderGraph {
+    pub fn init(alloc: Allocator, context: *const Context) !RenderGraph {
         return .{
             .alloc = alloc,
             .gpi = context.gpi,
             .cmdMan = try CmdManager.init(alloc, context, rc.MAX_IN_FLIGHT),
-            .descLayoutAddress = resMan.descMan.descBuffer.gpuAddress,
-            .pipeLayout = try createPipelineLayout(context.gpi, resMan.descMan.descLayout, vk.VK_SHADER_STAGE_ALL, @sizeOf(PushConstants)),
             .imgBarriers = try std.array_list.Managed(vk.VkImageMemoryBarrier2).initCapacity(alloc, 30),
             .bufBarriers = try std.array_list.Managed(vk.VkBufferMemoryBarrier2).initCapacity(alloc, 30),
         };
     }
 
     pub fn deinit(self: *RenderGraph) void {
-        vk.vkDestroyPipelineLayout(self.gpi, self.pipeLayout, null);
         self.imgBarriers.deinit();
         self.bufBarriers.deinit();
         self.cmdMan.deinit();
@@ -51,10 +46,8 @@ pub const RenderGraph = struct {
 
         cmd.resetQuerys();
 
-        cmd.startQuery(.TopOfPipe, 76, "Cmd-Setup");
-        cmd.bindDescriptorBuffer(self.descLayoutAddress);
-        cmd.setDescriptorBufferOffset(vk.VK_PIPELINE_BIND_POINT_COMPUTE, self.pipeLayout);
-        cmd.setDescriptorBufferOffset(vk.VK_PIPELINE_BIND_POINT_GRAPHICS, self.pipeLayout);
+        cmd.startQuery(.TopOfPipe, 76, "Desc-Heap-bind");
+        cmd.bindDescriptorHeap(resMan.descMan.descHeap.gpuAddress, resMan.descMan.descHeap.size, resMan.descMan.descHeapProps.minResourceHeapReservedRange);
         cmd.endQuery(.BotOfPipe, 76);
 
         try self.recordTransfers(cmd, resMan);
@@ -142,8 +135,9 @@ pub const RenderGraph = struct {
 
             const shaders = shaderMan.getShaders(pass.shaderIds)[0..pass.shaderIds.len];
             cmd.bindShaders(shaders);
+
             const pcs = try PushConstants.init(resMan, pass, frameData, cmd.flightId);
-            cmd.setPushConstants(self.pipeLayout, vk.VK_SHADER_STAGE_ALL, 0, @sizeOf(PushConstants), &pcs);
+            cmd.setPushData(&pcs, @sizeOf(PushConstants), 0);
 
             try self.recordPassBarriers(cmd, pass, resMan);
 

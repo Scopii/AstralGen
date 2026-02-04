@@ -4,12 +4,20 @@ const vhE = @import("../../help/Enums.zig");
 pub const TextureBase = struct {
     img: vk.VkImage,
     view: vk.VkImageView,
-    format: c_uint,
+    viewInfo: vk.VkImageViewCreateInfo,
     texType: vhE.TextureType,
     extent: vk.VkExtent3D,
     state: TextureState = .{},
 
     pub const TextureState = struct { stage: vhE.PipeStage = .TopOfPipe, access: vhE.PipeAccess = .None, layout: vhE.ImageLayout = .Undefined };
+
+    pub fn getAspectMask(self: *const TextureBase) vk.VkImageAspectFlags {
+        return self.viewInfo.subresourceRange.aspectMask;
+    }
+
+    pub fn getViewCreateInfo(self: *const TextureBase) vk.VkImageViewCreateInfo {
+        return self.viewInfo;
+    }
 
     pub fn createAttachment(self: *const TextureBase, clear: bool) vk.VkRenderingAttachmentInfo {
         const clearValue: vk.VkClearValue = switch (self.texType) {

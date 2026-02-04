@@ -154,6 +154,15 @@ pub const Cmd = struct {
         vk.vkCmdPushConstants(self.handle, layout, stageFlags, offset, size, pcs);
     }
 
+    pub fn setPushData(self: *const Cmd, pcs: ?*const anyopaque, size: u32, offset: u32) void {
+        const pushDataInf = vk.VkPushDataInfoEXT{
+            .sType = vk.VK_STRUCTURE_TYPE_PUSH_DATA_INFO_EXT,
+            .offset = offset,
+            .data = .{ .address = pcs, .size = size },
+        };
+        vkFn.vkCmdPushDataEXT.?(self.handle, &pushDataInf);
+    }
+
     pub fn setEmptyVertexInput(self: *const Cmd) void {
         vkFn.vkCmdSetVertexInputEXT.?(self.handle, 0, null, 0, null);
     }
@@ -191,6 +200,16 @@ pub const Cmd = struct {
         const bufferIndex: u32 = 0;
         const descOffset: vk.VkDeviceSize = 0;
         vkFn.vkCmdSetDescriptorBufferOffsetsEXT.?(self.handle, bindPoint, pipeLayout, 0, 1, &bufferIndex, &descOffset);
+    }
+
+    pub fn bindDescriptorHeap(self: *const Cmd, heapAddress: u64, heapSize: u64, reservedSize: u64) void {
+        const bindInf = vk.VkBindHeapInfoEXT{
+            .sType = vk.VK_STRUCTURE_TYPE_BIND_HEAP_INFO_EXT,
+            .heapRange = .{ .address = heapAddress, .size = heapSize },
+            .reservedRangeOffset = 0,
+            .reservedRangeSize = reservedSize,
+        };
+        vkFn.vkCmdBindResourceHeapEXT.?(self.handle, &bindInf);
     }
 
     pub fn copyImageToImage(self: *const Cmd, srcImg: vk.VkImage, srcExtent: vk.VkExtent3D, dstImg: vk.VkImage, dstExtent: vk.VkExtent3D, stretch: bool) void {
