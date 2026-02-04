@@ -1,9 +1,13 @@
 import Globals;
 
-[[vk::binding(0, 0)]] RWTexture2D<float4> globalImages[];
-[[vk::binding(1, 0)]] StructuredBuffer<Object> globalObjectBuffers[];
-[[vk::binding(1, 0)]] StructuredBuffer<CameraData> globalCameraBuffers[];
-[[vk::binding(1, 0)]] RWStructuredBuffer<IndirectCommand> globalIndirectBuffers[];
+// Images
+[[vk::binding(0, 0)]] RWTexture2D<float4> heapRWImages[];
+[[vk::binding(0, 0)]] Texture2D<float4> heapSampledImages[];
+// Buffers
+[[vk::binding(0, 0)]] StructuredBuffer<Object> heapObjectBuffers[];
+[[vk::binding(0, 0)]] StructuredBuffer<CameraData> heapCameraBuffers[];
+[[vk::binding(0, 0)]] RWStructuredBuffer<IndirectCommand> heapIndirectBuffers[];
+
 [[vk::push_constant]] ConstantBuffer<PushConstants> pc;
 
 // SHADER
@@ -13,7 +17,7 @@ void main(uint3 id: SV_DispatchThreadID) {
 
     //printf("test ID: %d\n", 1);
     uint bufIndex = pc.resources[0].index;
-    RWStructuredBuffer<IndirectCommand> indirectBuffer = globalIndirectBuffers[bufIndex];
+    RWStructuredBuffer<IndirectCommand> indirectBuffer = heapIndirectBuffers[bufIndex];
 
     indirectBuffer[0].groupX = 100;
     indirectBuffer[0].groupY = 100;

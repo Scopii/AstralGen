@@ -39,19 +39,25 @@ pub const Shader = struct {
             .pData = &specData,
         };
 
-        const imgMapping = vk.VkDescriptorSetAndBindingMappingEXT{
+        const heapMapping = vk.VkDescriptorSetAndBindingMappingEXT{
             .sType = vk.VK_STRUCTURE_TYPE_DESCRIPTOR_SET_AND_BINDING_MAPPING_EXT,
             .descriptorSet = 0,
-            .firstBinding = 0,
-            .bindingCount = 1,
-            .resourceMask = vk.VK_SPIRV_RESOURCE_TYPE_SAMPLED_IMAGE_BIT_EXT | vk.VK_SPIRV_RESOURCE_TYPE_READ_WRITE_IMAGE_BIT_EXT,
-
+            .firstBinding = 0, 
+            .bindingCount = 1, // It's one "bindless array" concept
+            
+            // It can contain EVERYTHING
+            .resourceMask = vk.VK_SPIRV_RESOURCE_TYPE_SAMPLED_IMAGE_BIT_EXT | 
+                            vk.VK_SPIRV_RESOURCE_TYPE_READ_WRITE_IMAGE_BIT_EXT | 
+                            vk.VK_SPIRV_RESOURCE_TYPE_UNIFORM_BUFFER_BIT_EXT | 
+                            vk.VK_SPIRV_RESOURCE_TYPE_READ_WRITE_STORAGE_BUFFER_BIT_EXT | 
+                            vk.VK_SPIRV_RESOURCE_TYPE_READ_ONLY_STORAGE_BUFFER_BIT_EXT,
+            
             .source = vk.VK_DESCRIPTOR_MAPPING_SOURCE_HEAP_WITH_CONSTANT_OFFSET_EXT,
-
             .sourceData = .{
                 .constantOffset = .{ 
-                    .heapOffset = @intCast(descMan.storageImgOffset),
-                    .heapArrayStride = @intCast(descMan.storageImgDescSize),
+                    // Start at the very beginning of your allocated data
+                    .heapOffset = @intCast(descMan.storageBufOffset), 
+                    .heapArrayStride = @intCast(descMan.commonStride),
                     .pEmbeddedSampler = null,
                     .samplerHeapOffset = 0,
                     .samplerHeapArrayStride = 0,
@@ -59,27 +65,7 @@ pub const Shader = struct {
             },
         };
 
-        const bufMapping = vk.VkDescriptorSetAndBindingMappingEXT{
-            .sType = vk.VK_STRUCTURE_TYPE_DESCRIPTOR_SET_AND_BINDING_MAPPING_EXT,
-            .descriptorSet = 0,
-            .firstBinding = 1,
-            .bindingCount = 1,
-            .resourceMask = vk.VK_SPIRV_RESOURCE_TYPE_UNIFORM_BUFFER_BIT_EXT | vk.VK_SPIRV_RESOURCE_TYPE_READ_WRITE_STORAGE_BUFFER_BIT_EXT | vk.VK_SPIRV_RESOURCE_TYPE_READ_ONLY_STORAGE_BUFFER_BIT_EXT,
-
-            .source = vk.VK_DESCRIPTOR_MAPPING_SOURCE_HEAP_WITH_CONSTANT_OFFSET_EXT,
-
-            .sourceData = .{ 
-                .constantOffset = .{
-                    .heapOffset = @intCast(descMan.storageBufOffset),
-                    .heapArrayStride = @intCast(descMan.storageBufDescSize),
-                    .pEmbeddedSampler = null,
-                    .samplerHeapOffset = 0,
-                    .samplerHeapArrayStride = 0,
-                } 
-            },
-        };
-
-        const mappings = [_]vk.VkDescriptorSetAndBindingMappingEXT{ imgMapping, bufMapping };
+        const mappings = [_]vk.VkDescriptorSetAndBindingMappingEXT{ heapMapping };
 
         const mappingInf = vk.VkShaderDescriptorSetAndBindingMappingInfoEXT{
             .sType = vk.VK_STRUCTURE_TYPE_SHADER_DESCRIPTOR_SET_AND_BINDING_MAPPING_INFO_EXT,

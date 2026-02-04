@@ -47,7 +47,7 @@ pub const RenderGraph = struct {
         cmd.resetQuerys();
 
         cmd.startQuery(.TopOfPipe, 76, "Desc-Heap-bind");
-        cmd.bindDescriptorHeap(resMan.descMan.descHeap.gpuAddress, resMan.descMan.descHeap.size, resMan.descMan.descHeapProps.minResourceHeapReservedRange);
+        cmd.bindDescriptorHeap(resMan.descMan.descHeap.gpuAddress, resMan.descMan.descHeap.size, resMan.descMan.driverReservedSize);
         cmd.endQuery(.BotOfPipe, 76);
 
         try self.recordTransfers(cmd, resMan);
@@ -71,7 +71,6 @@ pub const RenderGraph = struct {
                 .dstOffset = transfer.dstOffset,
                 .size = transfer.size,
             };
-            // standard vkCmdCopyBuffer, passing the region
             vk.vkCmdCopyBuffer(cmd.handle, resMan.stagingBuffers[cmd.flightId].handle, buffer.handle, 1, &copyRegion);
         }
         resMan.resetTransfers(cmd.flightId);
@@ -218,17 +217,3 @@ pub const RenderGraph = struct {
         }
     }
 };
-
-fn createPipelineLayout(gpi: vk.VkDevice, descLayout: vk.VkDescriptorSetLayout, stageFlags: vk.VkShaderStageFlags, size: u32) !vk.VkPipelineLayout {
-    const pcRange = vk.VkPushConstantRange{ .stageFlags = stageFlags, .offset = 0, .size = size };
-    const pipeLayoutInf = vk.VkPipelineLayoutCreateInfo{
-        .sType = vk.VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-        .setLayoutCount = if (descLayout != null) 1 else 0,
-        .pSetLayouts = if (descLayout != null) &descLayout else null,
-        .pushConstantRangeCount = if (size > 0) 1 else 0,
-        .pPushConstantRanges = if (size > 0) &pcRange else null,
-    };
-    var layout: vk.VkPipelineLayout = undefined;
-    try vhF.check(vk.vkCreatePipelineLayout(gpi, &pipeLayoutInf, null, &layout), "Failed to create pipeline layout");
-    return layout;
-}

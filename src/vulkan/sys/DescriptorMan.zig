@@ -23,21 +23,20 @@ pub const DescriptorBuffer = struct {
 pub const DescriptorMan = struct {
     gpi: vk.VkDevice,
     descHeap: DescriptorBuffer,
-    descHeapProps: vk.VkPhysicalDeviceDescriptorHeapPropertiesEXT,
+
+    driverReservedSize: u64,
+    commonStride: u64,
 
     storageBufCount: u32 = 0,
     storageBufMap: CreateMapArray(u32, rc.MAX_IN_FLIGHT * rc.BUF_MAX, u32, rc.MAX_IN_FLIGHT * rc.BUF_MAX, 0) = .{},
-    storageBufDescSize: u64,
     storageBufOffset: u64,
 
     storageImgCount: u32 = 0,
     storageImgMap: CreateMapArray(u32, rc.MAX_IN_FLIGHT * rc.STORAGE_TEX_MAX, u32, rc.MAX_IN_FLIGHT * rc.STORAGE_TEX_MAX, 0) = .{},
-    storageImgDescSize: u64,
     storageImgOffset: u64,
 
     sampledImgCount: u32 = 0,
     sampledImgMap: CreateMapArray(u32, rc.MAX_IN_FLIGHT * rc.SAMPLED_TEX_MAX, u32, rc.MAX_IN_FLIGHT * rc.SAMPLED_TEX_MAX, 0) = .{},
-    sampledImgDescSize: u64,
     sampledImgOffset: u64,
 
     pub fn init(vma: Vma, gpi: vk.VkDevice, gpu: vk.VkPhysicalDevice) !DescriptorMan {
@@ -47,19 +46,18 @@ pub const DescriptorMan = struct {
         const alignment = heapProps.resourceHeapAlignment;
         const dataOffset = (driverReservedSize + (alignment - 1)) & ~(alignment - 1);
 
-        const bufHeapSize = rc.MAX_IN_FLIGHT * rc.BUF_MAX * heapProps.bufferDescriptorSize;
-        const imgHeapSize = rc.MAX_IN_FLIGHT * (rc.STORAGE_TEX_MAX + rc.SAMPLED_TEX_MAX) * heapProps.imageDescriptorSize;
+        const commonStride = @max(heapProps.bufferDescriptorSize, heapProps.imageDescriptorSize);
+        const bufHeapSize = rc.MAX_IN_FLIGHT * rc.BUF_MAX * commonStride;
+        const imgHeapSize = rc.MAX_IN_FLIGHT * rc.TEX_MAX * commonStride;
 
         return .{
             .gpi = gpi,
             .descHeap = try vma.allocDescriptorHeap(dataOffset + bufHeapSize + imgHeapSize),
-            .descHeapProps = heapProps,
-            .storageBufDescSize = heapProps.bufferDescriptorSize,
+            .driverReservedSize = driverReservedSize,
+            .commonStride = commonStride,
             .storageBufOffset = dataOffset,
-            .storageImgDescSize = heapProps.imageDescriptorSize,
             .storageImgOffset = dataOffset + bufHeapSize,
-            .sampledImgDescSize = heapProps.imageDescriptorSize,
-            .sampledImgOffset = dataOffset + bufHeapSize + (rc.STORAGE_TEX_MAX * rc.MAX_IN_FLIGHT * heapProps.imageDescriptorSize),
+            .sampledImgOffset = dataOffset + bufHeapSize + (rc.STORAGE_TEX_MAX * rc.MAX_IN_FLIGHT * commonStride),
         };
     }
 
@@ -101,7 +99,7 @@ pub const DescriptorMan = struct {
             .data = .{ .pAddressRange = &addressInf },
         };
 
-        try self.updateDescriptor(&resDescInf, self.descHeap.mappedPtr, self.storageBufOffset, descIndex, self.storageBufDescSize);
+        try self.updateDescriptor(&resDescInf, self.descHeap.mappedPtr, self.storageBufOffset, descIndex, self.commonStride);
         self.storageBufCount += 1;
         return descIndex;
     }
@@ -121,7 +119,7 @@ pub const DescriptorMan = struct {
             .data = .{ .pImage = &imgDescInf },
         };
 
-        try self.updateDescriptor(&resDescInf, self.descHeap.mappedPtr, self.storageImgOffset, descIndex, self.storageImgDescSize);
+        try self.updateDescriptor(&resDescInf, self.descHeap.mappedPtr, self.storageImgOffset, descIndex, self.commonStride);
         self.storageImgCount += 1;
         return descIndex;
     }
@@ -141,7 +139,7 @@ pub const DescriptorMan = struct {
             .data = .{ .pImage = &imgDescInf },
         };
 
-        try self.updateDescriptor(&resDescInf, self.descHeap.mappedPtr, self.sampledImgOffset, descIndex, self.sampledImgDescSize);
+        try self.updateDescriptor(&resDescInf, self.descHeap.mappedPtr, self.sampledImgOffset, descIndex, self.commonStride);
         self.sampledImgCount += 1;
         return descIndex;
     }
@@ -149,7 +147,7 @@ pub const DescriptorMan = struct {
     fn updateDescriptor(self: *DescriptorMan, resDescInf: *const vk.VkResourceDescriptorInfoEXT, mappedPtr: ?*anyopaque, heapOffset: u64, descIndex: u32, descSize: u64) !void {
         const finalOffset = heapOffset + (descIndex * descSize);
         const mappedData = @as([*]u8, @ptrCast(mappedPtr));
-        
+
         const hostAddrRange = vk.VkHostAddressRangeEXT{
             .address = mappedData + finalOffset,
             .size = descSize,

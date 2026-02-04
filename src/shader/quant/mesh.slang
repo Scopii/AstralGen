@@ -30,7 +30,14 @@ static const uint2 lineIndices[12] = {
     uint2(0, 4), uint2(1, 5), uint2(3, 7), uint2(2, 6)  // Connecting Pillars
 };
 
-[[vk::binding(1, 0)]] StructuredBuffer<CameraData> globalCameraBuffers[];
+// Images
+[[vk::binding(0, 0)]] RWTexture2D<float4> heapRWImages[];
+[[vk::binding(0, 0)]] Texture2D<float4> heapSampledImages[];
+// Buffers
+[[vk::binding(0, 0)]] StructuredBuffer<Object> heapObjectBuffers[];
+[[vk::binding(0, 0)]] StructuredBuffer<CameraData> heapCameraBuffers[];
+[[vk::binding(0, 0)]] RWStructuredBuffer<IndirectCommand> heapIndirectBuffers[];
+
 [[vk::push_constant]] ConstantBuffer<PushConstants> pc;
 
 [shader("mesh")]
@@ -45,7 +52,7 @@ void main(
     SetMeshOutputCounts(8, 12);
 
     // Camera Data
-    StructuredBuffer<CameraData> camBuffers = globalCameraBuffers[pc.resources[1].index]; // Cam Slot
+    StructuredBuffer<CameraData> camBuffers = heapCameraBuffers[pc.resources[1].index]; // Cam Slot
     CameraData cam = camBuffers[0];
 
     // Calc World Pos of Cube
