@@ -9,7 +9,8 @@ pub const Buffer = struct {
     descIndices: [rc.MAX_IN_FLIGHT]u32 = .{0} ** rc.MAX_IN_FLIGHT,
 
     lastUpdateFlightId: u8 = 0,
-    count: u32 = 0,
+    maxCount: u32,
+    curCount: u32,
     typ: vhE.BufferType = .Storage,
     update: vhE.UpdateType = .Overwrite,
 
@@ -18,9 +19,5 @@ pub const Buffer = struct {
 
     pub fn create(bufInf: BufInf) BufInf {
         return bufInf;
-    }
-
-    pub fn getResourceSlot(self: *const Buffer) PushData.ResourceSlot {
-        return .{ .index = self.descIndices, .count = self.count };
     }
 };

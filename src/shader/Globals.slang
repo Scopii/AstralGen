@@ -27,17 +27,12 @@ public struct CameraData {
     public float4 camDir;
 };
 
-public struct Resource {
-    public uint index;
-    public uint count;
-};
-
 public struct PushConstants {
     public float runtime;
     public float deltaTime;
     public uint width;
     public uint height;
-    public Resource resources[14];
+    public uint resources[14];
 };
 
 public struct IndirectCommand {

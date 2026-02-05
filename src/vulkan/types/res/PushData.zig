@@ -8,12 +8,7 @@ pub const PushData = extern struct {
     deltaTime: f32 = 0,
     width: u32 = 0,
     height: u32 = 0,
-    resourceSlots: [14]ResourceSlot = undefined,
-
-    pub const ResourceSlot = extern struct {
-        index: u32 = 0,
-        count: u32 = 0,
-    };
+    resourceSlots: [14]u32 = undefined,
 
     pub fn init(resMan: *ResourceMan, pass: Pass, frameData: FrameData, flightId: u8) !PushData {
         var pcs = PushData{ .runTime = frameData.runTime, .deltaTime = frameData.deltaTime };

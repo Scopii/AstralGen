@@ -55,15 +55,15 @@ pub const ResourceMan = struct {
         self.vma.deinit();
     }
 
-    pub fn getBufferResourceSlot(self: *ResourceMan, bufId: Buffer.BufId, flightId: u8) !PushData.ResourceSlot {
+    pub fn getBufferResourceSlot(self: *ResourceMan, bufId: Buffer.BufId, flightId: u8) !u32 {
         const buf = try self.getBufferPtr(bufId);
         const updateFlightId = if (buf.typ == .Indirect) flightId else buf.lastUpdateFlightId;
-        return .{ .index = buf.descIndices[updateFlightId], .count = buf.count };
+        return buf.descIndices[updateFlightId];
     }
 
-    pub fn getTextureResourceSlot(self: *ResourceMan, texId: Texture.TexId, flightId: u8) !PushData.ResourceSlot {
+    pub fn getTextureResourceSlot(self: *ResourceMan, texId: Texture.TexId, flightId: u8) !u32 {
         const tex = try self.getTexturePtr(texId);
-        return .{ .index = tex.desIndices[flightId], .count = 1 };
+        return tex.desIndices[flightId];
     }
 
     pub fn resetTransfers(self: *ResourceMan, flightId: u8) void {
@@ -82,14 +82,19 @@ pub const ResourceMan = struct {
     pub fn createBuffer(self: *ResourceMan, bufInf: Buffer.BufInf) !void {
         var buffer = try self.vma.allocDefinedBuffer(bufInf);
 
+        const descType: vk.VkDescriptorType = switch (bufInf.typ) {
+            .Uniform => vk.VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+            else => vk.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+        };
+
         switch (bufInf.update) {
             .Overwrite => {
-                const descIndex = try self.descMan.createStorageBufferDescriptor(buffer.base[0]);
+                const descIndex = try self.descMan.createBufferDescriptor(buffer.base[0], descType);
                 for (0..buffer.descIndices.len) |i| buffer.descIndices[i] = descIndex;
             },
             .PerFrame => {
                 for (0..buffer.descIndices.len) |i| {
-                    buffer.descIndices[i] = try self.descMan.createStorageBufferDescriptor(buffer.base[i]);
+                    buffer.descIndices[i] = try self.descMan.createBufferDescriptor(buffer.base[i], descType);
                 }
             },
         }
@@ -171,8 +176,14 @@ pub const ResourceMan = struct {
             },
             .CpuRead => return error.CpuReadBufferCantUpdate,
         }
-        try self.descMan.updateStorageBufferDescriptor(buffer.base[flightId].gpuAddress, bytes.len, buffer.descIndices[flightId]);
-        buffer.count = @intCast(bytes.len / bufInf.elementSize);
+
+        const descType: vk.VkDescriptorType = switch (bufInf.typ) {
+            .Uniform => vk.VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+            else => vk.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+        };
+
+        try self.descMan.updateBufferDescriptor(buffer.base[flightId].gpuAddress, bytes.len, buffer.descIndices[flightId], descType);
+        buffer.curCount = @intCast(bytes.len / bufInf.elementSize);
         buffer.lastUpdateFlightId = flightId;
     }
 

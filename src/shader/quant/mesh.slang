@@ -35,7 +35,7 @@ static const uint2 lineIndices[12] = {
 [[vk::binding(0, 0)]] Texture2D<float4> heapSampledImages[];
 // Buffers
 [[vk::binding(0, 0)]] StructuredBuffer<Object> heapObjectBuffers[];
-[[vk::binding(0, 0)]] StructuredBuffer<CameraData> heapCameraBuffers[];
+[[vk::binding(0, 0)]] ConstantBuffer<CameraData> heapCameraBuffers[];
 [[vk::binding(0, 0)]] RWStructuredBuffer<IndirectCommand> heapIndirectBuffers[];
 
 [[vk::push_constant]] ConstantBuffer<PushConstants> pc;
@@ -51,9 +51,7 @@ void main(
 ) {
     SetMeshOutputCounts(8, 12);
 
-    // Camera Data
-    StructuredBuffer<CameraData> camBuffers = heapCameraBuffers[pc.resources[1].index]; // Cam Slot
-    CameraData cam = camBuffers[0];
+    ConstantBuffer<CameraData> cam = heapCameraBuffers[pc.resources[1]];
 
     // Calc World Pos of Cube
     float3 gridPos = float3(groupId.x, groupId.y, groupId.z) * 4.00 ;

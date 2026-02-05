@@ -16,8 +16,4 @@ pub const Texture = struct {
     pub fn create(texInf: TexInf) TexInf {
         return texInf;
     }
-
-    pub fn getResourceSlot(self: *const Texture) PushData.ResourceSlot {
-        return .{ .index = self.desIndices, .count = 1 };
-    }
 };

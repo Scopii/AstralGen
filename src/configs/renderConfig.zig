@@ -56,7 +56,7 @@ pub const indirectSB = Buffer.create(.{ .id = .{ .val = 41 }, .mem = .Gpu, .typ 
 pub const readbackSB = Buffer.create(.{ .id = .{ .val = 45 }, .mem = .Gpu, .typ = .Storage, .len = 1, .elementSize = @sizeOf(vhT.ReadbackData), .update = .Overwrite });
 
 pub const objectSB = Buffer.create(.{ .id = .{ .val = 1 }, .mem = .Gpu, .typ = .Storage, .len = 100, .elementSize = @sizeOf(Object), .update = .PerFrame });
-pub const cameraUB = Buffer.create(.{ .id = .{ .val = 40 }, .mem = .Gpu, .typ = .Storage, .len = 1, .elementSize = @sizeOf(CameraData), .update = .PerFrame });
+pub const cameraUB = Buffer.create(.{ .id = .{ .val = 40 }, .mem = .Gpu, .typ = .Uniform, .len = 1, .elementSize = @sizeOf(CameraData), .update = .PerFrame });
 pub const BUFFERS: []const Buffer.BufInf = &.{ objectSB, cameraUB, indirectSB, readbackSB };
 
 // Textures
@@ -75,6 +75,7 @@ pub const quantComp: Pass = .{
     }),
     .bufUses = &.{
         BufferUse.init(indirectSB.id, .ComputeShader, .ShaderReadWrite, 0),
+        BufferUse.init(objectSB.id, .ComputeShader, .ShaderRead, 1),
     },
 };
 

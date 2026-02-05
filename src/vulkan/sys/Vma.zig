@@ -89,7 +89,10 @@ pub const Vma = struct {
         std.debug.print("Allocation is in VRAM: {}, CPU Visible: {}\n", .{ isVram, isCpuVisible });
     }
 
-    pub fn allocDefinedBuffer(self: *const Vma, bufInf: Buffer.BufInf,) !Buffer {
+    pub fn allocDefinedBuffer(
+        self: *const Vma,
+        bufInf: Buffer.BufInf,
+    ) !Buffer {
         const dataSize = bufInf.elementSize;
         if (dataSize == 0) {
             std.debug.print("Binding Info has invalid element size\n", .{});
@@ -134,7 +137,7 @@ pub const Vma = struct {
                 }
             },
         }
-
+        buffer.maxCount = bufInf.len;
         buffer.update = bufInf.update;
         buffer.typ = bufInf.typ;
         return buffer;
@@ -163,7 +166,7 @@ pub const Vma = struct {
             .handle = buffer,
             .allocation = allocation,
             .mappedPtr = allocVmaInf.pMappedData,
-            .size = allocVmaInf.size,
+            .size = size,
             .gpuAddress = gpuAddress,
         };
     }

@@ -5,7 +5,7 @@ import Globals;
 [[vk::binding(0, 0)]] Texture2D<float4> heapSampledImages[];
 // Buffers
 [[vk::binding(0, 0)]] StructuredBuffer<Object> heapObjectBuffers[];
-[[vk::binding(0, 0)]] StructuredBuffer<CameraData> heapCameraBuffers[];
+[[vk::binding(0, 0)]] ConstantBuffer<CameraData> heapCameraBuffers[];
 [[vk::binding(0, 0)]] RWStructuredBuffer<IndirectCommand> heapIndirectBuffers[];
 
 [[vk::push_constant]] ConstantBuffer<PushConstants> pc;
@@ -16,8 +16,8 @@ import Globals;
 void main(uint3 id: SV_DispatchThreadID) {
 
     //printf("test ID: %d\n", 1);
-    uint bufIndex = pc.resources[0].index;
-    RWStructuredBuffer<IndirectCommand> indirectBuffer = heapIndirectBuffers[bufIndex];
+    RWStructuredBuffer<IndirectCommand> indirectBuffer = heapIndirectBuffers[pc.resources[0]];
+    StructuredBuffer<Object> objectBuffer = heapObjectBuffers[pc.resources[1]];
 
     indirectBuffer[0].groupX = 100;
     indirectBuffer[0].groupY = 100;
