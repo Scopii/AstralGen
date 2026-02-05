@@ -93,7 +93,7 @@ pub const Renderer = struct {
         const new = self.swapMan.getMaxRenderExtent(texId);
 
         if (new.width != old.width or new.height != old.height) {
-            try self.resMan.destroyTexture(texId);
+            try self.resMan.queueTextureDestruction(texId, self.scheduler.flightId);
             try self.resMan.createTexture(.{ .id = texId, .width = new.width, .height = new.height, .depth = 1, .typ = oldType, .mem = .Gpu, .update = .PerFrame });
             std.debug.print("Render Texture ID {} recreated {}x{} to {}x{}\n", .{ texId.val, old.width, old.height, new.width, new.height });
         }
@@ -105,6 +105,7 @@ pub const Renderer = struct {
 
     pub fn draw(self: *Renderer, frameData: FrameData) !void {
         const flightId = try self.scheduler.beginFrame();
+        try self.resMan.cleanupResources(self.scheduler.totalFrames);
         const targets = try self.swapMan.getUpdatedTargets(flightId);
 
         if (targets.len == 0) {

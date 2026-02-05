@@ -1,4 +1,5 @@
 const CreateMapArray = @import("../../structures/MapArray.zig").CreateMapArray;
+const FixedList = @import("../../structures/FixedList.zig").FixedList;
 const DescriptorMan = @import("DescriptorMan.zig").DescriptorMan;
 const PushData = @import("../types/res/PushData.zig").PushData;
 const Texture = @import("../types/res/Texture.zig").Texture;
@@ -25,6 +26,11 @@ pub const ResourceMan = struct {
     buffers: CreateMapArray(Buffer, rc.BUF_MAX, u32, rc.BUF_MAX, 0) = .{},
     textures: CreateMapArray(Texture, rc.TEX_MAX, u32, rc.TEX_MAX, 0) = .{},
 
+    realFramesInFlights: [rc.MAX_IN_FLIGHT]u64 = .{0} ** rc.MAX_IN_FLIGHT,
+
+    bufToDelete: [rc.MAX_IN_FLIGHT + 1]FixedList(Buffer, rc.BUF_MAX),
+    texToDelete: [rc.MAX_IN_FLIGHT + 1]FixedList(Texture, rc.TEX_MAX),
+
     stagingBuffers: [rc.MAX_IN_FLIGHT]BufferBase,
     stagingOffsets: [rc.MAX_IN_FLIGHT]u64 = .{0} ** rc.MAX_IN_FLIGHT,
     transfers: [rc.MAX_IN_FLIGHT]std.array_list.Managed(Transfer),
@@ -38,11 +44,19 @@ pub const ResourceMan = struct {
         var transfers: [rc.MAX_IN_FLIGHT]std.array_list.Managed(Transfer) = undefined;
         for (0..rc.MAX_IN_FLIGHT) |i| transfers[i] = std.array_list.Managed(Transfer).init(alloc);
 
+        var bufToDelete: [rc.MAX_IN_FLIGHT + 1]FixedList(Buffer, rc.BUF_MAX) = undefined;
+        for (0..bufToDelete.len) |i| bufToDelete[i] = .{};
+
+        var texToDelete: [rc.MAX_IN_FLIGHT + 1]FixedList(Texture, rc.TEX_MAX) = undefined;
+        for (0..texToDelete.len) |i| texToDelete[i] = .{};
+
         return .{
             .vma = vma,
             .descMan = try DescriptorMan.init(vma, context.gpi, context.gpu),
             .stagingBuffers = stagingBuffers,
             .transfers = transfers,
+            .bufToDelete = bufToDelete,
+            .texToDelete = texToDelete,
         };
     }
 
@@ -186,8 +200,38 @@ pub const ResourceMan = struct {
         buffer.lastUpdateFlightId = flightId;
     }
 
-    pub fn destroyTexture(self: *ResourceMan, texId: Texture.TexId) !void {
+    pub fn queueTextureDestruction(self: *ResourceMan, texId: Texture.TexId, curFrame: u64) !void {
         const tex = try self.getTexturePtr(texId);
+        try self.texToDelete[curFrame % rc.MAX_IN_FLIGHT + 1].append(tex.*);
+        self.textures.removeAtKey(texId.val);
+    }
+
+    pub fn queueBufferDestruction(self: *ResourceMan, bufId: Buffer.BufId, curFrame: u64) !void {
+        const buf = try self.getBufferPtr(bufId);
+        try self.bufToDelete[curFrame % rc.MAX_IN_FLIGHT + 1].append(buf.*);
+        self.buffers.removeAtKey(bufId.val);
+    }
+
+    pub fn cleanupResources(self: *ResourceMan, curFrame: u64) !void {
+        if (curFrame < rc.MAX_IN_FLIGHT) return; // Only clean up resources queued MAX_IN_FLIGHT ago (safety check for startup)
+
+        const targetFrame = curFrame - rc.MAX_IN_FLIGHT;
+        const queueIndex = targetFrame % rc.MAX_IN_FLIGHT + 1;
+
+        if (self.texToDelete[queueIndex].len > 0) {
+            for (self.texToDelete[queueIndex].slice()) |*tex| try self.destroyTexture(tex);
+            self.texToDelete[queueIndex].clear();
+            std.debug.print("Textures destroyed: Frame {} (queued Frame {})\n", .{ curFrame, targetFrame });
+        }
+
+        if (self.bufToDelete[queueIndex].len > 0) {
+            for (self.bufToDelete[queueIndex].slice()) |*buf| try self.destroyBuffer(buf);
+            self.bufToDelete[queueIndex].clear();
+            std.debug.print("Buffers destroyed: Frame {} (queued Frame {})\n", .{ curFrame, targetFrame });
+        }
+    }
+
+    fn destroyTexture(self: *ResourceMan, tex: *Texture) !void {
         self.vma.freeTexture(tex);
 
         const count = switch (tex.update) {
@@ -195,20 +239,15 @@ pub const ResourceMan = struct {
             .PerFrame => rc.MAX_IN_FLIGHT,
         };
         for (0..count) |i| try self.descMan.freeDescriptor(tex.descIndices[i]);
-
-        self.textures.removeAtKey(texId.val);
     }
 
-    pub fn destroyBuffer(self: *ResourceMan, bufId: Buffer.BufId) !void {
-        const buf = try self.getBufferPtr(bufId);
+    fn destroyBuffer(self: *ResourceMan, buf: *Buffer) !void {
         self.vma.freeBuffer(buf);
 
         const count = switch (buf.update) {
             .Overwrite => 1,
             .PerFrame => rc.MAX_IN_FLIGHT,
         };
-        for (0..count) |i| try self.descMan.freeDescriptor(buf.desIndices[i]);
-
-        self.buffers.removeAtKey(bufId.val);
+        for (0..count) |i| try self.descMan.freeDescriptor(buf.descIndices[i]);
     }
 };

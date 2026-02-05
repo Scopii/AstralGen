@@ -152,10 +152,8 @@ fn threadCompile(src: []const u8, dst: []const u8, stage: vkE.ShaderStage, inclu
 
     //transpileSlang(alloc, src, dst, "hlsl")
     const result = compileShader(alloc, src, dst, stage, includePath);
-    
-    if (result == error.ShaderCompilationFailed) {
-        failedBool.store(true, .seq_cst); 
-    }
+    if (result == error.ShaderCompilationFailed) failedBool.store(true, .seq_cst); 
+
     std.heap.page_allocator.free(src);
     std.heap.page_allocator.free(dst);
 }
@@ -173,10 +171,8 @@ pub fn compileShadersParallel(alloc: std.mem.Allocator, absShaderPath: []const u
         try threads.append(t);
     }
     for (threads.items) |thread| thread.join();
-
-    if (failed.load(.seq_cst)) {
-        return error.ShaderCompilationFailed;
-    }
+    
+    if (failed.load(.seq_cst)) return error.ShaderCompilationFailed;
 }
 
 fn compileShader(alloc: Allocator, srcPath: []const u8, spvPath: []const u8, stage: vkE.ShaderStage, includePath: []const u8) !void {
