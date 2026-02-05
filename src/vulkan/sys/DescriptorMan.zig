@@ -25,39 +25,28 @@ pub const DescriptorMan = struct {
     descHeap: DescriptorBuffer,
 
     driverReservedSize: u64,
-    commonStride: u64,
+    descStride: u64,
+    startOffset: u64,
+    resourceCount: u32 = 0,
 
-    storageBufCount: u32 = 0,
-    storageBufMap: CreateMapArray(u32, rc.MAX_IN_FLIGHT * rc.BUF_MAX, u32, rc.MAX_IN_FLIGHT * rc.BUF_MAX, 0) = .{},
-    storageBufOffset: u64,
-
-    storageImgCount: u32 = 0,
-    storageImgMap: CreateMapArray(u32, rc.MAX_IN_FLIGHT * rc.STORAGE_TEX_MAX, u32, rc.MAX_IN_FLIGHT * rc.STORAGE_TEX_MAX, 0) = .{},
-    storageImgOffset: u64,
-
-    sampledImgCount: u32 = 0,
-    sampledImgMap: CreateMapArray(u32, rc.MAX_IN_FLIGHT * rc.SAMPLED_TEX_MAX, u32, rc.MAX_IN_FLIGHT * rc.SAMPLED_TEX_MAX, 0) = .{},
-    sampledImgOffset: u64,
+    // storageBufMap: CreateMapArray(u32, rc.MAX_IN_FLIGHT * rc.BUF_MAX, u32, rc.MAX_IN_FLIGHT * rc.BUF_MAX, 0) = .{},
 
     pub fn init(vma: Vma, gpi: vk.VkDevice, gpu: vk.VkPhysicalDevice) !DescriptorMan {
         const heapProps = getDescriptorHeapProperties(gpu);
         const driverReservedSize = heapProps.minResourceHeapReservedRange;
 
         const alignment = heapProps.resourceHeapAlignment;
-        const dataOffset = (driverReservedSize + (alignment - 1)) & ~(alignment - 1);
+        const startOffset = (driverReservedSize + (alignment - 1)) & ~(alignment - 1);
 
-        const commonStride = @max(heapProps.bufferDescriptorSize, heapProps.imageDescriptorSize);
-        const bufHeapSize = rc.MAX_IN_FLIGHT * rc.BUF_MAX * commonStride;
-        const imgHeapSize = rc.MAX_IN_FLIGHT * rc.TEX_MAX * commonStride;
+        const descStride = @max(heapProps.bufferDescriptorSize, heapProps.imageDescriptorSize);
+        const heapSize = rc.MAX_IN_FLIGHT * descStride * (rc.BUF_MAX + rc.TEX_MAX);
 
         return .{
             .gpi = gpi,
-            .descHeap = try vma.allocDescriptorHeap(dataOffset + bufHeapSize + imgHeapSize),
+            .descHeap = try vma.allocDescriptorHeap(startOffset + heapSize),
             .driverReservedSize = driverReservedSize,
-            .commonStride = commonStride,
-            .storageBufOffset = dataOffset,
-            .storageImgOffset = dataOffset + bufHeapSize,
-            .sampledImgOffset = dataOffset + bufHeapSize + (rc.STORAGE_TEX_MAX * rc.MAX_IN_FLIGHT * commonStride),
+            .descStride = descStride,
+            .startOffset = startOffset,
         };
     }
 
@@ -66,9 +55,9 @@ pub const DescriptorMan = struct {
     }
 
     pub fn createBufferDescriptor(self: *DescriptorMan, bufBase: BufferBase, bufTyp: vhE.BufferType) !u32 {
-        const descIndex = self.storageBufCount;
+        const descIndex = self.resourceCount;
         try self.updateBufferDescriptor(bufBase.gpuAddress, bufBase.size, descIndex, bufTyp);
-        self.storageBufCount += 1;
+        self.resourceCount += 1;
         return descIndex;
     }
 
@@ -84,14 +73,14 @@ pub const DescriptorMan = struct {
         };
         const resDescInf = vk.VkResourceDescriptorInfoEXT{
             .sType = vk.VK_STRUCTURE_TYPE_RESOURCE_DESCRIPTOR_INFO_EXT,
-            .type = descType, 
+            .type = descType,
             .data = .{ .pAddressRange = &addressInf },
         };
-        try self.updateDescriptor(&resDescInf, self.descHeap.mappedPtr, self.storageBufOffset, descIndex, self.commonStride);
+        try self.updateDescriptor(&resDescInf, self.descHeap.mappedPtr, self.startOffset, descIndex, self.descStride);
     }
 
     pub fn createStorageTexDescriptor(self: *DescriptorMan, texBase: *const TextureBase) !u32 {
-        const descIndex = self.storageImgCount;
+        const descIndex = self.resourceCount;
         const viewInf = texBase.getViewCreateInfo();
 
         const imgDescInf = vk.VkImageDescriptorInfoEXT{
@@ -105,19 +94,19 @@ pub const DescriptorMan = struct {
             .data = .{ .pImage = &imgDescInf },
         };
 
-        try self.updateDescriptor(&resDescInf, self.descHeap.mappedPtr, self.storageImgOffset, descIndex, self.commonStride);
-        self.storageImgCount += 1;
+        try self.updateDescriptor(&resDescInf, self.descHeap.mappedPtr, self.startOffset, descIndex, self.descStride);
+        self.resourceCount += 1;
         return descIndex;
     }
 
     pub fn createSampledTexDescriptor(self: *DescriptorMan, texBase: *const TextureBase) !u32 {
-        const descIndex = self.sampledImgCount;
+        const descIndex = self.resourceCount;
         const viewInf = texBase.getViewCreateInfo();
 
         const imgDescInf = vk.VkImageDescriptorInfoEXT{
             .sType = vk.VK_STRUCTURE_TYPE_IMAGE_DESCRIPTOR_INFO_EXT,
             .pView = &viewInf,
-            .layout = vk.VK_IMAGE_LAYOUT_GENERAL, // Or DEPTH_STENCIL_READ_ONLY_OPTIMAL for depth
+            .layout = vk.VK_IMAGE_LAYOUT_GENERAL, // change to DEPTH_STENCIL_READ_ONLY_OPTIMAL for depth?
         };
         const resDescInf = vk.VkResourceDescriptorInfoEXT{
             .sType = vk.VK_STRUCTURE_TYPE_RESOURCE_DESCRIPTOR_INFO_EXT,
@@ -125,8 +114,8 @@ pub const DescriptorMan = struct {
             .data = .{ .pImage = &imgDescInf },
         };
 
-        try self.updateDescriptor(&resDescInf, self.descHeap.mappedPtr, self.sampledImgOffset, descIndex, self.commonStride);
-        self.sampledImgCount += 1;
+        try self.updateDescriptor(&resDescInf, self.descHeap.mappedPtr, self.startOffset, descIndex, self.descStride);
+        self.resourceCount += 1;
         return descIndex;
     }
 

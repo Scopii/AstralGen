@@ -232,7 +232,7 @@ pub const Vma = struct {
                         .view = imagePacket.view,
                         .texType = texInf.typ,
                         .extent = extent,
-                        .viewInfo = getViewCreateInfo(imagePacket.img, vk.VK_IMAGE_VIEW_TYPE_2D, format, aspectMask),
+                        .viewInf = getViewCreateInfo(imagePacket.img, vk.VK_IMAGE_VIEW_TYPE_2D, format, aspectMask),
                     };
                 }
             },
@@ -246,7 +246,7 @@ pub const Vma = struct {
                         .view = imagePacket.view,
                         .texType = texInf.typ,
                         .extent = extent,
-                        .viewInfo = getViewCreateInfo(imagePacket.img, vk.VK_IMAGE_VIEW_TYPE_2D, format, aspectMask),
+                        .viewInf = getViewCreateInfo(imagePacket.img, vk.VK_IMAGE_VIEW_TYPE_2D, format, aspectMask),
                     };
                 }
             },

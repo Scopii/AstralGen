@@ -87,7 +87,7 @@ pub const Swapchain = struct {
                 .texType = .Color,
                 .extent = .{ .width = realExtent.width, .height = realExtent.height, .depth = 1 },
                 .state = .{ .layout = .Undefined, .stage = .ColorAtt, .access = .None },
-                .viewInfo = viewInf,
+                .viewInf = viewInf,
             };
         }
 

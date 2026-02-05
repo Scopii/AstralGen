@@ -53,18 +53,14 @@ void main(
 
     ConstantBuffer<CameraData> cam = heapCameraBuffers[pc.resources[1]];
 
-    // Calc World Pos of Cube
-    float3 gridPos = float3(groupId.x, groupId.y, groupId.z) * 4.00 ;
-    
-    // Shift the grid
-    float3 worldOrigin = gridPos - float3(15.0, 15.0, 15.0); 
+    float3 gridPos = float3(groupId.x, groupId.y, groupId.z) * 4.00; // World Pos of Cube
+
+    float3 worldOrigin = gridPos - float3(15.0, 15.0, 15.0); // Offset grid
 
     for (uint i = 0; i < 8; ++i) {
-        // Local Cube Pos + Grid Offset
-        float3 worldPos = cubeVerts[i] + worldOrigin;
+        float3 worldPos = cubeVerts[i] + worldOrigin; // Local Cube Pos + Grid Offset
 
-        // Project to Screen
-        verts[i].pos = mul(cam.viewProj, float4(worldPos, 1.0));
+        verts[i].pos = mul(cam.viewProj, float4(worldPos, 1.0)); // Project to Screen
 
         // Color
         // verts[i].color = float3(groupId.x, groupId.y, groupId.z) / 10.0;
