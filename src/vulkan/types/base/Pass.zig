@@ -1,6 +1,7 @@
 const ShaderId = @import("../../../core/ShaderCompiler.zig").ShaderInf.ShaderId;
 const RenderState = @import("../base/RenderState.zig").RenderState;
 const TextureBase = @import("../res/TextureBase.zig").TextureBase;
+const BufferBase = @import("../res/BufferBase.zig").BufferBase;
 const Texture = @import("../res/Texture.zig").Texture;
 const Buffer = @import("../res/Buffer.zig").Buffer;
 const vhE = @import("../../help/Enums.zig");
@@ -139,7 +140,7 @@ pub const BufferUse = struct {
         return .{ .bufId = bufId, .stage = stage, .access = access, .shaderSlot = if (shaderSlot) |slot| slot else null };
     }
 
-    pub fn getNeededState(self: *const BufferUse) Buffer.BufferState {
+    pub fn getNeededState(self: *const BufferUse) BufferBase.BufferState {
         return .{ .stage = self.stage, .access = self.access };
     }
 };

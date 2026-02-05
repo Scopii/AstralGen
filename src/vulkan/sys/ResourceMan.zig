@@ -10,6 +10,8 @@ const Allocator = std.mem.Allocator;
 const Vma = @import("Vma.zig").Vma;
 const std = @import("std");
 
+const BufferBase = @import("../types/res/BufferBase.zig").BufferBase;
+
 pub const Transfer = struct {
     srcOffset: u64,
     dstResId: Buffer.BufId,
@@ -23,14 +25,14 @@ pub const ResourceMan = struct {
     buffers: CreateMapArray(Buffer, rc.BUF_MAX, u32, rc.BUF_MAX, 0) = .{},
     textures: CreateMapArray(Texture, rc.TEX_MAX, u32, rc.TEX_MAX, 0) = .{},
 
-    stagingBuffers: [rc.MAX_IN_FLIGHT]Buffer,
+    stagingBuffers: [rc.MAX_IN_FLIGHT]BufferBase,
     stagingOffsets: [rc.MAX_IN_FLIGHT]u64 = .{0} ** rc.MAX_IN_FLIGHT,
     transfers: [rc.MAX_IN_FLIGHT]std.array_list.Managed(Transfer),
 
     pub fn init(alloc: Allocator, context: *const Context) !ResourceMan {
         const vma = try Vma.init(context.instance, context.gpi, context.gpu);
 
-        var stagingBuffers: [rc.MAX_IN_FLIGHT]Buffer = undefined;
+        var stagingBuffers: [rc.MAX_IN_FLIGHT]BufferBase = undefined;
         for (0..rc.MAX_IN_FLIGHT) |i| stagingBuffers[i] = try vma.allocStagingBuffer(rc.STAGING_BUF_SIZE);
 
         var transfers: [rc.MAX_IN_FLIGHT]std.array_list.Managed(Transfer) = undefined;
@@ -45,9 +47,9 @@ pub const ResourceMan = struct {
     }
 
     pub fn deinit(self: *ResourceMan) void {
-        for (self.buffers.getElements()) |*buf| self.vma.freeBuffer(buf.handle, buf.allocation);
+        for (self.buffers.getElements()) |*buf| self.vma.freeBuffer(buf);
         for (self.textures.getElements()) |*tex| self.vma.freeTexture(tex);
-        for (&self.stagingBuffers) |*stagingBuffer| self.vma.freeBuffer(stagingBuffer.handle, stagingBuffer.allocation);
+        for (&self.stagingBuffers) |*stagingBuffer| self.vma.freeRawBuffer(stagingBuffer.handle, stagingBuffer.allocation);
         for (&self.transfers) |*transferList| transferList.deinit();
         self.descMan.deinit(self.vma);
         self.vma.deinit();
@@ -56,12 +58,12 @@ pub const ResourceMan = struct {
     pub fn getBufferResourceSlot(self: *ResourceMan, bufId: Buffer.BufId, flightId: u8) !PushData.ResourceSlot {
         const buf = try self.getBufferPtr(bufId);
         const updateFlightId = if (buf.typ == .Indirect) flightId else buf.lastUpdateFlightId;
-        return .{ .index = buf.descIndex[updateFlightId], .count = buf.count };
+        return .{ .index = buf.descIndices[updateFlightId], .count = buf.count };
     }
 
     pub fn getTextureResourceSlot(self: *ResourceMan, texId: Texture.TexId, flightId: u8) !PushData.ResourceSlot {
         const tex = try self.getTexturePtr(texId);
-        return .{ .index = tex.descIndex[flightId], .count = 1 };
+        return .{ .index = tex.desIndices[flightId], .count = 1 };
     }
 
     pub fn resetTransfers(self: *ResourceMan, flightId: u8) void {
@@ -69,18 +71,7 @@ pub const ResourceMan = struct {
         self.transfers[flightId].clearRetainingCapacity();
     }
 
-    pub fn queueBufferUpload(self: *ResourceMan, bufInf: Buffer.BufInf, data: anytype, flightId: u8) !void {
-        const DataType = @TypeOf(data);
-
-        const bytes: []const u8 = switch (@typeInfo(DataType)) {
-            .pointer => |ptr| switch (ptr.size) {
-                .one => std.mem.asBytes(data),
-                .slice => std.mem.sliceAsBytes(data),
-                else => return error.UnsupportedPointerType,
-            },
-            else => return error.ExpectedPointer,
-        };
-
+    pub fn queueBufferUpload(self: *ResourceMan, bufInf: Buffer.BufInf, bytes: []const u8, flightId: u8) !void {
         const stagingOffset = self.stagingOffsets[flightId];
         const stagingBuffer = self.stagingBuffers[flightId];
 
@@ -89,19 +80,19 @@ pub const ResourceMan = struct {
         const stagingPtr: [*]u8 = @ptrCast(stagingBuffer.mappedPtr);
         @memcpy(stagingPtr[stagingOffset..][0..bytes.len], bytes);
 
-        var dstOffset: u64 = 0;
-
-        if (bufInf.update == .PerFrame) {
-            const sliceSize = @as(u64, bufInf.elementSize) * bufInf.len;
-            dstOffset = @as(u64, flightId) * sliceSize; // Offset = FrameIndex * SliceSize
-        }
-
-        try self.transfers[flightId].append(Transfer{ .srcOffset = stagingOffset, .dstResId = bufInf.id, .dstOffset = dstOffset, .size = bytes.len });
+        const transfer = Transfer{
+            .srcOffset = stagingOffset,
+            .dstResId = bufInf.id,
+            .dstOffset = 0,
+            .size = bytes.len,
+        };
+        try self.transfers[flightId].append(transfer);
 
         var buffer = try self.getBufferPtr(bufInf.id);
         buffer.count = @intCast(bytes.len / bufInf.elementSize);
-
         buffer.lastUpdateFlightId = flightId;
+
+        try self.descMan.updateStorageBufferDescriptor(buffer.base[flightId].gpuAddress, bytes.len, buffer.descIndices[flightId]);
 
         self.stagingOffsets[flightId] += (bytes.len + 15) & ~@as(u64, 15);
     }
@@ -115,77 +106,50 @@ pub const ResourceMan = struct {
     }
 
     pub fn createBuffer(self: *ResourceMan, bufInf: Buffer.BufInf) !void {
+        var buffer = try self.vma.allocDefinedBuffer(bufInf);
+
         switch (bufInf.update) {
             .Overwrite => {
-                var buffer = try self.vma.allocDefinedBuffer(bufInf, bufInf.mem);
-                const descIndex = try self.descMan.updateStorageBuffer(buffer.gpuAddress, buffer.size);
-                for (&buffer.descIndex) |*index| {
-                    index.* = descIndex;
-                }
-                self.buffers.set(bufInf.id.val, buffer);
-
-                std.debug.print("Buffer ID {}, Type {}, Update: {} created! Descriptor Index {} ", .{ bufInf.id.val, bufInf.typ, bufInf.update, descIndex });
-                self.vma.printMemoryInfo(buffer.allocation);
+                const descIndex = try self.descMan.createStorageBufferDescriptor(buffer.base[0]);
+                for (0..buffer.descIndices.len) |i| buffer.descIndices[i] = descIndex;
             },
             .PerFrame => {
-                var realBufInf = bufInf;
-                if (bufInf.update == .PerFrame) realBufInf.len *= rc.MAX_IN_FLIGHT;
-                var buffer = try self.vma.allocDefinedBuffer(realBufInf, bufInf.mem);
-
-                const totalSize = buffer.size;
-                const sliceSize = totalSize / rc.MAX_IN_FLIGHT;
-
-                for (&buffer.descIndex, 0..) |*index, i| {
-                    const offset = @as(u64, i) * sliceSize;
-                    const descIndex = try self.descMan.updateStorageBuffer(buffer.gpuAddress + offset, sliceSize);
-                    index.* = descIndex;
+                for (0..buffer.descIndices.len) |i| {
+                    buffer.descIndices[i] = try self.descMan.createStorageBufferDescriptor(buffer.base[i]);
                 }
-                self.buffers.set(realBufInf.id.val, buffer);
-
-                std.debug.print("Buffer ID {}, Type {}, Update {} created! Descriptor Indices ", .{ realBufInf.id.val, realBufInf.typ, realBufInf.update });
-                for (buffer.descIndex) |index| std.debug.print("{} ", .{index});
-                self.vma.printMemoryInfo(buffer.allocation);
             },
         }
+        std.debug.print("Buffer ID {}, Type {}, Update {} created! Descriptor Indices ", .{ bufInf.id.val, bufInf.typ, bufInf.update });
+        for (buffer.descIndices) |index| std.debug.print("{} ", .{index});
+        self.vma.printMemoryInfo(buffer.base[0].allocation);
+
+        self.buffers.set(bufInf.id.val, buffer);
     }
 
     pub fn createTexture(self: *ResourceMan, texInf: Texture.TexInf) !void {
         var tex = try self.vma.allocTexture(texInf);
 
-        switch (texInf.typ) {
-            .Color => {
-                switch (texInf.update) {
-                    .Overwrite => {
-                        const descIndex = try self.descMan.updateStorageTexture(&tex.base[0]);
-                        for (&tex.descIndex) |*index| index.* = descIndex;
-                    },
-                    .PerFrame => {
-                        for (0..tex.descIndex.len) |i| {
-                            const descIndex = try self.descMan.updateStorageTexture(&tex.base[i]);
-                            tex.descIndex[i] = descIndex;
-                        }
-                    },
-                }
+        switch (texInf.update) {
+            .Overwrite => {
+                const descIndex = switch (texInf.typ) {
+                    .Color => try self.descMan.createStorageTexDescriptor(&tex.base[0]),
+                    .Depth, .Stencil => try self.descMan.createSampledTexDescriptor(&tex.base[0]),
+                };
+                for (0..tex.desIndices.len) |i| tex.desIndices[i] = descIndex;
             },
-            .Depth, .Stencil => {
-                switch (texInf.update) {
-                    .Overwrite => {
-                        const descIndex = try self.descMan.updateSampledTextureDescriptor(&tex.base[0]);
-                        for (&tex.descIndex) |*index| index.* = descIndex;
-                    },
-                    .PerFrame => {
-                        for (0..tex.descIndex.len) |i| {
-                            const descIndex = try self.descMan.updateSampledTextureDescriptor(&tex.base[i]);
-                            tex.descIndex[i] = descIndex;
-                        }
-                    },
+            .PerFrame => {
+                for (0..tex.desIndices.len) |i| {
+                    tex.desIndices[i] = switch (texInf.typ) {
+                        .Color => try self.descMan.createStorageTexDescriptor(&tex.base[i]),
+                        .Depth, .Stencil => try self.descMan.createSampledTexDescriptor(&tex.base[i]),
+                    };
                 }
             },
         }
         std.debug.print("Texture ID {}, Type {}, Update {} created! Descriptor Indices ", .{ texInf.id.val, texInf.typ, texInf.update });
-        for (tex.descIndex) |index| std.debug.print("{} ", .{index});
-
+        for (tex.desIndices) |index| std.debug.print("{} ", .{index});
         self.vma.printMemoryInfo(tex.allocation[0]);
+
         self.textures.set(texInf.id.val, tex);
     }
 
@@ -201,55 +165,33 @@ pub const ResourceMan = struct {
     }
 
     pub fn updateBuffer(self: *ResourceMan, bufInf: Buffer.BufInf, data: anytype, flightId: u8) !void {
+        const DataType = @TypeOf(data);
+        const bytes: []const u8 = switch (@typeInfo(DataType)) {
+            .pointer => |ptr| switch (ptr.size) {
+                .one => std.mem.asBytes(data),
+                .slice => std.mem.sliceAsBytes(data),
+                else => return error.UnsupportedPointerType,
+            },
+            else => return error.ExpectedPointer,
+        };
+
         switch (bufInf.mem) {
             .Gpu => {
-                try self.queueBufferUpload(bufInf, data, flightId);
+                try self.queueBufferUpload(bufInf, bytes, flightId);
             },
             .CpuWrite => {
-                const DataType = @TypeOf(data);
-                const typeInfo = @typeInfo(DataType);
-
-                const dataBytes: []const u8 = switch (typeInfo) {
-                    .pointer => |ptr| switch (ptr.size) {
-                        .one => std.mem.asBytes(data),
-                        .slice => std.mem.sliceAsBytes(data),
-                        else => return error.UnsupportedPointerType,
-                    },
-                    else => return error.ExpectedPointer,
-                };
-                // Calculate element count
-                const elementCount = dataBytes.len / bufInf.elementSize;
-                if (dataBytes.len % bufInf.elementSize != 0) {
-                    std.debug.print("Error: Data size {} not aligned to element size {}\n", .{ dataBytes.len, bufInf.elementSize });
-                    return error.TypeMismatch;
-                }
-
+                const elementCount = bytes.len / bufInf.elementSize;
                 var buffer = try self.getBufferPtr(bufInf.id);
-                const pMappedData = buffer.mappedPtr orelse return error.BufferNotMapped;
 
-                // Calculate Destination Offset (Same logic as queueBufferUpload)
-                var dstOffset: u64 = 0;
-                if (bufInf.update == .PerFrame) {
-                    // bufInf.len is the "per frame" length from config
-                    const sliceSize = @as(u64, bufInf.elementSize) * bufInf.len;
+                const pMappedData = buffer.base[flightId].mappedPtr orelse return error.BufferNotMapped;
 
-                    // Safety Check: Ensure we aren't writing more than the slice allows
-                    if (dataBytes.len > sliceSize) {
-                        std.debug.print("Error: Updating Buffer {} with {} bytes, but PerFrame slice is only {} bytes\n", .{ bufInf.id.val, dataBytes.len, sliceSize });
-                        return error.BufferOverflow;
-                    }
-
-                    dstOffset = @as(u64, flightId) * sliceSize;
-                }
-                // Apply Offset to Mapped Pointer
-                const destBase: [*]u8 = @ptrCast(pMappedData);
-                const destPtr = destBase + dstOffset;
-
-                @memcpy(destPtr[0..dataBytes.len], dataBytes);
+                const destPtr = @as([*]u8, @ptrCast(pMappedData));
+                @memcpy(destPtr[0..bytes.len], bytes);
 
                 buffer.lastUpdateFlightId = flightId;
-                // Update count (this updates the tracked count for the object)
                 buffer.count = @intCast(elementCount);
+
+                try self.descMan.updateStorageBufferDescriptor(buffer.base[flightId].gpuAddress, bytes.len, buffer.descIndices[flightId]);
             },
             .CpuRead => return error.CpuReadBufferCantUpdate,
         }

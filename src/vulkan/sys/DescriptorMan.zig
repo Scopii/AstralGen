@@ -1,5 +1,6 @@
 const CreateMapArray = @import("../../structures/MapArray.zig").CreateMapArray;
 const TextureBase = @import("../types/res/TextureBase.zig").TextureBase;
+const BufferBase = @import("../types/res/BufferBase.zig").BufferBase;
 const Texture = @import("../types/res/Texture.zig").Texture;
 const Buffer = @import("../types/res/Buffer.zig").Buffer;
 const rc = @import("../../configs/renderConfig.zig");
@@ -61,49 +62,30 @@ pub const DescriptorMan = struct {
     }
 
     pub fn deinit(self: *DescriptorMan, vma: Vma) void {
-        vma.freeBuffer(self.descHeap.handle, self.descHeap.allocation);
+        vma.freeRawBuffer(self.descHeap.handle, self.descHeap.allocation);
     }
 
-    pub fn getStorageTexture(self: *DescriptorMan, texId: Texture.TexId) u32 {
-        return self.storageImgMap.get(texId.val);
-    }
-
-    pub fn getSampledTexture(self: *DescriptorMan, texId: Texture.TexId) u32 {
-        return self.sampledImgMap.get(texId.val);
-    }
-
-    pub fn getStorageBufferIndex(self: *DescriptorMan, bufId: Buffer.BufId) u32 {
-        return self.storageBufMap.get(bufId.val);
-    }
-
-    pub fn removeStorageTexture(self: *DescriptorMan, texId: Texture.TexId) void {
-        self.storageImgMap.removeAtKey(texId.val);
-    }
-
-    pub fn removeSampledTextureDescriptor(self: *DescriptorMan, texId: Texture.TexId) void {
-        self.sampledImgMap.removeAtKey(texId.val);
-    }
-
-    pub fn removeStorageBuffer(self: *DescriptorMan, bufId: Buffer.BufId) void {
-        self.storageBufMap.removeAtKey(bufId.val);
-    }
-
-    pub fn updateStorageBuffer(self: *DescriptorMan, gpuAddress: u64, size: u64) !u32 {
+    pub fn createStorageBufferDescriptor(self: *DescriptorMan, bufBase: BufferBase) !u32 {
         const descIndex = self.storageBufCount;
-        const addressInf = vk.VkDeviceAddressRangeEXT{ .address = gpuAddress, .size = size };
+        try self.updateStorageBufferDescriptor(bufBase.gpuAddress, bufBase.size, descIndex);
+        self.storageBufCount += 1;
+        return descIndex;
+    }
 
+    pub fn updateStorageBufferDescriptor(self: *DescriptorMan, gpuAddress: u64, size: u64, descIndex: u32) !void {
+        const addressInf = vk.VkDeviceAddressRangeEXT{
+            .address = gpuAddress,
+            .size = size,
+        };
         const resDescInf = vk.VkResourceDescriptorInfoEXT{
             .sType = vk.VK_STRUCTURE_TYPE_RESOURCE_DESCRIPTOR_INFO_EXT,
             .type = vk.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
             .data = .{ .pAddressRange = &addressInf },
         };
-
         try self.updateDescriptor(&resDescInf, self.descHeap.mappedPtr, self.storageBufOffset, descIndex, self.commonStride);
-        self.storageBufCount += 1;
-        return descIndex;
     }
 
-    pub fn updateStorageTexture(self: *DescriptorMan, texBase: *const TextureBase) !u32 {
+    pub fn createStorageTexDescriptor(self: *DescriptorMan, texBase: *const TextureBase) !u32 {
         const descIndex = self.storageImgCount;
         const viewInf = texBase.getViewCreateInfo();
 
@@ -123,7 +105,7 @@ pub const DescriptorMan = struct {
         return descIndex;
     }
 
-    pub fn updateSampledTextureDescriptor(self: *DescriptorMan, texBase: *const TextureBase) !u32 {
+    pub fn createSampledTexDescriptor(self: *DescriptorMan, texBase: *const TextureBase) !u32 {
         const descIndex = self.sampledImgCount;
         const viewInf = texBase.getViewCreateInfo();
 

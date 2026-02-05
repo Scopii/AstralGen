@@ -1,5 +1,6 @@
 const TextureBase = @import("../types/res/TextureBase.zig").TextureBase;
 const DescriptorBuffer = @import("DescriptorMan.zig").DescriptorBuffer;
+const BufferBase = @import("../types/res/BufferBase.zig").BufferBase;
 const Texture = @import("../types/res/Texture.zig").Texture;
 const Buffer = @import("../types/res/Buffer.zig").Buffer;
 const rc = @import("../../configs/renderConfig.zig");
@@ -70,7 +71,7 @@ pub const Vma = struct {
         };
     }
 
-    pub fn allocStagingBuffer(self: *const Vma, size: vk.VkDeviceSize) !Buffer {
+    pub fn allocStagingBuffer(self: *const Vma, size: vk.VkDeviceSize) !BufferBase {
         defer std.debug.print("Created Staging Buffer\n", .{});
         const memFlags = vk.VMA_ALLOCATION_CREATE_MAPPED_BIT | vk.VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
         return try self.allocBuffer(size, vk.VK_BUFFER_USAGE_TRANSFER_SRC_BIT, vk.VMA_MEMORY_USAGE_CPU_ONLY, memFlags); // TEST CPU_TO_GPU and AUTO
@@ -88,7 +89,7 @@ pub const Vma = struct {
         std.debug.print("Allocation is in VRAM: {}, CPU Visible: {}\n", .{ isVram, isCpuVisible });
     }
 
-    pub fn allocDefinedBuffer(self: *const Vma, bufInf: Buffer.BufInf, memUse: vhE.MemUsage) !Buffer {
+    pub fn allocDefinedBuffer(self: *const Vma, bufInf: Buffer.BufInf,) !Buffer {
         const dataSize = bufInf.elementSize;
         if (dataSize == 0) {
             std.debug.print("Binding Info has invalid element size\n", .{});
@@ -107,25 +108,39 @@ pub const Vma = struct {
 
         if (bufInf.typ != .Staging) bufferBits |= vk.VK_BUFFER_USAGE_TRANSFER_DST_BIT | vk.VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
 
-        const memType: vk.VmaMemoryUsage = switch (memUse) {
+        const memType: vk.VmaMemoryUsage = switch (bufInf.mem) {
             .Gpu => vk.VMA_MEMORY_USAGE_GPU_ONLY,
             .CpuWrite => vk.VMA_MEMORY_USAGE_CPU_TO_GPU,
             .CpuRead => vk.VMA_MEMORY_USAGE_GPU_TO_CPU,
         };
 
-        var memFlags: vk.VmaAllocationCreateFlags = switch (memUse) {
+        var memFlags: vk.VmaAllocationCreateFlags = switch (bufInf.mem) {
             .Gpu => 0,
             .CpuWrite, .CpuRead => vk.VMA_ALLOCATION_CREATE_MAPPED_BIT,
         };
         if (bufInf.typ == .Staging) memFlags |= vk.VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
 
-        var buffer = try self.allocBuffer(bufferByteSize, bufferBits, memType, memFlags);
+        var buffer: Buffer = undefined;
+
+        switch (bufInf.update) {
+            .Overwrite => {
+                const tempBuffer = try self.allocBuffer(bufferByteSize, bufferBits, memType, memFlags);
+                for (0..rc.MAX_IN_FLIGHT) |i| buffer.base[i] = tempBuffer;
+            },
+            .PerFrame => {
+                for (0..rc.MAX_IN_FLIGHT) |i| {
+                    const tempBuffer = try self.allocBuffer(bufferByteSize, bufferBits, memType, memFlags);
+                    buffer.base[i] = tempBuffer;
+                }
+            },
+        }
+
         buffer.update = bufInf.update;
         buffer.typ = bufInf.typ;
         return buffer;
     }
 
-    pub fn allocBuffer(self: *const Vma, size: vk.VkDeviceSize, bufUse: vk.VkBufferUsageFlags, memUse: vk.VmaMemoryUsage, memFlags: vk.VmaAllocationCreateFlags) !Buffer {
+    pub fn allocBuffer(self: *const Vma, size: vk.VkDeviceSize, bufUse: vk.VkBufferUsageFlags, memUse: vk.VmaMemoryUsage, memFlags: vk.VmaAllocationCreateFlags) !BufferBase {
         const bufInf = vk.VkBufferCreateInfo{
             .sType = vk.VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
             .size = size,
@@ -197,7 +212,7 @@ pub const Vma = struct {
             .Depth => vk.VK_IMAGE_ASPECT_DEPTH_BIT,
             .Stencil => vk.VK_IMAGE_ASPECT_STENCIL_BIT,
         };
-        
+
         const extent = vk.VkExtent3D{ .width = texInf.width, .height = texInf.height, .depth = texInf.depth };
 
         var tempAllocations: [rc.MAX_IN_FLIGHT]vk.VmaAllocation = undefined;
@@ -241,8 +256,16 @@ pub const Vma = struct {
         };
     }
 
-    pub fn freeBuffer(self: *const Vma, buffer: vk.VkBuffer, allocation: vk.VmaAllocation) void {
+    pub fn freeRawBuffer(self: *const Vma, buffer: vk.VkBuffer, allocation: vk.VmaAllocation) void {
         vk.vmaDestroyBuffer(self.handle, buffer, allocation);
+    }
+
+    pub fn freeBuffer(self: *const Vma, buffer: *Buffer) void {
+        const count = switch (buffer.update) {
+            .Overwrite => 1,
+            .PerFrame => rc.MAX_IN_FLIGHT,
+        };
+        for (0..count) |i| vk.vmaDestroyBuffer(self.handle, buffer.base[@intCast(i)].handle, buffer.base[@intCast(i)].allocation);
     }
 
     pub fn freeTexture(self: *const Vma, tex: *const Texture) void {
