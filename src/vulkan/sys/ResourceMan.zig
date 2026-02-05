@@ -82,19 +82,14 @@ pub const ResourceMan = struct {
     pub fn createBuffer(self: *ResourceMan, bufInf: Buffer.BufInf) !void {
         var buffer = try self.vma.allocDefinedBuffer(bufInf);
 
-        const descType: vk.VkDescriptorType = switch (bufInf.typ) {
-            .Uniform => vk.VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-            else => vk.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-        };
-
         switch (bufInf.update) {
             .Overwrite => {
-                const descIndex = try self.descMan.createBufferDescriptor(buffer.base[0], descType);
+                const descIndex = try self.descMan.createBufferDescriptor(buffer.base[0], buffer.typ);
                 for (0..buffer.descIndices.len) |i| buffer.descIndices[i] = descIndex;
             },
             .PerFrame => {
                 for (0..buffer.descIndices.len) |i| {
-                    buffer.descIndices[i] = try self.descMan.createBufferDescriptor(buffer.base[i], descType);
+                    buffer.descIndices[i] = try self.descMan.createBufferDescriptor(buffer.base[i], buffer.typ);
                 }
             },
         }
@@ -176,13 +171,7 @@ pub const ResourceMan = struct {
             },
             .CpuRead => return error.CpuReadBufferCantUpdate,
         }
-
-        const descType: vk.VkDescriptorType = switch (bufInf.typ) {
-            .Uniform => vk.VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-            else => vk.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-        };
-
-        try self.descMan.updateBufferDescriptor(buffer.base[flightId].gpuAddress, bytes.len, buffer.descIndices[flightId], descType);
+        try self.descMan.updateBufferDescriptor(buffer.base[flightId].gpuAddress, bytes.len, buffer.descIndices[flightId], buffer.typ);
         buffer.curCount = @intCast(bytes.len / bufInf.elementSize);
         buffer.lastUpdateFlightId = flightId;
     }

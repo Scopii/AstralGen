@@ -65,14 +65,19 @@ pub const DescriptorMan = struct {
         vma.freeRawBuffer(self.descHeap.handle, self.descHeap.allocation);
     }
 
-    pub fn createBufferDescriptor(self: *DescriptorMan, bufBase: BufferBase, descType: vk.VkDescriptorType) !u32 {
+    pub fn createBufferDescriptor(self: *DescriptorMan, bufBase: BufferBase, bufTyp: vhE.BufferType) !u32 {
         const descIndex = self.storageBufCount;
-        try self.updateBufferDescriptor(bufBase.gpuAddress, bufBase.size, descIndex, descType);
+        try self.updateBufferDescriptor(bufBase.gpuAddress, bufBase.size, descIndex, bufTyp);
         self.storageBufCount += 1;
         return descIndex;
     }
 
-    pub fn updateBufferDescriptor(self: *DescriptorMan, gpuAddress: u64, size: u64, descIndex: u32, descType: vk.VkDescriptorType) !void {
+    pub fn updateBufferDescriptor(self: *DescriptorMan, gpuAddress: u64, size: u64, descIndex: u32, bufTyp: vhE.BufferType) !void {
+        const descType: vk.VkDescriptorType = switch (bufTyp) {
+            .Uniform => vk.VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+            else => vk.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+        };
+
         const addressInf = vk.VkDeviceAddressRangeEXT{
             .address = gpuAddress,
             .size = size,
