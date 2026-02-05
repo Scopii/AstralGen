@@ -145,7 +145,7 @@ pub fn getFileTimeStamp(src: []const u8) !i128 {
     return ns; // return ns / 1_000_000 nanoseconds -> milliseconds
 }
 
-fn threadCompile(src: []const u8, dst: []const u8, stage: vkE.ShaderStage, includePath: []const u8) void {
+fn threadCompile(src: []const u8, dst: []const u8, stage: vkE.ShaderStage, includePath: []const u8, failedBool: *std.atomic.Value(bool)) void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){}; // Thread Save
     defer _ = gpa.deinit();
     const alloc = gpa.allocator();
@@ -153,6 +153,7 @@ fn threadCompile(src: []const u8, dst: []const u8, stage: vkE.ShaderStage, inclu
     //transpileSlang(alloc, src, dst, "hlsl")
     compileShader(alloc, src, dst, stage, includePath) catch |err| {
         std.debug.print("Thread Compile Failed: {}\n", .{err});
+        failedBool.store(true, .seq_cst); 
     };
     std.heap.page_allocator.free(src);
     std.heap.page_allocator.free(dst);
@@ -162,13 +163,19 @@ pub fn compileShadersParallel(alloc: std.mem.Allocator, absShaderPath: []const u
     var threads = std.array_list.Managed(std.Thread).init(alloc);
     defer threads.deinit();
 
+    var failed = std.atomic.Value(bool).init(false); 
+
     for (shaders) |shader| {
         const src = try joinPath(std.heap.page_allocator, absShaderPath, shader.file);
         const dst = try joinPath(std.heap.page_allocator, absShaderOutputPath, shader.spvFile);
-        const t = try std.Thread.spawn(.{}, threadCompile, .{ src, dst, shader.typ, absShaderPath });
+        const t = try std.Thread.spawn(.{}, threadCompile, .{ src, dst, shader.typ, absShaderPath, &failed });
         try threads.append(t);
     }
     for (threads.items) |thread| thread.join();
+
+    if (failed.load(.seq_cst)) {
+        return error.ShaderCompilationFailed;
+    }
 }
 
 fn compileShader(alloc: Allocator, srcPath: []const u8, spvPath: []const u8, stage: vkE.ShaderStage, includePath: []const u8) !void {
