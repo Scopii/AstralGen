@@ -63,7 +63,7 @@ pub const ResourceMan = struct {
 
     pub fn getTextureResourceSlot(self: *ResourceMan, texId: Texture.TexId, flightId: u8) !u32 {
         const tex = try self.getTexturePtr(texId);
-        return tex.desIndices[flightId];
+        return tex.descIndices[flightId];
     }
 
     pub fn resetTransfers(self: *ResourceMan, flightId: u8) void {
@@ -84,12 +84,17 @@ pub const ResourceMan = struct {
 
         switch (bufInf.update) {
             .Overwrite => {
-                const descIndex = try self.descMan.createBufferDescriptor(buffer.base[0], buffer.typ);
+                const descIndex = try self.descMan.getFreeDescriptorIndex();
+
+                try self.descMan.updateBufferDescriptor(buffer.base[0].gpuAddress, buffer.base[0].size, descIndex, buffer.typ);
                 for (0..buffer.descIndices.len) |i| buffer.descIndices[i] = descIndex;
             },
             .PerFrame => {
                 for (0..buffer.descIndices.len) |i| {
-                    buffer.descIndices[i] = try self.descMan.createBufferDescriptor(buffer.base[i], buffer.typ);
+                    const descIndex = try self.descMan.getFreeDescriptorIndex();
+
+                    try self.descMan.updateBufferDescriptor(buffer.base[i].gpuAddress, buffer.base[i].size, descIndex, buffer.typ);
+                    buffer.descIndices[i] = descIndex;
                 }
             },
         }
@@ -105,23 +110,28 @@ pub const ResourceMan = struct {
 
         switch (texInf.update) {
             .Overwrite => {
-                const descIndex = switch (texInf.typ) {
-                    .Color => try self.descMan.createStorageTexDescriptor(&tex.base[0]),
-                    .Depth, .Stencil => try self.descMan.createSampledTexDescriptor(&tex.base[0]),
-                };
-                for (0..tex.desIndices.len) |i| tex.desIndices[i] = descIndex;
+                const descIndex = try self.descMan.getFreeDescriptorIndex();
+                for (0..tex.descIndices.len) |i| tex.descIndices[i] = descIndex;
+
+                switch (texInf.typ) {
+                    .Color => try self.descMan.updateStorageTexDescriptor(&tex.base[0], descIndex),
+                    .Depth, .Stencil => try self.descMan.updateSampledTexDescriptor(&tex.base[0], descIndex),
+                }
             },
             .PerFrame => {
-                for (0..tex.desIndices.len) |i| {
-                    tex.desIndices[i] = switch (texInf.typ) {
-                        .Color => try self.descMan.createStorageTexDescriptor(&tex.base[i]),
-                        .Depth, .Stencil => try self.descMan.createSampledTexDescriptor(&tex.base[i]),
-                    };
+                for (0..tex.descIndices.len) |i| {
+                    const descIndex = try self.descMan.getFreeDescriptorIndex();
+                    tex.descIndices[i] = descIndex;
+
+                    switch (texInf.typ) {
+                        .Color => try self.descMan.updateStorageTexDescriptor(&tex.base[i], descIndex),
+                        .Depth, .Stencil => try self.descMan.updateSampledTexDescriptor(&tex.base[i], descIndex),
+                    }
                 }
             },
         }
         std.debug.print("Texture ID {}, Type {}, Update {} created! Descriptor Indices ", .{ texInf.id.val, texInf.typ, texInf.update });
-        for (tex.desIndices) |index| std.debug.print("{} ", .{index});
+        for (tex.descIndices) |index| std.debug.print("{} ", .{index});
         self.vma.printMemoryInfo(tex.allocation[0]);
 
         self.textures.set(texInf.id.val, tex);
@@ -179,12 +189,26 @@ pub const ResourceMan = struct {
     pub fn destroyTexture(self: *ResourceMan, texId: Texture.TexId) !void {
         const tex = try self.getTexturePtr(texId);
         self.vma.freeTexture(tex);
+
+        const count = switch (tex.update) {
+            .Overwrite => 1,
+            .PerFrame => rc.MAX_IN_FLIGHT,
+        };
+        for (0..count) |i| try self.descMan.freeDescriptor(tex.descIndices[i]);
+
         self.textures.removeAtKey(texId.val);
     }
 
     pub fn destroyBuffer(self: *ResourceMan, bufId: Buffer.BufId) !void {
         const buf = try self.getBufferPtr(bufId);
         self.vma.freeBuffer(buf);
+
+        const count = switch (buf.update) {
+            .Overwrite => 1,
+            .PerFrame => rc.MAX_IN_FLIGHT,
+        };
+        for (0..count) |i| try self.descMan.freeDescriptor(buf.desIndices[i]);
+
         self.buffers.removeAtKey(bufId.val);
     }
 };

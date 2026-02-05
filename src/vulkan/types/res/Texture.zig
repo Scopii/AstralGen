@@ -6,7 +6,7 @@ const vhE = @import("../../help/Enums.zig");
 
 pub const Texture = struct {
     allocation: [rc.MAX_IN_FLIGHT]vk.VmaAllocation,
-    desIndices: [rc.MAX_IN_FLIGHT]u32 = .{0} ** rc.MAX_IN_FLIGHT,
+    descIndices: [rc.MAX_IN_FLIGHT]u32 = .{0} ** rc.MAX_IN_FLIGHT,
     base: [rc.MAX_IN_FLIGHT]TextureBase,
     update: vhE.UpdateType = .Overwrite,
 

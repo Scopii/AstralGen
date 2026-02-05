@@ -1,4 +1,5 @@
 const CreateMapArray = @import("../../structures/MapArray.zig").CreateMapArray;
+const FixedList = @import("../../structures/FixedList.zig").FixedList;
 const TextureBase = @import("../types/res/TextureBase.zig").TextureBase;
 const BufferBase = @import("../types/res/BufferBase.zig").BufferBase;
 const Texture = @import("../types/res/Texture.zig").Texture;
@@ -29,7 +30,7 @@ pub const DescriptorMan = struct {
     startOffset: u64,
     resourceCount: u32 = 0,
 
-    // storageBufMap: CreateMapArray(u32, rc.MAX_IN_FLIGHT * rc.BUF_MAX, u32, rc.MAX_IN_FLIGHT * rc.BUF_MAX, 0) = .{},
+    freeList: FixedList(u32, rc.RESOURCE_MAX) = .{},
 
     pub fn init(vma: Vma, gpi: vk.VkDevice, gpu: vk.VkPhysicalDevice) !DescriptorMan {
         const heapProps = getDescriptorHeapProperties(gpu);
@@ -39,7 +40,7 @@ pub const DescriptorMan = struct {
         const startOffset = (driverReservedSize + (alignment - 1)) & ~(alignment - 1);
 
         const descStride = @max(heapProps.bufferDescriptorSize, heapProps.imageDescriptorSize);
-        const heapSize = rc.MAX_IN_FLIGHT * descStride * (rc.BUF_MAX + rc.TEX_MAX);
+        const heapSize = rc.MAX_IN_FLIGHT * descStride * (rc.RESOURCE_MAX);
 
         return .{
             .gpi = gpi,
@@ -54,11 +55,23 @@ pub const DescriptorMan = struct {
         vma.freeRawBuffer(self.descHeap.handle, self.descHeap.allocation);
     }
 
-    pub fn createBufferDescriptor(self: *DescriptorMan, bufBase: BufferBase, bufTyp: vhE.BufferType) !u32 {
+    pub fn getFreeDescriptorIndex(self: *DescriptorMan) !u32 {
+        if (self.freeList.len > 0) {
+            const descIndex = self.freeList.pop();
+            if (descIndex) |index| return index else return error.CouldNotPopDescriptorIndex;
+        }
+        if (self.resourceCount >= rc.RESOURCE_MAX) return error.DescriptorHeapFull;
+
         const descIndex = self.resourceCount;
-        try self.updateBufferDescriptor(bufBase.gpuAddress, bufBase.size, descIndex, bufTyp);
         self.resourceCount += 1;
         return descIndex;
+    }
+
+    pub fn freeDescriptor(self: *DescriptorMan, descIndex: u32) !void {
+        if (descIndex >= self.resourceCount) {
+            std.debug.print("Descriptor Index {} is unused and cant be freed", .{descIndex});
+        }
+        try self.freeList.append(descIndex);
     }
 
     pub fn updateBufferDescriptor(self: *DescriptorMan, gpuAddress: u64, size: u64, descIndex: u32, bufTyp: vhE.BufferType) !void {
@@ -79,8 +92,7 @@ pub const DescriptorMan = struct {
         try self.updateDescriptor(&resDescInf, self.descHeap.mappedPtr, self.startOffset, descIndex, self.descStride);
     }
 
-    pub fn createStorageTexDescriptor(self: *DescriptorMan, texBase: *const TextureBase) !u32 {
-        const descIndex = self.resourceCount;
+    pub fn updateStorageTexDescriptor(self: *DescriptorMan, texBase: *const TextureBase, descIndex: u32) !void {
         const viewInf = texBase.getViewCreateInfo();
 
         const imgDescInf = vk.VkImageDescriptorInfoEXT{
@@ -93,14 +105,10 @@ pub const DescriptorMan = struct {
             .type = vk.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, // For color/RW images
             .data = .{ .pImage = &imgDescInf },
         };
-
         try self.updateDescriptor(&resDescInf, self.descHeap.mappedPtr, self.startOffset, descIndex, self.descStride);
-        self.resourceCount += 1;
-        return descIndex;
     }
 
-    pub fn createSampledTexDescriptor(self: *DescriptorMan, texBase: *const TextureBase) !u32 {
-        const descIndex = self.resourceCount;
+    pub fn updateSampledTexDescriptor(self: *DescriptorMan, texBase: *const TextureBase, descIndex: u32) !void {
         const viewInf = texBase.getViewCreateInfo();
 
         const imgDescInf = vk.VkImageDescriptorInfoEXT{
@@ -113,10 +121,7 @@ pub const DescriptorMan = struct {
             .type = vk.VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
             .data = .{ .pImage = &imgDescInf },
         };
-
         try self.updateDescriptor(&resDescInf, self.descHeap.mappedPtr, self.startOffset, descIndex, self.descStride);
-        self.resourceCount += 1;
-        return descIndex;
     }
 
     fn updateDescriptor(self: *DescriptorMan, resDescInf: *const vk.VkResourceDescriptorInfoEXT, mappedPtr: ?*anyopaque, heapOffset: u64, descIndex: u32, descSize: u64) !void {

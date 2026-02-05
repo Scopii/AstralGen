@@ -33,6 +33,7 @@ pub const BUF_MAX = 63;
 pub const STORAGE_TEX_MAX = 31;
 pub const SAMPLED_TEX_MAX = 31;
 pub const TEX_MAX = STORAGE_TEX_MAX + SAMPLED_TEX_MAX;
+pub const RESOURCE_MAX = TEX_MAX + BUF_MAX;
 pub const STAGING_BUF_SIZE = 32 * 1024 * 1024; // Bytes
 
 pub const TEX_COLOR_FORMAT = vk.VK_FORMAT_R16G16B16A16_SFLOAT;
