@@ -151,10 +151,11 @@ fn threadCompile(src: []const u8, dst: []const u8, stage: vkE.ShaderStage, inclu
     const alloc = gpa.allocator();
 
     //transpileSlang(alloc, src, dst, "hlsl")
-    compileShader(alloc, src, dst, stage, includePath) catch |err| {
-        std.debug.print("Thread Compile Failed: {}\n", .{err});
+    const result = compileShader(alloc, src, dst, stage, includePath);
+    
+    if (result == error.ShaderCompilationFailed) {
         failedBool.store(true, .seq_cst); 
-    };
+    }
     std.heap.page_allocator.free(src);
     std.heap.page_allocator.free(dst);
 }

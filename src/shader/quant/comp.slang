@@ -19,7 +19,7 @@ void main(uint3 id: SV_DispatchThreadID) {
     RWStructuredBuffer<IndirectCommand> indirectBuffer = heapIndirectBuffers[pc.resources[0]];
     StructuredBuffer<Object> objectBuffer = heapObjectBuffers[pc.resources[1]];
 
-    indirectBuffer[0].groupX = objectBuffer.getCount();
+    indirectBuffer[0].groupX = objectBuffer.getCount(;
     indirectBuffer[0].groupY = 100;
     indirectBuffer[0].groupZ = 100;
 }
