@@ -47,7 +47,7 @@ pub const RenderGraph = struct {
 
         cmd.resetQuerys();
 
-        cmd.startQuery(.TopOfPipe, 76, "Desc-Heap-bind");
+        cmd.startQuery(.TopOfPipe, 76, "Descriptor Heap");
         cmd.bindDescriptorHeap(resMan.descMan.descHeap.gpuAddress, resMan.descMan.descHeap.size, resMan.descMan.driverReservedSize);
         cmd.endQuery(.BotOfPipe, 76);
 

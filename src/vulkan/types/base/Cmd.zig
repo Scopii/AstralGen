@@ -118,9 +118,10 @@ pub const Cmd = struct {
             if (endTime > frameEnd) frameEnd = endTime;
         }
 
-        const frameTime = frameEnd - frameStart;
-        const gpuFrameMs = (@as(f64, @floatFromInt(frameTime)) * timestampPeriod) / 1_000_000.0;
-        std.debug.print("GPU Frame {} (flight {}): {d:.3} ms ({d:.1} FPS) {}/{} Queries\n", .{ self.frame, self.flightId, gpuFrameMs, 1000.0 / gpuFrameMs, self.querys.getCount(), rc.GPU_QUERYS });
+        const ticks = frameEnd - frameStart;
+        const gpuFrameMs = (@as(f64, @floatFromInt(ticks)) * timestampPeriod) / 1_000_000.0;
+        std.debug.print("GPU Frame {} (FlightID {}) ({}/{} Queries)\n", .{ self.frame, self.flightId, self.querys.getCount(), rc.GPU_QUERYS });
+        std.debug.print("{d:.3} ms ({d:.1} FPS) ({} GPU Ticks):\n", .{ gpuFrameMs, 1000.0 / gpuFrameMs, ticks });
 
         var untrackedMs: f64 = gpuFrameMs;
 
@@ -128,9 +129,9 @@ pub const Cmd = struct {
             const diff = results[query.endIndex] - results[query.startIndex];
             const gpuQueryMs = (@as(f64, @floatFromInt(diff)) * timestampPeriod) / 1_000_000.0;
             untrackedMs -= gpuQueryMs;
-            std.debug.print(" {d:.3} ms ({d:5.2} %) {s} \n", .{ gpuQueryMs, (gpuQueryMs / gpuFrameMs) * 100, query.name });
+            std.debug.print(" - {d:.3} ms ({d:5.2} %) {s}\n", .{ gpuQueryMs, (gpuQueryMs / gpuFrameMs) * 100, query.name });
         }
-        std.debug.print("Untracked {d:.3} ms ({d:5.2} %) \n", .{ untrackedMs, untrackedMs * 100 });
+        std.debug.print("Untracked {d:.3} ms ({d:5.2} %)\n", .{ untrackedMs + 0.00001, untrackedMs * 100 + 0.00001 }); // + 0.00001 to avoid negative through precision loss
     }
 
     pub fn resetQuerys(self: *Cmd) void {
