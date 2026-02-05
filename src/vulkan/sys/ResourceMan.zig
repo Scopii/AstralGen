@@ -71,32 +71,6 @@ pub const ResourceMan = struct {
         self.transfers[flightId].clearRetainingCapacity();
     }
 
-    pub fn queueBufferUpload(self: *ResourceMan, bufInf: Buffer.BufInf, bytes: []const u8, flightId: u8) !void {
-        const stagingOffset = self.stagingOffsets[flightId];
-        const stagingBuffer = self.stagingBuffers[flightId];
-
-        if (stagingOffset + bytes.len > rc.STAGING_BUF_SIZE) return error.StagingBufferFull;
-
-        const stagingPtr: [*]u8 = @ptrCast(stagingBuffer.mappedPtr);
-        @memcpy(stagingPtr[stagingOffset..][0..bytes.len], bytes);
-
-        const transfer = Transfer{
-            .srcOffset = stagingOffset,
-            .dstResId = bufInf.id,
-            .dstOffset = 0,
-            .size = bytes.len,
-        };
-        try self.transfers[flightId].append(transfer);
-
-        var buffer = try self.getBufferPtr(bufInf.id);
-        buffer.count = @intCast(bytes.len / bufInf.elementSize);
-        buffer.lastUpdateFlightId = flightId;
-
-        try self.descMan.updateStorageBufferDescriptor(buffer.base[flightId].gpuAddress, bytes.len, buffer.descIndices[flightId]);
-
-        self.stagingOffsets[flightId] += (bytes.len + 15) & ~@as(u64, 15);
-    }
-
     pub fn getTexturePtr(self: *ResourceMan, texId: Texture.TexId) !*Texture {
         if (self.textures.isKeyUsed(texId.val) == true) return self.textures.getPtr(texId.val) else return error.TextureIdNotUsed;
     }
@@ -155,7 +129,9 @@ pub const ResourceMan = struct {
 
     pub fn getBufferDataPtr(self: *ResourceMan, bufId: Buffer.BufId, comptime T: type) !*T {
         const buffer = try self.getBufferPtr(bufId);
-        if (buffer.mappedPtr) |ptr| return @as(*T, @ptrCast(@alignCast(ptr)));
+        if (buffer.base[0].mappedPtr) |ptr| {
+            return @as(*T, @ptrCast(@alignCast(ptr)));
+        }
         return error.BufferNotHostVisible;
     }
 
@@ -175,26 +151,29 @@ pub const ResourceMan = struct {
             else => return error.ExpectedPointer,
         };
 
+        var buffer = try self.getBufferPtr(bufInf.id);
+
         switch (bufInf.mem) {
             .Gpu => {
-                try self.queueBufferUpload(bufInf, bytes, flightId);
+                const stagingOffset = self.stagingOffsets[flightId];
+                if (stagingOffset + bytes.len > rc.STAGING_BUF_SIZE) return error.StagingBufferFull;
+
+                try self.transfers[flightId].append(Transfer{ .srcOffset = stagingOffset, .dstResId = bufInf.id, .dstOffset = 0, .size = bytes.len });
+                self.stagingOffsets[flightId] += (bytes.len + 15) & ~@as(u64, 15);
+
+                const stagingPtr: [*]u8 = @ptrCast(self.stagingBuffers[flightId].mappedPtr);
+                @memcpy(stagingPtr[stagingOffset..][0..bytes.len], bytes);
             },
             .CpuWrite => {
-                const elementCount = bytes.len / bufInf.elementSize;
-                var buffer = try self.getBufferPtr(bufInf.id);
-
                 const pMappedData = buffer.base[flightId].mappedPtr orelse return error.BufferNotMapped;
-
-                const destPtr = @as([*]u8, @ptrCast(pMappedData));
+                const destPtr: [*]u8 = @ptrCast(pMappedData);
                 @memcpy(destPtr[0..bytes.len], bytes);
-
-                buffer.lastUpdateFlightId = flightId;
-                buffer.count = @intCast(elementCount);
-
-                try self.descMan.updateStorageBufferDescriptor(buffer.base[flightId].gpuAddress, bytes.len, buffer.descIndices[flightId]);
             },
             .CpuRead => return error.CpuReadBufferCantUpdate,
         }
+        try self.descMan.updateStorageBufferDescriptor(buffer.base[flightId].gpuAddress, bytes.len, buffer.descIndices[flightId]);
+        buffer.count = @intCast(bytes.len / bufInf.elementSize);
+        buffer.lastUpdateFlightId = flightId;
     }
 
     pub fn destroyTexture(self: *ResourceMan, texId: Texture.TexId) !void {
@@ -205,7 +184,7 @@ pub const ResourceMan = struct {
 
     pub fn destroyBuffer(self: *ResourceMan, bufId: Buffer.BufId) !void {
         const buf = try self.getBufferPtr(bufId);
-        self.vma.freeBuffer(buf.handle, buf.allocation);
+        self.vma.freeBuffer(buf);
         self.buffers.removeAtKey(bufId.val);
     }
 };
