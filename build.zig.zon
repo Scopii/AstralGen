@@ -34,10 +34,11 @@
             .url = "https://github.com/zig-gamedev/ztracy/archive/e7b401dea9ce006f8b236e3a2ca1a9f3d5c3e896.tar.gz",
             .hash = "ztracy-0.14.0-dev-zHJSq78GGQC904aYvBPn6OOvRVOq_opAwDfeHZdvQyej",
         },
-        .zgui = .{
-            .url = "https://github.com/zig-gamedev/zgui/archive/a5210f93baa2f23463ddefbae97931ff4e67f3b8.tar.gz",
-            .hash = "zgui-0.6.0-dev--L6sZAz7bQAOM1-JcVBhypkDWegRCAYr9MaJZ54p5WvN",
-        },
+        // .zgui = .{
+        //     .url = "https://github.com/zig-gamedev/zgui/archive/a5210f93baa2f23463ddefbae97931ff4e67f3b8.tar.gz",
+        //     .hash = "zgui-0.6.0-dev--L6sZAz7bQAOM1-JcVBhypkDWegRCAYr9MaJZ54p5WvN",
+        // },
+        .zgui =.{ .path = "../../zgui" },
     },
 
     .paths = .{

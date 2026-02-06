@@ -6,62 +6,69 @@ const zgui = @import("zgui");
 const std = @import("std");
 
 pub const ImGuiMan = struct {
-    pool: vk.VkDescriptorPool,
-
     pub fn init(context: *const Context, sdl_window: *vk.SDL_Window) !ImGuiMan {
-        // 1. Init zgui logic
+        // 1. Init zgui
         zgui.init(std.heap.c_allocator);
 
-        // 2. Create a Descriptor Pool (Required by ImGui even for bindless engines)
-        const pool_sizes = [_]vk.VkDescriptorPoolSize{
-            .{ .type = vk.VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, .descriptorCount = 1000 },
-        };
-        const pool_info = vk.VkDescriptorPoolCreateInfo{
-            .sType = vk.VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-            .flags = vk.VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT,
-            .maxSets = 1000,
-            .poolSizeCount = 1,
-            .pPoolSizes = &pool_sizes,
-        };
-        var pool: vk.VkDescriptorPool = undefined;
-        _ = vk.vkCreateDescriptorPool(context.gpi, &pool_info, null, &pool);
+        const loaded = zgui.backend.loadFunctions(
+            vk.VK_API_VERSION_1_3,
+            vulkanGetProcAddr,
+            context.instance,
+        );
+        if (!loaded) {
+            return error.VulkanFunctionLoadingFailed;
+        }
 
-        // 3. Init SDL3 and Vulkan Backends via C
-        _ = vk.bridge_ImGui_ImplSDL3_InitForVulkan(sdl_window);
+        const swapchain_format = vk.VK_FORMAT_B8G8R8A8_UNORM;
 
-        var info = std.mem.zeroInit(vk.ZigImGuiInitInfo, .{
-            .Instance = context.instance,
-            .PhysicalDevice = context.gpu,
-            .Device = context.gpi,
-            .QueueFamily = context.families.graphics,
-            .Queue = context.graphicsQ.handle,
-            .DescriptorPool = pool,
-            .MinImageCount = rc.DESIRED_SWAPCHAIN_IMAGES,
-            .ImageCount = rc.DESIRED_SWAPCHAIN_IMAGES,
-            .ColorAttachmentFormat = rc.TEX_COLOR_FORMAT,
-            .DepthAttachmentFormat = rc.TEX_DEPTH_FORMAT,
-        });
+        // 3. Initialize SDL3 platform backend
+        zgui.backend.init(
+            .{
+                .api_version = vk.VK_API_VERSION_1_3,
+                .instance = context.instance,
+                .physical_device = context.gpu,
+                .device = context.gpi,
+                .queue_family = context.families.graphics,
+                .queue = context.graphicsQ.handle,
+                .descriptor_pool = null,
+                .min_image_count = rc.DESIRED_SWAPCHAIN_IMAGES,
+                .image_count = rc.DESIRED_SWAPCHAIN_IMAGES,
+                .msaa_samples = 0,
+                .descriptor_pool_size = 1000,
+                .use_dynamic_rendering = true,
+                .render_pass = null,
+                .pipeline_rendering_create_info = .{
+                    .s_type = vk.VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
+                    .view_mask = 0, //vk.VK_SAMPLE_COUNT_1_BIT
+                    .color_attachment_count = 1,
+                    .p_color_attachment_formats = @ptrCast(&swapchain_format),
+                    .depth_attachment_format = vk.VK_FORMAT_UNDEFINED,
+                    .stencil_attachment_format = vk.VK_FORMAT_UNDEFINED,
+                },
+            },
+            sdl_window,
+        );
 
-        _ = vk.bridge_ImGui_ImplVulkan_Init(&info);
-
-        return .{ .pool = pool };
+        return .{};
     }
 
-    pub fn deinit(self: *ImGuiMan, gpi: vk.VkDevice) void {
-        _ = vk.bridge_ImGui_ImplVulkan_Shutdown();
-        _ = vk.bridge_ImGui_ImplSDL3_Shutdown();
+    pub fn deinit(_: *ImGuiMan, _: vk.VkDevice) void {
+        zgui.backend.deinit();
         zgui.deinit();
-        vk.vkDestroyDescriptorPool(gpi, self.pool, null);
     }
 
     pub fn newFrame(_: *ImGuiMan) void {
-        _ = vk.bridge_ImGui_ImplVulkan_NewFrame();
-        _ = vk.bridge_ImGui_ImplSDL3_NewFrame();
-        zgui.newFrame();
+        zgui.backend.newFrame(1920, 1080); // your window dimensions
     }
 
     pub fn render(_: *ImGuiMan, cmd: *const Cmd) void {
-        zgui.render(); // This prepares zgui's internal draw data
-        vk.bridge_ImGui_ImplVulkan_RenderDrawData(cmd.handle);
+        zgui.render();
+        zgui.backend.render(cmd.handle);
     }
 };
+
+fn vulkanGetProcAddr(function_name: [*:0]const u8, user_data: ?*anyopaque) callconv(.c) ?*anyopaque {
+    const instance = @as(vk.VkInstance, @ptrCast(user_data));
+    const result = vk.vkGetInstanceProcAddr(instance, function_name);
+    return @ptrCast(@constCast(result));
+}

@@ -240,9 +240,9 @@ pub const Cmd = struct {
         self: *const Cmd,
         width: u32,
         height: u32,
-        colorInfs: []vk.VkRenderingAttachmentInfo,
-        depthInf: ?vk.VkRenderingAttachmentInfo,
-        stencilInf: ?vk.VkRenderingAttachmentInfo,
+        colorInfs: []const vk.VkRenderingAttachmentInfo,
+        depthInf: ?*const vk.VkRenderingAttachmentInfo,
+        stencilInf: ?*const vk.VkRenderingAttachmentInfo,
     ) void {
         const viewport = vk.VkViewport{
             .x = 0,
@@ -266,10 +266,11 @@ pub const Cmd = struct {
             .flags = 0,
             .renderArea = scissor,
             .layerCount = 1,
+            .viewMask = 0,
             .colorAttachmentCount = @intCast(colorInfs.len),
             .pColorAttachments = colorInfs.ptr,
-            .pDepthAttachment = if (depthInf != null) &depthInf.? else null,
-            .pStencilAttachment = if (stencilInf != null) &stencilInf.? else null,
+            .pDepthAttachment = if (depthInf != null) depthInf.? else null,
+            .pStencilAttachment = if (stencilInf != null) stencilInf.? else null,
         };
 
         vk.vkCmdBeginRendering(self.handle, &renderInf);

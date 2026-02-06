@@ -11,6 +11,7 @@ const MAX_WINDOWS = @import("../configs/renderConfig.zig").MAX_WINDOWS;
 const SDL_KEY_MAX = @import("../core/EventManager.zig").SDL_KEY_MAX;
 
 const ImGuiMan = @import("../vulkan/sys/ImGuiMan.zig").ImGuiMan;
+const zgui = @import("zgui");
 
 pub const WindowManager = struct {
     windows: CreateMapArray(Window, MAX_WINDOWS, u32, 32 + MAX_WINDOWS, 0) = .{},
@@ -105,16 +106,16 @@ pub const WindowManager = struct {
 
         if (self.openWindows == 0) {
             if (sdl.SDL_WaitEvent(&event)) { // On pause wait for an event and process
-                vk.bridge_ImGui_ImplSDL3_ProcessEvent(&event);
+                _ = zgui.backend.processEvent(&event);
                 try self.processEvent(&event);
             }
             while (sdl.SDL_PollEvent(&event)) { // drain remaining events
-                vk.bridge_ImGui_ImplSDL3_ProcessEvent(&event);
+                _ = zgui.backend.processEvent(&event);
                 try self.processEvent(&event);
             }
         } else {
             while (sdl.SDL_PollEvent(&event)) { // When active process all events in queue
-                vk.bridge_ImGui_ImplSDL3_ProcessEvent(&event);
+                _ = zgui.backend.processEvent(&event);
                 try self.processEvent(&event);
             }
         }

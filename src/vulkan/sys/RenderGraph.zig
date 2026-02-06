@@ -184,7 +184,7 @@ pub const RenderGraph = struct {
             colorInfs[i] = tex.base[cmd.flightId].createAttachment(colorAtt.clear);
         }
 
-        cmd.beginRendering(width, height, colorInfs[0..passData.colorAtts.len], depthInf, stencilInf);
+        cmd.beginRendering(width, height, colorInfs[0..passData.colorAtts.len], if (depthInf) |*d| d else null, if (stencilInf) |*s| s else null);
 
         switch (passData.classicTyp) {
             .taskMesh => |taskMesh| {
@@ -216,7 +216,8 @@ pub const RenderGraph = struct {
         for (swapchains) |swapchain| { // Blits + Swapchain Presentation Barriers
             const renderTex = try resMan.getTexturePtr(swapchain.renderTexId);
             cmd.copyImageToImage(renderTex.base[cmd.flightId].img, renderTex.base[cmd.flightId].extent, swapchain.getCurTexture().img, swapchain.getExtent3D(), rc.RENDER_TEX_STRETCH);
-            try self.checkImageState(swapchain.getCurTexture(), .{ .stage = .ColorAtt, .access = .None, .layout = .PresentSrc });
+            // try self.checkImageState(swapchain.getCurTexture(), .{ .stage = .ColorAtt, .access = .None, .layout = .PresentSrc });
+            try self.checkImageState(swapchain.getCurTexture(), .{ .stage = .ColorAtt, .access = .ColorAttWrite, .layout = .Attachment });
         }
         self.bakeBarriers(cmd);
         cmd.endQuery(.BotOfPipe, 55);
@@ -225,13 +226,34 @@ pub const RenderGraph = struct {
     pub fn recordImGui(self: *RenderGraph, cmd: *Cmd, swapchains: []const *Swapchain, imguiMan: *ImGuiMan) !void {
         cmd.startQuery(.TopOfPipe, 60, "ImGui");
 
+        // Loop through every window (target)
         for (swapchains) |swapchain| {
             const target = swapchain.getCurTexture();
-            try self.checkImageState(target, .{ .stage = .ColorAtt, .access = .ColorAttWrite, .layout = .Attachment });
+
+            // 1. Create attachment info
+            // IMPORTANT: We pass 'false' to clear.
+            // This tells Vulkan: "Keep the pixels already there" (the result of your Blit).
+            const colorAtt = target.createAttachment(false);
+
+            // 2. Start Dynamic Rendering for this specific window
+            cmd.beginRendering(swapchain.extent.width, swapchain.extent.height, &[_]vk.VkRenderingAttachmentInfo{colorAtt}, null, // No Depth (ImGui is 2D)
+                null // No Stencil
+            );
+
+            // 3. Issue the ImGui Draw Commands
+            imguiMan.render(cmd);
+
+            // 4. End Rendering for this window
+            cmd.endRendering();
+
+            // 5. Prepare for the OS to show the window
+            // Transition from Attachment -> Present
+            try self.checkImageState(target, .{ .stage = .BotOfPipe, .access = .None, .layout = .PresentSrc });
         }
+
+        // Apply the transitions to PresentSrc
         self.bakeBarriers(cmd);
-        imguiMan.render(cmd);
-        
+
         cmd.endQuery(.BotOfPipe, 60);
     }
 
