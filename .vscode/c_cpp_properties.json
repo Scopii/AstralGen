@@ -1,0 +1,31 @@
+{
+    "configurations": [
+        {
+            "name": "Win32",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "${workspaceFolder}/include",
+                
+                // UPDATE THIS PATH TO MATCH YOUR ZIG CACHE:
+                "C:/Users/Scopii/AppData/Local/zig/p/zgui-0.6.0-dev--L6sZAz7bQAOM1-JcVBhypkDWegRCAYr9MaJZ54p5WvN/libs/imgui",
+                "C:/Users/Scopii/AppData/Local/zig/p/zgui-0.6.0-dev--L6sZAz7bQAOM1-JcVBhypkDWegRCAYr9MaJZ54p5WvN/libs/imgui/backends"
+                // "C:/VulkanSDK/1.3.268.0/Include", 
+                // "C:/Users/Scopii/ZigProjects/AstralGen/libs/SDL3/include"
+            ],
+            "defines": [
+                "_DEBUG",
+                "UNICODE",
+                "_UNICODE",
+                "IMGUI_HAS_DOCKING",
+                "IMGUI_USE_WCHAR32",
+                "IMGUI_DISABLE_OBSOLETE_FUNCTIONS"
+            ],
+            "windowsSdkVersion": "10.0.22000.0",
+            "compilerPath": "cl.exe",
+            "cStandard": "c17",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "windows-msvc-x64"
+        }
+    ],
+    "version": 4
+}

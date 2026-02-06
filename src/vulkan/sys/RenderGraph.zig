@@ -9,6 +9,7 @@ const Buffer = @import("../types/res/Buffer.zig").Buffer;
 const rc = @import("../../configs/renderConfig.zig");
 const FrameData = @import("../../App.zig").FrameData;
 const Pass = @import("../types/base/Pass.zig").Pass;
+const ImGuiMan = @import("ImGuiMan.zig").ImGuiMan;
 const Cmd = @import("../types/base/Cmd.zig").Cmd;
 const CmdManager = @import("CmdMan.zig").CmdMan;
 const Context = @import("Context.zig").Context;
@@ -41,7 +42,17 @@ pub const RenderGraph = struct {
         self.cmdMan.deinit();
     }
 
-    pub fn recordFrame(self: *RenderGraph, passes: []Pass, flightId: u8, frame: u64, frameData: FrameData, targets: []const *Swapchain, resMan: *ResourceMan, shaderMan: *ShaderManager) !*Cmd {
+    pub fn recordFrame(
+        self: *RenderGraph,
+        passes: []Pass,
+        flightId: u8,
+        frame: u64,
+        frameData: FrameData,
+        targets: []const *Swapchain,
+        resMan: *ResourceMan,
+        shaderMan: *ShaderManager,
+        imguiMan: *ImGuiMan,
+    ) !*Cmd {
         var cmd = try self.cmdMan.getCmd(flightId);
         try cmd.begin(flightId, frame);
 
@@ -54,6 +65,7 @@ pub const RenderGraph = struct {
         try self.recordTransfers(cmd, resMan);
         try self.recordPasses(cmd, passes, frameData, resMan, shaderMan);
         try self.recordSwapchainBlits(cmd, targets, resMan);
+        try self.recordImGui(cmd, targets, imguiMan);
 
         try cmd.end();
         return cmd;
@@ -208,6 +220,19 @@ pub const RenderGraph = struct {
         }
         self.bakeBarriers(cmd);
         cmd.endQuery(.BotOfPipe, 55);
+    }
+
+    pub fn recordImGui(self: *RenderGraph, cmd: *Cmd, swapchains: []const *Swapchain, imguiMan: *ImGuiMan) !void {
+        cmd.startQuery(.TopOfPipe, 60, "ImGui");
+
+        for (swapchains) |swapchain| {
+            const target = swapchain.getCurTexture();
+            try self.checkImageState(target, .{ .stage = .ColorAtt, .access = .ColorAttWrite, .layout = .Attachment });
+        }
+        self.bakeBarriers(cmd);
+        imguiMan.render(cmd);
+        
+        cmd.endQuery(.BotOfPipe, 60);
     }
 
     fn bakeBarriers(self: *RenderGraph, cmd: *const Cmd) void {

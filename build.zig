@@ -6,14 +6,11 @@ pub fn build(b: *std.Build) void {
 
     const check = b.step("check", "check everything");
 
-    const c_module = b.addModule("c", .{
-        .root_source_file = b.path("src/modules/c.zig"),
-    });
-    c_module.addIncludePath(b.path("include"));
+    const c_module = b.addModule("c", .{ .root_source_file = b.path("src/modules/c.zig") });
 
     const exe = b.addExecutable(.{
         .name = "AstralGen",
-        .root_module = b.createModule(.{ // this line was added
+        .root_module = b.createModule(.{
             .root_source_file = b.path("src/main.zig"),
             .target = target,
             .optimize = optimize,
@@ -23,22 +20,53 @@ pub fn build(b: *std.Build) void {
     check.dependOn(&exe.step);
 
     exe.root_module.addImport("c", c_module);
+    
     exe.linkLibCpp();
     exe.linkLibC();
+
+    // 2. Add dependencies
+    const zgui_dep = b.dependency("zgui", .{
+        .target = target,
+        .optimize = optimize,
+        .backend = .no_backend,
+    });
+    exe.root_module.addImport("zgui", zgui_dep.module("root"));
+    exe.linkLibrary(zgui_dep.artifact("imgui"));
+
+    // 3. Setup Include Paths
+    const imgui_src_path = zgui_dep.path("libs/imgui");
+    const imgui_backend_path = zgui_dep.path("libs/imgui/backends");
+    const local_include_path = b.path("include"); // Cause imgui_bridge.h
+
+    const include_paths = [_]std.Build.LazyPath{
+        local_include_path,
+        imgui_src_path,
+        imgui_backend_path,
+    };
+
+    for (include_paths) |path| {
+        exe.addIncludePath(path);
+        c_module.addIncludePath(path);
+    }
+
+    // 4. Add C Source Files
+    const imgui_flags = &.{
+        "-std=c++17",
+        "-DIMGUI_HAS_DOCKING",
+        "-DIMGUI_USE_WCHAR32",
+        "-DIMGUI_DISABLE_OBSOLETE_FUNCTIONS",
+    };
+
+    exe.addCSourceFile(.{ .file = zgui_dep.path("libs/imgui/backends/imgui_impl_sdl3.cpp"), .flags = imgui_flags });
+    exe.addCSourceFile(.{ .file = zgui_dep.path("libs/imgui/backends/imgui_impl_vulkan.cpp"), .flags = imgui_flags });
+    exe.addCSourceFile(.{ .file = b.path("src/modules/imgui_bridge.cpp"), .flags = imgui_flags });
 
     exe.addCSourceFile(.{
         .file = b.path("src/modules/vmaLink.cpp"),
         .flags = &.{"-std=c++17"}, //"-O3", "-g0"
     });
-    exe.addIncludePath(b.path("include"));
 
-    //Vulkan setup
-    // const vulkan_zig_dep = b.dependency("vulkan_zig", .{
-    //     .registry = b.path("vk.xml"),
-    //     .target = target,
-    //     .optimize = optimize,
-    // });
-    // exe.root_module.addImport("vulkan-zig", vulkan_zig_dep.module("vulkan-zig"));
+    // 5. Link Libraries
 
     exe.addLibraryPath(b.path("libs/SDL3"));
     exe.linkSystemLibrary("SDL3");

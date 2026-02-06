@@ -11,10 +11,12 @@ const rc = @import("../../configs/renderConfig.zig");
 const FrameData = @import("../../App.zig").FrameData;
 const Scheduler = @import("Scheduler.zig").Scheduler;
 const Pass = @import("../types/base/Pass.zig").Pass;
+const ImGuiMan = @import("ImGuiMan.zig").ImGuiMan;
 const Context = @import("Context.zig").Context;
 const vk = @import("../../modules/vk.zig").c;
 const vkT = @import("../help/Types.zig");
 const Allocator = std.mem.Allocator;
+const zgui = @import("zgui");
 const std = @import("std");
 
 pub const Renderer = struct {
@@ -26,12 +28,15 @@ pub const Renderer = struct {
     shaderMan: ShaderMan,
     swapMan: SwapchainMan,
     scheduler: Scheduler,
+    imguiMan: ImGuiMan,
     passes: std.array_list.Managed(Pass),
 
-    pub fn init(memoryMan: *MemoryManager) !Renderer {
+    pub fn init(memoryMan: *MemoryManager, mainWindow: *vk.SDL_Window) !Renderer {
         const alloc = memoryMan.getAllocator();
         const context = try Context.init(alloc);
         const resMan = try ResourceMan.init(alloc, &context);
+
+        const imguiMan = try ImGuiMan.init(&context, mainWindow);
 
         return .{
             .alloc = alloc,
@@ -43,11 +48,13 @@ pub const Renderer = struct {
             .scheduler = try Scheduler.init(&context, rc.MAX_IN_FLIGHT),
             .swapMan = try SwapchainMan.init(alloc, &context),
             .passes = std.array_list.Managed(Pass).init(alloc),
+            .imguiMan = imguiMan,
         };
     }
 
     pub fn deinit(self: *Renderer) void {
         _ = vk.vkDeviceWaitIdle(self.context.gpi);
+        self.imguiMan.deinit(self.context.gpi);
         self.scheduler.deinit();
         self.swapMan.deinit();
         self.shaderMan.deinit();
@@ -116,7 +123,11 @@ pub const Renderer = struct {
         if (rc.GPU_READBACK == true) try self.resMan.printReadbackBuffer(.{ .val = 45 }, vkT.ReadbackData);
         if (rc.GPU_PROFILING == true) try self.renderGraph.cmdMan.printQueryResults(flightId);
 
-        const cmd = try self.renderGraph.recordFrame(self.passes.items, flightId, self.scheduler.totalFrames, frameData, targets, &self.resMan, &self.shaderMan);
+        self.imguiMan.newFrame();
+
+        zgui.showDemoWindow(null);
+
+        const cmd = try self.renderGraph.recordFrame(self.passes.items, flightId, self.scheduler.totalFrames, frameData, targets, &self.resMan, &self.shaderMan, &self.imguiMan);
         try self.scheduler.queueSubmit(cmd, targets, self.context.graphicsQ);
         try self.scheduler.queuePresent(targets, self.context.presentQ);
 

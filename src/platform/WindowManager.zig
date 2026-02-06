@@ -10,6 +10,8 @@ const std = @import("std");
 const MAX_WINDOWS = @import("../configs/renderConfig.zig").MAX_WINDOWS;
 const SDL_KEY_MAX = @import("../core/EventManager.zig").SDL_KEY_MAX;
 
+const ImGuiMan = @import("../vulkan/sys/ImGuiMan.zig").ImGuiMan;
+
 pub const WindowManager = struct {
     windows: CreateMapArray(Window, MAX_WINDOWS, u32, 32 + MAX_WINDOWS, 0) = .{},
     mainWindow: ?*Window = null,
@@ -66,11 +68,12 @@ pub const WindowManager = struct {
 
         const window = try Window.init(props, renderTexId, vk.VkExtent2D{ .width = @intCast(width), .height = @intCast(height) }, resizeTex);
         window.setOpacity(0.0);
-        window.setRelativeMouseMode(true);
+        //window.setRelativeMouseMode(true);
 
         self.windows.set(window.id.val, window);
         try self.changedWindows.append(self.windows.get(window.id.val));
         self.openWindows += 1;
+        self.mainWindow = self.windows.getPtr(window.id.val);
         std.debug.print("Window ID {} created to present Render ID {}\n", .{ window.id.val, renderTexId.val });
     }
 
@@ -101,10 +104,19 @@ pub const WindowManager = struct {
         var event: sdl.SDL_Event = undefined;
 
         if (self.openWindows == 0) {
-            if (sdl.SDL_WaitEvent(&event)) try self.processEvent(&event); // On pause wait for an event and process
-            while (sdl.SDL_PollEvent(&event)) try self.processEvent(&event); // drain remaining events
+            if (sdl.SDL_WaitEvent(&event)) { // On pause wait for an event and process
+                vk.bridge_ImGui_ImplSDL3_ProcessEvent(&event);
+                try self.processEvent(&event);
+            }
+            while (sdl.SDL_PollEvent(&event)) { // drain remaining events
+                vk.bridge_ImGui_ImplSDL3_ProcessEvent(&event);
+                try self.processEvent(&event);
+            }
         } else {
-            while (sdl.SDL_PollEvent(&event)) try self.processEvent(&event); // When active process all events in queue
+            while (sdl.SDL_PollEvent(&event)) { // When active process all events in queue
+                vk.bridge_ImGui_ImplSDL3_ProcessEvent(&event);
+                try self.processEvent(&event);
+            }
         }
     }
 
