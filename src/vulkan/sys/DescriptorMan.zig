@@ -74,57 +74,36 @@ pub const DescriptorMan = struct {
         try self.freeList.append(descIndex);
     }
 
-    pub fn updateBufferDescriptor(self: *DescriptorMan, gpuAddress: u64, size: u64, descIndex: u32, bufTyp: vhE.BufferType) !void {
-        const descType: vk.VkDescriptorType = switch (bufTyp) {
-            .Uniform => vk.VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-            else => vk.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-        };
+    pub fn setTextureDescriptor(self: *DescriptorMan, texBase: *const TextureBase, descIndex: u32, typ: enum {StorageTex, SampledTex}) !void {
+        const viewInf = texBase.getViewCreateInfo();
 
+        const imgDescInf = vk.VkImageDescriptorInfoEXT{
+            .sType = vk.VK_STRUCTURE_TYPE_IMAGE_DESCRIPTOR_INFO_EXT,
+            .pView = &viewInf,
+            .layout = vk.VK_IMAGE_LAYOUT_GENERAL, // try  to DEPTH_STENCIL_READ_ONLY_OPTIMAL for depth?
+        };
+        const resDescInf = vk.VkResourceDescriptorInfoEXT{
+            .sType = vk.VK_STRUCTURE_TYPE_RESOURCE_DESCRIPTOR_INFO_EXT,
+            .type = if (typ == .StorageTex) vk.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE else vk.VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+            .data = .{ .pImage = &imgDescInf },
+        };
+        try self.setDescriptor(&resDescInf, self.descHeap.mappedPtr, self.startOffset, descIndex, self.descStride);
+    }
+
+    pub fn setBufferDescriptor(self: *DescriptorMan, gpuAddress: u64, size: u64, descIndex: u32, bufTyp: vhE.BufferType) !void {
         const addressInf = vk.VkDeviceAddressRangeEXT{
             .address = gpuAddress,
             .size = size,
         };
         const resDescInf = vk.VkResourceDescriptorInfoEXT{
             .sType = vk.VK_STRUCTURE_TYPE_RESOURCE_DESCRIPTOR_INFO_EXT,
-            .type = descType,
+            .type = if (bufTyp == .Uniform) vk.VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER else vk.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, // what about other Buffer Types?
             .data = .{ .pAddressRange = &addressInf },
         };
-        try self.updateDescriptor(&resDescInf, self.descHeap.mappedPtr, self.startOffset, descIndex, self.descStride);
+        try self.setDescriptor(&resDescInf, self.descHeap.mappedPtr, self.startOffset, descIndex, self.descStride);
     }
 
-    pub fn updateStorageTexDescriptor(self: *DescriptorMan, texBase: *const TextureBase, descIndex: u32) !void {
-        const viewInf = texBase.getViewCreateInfo();
-
-        const imgDescInf = vk.VkImageDescriptorInfoEXT{
-            .sType = vk.VK_STRUCTURE_TYPE_IMAGE_DESCRIPTOR_INFO_EXT,
-            .pView = &viewInf,
-            .layout = vk.VK_IMAGE_LAYOUT_GENERAL,
-        };
-        const resDescInf = vk.VkResourceDescriptorInfoEXT{
-            .sType = vk.VK_STRUCTURE_TYPE_RESOURCE_DESCRIPTOR_INFO_EXT,
-            .type = vk.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, // For color/RW images
-            .data = .{ .pImage = &imgDescInf },
-        };
-        try self.updateDescriptor(&resDescInf, self.descHeap.mappedPtr, self.startOffset, descIndex, self.descStride);
-    }
-
-    pub fn updateSampledTexDescriptor(self: *DescriptorMan, texBase: *const TextureBase, descIndex: u32) !void {
-        const viewInf = texBase.getViewCreateInfo();
-
-        const imgDescInf = vk.VkImageDescriptorInfoEXT{
-            .sType = vk.VK_STRUCTURE_TYPE_IMAGE_DESCRIPTOR_INFO_EXT,
-            .pView = &viewInf,
-            .layout = vk.VK_IMAGE_LAYOUT_GENERAL, // change to DEPTH_STENCIL_READ_ONLY_OPTIMAL for depth?
-        };
-        const resDescInf = vk.VkResourceDescriptorInfoEXT{
-            .sType = vk.VK_STRUCTURE_TYPE_RESOURCE_DESCRIPTOR_INFO_EXT,
-            .type = vk.VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-            .data = .{ .pImage = &imgDescInf },
-        };
-        try self.updateDescriptor(&resDescInf, self.descHeap.mappedPtr, self.startOffset, descIndex, self.descStride);
-    }
-
-    fn updateDescriptor(self: *DescriptorMan, resDescInf: *const vk.VkResourceDescriptorInfoEXT, mappedPtr: ?*anyopaque, heapOffset: u64, descIndex: u32, descSize: u64) !void {
+    fn setDescriptor(self: *DescriptorMan, resDescInf: *const vk.VkResourceDescriptorInfoEXT, mappedPtr: ?*anyopaque, heapOffset: u64, descIndex: u32, descSize: u64) !void {
         const finalOffset = heapOffset + (descIndex * descSize);
         const mappedData = @as([*]u8, @ptrCast(mappedPtr));
 

@@ -109,14 +109,14 @@ pub const ResourceMan = struct {
             .Overwrite => {
                 const descIndex = try self.descMan.getFreeDescriptorIndex();
 
-                try self.descMan.updateBufferDescriptor(buffer.base[0].gpuAddress, buffer.base[0].size, descIndex, buffer.typ);
+                try self.descMan.setBufferDescriptor(buffer.base[0].gpuAddress, buffer.base[0].size, descIndex, buffer.typ);
                 for (0..buffer.descIndices.len) |i| buffer.descIndices[i] = descIndex;
             },
             .PerFrame => {
                 for (0..buffer.descIndices.len) |i| {
                     const descIndex = try self.descMan.getFreeDescriptorIndex();
 
-                    try self.descMan.updateBufferDescriptor(buffer.base[i].gpuAddress, buffer.base[i].size, descIndex, buffer.typ);
+                    try self.descMan.setBufferDescriptor(buffer.base[i].gpuAddress, buffer.base[i].size, descIndex, buffer.typ);
                     buffer.descIndices[i] = descIndex;
                 }
             },
@@ -137,8 +137,8 @@ pub const ResourceMan = struct {
                 for (0..tex.descIndices.len) |i| tex.descIndices[i] = descIndex;
 
                 switch (texInf.typ) {
-                    .Color => try self.descMan.updateStorageTexDescriptor(&tex.base[0], descIndex),
-                    .Depth, .Stencil => try self.descMan.updateSampledTexDescriptor(&tex.base[0], descIndex),
+                    .Color => try self.descMan.setTextureDescriptor(&tex.base[0], descIndex, .StorageTex),
+                    .Depth, .Stencil => try self.descMan.setTextureDescriptor(&tex.base[0], descIndex, .SampledTex),
                 }
             },
             .PerFrame => {
@@ -147,8 +147,8 @@ pub const ResourceMan = struct {
                     tex.descIndices[i] = descIndex;
 
                     switch (texInf.typ) {
-                        .Color => try self.descMan.updateStorageTexDescriptor(&tex.base[i], descIndex),
-                        .Depth, .Stencil => try self.descMan.updateSampledTexDescriptor(&tex.base[i], descIndex),
+                        .Color => try self.descMan.setTextureDescriptor(&tex.base[i], descIndex, .StorageTex),
+                        .Depth, .Stencil => try self.descMan.setTextureDescriptor(&tex.base[i], descIndex, .SampledTex),
                     }
                 }
             },
@@ -204,7 +204,7 @@ pub const ResourceMan = struct {
             },
             .CpuRead => return error.CpuReadBufferCantUpdate,
         }
-        try self.descMan.updateBufferDescriptor(buffer.base[flightId].gpuAddress, bytes.len, buffer.descIndices[flightId], buffer.typ);
+        try self.descMan.setBufferDescriptor(buffer.base[flightId].gpuAddress, bytes.len, buffer.descIndices[flightId], buffer.typ);
         buffer.curCount = @intCast(bytes.len / bufInf.elementSize);
         buffer.lastUpdateFlightId = flightId;
     }
