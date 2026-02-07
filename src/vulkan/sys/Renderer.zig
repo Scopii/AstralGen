@@ -125,7 +125,7 @@ pub const Renderer = struct {
 
         self.imguiMan.newFrame();
 
-        zgui.showDemoWindow(null);
+        self.imguiMan.drawUi();
 
         const cmd = try self.renderGraph.recordFrame(self.passes.items, flightId, self.scheduler.totalFrames, frameData, targets, &self.resMan, &self.shaderMan, &self.imguiMan);
         try self.scheduler.queueSubmit(cmd, targets, self.context.graphicsQ);

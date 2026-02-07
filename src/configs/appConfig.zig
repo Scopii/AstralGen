@@ -17,7 +17,7 @@ pub const AppEvent = enum {
 
     toggleFullscreen,
     closeApp,
-    restartApp,
+    toggleImgui,
 };
 
 pub const MOUSE_MOVEMENT_INFO = false;
@@ -42,8 +42,8 @@ pub const keyMap = [_]KeyMapping{
     .{ .device = .keyboard, .state = .pressed, .cycle = .repeat, .key = sdl.SDL_SCANCODE_UP, .appEvent = .camFovDecrease },
     // App Control
     .{ .device = .keyboard, .state = .pressed, .cycle = .oneTime, .key = sdl.SDL_SCANCODE_ESCAPE, .appEvent = .closeApp },
-    .{ .device = .keyboard, .state = .pressed, .cycle = .oneTime, .key = sdl.SDL_SCANCODE_R, .appEvent = .restartApp },
-    .{ .device = .keyboard, .state = .pressed, .cycle = .oneTime, .key = sdl.SDL_SCANCODE_LCTRL, .appEvent = .toggleFullscreen },
+    .{ .device = .keyboard, .state = .pressed, .cycle = .oneTime, .key = sdl.SDL_SCANCODE_R, .appEvent = .toggleImgui },
+    .{ .device = .keyboard, .state = .pressed, .cycle = .oneBlock, .key = sdl.SDL_SCANCODE_LCTRL, .appEvent = .toggleFullscreen },
     // Mouse
-    .{ .device = .mouse, .state = .pressed, .cycle = .repeat, .key = sdl.SDL_BUTTON_LEFT, .appEvent = .camForward },
+    // .{ .device = .mouse, .state = .pressed, .cycle = .repeat, .key = sdl.SDL_BUTTON_LEFT, .appEvent = .camForward },
 };

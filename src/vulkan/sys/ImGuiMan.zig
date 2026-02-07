@@ -6,6 +6,8 @@ const zgui = @import("zgui");
 const std = @import("std");
 
 pub const ImGuiMan = struct {
+    uiActive: bool = true,
+
     pub fn init(context: *const Context, sdl_window: *vk.SDL_Window) !ImGuiMan {
         // 1. Init zgui
         zgui.init(std.heap.c_allocator);
@@ -57,13 +59,27 @@ pub const ImGuiMan = struct {
         zgui.deinit();
     }
 
-    pub fn newFrame(_: *ImGuiMan) void {
-        zgui.backend.newFrame(1920, 1080); // your window dimensions
+    pub fn drawUi(self: *ImGuiMan) void {
+        if (self.uiActive == true) {
+            zgui.showDemoWindow(null);
+        }
     }
 
-    pub fn render(_: *ImGuiMan, cmd: *const Cmd) void {
-        zgui.render();
-        zgui.backend.render(cmd.handle);
+    pub fn newFrame(self: *ImGuiMan) void {
+        if (self.uiActive == true) {
+            zgui.backend.newFrame(1920, 1080); // your window dimensions
+        }
+    }
+
+    pub fn toogleUiMode(self: *ImGuiMan) void {
+        if (self.uiActive == true) self.uiActive = false else self.uiActive = true;
+    }
+
+    pub fn render(self: *ImGuiMan, cmd: *const Cmd) void {
+        if (self.uiActive == true) {
+            zgui.render();
+            zgui.backend.render(cmd.handle);
+        }
     }
 };
 

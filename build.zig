@@ -29,6 +29,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
         .backend = .sdl3_vulkan,
+        // .vulkan_include = b.path("include").getPath(b),
     });
     exe.root_module.addImport("zgui", zgui_dep.module("root"));
     exe.linkLibrary(zgui_dep.artifact("imgui"));

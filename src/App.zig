@@ -33,7 +33,6 @@ pub const App = struct {
 
         try windowMan.addWindow("Main Rendering", 16 * 80, 9 * 80, rc.quantTex.id, 300, 200, true);
 
-
         var shaderCompiler = ShaderCompiler.init(memoryMan.getAllocator()) catch |err| {
             windowMan.showErrorBox("Astral App Error", "File Manager could not launch");
             std.debug.print("Err {}\n", .{err});
@@ -128,13 +127,6 @@ pub const App = struct {
             // Handle Inputs
             if (windowMan.inputEvents.len > 0) eventMan.mapKeyEvents(windowMan.consumeKeyEvents());
 
-            if (windowMan.mouseMoveX != 0 or windowMan.mouseMoveY != 0) {
-                cam.rotate(windowMan.mouseMoveX, windowMan.mouseMoveY);
-                if (ac.MOUSE_MOVEMENT_INFO == true) std.debug.print("Mouse Total Movement x:{} y:{}\n", .{ windowMan.mouseMoveX, windowMan.mouseMoveY });
-                windowMan.mouseMoveX = 0;
-                windowMan.mouseMoveY = 0;
-            }
-
             // Process Window Changes
             if (windowMan.changedWindows.len > 0) {
                 try renderer.updateWindowStates(windowMan.getChangedWindows());
@@ -155,23 +147,47 @@ pub const App = struct {
             // Generate and Process and clear Events
             for (eventMan.getAppEvents()) |appEvent| {
                 switch (appEvent) {
-                    .camForward => cam.moveForward(dt),
-                    .camBackward => cam.moveBackward(dt),
-                    .camUp => cam.moveUp(dt),
-                    .camDown => cam.moveDown(dt),
-                    .camLeft => cam.moveLeft(dt),
-                    .camRight => cam.moveRight(dt),
-                    .camFovIncrease => cam.increaseFov(dt),
-                    .camFovDecrease => cam.decreaseFov(dt),
                     .closeApp => {
                         windowMan.hideAllWindows();
                         return;
                     },
-                    .restartApp => {},
                     .toggleFullscreen => windowMan.toggleMainFullscreen(),
+
+                    .toggleImgui => {
+                        self.windowMan.toogleUiMode();
+                        self.renderer.imguiMan.toogleUiMode();
+                        std.debug.print("UI Toggle: {}\n", .{self.windowMan.uiActive});
+                    },
+                    else => {
+                        if (self.windowMan.uiActive == false) {
+                            switch (appEvent) {
+                                .camForward => cam.moveForward(dt),
+                                .camBackward => cam.moveBackward(dt),
+                                .camUp => cam.moveUp(dt),
+                                .camDown => cam.moveDown(dt),
+                                .camLeft => cam.moveLeft(dt),
+                                .camRight => cam.moveRight(dt),
+                                .camFovIncrease => cam.increaseFov(dt),
+                                .camFovDecrease => cam.decreaseFov(dt),
+                                else => {},
+                            }
+                        }
+                    },
                 }
             }
             eventMan.clearAppEvents();
+
+            if (self.windowMan.uiActive == false) {
+                if (windowMan.mouseMoveX != 0 or windowMan.mouseMoveY != 0) {
+                    cam.rotate(windowMan.mouseMoveX, windowMan.mouseMoveY);
+                    if (ac.MOUSE_MOVEMENT_INFO == true) std.debug.print("Mouse Total Movement x:{} y:{}\n", .{ windowMan.mouseMoveX, windowMan.mouseMoveY });
+                    windowMan.mouseMoveX = 0;
+                    windowMan.mouseMoveY = 0;
+                }
+            } else {
+                windowMan.mouseMoveX = 0;
+                windowMan.mouseMoveY = 0;
+            }
 
             if (cam.needsUpdate == true) {
                 const camData = cam.getCameraData();

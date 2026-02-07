@@ -20,6 +20,7 @@ pub const WindowManager = struct {
     openWindows: u8 = 0,
     appExit: bool = false,
     windowProps: sdl.SDL_PropertiesID,
+    uiActive: bool = true,
 
     inputEvents: FixedList(KeyEvent, 127) = .{},
     mouseMoveX: f32 = 0,
@@ -69,6 +70,7 @@ pub const WindowManager = struct {
 
         const window = try Window.init(props, renderTexId, vk.VkExtent2D{ .width = @intCast(width), .height = @intCast(height) }, resizeTex);
         window.setOpacity(0.0);
+
         //window.setRelativeMouseMode(true);
 
         self.windows.set(window.id.val, window);
@@ -101,22 +103,27 @@ pub const WindowManager = struct {
         self.changedWindows.clear();
     }
 
+    pub fn toogleUiMode(self: *WindowManager) void {
+        if (self.uiActive == true) self.uiActive = false else self.uiActive = true;
+        if (self.mainWindow) |window| window.setRelativeMouseMode(!self.uiActive);
+    }
+
     pub fn pollEvents(self: *WindowManager) !void {
         var event: sdl.SDL_Event = undefined;
 
         if (self.openWindows == 0) {
             if (sdl.SDL_WaitEvent(&event)) { // On pause wait for an event and process
-                _ = zgui.backend.processEvent(&event);
                 try self.processEvent(&event);
+                if (self.uiActive == true) _ = zgui.backend.processEvent(&event);
             }
             while (sdl.SDL_PollEvent(&event)) { // drain remaining events
-                _ = zgui.backend.processEvent(&event);
                 try self.processEvent(&event);
+                if (self.uiActive == true) _ = zgui.backend.processEvent(&event);
             }
         } else {
             while (sdl.SDL_PollEvent(&event)) { // When active process all events in queue
-                _ = zgui.backend.processEvent(&event);
                 try self.processEvent(&event);
+                if (self.uiActive == true) _ = zgui.backend.processEvent(&event);
             }
         }
     }
@@ -145,11 +152,11 @@ pub const WindowManager = struct {
     pub fn toggleMainFullscreen(self: *WindowManager) void {
         if (self.mainWindow) |window| {
             if (window.isFullscreen() == false) {
-                window.setBordered(false);
+                // window.setBordered(false);
                 window.setOpacity(0);
                 window.setFullscreenBorderless(true);
             } else {
-                window.setBordered(true);
+                // window.setBordered(true);
                 window.setOpacity(0);
                 window.setFullscreenBorderless(false);
             }

@@ -4,14 +4,14 @@ const AppEvent = @import("../configs/appConfig.zig").AppEvent;
 const ac = @import("../configs/appConfig.zig");
 const std = @import("std");
 
-pub const KeyState = enum { pressed, released };
+pub const KeyState = enum { pressed, released, blocked };
 pub const KeyEvent = struct { key: c_uint, event: KeyState };
 pub const MouseMovement = struct { xChange: f32, yChange: f32 };
 
 pub const KeyMapping = struct {
     device: enum { mouse, keyboard },
     state: KeyState,
-    cycle: enum { oneTime, repeat },
+    cycle: enum { oneTime, repeat, oneBlock },
     appEvent: AppEvent,
     key: c_uint,
 };
@@ -29,6 +29,12 @@ pub const EventManager = struct {
                 std.debug.print("Key {} Invalid\n", .{keyEvent.key});
                 continue;
             }
+
+            if (self.keyStates.isKeyUsed(keyEvent.key)) {
+                const keyState = self.keyStates.get(keyEvent.key);
+                if (keyState == .blocked and keyEvent.event == .pressed) continue;
+            }
+
             self.keyStates.set(keyEvent.key, if (keyEvent.event == .pressed) .pressed else .released);
             if (ac.KEY_EVENT_INFO == true) std.debug.print("Key {} pressed \n", .{keyEvent.key});
         }
@@ -48,6 +54,7 @@ pub const EventManager = struct {
                 if (keyState == assignment.state) {
                     self.appendAppEvent(assignment.appEvent);
                     if (assignment.cycle == .oneTime) self.keyStates.set(actualKey, .released);
+                    if (assignment.cycle == .oneBlock) self.keyStates.set(actualKey, .blocked);
                 }
             }
         }
