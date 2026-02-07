@@ -87,7 +87,7 @@ pub const DescriptorMan = struct {
             .type = if (typ == .StorageTex) vk.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE else vk.VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
             .data = .{ .pImage = &imgDescInf },
         };
-        try self.setDescriptor(&resDescInf, self.descHeap.mappedPtr, self.startOffset, descIndex, self.descStride);
+        try self.setDescriptor(&resDescInf, descIndex);
     }
 
     pub fn setBufferDescriptor(self: *DescriptorMan, gpuAddress: u64, size: u64, descIndex: u32, bufTyp: vhE.BufferType) !void {
@@ -100,16 +100,16 @@ pub const DescriptorMan = struct {
             .type = if (bufTyp == .Uniform) vk.VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER else vk.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, // what about other Buffer Types?
             .data = .{ .pAddressRange = &addressInf },
         };
-        try self.setDescriptor(&resDescInf, self.descHeap.mappedPtr, self.startOffset, descIndex, self.descStride);
+        try self.setDescriptor(&resDescInf, descIndex);
     }
 
-    fn setDescriptor(self: *DescriptorMan, resDescInf: *const vk.VkResourceDescriptorInfoEXT, mappedPtr: ?*anyopaque, heapOffset: u64, descIndex: u32, descSize: u64) !void {
-        const finalOffset = heapOffset + (descIndex * descSize);
-        const mappedData = @as([*]u8, @ptrCast(mappedPtr));
+    fn setDescriptor(self: *DescriptorMan, resDescInf: *const vk.VkResourceDescriptorInfoEXT, descIndex: u32) !void {
+        const finalOffset = self.startOffset + (descIndex * self.descStride);
+        const mappedData = @as([*]u8, @ptrCast(self.descHeap.mappedPtr,));
 
         const hostAddrRange = vk.VkHostAddressRangeEXT{
             .address = mappedData + finalOffset,
-            .size = descSize,
+            .size = self.descStride,
         };
         try vhF.check(vkFn.vkWriteResourceDescriptorsEXT.?(self.gpi, 1, resDescInf, &hostAddrRange), "Failed to write Descriptor");
     }
