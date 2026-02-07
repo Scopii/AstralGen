@@ -28,8 +28,8 @@ pub const ResourceMan = struct {
 
     realFramesInFlights: [rc.MAX_IN_FLIGHT]u64 = .{0} ** rc.MAX_IN_FLIGHT,
 
-    bufToDelete: [rc.MAX_IN_FLIGHT + 1]FixedList(Buffer, rc.BUF_MAX),
-    texToDelete: [rc.MAX_IN_FLIGHT + 1]FixedList(Texture, rc.TEX_MAX),
+    bufToDeleteLists: [rc.MAX_IN_FLIGHT + 1]FixedList(Buffer, rc.BUF_MAX),
+    texToDeleteLists: [rc.MAX_IN_FLIGHT + 1]FixedList(Texture, rc.TEX_MAX),
 
     stagingBuffers: [rc.MAX_IN_FLIGHT]BufferBase,
     stagingOffsets: [rc.MAX_IN_FLIGHT]u64 = .{0} ** rc.MAX_IN_FLIGHT,
@@ -44,27 +44,36 @@ pub const ResourceMan = struct {
         var transfers: [rc.MAX_IN_FLIGHT]std.array_list.Managed(Transfer) = undefined;
         for (0..rc.MAX_IN_FLIGHT) |i| transfers[i] = std.array_list.Managed(Transfer).init(alloc);
 
-        var bufToDelete: [rc.MAX_IN_FLIGHT + 1]FixedList(Buffer, rc.BUF_MAX) = undefined;
-        for (0..bufToDelete.len) |i| bufToDelete[i] = .{};
+        var bufToDeleteList: [rc.MAX_IN_FLIGHT + 1]FixedList(Buffer, rc.BUF_MAX) = undefined;
+        for (0..bufToDeleteList.len) |i| bufToDeleteList[i] = .{};
 
-        var texToDelete: [rc.MAX_IN_FLIGHT + 1]FixedList(Texture, rc.TEX_MAX) = undefined;
-        for (0..texToDelete.len) |i| texToDelete[i] = .{};
+        var texToDeleteLists: [rc.MAX_IN_FLIGHT + 1]FixedList(Texture, rc.TEX_MAX) = undefined;
+        for (0..texToDeleteLists.len) |i| texToDeleteLists[i] = .{};
 
         return .{
             .vma = vma,
             .descMan = try DescriptorMan.init(vma, context.gpi, context.gpu),
             .stagingBuffers = stagingBuffers,
             .transfers = transfers,
-            .bufToDelete = bufToDelete,
-            .texToDelete = texToDelete,
+            .bufToDeleteLists = bufToDeleteList,
+            .texToDeleteLists = texToDeleteLists,
         };
     }
 
     pub fn deinit(self: *ResourceMan) void {
         for (self.buffers.getElements()) |*buf| self.vma.freeBuffer(buf);
         for (self.textures.getElements()) |*tex| self.vma.freeTexture(tex);
+
+        for (&self.bufToDeleteLists) |*bufList| {
+            for (bufList.slice()) |*buf| self.vma.freeBuffer(buf);
+        }
+        for (&self.texToDeleteLists) |*texList| {
+            for (texList.slice()) |*tex| self.vma.freeTexture(tex);
+        }
+
         for (&self.stagingBuffers) |*stagingBuffer| self.vma.freeRawBuffer(stagingBuffer.handle, stagingBuffer.allocation);
         for (&self.transfers) |*transferList| transferList.deinit();
+
         self.descMan.deinit(self.vma);
         self.vma.deinit();
     }
@@ -202,13 +211,13 @@ pub const ResourceMan = struct {
 
     pub fn queueTextureDestruction(self: *ResourceMan, texId: Texture.TexId, curFrame: u64) !void {
         const tex = try self.getTexturePtr(texId);
-        try self.texToDelete[curFrame % rc.MAX_IN_FLIGHT + 1].append(tex.*);
+        try self.texToDeleteLists[curFrame % rc.MAX_IN_FLIGHT + 1].append(tex.*);
         self.textures.removeAtKey(texId.val);
     }
 
     pub fn queueBufferDestruction(self: *ResourceMan, bufId: Buffer.BufId, curFrame: u64) !void {
         const buf = try self.getBufferPtr(bufId);
-        try self.bufToDelete[curFrame % rc.MAX_IN_FLIGHT + 1].append(buf.*);
+        try self.bufToDeleteLists[curFrame % rc.MAX_IN_FLIGHT + 1].append(buf.*);
         self.buffers.removeAtKey(bufId.val);
     }
 
@@ -218,15 +227,15 @@ pub const ResourceMan = struct {
         const targetFrame = curFrame - rc.MAX_IN_FLIGHT;
         const queueIndex = targetFrame % rc.MAX_IN_FLIGHT + 1;
 
-        if (self.texToDelete[queueIndex].len > 0) {
-            for (self.texToDelete[queueIndex].slice()) |*tex| try self.destroyTexture(tex);
-            self.texToDelete[queueIndex].clear();
+        if (self.texToDeleteLists[queueIndex].len > 0) {
+            for (self.texToDeleteLists[queueIndex].slice()) |*tex| try self.destroyTexture(tex);
+            self.texToDeleteLists[queueIndex].clear();
             std.debug.print("Textures destroyed: Frame {} (queued Frame {})\n", .{ curFrame, targetFrame });
         }
 
-        if (self.bufToDelete[queueIndex].len > 0) {
-            for (self.bufToDelete[queueIndex].slice()) |*buf| try self.destroyBuffer(buf);
-            self.bufToDelete[queueIndex].clear();
+        if (self.bufToDeleteLists[queueIndex].len > 0) {
+            for (self.bufToDeleteLists[queueIndex].slice()) |*buf| try self.destroyBuffer(buf);
+            self.bufToDeleteLists[queueIndex].clear();
             std.debug.print("Buffers destroyed: Frame {} (queued Frame {})\n", .{ curFrame, targetFrame });
         }
     }

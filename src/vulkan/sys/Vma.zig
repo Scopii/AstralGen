@@ -271,7 +271,7 @@ pub const Vma = struct {
         for (0..count) |i| vk.vmaDestroyBuffer(self.handle, buffer.base[@intCast(i)].handle, buffer.base[@intCast(i)].allocation);
     }
 
-    pub fn freeTexture(self: *const Vma, tex: *const Texture) void {
+    pub fn freeTexture(self: *const Vma, tex: *Texture) void {
         const count = switch (tex.update) {
             .Overwrite => 1,
             .PerFrame => rc.MAX_IN_FLIGHT,
