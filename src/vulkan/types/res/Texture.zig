@@ -8,6 +8,8 @@ pub const Texture = struct {
     allocation: [rc.MAX_IN_FLIGHT]vk.VmaAllocation,
     descIndices: [rc.MAX_IN_FLIGHT]u32 = .{0} ** rc.MAX_IN_FLIGHT,
     base: [rc.MAX_IN_FLIGHT]TextureBase,
+
+    texType: vhE.TextureType,
     update: vhE.UpdateType = .Overwrite,
 
     pub const TexId = packed struct { val: u32 };

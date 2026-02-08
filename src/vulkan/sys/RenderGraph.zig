@@ -15,6 +15,7 @@ const CmdManager = @import("CmdMan.zig").CmdMan;
 const Context = @import("Context.zig").Context;
 const vhF = @import("../help/Functions.zig");
 const vk = @import("../../modules/vk.zig").c;
+const vhE = @import("../help/Enums.zig");
 const vhT = @import("../help/Types.zig");
 const Allocator = std.mem.Allocator;
 const std = @import("std");
@@ -91,10 +92,10 @@ pub const RenderGraph = struct {
         cmd.endQuery(.BotOfPipe, 40);
     }
 
-    fn checkImageState(self: *RenderGraph, tex: *TextureBase, neededState: TextureBase.TextureState) !void {
+    fn checkImageState(self: *RenderGraph, tex: *TextureBase, texTyp: vhE.TextureType, neededState: TextureBase.TextureState) !void {
         const state = tex.state;
         if (state.stage == neededState.stage and state.access == neededState.access and state.layout == neededState.layout) return;
-        try self.imgBarriers.append(tex.createImageBarrier(neededState));
+        try self.imgBarriers.append(tex.createImageBarrier(neededState, texTyp));
     }
 
     fn checkBufferState(self: *RenderGraph, buffer: *BufferBase, neededState: BufferBase.BufferState) !void {
@@ -113,19 +114,19 @@ pub const RenderGraph = struct {
         }
         for (pass.texUses) |texUse| {
             const tex = try resMan.getTexturePtr(texUse.texId);
-            try self.checkImageState(&tex.base[cmd.flightId], texUse.getNeededState());
+            try self.checkImageState(&tex.base[cmd.flightId], tex.texType, texUse.getNeededState());
         }
         for (pass.getColorAtts()) |colorAtt| {
             const tex = try resMan.getTexturePtr(colorAtt.texId);
-            try self.checkImageState(&tex.base[cmd.flightId], colorAtt.getNeededState());
+            try self.checkImageState(&tex.base[cmd.flightId], tex.texType, colorAtt.getNeededState());
         }
         if (pass.getDepthAtt()) |depthAtt| {
             const tex = try resMan.getTexturePtr(depthAtt.texId);
-            try self.checkImageState(&tex.base[cmd.flightId], depthAtt.getNeededState());
+            try self.checkImageState(&tex.base[cmd.flightId], tex.texType, depthAtt.getNeededState());
         }
         if (pass.getStencilAtt()) |stencilAtt| {
             const tex = try resMan.getTexturePtr(stencilAtt.texId);
-            try self.checkImageState(&tex.base[cmd.flightId], stencilAtt.getNeededState());
+            try self.checkImageState(&tex.base[cmd.flightId], tex.texType, stencilAtt.getNeededState());
         }
         self.bakeBarriers(cmd);
     }
@@ -169,19 +170,19 @@ pub const RenderGraph = struct {
 
         const depthInf: ?vk.VkRenderingAttachmentInfo = if (passData.depthAtt) |depth| blk: {
             const tex = try resMan.getTexturePtr(depth.texId);
-            break :blk tex.base[cmd.flightId].createAttachment(depth.clear);
+            break :blk tex.base[cmd.flightId].createAttachment(tex.texType, depth.clear);
         } else null;
 
         const stencilInf: ?vk.VkRenderingAttachmentInfo = if (passData.stencilAtt) |stencil| blk: {
             const tex = try resMan.getTexturePtr(stencil.texId);
-            break :blk tex.base[cmd.flightId].createAttachment(stencil.clear);
+            break :blk tex.base[cmd.flightId].createAttachment(tex.texType, stencil.clear);
         } else null;
 
         var colorInfs: [8]vk.VkRenderingAttachmentInfo = undefined;
         for (0..passData.colorAtts.len) |i| {
             const colorAtt = passData.colorAtts[i];
             const tex = try resMan.getTexturePtr(colorAtt.texId);
-            colorInfs[i] = tex.base[cmd.flightId].createAttachment(colorAtt.clear);
+            colorInfs[i] = tex.base[cmd.flightId].createAttachment(tex.texType, colorAtt.clear);
         }
 
         cmd.beginRendering(width, height, colorInfs[0..passData.colorAtts.len], if (depthInf) |*d| d else null, if (stencilInf) |*s| s else null);
@@ -208,16 +209,15 @@ pub const RenderGraph = struct {
 
         for (swapchains) |swapchain| { // Render Texture and Swapchain Preperations
             const renderTex = try resMan.getTexturePtr(swapchain.renderTexId);
-            try self.checkImageState(&renderTex.base[cmd.flightId], .{ .stage = .Transfer, .access = .TransferRead, .layout = .TransferSrc });
-            try self.checkImageState(&swapchain.textures[swapchain.curIndex], .{ .stage = .Transfer, .access = .TransferWrite, .layout = .TransferDst });
+            try self.checkImageState(&renderTex.base[cmd.flightId], renderTex.texType, .{ .stage = .Transfer, .access = .TransferRead, .layout = .TransferSrc });
+            try self.checkImageState(&swapchain.textures[swapchain.curIndex], .Color, .{ .stage = .Transfer, .access = .TransferWrite, .layout = .TransferDst });
         }
         self.bakeBarriers(cmd);
 
         for (swapchains) |swapchain| { // Blits + Swapchain Presentation Barriers
             const renderTex = try resMan.getTexturePtr(swapchain.renderTexId);
             cmd.copyImageToImage(renderTex.base[cmd.flightId].img, renderTex.base[cmd.flightId].extent, swapchain.getCurTexture().img, swapchain.getExtent3D(), rc.RENDER_TEX_STRETCH);
-            // try self.checkImageState(swapchain.getCurTexture(), .{ .stage = .ColorAtt, .access = .None, .layout = .PresentSrc });
-            try self.checkImageState(swapchain.getCurTexture(), .{ .stage = .ColorAtt, .access = .ColorAttWrite, .layout = .Attachment });
+            try self.checkImageState(swapchain.getCurTexture(), .Color, .{ .stage = .ColorAtt, .access = .ColorAttWrite, .layout = .Attachment });
         }
         self.bakeBarriers(cmd);
         cmd.endQuery(.BotOfPipe, 55);
@@ -226,34 +226,17 @@ pub const RenderGraph = struct {
     pub fn recordImGui(self: *RenderGraph, cmd: *Cmd, swapchains: []const *Swapchain, imguiMan: *ImGuiMan) !void {
         cmd.startQuery(.TopOfPipe, 60, "ImGui");
 
-        // Loop through every window (target)
         for (swapchains) |swapchain| {
             const target = swapchain.getCurTexture();
-
-            // 1. Create attachment info
-            // IMPORTANT: We pass 'false' to clear.
-            // This tells Vulkan: "Keep the pixels already there" (the result of your Blit).
-            const colorAtt = target.createAttachment(false);
-
-            // 2. Start Dynamic Rendering for this specific window
-            cmd.beginRendering(swapchain.extent.width, swapchain.extent.height, &[_]vk.VkRenderingAttachmentInfo{colorAtt}, null, // No Depth (ImGui is 2D)
-                null // No Stencil
-            );
-
-            // 3. Issue the ImGui Draw Commands
+            const colorAtt = target.createAttachment(.Color, false);
+            
+            cmd.beginRendering(swapchain.extent.width, swapchain.extent.height, &[_]vk.VkRenderingAttachmentInfo{colorAtt}, null, null);
             imguiMan.render(cmd);
-
-            // 4. End Rendering for this window
             cmd.endRendering();
 
-            // 5. Prepare for the OS to show the window
-            // Transition from Attachment -> Present
-            try self.checkImageState(target, .{ .stage = .BotOfPipe, .access = .None, .layout = .PresentSrc });
+            try self.checkImageState(target, .Color, .{ .stage = .BotOfPipe, .access = .None, .layout = .PresentSrc });
         }
-
-        // Apply the transitions to PresentSrc
         self.bakeBarriers(cmd);
-
         cmd.endQuery(.BotOfPipe, 60);
     }
 

@@ -230,7 +230,6 @@ pub const Vma = struct {
                     tempBase[i] = .{
                         .img = imagePacket.img,
                         .view = imagePacket.view,
-                        .texType = texInf.typ,
                         .extent = extent,
                         .viewInf = getViewCreateInfo(imagePacket.img, vk.VK_IMAGE_VIEW_TYPE_2D, format, aspectMask),
                     };
@@ -244,7 +243,6 @@ pub const Vma = struct {
                     tempBase[i] = .{
                         .img = imagePacket.img,
                         .view = imagePacket.view,
-                        .texType = texInf.typ,
                         .extent = extent,
                         .viewInf = getViewCreateInfo(imagePacket.img, vk.VK_IMAGE_VIEW_TYPE_2D, format, aspectMask),
                     };
@@ -255,6 +253,7 @@ pub const Vma = struct {
         return .{
             .allocation = tempAllocations,
             .base = tempBase,
+            .texType = texInf.typ,
             .update = texInf.update,
         };
     }

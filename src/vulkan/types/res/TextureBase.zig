@@ -5,7 +5,6 @@ pub const TextureBase = struct {
     img: vk.VkImage,
     view: vk.VkImageView,
     viewInf: vk.VkImageViewCreateInfo,
-    texType: vhE.TextureType,
     extent: vk.VkExtent3D,
     state: TextureState = .{},
 
@@ -19,8 +18,8 @@ pub const TextureBase = struct {
         return self.viewInf;
     }
 
-    pub fn createAttachment(self: *const TextureBase, clear: bool) vk.VkRenderingAttachmentInfo {
-        const clearValue: vk.VkClearValue = switch (self.texType) {
+    pub fn createAttachment(self: *const TextureBase, texType: vhE.TextureType, clear: bool) vk.VkRenderingAttachmentInfo {
+        const clearValue: vk.VkClearValue = switch (texType) {
             .Color => .{ .color = .{ .float32 = .{ 0.0, 0.0, 0.1, 1.0 } } },
             .Depth, .Stencil => .{ .depthStencil = .{ .depth = 1.0, .stencil = 0 } },
         };
@@ -35,8 +34,8 @@ pub const TextureBase = struct {
         };
     }
 
-    pub fn createImageBarrier(self: *TextureBase, newState: TextureState) vk.VkImageMemoryBarrier2 {
-        const aspectMask: vk.VkImageAspectFlagBits = switch (self.texType) {
+    pub fn createImageBarrier(self: *TextureBase, newState: TextureState, texType: vhE.TextureType) vk.VkImageMemoryBarrier2 {
+        const aspectMask: vk.VkImageAspectFlagBits = switch (texType) {
             .Color => vk.VK_IMAGE_ASPECT_COLOR_BIT,
             .Depth => vk.VK_IMAGE_ASPECT_DEPTH_BIT,
             .Stencil => vk.VK_IMAGE_ASPECT_STENCIL_BIT,

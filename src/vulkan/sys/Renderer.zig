@@ -96,7 +96,7 @@ pub const Renderer = struct {
     pub fn updateRenderTexture(self: *Renderer, texId: Texture.TexId) !void {
         const tex = try self.resMan.getTexturePtr(texId);
         const old = tex.base[0].extent;
-        const oldType = tex.base[0].texType;
+        const oldType = tex.texType;
         const new = self.swapMan.getMaxRenderExtent(texId);
 
         if (new.width != old.width or new.height != old.height) {
