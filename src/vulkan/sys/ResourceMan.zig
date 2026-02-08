@@ -155,7 +155,7 @@ pub const ResourceMan = struct {
         }
         std.debug.print("Texture ID {}, Type {}, Update {} created! Descriptor Indices ", .{ texInf.id.val, texInf.typ, texInf.update });
         for (tex.descIndices) |index| std.debug.print("{} ", .{index});
-        self.vma.printMemoryInfo(tex.allocation[0]);
+        self.vma.printMemoryInfo(tex.base[0].allocation);
 
         self.textures.set(texInf.id.val, tex);
     }

@@ -4,6 +4,7 @@ const vhE = @import("../../help/Enums.zig");
 pub const TextureBase = struct {
     img: vk.VkImage,
     view: vk.VkImageView,
+    allocation: vk.VmaAllocation,
     viewInf: vk.VkImageViewCreateInfo,
     extent: vk.VkExtent3D,
     state: TextureState = .{},

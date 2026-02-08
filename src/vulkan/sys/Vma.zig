@@ -215,7 +215,6 @@ pub const Vma = struct {
 
         const extent = vk.VkExtent3D{ .width = texInf.width, .height = texInf.height, .depth = texInf.depth };
 
-        var tempAllocations: [rc.MAX_IN_FLIGHT]vk.VmaAllocation = undefined;
         var tempBase: [rc.MAX_IN_FLIGHT]TextureBase = undefined;
 
         switch (texInf.update) {
@@ -223,10 +222,10 @@ pub const Vma = struct {
                 const imagePacket = try self.allocImagePacket(memType, texUse, aspectMask, format, extent);
 
                 for (0..rc.MAX_IN_FLIGHT) |i| {
-                    tempAllocations[i] = imagePacket.allocation;
                     tempBase[i] = .{
                         .img = imagePacket.img,
                         .view = imagePacket.view,
+                        .allocation = imagePacket.allocation,
                         .extent = extent,
                         .viewInf = getViewCreateInfo(imagePacket.img, vk.VK_IMAGE_VIEW_TYPE_2D, format, aspectMask),
                     };
@@ -236,10 +235,10 @@ pub const Vma = struct {
                 for (0..rc.MAX_IN_FLIGHT) |i| {
                     const imagePacket = try self.allocImagePacket(memType, texUse, aspectMask, format, extent);
 
-                    tempAllocations[i] = imagePacket.allocation;
                     tempBase[i] = .{
                         .img = imagePacket.img,
                         .view = imagePacket.view,
+                        .allocation = imagePacket.allocation,
                         .extent = extent,
                         .viewInf = getViewCreateInfo(imagePacket.img, vk.VK_IMAGE_VIEW_TYPE_2D, format, aspectMask),
                     };
@@ -248,7 +247,6 @@ pub const Vma = struct {
         }
 
         return .{
-            .allocation = tempAllocations,
             .base = tempBase,
             .texType = texInf.typ,
             .update = texInf.update,
@@ -274,7 +272,7 @@ pub const Vma = struct {
         };
         for (0..count) |i| {
             vk.vkDestroyImageView(self.gpi, tex.base[@intCast(i)].view, null);
-            vk.vmaDestroyImage(self.handle, tex.base[@intCast(i)].img, tex.allocation[@intCast(i)]);
+            vk.vmaDestroyImage(self.handle, tex.base[@intCast(i)].img, tex.base[@intCast(i)].allocation);
         }
     }
 };
