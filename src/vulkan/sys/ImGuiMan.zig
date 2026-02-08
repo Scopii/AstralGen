@@ -9,7 +9,6 @@ pub const ImGuiMan = struct {
     uiActive: bool = true,
 
     pub fn init(context: *const Context, sdl_window: *vk.SDL_Window) !ImGuiMan {
-        // 1. Init zgui
         zgui.init(std.heap.c_allocator);
 
         const loaded = zgui.backend.loadFunctions(
@@ -23,7 +22,6 @@ pub const ImGuiMan = struct {
 
         const swapchain_format = vk.VK_FORMAT_B8G8R8A8_UNORM;
 
-        // 3. Initialize SDL3 platform backend
         zgui.backend.init(
             .{
                 .api_version = vk.VK_API_VERSION_1_3,
@@ -50,7 +48,6 @@ pub const ImGuiMan = struct {
             },
             sdl_window,
         );
-
         return .{};
     }
 
@@ -67,7 +64,7 @@ pub const ImGuiMan = struct {
 
     pub fn newFrame(self: *ImGuiMan) void {
         if (self.uiActive == true) {
-            zgui.backend.newFrame(1920, 1080); // your window dimensions
+            zgui.backend.newFrame(1920, 1080); // Window Dimensions
         }
     }
 
