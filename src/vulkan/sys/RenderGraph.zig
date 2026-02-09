@@ -134,10 +134,12 @@ pub const RenderGraph = struct {
     fn recordCompute(cmd: *const Cmd, dispatch: Pass.Dispatch, renderTexId: ?TexId, resMan: *ResourceMan) !void {
         if (renderTexId) |texId| {
             const tex = try resMan.getTexturePtr(texId);
+            const extent = tex.base[cmd.flightId].extent;
+
             cmd.dispatch(
-                (tex.base[cmd.flightId].extent.width + dispatch.x - 1) / dispatch.x,
-                (tex.base[cmd.flightId].extent.height + dispatch.y - 1) / dispatch.y,
-                (tex.base[cmd.flightId].extent.depth + dispatch.z - 1) / dispatch.z,
+                (extent.width + dispatch.x - 1) / dispatch.x,
+                (extent.height + dispatch.y - 1) / dispatch.y,
+                (extent.depth + dispatch.z - 1) / dispatch.z,
             );
         } else cmd.dispatch(dispatch.x, dispatch.y, dispatch.z);
     }
@@ -229,7 +231,7 @@ pub const RenderGraph = struct {
         for (swapchains) |swapchain| {
             const target = swapchain.getCurTexture();
             const colorAtt = target.createAttachment(.Color, false);
-            
+
             cmd.beginRendering(swapchain.extent.width, swapchain.extent.height, &[_]vk.VkRenderingAttachmentInfo{colorAtt}, null, null);
             imguiMan.render(cmd);
             cmd.endRendering();
