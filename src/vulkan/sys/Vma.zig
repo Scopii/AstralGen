@@ -177,10 +177,10 @@ pub const Vma = struct {
         allocation: vk.VmaAllocation,
     };
 
-    fn allocImage(self: *Vma, memType: vk.VmaMemoryUsage, imgUse: vk.VkImageUsageFlags, format: vk.VkFormat, extent: vk.VkExtent3D) !Image {
+    fn allocImage(self: *Vma, memType: vk.VmaMemoryUsage, imgUse: vk.VkImageUsageFlags, format: vk.VkFormat, extent: vk.VkExtent3D, subRange: vk.VkImageSubresourceRange) !Image {
         var img: vk.VkImage = undefined;
         var allocation: vk.VmaAllocation = undefined;
-        const imgInf = createImageInf(format, imgUse, extent);
+        const imgInf = createImageInf(format, imgUse, extent, subRange);
         const imgAllocInf = vk.VmaAllocationCreateInfo{ .usage = memType, .requiredFlags = vk.VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT };
         try vhF.check(vk.vmaCreateImage(self.handle, &imgInf, &imgAllocInf, &img, &allocation, null), "Could not create Render Image");
 
@@ -226,7 +226,7 @@ pub const Vma = struct {
 
         switch (texInf.update) {
             .Overwrite => { // Single image shared across all frames
-                const img = try self.allocImage(memType, texUse, format, extent);
+                const img = try self.allocImage(memType, texUse, format, extent, subRange);
 
                 for (0..rc.MAX_IN_FLIGHT) |i| {
                     texBase[i] = .{
@@ -239,7 +239,7 @@ pub const Vma = struct {
             },
             .PerFrame => { // Separate image per frame
                 for (0..rc.MAX_IN_FLIGHT) |i| {
-                    const img = try self.allocImage(memType, texUse, format, extent);
+                    const img = try self.allocImage(memType, texUse, format, extent, subRange);
 
                     texBase[i] = .{
                         .extent = extent,
@@ -285,16 +285,20 @@ pub const Vma = struct {
     }
 };
 
-fn createImageInf(format: vk.VkFormat, usageFlags: vk.VkImageUsageFlags, extent3d: vk.VkExtent3D) vk.VkImageCreateInfo {
+fn createImageInf(format: vk.VkFormat, usageFlags: vk.VkImageUsageFlags, extent3d: vk.VkExtent3D, subRange: vk.VkImageSubresourceRange) vk.VkImageCreateInfo {
     return vk.VkImageCreateInfo{
         .sType = vk.VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
         .imageType = vk.VK_IMAGE_TYPE_2D,
         .format = format,
         .extent = extent3d,
-        .mipLevels = 1,
-        .arrayLayers = 1,
+        .mipLevels = subRange.levelCount,
+        .arrayLayers = subRange.layerCount,
         .samples = vk.VK_SAMPLE_COUNT_1_BIT, // MSAA not used by default!
         .tiling = vk.VK_IMAGE_TILING_OPTIMAL, // Optimal GPU Format has to be changed to LINEAR for CPU Read
         .usage = usageFlags,
+        .sharingMode = vk.VK_SHARING_MODE_EXCLUSIVE,
+        .queueFamilyIndexCount = 0,
+        .pQueueFamilyIndices = null,
+        .initialLayout = vk.VK_IMAGE_LAYOUT_UNDEFINED,
     };
 }
