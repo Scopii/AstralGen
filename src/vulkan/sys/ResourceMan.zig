@@ -80,7 +80,7 @@ pub const ResourceMan = struct {
 
     pub fn getBufferResourceSlot(self: *ResourceMan, bufId: Buffer.BufId, flightId: u8) !u32 {
         const buf = try self.getBufferPtr(bufId);
-        const updateFlightId = if (buf.typ == .Indirect) flightId else buf.lastUpdateFlightId;
+        const updateFlightId = if (buf.typ == .Indirect) flightId else buf.updateId;
         return buf.descIndices[updateFlightId];
     }
 
@@ -109,21 +109,21 @@ pub const ResourceMan = struct {
             .Overwrite => {
                 const descIndex = try self.descMan.getFreeDescriptorIndex();
 
-                try self.descMan.setBufferDescriptor(buffer.base[0].gpuAddress, buffer.base[0].size, descIndex, buffer.typ);
+                try self.descMan.setBufferDescriptor(buffer.bases[0].gpuAddress, buffer.bases[0].size, descIndex, buffer.typ);
                 for (0..buffer.descIndices.len) |i| buffer.descIndices[i] = descIndex;
             },
             .PerFrame => {
                 for (0..buffer.descIndices.len) |i| {
                     const descIndex = try self.descMan.getFreeDescriptorIndex();
 
-                    try self.descMan.setBufferDescriptor(buffer.base[i].gpuAddress, buffer.base[i].size, descIndex, buffer.typ);
+                    try self.descMan.setBufferDescriptor(buffer.bases[i].gpuAddress, buffer.bases[i].size, descIndex, buffer.typ);
                     buffer.descIndices[i] = descIndex;
                 }
             },
         }
         std.debug.print("Buffer ID {}, Type {}, Update {} created! Descriptor Indices ", .{ bufInf.id.val, bufInf.typ, bufInf.update });
         for (buffer.descIndices) |index| std.debug.print("{} ", .{index});
-        self.vma.printMemoryInfo(buffer.base[0].allocation);
+        self.vma.printMemoryInfo(buffer.bases[0].allocation);
 
         self.buffers.set(bufInf.id.val, buffer);
     }
@@ -162,7 +162,7 @@ pub const ResourceMan = struct {
 
     pub fn getBufferDataPtr(self: *ResourceMan, bufId: Buffer.BufId, comptime T: type) !*T {
         const buffer = try self.getBufferPtr(bufId);
-        if (buffer.base[0].mappedPtr) |ptr| {
+        if (buffer.bases[0].mappedPtr) |ptr| {
             return @as(*T, @ptrCast(@alignCast(ptr)));
         }
         return error.BufferNotHostVisible;
@@ -185,7 +185,7 @@ pub const ResourceMan = struct {
         };
 
         var buffer = try self.getBufferPtr(bufInf.id);
-        if (buffer.base[flightId].size < bytes.len) return error.BufferBaseTooSmallForUpdate;
+        if (bytes.len > buffer.bases[flightId].size) return error.BufferBaseTooSmallForUpdate;
 
         switch (bufInf.mem) {
             .Gpu => {
@@ -199,15 +199,15 @@ pub const ResourceMan = struct {
                 @memcpy(stagingPtr[stagingOffset..][0..bytes.len], bytes);
             },
             .CpuWrite => {
-                const pMappedData = buffer.base[flightId].mappedPtr orelse return error.BufferNotMapped;
+                const pMappedData = buffer.bases[flightId].mappedPtr orelse return error.BufferNotMapped;
                 const destPtr: [*]u8 = @ptrCast(pMappedData);
                 @memcpy(destPtr[0..bytes.len], bytes);
             },
             .CpuRead => return error.CpuReadBufferCantUpdate,
         }
-        try self.descMan.setBufferDescriptor(buffer.base[flightId].gpuAddress, bytes.len, buffer.descIndices[flightId], buffer.typ);
-        buffer.base[flightId].curCount = @intCast(bytes.len / bufInf.elementSize);
-        buffer.lastUpdateFlightId = flightId;
+        try self.descMan.setBufferDescriptor(buffer.bases[flightId].gpuAddress, bytes.len, buffer.descIndices[flightId], buffer.typ);
+        buffer.bases[flightId].curCount = @intCast(bytes.len / bufInf.elementSize);
+        buffer.updateId = flightId;
     }
 
     pub fn queueTextureDestruction(self: *ResourceMan, texId: Texture.TexId, curFrame: u64) !void {

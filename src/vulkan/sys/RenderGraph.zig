@@ -78,14 +78,14 @@ pub const RenderGraph = struct {
 
         for (resMan.transfers[cmd.flightId].items) |transfer| {
             const buffer = try resMan.getBufferPtr(transfer.dstResId);
-            try self.checkBufferState(&buffer.base[cmd.flightId], .{ .stage = .Transfer, .access = .TransferWrite });
+            try self.checkBufferState(&buffer.bases[cmd.flightId], .{ .stage = .Transfer, .access = .TransferWrite });
 
             const copyRegion = vk.VkBufferCopy{
                 .srcOffset = transfer.srcOffset,
                 .dstOffset = transfer.dstOffset,
                 .size = transfer.size,
             };
-            vk.vkCmdCopyBuffer(cmd.handle, resMan.stagingBuffers[cmd.flightId].handle, buffer.base[cmd.flightId].handle, 1, &copyRegion);
+            vk.vkCmdCopyBuffer(cmd.handle, resMan.stagingBuffers[cmd.flightId].handle, buffer.bases[cmd.flightId].handle, 1, &copyRegion);
         }
         resMan.resetTransfers(cmd.flightId);
         self.bakeBarriers(cmd);
@@ -110,7 +110,7 @@ pub const RenderGraph = struct {
     pub fn recordPassBarriers(self: *RenderGraph, cmd: *const Cmd, pass: Pass, resMan: *ResourceMan) !void {
         for (pass.bufUses) |bufUse| {
             const buffer = try resMan.getBufferPtr(bufUse.bufId);
-            try self.checkBufferState(&buffer.base[cmd.flightId], bufUse.getNeededState());
+            try self.checkBufferState(&buffer.bases[cmd.flightId], bufUse.getNeededState());
         }
         for (pass.texUses) |texUse| {
             const tex = try resMan.getTexturePtr(texUse.texId);
@@ -193,7 +193,7 @@ pub const RenderGraph = struct {
             .taskMesh => |taskMesh| {
                 if (taskMesh.indirectBuf) |indirectBuf| {
                     const buffer = try resMan.getBufferPtr(indirectBuf.id);
-                    cmd.drawMeshTasksIndirect(buffer.base[cmd.flightId].handle, indirectBuf.offset, 1, @sizeOf(vhT.IndirectData));
+                    cmd.drawMeshTasksIndirect(buffer.bases[cmd.flightId].handle, indirectBuf.offset, 1, @sizeOf(vhT.IndirectData));
                 } else {
                     cmd.drawMeshTasks(taskMesh.workgroups.x, taskMesh.workgroups.y, taskMesh.workgroups.z);
                 }

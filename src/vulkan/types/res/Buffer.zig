@@ -5,13 +5,13 @@ const vk = @import("../../../modules/vk.zig").c;
 const vhE = @import("../../help/Enums.zig");
 
 pub const Buffer = struct {
-    base: [rc.MAX_IN_FLIGHT]BufferBase,
+    bases: [rc.MAX_IN_FLIGHT]BufferBase,
     descIndices: [rc.MAX_IN_FLIGHT]u32 = .{0} ** rc.MAX_IN_FLIGHT,
 
-    lastUpdateFlightId: u8 = 0,
+    updateId: u8 = 0,
     elementSize: u32,
-    typ: vhE.BufferType = .Storage,
-    update: vhE.UpdateType = .Overwrite,
+    typ: vhE.BufferType,
+    update: vhE.UpdateType,
 
     pub const BufId = packed struct { val: u32 };
     pub const BufInf = struct { id: BufId, mem: vhE.MemUsage, elementSize: u32, len: u32, typ: vhE.BufferType, update: vhE.UpdateType };

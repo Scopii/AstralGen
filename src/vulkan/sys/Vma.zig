@@ -120,24 +120,27 @@ pub const Vma = struct {
         };
         if (bufInf.typ == .Staging) memFlags |= vk.VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
 
-        var buffer: Buffer = undefined;
+        var bufferBases: [rc.MAX_IN_FLIGHT]BufferBase = undefined;
 
         switch (bufInf.update) {
             .Overwrite => {
                 const tempBuffer = try self.allocBuffer(bufferByteSize, bufferBits, memType, memFlags);
-                for (0..rc.MAX_IN_FLIGHT) |i| buffer.base[i] = tempBuffer;
+                for (0..rc.MAX_IN_FLIGHT) |i| bufferBases[i] = tempBuffer;
             },
             .PerFrame => {
                 for (0..rc.MAX_IN_FLIGHT) |i| {
                     const tempBuffer = try self.allocBuffer(bufferByteSize, bufferBits, memType, memFlags);
-                    buffer.base[i] = tempBuffer;
+                    bufferBases[i] = tempBuffer;
                 }
             },
         }
-        buffer.elementSize = bufInf.elementSize;
-        buffer.update = bufInf.update;
-        buffer.typ = bufInf.typ;
-        return buffer;
+
+        return .{
+            .bases = bufferBases,
+            .typ = bufInf.typ,
+            .update = bufInf.update,
+            .elementSize = bufInf.elementSize,
+        };
     }
 
     pub fn allocBuffer(self: *const Vma, size: vk.VkDeviceSize, bufUse: vk.VkBufferUsageFlags, memUse: vk.VmaMemoryUsage, memFlags: vk.VmaAllocationCreateFlags) !BufferBase {
@@ -147,6 +150,7 @@ pub const Vma = struct {
             .usage = bufUse,
             .sharingMode = vk.VK_SHARING_MODE_EXCLUSIVE,
         };
+        
         var buffer: vk.VkBuffer = undefined;
         var allocation: vk.VmaAllocation = undefined;
         var allocVmaInf: vk.VmaAllocationInfo = undefined;
@@ -174,7 +178,7 @@ pub const Vma = struct {
         view: vk.VkImageView,
     };
 
-    fn allocImagePacket(self: *Vma, memType: vk.VmaMemoryUsage, imgUse: vk.VkImageUsageFlags, aspectFlags: vk.VkImageAspectFlags, format: c_uint, extent: vk.VkExtent3D) !Image {
+    fn allocImage(self: *Vma, memType: vk.VmaMemoryUsage, imgUse: vk.VkImageUsageFlags, aspectFlags: vk.VkImageAspectFlags, format: c_uint, extent: vk.VkExtent3D) !Image {
         var img: vk.VkImage = undefined;
         var allocation: vk.VmaAllocation = undefined;
         const imgInf = createAllocatedImageInf(format, imgUse, extent);
@@ -219,7 +223,7 @@ pub const Vma = struct {
 
         switch (texInf.update) {
             .Overwrite => { // Single image shared across all frames
-                const imagePacket = try self.allocImagePacket(memType, texUse, aspectMask, format, extent);
+                const imagePacket = try self.allocImage(memType, texUse, aspectMask, format, extent);
 
                 for (0..rc.MAX_IN_FLIGHT) |i| {
                     tempBase[i] = .{
@@ -233,7 +237,7 @@ pub const Vma = struct {
             },
             .PerFrame => { // Separate image per frame
                 for (0..rc.MAX_IN_FLIGHT) |i| {
-                    const imagePacket = try self.allocImagePacket(memType, texUse, aspectMask, format, extent);
+                    const imagePacket = try self.allocImage(memType, texUse, aspectMask, format, extent);
 
                     tempBase[i] = .{
                         .img = imagePacket.img,
@@ -262,7 +266,7 @@ pub const Vma = struct {
             .Overwrite => 1,
             .PerFrame => rc.MAX_IN_FLIGHT,
         };
-        for (0..count) |i| vk.vmaDestroyBuffer(self.handle, buffer.base[@intCast(i)].handle, buffer.base[@intCast(i)].allocation);
+        for (0..count) |i| vk.vmaDestroyBuffer(self.handle, buffer.bases[@intCast(i)].handle, buffer.bases[@intCast(i)].allocation);
     }
 
     pub fn freeTexture(self: *const Vma, tex: *Texture) void {

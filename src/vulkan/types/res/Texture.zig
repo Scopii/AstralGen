@@ -9,7 +9,7 @@ pub const Texture = struct {
     base: [rc.MAX_IN_FLIGHT]TextureBase,
 
     texType: vhE.TextureType,
-    update: vhE.UpdateType = .Overwrite,
+    update: vhE.UpdateType,
 
     pub const TexId = packed struct { val: u32 };
     pub const TexInf = struct { id: TexId, mem: vhE.MemUsage, typ: vhE.TextureType, width: u32, height: u32, depth: u32 = 1, update: vhE.UpdateType };
