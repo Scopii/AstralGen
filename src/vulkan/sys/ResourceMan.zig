@@ -185,6 +185,7 @@ pub const ResourceMan = struct {
         };
 
         var buffer = try self.getBufferPtr(bufInf.id);
+        if (buffer.base[flightId].size < bytes.len) return error.BufferBaseTooSmallForUpdate;
 
         switch (bufInf.mem) {
             .Gpu => {
@@ -205,7 +206,7 @@ pub const ResourceMan = struct {
             .CpuRead => return error.CpuReadBufferCantUpdate,
         }
         try self.descMan.setBufferDescriptor(buffer.base[flightId].gpuAddress, bytes.len, buffer.descIndices[flightId], buffer.typ);
-        buffer.curCount = @intCast(bytes.len / bufInf.elementSize);
+        buffer.base[flightId].curCount = @intCast(bytes.len / bufInf.elementSize);
         buffer.lastUpdateFlightId = flightId;
     }
 

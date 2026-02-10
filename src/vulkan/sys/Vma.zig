@@ -134,7 +134,7 @@ pub const Vma = struct {
                 }
             },
         }
-        buffer.maxCount = bufInf.len;
+        buffer.elementSize = bufInf.elementSize;
         buffer.update = bufInf.update;
         buffer.typ = bufInf.typ;
         return buffer;

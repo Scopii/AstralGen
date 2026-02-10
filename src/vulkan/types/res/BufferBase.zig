@@ -9,6 +9,7 @@ pub const BufferBase = struct {
     mappedPtr: ?*anyopaque,
     gpuAddress: u64,
     size: vk.VkDeviceSize,
+    curCount: u32 = 0,
     state: BufferState = .{},
 
     pub const BufferState = struct { stage: vhE.PipeStage = .TopOfPipe, access: vhE.PipeAccess = .None };

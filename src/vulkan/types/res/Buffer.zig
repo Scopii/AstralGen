@@ -9,8 +9,7 @@ pub const Buffer = struct {
     descIndices: [rc.MAX_IN_FLIGHT]u32 = .{0} ** rc.MAX_IN_FLIGHT,
 
     lastUpdateFlightId: u8 = 0,
-    maxCount: u32,
-    curCount: u32,
+    elementSize: u32,
     typ: vhE.BufferType = .Storage,
     update: vhE.UpdateType = .Overwrite,
 
