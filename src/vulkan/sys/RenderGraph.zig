@@ -219,7 +219,7 @@ pub const RenderGraph = struct {
         for (swapchains) |swapchain| { // Blits + Swapchain Presentation Barriers
             const renderTex = try resMan.getTexturePtr(swapchain.renderTexId);
             cmd.copyImageToImage(renderTex.base[cmd.flightId].img, renderTex.base[cmd.flightId].extent, swapchain.getCurTexture().img, swapchain.getExtent3D(), rc.RENDER_TEX_STRETCH);
-            try self.checkImageState(swapchain.getCurTexture(), .Color, .{ .stage = .ColorAtt, .access = .ColorAttWrite, .layout = .Attachment });
+            try self.checkImageState(swapchain.getCurTexture(), .Color, .{ .stage = .ColorAtt, .access = .ColorAttReadWrite, .layout = .Attachment });
         }
         self.bakeBarriers(cmd);
         cmd.endQuery(.BotOfPipe, 55);
