@@ -45,14 +45,12 @@ pub const Vma = struct {
         const bufInf = vk.VkBufferCreateInfo{
             .sType = vk.VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
             .size = size,
-            .usage = vk.VK_BUFFER_USAGE_DESCRIPTOR_HEAP_BIT_EXT |
-                vk.VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+            .usage = vk.VK_BUFFER_USAGE_DESCRIPTOR_HEAP_BIT_EXT | vk.VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
             .sharingMode = vk.VK_SHARING_MODE_EXCLUSIVE,
         };
         const allocInf = vk.VmaAllocationCreateInfo{
             .usage = vk.VMA_MEMORY_USAGE_CPU_TO_GPU,
-            .flags = vk.VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
-                vk.VMA_ALLOCATION_CREATE_MAPPED_BIT,
+            .flags = vk.VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | vk.VMA_ALLOCATION_CREATE_MAPPED_BIT,
         };
 
         var buffer: vk.VkBuffer = undefined;
@@ -177,24 +175,34 @@ pub const Vma = struct {
         allocation: vk.VmaAllocation,
     };
 
-    fn allocImage(self: *Vma, memType: vk.VmaMemoryUsage, imgUse: vk.VkImageUsageFlags, format: vk.VkFormat, extent: vk.VkExtent3D, subRange: vk.VkImageSubresourceRange) !Image {
+    fn allocTexture(
+        self: *Vma,
+        memType: vk.VmaMemoryUsage,
+        imgUse: vk.VkImageUsageFlags,
+        format: vk.VkFormat,
+        extent: vk.VkExtent3D,
+        subRange: vk.VkImageSubresourceRange,
+        viewType: vk.VkImageViewType,
+    ) !TextureBase {
         var img: vk.VkImage = undefined;
         var allocation: vk.VmaAllocation = undefined;
-        const imgInf = createImageInf(format, imgUse, extent, subRange);
+        const imgInf = createImageInf(format, imgUse, extent, subRange, vk.VK_IMAGE_TYPE_2D);
         const imgAllocInf = vk.VmaAllocationCreateInfo{ .usage = memType, .requiredFlags = vk.VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT };
         try vhF.check(vk.vmaCreateImage(self.handle, &imgInf, &imgAllocInf, &img, &allocation, null), "Could not create Render Image");
 
-        return .{ .allocation = allocation, .handle = img };
-    }
-
-    fn createImageView(self: *Vma, img: vk.VkImage, viewType: vk.VkImageViewType, format: vk.VkFormat, subRange: vk.VkImageSubresourceRange) !vk.VkImageView {
         var view: vk.VkImageView = undefined;
         const viewInf = vhF.getViewCreateInfo(img, viewType, format, subRange);
         try vhF.check(vk.vkCreateImageView(self.gpi, &viewInf, null, &view), "Could not create Render Image View");
-        return view;
+
+        return .{
+            .allocation = allocation,
+            .img = img,
+            .view = view,
+            .extent = extent,
+        };
     }
 
-    pub fn allocTexture(self: *Vma, texInf: Texture.TexInf) !Texture {
+    pub fn allocDefinedTexture(self: *Vma, texInf: Texture.TexInf) !Texture {
         const memType: vk.VmaMemoryUsage = switch (texInf.mem) {
             .Gpu => vk.VMA_MEMORY_USAGE_GPU_ONLY,
             .CpuWrite => vk.VMA_MEMORY_USAGE_CPU_TO_GPU,
@@ -226,27 +234,12 @@ pub const Vma = struct {
 
         switch (texInf.update) {
             .Overwrite => { // Single image shared across all frames
-                const img = try self.allocImage(memType, texUse, format, extent, subRange);
-
-                for (0..rc.MAX_IN_FLIGHT) |i| {
-                    texBase[i] = .{
-                        .extent = extent,
-                        .img = img.handle,
-                        .allocation = img.allocation,
-                        .view = try self.createImageView(img.handle, vk.VK_IMAGE_VIEW_TYPE_2D, format, subRange),
-                    };
-                }
+                const img = try self.allocTexture(memType, texUse, format, extent, subRange, vk.VK_IMAGE_VIEW_TYPE_2D);
+                for (0..rc.MAX_IN_FLIGHT) |i| texBase[i] = img;
             },
             .PerFrame => { // Separate image per frame
                 for (0..rc.MAX_IN_FLIGHT) |i| {
-                    const img = try self.allocImage(memType, texUse, format, extent, subRange);
-
-                    texBase[i] = .{
-                        .extent = extent,
-                        .img = img.handle,
-                        .allocation = img.allocation,
-                        .view = try self.createImageView(img.handle, vk.VK_IMAGE_VIEW_TYPE_2D, format, subRange),
-                    };
+                    texBase[i] = try self.allocTexture(memType, texUse, format, extent, subRange, vk.VK_IMAGE_VIEW_TYPE_2D);
                 }
             },
         }
@@ -285,10 +278,10 @@ pub const Vma = struct {
     }
 };
 
-fn createImageInf(format: vk.VkFormat, usageFlags: vk.VkImageUsageFlags, extent3d: vk.VkExtent3D, subRange: vk.VkImageSubresourceRange) vk.VkImageCreateInfo {
+fn createImageInf(format: vk.VkFormat, usageFlags: vk.VkImageUsageFlags, extent3d: vk.VkExtent3D, subRange: vk.VkImageSubresourceRange, imgType: vk.VkImageType) vk.VkImageCreateInfo {
     return vk.VkImageCreateInfo{
         .sType = vk.VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-        .imageType = vk.VK_IMAGE_TYPE_2D,
+        .imageType = imgType,
         .format = format,
         .extent = extent3d,
         .mipLevels = subRange.levelCount,

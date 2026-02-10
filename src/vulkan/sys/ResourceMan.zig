@@ -129,7 +129,7 @@ pub const ResourceMan = struct {
     }
 
     pub fn createTexture(self: *ResourceMan, texInf: Texture.TexInf) !void {
-        var tex = try self.vma.allocTexture(texInf);
+        var tex = try self.vma.allocDefinedTexture(texInf);
 
         switch (texInf.update) {
             .Overwrite => {
