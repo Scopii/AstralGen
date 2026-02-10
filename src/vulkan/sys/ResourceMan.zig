@@ -134,22 +134,14 @@ pub const ResourceMan = struct {
         switch (texInf.update) {
             .Overwrite => {
                 const descIndex = try self.descMan.getFreeDescriptorIndex();
+                try self.descMan.setTextureDescriptor(&tex, 0, descIndex);
                 for (0..tex.descIndices.len) |i| tex.descIndices[i] = descIndex;
-
-                switch (texInf.typ) {
-                    .Color => try self.descMan.setTextureDescriptor(&tex.base[0], descIndex, .StorageTex),
-                    .Depth, .Stencil => try self.descMan.setTextureDescriptor(&tex.base[0], descIndex, .SampledTex),
-                }
             },
             .PerFrame => {
                 for (0..tex.descIndices.len) |i| {
                     const descIndex = try self.descMan.getFreeDescriptorIndex();
+                    try self.descMan.setTextureDescriptor(&tex, @intCast(i), descIndex);
                     tex.descIndices[i] = descIndex;
-
-                    switch (texInf.typ) {
-                        .Color => try self.descMan.setTextureDescriptor(&tex.base[i], descIndex, .StorageTex),
-                        .Depth, .Stencil => try self.descMan.setTextureDescriptor(&tex.base[i], descIndex, .SampledTex),
-                    }
                 }
             },
         }

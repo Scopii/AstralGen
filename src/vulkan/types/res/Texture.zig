@@ -8,11 +8,24 @@ pub const Texture = struct {
     descIndices: [rc.MAX_IN_FLIGHT]u32 = .{0} ** rc.MAX_IN_FLIGHT,
     base: [rc.MAX_IN_FLIGHT]TextureBase,
 
+    aspectFlags: vk.VkImageAspectFlags,
+    viewType: vk.VkImageViewType,
+    format: vk.VkFormat,
+
     texType: vhE.TextureType,
     update: vhE.UpdateType,
 
     pub const TexId = packed struct { val: u32 };
-    pub const TexInf = struct { id: TexId, mem: vhE.MemUsage, typ: vhE.TextureType, width: u32, height: u32, depth: u32 = 1, update: vhE.UpdateType };
+
+    pub const TexInf = struct {
+        id: TexId,
+        mem: vhE.MemUsage,
+        typ: vhE.TextureType,
+        width: u32,
+        height: u32,
+        depth: u32 = 1,
+        update: vhE.UpdateType,
+    };
 
     pub fn create(texInf: TexInf) TexInf {
         return texInf;

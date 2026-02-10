@@ -64,6 +64,8 @@ pub fn setObjectName(device: vk.VkDevice, handle: anytype, objectType: vk.VkObje
 // USAGE:
 // vh.setObjectName(self.gpi, buffer.handle, vk.VK_OBJECT_TYPE_BUFFER, buffer.name);
 
+// Synchronization
+
 pub fn createSemaphore(gpi: vk.VkDevice) !vk.VkSemaphore {
     const semaphoreInf = vk.VkSemaphoreCreateInfo{ .sType = vk.VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO };
     var semaphore: vk.VkSemaphore = undefined;
@@ -110,4 +112,28 @@ pub fn getTimelineVal(gpi: vk.VkDevice, semaphore: vk.VkSemaphore) !u64 {
     var val: u64 = 0;
     try check(vk.vkGetSemaphoreCounterValue(gpi, semaphore, &val), "Failed to get timeline semaphore value");
     return val;
+}
+
+// Texture Related
+
+pub fn getViewCreateInfo(image: vk.VkImage, viewType: vk.VkImageViewType, format: vk.VkFormat, subRange: vk.VkImageSubresourceRange) vk.VkImageViewCreateInfo {
+    return vk.VkImageViewCreateInfo{
+        .sType = vk.VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+        .pNext = null,
+        .flags = 0,
+        .image = image,
+        .viewType = viewType,
+        .format = format,
+        .components = .{
+            .r = vk.VK_COMPONENT_SWIZZLE_IDENTITY,
+            .g = vk.VK_COMPONENT_SWIZZLE_IDENTITY,
+            .b = vk.VK_COMPONENT_SWIZZLE_IDENTITY,
+            .a = vk.VK_COMPONENT_SWIZZLE_IDENTITY,
+        },
+        .subresourceRange = subRange
+    };
+}
+
+pub fn createSubresourceRange(mask: vk.VkImageAspectFlags, mipLevel: u32, levelCount: u32, arrayLayer: u32, layerCount: u32) vk.VkImageSubresourceRange {
+    return vk.VkImageSubresourceRange{ .aspectMask = mask, .baseMipLevel = mipLevel, .levelCount = levelCount, .baseArrayLayer = arrayLayer, .layerCount = layerCount };
 }

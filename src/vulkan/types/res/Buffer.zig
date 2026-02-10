@@ -14,7 +14,15 @@ pub const Buffer = struct {
     update: vhE.UpdateType,
 
     pub const BufId = packed struct { val: u32 };
-    pub const BufInf = struct { id: BufId, mem: vhE.MemUsage, elementSize: u32, len: u32, typ: vhE.BufferType, update: vhE.UpdateType };
+    
+    pub const BufInf = struct {
+        id: BufId,
+        mem: vhE.MemUsage,
+        elementSize: u32,
+        len: u32,
+        typ: vhE.BufferType,
+        update: vhE.UpdateType,
+    };
 
     pub fn create(bufInf: BufInf) BufInf {
         return bufInf;

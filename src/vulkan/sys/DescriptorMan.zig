@@ -74,17 +74,19 @@ pub const DescriptorMan = struct {
         try self.freeList.append(descIndex);
     }
 
-    pub fn setTextureDescriptor(self: *DescriptorMan, texBase: *const TextureBase, descIndex: u32, typ: enum {StorageTex, SampledTex}) !void {
-        const viewInf = texBase.getViewCreateInfo();
+    pub fn setTextureDescriptor(self: *DescriptorMan, tex: *const Texture, flightId: u8, descIndex: u32) !void {
+        const texBase = tex.base[flightId];
+        const subRange = vhF.createSubresourceRange(tex.aspectFlags, 0, 1, 0, 1);
+        const viewInf = vhF.getViewCreateInfo(texBase.img, tex.viewType, tex.format, subRange);
 
         const imgDescInf = vk.VkImageDescriptorInfoEXT{
             .sType = vk.VK_STRUCTURE_TYPE_IMAGE_DESCRIPTOR_INFO_EXT,
             .pView = &viewInf,
-            .layout = vk.VK_IMAGE_LAYOUT_GENERAL, // try  to DEPTH_STENCIL_READ_ONLY_OPTIMAL for depth?
+            .layout = vk.VK_IMAGE_LAYOUT_GENERAL, // to DEPTH_STENCIL_READ_ONLY_OPTIMAL for depth?
         };
         const resDescInf = vk.VkResourceDescriptorInfoEXT{
             .sType = vk.VK_STRUCTURE_TYPE_RESOURCE_DESCRIPTOR_INFO_EXT,
-            .type = if (typ == .StorageTex) vk.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE else vk.VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+            .type = if (tex.texType == .Color) vk.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE else vk.VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
             .data = .{ .pImage = &imgDescInf },
         };
         try self.setDescriptor(&resDescInf, descIndex);
@@ -105,7 +107,7 @@ pub const DescriptorMan = struct {
 
     fn setDescriptor(self: *DescriptorMan, resDescInf: *const vk.VkResourceDescriptorInfoEXT, descIndex: u32) !void {
         const finalOffset = self.startOffset + (descIndex * self.descStride);
-        const mappedData = @as([*]u8, @ptrCast(self.descHeap.mappedPtr,));
+        const mappedData = @as([*]u8, @ptrCast(self.descHeap.mappedPtr));
 
         const hostAddrRange = vk.VkHostAddressRangeEXT{
             .address = mappedData + finalOffset,

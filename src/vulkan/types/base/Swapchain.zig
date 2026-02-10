@@ -64,19 +64,8 @@ pub const Swapchain = struct {
         errdefer alloc.free(baseTextures);
 
         for (0..realImgCount) |i| {
-            const viewInf = vk.VkImageViewCreateInfo{
-                .sType = vk.VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-                .image = images[i],
-                .viewType = vk.VK_IMAGE_VIEW_TYPE_2D,
-                .format = surfaceFormat.format,
-                .subresourceRange = vk.VkImageSubresourceRange{
-                    .aspectMask = vk.VK_IMAGE_ASPECT_COLOR_BIT,
-                    .baseMipLevel = 0,
-                    .levelCount = 1,
-                    .baseArrayLayer = 0,
-                    .layerCount = 1,
-                },
-            };
+            const subRange = vhF.createSubresourceRange(vk.VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1);
+            const viewInf = vhF.getViewCreateInfo(images[i], vk.VK_IMAGE_VIEW_TYPE_2D, surfaceFormat.format, subRange);
 
             var view: vk.VkImageView = undefined;
             try vhF.check(vk.vkCreateImageView(gpi, &viewInf, null, &view), "Failed to create image view");
@@ -87,7 +76,6 @@ pub const Swapchain = struct {
                 .allocation = undefined, // MANAGED BY OS!
                 .extent = .{ .width = realExtent.width, .height = realExtent.height, .depth = 1 },
                 .state = .{ .layout = .Undefined, .stage = .ColorAtt, .access = .None },
-                .viewInf = viewInf,
             };
         }
 

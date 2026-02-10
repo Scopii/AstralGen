@@ -180,16 +180,16 @@ pub const Vma = struct {
     fn allocImage(self: *Vma, memType: vk.VmaMemoryUsage, imgUse: vk.VkImageUsageFlags, format: vk.VkFormat, extent: vk.VkExtent3D) !Image {
         var img: vk.VkImage = undefined;
         var allocation: vk.VmaAllocation = undefined;
-        const imgInf = createAllocatedImageInf(format, imgUse, extent);
+        const imgInf = createImageInf(format, imgUse, extent);
         const imgAllocInf = vk.VmaAllocationCreateInfo{ .usage = memType, .requiredFlags = vk.VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT };
         try vhF.check(vk.vmaCreateImage(self.handle, &imgInf, &imgAllocInf, &img, &allocation, null), "Could not create Render Image");
 
         return .{ .allocation = allocation, .handle = img };
     }
 
-    fn createImageView(self: *Vma, img: vk.VkImage, aspectFlags: vk.VkImageAspectFlags, format: vk.VkFormat) !vk.VkImageView {
+    fn createImageView(self: *Vma, img: vk.VkImage, viewType: vk.VkImageViewType, format: vk.VkFormat, subRange: vk.VkImageSubresourceRange) !vk.VkImageView {
         var view: vk.VkImageView = undefined;
-        const viewInf = createAllocatedImageViewInf(format, img, aspectFlags);
+        const viewInf = vhF.getViewCreateInfo(img, viewType, format, subRange);
         try vhF.check(vk.vkCreateImageView(self.gpi, &viewInf, null, &view), "Could not create Render Image View");
         return view;
     }
@@ -220,6 +220,7 @@ pub const Vma = struct {
         };
 
         const extent = vk.VkExtent3D{ .width = texInf.width, .height = texInf.height, .depth = texInf.depth };
+        const subRange = vhF.createSubresourceRange(aspectFlags, 0, 1, 0, 1);
 
         var texBase: [rc.MAX_IN_FLIGHT]TextureBase = undefined;
 
@@ -232,8 +233,7 @@ pub const Vma = struct {
                         .extent = extent,
                         .img = img.handle,
                         .allocation = img.allocation,
-                        .view = try self.createImageView(img.handle, aspectFlags, format),
-                        .viewInf = getViewCreateInfo(img.handle, vk.VK_IMAGE_VIEW_TYPE_2D, format, aspectFlags),
+                        .view = try self.createImageView(img.handle, vk.VK_IMAGE_VIEW_TYPE_2D, format, subRange),
                     };
                 }
             },
@@ -245,8 +245,7 @@ pub const Vma = struct {
                         .extent = extent,
                         .img = img.handle,
                         .allocation = img.allocation,
-                        .view = try self.createImageView(img.handle, aspectFlags, format),
-                        .viewInf = getViewCreateInfo(img.handle, vk.VK_IMAGE_VIEW_TYPE_2D, format, aspectFlags),
+                        .view = try self.createImageView(img.handle, vk.VK_IMAGE_VIEW_TYPE_2D, format, subRange),
                     };
                 }
             },
@@ -256,6 +255,9 @@ pub const Vma = struct {
             .base = texBase,
             .texType = texInf.typ,
             .update = texInf.update,
+            .viewType = vk.VK_IMAGE_VIEW_TYPE_2D,
+            .format = format,
+            .aspectFlags = aspectFlags,
         };
     }
 
@@ -283,31 +285,7 @@ pub const Vma = struct {
     }
 };
 
-fn getViewCreateInfo(image: vk.VkImage, viewType: vk.VkImageViewType, format: vk.VkFormat, aspectMask: vk.VkImageAspectFlags) vk.VkImageViewCreateInfo {
-    return vk.VkImageViewCreateInfo{
-        .sType = vk.VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-        .pNext = null,
-        .flags = 0,
-        .image = image,
-        .viewType = viewType,
-        .format = format,
-        .components = .{
-            .r = vk.VK_COMPONENT_SWIZZLE_IDENTITY,
-            .g = vk.VK_COMPONENT_SWIZZLE_IDENTITY,
-            .b = vk.VK_COMPONENT_SWIZZLE_IDENTITY,
-            .a = vk.VK_COMPONENT_SWIZZLE_IDENTITY,
-        },
-        .subresourceRange = .{
-            .aspectMask = aspectMask,
-            .baseMipLevel = 0,
-            .levelCount = 1,
-            .baseArrayLayer = 0,
-            .layerCount = 1,
-        },
-    };
-}
-
-fn createAllocatedImageInf(format: vk.VkFormat, usageFlags: vk.VkImageUsageFlags, extent3d: vk.VkExtent3D) vk.VkImageCreateInfo {
+fn createImageInf(format: vk.VkFormat, usageFlags: vk.VkImageUsageFlags, extent3d: vk.VkExtent3D) vk.VkImageCreateInfo {
     return vk.VkImageCreateInfo{
         .sType = vk.VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
         .imageType = vk.VK_IMAGE_TYPE_2D,
@@ -318,21 +296,5 @@ fn createAllocatedImageInf(format: vk.VkFormat, usageFlags: vk.VkImageUsageFlags
         .samples = vk.VK_SAMPLE_COUNT_1_BIT, // MSAA not used by default!
         .tiling = vk.VK_IMAGE_TILING_OPTIMAL, // Optimal GPU Format has to be changed to LINEAR for CPU Read
         .usage = usageFlags,
-    };
-}
-
-fn createAllocatedImageViewInf(format: vk.VkFormat, img: vk.VkImage, aspectFlags: vk.VkImageAspectFlags) vk.VkImageViewCreateInfo {
-    return vk.VkImageViewCreateInfo{
-        .sType = vk.VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-        .viewType = vk.VK_IMAGE_VIEW_TYPE_2D,
-        .image = img,
-        .format = format,
-        .subresourceRange = vk.VkImageSubresourceRange{
-            .baseMipLevel = 0,
-            .levelCount = 1,
-            .baseArrayLayer = 0,
-            .layerCount = 1,
-            .aspectMask = aspectFlags,
-        },
     };
 }

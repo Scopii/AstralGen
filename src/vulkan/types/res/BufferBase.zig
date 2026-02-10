@@ -12,7 +12,10 @@ pub const BufferBase = struct {
     curCount: u32 = 0,
     state: BufferState = .{},
 
-    pub const BufferState = struct { stage: vhE.PipeStage = .TopOfPipe, access: vhE.PipeAccess = .None };
+    pub const BufferState = struct {
+        stage: vhE.PipeStage = .TopOfPipe,
+        access: vhE.PipeAccess = .None,
+    };
 
     pub fn createBufferBarrier(self: *BufferBase, newState: BufferState) vk.VkBufferMemoryBarrier2 {
         const barrier = vk.VkBufferMemoryBarrier2{
