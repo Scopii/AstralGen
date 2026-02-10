@@ -51,7 +51,7 @@ pub const Scheduler = struct {
 
         for (targets, 0..) |swapchain, i| {
             waitInfos[i] = createSemaphoreSubmitInfo(swapchain.acquireSems[self.flightId], .ColorAtt, 0);
-            signalInfos[i] = createSemaphoreSubmitInfo(swapchain.renderSems[swapchain.curIndex], .ColorAtt, 0);
+            signalInfos[i] = createSemaphoreSubmitInfo(swapchain.renderSems[swapchain.curIndex], .BotOfPipe, 0);
         }
         const cmdSlice = &[_]vk.VkCommandBufferSubmitInfo{cmd.createSubmitInfo()};
         try queue.submit(waitInfos[0..targets.len], cmdSlice, signalInfos[0 .. targets.len + 1]);
