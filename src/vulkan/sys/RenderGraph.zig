@@ -88,14 +88,14 @@ pub const RenderGraph = struct {
             vk.vkCmdCopyBuffer(cmd.handle, resMan.stagingBuffers[cmd.flightId].handle, buffer.bases[cmd.flightId].handle, 1, &copyRegion);
         }
         resMan.resetTransfers(cmd.flightId);
-        self.bakeBarriers(cmd);
+        self.bakeBarriers(cmd, "Transfers");
         cmd.endQuery(.BotOfPipe, 40);
     }
 
-    fn checkImageState(self: *RenderGraph, tex: *TextureBase, texTyp: vhE.TextureType, neededState: TextureBase.TextureState) !void {
+    fn checkImageState(self: *RenderGraph, tex: *TextureBase, subRange: vk.VkImageSubresourceRange, neededState: TextureBase.TextureState) !void {
         const state = tex.state;
         if (state.stage == neededState.stage and state.access == neededState.access and state.layout == neededState.layout) return;
-        try self.imgBarriers.append(tex.createImageBarrier(neededState, texTyp));
+        try self.imgBarriers.append(tex.createImageBarrier(neededState, subRange));
     }
 
     fn checkBufferState(self: *RenderGraph, buffer: *BufferBase, neededState: BufferBase.BufferState) !void {
@@ -114,21 +114,21 @@ pub const RenderGraph = struct {
         }
         for (pass.texUses) |texUse| {
             const tex = try resMan.getTexturePtr(texUse.texId);
-            try self.checkImageState(&tex.base[cmd.flightId], tex.texType, texUse.getNeededState());
+            try self.checkImageState(&tex.base[cmd.flightId], tex.subRange, texUse.getNeededState());
         }
         for (pass.getColorAtts()) |colorAtt| {
             const tex = try resMan.getTexturePtr(colorAtt.texId);
-            try self.checkImageState(&tex.base[cmd.flightId], tex.texType, colorAtt.getNeededState());
+            try self.checkImageState(&tex.base[cmd.flightId], tex.subRange, colorAtt.getNeededState());
         }
         if (pass.getDepthAtt()) |depthAtt| {
             const tex = try resMan.getTexturePtr(depthAtt.texId);
-            try self.checkImageState(&tex.base[cmd.flightId], tex.texType, depthAtt.getNeededState());
+            try self.checkImageState(&tex.base[cmd.flightId], tex.subRange, depthAtt.getNeededState());
         }
         if (pass.getStencilAtt()) |stencilAtt| {
             const tex = try resMan.getTexturePtr(stencilAtt.texId);
-            try self.checkImageState(&tex.base[cmd.flightId], tex.texType, stencilAtt.getNeededState());
+            try self.checkImageState(&tex.base[cmd.flightId], tex.subRange, stencilAtt.getNeededState());
         }
-        self.bakeBarriers(cmd);
+        self.bakeBarriers(cmd, pass.name);
     }
 
     fn recordCompute(cmd: *const Cmd, dispatch: Pass.Dispatch, renderTexId: ?TexId, resMan: *ResourceMan) !void {
@@ -211,17 +211,17 @@ pub const RenderGraph = struct {
 
         for (swapchains) |swapchain| { // Render Texture and Swapchain Preperations
             const renderTex = try resMan.getTexturePtr(swapchain.renderTexId);
-            try self.checkImageState(&renderTex.base[cmd.flightId], renderTex.texType, .{ .stage = .Transfer, .access = .TransferRead, .layout = .TransferSrc });
-            try self.checkImageState(&swapchain.textures[swapchain.curIndex], .Color, .{ .stage = .Transfer, .access = .TransferWrite, .layout = .TransferDst });
+            try self.checkImageState(&renderTex.base[cmd.flightId], renderTex.subRange, .{ .stage = .Transfer, .access = .TransferRead, .layout = .TransferSrc });
+            try self.checkImageState(&swapchain.textures[swapchain.curIndex], swapchain.subRange, .{ .stage = .Transfer, .access = .TransferWrite, .layout = .TransferDst });
         }
-        self.bakeBarriers(cmd);
+        self.bakeBarriers(cmd, "Blits Prep");
 
         for (swapchains) |swapchain| { // Blits + Swapchain Presentation Barriers
             const renderTex = try resMan.getTexturePtr(swapchain.renderTexId);
             cmd.copyImageToImage(renderTex.base[cmd.flightId].img, renderTex.base[cmd.flightId].extent, swapchain.getCurTexture().img, swapchain.getExtent3D(), rc.RENDER_TEX_STRETCH);
-            try self.checkImageState(swapchain.getCurTexture(), .Color, .{ .stage = .ColorAtt, .access = .ColorAttReadWrite, .layout = .Attachment });
+            try self.checkImageState(swapchain.getCurTexture(), swapchain.subRange, .{ .stage = .ColorAtt, .access = .ColorAttReadWrite, .layout = .Attachment });
         }
-        self.bakeBarriers(cmd);
+        self.bakeBarriers(cmd, "Blits Present");
         cmd.endQuery(.BotOfPipe, 55);
     }
 
@@ -236,17 +236,21 @@ pub const RenderGraph = struct {
             imguiMan.render(cmd);
             cmd.endRendering();
 
-            try self.checkImageState(target, .Color, .{ .stage = .BotOfPipe, .access = .None, .layout = .PresentSrc });
+            try self.checkImageState(target, swapchain.subRange, .{ .stage = .BotOfPipe, .access = .None, .layout = .PresentSrc });
         }
-        self.bakeBarriers(cmd);
+        self.bakeBarriers(cmd, "Imgui");
         cmd.endQuery(.BotOfPipe, 60);
     }
 
-    fn bakeBarriers(self: *RenderGraph, cmd: *const Cmd) void {
-        if (self.imgBarriers.items.len != 0 or self.bufBarriers.items.len != 0) {
+    fn bakeBarriers(self: *RenderGraph, cmd: *const Cmd, name: []const u8) void {
+        const imgBarCount = self.imgBarriers.items.len;
+        const bufBarCount = self.bufBarriers.items.len;
+
+        if (imgBarCount != 0 or bufBarCount != 0) {
+            if (rc.BARRIER_DEBUG == true) std.debug.print("BakeBarriers: {} Img, {} Buf ({s})\n", .{ imgBarCount, bufBarCount, name });
             cmd.bakeBarriers(self.imgBarriers.items, self.bufBarriers.items);
             self.imgBarriers.clearRetainingCapacity();
             self.bufBarriers.clearRetainingCapacity();
-        }
+        } else if (rc.BARRIER_DEBUG == true) std.debug.print("BakeBarriers: Skipped ({s})\n", .{name});
     }
 };

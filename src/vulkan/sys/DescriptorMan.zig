@@ -30,7 +30,7 @@ pub const DescriptorMan = struct {
     startOffset: u64,
     resourceCount: u32 = 0,
 
-    freeList: FixedList(u32, rc.RESOURCE_MAX) = .{},
+    freedDescIndices: FixedList(u32, rc.RESOURCE_MAX) = .{},
 
     pub fn init(vma: Vma, gpi: vk.VkDevice, gpu: vk.VkPhysicalDevice) !DescriptorMan {
         const heapProps = getDescriptorHeapProperties(gpu);
@@ -56,8 +56,8 @@ pub const DescriptorMan = struct {
     }
 
     pub fn getFreeDescriptorIndex(self: *DescriptorMan) !u32 {
-        if (self.freeList.len > 0) {
-            const descIndex = self.freeList.pop();
+        if (self.freedDescIndices.len > 0) {
+            const descIndex = self.freedDescIndices.pop();
             if (descIndex) |index| return index else return error.CouldNotPopDescriptorIndex;
         }
         if (self.resourceCount >= rc.RESOURCE_MAX) return error.DescriptorHeapFull;
@@ -71,13 +71,12 @@ pub const DescriptorMan = struct {
         if (descIndex >= self.resourceCount) {
             std.debug.print("Descriptor Index {} is unused and cant be freed", .{descIndex});
         }
-        try self.freeList.append(descIndex);
+        try self.freedDescIndices.append(descIndex);
     }
 
     pub fn setTextureDescriptor(self: *DescriptorMan, tex: *const Texture, flightId: u8, descIndex: u32) !void {
         const texBase = tex.base[flightId];
-        const subRange = vhF.createSubresourceRange(tex.aspectFlags, 0, 1, 0, 1);
-        const viewInf = vhF.getViewCreateInfo(texBase.img, tex.viewType, tex.format, subRange);
+        const viewInf = vhF.getViewCreateInfo(texBase.img, tex.viewType, tex.format, tex.subRange);
 
         const imgDescInf = vk.VkImageDescriptorInfoEXT{
             .sType = vk.VK_STRUCTURE_TYPE_IMAGE_DESCRIPTOR_INFO_EXT,

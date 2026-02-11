@@ -250,7 +250,7 @@ pub const Vma = struct {
             .update = texInf.update,
             .viewType = vk.VK_IMAGE_VIEW_TYPE_2D,
             .format = format,
-            .aspectFlags = aspectFlags,
+            .subRange = subRange,
         };
     }
 

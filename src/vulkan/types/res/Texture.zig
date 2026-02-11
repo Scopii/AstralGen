@@ -8,7 +8,7 @@ pub const Texture = struct {
     descIndices: [rc.MAX_IN_FLIGHT]u32 = .{0} ** rc.MAX_IN_FLIGHT,
     base: [rc.MAX_IN_FLIGHT]TextureBase,
 
-    aspectFlags: vk.VkImageAspectFlags,
+    subRange: vk.VkImageSubresourceRange,
     viewType: vk.VkImageViewType,
     format: vk.VkFormat,
 

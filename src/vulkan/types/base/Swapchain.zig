@@ -14,6 +14,7 @@ pub const Swapchain = struct {
     acquireSems: []vk.VkSemaphore, // indexed by max-in-flight.
     renderSems: []vk.VkSemaphore, // indexed by swapchain images
     textures: []TextureBase, // indexed by swapchain images
+    subRange: vk.VkImageSubresourceRange,
     extent: vk.VkExtent2D,
     inUse: bool = true,
 
@@ -63,8 +64,9 @@ pub const Swapchain = struct {
         const baseTextures = try alloc.alloc(TextureBase, realImgCount);
         errdefer alloc.free(baseTextures);
 
+        const subRange = vhF.createSubresourceRange(vk.VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1);
+
         for (0..realImgCount) |i| {
-            const subRange = vhF.createSubresourceRange(vk.VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1);
             const viewInf = vhF.getViewCreateInfo(images[i], vk.VK_IMAGE_VIEW_TYPE_2D, surfaceFormat.format, subRange);
 
             var view: vk.VkImageView = undefined;
@@ -95,6 +97,7 @@ pub const Swapchain = struct {
             .acquireSems = imgRdySems,
             .renderSems = renderDoneSems,
             .renderTexId = renderTexId,
+            .subRange = subRange,
         };
     }
 
