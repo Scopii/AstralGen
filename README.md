@@ -5,16 +5,17 @@
 This project is mainly for educational purposes because I wanted to try Vulkan after my previous OpenGL Projects. I also choose Zig to try a more modern low level language after mostly doing Kotlin in Uni (great language IMO) and C++ for my last project. 
 This is also the next logical step for my personal growth towards becomming a proper graphics/rendering engineer and my dream of making a game with my own Game Engine.
 
-## Build & Run Steps (currently only works on Windows)
+## Build & Run Steps (Tested on Windows and Linux)
 1. Installing the **absolute NEWEST GPU Drivers**!
 1. Installing **Vulkan SDK Version 1.4.341.0+**
 2. Having specifically **Zig Version 15.2!**
 3. In Console: zig build run
 Thats it!
 
-**Keyboard Controls, App Events:** src/configs/appConfig.zig
-**Shader Definitions:** src/configs/shaderConfig.zig
-**Graphics Settings, Passes/Resources:** src/configs/renderConfig.zig
+## Settings
+* **Keyboard Controls, App Events:** src/configs/appConfig.zig
+* **Shader Definitions:** src/configs/shaderConfig.zig
+* **Graphics Settings, Passes/Resources:** src/configs/renderConfig.zig
 
 ## Techstack used
 
