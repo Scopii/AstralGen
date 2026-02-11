@@ -17,6 +17,14 @@ pub fn FixedList(comptime T: type, comptime capacity: usize) type {
             self.len += 1;
         }
 
+        pub fn appendReturnPtr(self: *Self, item: T) !*T {
+            if (self.len >= capacity) return error.ListFull;
+            const ptr = &self.buffer[self.len];
+            ptr.* = item;
+            self.len += 1;
+            return ptr;
+        }
+
         pub fn appendAssumeCapacity(self: *Self, item: T) void {
             std.debug.assert(self.len < capacity);
             self.buffer[self.len] = item;

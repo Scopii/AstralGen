@@ -109,14 +109,14 @@ pub const ResourceMan = struct {
             .Overwrite => {
                 const descIndex = try self.descMan.getFreeDescriptorIndex();
 
-                try self.descMan.setBufferDescriptor(buffer.bases[0].gpuAddress, buffer.bases[0].size, descIndex, buffer.typ);
+                try self.descMan.queueBufferDescriptor(buffer.bases[0].gpuAddress, buffer.bases[0].size, descIndex, buffer.typ);
                 for (0..buffer.descIndices.len) |i| buffer.descIndices[i] = descIndex;
             },
             .PerFrame => {
                 for (0..buffer.descIndices.len) |i| {
                     const descIndex = try self.descMan.getFreeDescriptorIndex();
 
-                    try self.descMan.setBufferDescriptor(buffer.bases[i].gpuAddress, buffer.bases[i].size, descIndex, buffer.typ);
+                    try self.descMan.queueBufferDescriptor(buffer.bases[i].gpuAddress, buffer.bases[i].size, descIndex, buffer.typ);
                     buffer.descIndices[i] = descIndex;
                 }
             },
@@ -134,13 +134,13 @@ pub const ResourceMan = struct {
         switch (texInf.update) {
             .Overwrite => {
                 const descIndex = try self.descMan.getFreeDescriptorIndex();
-                try self.descMan.setTextureDescriptor(&tex, 0, descIndex);
+                try self.descMan.queueTextureDescriptor(&tex, 0, descIndex);
                 for (0..tex.descIndices.len) |i| tex.descIndices[i] = descIndex;
             },
             .PerFrame => {
                 for (0..tex.descIndices.len) |i| {
                     const descIndex = try self.descMan.getFreeDescriptorIndex();
-                    try self.descMan.setTextureDescriptor(&tex, @intCast(i), descIndex);
+                    try self.descMan.queueTextureDescriptor(&tex, @intCast(i), descIndex);
                     tex.descIndices[i] = descIndex;
                 }
             },
@@ -197,7 +197,7 @@ pub const ResourceMan = struct {
             },
             .CpuRead => return error.CpuReadBufferCantUpdate,
         }
-        try self.descMan.setBufferDescriptor(buffer.bases[flightId].gpuAddress, bytes.len, buffer.descIndices[flightId], buffer.typ);
+        try self.descMan.queueBufferDescriptor(buffer.bases[flightId].gpuAddress, bytes.len, buffer.descIndices[flightId], buffer.typ);
         buffer.bases[flightId].curCount = @intCast(bytes.len / bufInf.elementSize);
         buffer.updateId = flightId;
     }

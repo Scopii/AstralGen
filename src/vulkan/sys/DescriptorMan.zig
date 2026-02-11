@@ -32,6 +32,13 @@ pub const DescriptorMan = struct {
 
     freedDescIndices: FixedList(u32, rc.RESOURCE_MAX) = .{},
 
+    queuedDescInfos: FixedList(vk.VkResourceDescriptorInfoEXT, rc.RESOURCE_MAX * rc.MAX_IN_FLIGHT) = .{},
+    queuedHostRanges: FixedList(vk.VkHostAddressRangeEXT, rc.RESOURCE_MAX * rc.MAX_IN_FLIGHT) = .{},
+
+    imgViewStorage: FixedList(vk.VkImageViewCreateInfo, rc.TEX_MAX * rc.MAX_IN_FLIGHT) = .{},
+    imgDescStorage: FixedList(vk.VkImageDescriptorInfoEXT, rc.TEX_MAX * rc.MAX_IN_FLIGHT) = .{},
+    devRangeStorage: FixedList(vk.VkDeviceAddressRangeEXT, rc.BUF_MAX * rc.MAX_IN_FLIGHT) = .{},
+
     pub fn init(vma: Vma, gpi: vk.VkDevice, gpu: vk.VkPhysicalDevice) !DescriptorMan {
         const heapProps = getDescriptorHeapProperties(gpu);
         const driverReservedSize = heapProps.minResourceHeapReservedRange;
@@ -74,45 +81,71 @@ pub const DescriptorMan = struct {
         try self.freedDescIndices.append(descIndex);
     }
 
-    pub fn setTextureDescriptor(self: *DescriptorMan, tex: *const Texture, flightId: u8, descIndex: u32) !void {
-        const texBase = tex.base[flightId];
-        const viewInf = vhF.getViewCreateInfo(texBase.img, tex.viewType, tex.format, tex.subRange);
+    pub fn queueTextureDescriptor(self: *DescriptorMan, tex: *const Texture, flightId: u8, descIndex: u32) !void {
+        const imgViewPtr = try self.imgViewStorage.appendReturnPtr(
+            vhF.getViewCreateInfo(tex.base[flightId].img, tex.viewType, tex.format, tex.subRange),
+        );
 
-        const imgDescInf = vk.VkImageDescriptorInfoEXT{
-            .sType = vk.VK_STRUCTURE_TYPE_IMAGE_DESCRIPTOR_INFO_EXT,
-            .pView = &viewInf,
-            .layout = vk.VK_IMAGE_LAYOUT_GENERAL, // to DEPTH_STENCIL_READ_ONLY_OPTIMAL for depth?
-        };
-        const resDescInf = vk.VkResourceDescriptorInfoEXT{
-            .sType = vk.VK_STRUCTURE_TYPE_RESOURCE_DESCRIPTOR_INFO_EXT,
-            .type = if (tex.texType == .Color) vk.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE else vk.VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-            .data = .{ .pImage = &imgDescInf },
-        };
-        try self.setDescriptor(&resDescInf, descIndex);
+        const imgDescPtr = try self.imgDescStorage.appendReturnPtr(
+            vk.VkImageDescriptorInfoEXT{
+                .sType = vk.VK_STRUCTURE_TYPE_IMAGE_DESCRIPTOR_INFO_EXT,
+                .pView = imgViewPtr,
+                .layout = vk.VK_IMAGE_LAYOUT_GENERAL, // to DEPTH_STENCIL_READ_ONLY_OPTIMAL for depth?
+            },
+        );
+
+        try self.queuedDescInfos.append(
+            vk.VkResourceDescriptorInfoEXT{
+                .sType = vk.VK_STRUCTURE_TYPE_RESOURCE_DESCRIPTOR_INFO_EXT,
+                .type = if (tex.texType == .Color) vk.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE else vk.VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+                .data = .{ .pImage = imgDescPtr },
+            },
+        );
+
+        try self.queuedHostRanges.append(self.createDescriptorAdressRange(descIndex));
     }
 
-    pub fn setBufferDescriptor(self: *DescriptorMan, gpuAddress: u64, size: u64, descIndex: u32, bufTyp: vhE.BufferType) !void {
-        const addressInf = vk.VkDeviceAddressRangeEXT{
-            .address = gpuAddress,
-            .size = size,
-        };
-        const resDescInf = vk.VkResourceDescriptorInfoEXT{
+    pub fn queueBufferDescriptor(self: *DescriptorMan, gpuAddress: u64, size: u64, descIndex: u32, bufTyp: vhE.BufferType) !void {
+        const devRangePtr = try self.devRangeStorage.appendReturnPtr(
+            vk.VkDeviceAddressRangeEXT{
+                .address = gpuAddress,
+                .size = size,
+            },
+        );
+
+        try self.queuedDescInfos.append(vk.VkResourceDescriptorInfoEXT{
             .sType = vk.VK_STRUCTURE_TYPE_RESOURCE_DESCRIPTOR_INFO_EXT,
             .type = if (bufTyp == .Uniform) vk.VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER else vk.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, // what about other Buffer Types?
-            .data = .{ .pAddressRange = &addressInf },
-        };
-        try self.setDescriptor(&resDescInf, descIndex);
+            .data = .{ .pAddressRange = devRangePtr },
+        });
+
+        try self.queuedHostRanges.append(self.createDescriptorAdressRange(descIndex));
     }
 
-    fn setDescriptor(self: *DescriptorMan, resDescInf: *const vk.VkResourceDescriptorInfoEXT, descIndex: u32) !void {
+    fn createDescriptorAdressRange(self: *DescriptorMan, descIndex: u32) vk.VkHostAddressRangeEXT {
         const finalOffset = self.startOffset + (descIndex * self.descStride);
         const mappedData = @as([*]u8, @ptrCast(self.descHeap.mappedPtr));
 
-        const hostAddrRange = vk.VkHostAddressRangeEXT{
+        return vk.VkHostAddressRangeEXT{
             .address = mappedData + finalOffset,
             .size = self.descStride,
         };
-        try vhF.check(vkFn.vkWriteResourceDescriptorsEXT.?(self.gpi, 1, resDescInf, &hostAddrRange), "Failed to write Descriptor");
+    }
+
+    pub fn updateDescriptors(self: *DescriptorMan) !void {
+        if (self.queuedDescInfos.len == 0) return;
+
+        const descCount: u32 = @intCast(self.queuedDescInfos.len);
+        try vhF.check(vkFn.vkWriteResourceDescriptorsEXT.?(self.gpi, descCount, self.queuedDescInfos.slice().ptr, self.queuedHostRanges.slice().ptr), "Failed to write Descriptor");
+
+        self.queuedDescInfos.clear();
+        self.queuedHostRanges.clear();
+
+        self.imgViewStorage.clear();
+        self.imgDescStorage.clear();
+        self.devRangeStorage.clear();
+
+        if (rc.DESCRIPTOR_DEBUG == true) {}std.debug.print("Descriptors Updated ({})\n", .{descCount});
     }
 };
 

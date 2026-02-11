@@ -113,6 +113,7 @@ pub const Renderer = struct {
     pub fn draw(self: *Renderer, frameData: FrameData) !void {
         const flightId = try self.scheduler.beginFrame();
         try self.resMan.cleanupResources(self.scheduler.totalFrames);
+        try self.resMan.descMan.updateDescriptors();
         const targets = try self.swapMan.getUpdatedTargets(flightId);
 
         if (targets.len == 0) {
@@ -124,7 +125,6 @@ pub const Renderer = struct {
         if (rc.GPU_PROFILING == true) try self.renderGraph.cmdMan.printQueryResults(flightId);
 
         self.imguiMan.newFrame();
-
         self.imguiMan.drawUi();
 
         const cmd = try self.renderGraph.recordFrame(self.passes.items, flightId, self.scheduler.totalFrames, frameData, targets, &self.resMan, &self.shaderMan, &self.imguiMan);
