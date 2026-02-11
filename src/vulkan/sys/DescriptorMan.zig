@@ -145,7 +145,7 @@ pub const DescriptorMan = struct {
         self.imgDescStorage.clear();
         self.devRangeStorage.clear();
 
-        if (rc.DESCRIPTOR_DEBUG == true) {}std.debug.print("Descriptors Updated ({})\n", .{descCount});
+        if (rc.DESCRIPTOR_DEBUG == true) std.debug.print("Descriptors Updated ({})\n", .{descCount});
     }
 };
 

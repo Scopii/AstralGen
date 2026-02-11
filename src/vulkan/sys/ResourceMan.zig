@@ -152,16 +152,16 @@ pub const ResourceMan = struct {
         self.textures.set(texInf.id.val, tex);
     }
 
-    pub fn getBufferDataPtr(self: *ResourceMan, bufId: Buffer.BufId, comptime T: type) !*T {
+    pub fn getBufferDataPtr(self: *ResourceMan, bufId: Buffer.BufId, comptime T: type, flightId: u8) !*T {
         const buffer = try self.getBufferPtr(bufId);
-        if (buffer.bases[0].mappedPtr) |ptr| {
+        if (buffer.bases[flightId].mappedPtr) |ptr| {
             return @as(*T, @ptrCast(@alignCast(ptr)));
         }
         return error.BufferNotHostVisible;
     }
 
-    pub fn printReadbackBuffer(self: *ResourceMan, bufId: Buffer.BufId, comptime T: type) !void {
-        const readbackPtr = try self.getBufferDataPtr(bufId, T);
+    pub fn printReadbackBuffer(self: *ResourceMan, bufId: Buffer.BufId, comptime T: type, flightId: u8) !void {
+        const readbackPtr = try self.getBufferDataPtr(bufId, T, flightId);
         std.debug.print("Readback: {}\n", .{readbackPtr.*});
     }
 
