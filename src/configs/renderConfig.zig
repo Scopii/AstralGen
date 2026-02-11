@@ -15,21 +15,27 @@ pub const VALIDATION = true;
 pub const GPU_VALIDATION = false;
 pub const BEST_PRACTICES = false;
 
-pub const SWAPCHAIN_PROFILING = false;
-pub const CPU_PROFILING = false;
+// Normal Profiling
 pub const GPU_PROFILING = false;
-pub const BARRIER_DEBUG = false;
 pub const GPU_QUERYS = 63;
 pub const GPU_READBACK = false;
+pub const CPU_PROFILING = false;
+pub const SWAPCHAIN_PROFILING = false;
 
-pub const EARLY_GPU_WAIT = true; // Lower Latency, more CPU Stutters (Reflex Mode)
+// Additional Debug Prints
+pub const BARRIER_DEBUG = false;
+pub const DESCRIPTOR_DEBUG = false;
 
 // Rendering, Swapchains and Windows
+pub const EARLY_GPU_WAIT = true; // (Reflex Mode)
 pub const MAX_IN_FLIGHT: u8 = 2; // (Frames)
 pub const DESIRED_SWAPCHAIN_IMAGES: u8 = 3;
 pub const DISPLAY_MODE = vk.VK_PRESENT_MODE_IMMEDIATE_KHR;
 pub const MAX_WINDOWS: u8 = 8;
+pub const RENDER_TEX_AUTO_RESIZE = true;
+pub const RENDER_TEX_STRETCH = true; // Ignored on AUTO_RESIZE
 
+// Resource Information
 pub const BUF_MAX = 63;
 pub const STORAGE_TEX_MAX = 31;
 pub const SAMPLED_TEX_MAX = 31;
@@ -39,19 +45,6 @@ pub const STAGING_BUF_SIZE = 32 * 1024 * 1024; // Bytes
 
 pub const TEX_COLOR_FORMAT = vk.VK_FORMAT_R16G16B16A16_SFLOAT;
 pub const TEX_DEPTH_FORMAT = vk.VK_FORMAT_D32_SFLOAT;
-pub const RENDER_TEX_AUTO_RESIZE = true;
-pub const RENDER_TEX_STRETCH = true; // Ignored on AUTO_RESIZE
-
-// Descriptors and Bindings
-pub const STORAGE_TEX_BINDING = 0;
-pub const STORAGE_BUF_BINDING = 1;
-pub const SAMPLED_TEX_BINDING = 2;
-
-pub const bindingRegistry: []const struct { binding: u32, descType: vk.VkDescriptorType, len: u32 } = &.{
-    .{ .binding = STORAGE_TEX_BINDING, .descType = vk.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, .len = STORAGE_TEX_MAX },
-    .{ .binding = STORAGE_BUF_BINDING, .descType = vk.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, .len = BUF_MAX },
-    .{ .binding = SAMPLED_TEX_BINDING, .descType = vk.VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, .len = SAMPLED_TEX_MAX },
-};
 
 // Buffers
 pub const indirectSB = Buffer.create(.{ .id = .{ .val = 41 }, .mem = .Gpu, .typ = .Indirect, .len = 1, .elementSize = @sizeOf(vhT.IndirectData), .update = .PerFrame });
