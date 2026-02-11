@@ -11,7 +11,7 @@ const vk = @import("../modules/vk.zig").c;
 const sc = @import("shaderConfig.zig");
 
 // Vulkan Validation Layers
-pub const VALIDATION = true;
+pub const VALIDATION = false;
 pub const GPU_VALIDATION = false;
 pub const BEST_PRACTICES = false;
 
