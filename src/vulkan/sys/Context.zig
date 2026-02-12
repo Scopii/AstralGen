@@ -267,15 +267,9 @@ fn createGPI(alloc: Allocator, gpu: vk.VkPhysicalDevice, families: QueueFamilies
     vk.vkGetPhysicalDeviceFeatures(gpu, &features);
     features.shaderInt64 = vk.VK_TRUE;
 
-    var vk14Features = vk.VkPhysicalDeviceVulkan14Features{
-        .sType = vk.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_4_FEATURES,
-        .maintenance5 = vk.VK_TRUE,
-        .pNext = null,
-    };
-
     var descUntypedFeatures = vk.VkPhysicalDeviceShaderUntypedPointersFeaturesKHR{
         .sType = vk.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_UNTYPED_POINTERS_FEATURES_KHR,
-        .pNext = &vk14Features,
+        .pNext = null,
         .shaderUntypedPointers = vk.VK_TRUE,
     };
 
@@ -301,8 +295,15 @@ fn createGPI(alloc: Allocator, gpu: vk.VkPhysicalDevice, families: QueueFamilies
     var dynamicState3Features = vk.VkPhysicalDeviceExtendedDynamicState3FeaturesEXT{
         .sType = vk.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_3_FEATURES_EXT,
         .pNext = &descHeapFeatures,
+        .extendedDynamicState3PolygonMode = vk.VK_TRUE,
+        .extendedDynamicState3RasterizationSamples = vk.VK_TRUE,
+        .extendedDynamicState3SampleMask = vk.VK_TRUE,
+        .extendedDynamicState3DepthClampEnable = vk.VK_TRUE,
         .extendedDynamicState3ColorBlendEnable = vk.VK_TRUE,
+        .extendedDynamicState3ColorBlendEquation = vk.VK_TRUE,
         .extendedDynamicState3ColorWriteMask = vk.VK_TRUE,
+        .extendedDynamicState3AlphaToCoverageEnable = vk.VK_TRUE,
+        .extendedDynamicState3AlphaToOneEnable = vk.VK_TRUE,
     };
 
     var dynamicState2Features = vk.VkPhysicalDeviceExtendedDynamicState2FeaturesEXT{
@@ -313,15 +314,9 @@ fn createGPI(alloc: Allocator, gpu: vk.VkPhysicalDevice, families: QueueFamilies
         .extendedDynamicState2PatchControlPoints = vk.VK_TRUE,
     };
 
-    var dynamicStateFeatures = vk.VkPhysicalDeviceExtendedDynamicStateFeaturesEXT{
-        .sType = vk.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_FEATURES_EXT,
-        .pNext = &dynamicState2Features,
-        .extendedDynamicState = vk.VK_TRUE,
-    };
-
     var shadingRateFeatures = vk.VkPhysicalDeviceFragmentShadingRateFeaturesKHR{
         .sType = vk.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_SHADING_RATE_FEATURES_KHR,
-        .pNext = &dynamicStateFeatures,
+        .pNext = &dynamicState2Features,
         .pipelineFragmentShadingRate = vk.VK_TRUE, // for cmd call
         .primitiveFragmentShadingRate = vk.VK_TRUE, // for Mesh Shader writing
         .attachmentFragmentShadingRate = vk.VK_FALSE, // for images to control rate
@@ -340,19 +335,12 @@ fn createGPI(alloc: Allocator, gpu: vk.VkPhysicalDevice, families: QueueFamilies
         .meshShader = vk.VK_TRUE,
     };
 
-    var descBufferFeatures = vk.VkPhysicalDeviceDescriptorBufferFeaturesEXT{
-        .sType = vk.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_BUFFER_FEATURES_EXT,
-        .pNext = &meshShaderFeatures,
-        .descriptorBuffer = vk.VK_TRUE,
-    };
-
     var vk11Features = vk.VkPhysicalDeviceVulkan11Features{
         .sType = vk.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES,
-        .pNext = &descBufferFeatures,
+        .pNext = &meshShaderFeatures,
         .shaderDrawParameters = vk.VK_TRUE,
-
         .storageBuffer16BitAccess = vk.VK_TRUE, // Allows reading/writing 16-bit values to SSBOs
-        .uniformAndStorageBuffer16BitAccess = vk.VK_TRUE, // UBOs too
+        .uniformAndStorageBuffer16BitAccess = vk.VK_TRUE, // UBOs too ^^
     };
 
     var vk12Features = vk.VkPhysicalDeviceVulkan12Features{
@@ -371,12 +359,18 @@ fn createGPI(alloc: Allocator, gpu: vk.VkPhysicalDevice, families: QueueFamilies
         .pNext = &vk11Features,
     };
 
-    const vk13Features = vk.VkPhysicalDeviceVulkan13Features{
+    var vk13Features = vk.VkPhysicalDeviceVulkan13Features{
         .sType = vk.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
         .dynamicRendering = vk.VK_TRUE,
         .synchronization2 = vk.VK_TRUE,
         .maintenance4 = vk.VK_TRUE,
         .pNext = &vk12Features,
+    };
+
+    const vk14Features = vk.VkPhysicalDeviceVulkan14Features{
+        .sType = vk.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_4_FEATURES,
+        .maintenance5 = vk.VK_TRUE,
+        .pNext = &vk13Features,
     };
 
     const gpuExtensions = [_][*c]const u8{
@@ -396,7 +390,7 @@ fn createGPI(alloc: Allocator, gpu: vk.VkPhysicalDevice, families: QueueFamilies
 
     const createInf = vk.VkDeviceCreateInfo{
         .sType = vk.VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
-        .pNext = &vk13Features,
+        .pNext = &vk14Features,
         .pQueueCreateInfos = queueInfos.items.ptr,
         .queueCreateInfoCount = @intCast(queueInfos.items.len),
         .pEnabledFeatures = &features,
@@ -437,7 +431,7 @@ fn createGPI(alloc: Allocator, gpu: vk.VkPhysicalDevice, families: QueueFamilies
     try loadVkProc(gpi, &vkFn.vkCmdSetAlphaToCoverageEnableEXT, "vkCmdSetAlphaToCoverageEnableEXT");
 
     // Extended Dynamic State 2
-    // try loadVkProc(gpi, &vkFn.vkCmdSetVertexInputEXT, "vkCmdSetVertexInputEXT");
+    try loadVkProc(gpi, &vkFn.vkCmdSetVertexInputEXT, "vkCmdSetVertexInputEXT");
     try loadVkProc(gpi, &vkFn.vkCmdSetLogicOpEnableEXT, "vkCmdSetLogicOpEnableEXT");
     try loadVkProc(gpi, &vkFn.vkCmdSetLogicOpEXT, "vkCmdSetLogicOpEXT");
 
@@ -451,6 +445,13 @@ fn createGPI(alloc: Allocator, gpu: vk.VkPhysicalDevice, families: QueueFamilies
     if (rc.VALIDATION == true) try loadVkProc(gpi, &vkFn.vkSetDebugUtilsObjectNameEXT, "vkSetDebugUtilsObjectNameEXT");
 
     return gpi;
+}
+
+fn checkFeature(name: []const u8, supportBool: vk.VkBool32) !void {
+    if (supportBool == vk.VK_FALSE) {
+        std.log.err("Hardware Feature Missing: {s}", .{name});
+        return error.FeatureNotSupported;
+    }
 }
 
 // Handle can be instance or device
