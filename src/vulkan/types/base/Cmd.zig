@@ -72,7 +72,7 @@ pub const Cmd = struct {
 
     pub fn startQuery(self: *Cmd, pipeStage: vhE.PipeStage, queryId: u8, name: []const u8) void {
         if (self.querys.isKeyUsed(queryId) == true) {
-            std.debug.print("Warning: Query ID {} in use by {s}!", .{ queryId, self.querys.getPtr(queryId).name });
+            std.debug.print("Warning: Query ID {} in use by {s}\n!", .{ queryId, self.querys.getPtr(queryId).name });
             return;
         }
         const idx = self.queryCounter;

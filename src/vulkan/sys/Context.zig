@@ -272,8 +272,10 @@ fn createGPI(alloc: Allocator, gpu: vk.VkPhysicalDevice, families: QueueFamilies
 
     // Untyped Ptr
     try checkFeature("Descriptor Untyped Ptr", supported.descUntyped.shaderUntypedPointers, &needed.descUntyped.shaderUntypedPointers);
+
     // Descriptor Heaps
     try checkFeature("Descriptor Heaps", supported.descHeaps.descriptorHeap, &needed.descHeaps.descriptorHeap);
+
     // Dynamic State 3
     try checkFeature("Polygon Mode", supported.dynState3.extendedDynamicState3PolygonMode, &needed.dynState3.extendedDynamicState3PolygonMode);
     try checkFeature("Raster Samples", supported.dynState3.extendedDynamicState3RasterizationSamples,&needed.dynState3.extendedDynamicState3RasterizationSamples);
@@ -284,23 +286,29 @@ fn createGPI(alloc: Allocator, gpu: vk.VkPhysicalDevice, families: QueueFamilies
     try checkFeature("Color Write Mask", supported.dynState3.extendedDynamicState3ColorWriteMask, &needed.dynState3.extendedDynamicState3ColorWriteMask);
     try checkFeature("Alpha to Coverage", supported.dynState3.extendedDynamicState3AlphaToCoverageEnable, &needed.dynState3.extendedDynamicState3AlphaToCoverageEnable);
     try checkFeature("Alpha to One", supported.dynState3.extendedDynamicState3AlphaToOneEnable, &needed.dynState3.extendedDynamicState3AlphaToOneEnable);
+
     // Dynamic State 2
     try checkFeature("Extended State 2", supported.dynState2.extendedDynamicState2, &needed.dynState2.extendedDynamicState2);
     try checkFeature("Extended State 2 Logic Op", supported.dynState2.extendedDynamicState2LogicOp, &needed.dynState2.extendedDynamicState2LogicOp);
     try checkFeature("Extended State 2 Patch Control", supported.dynState2.extendedDynamicState2PatchControlPoints, &needed.dynState2.extendedDynamicState2PatchControlPoints);
+
     // Vairable Shading Rate
     try checkFeature("Pipeline Fragment Shading Rate", supported.shadingRate.pipelineFragmentShadingRate, &needed.shadingRate.pipelineFragmentShadingRate);
     try checkFeature("Primitive Fragment Shading Rate", supported.shadingRate.primitiveFragmentShadingRate, &needed.shadingRate.primitiveFragmentShadingRate);
     try checkFeature("Attachment Fragment Shading Rate", supported.shadingRate.attachmentFragmentShadingRate, &needed.shadingRate.attachmentFragmentShadingRate);
+
     // Shader Objects
     try checkFeature("Shader Objects", supported.shaderObj.shaderObject, &needed.shaderObj.shaderObject);
+
     // Mesh/Task Shaders
     try checkFeature("Mesh Shaders", supported.meshShaders.meshShader, &needed.meshShaders.meshShader);
     try checkFeature("Task Shaders", supported.meshShaders.taskShader, &needed.meshShaders.taskShader);
+
     // Vk11 Features
     try checkFeature("Shader Draw Parameters", supported.vk11.shaderDrawParameters, &needed.vk11.shaderDrawParameters);
     try checkFeature("Storage Buffer 16Bit Access", supported.vk11.storageBuffer16BitAccess, &needed.vk11.storageBuffer16BitAccess);
     try checkFeature("Uniform/Storage Buffer 16Bit Access", supported.vk11.uniformAndStorageBuffer16BitAccess, &needed.vk11.uniformAndStorageBuffer16BitAccess);
+
     // Vk12 Features
     try checkFeature("Buffer Device Address", supported.vk12.bufferDeviceAddress, &needed.vk12.bufferDeviceAddress);
     try checkFeature("Descriptor Indexing", supported.vk12.descriptorIndexing, &needed.vk12.descriptorIndexing);
@@ -313,12 +321,15 @@ fn createGPI(alloc: Allocator, gpu: vk.VkPhysicalDevice, families: QueueFamilies
     try checkFeature("Shader SampledImg Array-NonUniform-Indexing", supported.vk12.shaderSampledImageArrayNonUniformIndexing, &needed.vk12.shaderSampledImageArrayNonUniformIndexing);
     try checkFeature("Shader Float 16", supported.vk12.shaderFloat16, &needed.vk12.shaderFloat16);
     try checkFeature("Shader Buffer Int64 Atomics", supported.vk12.shaderBufferInt64Atomics, &needed.vk12.shaderBufferInt64Atomics);
+
     // Vk13 Features
     try checkFeature("Dynamic Rendering", supported.vk13.dynamicRendering, &needed.vk13.dynamicRendering);
     try checkFeature("Synchronization 2", supported.vk13.synchronization2, &needed.vk13.synchronization2);
     try checkFeature("Maintenance 4", supported.vk13.maintenance4, &needed.vk13.maintenance4);
+
     // Vk14 Features
     try checkFeature("Maintenance 5", supported.maint5.maintenance5, &needed.maint5.maintenance5);
+
     // Device2 Features
     try checkFeature("Shader Int 64", supported.device.features.shaderInt64, &needed.device.features.shaderInt64);
     try checkFeature("Wide Lines", supported.device.features.wideLines, &needed.device.features.wideLines);
@@ -428,7 +439,6 @@ const DeviceFeatures = struct {
     vk12: vk.VkPhysicalDeviceVulkan12Features,
     vk13: vk.VkPhysicalDeviceVulkan13Features,
     maint5: vk.VkPhysicalDeviceMaintenance5FeaturesKHR,
-
     device: vk.VkPhysicalDeviceFeatures2,
 
     pub fn prepare(self: *DeviceFeatures) void {

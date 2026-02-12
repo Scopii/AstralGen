@@ -207,7 +207,7 @@ pub const RenderGraph = struct {
     }
 
     pub fn recordSwapchainBlits(self: *RenderGraph, cmd: *Cmd, swapchains: []const *Swapchain, resMan: *ResourceMan) !void {
-        cmd.startQuery(.TopOfPipe, 55, "Blits");
+        cmd.startQuery(.TopOfPipe, 54, "Blits Prep");
 
         for (swapchains) |swapchain| { // Render Texture and Swapchain Preperations
             const renderTex = try resMan.getTexturePtr(swapchain.renderTexId);
@@ -215,6 +215,8 @@ pub const RenderGraph = struct {
             try self.checkImageState(&swapchain.textures[swapchain.curIndex], swapchain.subRange, .{ .stage = .Transfer, .access = .TransferWrite, .layout = .TransferDst });
         }
         self.bakeBarriers(cmd, "Blits Prep");
+        cmd.endQuery(.BotOfPipe, 54);
+        cmd.startQuery(.TopOfPipe, 55, "Blits Present");
 
         for (swapchains) |swapchain| { // Blits + Swapchain Presentation Barriers
             const renderTex = try resMan.getTexturePtr(swapchain.renderTexId);

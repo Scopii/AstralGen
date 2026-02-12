@@ -48,7 +48,7 @@ pub const TEX_DEPTH_FORMAT = vk.VK_FORMAT_D32_SFLOAT;
 
 // Buffers
 pub const indirectSB = Buffer.create(.{ .id = .{ .val = 41 }, .mem = .Gpu, .typ = .Indirect, .len = 1, .elementSize = @sizeOf(vhT.IndirectData), .update = .PerFrame });
-pub const readbackSB = Buffer.create(.{ .id = .{ .val = 45 }, .mem = .Gpu, .typ = .Storage, .len = 1, .elementSize = @sizeOf(vhT.ReadbackData), .update = .Overwrite });
+pub const readbackSB = Buffer.create(.{ .id = .{ .val = 45 }, .mem = .CpuRead, .typ = .Storage, .len = 1, .elementSize = @sizeOf(vhT.ReadbackData), .update = .Overwrite });
 
 pub const objectSB = Buffer.create(.{ .id = .{ .val = 1 }, .mem = .Gpu, .typ = .Storage, .len = 100, .elementSize = @sizeOf(Object), .update = .PerFrame });
 pub const cameraUB = Buffer.create(.{ .id = .{ .val = 40 }, .mem = .Gpu, .typ = .Uniform, .len = 1, .elementSize = @sizeOf(CameraData), .update = .PerFrame });

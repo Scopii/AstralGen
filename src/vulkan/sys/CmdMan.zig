@@ -24,14 +24,13 @@ pub const CmdMan = struct {
 
         var props: vk.VkPhysicalDeviceProperties = undefined;
         vk.vkGetPhysicalDeviceProperties(context.gpu, &props);
-        const timestampPeriod = props.limits.timestampPeriod;
 
         return .{
             .alloc = alloc,
             .gpi = gpi,
             .cmdPool = cmdPool,
             .cmds = cmds,
-            .timestampPeriod = timestampPeriod,
+            .timestampPeriod = props.limits.timestampPeriod,
         };
     }
 

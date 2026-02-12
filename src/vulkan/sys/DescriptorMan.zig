@@ -136,7 +136,7 @@ pub const DescriptorMan = struct {
         if (self.queuedDescInfos.len == 0) return;
 
         const descCount: u32 = @intCast(self.queuedDescInfos.len);
-        try vhF.check(vkFn.vkWriteResourceDescriptorsEXT.?(self.gpi, descCount, self.queuedDescInfos.slice().ptr, self.queuedHostRanges.slice().ptr), "Failed to write Descriptor");
+        try vhF.check(vkFn.vkWriteResourceDescriptorsEXT.?(self.gpi, descCount, &self.queuedDescInfos.buffer, &self.queuedHostRanges.buffer), "Failed to write Descriptor");
 
         self.queuedDescInfos.clear();
         self.queuedHostRanges.clear();

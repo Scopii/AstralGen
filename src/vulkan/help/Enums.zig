@@ -54,7 +54,7 @@ pub const PipeStage = enum(vk.VkPipelineStageFlagBits2) { //( SHOULD BE CORRECT 
     Transfer = vk.VK_PIPELINE_STAGE_2_TRANSFER_BIT,
     AllCmds = vk.VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
     BotOfPipe = vk.VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT,
-    //.. more exist
+    //more exist
 };
 
 pub const PipeAccess = enum(vk.VkAccessFlagBits2) {
@@ -79,7 +79,7 @@ pub const PipeAccess = enum(vk.VkAccessFlagBits2) {
     MemoryRead = vk.VK_ACCESS_2_MEMORY_READ_BIT,
     MemoryWrite = vk.VK_ACCESS_2_MEMORY_WRITE_BIT,
     MemoryReadWrite = vk.VK_ACCESS_2_MEMORY_READ_BIT | vk.VK_ACCESS_2_MEMORY_WRITE_BIT,
-    //.. more exist
+    //more exist
 };
 
 pub const ShaderStage = enum(vk.VkShaderStageFlagBits) {
