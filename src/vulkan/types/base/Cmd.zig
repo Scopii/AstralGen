@@ -188,21 +188,6 @@ pub const Cmd = struct {
         vk.vkCmdEndRendering(self.handle);
     }
 
-    pub fn bindDescriptorBuffer(self: *const Cmd, gpuAddress: u64) void {
-        const bufferBindingInf = vk.VkDescriptorBufferBindingInfoEXT{
-            .sType = vk.VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT,
-            .address = gpuAddress,
-            .usage = vk.VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT,
-        };
-        vkFn.vkCmdBindDescriptorBuffersEXT.?(self.handle, 1, &bufferBindingInf);
-    }
-
-    pub fn setDescriptorBufferOffset(self: *const Cmd, bindPoint: vk.VkPipelineBindPoint, pipeLayout: vk.VkPipelineLayout) void {
-        const bufferIndex: u32 = 0;
-        const descOffset: vk.VkDeviceSize = 0;
-        vkFn.vkCmdSetDescriptorBufferOffsetsEXT.?(self.handle, bindPoint, pipeLayout, 0, 1, &bufferIndex, &descOffset);
-    }
-
     pub fn bindDescriptorHeap(self: *const Cmd, heapAddress: u64, heapSize: u64, reservedSize: u64) void {
         const bindInf = vk.VkBindHeapInfoEXT{
             .sType = vk.VK_STRUCTURE_TYPE_BIND_HEAP_INFO_EXT,
@@ -252,14 +237,14 @@ pub const Cmd = struct {
             .minDepth = 0.0,
             .maxDepth = 1.0,
         };
-        vkFn.vkCmdSetViewportWithCount.?(self.handle, 1, &viewport);
+        vk.vkCmdSetViewportWithCount(self.handle, 1, &viewport);
 
         const scissor = vk.VkRect2D{
             .offset = .{ .x = 0, .y = 0 },
             .extent = .{ .width = width, .height = height },
         };
 
-        vkFn.vkCmdSetScissorWithCount.?(self.handle, 1, &scissor);
+        vk.vkCmdSetScissorWithCount(self.handle, 1, &scissor);
 
         const renderInf = vk.VkRenderingInfo{
             .sType = vk.VK_STRUCTURE_TYPE_RENDERING_INFO,
@@ -320,32 +305,32 @@ pub const Cmd = struct {
 
         // Rasterization & Geometry
         vkFn.vkCmdSetPolygonModeEXT.?(cmd, state.polygonMode);
-        vkFn.vkCmdSetCullMode.?(cmd, state.cullMode);
-        vkFn.vkCmdSetFrontFace.?(cmd, state.frontFace);
-        vkFn.vkCmdSetPrimitiveTopology.?(cmd, state.topology);
+        vk.vkCmdSetCullMode(cmd, state.cullMode);
+        vk.vkCmdSetFrontFace(cmd, state.frontFace);
+        vk.vkCmdSetPrimitiveTopology(cmd, state.topology);
 
-        vkFn.vkCmdSetPrimitiveRestartEnable.?(cmd, state.primitiveRestart);
-        vkFn.vkCmdSetRasterizerDiscardEnable.?(cmd, state.rasterDiscard);
+        vk.vkCmdSetPrimitiveRestartEnable(cmd, state.primitiveRestart);
+        vk.vkCmdSetRasterizerDiscardEnable(cmd, state.rasterDiscard);
         vkFn.vkCmdSetRasterizationSamplesEXT.?(cmd, state.rasterSamples);
 
         const sampleMask: u32 = state.sample.sampleMask;
         vkFn.vkCmdSetSampleMaskEXT.?(cmd, state.sample.sampling, &sampleMask);
 
         // Depth & Stencil
-        vkFn.vkCmdSetDepthBoundsTestEnable.?(cmd, state.depthBoundsTest);
-        vkFn.vkCmdSetDepthBiasEnable.?(cmd, state.depthBias);
+        vk.vkCmdSetDepthBoundsTestEnable(cmd, state.depthBoundsTest);
+        vk.vkCmdSetDepthBiasEnable(cmd, state.depthBias);
         vkFn.vkCmdSetDepthClampEnableEXT.?(cmd, state.depthClamp);
 
-        vkFn.vkCmdSetDepthTestEnable.?(cmd, state.depthTest);
-        vkFn.vkCmdSetDepthWriteEnable.?(cmd, state.depthWrite);
-        vkFn.vkCmdSetDepthCompareOp.?(cmd, state.depthCompare);
-        vkFn.vkCmdSetDepthBias.?(cmd, state.depthValues.constant, state.depthValues.clamp, state.depthValues.slope);
+        vk.vkCmdSetDepthTestEnable(cmd, state.depthTest);
+        vk.vkCmdSetDepthWriteEnable(cmd, state.depthWrite);
+        vk.vkCmdSetDepthCompareOp(cmd, state.depthCompare);
+        vk.vkCmdSetDepthBias(cmd, state.depthValues.constant, state.depthValues.clamp, state.depthValues.slope);
 
-        vkFn.vkCmdSetStencilTestEnable.?(cmd, state.stencilTest);
-        vkFn.vkCmdSetStencilOp.?(cmd, state.stencilOp[0], state.stencilOp[1], state.stencilOp[2], state.stencilOp[3], state.stencilOp[4]);
-        vkFn.vkCmdSetStencilCompareMask.?(cmd, state.stencilCompare.faceMask, state.stencilCompare.mask);
-        vkFn.vkCmdSetStencilWriteMask.?(cmd, state.stencilWrite.faceMask, state.stencilWrite.mask);
-        vkFn.vkCmdSetStencilReference.?(cmd, state.stencilReference.faceMask, state.stencilReference.mask);
+        vk.vkCmdSetStencilTestEnable(cmd, state.stencilTest);
+        vk.vkCmdSetStencilOp(cmd, state.stencilOp[0], state.stencilOp[1], state.stencilOp[2], state.stencilOp[3], state.stencilOp[4]);
+        vk.vkCmdSetStencilCompareMask(cmd, state.stencilCompare.faceMask, state.stencilCompare.mask);
+        vk.vkCmdSetStencilWriteMask(cmd, state.stencilWrite.faceMask, state.stencilWrite.mask);
+        vk.vkCmdSetStencilReference(cmd, state.stencilReference.faceMask, state.stencilReference.mask);
 
         // Color & Blending
         const blendEnable = state.colorBlend;
@@ -364,7 +349,7 @@ pub const Cmd = struct {
         vkFn.vkCmdSetColorBlendEquationEXT.?(cmd, 0, 8, &equations);
 
         const blendConsts = [_]f32{ state.blendConstants.red, state.blendConstants.green, state.blendConstants.blue, state.blendConstants.alpha };
-        vkFn.vkCmdSetBlendConstants.?(cmd, &blendConsts);
+        vk.vkCmdSetBlendConstants(cmd, &blendConsts);
 
         const colWriteMask = state.colorWriteMask;
         const colWriteMasks = [_]vk.VkColorComponentFlags{colWriteMask} ** 8;
@@ -377,7 +362,7 @@ pub const Cmd = struct {
         vkFn.vkCmdSetLogicOpEXT.?(cmd, state.logicOpType);
 
         // Advanced / Debug
-        vkFn.vkCmdSetLineWidth.?(cmd, state.lineWidth);
+        vk.vkCmdSetLineWidth(cmd, state.lineWidth);
         vkFn.vkCmdSetConservativeRasterizationModeEXT.?(cmd, state.conservativeRasterMode);
 
         const combinerOps = [_]vk.VkFragmentShadingRateCombinerOpKHR{ state.fragShadingRate.operation, state.fragShadingRate.operation };
