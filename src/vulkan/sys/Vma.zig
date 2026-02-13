@@ -266,15 +266,21 @@ pub const Vma = struct {
         for (0..count) |i| self.freeRawBuffer(buffer.bases[@intCast(i)].handle, buffer.bases[@intCast(i)].allocation);
     }
 
+    pub fn freeBufferBase(self: *const Vma, bufBase: *BufferBase) void {
+        vk.vmaDestroyBuffer(self.handle, bufBase.handle, bufBase.allocation);
+    }
+
     pub fn freeTexture(self: *const Vma, tex: *Texture) void {
         const count = switch (tex.update) {
             .Overwrite => 1,
             .PerFrame => rc.MAX_IN_FLIGHT,
         };
-        for (0..count) |i| {
-            vk.vkDestroyImageView(self.gpi, tex.base[@intCast(i)].view, null);
-            vk.vmaDestroyImage(self.handle, tex.base[@intCast(i)].img, tex.base[@intCast(i)].allocation);
-        }
+        for (0..count) |i| self.freeTextureBase(&tex.base[@intCast(i)]);
+    }
+
+    pub fn freeTextureBase(self: *const Vma, texBase: *TextureBase) void {
+        vk.vkDestroyImageView(self.gpi, texBase.view, null);
+        vk.vmaDestroyImage(self.handle, texBase.img, texBase.allocation);
     }
 };
 
