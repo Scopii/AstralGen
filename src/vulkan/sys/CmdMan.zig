@@ -42,6 +42,7 @@ pub const CmdMan = struct {
 
     pub fn getCmd(self: *CmdMan, flightId: u8) !*Cmd {
         const cmd = &self.cmds[flightId];
+        if (rc.GPU_PROFILING == true) try self.printQueryResults(flightId);
         return cmd;
     }
 

@@ -14,7 +14,6 @@ const Pass = @import("../types/base/Pass.zig").Pass;
 const ImGuiMan = @import("ImGuiMan.zig").ImGuiMan;
 const Context = @import("Context.zig").Context;
 const vk = @import("../../modules/vk.zig").c;
-const vkT = @import("../help/Types.zig");
 const Allocator = std.mem.Allocator;
 const zgui = @import("zgui");
 const std = @import("std");
@@ -111,19 +110,16 @@ pub const Renderer = struct {
     }
 
     pub fn draw(self: *Renderer, frameData: FrameData) !void {
-        if (rc.GPU_READBACK == true) try self.resMan.printReadbackBuffer(.{ .val = 45 }, vkT.ReadbackData, self.scheduler.flightId);
-        const flightId = try self.scheduler.beginFrame();
-        if (rc.GPU_PROFILING == true) try self.renderGraph.cmdMan.printQueryResults(flightId);
+        try self.resMan.update(self.scheduler.flightId, self.scheduler.totalFrames + 1); // + 1?
 
-        try self.resMan.cleanupResources(self.scheduler.totalFrames);
+        const flightId = try self.scheduler.beginFrame();
         const targets = try self.swapMan.getUpdatedTargets(flightId);
 
         self.imguiMan.newFrame();
         self.imguiMan.drawUi();
 
-        try self.resMan.descMan.updateDescriptors();
         const cmd = try self.renderGraph.recordFrame(self.passes.items, flightId, self.scheduler.totalFrames, frameData, targets, &self.resMan, &self.shaderMan, &self.imguiMan);
-        
+
         try self.scheduler.queueSubmit(cmd, targets, self.context.graphicsQ);
         try self.scheduler.queuePresent(targets, self.context.presentQ);
 

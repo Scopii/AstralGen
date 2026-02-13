@@ -7,6 +7,7 @@ const Buffer = @import("../types/res/Buffer.zig").Buffer;
 const rc = @import("../../configs/renderConfig.zig");
 const Context = @import("Context.zig").Context;
 const vk = @import("../../modules/vk.zig").c;
+const vkT = @import("../help/Types.zig");
 const Allocator = std.mem.Allocator;
 const Vma = @import("Vma.zig").Vma;
 const std = @import("std");
@@ -76,6 +77,12 @@ pub const ResourceMan = struct {
 
         self.descMan.deinit(self.vma);
         self.vma.deinit();
+    }
+
+    pub fn update(self: *ResourceMan, flightId: u8, frame: u64) !void {
+        if (rc.GPU_READBACK == true) try self.printReadbackBuffer(rc.readbackSB.id, vkT.ReadbackData, flightId);
+        try self.cleanupResources(frame);
+        try self.descMan.updateDescriptors();
     }
 
     pub fn getBufferResourceSlot(self: *ResourceMan, bufId: Buffer.BufId, flightId: u8) !u32 {
