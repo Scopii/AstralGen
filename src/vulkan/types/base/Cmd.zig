@@ -17,11 +17,12 @@ pub const Query = struct {
 
 pub const Cmd = struct {
     handle: vk.VkCommandBuffer,
+    flightId: u8 = 0,
+    frame: u64 = 0,
     queryPool: vk.VkQueryPool,
     queryCounter: u8 = 0,
     querys: CreateMapArray(Query, rc.GPU_QUERYS, u8, rc.GPU_QUERYS * 2, 0) = .{},
-    flightId: u8 = 0,
-    frame: u64 = 0,
+    renderState: ?RenderState = null,
 
     pub fn init(cmdPool: vk.VkCommandPool, level: vk.VkCommandBufferLevel, gpi: vk.VkDevice) !Cmd {
         const allocInf = vk.VkCommandBufferAllocateInfo{
@@ -59,6 +60,7 @@ pub const Cmd = struct {
         };
         self.flightId = flightId;
         self.frame = frame;
+        self.renderState = null;
         try vhF.check(vk.vkBeginCommandBuffer(self.handle, &beginInf), "could not Begin CmdBuffer");
     }
 
@@ -300,73 +302,90 @@ pub const Cmd = struct {
         vk.vkCmdCopyBuffer(self.handle, srcBuffer, dstBuffer, 1, &copy);
     }
 
-    pub fn setGraphicsState(self: *const Cmd, state: RenderState) void {
+    pub fn updateRenderState(self: *Cmd, new: RenderState) void {
         const cmd = self.handle;
 
+        var old: RenderState = undefined;
+        var force = false;
+
+        if (self.renderState) |renderState| old = renderState else force = true;
+
         // Rasterization & Geometry
-        vkFn.vkCmdSetPolygonModeEXT.?(cmd, state.polygonMode);
-        vk.vkCmdSetCullMode(cmd, state.cullMode);
-        vk.vkCmdSetFrontFace(cmd, state.frontFace);
-        vk.vkCmdSetPrimitiveTopology(cmd, state.topology);
+        if (force or old.polygonMode != new.polygonMode) vkFn.vkCmdSetPolygonModeEXT.?(cmd, new.polygonMode);
+        if (force or old.cullMode != new.cullMode) vk.vkCmdSetCullMode(cmd, new.cullMode);
+        if (force or old.frontFace != new.frontFace) vk.vkCmdSetFrontFace(cmd, new.frontFace);
+        if (force or old.topology != new.topology) vk.vkCmdSetPrimitiveTopology(cmd, new.topology);
 
-        vk.vkCmdSetPrimitiveRestartEnable(cmd, state.primitiveRestart);
-        vk.vkCmdSetRasterizerDiscardEnable(cmd, state.rasterDiscard);
-        vkFn.vkCmdSetRasterizationSamplesEXT.?(cmd, state.rasterSamples);
+        if (force or old.primitiveRestart != new.primitiveRestart) vk.vkCmdSetPrimitiveRestartEnable(cmd, new.primitiveRestart);
+        if (force or old.rasterDiscard != new.rasterDiscard) vk.vkCmdSetRasterizerDiscardEnable(cmd, new.rasterDiscard);
+        if (force or old.rasterSamples != new.rasterSamples) vkFn.vkCmdSetRasterizationSamplesEXT.?(cmd, new.rasterSamples);
 
-        const sampleMask: u32 = state.sample.sampleMask;
-        vkFn.vkCmdSetSampleMaskEXT.?(cmd, state.sample.sampling, &sampleMask);
+        const sampleMask: u32 = new.sample.sampleMask;
+        if (force or !std.meta.eql(old.sample, new.sample)) vkFn.vkCmdSetSampleMaskEXT.?(cmd, new.sample.sampling, &sampleMask);
 
         // Depth & Stencil
-        vk.vkCmdSetDepthBoundsTestEnable(cmd, state.depthBoundsTest);
-        vk.vkCmdSetDepthBiasEnable(cmd, state.depthBias);
-        vkFn.vkCmdSetDepthClampEnableEXT.?(cmd, state.depthClamp);
+        if (force or old.depthBoundsTest != new.depthBoundsTest) vk.vkCmdSetDepthBoundsTestEnable(cmd, new.depthBoundsTest);
+        if (force or old.depthBias != new.depthBias) vk.vkCmdSetDepthBiasEnable(cmd, new.depthBias);
+        if (force or old.depthClamp != new.depthClamp) vkFn.vkCmdSetDepthClampEnableEXT.?(cmd, new.depthClamp);
 
-        vk.vkCmdSetDepthTestEnable(cmd, state.depthTest);
-        vk.vkCmdSetDepthWriteEnable(cmd, state.depthWrite);
-        vk.vkCmdSetDepthCompareOp(cmd, state.depthCompare);
-        vk.vkCmdSetDepthBias(cmd, state.depthValues.constant, state.depthValues.clamp, state.depthValues.slope);
+        if (force or old.depthTest != new.depthTest) vk.vkCmdSetDepthTestEnable(cmd, new.depthTest);
+        if (force or old.depthWrite != new.depthWrite) vk.vkCmdSetDepthWriteEnable(cmd, new.depthWrite);
+        if (force or old.depthCompare != new.depthCompare) vk.vkCmdSetDepthCompareOp(cmd, new.depthCompare);
+        if (force or !std.meta.eql(old.depthValues, new.depthValues)) vk.vkCmdSetDepthBias(cmd, new.depthValues.constant, new.depthValues.clamp, new.depthValues.slope);
 
-        vk.vkCmdSetStencilTestEnable(cmd, state.stencilTest);
-        vk.vkCmdSetStencilOp(cmd, state.stencilOp[0], state.stencilOp[1], state.stencilOp[2], state.stencilOp[3], state.stencilOp[4]);
-        vk.vkCmdSetStencilCompareMask(cmd, state.stencilCompare.faceMask, state.stencilCompare.mask);
-        vk.vkCmdSetStencilWriteMask(cmd, state.stencilWrite.faceMask, state.stencilWrite.mask);
-        vk.vkCmdSetStencilReference(cmd, state.stencilReference.faceMask, state.stencilReference.mask);
+        if (force or old.stencilTest != new.stencilTest) vk.vkCmdSetStencilTestEnable(cmd, new.stencilTest);
+        if (force or !std.meta.eql(old.stencilOp, new.stencilOp)) vk.vkCmdSetStencilOp(cmd, new.stencilOp[0], new.stencilOp[1], new.stencilOp[2], new.stencilOp[3], new.stencilOp[4]);
+        if (force or !std.meta.eql(old.stencilCompare, new.stencilCompare)) vk.vkCmdSetStencilCompareMask(cmd, new.stencilCompare.faceMask, new.stencilCompare.mask);
+        if (force or !std.meta.eql(old.stencilWrite, new.stencilWrite)) vk.vkCmdSetStencilWriteMask(cmd, new.stencilWrite.faceMask, new.stencilWrite.mask);
+        if (force or !std.meta.eql(old.stencilReference, new.stencilReference)) vk.vkCmdSetStencilReference(cmd, new.stencilReference.faceMask, new.stencilReference.mask);
 
         // Color & Blending
-        const blendEnable = state.colorBlend;
+        const blendEnable = new.colorBlend;
         const colorBlendAttachments = [_]vk.VkBool32{blendEnable} ** 8;
-        vkFn.vkCmdSetColorBlendEnableEXT.?(cmd, 0, 8, &colorBlendAttachments);
+        if (force or old.colorBlend != new.colorBlend) vkFn.vkCmdSetColorBlendEnableEXT.?(cmd, 0, 8, &colorBlendAttachments);
+
+        const oldBlendEquation = vk.VkColorBlendEquationEXT{
+            .srcColorBlendFactor = old.colorBlendEquation.srcColor,
+            .dstColorBlendFactor = old.colorBlendEquation.dstColor,
+            .colorBlendOp = old.colorBlendEquation.colorOperation,
+            .srcAlphaBlendFactor = old.colorBlendEquation.srcAlpha,
+            .dstAlphaBlendFactor = old.colorBlendEquation.dstAlpha,
+            .alphaBlendOp = old.colorBlendEquation.alphaOperation,
+        };
 
         const blendEquation = vk.VkColorBlendEquationEXT{
-            .srcColorBlendFactor = state.colorBlendEquation.srcColor,
-            .dstColorBlendFactor = state.colorBlendEquation.dstColor,
-            .colorBlendOp = state.colorBlendEquation.colorOperation,
-            .srcAlphaBlendFactor = state.colorBlendEquation.srcAlpha,
-            .dstAlphaBlendFactor = state.colorBlendEquation.dstAlpha,
-            .alphaBlendOp = state.colorBlendEquation.alphaOperation,
+            .srcColorBlendFactor = new.colorBlendEquation.srcColor,
+            .dstColorBlendFactor = new.colorBlendEquation.dstColor,
+            .colorBlendOp = new.colorBlendEquation.colorOperation,
+            .srcAlphaBlendFactor = new.colorBlendEquation.srcAlpha,
+            .dstAlphaBlendFactor = new.colorBlendEquation.dstAlpha,
+            .alphaBlendOp = new.colorBlendEquation.alphaOperation,
         };
         const equations = [_]vk.VkColorBlendEquationEXT{blendEquation} ** 8;
-        vkFn.vkCmdSetColorBlendEquationEXT.?(cmd, 0, 8, &equations);
+        if (force or !std.meta.eql(oldBlendEquation, blendEquation)) vkFn.vkCmdSetColorBlendEquationEXT.?(cmd, 0, 8, &equations);
 
-        const blendConsts = [_]f32{ state.blendConstants.red, state.blendConstants.green, state.blendConstants.blue, state.blendConstants.alpha };
-        vk.vkCmdSetBlendConstants(cmd, &blendConsts);
+        const oldBlendConsts = [_]f32{ old.blendConstants.red, old.blendConstants.green, old.blendConstants.blue, old.blendConstants.alpha };
+        const blendConsts = [_]f32{ new.blendConstants.red, new.blendConstants.green, new.blendConstants.blue, new.blendConstants.alpha };
+        if (force or !std.meta.eql(oldBlendConsts, blendConsts)) vk.vkCmdSetBlendConstants(cmd, &blendConsts);
 
-        const colWriteMask = state.colorWriteMask;
-        const colWriteMasks = [_]vk.VkColorComponentFlags{colWriteMask} ** 8;
-        vkFn.vkCmdSetColorWriteMaskEXT.?(cmd, 0, 8, &colWriteMasks);
+        const colWriteMasks = [_]vk.VkColorComponentFlags{new.colorWriteMask} ** 8;
+        if (force or old.colorWriteMask != new.colorWriteMask) vkFn.vkCmdSetColorWriteMaskEXT.?(cmd, 0, 8, &colWriteMasks);
 
-        vkFn.vkCmdSetAlphaToOneEnableEXT.?(cmd, state.alphaToOne);
-        vkFn.vkCmdSetAlphaToCoverageEnableEXT.?(cmd, state.alphaToCoverage);
+        if (force or old.alphaToOne != new.alphaToOne) vkFn.vkCmdSetAlphaToOneEnableEXT.?(cmd, new.alphaToOne);
+        if (force or old.alphaToCoverage != new.alphaToCoverage) vkFn.vkCmdSetAlphaToCoverageEnableEXT.?(cmd, new.alphaToCoverage);
 
-        vkFn.vkCmdSetLogicOpEnableEXT.?(cmd, state.logicOp);
-        vkFn.vkCmdSetLogicOpEXT.?(cmd, state.logicOpType);
+        if (force or old.logicOp != new.logicOp) vkFn.vkCmdSetLogicOpEnableEXT.?(cmd, new.logicOp);
+        if (force or old.logicOpType != new.logicOpType) vkFn.vkCmdSetLogicOpEXT.?(cmd, new.logicOpType);
 
         // Advanced / Debug
-        vk.vkCmdSetLineWidth(cmd, state.lineWidth);
-        vkFn.vkCmdSetConservativeRasterizationModeEXT.?(cmd, state.conservativeRasterMode);
+        if (force or old.lineWidth != new.lineWidth) vk.vkCmdSetLineWidth(cmd, new.lineWidth);
+        if (force or old.conservativeRasterMode != new.conservativeRasterMode) vkFn.vkCmdSetConservativeRasterizationModeEXT.?(cmd, new.conservativeRasterMode);
 
-        const combinerOps = [_]vk.VkFragmentShadingRateCombinerOpKHR{ state.fragShadingRate.operation, state.fragShadingRate.operation };
-        vkFn.vkCmdSetFragmentShadingRateKHR.?(cmd, &.{ .width = state.fragShadingRate.width, .height = state.fragShadingRate.height }, &combinerOps);
+        const combinerOps = [_]vk.VkFragmentShadingRateCombinerOpKHR{ new.fragShadingRate.operation, new.fragShadingRate.operation };
+        const extent = vk.VkExtent2D{ .width = new.fragShadingRate.width, .height = new.fragShadingRate.height };
+        if (force or !std.meta.eql(old.fragShadingRate, new.fragShadingRate)) vkFn.vkCmdSetFragmentShadingRateKHR.?(cmd, &extent, &combinerOps);
+
+        self.renderState = new;
     }
 
     pub fn createSubmitInfo(self: *const Cmd) vk.VkCommandBufferSubmitInfo {

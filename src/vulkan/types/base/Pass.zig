@@ -30,7 +30,7 @@ pub const Pass = struct {
     };
 
     pub const ClassicPass = struct {
-        state: RenderState = .{},
+        renderState: RenderState = .{},
         mainTexId: Texture.TexId,
         colorAtts: []const Attachment,
         depthAtt: ?Attachment = null,

@@ -158,7 +158,7 @@ pub const RenderGraph = struct {
 
             switch (pass.typ) {
                 .classic => |classic| {
-                    cmd.setGraphicsState(classic.state);
+                    cmd.updateRenderState(classic.renderState);
                     try recordGraphics(cmd, pushData.width, pushData.height, classic, resMan);
                 },
                 .compute => |comp| try recordCompute(cmd, comp.workgroups, comp.mainTexId, resMan),
