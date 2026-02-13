@@ -1,9 +1,9 @@
 const ShaderId = @import("../../../core/ShaderCompiler.zig").ShaderInf.ShaderId;
 const RenderState = @import("../base/RenderState.zig").RenderState;
 const TextureBase = @import("../res/TextureBase.zig").TextureBase;
+const TextureMeta = @import("../res/TextureMeta.zig").TextureMeta;
 const BufferBase = @import("../res/BufferBase.zig").BufferBase;
-const Texture = @import("../res/Texture.zig").Texture;
-const Buffer = @import("../res/Buffer.zig").Buffer;
+const BufferMeta = @import("../res/BufferMeta.zig").BufferMeta;
 const vhE = @import("../../help/Enums.zig");
 
 pub const Pass = struct {
@@ -26,12 +26,12 @@ pub const Pass = struct {
 
     const ComputePass = struct {
         workgroups: Dispatch,
-        mainTexId: ?Texture.TexId = null,
+        mainTexId: ?TextureMeta.TexId = null,
     };
 
     pub const ClassicPass = struct {
         renderState: RenderState = .{},
-        mainTexId: Texture.TexId,
+        mainTexId: TextureMeta.TexId,
         colorAtts: []const Attachment,
         depthAtt: ?Attachment = null,
         stencilAtt: ?Attachment = null,
@@ -45,7 +45,7 @@ pub const Pass = struct {
 
         const TaskMesh = struct {
             workgroups: Dispatch,
-            indirectBuf: ?struct { id: Buffer.BufId, offset: u64 = 0 } = null,
+            indirectBuf: ?struct { id: BufferMeta.BufId, offset: u64 = 0 } = null,
         };
 
         pub fn taskMeshData(data: TaskMesh) ClassicTyp {
@@ -69,7 +69,7 @@ pub const Pass = struct {
         return .{ .compute = data };
     }
 
-    pub fn getMainTexId(self: *const Pass) ?Texture.TexId {
+    pub fn getMainTexId(self: *const Pass) ?TextureMeta.TexId {
         return switch (self.typ) {
             .classic => |classic| classic.mainTexId,
             .compute => |compute| compute.mainTexId,
@@ -99,13 +99,13 @@ pub const Pass = struct {
 };
 
 pub const Attachment = struct {
-    texId: Texture.TexId,
+    texId: TextureMeta.TexId,
     stage: vhE.PipeStage = .TopOfPipe,
     access: vhE.PipeAccess = .None,
     layout: vhE.ImageLayout = .General,
     clear: bool,
 
-    pub fn init(id: Texture.TexId, stage: vhE.PipeStage, access: vhE.PipeAccess, clear: bool) Attachment {
+    pub fn init(id: TextureMeta.TexId, stage: vhE.PipeStage, access: vhE.PipeAccess, clear: bool) Attachment {
         return .{ .texId = id, .stage = stage, .access = access, .layout = .Attachment, .clear = clear };
     }
 
@@ -115,13 +115,13 @@ pub const Attachment = struct {
 };
 
 pub const TextureUse = struct {
-    texId: Texture.TexId,
+    texId: TextureMeta.TexId,
     stage: vhE.PipeStage = .TopOfPipe,
     access: vhE.PipeAccess = .None,
     layout: vhE.ImageLayout = .General,
     shaderSlot: ?u32 = null,
 
-    pub fn init(id: Texture.TexId, stage: vhE.PipeStage, access: vhE.PipeAccess, layout: vhE.ImageLayout, shaderSlot: ?u8) TextureUse {
+    pub fn init(id: TextureMeta.TexId, stage: vhE.PipeStage, access: vhE.PipeAccess, layout: vhE.ImageLayout, shaderSlot: ?u8) TextureUse {
         return .{ .texId = id, .stage = stage, .access = access, .layout = layout, .shaderSlot = if (shaderSlot) |slot| slot else null };
     }
 
@@ -131,12 +131,12 @@ pub const TextureUse = struct {
 };
 
 pub const BufferUse = struct {
-    bufId: Buffer.BufId,
+    bufId: BufferMeta.BufId,
     stage: vhE.PipeStage = .TopOfPipe,
     access: vhE.PipeAccess = .None,
     shaderSlot: ?u32 = null,
 
-    pub fn init(bufId: Buffer.BufId, stage: vhE.PipeStage, access: vhE.PipeAccess, shaderSlot: ?u8) BufferUse {
+    pub fn init(bufId: BufferMeta.BufId, stage: vhE.PipeStage, access: vhE.PipeAccess, shaderSlot: ?u8) BufferUse {
         return .{ .bufId = bufId, .stage = stage, .access = access, .shaderSlot = if (shaderSlot) |slot| slot else null };
     }
 

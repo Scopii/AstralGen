@@ -1,9 +1,10 @@
 const CreateMapArray = @import("../../structures/MapArray.zig").CreateMapArray;
+const TextureMeta = @import("../types/res/TextureMeta.zig").TextureMeta;
 const FixedList = @import("../../structures/FixedList.zig").FixedList;
+const BufferMeta = @import("../types/res/BufferMeta.zig").BufferMeta;
+const BufferBase = @import("../types/res/BufferBase.zig").BufferBase;
 const DescriptorMan = @import("DescriptorMan.zig").DescriptorMan;
 const PushData = @import("../types/res/PushData.zig").PushData;
-const Texture = @import("../types/res/Texture.zig").Texture;
-const Buffer = @import("../types/res/Buffer.zig").Buffer;
 const rc = @import("../../configs/renderConfig.zig");
 const Context = @import("Context.zig").Context;
 const vk = @import("../../modules/vk.zig").c;
@@ -12,11 +13,9 @@ const Allocator = std.mem.Allocator;
 const Vma = @import("Vma.zig").Vma;
 const std = @import("std");
 
-const BufferBase = @import("../types/res/BufferBase.zig").BufferBase;
-
 pub const Transfer = struct {
     srcOffset: u64,
-    dstResId: Buffer.BufId,
+    dstResId: BufferMeta.BufId,
     dstOffset: u64,
     size: u64,
 };
@@ -24,13 +23,13 @@ pub const Transfer = struct {
 pub const ResourceMan = struct {
     vma: Vma,
     descMan: DescriptorMan,
-    buffers: CreateMapArray(Buffer, rc.BUF_MAX, u32, rc.BUF_MAX, 0) = .{},
-    textures: CreateMapArray(Texture, rc.TEX_MAX, u32, rc.TEX_MAX, 0) = .{},
+    buffers: CreateMapArray(BufferMeta, rc.BUF_MAX, u32, rc.BUF_MAX, 0) = .{},
+    textures: CreateMapArray(TextureMeta, rc.TEX_MAX, u32, rc.TEX_MAX, 0) = .{},
 
     realFramesInFlights: [rc.MAX_IN_FLIGHT]u64 = .{0} ** rc.MAX_IN_FLIGHT,
 
-    bufToDeleteLists: [rc.MAX_IN_FLIGHT + 1]FixedList(Buffer, rc.BUF_MAX),
-    texToDeleteLists: [rc.MAX_IN_FLIGHT + 1]FixedList(Texture, rc.TEX_MAX),
+    bufToDeleteLists: [rc.MAX_IN_FLIGHT + 1]FixedList(BufferMeta, rc.BUF_MAX),
+    texToDeleteLists: [rc.MAX_IN_FLIGHT + 1]FixedList(TextureMeta, rc.TEX_MAX),
 
     stagingBuffers: [rc.MAX_IN_FLIGHT]BufferBase,
     stagingOffsets: [rc.MAX_IN_FLIGHT]u64 = .{0} ** rc.MAX_IN_FLIGHT,
@@ -45,10 +44,10 @@ pub const ResourceMan = struct {
         var transfers: [rc.MAX_IN_FLIGHT]std.array_list.Managed(Transfer) = undefined;
         for (0..rc.MAX_IN_FLIGHT) |i| transfers[i] = std.array_list.Managed(Transfer).init(alloc);
 
-        var bufToDeleteList: [rc.MAX_IN_FLIGHT + 1]FixedList(Buffer, rc.BUF_MAX) = undefined;
+        var bufToDeleteList: [rc.MAX_IN_FLIGHT + 1]FixedList(BufferMeta, rc.BUF_MAX) = undefined;
         for (0..bufToDeleteList.len) |i| bufToDeleteList[i] = .{};
 
-        var texToDeleteLists: [rc.MAX_IN_FLIGHT + 1]FixedList(Texture, rc.TEX_MAX) = undefined;
+        var texToDeleteLists: [rc.MAX_IN_FLIGHT + 1]FixedList(TextureMeta, rc.TEX_MAX) = undefined;
         for (0..texToDeleteLists.len) |i| texToDeleteLists[i] = .{};
 
         return .{
@@ -85,13 +84,13 @@ pub const ResourceMan = struct {
         try self.descMan.updateDescriptors();
     }
 
-    pub fn getBufferResourceSlot(self: *ResourceMan, bufId: Buffer.BufId, flightId: u8) !u32 {
+    pub fn getBufferResourceSlot(self: *ResourceMan, bufId: BufferMeta.BufId, flightId: u8) !u32 {
         const buf = try self.getBufferPtr(bufId);
         const updateFlightId = if (buf.typ == .Indirect) flightId else buf.updateId;
         return buf.descIndices[updateFlightId];
     }
 
-    pub fn getTextureResourceSlot(self: *ResourceMan, texId: Texture.TexId, flightId: u8) !u32 {
+    pub fn getTextureResourceSlot(self: *ResourceMan, texId: TextureMeta.TexId, flightId: u8) !u32 {
         const tex = try self.getTexturePtr(texId);
         return tex.descIndices[flightId];
     }
@@ -101,15 +100,15 @@ pub const ResourceMan = struct {
         self.transfers[flightId].clearRetainingCapacity();
     }
 
-    pub fn getTexturePtr(self: *ResourceMan, texId: Texture.TexId) !*Texture {
+    pub fn getTexturePtr(self: *ResourceMan, texId: TextureMeta.TexId) !*TextureMeta {
         if (self.textures.isKeyUsed(texId.val) == true) return self.textures.getPtr(texId.val) else return error.TextureIdNotUsed;
     }
 
-    pub fn getBufferPtr(self: *ResourceMan, bufId: Buffer.BufId) !*Buffer {
+    pub fn getBufferPtr(self: *ResourceMan, bufId: BufferMeta.BufId) !*BufferMeta {
         if (self.buffers.isKeyUsed(bufId.val) == true) return self.buffers.getPtr(bufId.val) else return error.BufferIdNotUsed;
     }
 
-    pub fn createBuffer(self: *ResourceMan, bufInf: Buffer.BufInf) !void {
+    pub fn createBuffer(self: *ResourceMan, bufInf: BufferMeta.BufInf) !void {
         var buffer = try self.vma.allocDefinedBuffer(bufInf);
 
         switch (bufInf.update) {
@@ -135,7 +134,7 @@ pub const ResourceMan = struct {
         self.buffers.set(bufInf.id.val, buffer);
     }
 
-    pub fn createTexture(self: *ResourceMan, texInf: Texture.TexInf) !void {
+    pub fn createTexture(self: *ResourceMan, texInf: TextureMeta.TexInf) !void {
         var tex = try self.vma.allocDefinedTexture(texInf);
 
         switch (texInf.update) {
@@ -159,7 +158,7 @@ pub const ResourceMan = struct {
         self.textures.set(texInf.id.val, tex);
     }
 
-    pub fn getBufferDataPtr(self: *ResourceMan, bufId: Buffer.BufId, comptime T: type, flightId: u8) !*T {
+    pub fn getBufferDataPtr(self: *ResourceMan, bufId: BufferMeta.BufId, comptime T: type, flightId: u8) !*T {
         const buffer = try self.getBufferPtr(bufId);
         if (buffer.bases[flightId].mappedPtr) |ptr| {
             return @as(*T, @ptrCast(@alignCast(ptr)));
@@ -167,12 +166,12 @@ pub const ResourceMan = struct {
         return error.BufferNotHostVisible;
     }
 
-    pub fn printReadbackBuffer(self: *ResourceMan, bufId: Buffer.BufId, comptime T: type, flightId: u8) !void {
+    pub fn printReadbackBuffer(self: *ResourceMan, bufId: BufferMeta.BufId, comptime T: type, flightId: u8) !void {
         const readbackPtr = try self.getBufferDataPtr(bufId, T, flightId);
         std.debug.print("Readback: {}\n", .{readbackPtr.*});
     }
 
-    pub fn updateBuffer(self: *ResourceMan, bufInf: Buffer.BufInf, data: anytype, flightId: u8) !void {
+    pub fn updateBuffer(self: *ResourceMan, bufInf: BufferMeta.BufInf, data: anytype, flightId: u8) !void {
         const DataType = @TypeOf(data);
         const bytes: []const u8 = switch (@typeInfo(DataType)) {
             .pointer => |ptr| switch (ptr.size) {
@@ -209,13 +208,13 @@ pub const ResourceMan = struct {
         buffer.updateId = flightId;
     }
 
-    pub fn queueTextureDestruction(self: *ResourceMan, texId: Texture.TexId, curFrame: u64) !void {
+    pub fn queueTextureDestruction(self: *ResourceMan, texId: TextureMeta.TexId, curFrame: u64) !void {
         const tex = try self.getTexturePtr(texId);
         try self.texToDeleteLists[curFrame % rc.MAX_IN_FLIGHT + 1].append(tex.*);
         self.textures.removeAtKey(texId.val);
     }
 
-    pub fn queueBufferDestruction(self: *ResourceMan, bufId: Buffer.BufId, curFrame: u64) !void {
+    pub fn queueBufferDestruction(self: *ResourceMan, bufId: BufferMeta.BufId, curFrame: u64) !void {
         const buf = try self.getBufferPtr(bufId);
         try self.bufToDeleteLists[curFrame % rc.MAX_IN_FLIGHT + 1].append(buf.*);
         self.buffers.removeAtKey(bufId.val);
@@ -240,7 +239,7 @@ pub const ResourceMan = struct {
         }
     }
 
-    fn destroyTexture(self: *ResourceMan, tex: *Texture) !void {
+    fn destroyTexture(self: *ResourceMan, tex: *TextureMeta) !void {
         self.vma.freeTexture(tex);
 
         const count = switch (tex.update) {
@@ -250,7 +249,7 @@ pub const ResourceMan = struct {
         for (0..count) |i| try self.descMan.freeDescriptor(tex.descIndices[i]);
     }
 
-    fn destroyBuffer(self: *ResourceMan, buf: *Buffer) !void {
+    fn destroyBuffer(self: *ResourceMan, buf: *BufferMeta) !void {
         self.vma.freeBuffer(buf);
 
         const count = switch (buf.update) {

@@ -4,7 +4,7 @@ const PushData = @import("PushData.zig").PushData;
 const vk = @import("../../../modules/vk.zig").c;
 const vhE = @import("../../help/Enums.zig");
 
-pub const Texture = struct {
+pub const TextureMeta = struct {
     descIndices: [rc.MAX_IN_FLIGHT]u32 = .{0} ** rc.MAX_IN_FLIGHT,
     base: [rc.MAX_IN_FLIGHT]TextureBase,
 

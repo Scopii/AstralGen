@@ -1,8 +1,8 @@
 const TextureBase = @import("../types/res/TextureBase.zig").TextureBase;
 const DescriptorBuffer = @import("DescriptorMan.zig").DescriptorBuffer;
+const TextureMeta = @import("../types/res/TextureMeta.zig").TextureMeta;
+const BufferMeta = @import("../types/res/BufferMeta.zig").BufferMeta;
 const BufferBase = @import("../types/res/BufferBase.zig").BufferBase;
-const Texture = @import("../types/res/Texture.zig").Texture;
-const Buffer = @import("../types/res/Buffer.zig").Buffer;
 const rc = @import("../../configs/renderConfig.zig");
 const vkFn = @import("../../modules/vk.zig");
 const vhF = @import("../help/Functions.zig");
@@ -87,7 +87,7 @@ pub const Vma = struct {
         std.debug.print("(is in {s}, CPU {s})\n", .{ memory, visible });
     }
 
-    pub fn allocDefinedBuffer(self: *const Vma, bufInf: Buffer.BufInf) !Buffer {
+    pub fn allocDefinedBuffer(self: *const Vma, bufInf: BufferMeta.BufInf) !BufferMeta {
         const dataSize = bufInf.elementSize;
         if (dataSize == 0) {
             std.debug.print("Binding Info has invalid element size\n", .{});
@@ -202,7 +202,7 @@ pub const Vma = struct {
         };
     }
 
-    pub fn allocDefinedTexture(self: *Vma, texInf: Texture.TexInf) !Texture {
+    pub fn allocDefinedTexture(self: *Vma, texInf: TextureMeta.TexInf) !TextureMeta {
         const memType: vk.VmaMemoryUsage = switch (texInf.mem) {
             .Gpu => vk.VMA_MEMORY_USAGE_GPU_ONLY,
             .CpuWrite => vk.VMA_MEMORY_USAGE_CPU_TO_GPU,
@@ -258,7 +258,7 @@ pub const Vma = struct {
         vk.vmaDestroyBuffer(self.handle, buffer, allocation);
     }
 
-    pub fn freeBuffer(self: *const Vma, buffer: *Buffer) void {
+    pub fn freeBuffer(self: *const Vma, buffer: *BufferMeta) void {
         const count = switch (buffer.update) {
             .Overwrite => 1,
             .PerFrame => rc.MAX_IN_FLIGHT,
@@ -270,7 +270,7 @@ pub const Vma = struct {
         vk.vmaDestroyBuffer(self.handle, bufBase.handle, bufBase.allocation);
     }
 
-    pub fn freeTexture(self: *const Vma, tex: *Texture) void {
+    pub fn freeTexture(self: *const Vma, tex: *TextureMeta) void {
         const count = switch (tex.update) {
             .Overwrite => 1,
             .PerFrame => rc.MAX_IN_FLIGHT,

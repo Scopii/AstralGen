@@ -4,7 +4,7 @@ const PushData = @import("PushData.zig").PushData;
 const vk = @import("../../../modules/vk.zig").c;
 const vhE = @import("../../help/Enums.zig");
 
-pub const Buffer = struct {
+pub const BufferMeta = struct {
     bases: [rc.MAX_IN_FLIGHT]BufferBase,
     descIndices: [rc.MAX_IN_FLIGHT]u32 = .{0} ** rc.MAX_IN_FLIGHT,
 
@@ -14,7 +14,7 @@ pub const Buffer = struct {
     update: vhE.UpdateType,
 
     pub const BufId = packed struct { val: u32 };
-    
+
     pub const BufInf = struct {
         id: BufId,
         mem: vhE.MemUsage,

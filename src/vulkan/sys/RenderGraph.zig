@@ -1,11 +1,11 @@
 const TextureBase = @import("../types/res/TextureBase.zig").TextureBase;
+const TexId = @import("../types/res/TextureMeta.zig").TextureMeta.TexId;
+const BufferMeta = @import("../types/res/BufferMeta.zig").BufferMeta;
 const BufferBase = @import("../types/res/BufferBase.zig").BufferBase;
 const Swapchain = @import("../types/base/Swapchain.zig").Swapchain;
-const TexId = @import("../types/res/Texture.zig").Texture.TexId;
 const PushData = @import("../types/res/PushData.zig").PushData;
 const ResourceMan = @import("ResourceMan.zig").ResourceMan;
 const ShaderManager = @import("ShaderMan.zig").ShaderMan;
-const Buffer = @import("../types/res/Buffer.zig").Buffer;
 const rc = @import("../../configs/renderConfig.zig");
 const FrameData = @import("../../App.zig").FrameData;
 const Pass = @import("../types/base/Pass.zig").Pass;
@@ -216,7 +216,7 @@ pub const RenderGraph = struct {
         }
         self.bakeBarriers(cmd, "Blits Prep");
         cmd.endQuery(.BotOfPipe, 54);
-        
+
         cmd.startQuery(.TopOfPipe, 55, "Blits Present");
 
         for (swapchains) |swapchain| { // Blits + Swapchain Presentation Barriers

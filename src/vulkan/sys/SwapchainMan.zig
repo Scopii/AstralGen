@@ -1,6 +1,6 @@
 const CreateMapArray = @import("../../structures/MapArray.zig").CreateMapArray;
+const TexId = @import("../types/res/TextureMeta.zig").TextureMeta.TexId;
 const Swapchain = @import("../types/base/Swapchain.zig").Swapchain;
-const TexId = @import("../types/res/Texture.zig").Texture.TexId;
 const Window = @import("../../platform/Window.zig").Window;
 const rc = @import("../../configs/renderConfig.zig");
 const Context = @import("Context.zig").Context;

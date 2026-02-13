@@ -1,5 +1,5 @@
 const TextureBase = @import("../res/TextureBase.zig").TextureBase;
-const TexId = @import("../res/Texture.zig").Texture.TexId;
+const TexId = @import("../res/TextureMeta.zig").TextureMeta.TexId;
 const rc = @import("../../../configs/renderConfig.zig");
 const vk = @import("../../../modules/vk.zig").c;
 const vhF = @import("../../help/Functions.zig");

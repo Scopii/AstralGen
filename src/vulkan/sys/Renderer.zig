@@ -1,11 +1,11 @@
 const MemoryManager = @import("../../core/MemoryManager.zig").MemoryManager;
 const LoadedShader = @import("../../core/ShaderCompiler.zig").LoadedShader;
+const TextureMeta = @import("../types/res/TextureMeta.zig").TextureMeta;
+const BufferMeta = @import("../types/res/BufferMeta.zig").BufferMeta;
 const SwapchainMan = @import("SwapchainMan.zig").SwapchainMan;
 const ResourceMan = @import("ResourceMan.zig").ResourceMan;
-const Texture = @import("../types/res/Texture.zig").Texture;
 const Window = @import("../../platform/Window.zig").Window;
 const RenderGraph = @import("RenderGraph.zig").RenderGraph;
-const Buffer = @import("../types/res/Buffer.zig").Buffer;
 const ShaderMan = @import("ShaderMan.zig").ShaderMan;
 const rc = @import("../../configs/renderConfig.zig");
 const FrameData = @import("../../App.zig").FrameData;
@@ -70,7 +70,7 @@ pub const Renderer = struct {
                 break;
             }
         }
-        var texIds: [rc.MAX_WINDOWS]?Texture.TexId = .{null} ** rc.MAX_WINDOWS;
+        var texIds: [rc.MAX_WINDOWS]?TextureMeta.TexId = .{null} ** rc.MAX_WINDOWS;
 
         for (tempWindows, 0..) |window, i| {
             switch (window.state) {
@@ -92,7 +92,7 @@ pub const Renderer = struct {
         }
     }
 
-    pub fn updateRenderTexture(self: *Renderer, texId: Texture.TexId) !void {
+    pub fn updateRenderTexture(self: *Renderer, texId: TextureMeta.TexId) !void {
         const tex = try self.resMan.getTexturePtr(texId);
         const old = tex.base[0].extent;
         const oldType = tex.texType;
@@ -146,15 +146,15 @@ pub const Renderer = struct {
         try self.shaderMan.createShaders(loadedShaders, &self.resMan.descMan);
     }
 
-    pub fn createBuffers(self: *Renderer, bufInfos: []const Buffer.BufInf) !void {
+    pub fn createBuffers(self: *Renderer, bufInfos: []const BufferMeta.BufInf) !void {
         for (bufInfos) |bufInf| try self.resMan.createBuffer(bufInf);
     }
 
-    pub fn updateBuffer(self: *Renderer, bufInf: Buffer.BufInf, data: anytype) !void {
+    pub fn updateBuffer(self: *Renderer, bufInf: BufferMeta.BufInf, data: anytype) !void {
         try self.resMan.updateBuffer(bufInf, data, @intCast(self.scheduler.totalFrames % @as(u64, rc.MAX_IN_FLIGHT)));
     }
 
-    pub fn createTexture(self: *Renderer, texInfos: []const Texture.TexInf) !void {
+    pub fn createTexture(self: *Renderer, texInfos: []const TextureMeta.TexInf) !void {
         for (texInfos) |texInf| try self.resMan.createTexture(texInf);
     }
 };

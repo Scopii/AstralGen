@@ -1,9 +1,9 @@
 const CreateMapArray = @import("../../structures/MapArray.zig").CreateMapArray;
-const FixedList = @import("../../structures/FixedList.zig").FixedList;
 const TextureBase = @import("../types/res/TextureBase.zig").TextureBase;
+const TextureMeta = @import("../types/res/TextureMeta.zig").TextureMeta;
+const FixedList = @import("../../structures/FixedList.zig").FixedList;
 const BufferBase = @import("../types/res/BufferBase.zig").BufferBase;
-const Texture = @import("../types/res/Texture.zig").Texture;
-const Buffer = @import("../types/res/Buffer.zig").Buffer;
+const BufferMeta = @import("../types/res/BufferMeta.zig").BufferMeta;
 const rc = @import("../../configs/renderConfig.zig");
 const vhF = @import("../help/Functions.zig");
 const vk = @import("../../modules/vk.zig").c;
@@ -81,7 +81,7 @@ pub const DescriptorMan = struct {
         try self.freedDescIndices.append(descIndex);
     }
 
-    pub fn queueTextureDescriptor(self: *DescriptorMan, tex: *const Texture, flightId: u8, descIndex: u32) !void {
+    pub fn queueTextureDescriptor(self: *DescriptorMan, tex: *const TextureMeta, flightId: u8, descIndex: u32) !void {
         const imgViewPtr = try self.imgViewStorage.appendReturnPtr(
             vhF.getViewCreateInfo(tex.base[flightId].img, tex.viewType, tex.format, tex.subRange),
         );

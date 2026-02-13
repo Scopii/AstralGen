@@ -1,7 +1,7 @@
+const TextureMeta = @import("../vulkan/types/res/TextureMeta.zig").TextureMeta;
 const CreateMapArray = @import("../structures/MapArray.zig").CreateMapArray;
-const FixedList = @import("../structures/FixedList.zig").FixedList;
 const MouseMovement = @import("../core/EventManager.zig").MouseMovement;
-const TexId = @import("../vulkan/types/res/Texture.zig").Texture.TexId;
+const FixedList = @import("../structures/FixedList.zig").FixedList;
 const KeyEvent = @import("../core/EventManager.zig").KeyEvent;
 const Window = @import("Window.zig").Window;
 const sdl = @import("../modules/sdl.zig").c;
@@ -58,7 +58,7 @@ pub const WindowManager = struct {
         for (self.windows.getElements()) |*win| win.setOpacity(1.0);
     }
 
-    pub fn addWindow(self: *WindowManager, title: [*c]const u8, width: c_int, height: c_int, renderTexId: TexId, xPos: c_int, yPos: c_int, resizeTex: bool) !void {
+    pub fn addWindow(self: *WindowManager, title: [*c]const u8, width: c_int, height: c_int, renderTexId: TextureMeta.TexId, xPos: c_int, yPos: c_int, resizeTex: bool) !void {
         const props = self.windowProps;
         const flags = sdl.SDL_WINDOW_VULKAN | sdl.SDL_WINDOW_RESIZABLE | sdl.SDL_WINDOW_HIDDEN;
         _ = sdl.SDL_SetNumberProperty(props, sdl.SDL_PROP_WINDOW_CREATE_FLAGS_NUMBER, @intCast(flags));

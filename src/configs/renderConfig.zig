@@ -1,8 +1,8 @@
 const Attachment = @import("../vulkan/types/base/Pass.zig").Attachment;
 const TextureUse = @import("../vulkan/types/base/Pass.zig").TextureUse;
 const BufferUse = @import("../vulkan/types/base/Pass.zig").BufferUse;
-const Texture = @import("../vulkan/types/res/Texture.zig").Texture;
-const Buffer = @import("../vulkan/types/res/Buffer.zig").Buffer;
+const TextureMeta = @import("../vulkan/types/res/TextureMeta.zig").TextureMeta;
+const BufferMeta = @import("../vulkan/types/res/BufferMeta.zig").BufferMeta;
 const CameraData = @import("../core/Camera.zig").CameraData;
 const Pass = @import("../vulkan/types/base/Pass.zig").Pass;
 const Object = @import("../ecs/EntityManager.zig").Object;
@@ -47,17 +47,17 @@ pub const TEX_COLOR_FORMAT = vk.VK_FORMAT_R16G16B16A16_SFLOAT;
 pub const TEX_DEPTH_FORMAT = vk.VK_FORMAT_D32_SFLOAT;
 
 // Buffers
-pub const indirectSB = Buffer.create(.{ .id = .{ .val = 41 }, .mem = .Gpu, .typ = .Indirect, .len = 1, .elementSize = @sizeOf(vhT.IndirectData), .update = .PerFrame });
-pub const readbackSB = Buffer.create(.{ .id = .{ .val = 45 }, .mem = .CpuRead, .typ = .Storage, .len = 1, .elementSize = @sizeOf(vhT.ReadbackData), .update = .Overwrite });
+pub const indirectSB = BufferMeta.create(.{ .id = .{ .val = 41 }, .mem = .Gpu, .typ = .Indirect, .len = 1, .elementSize = @sizeOf(vhT.IndirectData), .update = .PerFrame });
+pub const readbackSB = BufferMeta.create(.{ .id = .{ .val = 45 }, .mem = .CpuRead, .typ = .Storage, .len = 1, .elementSize = @sizeOf(vhT.ReadbackData), .update = .Overwrite });
 
-pub const objectSB = Buffer.create(.{ .id = .{ .val = 1 }, .mem = .Gpu, .typ = .Storage, .len = 100, .elementSize = @sizeOf(Object), .update = .PerFrame });
-pub const cameraUB = Buffer.create(.{ .id = .{ .val = 40 }, .mem = .Gpu, .typ = .Uniform, .len = 1, .elementSize = @sizeOf(CameraData), .update = .PerFrame });
-pub const BUFFERS: []const Buffer.BufInf = &.{ objectSB, cameraUB, indirectSB, readbackSB };
+pub const objectSB = BufferMeta.create(.{ .id = .{ .val = 1 }, .mem = .Gpu, .typ = .Storage, .len = 100, .elementSize = @sizeOf(Object), .update = .PerFrame });
+pub const cameraUB = BufferMeta.create(.{ .id = .{ .val = 40 }, .mem = .Gpu, .typ = .Uniform, .len = 1, .elementSize = @sizeOf(CameraData), .update = .PerFrame });
+pub const BUFFERS: []const BufferMeta.BufInf = &.{ objectSB, cameraUB, indirectSB, readbackSB };
 
 // Textures
-pub const quantTex = Texture.create(.{ .id = .{ .val = 5 }, .mem = .Gpu, .typ = .Color, .width = 1920, .height = 1080, .update = .PerFrame });
-pub const quantDepthTex = Texture.create(.{ .id = .{ .val = 11 }, .mem = .Gpu, .typ = .Depth, .width = 1920, .height = 1080, .update = .PerFrame });
-pub const TEXTURES: []const Texture.TexInf = &.{ quantTex, quantDepthTex };
+pub const quantTex = TextureMeta.create(.{ .id = .{ .val = 5 }, .mem = .Gpu, .typ = .Color, .width = 1920, .height = 1080, .update = .PerFrame });
+pub const quantDepthTex = TextureMeta.create(.{ .id = .{ .val = 11 }, .mem = .Gpu, .typ = .Depth, .width = 1920, .height = 1080, .update = .PerFrame });
+pub const TEXTURES: []const TextureMeta.TexInf = &.{ quantTex, quantDepthTex };
 
 // Passes
 pub const PASSES: []const Pass = &.{ quantComp, quant };
