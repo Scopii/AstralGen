@@ -216,6 +216,7 @@ pub const RenderGraph = struct {
         }
         self.bakeBarriers(cmd, "Blits Prep");
         cmd.endQuery(.BotOfPipe, 54);
+        
         cmd.startQuery(.TopOfPipe, 55, "Blits Present");
 
         for (swapchains) |swapchain| { // Blits + Swapchain Presentation Barriers

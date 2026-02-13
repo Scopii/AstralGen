@@ -42,7 +42,6 @@ pub const CmdMan = struct {
 
     pub fn getCmd(self: *CmdMan, flightId: u8) !*Cmd {
         const cmd = &self.cmds[flightId];
-        try vhF.check(vk.vkResetCommandBuffer(cmd.handle, 0), "could not reset command buffer"); // Might be optional
         return cmd;
     }
 

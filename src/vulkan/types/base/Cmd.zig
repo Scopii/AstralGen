@@ -32,7 +32,7 @@ pub const Cmd = struct {
             .commandBufferCount = 1,
         };
         var cmd: vk.VkCommandBuffer = undefined;
-        try vhF.check(vk.vkAllocateCommandBuffers(gpi, &allocInf, &cmd), "Could not create Cmd Buffer");
+        try vhF.check(vk.vkAllocateCommandBuffers(gpi, &allocInf, &cmd), "Could not create Cmd");
 
         const poolInfo = vk.VkQueryPoolCreateInfo{
             .sType = vk.VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO,
@@ -40,7 +40,7 @@ pub const Cmd = struct {
             .queryCount = rc.GPU_QUERYS * 2,
         };
         var queryPool: vk.VkQueryPool = undefined;
-        try vhF.check(vk.vkCreateQueryPool(gpi, &poolInfo, null, &queryPool), "Could not init QueryPool");
+        try vhF.check(vk.vkCreateQueryPool(gpi, &poolInfo, null, &queryPool), "Could not init Cmd QueryPool");
 
         return .{
             .handle = cmd,
@@ -61,11 +61,13 @@ pub const Cmd = struct {
         self.flightId = flightId;
         self.frame = frame;
         self.renderState = null;
-        try vhF.check(vk.vkBeginCommandBuffer(self.handle, &beginInf), "could not Begin CmdBuffer");
+
+        try vhF.check(vk.vkResetCommandBuffer(self.handle, 0), "could not reset Cmd");
+        try vhF.check(vk.vkBeginCommandBuffer(self.handle, &beginInf), "could not Begin Cmd");
     }
 
     pub fn end(self: *const Cmd) !void {
-        try vhF.check(vk.vkEndCommandBuffer(self.handle), "Could not End CmdBuffer");
+        try vhF.check(vk.vkEndCommandBuffer(self.handle), "Could not End Cmd Buffer");
     }
 
     fn writeTimestamp(self: *const Cmd, pool: vk.VkQueryPool, stage: vk.VkPipelineStageFlagBits2, queryIndex: u32) void {
@@ -74,7 +76,7 @@ pub const Cmd = struct {
 
     pub fn startQuery(self: *Cmd, pipeStage: vhE.PipeStage, queryId: u8, name: []const u8) void {
         if (self.querys.isKeyUsed(queryId) == true) {
-            std.debug.print("Warning: Query ID {} in use by {s}\n!", .{ queryId, self.querys.getPtr(queryId).name });
+            std.debug.print("Cmd Warning: Query ID {} in use by {s}\n!", .{ queryId, self.querys.getPtr(queryId).name });
             return;
         }
         const idx = self.queryCounter;
@@ -87,7 +89,7 @@ pub const Cmd = struct {
 
     pub fn endQuery(self: *Cmd, pipeStage: vhE.PipeStage, queryId: u8) void {
         if (self.querys.isKeyUsed(queryId) == false) {
-            std.debug.print("Error: QueryId {} not registered", .{queryId});
+            std.debug.print("Cmd Error: QueryId {} not registered", .{queryId});
             return;
         }
 
@@ -109,7 +111,7 @@ pub const Cmd = struct {
 
         var results: [rc.GPU_QUERYS * 2]u64 = undefined;
         const flags = vk.VK_QUERY_RESULT_64_BIT | vk.VK_QUERY_RESULT_WAIT_BIT;
-        try vhF.check(vk.vkGetQueryPoolResults(gpi, self.queryPool, 0, count, @sizeOf(u64) * 128, &results, @sizeOf(u64), flags), "Failed getting Queries");
+        try vhF.check(vk.vkGetQueryPoolResults(gpi, self.queryPool, 0, count, @sizeOf(u64) * 128, &results, @sizeOf(u64), flags), "Failed getting Cmd Queries");
 
         const frameStartIndex = self.querys.getAtIndex(0).startIndex;
         const frameStart = results[frameStartIndex];
