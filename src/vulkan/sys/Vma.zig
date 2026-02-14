@@ -41,16 +41,19 @@ pub const Vma = struct {
         vk.vmaDestroyAllocator(self.handle);
     }
 
-    pub fn allocDescriptorHeap(self: *const Vma, size: u64) !BufferBase {
-        const usage = vk.VK_BUFFER_USAGE_DESCRIPTOR_HEAP_BIT_EXT | vk.VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
-        const flags = vk.VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | vk.VMA_ALLOCATION_CREATE_MAPPED_BIT;
-        return try self.allocBuffer(size, usage, vk.VMA_MEMORY_USAGE_CPU_TO_GPU, flags);
+    pub fn allocDescriptorHeap(self: *const Vma, size: vk.VkDeviceSize) !BufferBase {
+        const bufUse = vk.VK_BUFFER_USAGE_DESCRIPTOR_HEAP_BIT_EXT | vk.VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+        const allocFlags = vk.VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | vk.VMA_ALLOCATION_CREATE_MAPPED_BIT;
+        const buf = try self.allocBuffer(size, bufUse, vk.VMA_MEMORY_USAGE_CPU_TO_GPU, allocFlags);
+        std.debug.print("Created Descriptor Buffer\n", .{});
+        return buf;
     }
 
     pub fn allocStagingBuffer(self: *const Vma, size: vk.VkDeviceSize) !BufferBase {
-        defer std.debug.print("Created Staging Buffer\n", .{});
-        const memFlags = vk.VMA_ALLOCATION_CREATE_MAPPED_BIT | vk.VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
-        return try self.allocBuffer(size, vk.VK_BUFFER_USAGE_TRANSFER_SRC_BIT, vk.VMA_MEMORY_USAGE_CPU_ONLY, memFlags); // TEST CPU_TO_GPU and AUTO
+        const allocFlags = vk.VMA_ALLOCATION_CREATE_MAPPED_BIT | vk.VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+        const buf = try self.allocBuffer(size, vk.VK_BUFFER_USAGE_TRANSFER_SRC_BIT, vk.VMA_MEMORY_USAGE_CPU_ONLY, allocFlags); // TEST CPU_TO_GPU and AUTO
+        std.debug.print("Created Staging Buffer\n", .{});
+        return buf;
     }
 
     pub fn printMemoryInfo(self: *const Vma, allocation: vk.VmaAllocation) void {
@@ -111,7 +114,6 @@ pub const Vma = struct {
         var buffer: vk.VkBuffer = undefined;
         var allocation: vk.VmaAllocation = undefined;
         var allocVmaInf: vk.VmaAllocationInfo = undefined;
-
         try vhF.check(vk.vmaCreateBuffer(self.handle, &bufCreateInf, &allocCreateInf, &buffer, &allocation, &allocVmaInf), "Failed to create Gpu Buffer");
 
         var gpuAddress: u64 = 0;
