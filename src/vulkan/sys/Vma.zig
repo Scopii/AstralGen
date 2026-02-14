@@ -41,32 +41,10 @@ pub const Vma = struct {
         vk.vmaDestroyAllocator(self.handle);
     }
 
-    pub fn allocDescriptorHeap(self: *const Vma, size: u64) !DescriptorBuffer {
-        const bufCreateInf = vk.VkBufferCreateInfo{
-            .sType = vk.VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-            .size = size,
-            .usage = vk.VK_BUFFER_USAGE_DESCRIPTOR_HEAP_BIT_EXT | vk.VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-            .sharingMode = vk.VK_SHARING_MODE_EXCLUSIVE,
-        };
-        const allocInf = vk.VmaAllocationCreateInfo{
-            .usage = vk.VMA_MEMORY_USAGE_CPU_TO_GPU,
-            .flags = vk.VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | vk.VMA_ALLOCATION_CREATE_MAPPED_BIT,
-        };
-
-        var buffer: vk.VkBuffer = undefined;
-        var allocation: vk.VmaAllocation = undefined;
-        var allocInfo: vk.VmaAllocationInfo = undefined;
-
-        try vhF.check(vk.vmaCreateBuffer(self.handle, &bufCreateInf, &allocInf, &buffer, &allocation, &allocInfo), "Failed to allocate descriptor heap");
-        const addressInf = vk.VkBufferDeviceAddressInfo{ .sType = vk.VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO, .buffer = buffer };
-
-        return DescriptorBuffer{
-            .handle = buffer,
-            .allocation = allocation,
-            .mappedPtr = allocInfo.pMappedData,
-            .size = size,
-            .gpuAddress = vk.vkGetBufferDeviceAddress(self.gpi, &addressInf),
-        };
+    pub fn allocDescriptorHeap(self: *const Vma, size: u64) !BufferBase {
+        const usage = vk.VK_BUFFER_USAGE_DESCRIPTOR_HEAP_BIT_EXT | vk.VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+        const flags = vk.VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | vk.VMA_ALLOCATION_CREATE_MAPPED_BIT;
+        return try self.allocBuffer(size, usage, vk.VMA_MEMORY_USAGE_CPU_TO_GPU, flags);
     }
 
     pub fn allocStagingBuffer(self: *const Vma, size: vk.VkDeviceSize) !BufferBase {
@@ -138,7 +116,10 @@ pub const Vma = struct {
 
         var gpuAddress: u64 = 0;
         if ((bufUse & vk.VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT) != 0) {
-            const addressInf = vk.VkBufferDeviceAddressInfo{ .sType = vk.VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO, .buffer = buffer };
+            const addressInf = vk.VkBufferDeviceAddressInfo{
+                .sType = vk.VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
+                .buffer = buffer,
+            };
             gpuAddress = vk.vkGetBufferDeviceAddress(self.gpi, &addressInf);
         }
 

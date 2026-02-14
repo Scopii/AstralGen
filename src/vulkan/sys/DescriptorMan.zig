@@ -13,17 +13,9 @@ const Allocator = std.mem.Allocator;
 const Vma = @import("Vma.zig").Vma;
 const std = @import("std");
 
-pub const DescriptorBuffer = struct {
-    allocation: vk.VmaAllocation,
-    mappedPtr: ?*anyopaque,
-    size: vk.VkDeviceSize,
-    handle: vk.VkBuffer,
-    gpuAddress: u64,
-};
-
 pub const DescriptorMan = struct {
     gpi: vk.VkDevice,
-    descHeap: DescriptorBuffer,
+    descHeap: BufferBase,
 
     driverReservedSize: u64,
     descStride: u64,
