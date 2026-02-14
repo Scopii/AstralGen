@@ -42,7 +42,7 @@ pub const Vma = struct {
     }
 
     pub fn allocDescriptorHeap(self: *const Vma, size: u64) !DescriptorBuffer {
-        const bufInf = vk.VkBufferCreateInfo{
+        const bufCreateInf = vk.VkBufferCreateInfo{
             .sType = vk.VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
             .size = size,
             .usage = vk.VK_BUFFER_USAGE_DESCRIPTOR_HEAP_BIT_EXT | vk.VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
@@ -57,7 +57,7 @@ pub const Vma = struct {
         var allocation: vk.VmaAllocation = undefined;
         var allocInfo: vk.VmaAllocationInfo = undefined;
 
-        try vhF.check(vk.vmaCreateBuffer(self.handle, &bufInf, &allocInf, &buffer, &allocation, &allocInfo), "Failed to allocate descriptor heap");
+        try vhF.check(vk.vmaCreateBuffer(self.handle, &bufCreateInf, &allocInf, &buffer, &allocation, &allocInfo), "Failed to allocate descriptor heap");
         const addressInf = vk.VkBufferDeviceAddressInfo{ .sType = vk.VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO, .buffer = buffer };
 
         return DescriptorBuffer{
@@ -88,46 +88,23 @@ pub const Vma = struct {
     }
 
     pub fn allocDefinedBuffer(self: *const Vma, bufInf: BufferMeta.BufInf) !BufferMeta {
-        const dataSize = bufInf.elementSize;
-        if (dataSize == 0) {
-            std.debug.print("Binding Info has invalid element size\n", .{});
-            return error.AllocDefinedBufferFailed;
-        }
-        const bufferByteSize = @as(vk.VkDeviceSize, bufInf.len) * dataSize;
+        const bufByteSize = @as(vk.VkDeviceSize, bufInf.len) * bufInf.elementSize;
+        if (bufByteSize == 0) return error.BufferByteSizeIsZero;
 
-        var bufferBits: vk.VkBufferUsageFlags = switch (bufInf.typ) {
-            .Storage => vk.VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
-            .Uniform => vk.VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-            .Index => vk.VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
-            .Vertex => vk.VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-            .Staging => vk.VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-            .Indirect => vk.VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | vk.VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
-        };
-
-        if (bufInf.typ != .Staging) bufferBits |= vk.VK_BUFFER_USAGE_TRANSFER_DST_BIT | vk.VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
-
-        const memType: vk.VmaMemoryUsage = switch (bufInf.mem) {
-            .Gpu => vk.VMA_MEMORY_USAGE_GPU_ONLY,
-            .CpuWrite => vk.VMA_MEMORY_USAGE_CPU_TO_GPU,
-            .CpuRead => vk.VMA_MEMORY_USAGE_GPU_TO_CPU,
-        };
-
-        var memFlags: vk.VmaAllocationCreateFlags = switch (bufInf.mem) {
-            .Gpu => 0,
-            .CpuWrite, .CpuRead => vk.VMA_ALLOCATION_CREATE_MAPPED_BIT,
-        };
-        if (bufInf.typ == .Staging) memFlags |= vk.VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+        const bufUse = vhF.getBufferUsageFlags(bufInf.typ);
+        const memUse = vhF.getMemUsage(bufInf.mem);
+        const allocFlags = vhF.getBufferAllocationFlags(bufInf.mem, bufInf.typ);
 
         var bufferBases: [rc.MAX_IN_FLIGHT]BufferBase = undefined;
 
         switch (bufInf.update) {
             .Overwrite => {
-                const tempBuffer = try self.allocBuffer(bufferByteSize, bufferBits, memType, memFlags);
+                const tempBuffer = try self.allocBuffer(bufByteSize, bufUse, memUse, allocFlags);
                 for (0..rc.MAX_IN_FLIGHT) |i| bufferBases[i] = tempBuffer;
             },
             .PerFrame => {
                 for (0..rc.MAX_IN_FLIGHT) |i| {
-                    const tempBuffer = try self.allocBuffer(bufferByteSize, bufferBits, memType, memFlags);
+                    const tempBuffer = try self.allocBuffer(bufByteSize, bufUse, memUse, allocFlags);
                     bufferBases[i] = tempBuffer;
                 }
             },
@@ -142,18 +119,22 @@ pub const Vma = struct {
     }
 
     pub fn allocBuffer(self: *const Vma, size: vk.VkDeviceSize, bufUse: vk.VkBufferUsageFlags, memUse: vk.VmaMemoryUsage, memFlags: vk.VmaAllocationCreateFlags) !BufferBase {
-        const bufInf = vk.VkBufferCreateInfo{
+        const bufCreateInf = vk.VkBufferCreateInfo{
             .sType = vk.VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
             .size = size,
             .usage = bufUse,
             .sharingMode = vk.VK_SHARING_MODE_EXCLUSIVE,
         };
+        const allocCreateInf = vk.VmaAllocationCreateInfo{
+            .usage = memUse,
+            .flags = memFlags,
+        };
 
         var buffer: vk.VkBuffer = undefined;
         var allocation: vk.VmaAllocation = undefined;
         var allocVmaInf: vk.VmaAllocationInfo = undefined;
-        const allocCreateInf = vk.VmaAllocationCreateInfo{ .usage = memUse, .flags = memFlags };
-        try vhF.check(vk.vmaCreateBuffer(self.handle, &bufInf, &allocCreateInf, &buffer, &allocation, &allocVmaInf), "Failed to create Gpu Buffer");
+
+        try vhF.check(vk.vmaCreateBuffer(self.handle, &bufCreateInf, &allocCreateInf, &buffer, &allocation, &allocVmaInf), "Failed to create Gpu Buffer");
 
         var gpuAddress: u64 = 0;
         if ((bufUse & vk.VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT) != 0) {
@@ -169,11 +150,6 @@ pub const Vma = struct {
             .gpuAddress = gpuAddress,
         };
     }
-
-    pub const Image = struct {
-        handle: vk.VkImage = undefined,
-        allocation: vk.VmaAllocation,
-    };
 
     fn allocTexture(
         self: *Vma,
@@ -203,43 +179,23 @@ pub const Vma = struct {
     }
 
     pub fn allocDefinedTexture(self: *Vma, texInf: TextureMeta.TexInf) !TextureMeta {
-        const memType: vk.VmaMemoryUsage = switch (texInf.mem) {
-            .Gpu => vk.VMA_MEMORY_USAGE_GPU_ONLY,
-            .CpuWrite => vk.VMA_MEMORY_USAGE_CPU_TO_GPU,
-            .CpuRead => vk.VMA_MEMORY_USAGE_GPU_TO_CPU,
-        };
-
-        var texUse: vk.VkImageUsageFlags = vk.VK_IMAGE_USAGE_TRANSFER_SRC_BIT | vk.VK_IMAGE_USAGE_TRANSFER_DST_BIT | vk.VK_IMAGE_USAGE_SAMPLED_BIT;
-        switch (texInf.typ) {
-            .Color => texUse |= vk.VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | vk.VK_IMAGE_USAGE_STORAGE_BIT,
-            .Depth, .Stencil => texUse |= vk.VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
-        }
-
-        const format: vk.VkFormat = switch (texInf.typ) {
-            .Color => rc.TEX_COLOR_FORMAT,
-            .Depth => rc.TEX_DEPTH_FORMAT,
-            .Stencil => vk.VK_FORMAT_S8_UINT,
-        };
-
-        const aspectFlags: vk.VkImageAspectFlags = switch (texInf.typ) {
-            .Color => vk.VK_IMAGE_ASPECT_COLOR_BIT,
-            .Depth => vk.VK_IMAGE_ASPECT_DEPTH_BIT,
-            .Stencil => vk.VK_IMAGE_ASPECT_STENCIL_BIT,
-        };
-
-        const extent = vk.VkExtent3D{ .width = texInf.width, .height = texInf.height, .depth = texInf.depth };
+        const memUsage = vhF.getMemUsage(texInf.mem);
+        const texUse = vhF.getImageUse(texInf.typ);
+        const format = vhF.getImageFormat(texInf.typ);
+        const aspectFlags = vhF.getImageAspectFlags(texInf.typ);
         const subRange = vhF.createSubresourceRange(aspectFlags, 0, 1, 0, 1);
+        const extent = vk.VkExtent3D{ .width = texInf.width, .height = texInf.height, .depth = texInf.depth };
 
         var texBase: [rc.MAX_IN_FLIGHT]TextureBase = undefined;
 
         switch (texInf.update) {
             .Overwrite => { // Single image shared across all frames
-                const img = try self.allocTexture(memType, texUse, format, extent, subRange, vk.VK_IMAGE_VIEW_TYPE_2D);
+                const img = try self.allocTexture(memUsage, texUse, format, extent, subRange, vk.VK_IMAGE_VIEW_TYPE_2D);
                 for (0..rc.MAX_IN_FLIGHT) |i| texBase[i] = img;
             },
             .PerFrame => { // Separate image per frame
                 for (0..rc.MAX_IN_FLIGHT) |i| {
-                    texBase[i] = try self.allocTexture(memType, texUse, format, extent, subRange, vk.VK_IMAGE_VIEW_TYPE_2D);
+                    texBase[i] = try self.allocTexture(memUsage, texUse, format, extent, subRange, vk.VK_IMAGE_VIEW_TYPE_2D);
                 }
             },
         }

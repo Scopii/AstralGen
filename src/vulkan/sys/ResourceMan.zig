@@ -1,5 +1,6 @@
 const CreateMapArray = @import("../../structures/MapArray.zig").CreateMapArray;
 const TextureMeta = @import("../types/res/TextureMeta.zig").TextureMeta;
+const TextureBase = @import("../types/res/TextureBase.zig").TextureBase;
 const FixedList = @import("../../structures/FixedList.zig").FixedList;
 const BufferMeta = @import("../types/res/BufferMeta.zig").BufferMeta;
 const BufferBase = @import("../types/res/BufferBase.zig").BufferBase;
@@ -20,9 +21,18 @@ pub const Transfer = struct {
     size: u64,
 };
 
+pub const BufferContainer = struct {
+    bases: [rc.MAX_IN_FLIGHT]BufferBase,
+};
+
+pub const TextureContainer = struct {
+    bases: [rc.MAX_IN_FLIGHT]TextureBase,
+};
+
 pub const ResourceMan = struct {
     vma: Vma,
     descMan: DescriptorMan,
+
     buffers: CreateMapArray(BufferMeta, rc.BUF_MAX, u32, rc.BUF_MAX, 0) = .{},
     textures: CreateMapArray(TextureMeta, rc.TEX_MAX, u32, rc.TEX_MAX, 0) = .{},
 
