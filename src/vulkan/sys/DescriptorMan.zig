@@ -66,11 +66,13 @@ pub const DescriptorMan = struct {
         return descIndex;
     }
 
-    pub fn freeDescriptor(self: *DescriptorMan, descIndex: u32) !void {
+    pub fn freeDescriptor(self: *DescriptorMan, descIndex: u32) void {
         if (descIndex >= self.resourceCount) {
             std.debug.print("Descriptor Index {} is unused and cant be freed", .{descIndex});
         }
-        try self.freedDescIndices.append(descIndex);
+        self.freedDescIndices.append(descIndex) catch |err| {
+            std.debug.print("Descriptor Append Failed {}\n", .{err});
+        };
     }
 
     pub fn queueTextureDescriptor(self: *DescriptorMan, texMeta: *const TextureMeta, img: vk.VkImage, descIndex: u32) !void {

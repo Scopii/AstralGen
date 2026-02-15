@@ -113,22 +113,22 @@ pub const RenderGraph = struct {
             try self.checkBufferState(&buffer.bases[cmd.flightId], bufUse.getNeededState());
         }
         for (pass.texUses) |texUse| {
-            const texMeta = try resMan.getTextureMeta(texUse.texId);
+            const texMeta = try resMan.getTexMeta(texUse.texId);
             const texBundle = try resMan.getTexBundle(texUse.texId);
             try self.checkImageState(&texBundle.bases[cmd.flightId], texMeta.subRange, texUse.getNeededState());
         }
         for (pass.getColorAtts()) |colorAtt| {
-            const texMeta = try resMan.getTextureMeta(colorAtt.texId);
+            const texMeta = try resMan.getTexMeta(colorAtt.texId);
             const texBundle = try resMan.getTexBundle(colorAtt.texId);
             try self.checkImageState(&texBundle.bases[cmd.flightId], texMeta.subRange, colorAtt.getNeededState());
         }
         if (pass.getDepthAtt()) |depthAtt| {
-            const texMeta = try resMan.getTextureMeta(depthAtt.texId);
+            const texMeta = try resMan.getTexMeta(depthAtt.texId);
             const texBundle = try resMan.getTexBundle(depthAtt.texId);
             try self.checkImageState(&texBundle.bases[cmd.flightId], texMeta.subRange, depthAtt.getNeededState());
         }
         if (pass.getStencilAtt()) |stencilAtt| {
-            const texMeta = try resMan.getTextureMeta(stencilAtt.texId);
+            const texMeta = try resMan.getTexMeta(stencilAtt.texId);
             const texBundle = try resMan.getTexBundle(stencilAtt.texId);
             try self.checkImageState(&texBundle.bases[cmd.flightId], texMeta.subRange, stencilAtt.getNeededState());
         }
@@ -175,13 +175,13 @@ pub const RenderGraph = struct {
         if (passData.colorAtts.len > 8) return error.TooManyAttachments;
 
         const depthInf: ?vk.VkRenderingAttachmentInfo = if (passData.depthAtt) |depth| blk: {
-            const texMeta = try resMan.getTextureMeta(depth.texId);
+            const texMeta = try resMan.getTexMeta(depth.texId);
             const texBundle = try resMan.getTexBundle(depth.texId);
             break :blk texBundle.bases[cmd.flightId].createAttachment(texMeta.texType, depth.clear);
         } else null;
 
         const stencilInf: ?vk.VkRenderingAttachmentInfo = if (passData.stencilAtt) |stencil| blk: {
-            const texMeta = try resMan.getTextureMeta(stencil.texId);
+            const texMeta = try resMan.getTexMeta(stencil.texId);
             const texBundle = try resMan.getTexBundle(stencil.texId);
             break :blk texBundle.bases[cmd.flightId].createAttachment(texMeta.texType, stencil.clear);
         } else null;
@@ -189,7 +189,7 @@ pub const RenderGraph = struct {
         var colorInfs: [8]vk.VkRenderingAttachmentInfo = undefined;
         for (0..passData.colorAtts.len) |i| {
             const colorAtt = passData.colorAtts[i];
-            const texMeta = try resMan.getTextureMeta(colorAtt.texId);
+            const texMeta = try resMan.getTexMeta(colorAtt.texId);
             const texBundle = try resMan.getTexBundle(colorAtt.texId);
             colorInfs[i] = texBundle.bases[cmd.flightId].createAttachment(texMeta.texType, colorAtt.clear);
         }
@@ -217,7 +217,7 @@ pub const RenderGraph = struct {
         cmd.startQuery(.TopOfPipe, 54, "Blits Prep");
 
         for (swapchains) |swapchain| { // Render Texture and Swapchain Preperations
-            const renderTexMeta = try resMan.getTextureMeta(swapchain.renderTexId);
+            const renderTexMeta = try resMan.getTexMeta(swapchain.renderTexId);
             const renderTexBundle = try resMan.getTexBundle(swapchain.renderTexId);
             try self.checkImageState(&renderTexBundle.bases[cmd.flightId], renderTexMeta.subRange, .{ .stage = .Transfer, .access = .TransferRead, .layout = .TransferSrc });
             try self.checkImageState(&swapchain.textures[swapchain.curIndex], swapchain.subRange, .{ .stage = .Transfer, .access = .TransferWrite, .layout = .TransferDst });

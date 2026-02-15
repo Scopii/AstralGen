@@ -26,8 +26,18 @@ pub const BufferBundle = struct {
     bases: [rc.MAX_IN_FLIGHT]BufferBase,
 };
 
+pub const BufferZombie = struct {
+    zomMeta: BufferMeta,
+    zomBases: [rc.MAX_IN_FLIGHT]BufferBase,
+};
+
 pub const TextureBundle = struct {
     bases: [rc.MAX_IN_FLIGHT]TextureBase,
+};
+
+pub const TextureZombie = struct {
+    zomMeta: TextureMeta,
+    zomBases: [rc.MAX_IN_FLIGHT]TextureBase,
 };
 
 pub const ResourceMan = struct {
@@ -41,10 +51,8 @@ pub const ResourceMan = struct {
     bufBundles: CreateMapArray(BufferBundle, rc.BUF_MAX, u32, rc.BUF_MAX, 0) = .{},
     texBundles: CreateMapArray(TextureBundle, rc.TEX_MAX, u32, rc.TEX_MAX, 0) = .{},
 
-    realFramesInFlights: [rc.MAX_IN_FLIGHT]u64 = .{0} ** rc.MAX_IN_FLIGHT,
-
-    bufToDeleteLists: [rc.MAX_IN_FLIGHT + 1]FixedList(u32, rc.BUF_MAX),
-    texToDeleteLists: [rc.MAX_IN_FLIGHT + 1]FixedList(u32, rc.TEX_MAX),
+    bufZombieLists: [rc.MAX_IN_FLIGHT + 1]FixedList(BufferZombie, rc.BUF_MAX),
+    texZombieLists: [rc.MAX_IN_FLIGHT + 1]FixedList(TextureZombie, rc.TEX_MAX),
 
     stagingBuffers: [rc.MAX_IN_FLIGHT]BufferBase,
     stagingOffsets: [rc.MAX_IN_FLIGHT]u64 = .{0} ** rc.MAX_IN_FLIGHT,
@@ -59,11 +67,11 @@ pub const ResourceMan = struct {
         var transfers: [rc.MAX_IN_FLIGHT]std.array_list.Managed(Transfer) = undefined;
         for (0..rc.MAX_IN_FLIGHT) |i| transfers[i] = std.array_list.Managed(Transfer).init(alloc);
 
-        var bufToDeleteList: [rc.MAX_IN_FLIGHT + 1]FixedList(u32, rc.BUF_MAX) = undefined;
-        for (0..bufToDeleteList.len) |i| bufToDeleteList[i] = .{};
+        var bufZombieLists: [rc.MAX_IN_FLIGHT + 1]FixedList(BufferZombie, rc.BUF_MAX) = undefined;
+        for (0..bufZombieLists.len) |i| bufZombieLists[i] = .{};
 
-        var texToDeleteLists: [rc.MAX_IN_FLIGHT + 1]FixedList(u32, rc.TEX_MAX) = undefined;
-        for (0..texToDeleteLists.len) |i| texToDeleteLists[i] = .{};
+        var texZombieLists: [rc.MAX_IN_FLIGHT + 1]FixedList(TextureZombie, rc.TEX_MAX) = undefined;
+        for (0..texZombieLists.len) |i| texZombieLists[i] = .{};
 
         return .{
             .vma = vma,
@@ -71,22 +79,34 @@ pub const ResourceMan = struct {
             .descMan = try DescriptorMan.init(vma, context.gpi, context.gpu),
             .stagingBuffers = stagingBuffers,
             .transfers = transfers,
-            .bufToDeleteLists = bufToDeleteList,
-            .texToDeleteLists = texToDeleteLists,
+            .bufZombieLists = bufZombieLists,
+            .texZombieLists = texZombieLists,
         };
     }
 
     pub fn deinit(self: *ResourceMan) void {
         for (0..self.bufMetas.getCount()) |i| {
-            const updateTyp = self.bufMetas.getAtIndex(@intCast(i)).update;
+            const bufMeta = self.bufMetas.getPtrAtIndex(@intCast(i));
             const bufBundle = self.bufBundles.getPtrAtIndex(@intCast(i));
-            self.vma.freeBuffer(bufBundle, updateTyp);
+            self.destroyBuffer(bufMeta, &bufBundle.bases);
+        }
+
+        for (0..self.bufZombieLists.len) |i| {
+            for (self.bufZombieLists[i].constSlice()) |*bufZombie| {
+                self.destroyBuffer(&bufZombie.zomMeta, &bufZombie.zomBases);
+            }
         }
 
         for (0..self.texBundles.getCount()) |i| {
-            const updateTyp = self.texMetas.getAtIndex(@intCast(i)).update;
+            const texMeta = self.texMetas.getPtrAtIndex(@intCast(i));
             const texBundle = self.texBundles.getPtrAtIndex(@intCast(i));
-            self.vma.freeTexture(texBundle, updateTyp);
+            self.destroyTexture(texMeta, &texBundle.bases);
+        }
+
+        for (0..self.texZombieLists.len) |i| {
+            for (self.texZombieLists[i].constSlice()) |*texZombie| {
+                self.destroyTexture(&texZombie.zomMeta, &texZombie.zomBases);
+            }
         }
 
         for (&self.stagingBuffers) |*stagingBuffer| self.vma.freeRawBuffer(stagingBuffer.handle, stagingBuffer.allocation);
@@ -103,7 +123,7 @@ pub const ResourceMan = struct {
     }
 
     pub fn getBufferResourceSlot(self: *ResourceMan, bufId: BufferMeta.BufId, flightId: u8) !u32 {
-        const bufMeta = try self.getBufferMeta(bufId);
+        const bufMeta = try self.getBufMeta(bufId);
         const updateFlightId = if (bufMeta.typ == .Indirect) flightId else bufMeta.updateId;
         return bufMeta.descIndices[updateFlightId];
     }
@@ -126,11 +146,11 @@ pub const ResourceMan = struct {
         if (self.bufBundles.isKeyUsed(bufId.val) == true) return self.bufBundles.getPtr(bufId.val) else return error.BufferIdNotUsed;
     }
 
-    pub fn getTextureMeta(self: *ResourceMan, texId: TextureMeta.TexId) !*TextureMeta {
+    pub fn getTexMeta(self: *ResourceMan, texId: TextureMeta.TexId) !*TextureMeta {
         if (self.texMetas.isKeyUsed(texId.val) == true) return self.texMetas.getPtr(texId.val) else return error.TextureIdNotUsed;
     }
 
-    pub fn getBufferMeta(self: *ResourceMan, bufId: BufferMeta.BufId) !*BufferMeta {
+    pub fn getBufMeta(self: *ResourceMan, bufId: BufferMeta.BufId) !*BufferMeta {
         if (self.bufMetas.isKeyUsed(bufId.val) == true) return self.bufMetas.getPtr(bufId.val) else return error.BufferIdNotUsed;
     }
 
@@ -227,7 +247,7 @@ pub const ResourceMan = struct {
         };
 
         const bufBundle = try self.getBufBundle(bufInf.id);
-        const bufMeta = try self.getBufferMeta(bufInf.id);
+        const bufMeta = try self.getBufMeta(bufInf.id);
 
         if (bytes.len > bufBundle.bases[flightId].size) return error.BufferBaseTooSmallForUpdate;
 
@@ -255,19 +275,22 @@ pub const ResourceMan = struct {
     }
 
     pub fn queueTextureDestruction(self: *ResourceMan, texId: TextureMeta.TexId, curFrame: u64) !void {
-        const metaIdx = self.texMetas.getIndex(texId.val);
-        try self.texToDeleteLists[curFrame % rc.MAX_IN_FLIGHT + 1].append(metaIdx);
+        const texMeta = try self.getTexMeta(texId);
+        const texBundle = try self.getTexBundle(texId);
 
-        self.texMetas.unlink(texId.val);
-        self.texBundles.unlink(texId.val);
+        try self.texZombieLists[curFrame % rc.MAX_IN_FLIGHT + 1].append(TextureZombie{ .zomMeta = texMeta.*, .zomBases = texBundle.*.bases });
+
+        self.texMetas.removeAtKey(texId.val);
+        self.texBundles.removeAtKey(texId.val);
     }
 
     pub fn queueBufferDestruction(self: *ResourceMan, bufId: BufferMeta.BufId, curFrame: u64) !void {
-        const metaIdx = self.bufMetas.getIndex(bufId.val);
-        try self.bufToDeleteLists[curFrame % rc.MAX_IN_FLIGHT + 1].append(metaIdx);
+        const bufMeta = try self.getBufMeta(bufId);
+        const bufBundle = try self.getBufBundle(bufId);
+        try self.bufZombieLists[curFrame % rc.MAX_IN_FLIGHT + 1].append(BufferZombie{ .zomMeta = bufMeta.*, .zomBases = bufBundle.*.bases });
 
-        self.bufMetas.unlink(bufId.val);
-        self.bufBundles.unlink(bufId.val);
+        self.bufMetas.removeAtKey(bufId.val);
+        self.bufBundles.removeAtKey(bufId.val);
     }
 
     pub fn cleanupResources(self: *ResourceMan, curFrame: u64) !void {
@@ -276,50 +299,44 @@ pub const ResourceMan = struct {
         const targetFrame = curFrame - rc.MAX_IN_FLIGHT;
         const queueIndex = targetFrame % rc.MAX_IN_FLIGHT + 1;
 
-        if (self.texToDeleteLists[queueIndex].len > 0) {
-            for (self.texToDeleteLists[queueIndex].slice()) |texIndex| {
-                try self.destroyTexture(texIndex);
-                self.texMetas.removeAtIndex(texIndex);
-                self.texBundles.removeAtIndex(texIndex);
+        if (self.texZombieLists[queueIndex].len > 0) {
+            for (self.texZombieLists[queueIndex].constSlice()) |*texZombie| {
+                self.destroyTexture(&texZombie.zomMeta, &texZombie.zomBases);
             }
-            self.texToDeleteLists[queueIndex].clear();
+            self.texZombieLists[queueIndex].clear();
             std.debug.print("Textures destroyed: Frame {} (queued Frame {})\n", .{ curFrame, targetFrame });
         }
 
-        if (self.bufToDeleteLists[queueIndex].len > 0) {
-            for (self.bufToDeleteLists[queueIndex].slice()) |bufIndex| {
-                try self.destroyBuffer(bufIndex);
-                self.bufMetas.removeAtIndex(bufIndex);
-                self.bufBundles.removeAtIndex(bufIndex);
+        if (self.bufZombieLists[queueIndex].len > 0) {
+            for (self.bufZombieLists[queueIndex].constSlice()) |*bufZombie| {
+                self.destroyBuffer(&bufZombie.zomMeta, &bufZombie.zomBases);
             }
-            self.bufToDeleteLists[queueIndex].clear();
+            self.bufZombieLists[queueIndex].clear();
             std.debug.print("Buffers destroyed: Frame {} (queued Frame {})\n", .{ curFrame, targetFrame });
         }
     }
 
-    pub fn destroyTexture(self: *ResourceMan, texIndex: u32) !void {
-        const texMeta = self.texMetas.getPtrAtIndex(texIndex);
-        const texBundle = self.texBundles.getPtrAtIndex(texIndex);
-
-        self.vma.freeTexture(texBundle, texMeta.update);
-
+    fn destroyTexture(self: *ResourceMan, texMeta: *const TextureMeta, texBase: *const [rc.MAX_IN_FLIGHT]TextureBase) void {
         const count = switch (texMeta.update) {
             .Overwrite => 1,
             .PerFrame => rc.MAX_IN_FLIGHT,
         };
-        for (0..count) |i| try self.descMan.freeDescriptor(texMeta.descIndices[i]);
+
+        for (0..count) |i| {
+            self.vma.freeTextureBase(&texBase[i]);
+            self.descMan.freeDescriptor(texMeta.descIndices[i]);
+        }
     }
 
-    pub fn destroyBuffer(self: *ResourceMan, bufIndex: u32) !void {
-        const bufMeta = self.bufMetas.getPtrAtIndex(bufIndex);
-        const bufBundle = self.bufBundles.getPtrAtIndex(bufIndex);
-
-        self.vma.freeBuffer(bufBundle, bufMeta.update);
-
+    fn destroyBuffer(self: *ResourceMan, bufMeta: *const BufferMeta, bufBase: *const [rc.MAX_IN_FLIGHT]BufferBase) void {
         const count = switch (bufMeta.update) {
             .Overwrite => 1,
             .PerFrame => rc.MAX_IN_FLIGHT,
         };
-        for (0..count) |i| try self.descMan.freeDescriptor(bufMeta.descIndices[i]);
+
+        for (0..count) |i| {
+            self.vma.freeBufferBase(&bufBase[i]);
+            self.descMan.freeDescriptor(bufMeta.descIndices[i]);
+        }
     }
 };

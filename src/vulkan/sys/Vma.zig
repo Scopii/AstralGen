@@ -176,27 +176,11 @@ pub const Vma = struct {
         vk.vmaDestroyBuffer(self.handle, buffer, allocation);
     }
 
-    pub fn freeBuffer(self: *const Vma, bufBundle: *BufferBundle, updateTyp: vhE.UpdateType) void {
-        const count = switch (updateTyp) {
-            .Overwrite => 1,
-            .PerFrame => rc.MAX_IN_FLIGHT,
-        };
-        for (0..count) |i| self.freeRawBuffer(bufBundle.bases[@intCast(i)].handle, bufBundle.bases[@intCast(i)].allocation);
-    }
-
-    pub fn freeBufferBase(self: *const Vma, bufBase: *BufferBase) void {
+    pub fn freeBufferBase(self: *const Vma, bufBase: *const BufferBase) void {
         vk.vmaDestroyBuffer(self.handle, bufBase.handle, bufBase.allocation);
     }
 
-    pub fn freeTexture(self: *const Vma, texBundle: *TextureBundle, updateTyp: vhE.UpdateType) void {
-        const count = switch (updateTyp) {
-            .Overwrite => 1,
-            .PerFrame => rc.MAX_IN_FLIGHT,
-        };
-        for (0..count) |i| self.freeTextureBase(&texBundle.bases[@intCast(i)]);
-    }
-
-    pub fn freeTextureBase(self: *const Vma, texBase: *TextureBase) void {
+    pub fn freeTextureBase(self: *const Vma, texBase: *const TextureBase) void {
         vk.vkDestroyImageView(self.gpi, texBase.view, null);
         vk.vmaDestroyImage(self.handle, texBase.img, texBase.allocation);
     }
