@@ -9,9 +9,6 @@ const vk = @import("../../modules/vk.zig").c;
 const vhE = @import("../help/Enums.zig");
 const std = @import("std");
 
-const TextureBundle = @import("ResourceMan.zig").TextureBundle;
-const BufferBundle = @import("ResourceMan.zig").BufferBundle;
-
 pub const Vma = struct {
     handle: vk.VmaAllocator,
     gpi: vk.VkDevice,
