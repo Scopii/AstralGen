@@ -27,8 +27,8 @@ pub const ResourceMan = struct {
     bufLists: [rc.MAX_IN_FLIGHT]CreateMapArray(BufferBase, rc.BUF_MAX, u32, rc.BUF_MAX, 0),
     texLists: [rc.MAX_IN_FLIGHT]CreateMapArray(TextureBase, rc.TEX_MAX, u32, rc.TEX_MAX, 0),
 
-    bufZombieLists: [rc.MAX_IN_FLIGHT + 1]FixedList(BufferBase, rc.BUF_MAX),
-    texZombieLists: [rc.MAX_IN_FLIGHT + 1]FixedList(TextureBase, rc.TEX_MAX),
+    bufZombieLists: [rc.MAX_IN_FLIGHT]FixedList(BufferBase, rc.BUF_MAX),
+    texZombieLists: [rc.MAX_IN_FLIGHT]FixedList(TextureBase, rc.TEX_MAX),
 
     resStorages: [rc.MAX_IN_FLIGHT]ResourceStorage,
 
@@ -44,10 +44,10 @@ pub const ResourceMan = struct {
         var texLists: [rc.MAX_IN_FLIGHT]CreateMapArray(TextureBase, rc.TEX_MAX, u32, rc.TEX_MAX, 0) = undefined;
         for (0..texLists.len) |i| texLists[i] = .{};
 
-        var bufZombieLists: [rc.MAX_IN_FLIGHT + 1]FixedList(BufferBase, rc.BUF_MAX) = undefined;
+        var bufZombieLists: [rc.MAX_IN_FLIGHT]FixedList(BufferBase, rc.BUF_MAX) = undefined;
         for (0..bufZombieLists.len) |i| bufZombieLists[i] = .{};
 
-        var texZombieLists: [rc.MAX_IN_FLIGHT + 1]FixedList(TextureBase, rc.TEX_MAX) = undefined;
+        var texZombieLists: [rc.MAX_IN_FLIGHT]FixedList(TextureBase, rc.TEX_MAX) = undefined;
         for (0..texZombieLists.len) |i| texZombieLists[i] = .{};
 
         return .{
@@ -203,7 +203,7 @@ pub const ResourceMan = struct {
 
     pub fn getBufferDataPtr(self: *ResourceMan, bufId: BufferMeta.BufId, comptime T: type, flightId: u8) !*T {
         const buffer = try self.getBuf(bufId, flightId);
-        
+
         if (buffer.mappedPtr) |ptr| {
             return @as(*T, @ptrCast(@alignCast(ptr)));
         }
@@ -270,7 +270,7 @@ pub const ResourceMan = struct {
         for (0..texMeta.update.getCount()) |i| {
             if (self.texLists[i].isKeyUsed(texId.val)) {
                 const tex = self.texLists[i].getPtr(texId.val);
-                try self.texZombieLists[curFrame % rc.MAX_IN_FLIGHT + 1].append(tex.*);
+                try self.texZombieLists[curFrame % rc.MAX_IN_FLIGHT].append(tex.*);
                 self.texLists[i].removeAtKey(texId.val);
             }
         }
@@ -283,7 +283,7 @@ pub const ResourceMan = struct {
         for (0..bufMeta.update.getCount()) |i| {
             if (self.bufLists[i].isKeyUsed(bufId.val)) {
                 const buffer = self.bufLists[i].getPtr(bufId.val);
-                try self.bufZombieLists[curFrame % rc.MAX_IN_FLIGHT + 1].append(buffer.*);
+                try self.bufZombieLists[curFrame % rc.MAX_IN_FLIGHT].append(buffer.*);
                 self.bufLists[i].removeAtKey(bufId.val);
             }
         }
@@ -294,22 +294,22 @@ pub const ResourceMan = struct {
         if (curFrame < rc.MAX_IN_FLIGHT) return; // Only clean up resources queued MAX_IN_FLIGHT ago (safety check for startup)
 
         const targetFrame = curFrame - rc.MAX_IN_FLIGHT;
-        const queueIndex = targetFrame % rc.MAX_IN_FLIGHT + 1;
+        const flightIndex = targetFrame % rc.MAX_IN_FLIGHT;
 
-        if (self.texZombieLists[queueIndex].len > 0) {
-            for (self.texZombieLists[queueIndex].constSlice()) |*texZombie| {
+        if (self.texZombieLists[flightIndex].len > 0) {
+            for (self.texZombieLists[flightIndex].constSlice()) |*texZombie| {
                 self.destroyTexture(texZombie);
             }
-            self.texZombieLists[queueIndex].clear();
-            std.debug.print("Textures destroyed: Frame {} (queued Frame {})\n", .{ curFrame, targetFrame });
+            std.debug.print("Textures destroyed (Count {}) (Frame {}) (queued Frame {})\n", .{ self.texZombieLists[flightIndex].len, curFrame, targetFrame });
+            self.texZombieLists[flightIndex].clear();
         }
 
-        if (self.bufZombieLists[queueIndex].len > 0) {
-            for (self.bufZombieLists[queueIndex].constSlice()) |*bufZombie| {
+        if (self.bufZombieLists[flightIndex].len > 0) {
+            for (self.bufZombieLists[flightIndex].constSlice()) |*bufZombie| {
                 self.destroyBuffer(bufZombie);
             }
-            self.bufZombieLists[queueIndex].clear();
-            std.debug.print("Buffers destroyed: Frame {} (queued Frame {})\n", .{ curFrame, targetFrame });
+            std.debug.print("Buffers destroyed (Count {}) (Frame {}) (queued Frame {})\n", .{ self.bufZombieLists[flightIndex].len, curFrame, targetFrame });
+            self.bufZombieLists[flightIndex].clear();
         }
     }
 
