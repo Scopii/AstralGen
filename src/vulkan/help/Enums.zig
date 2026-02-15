@@ -1,9 +1,17 @@
 const vk = @import("../../modules/vk.zig").c;
+const rc = @import("../../configs/renderConfig.zig");
 
 pub const UpdateType = enum {
     Overwrite, // Resource once in Memory, updates blocked
     PerFrame, // Resource Created for Every Frame in Flight, updates done per Frame via Staging Buffer
     // Async, // Resource Created Twice, Cycling Between Front and Back Representations to start next batch update when previous update is done
+
+    pub fn getCount(self: UpdateType) u8 {
+        return switch (self) {
+            .Overwrite => 1,
+            .PerFrame => rc.MAX_IN_FLIGHT,
+        };
+    }
 };
 
 pub const TextureType = enum {

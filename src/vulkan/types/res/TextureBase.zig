@@ -9,6 +9,8 @@ pub const TextureBase = struct {
     extent: vk.VkExtent3D,
     state: TextureState = .{},
 
+    descIndex: u32 = 0,
+
     pub const TextureState = struct {
         stage: vhE.PipeStage = .TopOfPipe,
         access: vhE.PipeAccess = .None,
@@ -31,7 +33,7 @@ pub const TextureBase = struct {
         };
     }
 
-    pub fn createImageBarrier(self: *TextureBase, newState: TextureState, subRange: vk.VkImageSubresourceRange,) vk.VkImageMemoryBarrier2 {
+    pub fn createImageBarrier(self: *TextureBase, newState: TextureState, subRange: vk.VkImageSubresourceRange) vk.VkImageMemoryBarrier2 {
         const barrier = vk.VkImageMemoryBarrier2{
             .sType = vk.VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
             .srcStageMask = @intFromEnum(self.state.stage),

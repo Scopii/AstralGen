@@ -79,15 +79,15 @@ pub const RenderGraph = struct {
         cmd.startQuery(.TopOfPipe, 40, "Transfers");
 
         for (resStorage.transfers.items) |transfer| {
-            const bufBundle = try resMan.getBufBundle(transfer.dstResId);
-            try self.checkBufferState(&bufBundle.bases[cmd.flightId], .{ .stage = .Transfer, .access = .TransferWrite });
+            const buffer = try resMan.getBuf(transfer.dstResId, cmd.flightId);
+            try self.checkBufferState(buffer, .{ .stage = .Transfer, .access = .TransferWrite });
 
             const copyRegion = vk.VkBufferCopy{
                 .srcOffset = transfer.srcOffset,
                 .dstOffset = transfer.dstOffset,
                 .size = transfer.size,
             };
-            vk.vkCmdCopyBuffer(cmd.handle, resStorage.stagingBuffer.handle, bufBundle.bases[cmd.flightId].handle, 1, &copyRegion);
+            vk.vkCmdCopyBuffer(cmd.handle, resStorage.stagingBuffer.handle, buffer.handle, 1, &copyRegion);
         }
         resMan.resetTransfers(cmd.flightId);
         self.bakeBarriers(cmd, "Transfers");
@@ -111,36 +111,36 @@ pub const RenderGraph = struct {
 
     pub fn recordPassBarriers(self: *RenderGraph, cmd: *const Cmd, pass: Pass, resMan: *ResourceMan) !void {
         for (pass.bufUses) |bufUse| {
-            const buffer = try resMan.getBufBundle(bufUse.bufId);
-            try self.checkBufferState(&buffer.bases[cmd.flightId], bufUse.getNeededState());
+            const buffer = try resMan.getBuf(bufUse.bufId, cmd.flightId);
+            try self.checkBufferState(buffer, bufUse.getNeededState());
         }
         for (pass.texUses) |texUse| {
             const texMeta = try resMan.getTexMeta(texUse.texId);
-            const texBundle = try resMan.getTexBundle(texUse.texId);
-            try self.checkImageState(&texBundle.bases[cmd.flightId], texMeta.subRange, texUse.getNeededState());
+            const tex = try resMan.getTex(texUse.texId, cmd.flightId);
+            try self.checkImageState(tex, texMeta.subRange, texUse.getNeededState());
         }
         for (pass.getColorAtts()) |colorAtt| {
             const texMeta = try resMan.getTexMeta(colorAtt.texId);
-            const texBundle = try resMan.getTexBundle(colorAtt.texId);
-            try self.checkImageState(&texBundle.bases[cmd.flightId], texMeta.subRange, colorAtt.getNeededState());
+            const tex = try resMan.getTex(colorAtt.texId, cmd.flightId);
+            try self.checkImageState(tex, texMeta.subRange, colorAtt.getNeededState());
         }
         if (pass.getDepthAtt()) |depthAtt| {
             const texMeta = try resMan.getTexMeta(depthAtt.texId);
-            const texBundle = try resMan.getTexBundle(depthAtt.texId);
-            try self.checkImageState(&texBundle.bases[cmd.flightId], texMeta.subRange, depthAtt.getNeededState());
+            const tex = try resMan.getTex(depthAtt.texId, cmd.flightId);
+            try self.checkImageState(tex, texMeta.subRange, depthAtt.getNeededState());
         }
         if (pass.getStencilAtt()) |stencilAtt| {
             const texMeta = try resMan.getTexMeta(stencilAtt.texId);
-            const texBundle = try resMan.getTexBundle(stencilAtt.texId);
-            try self.checkImageState(&texBundle.bases[cmd.flightId], texMeta.subRange, stencilAtt.getNeededState());
+            const tex = try resMan.getTex(stencilAtt.texId, cmd.flightId);
+            try self.checkImageState(tex, texMeta.subRange, stencilAtt.getNeededState());
         }
         self.bakeBarriers(cmd, pass.name);
     }
 
     fn recordCompute(cmd: *const Cmd, dispatch: Pass.Dispatch, renderTexId: ?TexId, resMan: *ResourceMan) !void {
         if (renderTexId) |texId| {
-            const tex = try resMan.getTexBundle(texId);
-            const extent = tex.bases[cmd.flightId].extent;
+            const tex = try resMan.getTex(texId, cmd.flightId);
+            const extent = tex.extent;
 
             cmd.dispatch(
                 (extent.width + dispatch.x - 1) / dispatch.x,
@@ -178,22 +178,22 @@ pub const RenderGraph = struct {
 
         const depthInf: ?vk.VkRenderingAttachmentInfo = if (passData.depthAtt) |depth| blk: {
             const texMeta = try resMan.getTexMeta(depth.texId);
-            const texBundle = try resMan.getTexBundle(depth.texId);
-            break :blk texBundle.bases[cmd.flightId].createAttachment(texMeta.texType, depth.clear);
+            const tex = try resMan.getTex(depth.texId, cmd.flightId);
+            break :blk tex.createAttachment(texMeta.texType, depth.clear);
         } else null;
 
         const stencilInf: ?vk.VkRenderingAttachmentInfo = if (passData.stencilAtt) |stencil| blk: {
             const texMeta = try resMan.getTexMeta(stencil.texId);
-            const texBundle = try resMan.getTexBundle(stencil.texId);
-            break :blk texBundle.bases[cmd.flightId].createAttachment(texMeta.texType, stencil.clear);
+            const tex = try resMan.getTex(stencil.texId, cmd.flightId);
+            break :blk tex.createAttachment(texMeta.texType, stencil.clear);
         } else null;
 
         var colorInfs: [8]vk.VkRenderingAttachmentInfo = undefined;
         for (0..passData.colorAtts.len) |i| {
             const colorAtt = passData.colorAtts[i];
             const texMeta = try resMan.getTexMeta(colorAtt.texId);
-            const texBundle = try resMan.getTexBundle(colorAtt.texId);
-            colorInfs[i] = texBundle.bases[cmd.flightId].createAttachment(texMeta.texType, colorAtt.clear);
+            const tex = try resMan.getTex(colorAtt.texId, cmd.flightId);
+            colorInfs[i] = tex.createAttachment(texMeta.texType, colorAtt.clear);
         }
 
         cmd.beginRendering(width, height, colorInfs[0..passData.colorAtts.len], if (depthInf) |*d| d else null, if (stencilInf) |*s| s else null);
@@ -201,8 +201,8 @@ pub const RenderGraph = struct {
         switch (passData.classicTyp) {
             .taskMesh => |taskMesh| {
                 if (taskMesh.indirectBuf) |indirectBuf| {
-                    const buffer = try resMan.getBufBundle(indirectBuf.id);
-                    cmd.drawMeshTasksIndirect(buffer.bases[cmd.flightId].handle, indirectBuf.offset, 1, @sizeOf(vhT.IndirectData));
+                    const buffer = try resMan.getBuf(indirectBuf.id, cmd.flightId);
+                    cmd.drawMeshTasksIndirect(buffer.handle, indirectBuf.offset, 1, @sizeOf(vhT.IndirectData));
                 } else {
                     cmd.drawMeshTasks(taskMesh.workgroups.x, taskMesh.workgroups.y, taskMesh.workgroups.z);
                 }
@@ -220,8 +220,8 @@ pub const RenderGraph = struct {
 
         for (swapchains) |swapchain| { // Render Texture and Swapchain Preperations
             const renderTexMeta = try resMan.getTexMeta(swapchain.renderTexId);
-            const renderTexBundle = try resMan.getTexBundle(swapchain.renderTexId);
-            try self.checkImageState(&renderTexBundle.bases[cmd.flightId], renderTexMeta.subRange, .{ .stage = .Transfer, .access = .TransferRead, .layout = .TransferSrc });
+            const renderTex = try resMan.getTex(swapchain.renderTexId, cmd.flightId);
+            try self.checkImageState(renderTex, renderTexMeta.subRange, .{ .stage = .Transfer, .access = .TransferRead, .layout = .TransferSrc });
             try self.checkImageState(&swapchain.textures[swapchain.curIndex], swapchain.subRange, .{ .stage = .Transfer, .access = .TransferWrite, .layout = .TransferDst });
         }
         self.bakeBarriers(cmd, "Blits Prep");
@@ -230,8 +230,8 @@ pub const RenderGraph = struct {
         cmd.startQuery(.TopOfPipe, 55, "Blits Present");
 
         for (swapchains) |swapchain| { // Blits + Swapchain Presentation Barriers
-            const renderTexBundle = try resMan.getTexBundle(swapchain.renderTexId);
-            cmd.copyImageToImage(renderTexBundle.bases[cmd.flightId].img, renderTexBundle.bases[cmd.flightId].extent, swapchain.getCurTexture().img, swapchain.getExtent3D(), rc.RENDER_TEX_STRETCH);
+            const renderTex = try resMan.getTex(swapchain.renderTexId, cmd.flightId);
+            cmd.copyImageToImage(renderTex.img, renderTex.extent, swapchain.getCurTexture().img, swapchain.getExtent3D(), rc.RENDER_TEX_STRETCH);
             try self.checkImageState(swapchain.getCurTexture(), swapchain.subRange, .{ .stage = .ColorAtt, .access = .ColorAttReadWrite, .layout = .Attachment });
         }
         self.bakeBarriers(cmd, "Blits Present");
