@@ -1,5 +1,4 @@
 const TextureBase = @import("../types/res/TextureBase.zig").TextureBase;
-const DescriptorBuffer = @import("DescriptorMan.zig").DescriptorBuffer;
 const TextureMeta = @import("../types/res/TextureMeta.zig").TextureMeta;
 const BufferMeta = @import("../types/res/BufferMeta.zig").BufferMeta;
 const BufferBase = @import("../types/res/BufferBase.zig").BufferBase;
@@ -9,6 +8,9 @@ const vhF = @import("../help/Functions.zig");
 const vk = @import("../../modules/vk.zig").c;
 const vhE = @import("../help/Enums.zig");
 const std = @import("std");
+
+const TextureBundle = @import("ResourceMan.zig").TextureBundle;
+const BufferBundle = @import("ResourceMan.zig").BufferBundle;
 
 pub const Vma = struct {
     handle: vk.VmaAllocator,
@@ -68,7 +70,15 @@ pub const Vma = struct {
         std.debug.print("(is in {s}, CPU {s})\n", .{ memory, visible });
     }
 
-    pub fn allocDefinedBuffer(self: *const Vma, bufInf: BufferMeta.BufInf) !BufferMeta {
+    pub fn createBufferMeta(_: *const Vma, bufInf: BufferMeta.BufInf) BufferMeta {
+        return .{
+            .typ = bufInf.typ,
+            .update = bufInf.update,
+            .elementSize = bufInf.elementSize,
+        };
+    }
+
+    pub fn allocDefinedBuffer(self: *const Vma, bufInf: BufferMeta.BufInf) !BufferBase {
         const bufByteSize = @as(vk.VkDeviceSize, bufInf.len) * bufInf.elementSize;
         if (bufByteSize == 0) return error.BufferByteSizeIsZero;
 
@@ -76,27 +86,7 @@ pub const Vma = struct {
         const memUse = vhF.getMemUsage(bufInf.mem);
         const allocFlags = vhF.getBufferAllocationFlags(bufInf.mem, bufInf.typ);
 
-        var bufferBases: [rc.MAX_IN_FLIGHT]BufferBase = undefined;
-
-        switch (bufInf.update) {
-            .Overwrite => {
-                const tempBuffer = try self.allocBuffer(bufByteSize, bufUse, memUse, allocFlags);
-                for (0..rc.MAX_IN_FLIGHT) |i| bufferBases[i] = tempBuffer;
-            },
-            .PerFrame => {
-                for (0..rc.MAX_IN_FLIGHT) |i| {
-                    const tempBuffer = try self.allocBuffer(bufByteSize, bufUse, memUse, allocFlags);
-                    bufferBases[i] = tempBuffer;
-                }
-            },
-        }
-
-        return .{
-            .bases = bufferBases,
-            .typ = bufInf.typ,
-            .update = bufInf.update,
-            .elementSize = bufInf.elementSize,
-        };
+        return try self.allocBuffer(bufByteSize, bufUse, memUse, allocFlags);
     }
 
     pub fn allocBuffer(self: *const Vma, size: vk.VkDeviceSize, bufUse: vk.VkBufferUsageFlags, memUse: vk.VmaMemoryUsage, memFlags: vk.VmaAllocationCreateFlags) !BufferBase {
@@ -134,6 +124,27 @@ pub const Vma = struct {
         };
     }
 
+    pub fn createTextureMeta(_: *const Vma, texInf: TextureMeta.TexInf) TextureMeta {
+        return .{
+            .texType = texInf.typ,
+            .update = texInf.update,
+            .viewType = vk.VK_IMAGE_VIEW_TYPE_2D,
+            .format = vhF.getImageFormat(texInf.typ),
+            .subRange = vhF.createSubresourceRange(vhF.getImageAspectFlags(texInf.typ), 0, 1, 0, 1),
+        };
+    }
+
+    pub fn allocDefinedTexture(self: *Vma, texInf: TextureMeta.TexInf) !TextureBase {
+        const memUsage = vhF.getMemUsage(texInf.mem);
+        const texUse = vhF.getImageUse(texInf.typ);
+        const format = vhF.getImageFormat(texInf.typ);
+        const aspectFlags = vhF.getImageAspectFlags(texInf.typ);
+        const subRange = vhF.createSubresourceRange(aspectFlags, 0, 1, 0, 1);
+        const extent = vk.VkExtent3D{ .width = texInf.width, .height = texInf.height, .depth = texInf.depth };
+
+        return try self.allocTexture(memUsage, texUse, format, extent, subRange, vk.VK_IMAGE_VIEW_TYPE_2D);
+    }
+
     fn allocTexture(
         self: *Vma,
         memType: vk.VmaMemoryUsage,
@@ -161,60 +172,28 @@ pub const Vma = struct {
         };
     }
 
-    pub fn allocDefinedTexture(self: *Vma, texInf: TextureMeta.TexInf) !TextureMeta {
-        const memUsage = vhF.getMemUsage(texInf.mem);
-        const texUse = vhF.getImageUse(texInf.typ);
-        const format = vhF.getImageFormat(texInf.typ);
-        const aspectFlags = vhF.getImageAspectFlags(texInf.typ);
-        const subRange = vhF.createSubresourceRange(aspectFlags, 0, 1, 0, 1);
-        const extent = vk.VkExtent3D{ .width = texInf.width, .height = texInf.height, .depth = texInf.depth };
-
-        var texBase: [rc.MAX_IN_FLIGHT]TextureBase = undefined;
-
-        switch (texInf.update) {
-            .Overwrite => { // Single image shared across all frames
-                const img = try self.allocTexture(memUsage, texUse, format, extent, subRange, vk.VK_IMAGE_VIEW_TYPE_2D);
-                for (0..rc.MAX_IN_FLIGHT) |i| texBase[i] = img;
-            },
-            .PerFrame => { // Separate image per frame
-                for (0..rc.MAX_IN_FLIGHT) |i| {
-                    texBase[i] = try self.allocTexture(memUsage, texUse, format, extent, subRange, vk.VK_IMAGE_VIEW_TYPE_2D);
-                }
-            },
-        }
-
-        return .{
-            .base = texBase,
-            .texType = texInf.typ,
-            .update = texInf.update,
-            .viewType = vk.VK_IMAGE_VIEW_TYPE_2D,
-            .format = format,
-            .subRange = subRange,
-        };
-    }
-
     pub fn freeRawBuffer(self: *const Vma, buffer: vk.VkBuffer, allocation: vk.VmaAllocation) void {
         vk.vmaDestroyBuffer(self.handle, buffer, allocation);
     }
 
-    pub fn freeBuffer(self: *const Vma, buffer: *BufferMeta) void {
-        const count = switch (buffer.update) {
+    pub fn freeBuffer(self: *const Vma, bufBundle: *BufferBundle, updateTyp: vhE.UpdateType) void {
+        const count = switch (updateTyp) {
             .Overwrite => 1,
             .PerFrame => rc.MAX_IN_FLIGHT,
         };
-        for (0..count) |i| self.freeRawBuffer(buffer.bases[@intCast(i)].handle, buffer.bases[@intCast(i)].allocation);
+        for (0..count) |i| self.freeRawBuffer(bufBundle.bases[@intCast(i)].handle, bufBundle.bases[@intCast(i)].allocation);
     }
 
     pub fn freeBufferBase(self: *const Vma, bufBase: *BufferBase) void {
         vk.vmaDestroyBuffer(self.handle, bufBase.handle, bufBase.allocation);
     }
 
-    pub fn freeTexture(self: *const Vma, tex: *TextureMeta) void {
-        const count = switch (tex.update) {
+    pub fn freeTexture(self: *const Vma, texBundle: *TextureBundle, updateTyp: vhE.UpdateType) void {
+        const count = switch (updateTyp) {
             .Overwrite => 1,
             .PerFrame => rc.MAX_IN_FLIGHT,
         };
-        for (0..count) |i| self.freeTextureBase(&tex.base[@intCast(i)]);
+        for (0..count) |i| self.freeTextureBase(&texBundle.bases[@intCast(i)]);
     }
 
     pub fn freeTextureBase(self: *const Vma, texBase: *TextureBase) void {

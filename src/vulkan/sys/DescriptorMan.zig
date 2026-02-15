@@ -73,9 +73,10 @@ pub const DescriptorMan = struct {
         try self.freedDescIndices.append(descIndex);
     }
 
-    pub fn queueTextureDescriptor(self: *DescriptorMan, tex: *const TextureMeta, flightId: u8, descIndex: u32) !void {
+    pub fn queueTextureDescriptor(self: *DescriptorMan, texMeta: *const TextureMeta, img: vk.VkImage, descIndex: u32) !void {
+        // std.debug.print("QUEUED TEXTURE DESCRIPTOR\n", .{});
         const imgViewPtr = try self.imgViewStorage.appendReturnPtr(
-            vhF.getViewCreateInfo(tex.base[flightId].img, tex.viewType, tex.format, tex.subRange),
+            vhF.getViewCreateInfo(img, texMeta.viewType, texMeta.format, texMeta.subRange),
         );
 
         const imgDescPtr = try self.imgDescStorage.appendReturnPtr(
@@ -89,7 +90,7 @@ pub const DescriptorMan = struct {
         try self.queuedDescInfos.append(
             vk.VkResourceDescriptorInfoEXT{
                 .sType = vk.VK_STRUCTURE_TYPE_RESOURCE_DESCRIPTOR_INFO_EXT,
-                .type = if (tex.texType == .Color) vk.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE else vk.VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+                .type = if (texMeta.texType == .Color) vk.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE else vk.VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
                 .data = .{ .pImage = imgDescPtr },
             },
         );
@@ -98,6 +99,7 @@ pub const DescriptorMan = struct {
     }
 
     pub fn queueBufferDescriptor(self: *DescriptorMan, gpuAddress: u64, size: u64, descIndex: u32, bufTyp: vhE.BufferType) !void {
+        // std.debug.print("QUEUED BUFFER DESCRIPTOR\n", .{});
         const devRangePtr = try self.devRangeStorage.appendReturnPtr(
             vk.VkDeviceAddressRangeEXT{
                 .address = gpuAddress,

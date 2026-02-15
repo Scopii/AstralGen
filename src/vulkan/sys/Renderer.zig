@@ -93,9 +93,11 @@ pub const Renderer = struct {
     }
 
     pub fn updateRenderTexture(self: *Renderer, texId: TextureMeta.TexId) !void {
-        const tex = try self.resMan.getTexturePtr(texId);
-        const old = tex.base[0].extent;
-        const oldType = tex.texType;
+        const texBundle = try self.resMan.getTexBundle(texId);
+        const texMeta = try self.resMan.getTextureMeta(texId);
+
+        const old = texBundle.bases[0].extent;
+        const oldType = texMeta.texType;
         const new = self.swapMan.getMaxRenderExtent(texId);
 
         if (new.width != old.width or new.height != old.height) {

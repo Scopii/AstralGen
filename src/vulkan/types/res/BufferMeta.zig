@@ -5,7 +5,6 @@ const vk = @import("../../../modules/vk.zig").c;
 const vhE = @import("../../help/Enums.zig");
 
 pub const BufferMeta = struct {
-    bases: [rc.MAX_IN_FLIGHT]BufferBase,
     descIndices: [rc.MAX_IN_FLIGHT]u32 = .{0} ** rc.MAX_IN_FLIGHT,
 
     updateId: u8 = 0,

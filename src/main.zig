@@ -25,6 +25,11 @@ pub fn main() void {
     };
     defer astralGen.deinit();
 
+    astralGen.setupApp() catch |err| {
+        std.debug.print("AstralGen failed to setup Err {}\n", .{err});
+        return;
+    };
+
     astralGen.initWindows() catch |err| {
         std.debug.print("AstralGen failed to init Windows Err {}\n", .{err});
         return;

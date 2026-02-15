@@ -9,7 +9,8 @@ const PushData = @import("../types/res/PushData.zig").PushData;
 const rc = @import("../../configs/renderConfig.zig");
 const Context = @import("Context.zig").Context;
 const vk = @import("../../modules/vk.zig").c;
-const vkT = @import("../help/Types.zig");
+const vhT = @import("../help/Types.zig");
+const vhE = @import("../help/Enums.zig");
 const Allocator = std.mem.Allocator;
 const Vma = @import("Vma.zig").Vma;
 const std = @import("std");
@@ -21,25 +22,29 @@ pub const Transfer = struct {
     size: u64,
 };
 
-pub const BufferContainer = struct {
+pub const BufferBundle = struct {
     bases: [rc.MAX_IN_FLIGHT]BufferBase,
 };
 
-pub const TextureContainer = struct {
+pub const TextureBundle = struct {
     bases: [rc.MAX_IN_FLIGHT]TextureBase,
 };
 
 pub const ResourceMan = struct {
     vma: Vma,
+    alloc: Allocator,
     descMan: DescriptorMan,
 
-    buffers: CreateMapArray(BufferMeta, rc.BUF_MAX, u32, rc.BUF_MAX, 0) = .{},
-    textures: CreateMapArray(TextureMeta, rc.TEX_MAX, u32, rc.TEX_MAX, 0) = .{},
+    bufMetas: CreateMapArray(BufferMeta, rc.BUF_MAX, u32, rc.BUF_MAX, 0) = .{},
+    texMetas: CreateMapArray(TextureMeta, rc.TEX_MAX, u32, rc.TEX_MAX, 0) = .{},
+
+    bufBundles: CreateMapArray(BufferBundle, rc.BUF_MAX, u32, rc.BUF_MAX, 0) = .{},
+    texBundles: CreateMapArray(TextureBundle, rc.TEX_MAX, u32, rc.TEX_MAX, 0) = .{},
 
     realFramesInFlights: [rc.MAX_IN_FLIGHT]u64 = .{0} ** rc.MAX_IN_FLIGHT,
 
-    bufToDeleteLists: [rc.MAX_IN_FLIGHT + 1]FixedList(BufferMeta, rc.BUF_MAX),
-    texToDeleteLists: [rc.MAX_IN_FLIGHT + 1]FixedList(TextureMeta, rc.TEX_MAX),
+    bufToDeleteLists: [rc.MAX_IN_FLIGHT + 1]FixedList(u32, rc.BUF_MAX),
+    texToDeleteLists: [rc.MAX_IN_FLIGHT + 1]FixedList(u32, rc.TEX_MAX),
 
     stagingBuffers: [rc.MAX_IN_FLIGHT]BufferBase,
     stagingOffsets: [rc.MAX_IN_FLIGHT]u64 = .{0} ** rc.MAX_IN_FLIGHT,
@@ -54,14 +59,15 @@ pub const ResourceMan = struct {
         var transfers: [rc.MAX_IN_FLIGHT]std.array_list.Managed(Transfer) = undefined;
         for (0..rc.MAX_IN_FLIGHT) |i| transfers[i] = std.array_list.Managed(Transfer).init(alloc);
 
-        var bufToDeleteList: [rc.MAX_IN_FLIGHT + 1]FixedList(BufferMeta, rc.BUF_MAX) = undefined;
+        var bufToDeleteList: [rc.MAX_IN_FLIGHT + 1]FixedList(u32, rc.BUF_MAX) = undefined;
         for (0..bufToDeleteList.len) |i| bufToDeleteList[i] = .{};
 
-        var texToDeleteLists: [rc.MAX_IN_FLIGHT + 1]FixedList(TextureMeta, rc.TEX_MAX) = undefined;
+        var texToDeleteLists: [rc.MAX_IN_FLIGHT + 1]FixedList(u32, rc.TEX_MAX) = undefined;
         for (0..texToDeleteLists.len) |i| texToDeleteLists[i] = .{};
 
         return .{
             .vma = vma,
+            .alloc = alloc,
             .descMan = try DescriptorMan.init(vma, context.gpi, context.gpu),
             .stagingBuffers = stagingBuffers,
             .transfers = transfers,
@@ -71,14 +77,16 @@ pub const ResourceMan = struct {
     }
 
     pub fn deinit(self: *ResourceMan) void {
-        for (self.buffers.getElements()) |*buf| self.vma.freeBuffer(buf);
-        for (self.textures.getElements()) |*tex| self.vma.freeTexture(tex);
-
-        for (&self.bufToDeleteLists) |*bufList| {
-            for (bufList.slice()) |*buf| self.vma.freeBuffer(buf);
+        for (0..self.bufMetas.getCount()) |i| {
+            const updateTyp = self.bufMetas.getAtIndex(@intCast(i)).update;
+            const bufBundle = self.bufBundles.getPtrAtIndex(@intCast(i));
+            self.vma.freeBuffer(bufBundle, updateTyp);
         }
-        for (&self.texToDeleteLists) |*texList| {
-            for (texList.slice()) |*tex| self.vma.freeTexture(tex);
+
+        for (0..self.texBundles.getCount()) |i| {
+            const updateTyp = self.texMetas.getAtIndex(@intCast(i)).update;
+            const texBundle = self.texBundles.getPtrAtIndex(@intCast(i));
+            self.vma.freeTexture(texBundle, updateTyp);
         }
 
         for (&self.stagingBuffers) |*stagingBuffer| self.vma.freeRawBuffer(stagingBuffer.handle, stagingBuffer.allocation);
@@ -89,20 +97,20 @@ pub const ResourceMan = struct {
     }
 
     pub fn update(self: *ResourceMan, flightId: u8, frame: u64) !void {
-        if (rc.GPU_READBACK == true) try self.printReadbackBuffer(rc.readbackSB.id, vkT.ReadbackData, flightId);
+        if (rc.GPU_READBACK == true) try self.printReadbackBuffer(rc.readbackSB.id, vhT.ReadbackData, flightId);
         try self.cleanupResources(frame);
         try self.descMan.updateDescriptors();
     }
 
     pub fn getBufferResourceSlot(self: *ResourceMan, bufId: BufferMeta.BufId, flightId: u8) !u32 {
-        const buf = try self.getBufferPtr(bufId);
-        const updateFlightId = if (buf.typ == .Indirect) flightId else buf.updateId;
-        return buf.descIndices[updateFlightId];
+        const bufMeta = try self.getBufferMeta(bufId);
+        const updateFlightId = if (bufMeta.typ == .Indirect) flightId else bufMeta.updateId;
+        return bufMeta.descIndices[updateFlightId];
     }
 
     pub fn getTextureResourceSlot(self: *ResourceMan, texId: TextureMeta.TexId, flightId: u8) !u32 {
-        const tex = try self.getTexturePtr(texId);
-        return tex.descIndices[flightId];
+        const texMeta = self.texMetas.getPtr(texId.val);
+        return texMeta.descIndices[flightId];
     }
 
     pub fn resetTransfers(self: *ResourceMan, flightId: u8) void {
@@ -110,66 +118,92 @@ pub const ResourceMan = struct {
         self.transfers[flightId].clearRetainingCapacity();
     }
 
-    pub fn getTexturePtr(self: *ResourceMan, texId: TextureMeta.TexId) !*TextureMeta {
-        if (self.textures.isKeyUsed(texId.val) == true) return self.textures.getPtr(texId.val) else return error.TextureIdNotUsed;
+    pub fn getTexBundle(self: *ResourceMan, texId: TextureMeta.TexId) !*TextureBundle {
+        if (self.texBundles.isKeyUsed(texId.val) == true) return self.texBundles.getPtr(texId.val) else return error.TextureIdNotUsed;
     }
 
-    pub fn getBufferPtr(self: *ResourceMan, bufId: BufferMeta.BufId) !*BufferMeta {
-        if (self.buffers.isKeyUsed(bufId.val) == true) return self.buffers.getPtr(bufId.val) else return error.BufferIdNotUsed;
+    pub fn getBufBundle(self: *ResourceMan, bufId: BufferMeta.BufId) !*BufferBundle {
+        if (self.bufBundles.isKeyUsed(bufId.val) == true) return self.bufBundles.getPtr(bufId.val) else return error.BufferIdNotUsed;
+    }
+
+    pub fn getTextureMeta(self: *ResourceMan, texId: TextureMeta.TexId) !*TextureMeta {
+        if (self.texMetas.isKeyUsed(texId.val) == true) return self.texMetas.getPtr(texId.val) else return error.TextureIdNotUsed;
+    }
+
+    pub fn getBufferMeta(self: *ResourceMan, bufId: BufferMeta.BufId) !*BufferMeta {
+        if (self.bufMetas.isKeyUsed(bufId.val) == true) return self.bufMetas.getPtr(bufId.val) else return error.BufferIdNotUsed;
     }
 
     pub fn createBuffer(self: *ResourceMan, bufInf: BufferMeta.BufInf) !void {
-        var buffer = try self.vma.allocDefinedBuffer(bufInf);
+        var bufBundle: BufferBundle = undefined;
+        var bufMeta: BufferMeta = self.vma.createBufferMeta(bufInf);
 
         switch (bufInf.update) {
             .Overwrite => {
+                const buffer = try self.vma.allocDefinedBuffer(bufInf);
                 const descIndex = try self.descMan.getFreeDescriptorIndex();
+                try self.descMan.queueBufferDescriptor(buffer.gpuAddress, buffer.size, descIndex, bufInf.typ);
 
-                try self.descMan.queueBufferDescriptor(buffer.bases[0].gpuAddress, buffer.bases[0].size, descIndex, buffer.typ);
-                for (0..buffer.descIndices.len) |i| buffer.descIndices[i] = descIndex;
+                for (0..rc.MAX_IN_FLIGHT) |i| {
+                    bufMeta.descIndices[i] = descIndex;
+                    bufBundle.bases[i] = buffer;
+                }
             },
             .PerFrame => {
-                for (0..buffer.descIndices.len) |i| {
+                for (0..rc.MAX_IN_FLIGHT) |i| {
+                    const buffer = try self.vma.allocDefinedBuffer(bufInf);
                     const descIndex = try self.descMan.getFreeDescriptorIndex();
+                    try self.descMan.queueBufferDescriptor(buffer.gpuAddress, buffer.size, descIndex, bufInf.typ);
 
-                    try self.descMan.queueBufferDescriptor(buffer.bases[i].gpuAddress, buffer.bases[i].size, descIndex, buffer.typ);
-                    buffer.descIndices[i] = descIndex;
+                    bufMeta.descIndices[i] = descIndex;
+                    bufBundle.bases[i] = buffer;
                 }
             },
         }
         std.debug.print("Buffer ID {}, Type {}, Update {} created! Descriptor Indices ", .{ bufInf.id.val, bufInf.typ, bufInf.update });
-        for (buffer.descIndices) |index| std.debug.print("{} ", .{index});
-        self.vma.printMemoryInfo(buffer.bases[0].allocation);
+        for (bufMeta.descIndices) |index| std.debug.print("{} ", .{index});
+        self.vma.printMemoryInfo(bufBundle.bases[0].allocation);
 
-        self.buffers.set(bufInf.id.val, buffer);
+        self.bufMetas.set(bufInf.id.val, bufMeta);
+        self.bufBundles.set(bufInf.id.val, bufBundle);
     }
 
     pub fn createTexture(self: *ResourceMan, texInf: TextureMeta.TexInf) !void {
-        var tex = try self.vma.allocDefinedTexture(texInf);
+        var texBundle: TextureBundle = undefined;
+        var texMeta: TextureMeta = self.vma.createTextureMeta(texInf);
 
         switch (texInf.update) {
             .Overwrite => {
+                const tex = try self.vma.allocDefinedTexture(texInf);
                 const descIndex = try self.descMan.getFreeDescriptorIndex();
-                try self.descMan.queueTextureDescriptor(&tex, 0, descIndex);
-                for (0..tex.descIndices.len) |i| tex.descIndices[i] = descIndex;
+                try self.descMan.queueTextureDescriptor(&texMeta, tex.img, descIndex);
+
+                for (0..rc.MAX_IN_FLIGHT) |i| {
+                    texMeta.descIndices[i] = descIndex;
+                    texBundle.bases[i] = tex;
+                }
             },
             .PerFrame => {
-                for (0..tex.descIndices.len) |i| {
+                for (0..rc.MAX_IN_FLIGHT) |i| {
+                    const tex = try self.vma.allocDefinedTexture(texInf);
                     const descIndex = try self.descMan.getFreeDescriptorIndex();
-                    try self.descMan.queueTextureDescriptor(&tex, @intCast(i), descIndex);
-                    tex.descIndices[i] = descIndex;
+                    try self.descMan.queueTextureDescriptor(&texMeta, tex.img, descIndex);
+
+                    texMeta.descIndices[i] = descIndex;
+                    texBundle.bases[i] = tex;
                 }
             },
         }
         std.debug.print("Texture ID {}, Type {}, Update {} created! Descriptor Indices ", .{ texInf.id.val, texInf.typ, texInf.update });
-        for (tex.descIndices) |index| std.debug.print("{} ", .{index});
-        self.vma.printMemoryInfo(tex.base[0].allocation);
+        for (texMeta.descIndices) |index| std.debug.print("{} ", .{index});
+        self.vma.printMemoryInfo(texBundle.bases[0].allocation);
 
-        self.textures.set(texInf.id.val, tex);
+        self.texMetas.set(texInf.id.val, texMeta);
+        self.texBundles.set(texInf.id.val, texBundle);
     }
 
     pub fn getBufferDataPtr(self: *ResourceMan, bufId: BufferMeta.BufId, comptime T: type, flightId: u8) !*T {
-        const buffer = try self.getBufferPtr(bufId);
+        const buffer = try self.getBufBundle(bufId);
         if (buffer.bases[flightId].mappedPtr) |ptr| {
             return @as(*T, @ptrCast(@alignCast(ptr)));
         }
@@ -192,8 +226,10 @@ pub const ResourceMan = struct {
             else => return error.ExpectedPointer,
         };
 
-        var buffer = try self.getBufferPtr(bufInf.id);
-        if (bytes.len > buffer.bases[flightId].size) return error.BufferBaseTooSmallForUpdate;
+        const bufBundle = try self.getBufBundle(bufInf.id);
+        const bufMeta = try self.getBufferMeta(bufInf.id);
+
+        if (bytes.len > bufBundle.bases[flightId].size) return error.BufferBaseTooSmallForUpdate;
 
         switch (bufInf.mem) {
             .Gpu => {
@@ -207,27 +243,31 @@ pub const ResourceMan = struct {
                 @memcpy(stagingPtr[stagingOffset..][0..bytes.len], bytes);
             },
             .CpuWrite => {
-                const pMappedData = buffer.bases[flightId].mappedPtr orelse return error.BufferNotMapped;
+                const pMappedData = bufBundle.bases[flightId].mappedPtr orelse return error.BufferNotMapped;
                 const destPtr: [*]u8 = @ptrCast(pMappedData);
                 @memcpy(destPtr[0..bytes.len], bytes);
             },
             .CpuRead => return error.CpuReadBufferCantUpdate,
         }
-        try self.descMan.queueBufferDescriptor(buffer.bases[flightId].gpuAddress, bytes.len, buffer.descIndices[flightId], buffer.typ);
-        buffer.bases[flightId].curCount = @intCast(bytes.len / bufInf.elementSize);
-        buffer.updateId = flightId;
+        try self.descMan.queueBufferDescriptor(bufBundle.bases[flightId].gpuAddress, bytes.len, bufMeta.descIndices[flightId], bufMeta.typ);
+        bufBundle.bases[flightId].curCount = @intCast(bytes.len / bufInf.elementSize);
+        bufMeta.updateId = flightId;
     }
 
     pub fn queueTextureDestruction(self: *ResourceMan, texId: TextureMeta.TexId, curFrame: u64) !void {
-        const tex = try self.getTexturePtr(texId);
-        try self.texToDeleteLists[curFrame % rc.MAX_IN_FLIGHT + 1].append(tex.*);
-        self.textures.removeAtKey(texId.val);
+        const metaIdx = self.texMetas.getIndex(texId.val);
+        try self.texToDeleteLists[curFrame % rc.MAX_IN_FLIGHT + 1].append(metaIdx);
+
+        self.texMetas.unlink(texId.val);
+        self.texBundles.unlink(texId.val);
     }
 
     pub fn queueBufferDestruction(self: *ResourceMan, bufId: BufferMeta.BufId, curFrame: u64) !void {
-        const buf = try self.getBufferPtr(bufId);
-        try self.bufToDeleteLists[curFrame % rc.MAX_IN_FLIGHT + 1].append(buf.*);
-        self.buffers.removeAtKey(bufId.val);
+        const metaIdx = self.bufMetas.getIndex(bufId.val);
+        try self.bufToDeleteLists[curFrame % rc.MAX_IN_FLIGHT + 1].append(metaIdx);
+
+        self.bufMetas.unlink(bufId.val);
+        self.bufBundles.unlink(bufId.val);
     }
 
     pub fn cleanupResources(self: *ResourceMan, curFrame: u64) !void {
@@ -237,35 +277,49 @@ pub const ResourceMan = struct {
         const queueIndex = targetFrame % rc.MAX_IN_FLIGHT + 1;
 
         if (self.texToDeleteLists[queueIndex].len > 0) {
-            for (self.texToDeleteLists[queueIndex].slice()) |*tex| try self.destroyTexture(tex);
+            for (self.texToDeleteLists[queueIndex].slice()) |texIndex| {
+                try self.destroyTexture(texIndex);
+                self.texMetas.removeAtIndex(texIndex);
+                self.texBundles.removeAtIndex(texIndex);
+            }
             self.texToDeleteLists[queueIndex].clear();
             std.debug.print("Textures destroyed: Frame {} (queued Frame {})\n", .{ curFrame, targetFrame });
         }
 
         if (self.bufToDeleteLists[queueIndex].len > 0) {
-            for (self.bufToDeleteLists[queueIndex].slice()) |*buf| try self.destroyBuffer(buf);
+            for (self.bufToDeleteLists[queueIndex].slice()) |bufIndex| {
+                try self.destroyBuffer(bufIndex);
+                self.bufMetas.removeAtIndex(bufIndex);
+                self.bufBundles.removeAtIndex(bufIndex);
+            }
             self.bufToDeleteLists[queueIndex].clear();
             std.debug.print("Buffers destroyed: Frame {} (queued Frame {})\n", .{ curFrame, targetFrame });
         }
     }
 
-    fn destroyTexture(self: *ResourceMan, tex: *TextureMeta) !void {
-        self.vma.freeTexture(tex);
+    pub fn destroyTexture(self: *ResourceMan, texIndex: u32) !void {
+        const texMeta = self.texMetas.getPtrAtIndex(texIndex);
+        const texBundle = self.texBundles.getPtrAtIndex(texIndex);
 
-        const count = switch (tex.update) {
+        self.vma.freeTexture(texBundle, texMeta.update);
+
+        const count = switch (texMeta.update) {
             .Overwrite => 1,
             .PerFrame => rc.MAX_IN_FLIGHT,
         };
-        for (0..count) |i| try self.descMan.freeDescriptor(tex.descIndices[i]);
+        for (0..count) |i| try self.descMan.freeDescriptor(texMeta.descIndices[i]);
     }
 
-    fn destroyBuffer(self: *ResourceMan, buf: *BufferMeta) !void {
-        self.vma.freeBuffer(buf);
+    pub fn destroyBuffer(self: *ResourceMan, bufIndex: u32) !void {
+        const bufMeta = self.bufMetas.getPtrAtIndex(bufIndex);
+        const bufBundle = self.bufBundles.getPtrAtIndex(bufIndex);
 
-        const count = switch (buf.update) {
+        self.vma.freeBuffer(bufBundle, bufMeta.update);
+
+        const count = switch (bufMeta.update) {
             .Overwrite => 1,
             .PerFrame => rc.MAX_IN_FLIGHT,
         };
-        for (0..count) |i| try self.descMan.freeDescriptor(buf.descIndices[i]);
+        for (0..count) |i| try self.descMan.freeDescriptor(bufMeta.descIndices[i]);
     }
 };

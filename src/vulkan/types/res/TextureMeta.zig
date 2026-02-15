@@ -6,7 +6,6 @@ const vhE = @import("../../help/Enums.zig");
 
 pub const TextureMeta = struct {
     descIndices: [rc.MAX_IN_FLIGHT]u32 = .{0} ** rc.MAX_IN_FLIGHT,
-    base: [rc.MAX_IN_FLIGHT]TextureBase,
 
     subRange: vk.VkImageSubresourceRange,
     viewType: vk.VkImageViewType,

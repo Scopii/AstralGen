@@ -61,12 +61,6 @@ pub const App = struct {
         try renderer.addShaders(shaderCompiler.pullFreshShaders());
         shaderCompiler.freeFreshShaders();
 
-        // RENDERING SET UP
-        try renderer.createBuffers(rc.BUFFERS);
-        try renderer.createTexture(rc.TEXTURES);
-        try renderer.createPasses(rc.PASSES);
-        try renderer.updateBuffer(rc.objectSB, ecs.getObjects());
-
         return .{
             .cam = Camera.init(.{}),
             .timeMan = TimeManager.init(),
@@ -85,6 +79,14 @@ pub const App = struct {
         self.shaderCompiler.deinit();
         self.windowMan.deinit();
         self.memoryMan.deinit();
+    }
+
+    pub fn setupApp(self: *App) !void {
+        // RENDERING SET UP
+        try self.renderer.createBuffers(rc.BUFFERS);
+        try self.renderer.createTexture(rc.TEXTURES);
+        try self.renderer.createPasses(rc.PASSES);
+        try self.renderer.updateBuffer(rc.objectSB, self.ecs.getObjects());
     }
 
     pub fn initWindows(_: *App) !void {
