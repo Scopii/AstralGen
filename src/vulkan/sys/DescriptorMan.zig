@@ -50,7 +50,7 @@ pub const DescriptorMan = struct {
         };
     }
 
-    pub fn deinit(self: *DescriptorMan, vma: Vma) void {
+    pub fn deinit(self: *DescriptorMan, vma: *const Vma) void {
         vma.freeRawBuffer(self.descHeap.handle, self.descHeap.allocation);
     }
 

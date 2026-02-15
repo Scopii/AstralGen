@@ -1,6 +1,7 @@
 const CreateMapArray = @import("../../structures/MapArray.zig").CreateMapArray;
 const TextureMeta = @import("../types/res/TextureMeta.zig").TextureMeta;
 const TextureBase = @import("../types/res/TextureBase.zig").TextureBase;
+const ResourceStorage = @import("ResourceStorage.zig").ResourceStorage;
 const FixedList = @import("../../structures/FixedList.zig").FixedList;
 const BufferMeta = @import("../types/res/BufferMeta.zig").BufferMeta;
 const BufferBase = @import("../types/res/BufferBase.zig").BufferBase;
@@ -14,13 +15,6 @@ const vhE = @import("../help/Enums.zig");
 const Allocator = std.mem.Allocator;
 const Vma = @import("Vma.zig").Vma;
 const std = @import("std");
-
-pub const Transfer = struct {
-    srcOffset: u64,
-    dstResId: BufferMeta.BufId,
-    dstOffset: u64,
-    size: u64,
-};
 
 pub const BufferBundle = struct {
     bases: [rc.MAX_IN_FLIGHT]BufferBase,
@@ -54,18 +48,13 @@ pub const ResourceMan = struct {
     bufZombieLists: [rc.MAX_IN_FLIGHT + 1]FixedList(BufferZombie, rc.BUF_MAX),
     texZombieLists: [rc.MAX_IN_FLIGHT + 1]FixedList(TextureZombie, rc.TEX_MAX),
 
-    stagingBuffers: [rc.MAX_IN_FLIGHT]BufferBase,
-    stagingOffsets: [rc.MAX_IN_FLIGHT]u64 = .{0} ** rc.MAX_IN_FLIGHT,
-    transfers: [rc.MAX_IN_FLIGHT]std.array_list.Managed(Transfer),
+    resStorages: [rc.MAX_IN_FLIGHT]ResourceStorage,
 
     pub fn init(alloc: Allocator, context: *const Context) !ResourceMan {
         const vma = try Vma.init(context.instance, context.gpi, context.gpu);
 
-        var stagingBuffers: [rc.MAX_IN_FLIGHT]BufferBase = undefined;
-        for (0..rc.MAX_IN_FLIGHT) |i| stagingBuffers[i] = try vma.allocStagingBuffer(rc.STAGING_BUF_SIZE);
-
-        var transfers: [rc.MAX_IN_FLIGHT]std.array_list.Managed(Transfer) = undefined;
-        for (0..rc.MAX_IN_FLIGHT) |i| transfers[i] = std.array_list.Managed(Transfer).init(alloc);
+        var resStorages: [rc.MAX_IN_FLIGHT]ResourceStorage = undefined;
+        for (0..rc.MAX_IN_FLIGHT) |i| resStorages[i] = try ResourceStorage.init(alloc, &vma);
 
         var bufZombieLists: [rc.MAX_IN_FLIGHT + 1]FixedList(BufferZombie, rc.BUF_MAX) = undefined;
         for (0..bufZombieLists.len) |i| bufZombieLists[i] = .{};
@@ -77,10 +66,9 @@ pub const ResourceMan = struct {
             .vma = vma,
             .alloc = alloc,
             .descMan = try DescriptorMan.init(vma, context.gpi, context.gpu),
-            .stagingBuffers = stagingBuffers,
-            .transfers = transfers,
             .bufZombieLists = bufZombieLists,
             .texZombieLists = texZombieLists,
+            .resStorages = resStorages,
         };
     }
 
@@ -109,10 +97,8 @@ pub const ResourceMan = struct {
             }
         }
 
-        for (&self.stagingBuffers) |*stagingBuffer| self.vma.freeRawBuffer(stagingBuffer.handle, stagingBuffer.allocation);
-        for (&self.transfers) |*transferList| transferList.deinit();
-
-        self.descMan.deinit(self.vma);
+        for (0..rc.MAX_IN_FLIGHT) |i| self.resStorages[i].deinit(&self.vma);
+        self.descMan.deinit(&self.vma);
         self.vma.deinit();
     }
 
@@ -134,8 +120,7 @@ pub const ResourceMan = struct {
     }
 
     pub fn resetTransfers(self: *ResourceMan, flightId: u8) void {
-        self.stagingOffsets[flightId] = 0;
-        self.transfers[flightId].clearRetainingCapacity();
+        self.resStorages[flightId].resetTransfers();
     }
 
     pub fn getTexBundle(self: *ResourceMan, texId: TextureMeta.TexId) !*TextureBundle {
@@ -251,15 +236,17 @@ pub const ResourceMan = struct {
 
         if (bytes.len > bufBundle.bases[flightId].size) return error.BufferBaseTooSmallForUpdate;
 
+        var resStorage = &self.resStorages[flightId];
+
         switch (bufInf.mem) {
             .Gpu => {
-                const stagingOffset = self.stagingOffsets[flightId];
+                const stagingOffset = resStorage.stagingOffset;
                 if (stagingOffset + bytes.len > rc.STAGING_BUF_SIZE) return error.StagingBufferFull;
 
-                try self.transfers[flightId].append(Transfer{ .srcOffset = stagingOffset, .dstResId = bufInf.id, .dstOffset = 0, .size = bytes.len });
-                self.stagingOffsets[flightId] += (bytes.len + 15) & ~@as(u64, 15);
+                try resStorage.transfers.append(.{ .srcOffset = stagingOffset, .dstResId = bufInf.id, .dstOffset = 0, .size = bytes.len });
+                resStorage.stagingOffset += (bytes.len + 15) & ~@as(u64, 15);
 
-                const stagingPtr: [*]u8 = @ptrCast(self.stagingBuffers[flightId].mappedPtr);
+                const stagingPtr: [*]u8 = @ptrCast(resStorage.stagingBuffer.mappedPtr);
                 @memcpy(stagingPtr[stagingOffset..][0..bytes.len], bytes);
             },
             .CpuWrite => {

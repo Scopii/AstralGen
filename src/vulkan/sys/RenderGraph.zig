@@ -73,10 +73,12 @@ pub const RenderGraph = struct {
     }
 
     pub fn recordTransfers(self: *RenderGraph, cmd: *Cmd, resMan: *ResourceMan) !void {
-        if (resMan.transfers[cmd.flightId].items.len == 0) return;
+        const resStorage = &resMan.resStorages[cmd.flightId];
+
+        if (resStorage.transfers.items.len == 0) return;
         cmd.startQuery(.TopOfPipe, 40, "Transfers");
 
-        for (resMan.transfers[cmd.flightId].items) |transfer| {
+        for (resStorage.transfers.items) |transfer| {
             const bufBundle = try resMan.getBufBundle(transfer.dstResId);
             try self.checkBufferState(&bufBundle.bases[cmd.flightId], .{ .stage = .Transfer, .access = .TransferWrite });
 
@@ -85,7 +87,7 @@ pub const RenderGraph = struct {
                 .dstOffset = transfer.dstOffset,
                 .size = transfer.size,
             };
-            vk.vkCmdCopyBuffer(cmd.handle, resMan.stagingBuffers[cmd.flightId].handle, bufBundle.bases[cmd.flightId].handle, 1, &copyRegion);
+            vk.vkCmdCopyBuffer(cmd.handle, resStorage.stagingBuffer.handle, bufBundle.bases[cmd.flightId].handle, 1, &copyRegion);
         }
         resMan.resetTransfers(cmd.flightId);
         self.bakeBarriers(cmd, "Transfers");
