@@ -16,7 +16,6 @@ const Allocator = std.mem.Allocator;
 const Vma = @import("Vma.zig").Vma;
 const std = @import("std");
 
-
 pub const ResourceMan = struct {
     vma: Vma,
     alloc: Allocator,
@@ -115,13 +114,21 @@ pub const ResourceMan = struct {
     }
 
     pub fn getTex(self: *ResourceMan, texId: TextureMeta.TexId, flightId: u8) !*TextureBase {
-        if (self.texLists[flightId].isKeyUsed(texId.val) == true) return self.texLists[flightId].getPtr(texId.val) else return error.TextureIdNotUsed;
+        const texMeta = try self.getTexMeta(texId);
+        const realIndex = switch (texMeta.update) {
+            .Overwrite => 0,
+            .PerFrame => flightId,
+        };
+        if (self.texLists[realIndex].isKeyUsed(texId.val) == true) return self.texLists[realIndex].getPtr(texId.val) else return error.TextureIdNotUsed;
     }
 
     pub fn getBuf(self: *ResourceMan, bufId: BufferMeta.BufId, flightId: u8) !*BufferBase {
         const bufMeta = try self.getBufMeta(bufId);
-        const updateFlightId = if (bufMeta.typ == .Indirect) flightId else bufMeta.updateId;
-        if (self.bufLists[updateFlightId].isKeyUsed(bufId.val) == true) return self.bufLists[updateFlightId].getPtr(bufId.val) else return error.BufferIdNotUsed;
+        const realIndex = switch (bufMeta.update) {
+            .Overwrite => 0,
+            .PerFrame => if (bufMeta.typ == .Indirect) flightId else bufMeta.updateId,
+        };
+        if (self.bufLists[realIndex].isKeyUsed(bufId.val) == true) return self.bufLists[realIndex].getPtr(bufId.val) else return error.BufferIdNotUsed;
     }
 
     pub fn getTexMeta(self: *ResourceMan, texId: TextureMeta.TexId) !*TextureMeta {
@@ -195,8 +202,9 @@ pub const ResourceMan = struct {
     }
 
     pub fn getBufferDataPtr(self: *ResourceMan, bufId: BufferMeta.BufId, comptime T: type, flightId: u8) !*T {
-        const buffer = try self.getBuf(bufId);
-        if (buffer.bases[flightId].mappedPtr) |ptr| {
+        const buffer = try self.getBuf(bufId, flightId);
+        
+        if (buffer.mappedPtr) |ptr| {
             return @as(*T, @ptrCast(@alignCast(ptr)));
         }
         return error.BufferNotHostVisible;
@@ -250,18 +258,22 @@ pub const ResourceMan = struct {
         }
         try self.descMan.queueBufferDescriptor(buffer.gpuAddress, bytes.len, buffer.descIndex, bufMeta.typ);
         buffer.curCount = @intCast(bytes.len / bufInf.elementSize);
-        bufMeta.updateId = flightId;
+
+        if (bufMeta.update == .PerFrame) {
+            bufMeta.updateId = flightId;
+        }
     }
 
     pub fn queueTextureDestruction(self: *ResourceMan, texId: TextureMeta.TexId, curFrame: u64) !void {
         const texMeta = try self.getTexMeta(texId);
 
         for (0..texMeta.update.getCount()) |i| {
-            const tex = try self.getTex(texId, @intCast(i));
-            try self.texZombieLists[curFrame % rc.MAX_IN_FLIGHT + 1].append(tex.*);
-            self.texLists[i].removeAtKey(texId.val);
+            if (self.texLists[i].isKeyUsed(texId.val)) {
+                const tex = self.texLists[i].getPtr(texId.val);
+                try self.texZombieLists[curFrame % rc.MAX_IN_FLIGHT + 1].append(tex.*);
+                self.texLists[i].removeAtKey(texId.val);
+            }
         }
-
         self.texMetas.removeAtKey(texId.val);
     }
 
@@ -269,11 +281,12 @@ pub const ResourceMan = struct {
         const bufMeta = try self.getBufMeta(bufId);
 
         for (0..bufMeta.update.getCount()) |i| {
-            const buffer = try self.getBuf(bufId, @intCast(i));
-            try self.bufZombieLists[curFrame % rc.MAX_IN_FLIGHT + 1].append(buffer.*);
-            self.bufLists[i].removeAtKey(bufId.val);
+            if (self.bufLists[i].isKeyUsed(bufId.val)) {
+                const buffer = self.bufLists[i].getPtr(bufId.val);
+                try self.bufZombieLists[curFrame % rc.MAX_IN_FLIGHT + 1].append(buffer.*);
+                self.bufLists[i].removeAtKey(bufId.val);
+            }
         }
-
         self.bufMetas.removeAtKey(bufId.val);
     }
 
