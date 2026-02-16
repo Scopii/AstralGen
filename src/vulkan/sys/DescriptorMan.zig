@@ -76,11 +76,9 @@ pub const DescriptorMan = struct {
     }
 
     pub fn queueTextureDescriptor(self: *DescriptorMan, texMeta: *const TextureMeta, img: vk.VkImage, descIndex: u32) !void {
-        // std.debug.print("QUEUED TEXTURE DESCRIPTOR\n", .{});
         const imgViewPtr = try self.imgViewStorage.appendReturnPtr(
             vhF.getViewCreateInfo(img, texMeta.viewType, texMeta.format, texMeta.subRange),
         );
-
         const imgDescPtr = try self.imgDescStorage.appendReturnPtr(
             vk.VkImageDescriptorInfoEXT{
                 .sType = vk.VK_STRUCTURE_TYPE_IMAGE_DESCRIPTOR_INFO_EXT,
@@ -88,7 +86,6 @@ pub const DescriptorMan = struct {
                 .layout = vk.VK_IMAGE_LAYOUT_GENERAL, // to DEPTH_STENCIL_READ_ONLY_OPTIMAL for depth?
             },
         );
-
         try self.queuedDescInfos.append(
             vk.VkResourceDescriptorInfoEXT{
                 .sType = vk.VK_STRUCTURE_TYPE_RESOURCE_DESCRIPTOR_INFO_EXT,
@@ -96,26 +93,24 @@ pub const DescriptorMan = struct {
                 .data = .{ .pImage = imgDescPtr },
             },
         );
-
         try self.queuedHostRanges.append(self.createDescriptorAdressRange(descIndex));
+        if (rc.DESCRIPTOR_DEBUG) std.debug.print("Queued Texture Descriptor\n", .{});
     }
 
     pub fn queueBufferDescriptor(self: *DescriptorMan, gpuAddress: u64, size: u64, descIndex: u32, bufTyp: vhE.BufferType) !void {
-        // std.debug.print("QUEUED BUFFER DESCRIPTOR\n", .{});
         const devRangePtr = try self.devRangeStorage.appendReturnPtr(
             vk.VkDeviceAddressRangeEXT{
                 .address = gpuAddress,
                 .size = size,
             },
         );
-
         try self.queuedDescInfos.append(vk.VkResourceDescriptorInfoEXT{
             .sType = vk.VK_STRUCTURE_TYPE_RESOURCE_DESCRIPTOR_INFO_EXT,
             .type = if (bufTyp == .Uniform) vk.VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER else vk.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, // what about other Buffer Types?
             .data = .{ .pAddressRange = devRangePtr },
         });
-
         try self.queuedHostRanges.append(self.createDescriptorAdressRange(descIndex));
+        if (rc.DESCRIPTOR_DEBUG) std.debug.print("QUEUED BUFFER DESCRIPTOR\n", .{});
     }
 
     fn createDescriptorAdressRange(self: *DescriptorMan, descIndex: u32) vk.VkHostAddressRangeEXT {
