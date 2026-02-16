@@ -52,12 +52,12 @@ pub const ResourceMan = struct {
         try self.descMan.updateDescriptors();
     }
 
-    pub fn getBufferResourceSlot(self: *ResourceMan, bufId: BufferMeta.BufId, flightId: u8) !u32 {
+    pub fn getBufferDescriptor(self: *ResourceMan, bufId: BufferMeta.BufId, flightId: u8) !u32 {
         const buffer = try self.getBuf(bufId, flightId);
         return buffer.descIndex;
     }
 
-    pub fn getTextureResourceSlot(self: *ResourceMan, texId: TextureMeta.TexId, flightId: u8) !u32 {
+    pub fn getTextureDescriptor(self: *ResourceMan, texId: TextureMeta.TexId, flightId: u8) !u32 {
         const tex = try self.getTex(texId, flightId);
         return tex.descIndex;
     }
@@ -174,39 +174,31 @@ pub const ResourceMan = struct {
         };
 
         var targetStorage = &self.resStorages[realFlightId];
-        const buffer = try targetStorage.getBuf(bufInf.id);
-        if (bytes.len > buffer.size) return error.BufferBaseTooSmallForUpdate;
+        const buf = try targetStorage.getBuf(bufInf.id);
+        if (bytes.len > buf.size) return error.BufferBaseTooSmallForUpdate;
 
         switch (bufInf.mem) {
             .Gpu => {
                 var resStorage = &self.resStorages[flightId];
-
-                const stagingOffset = resStorage.stagingOffset;
-                if (stagingOffset + bytes.len > rc.STAGING_BUF_SIZE) return error.StagingBufferFull;
-
-                try resStorage.transfers.append(.{ .srcOffset = stagingOffset, .dstResId = bufInf.id, .dstOffset = 0, .size = bytes.len });
-                resStorage.stagingOffset += (bytes.len + 15) & ~@as(u64, 15);
-
-                const stagingPtr: [*]u8 = @ptrCast(resStorage.stagingBuffer.mappedPtr);
-                @memcpy(stagingPtr[stagingOffset..][0..bytes.len], bytes);
+                try resStorage.stageBufferUpdate(bufInf.id, bytes);
             },
             .CpuWrite => {
-                const pMappedData = buffer.mappedPtr orelse return error.BufferNotMapped;
+                const pMappedData = buf.mappedPtr orelse return error.BufferNotMapped;
                 const destPtr: [*]u8 = @ptrCast(pMappedData);
                 @memcpy(destPtr[0..bytes.len], bytes);
             },
             .CpuRead => return error.CpuReadBufferCantUpdate,
         }
-        const newCount:u32 = @intCast(bytes.len / bufInf.elementSize);
+        const newCount: u32 = @intCast(bytes.len / bufInf.elementSize);
 
-        if (buffer.curCount != newCount) {
-            try self.descMan.queueBufferDescriptor(buffer.gpuAddress, bytes.len, buffer.descIndex, bufMeta.typ);
-            buffer.curCount = @intCast(bytes.len / bufInf.elementSize);
+        if (buf.curCount != newCount) {
+            try self.descMan.queueBufferDescriptor(buf.gpuAddress, bytes.len, buf.descIndex, bufMeta.typ);
+            buf.curCount = @intCast(bytes.len / bufInf.elementSize);
         }
         if (bufMeta.update == .PerFrame) bufMeta.updateId = flightId;
     }
 
-    pub fn queueTextureDestruction(self: *ResourceMan, texId: TextureMeta.TexId, _: u64) !void {
+    pub fn queueTextureDestruction(self: *ResourceMan, texId: TextureMeta.TexId) !void {
         const texMeta = try self.getTexMeta(texId);
 
         for (0..texMeta.update.getCount()) |i| {
@@ -215,7 +207,7 @@ pub const ResourceMan = struct {
         self.texMetas.removeAtKey(texId.val);
     }
 
-    pub fn queueBufferDestruction(self: *ResourceMan, bufId: BufferMeta.BufId, _: u64) !void {
+    pub fn queueBufferDestruction(self: *ResourceMan, bufId: BufferMeta.BufId) !void {
         const bufMeta = try self.getBufMeta(bufId);
 
         for (0..bufMeta.update.getCount()) |i| {

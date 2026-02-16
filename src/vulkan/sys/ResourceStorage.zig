@@ -71,6 +71,17 @@ pub const ResourceStorage = struct {
         if (self.textures.isKeyUsed(texId.val) == true) return self.textures.getPtr(texId.val) else return error.TextureIdNotUsed;
     }
 
+    pub fn stageBufferUpdate(self: *ResourceStorage, bufId: BufferMeta.BufId, bytes: []const u8) !void {
+        const stagingOffset = self.stagingOffset;
+        if (stagingOffset + bytes.len > rc.STAGING_BUF_SIZE) return error.StagingBufferFull;
+
+        try self.transfers.append(.{ .srcOffset = stagingOffset, .dstResId = bufId, .dstOffset = 0, .size = bytes.len });
+        self.stagingOffset += (bytes.len + 15) & ~@as(u64, 15);
+
+        const stagingPtr: [*]u8 = @ptrCast(self.stagingBuffer.mappedPtr);
+        @memcpy(stagingPtr[stagingOffset..][0..bytes.len], bytes);
+    }
+
     pub fn queueTexDestruction(self: *ResourceStorage, texId: TextureMeta.TexId) !void {
         if (self.textures.isKeyUsed(texId.val)) {
             const tex = self.textures.getPtr(texId.val);
