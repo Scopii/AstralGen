@@ -100,7 +100,7 @@ pub const ResourceMan = struct {
                 buffer.descIndex = descIndex;
                 try self.descMan.queueBufferDescriptor(buffer.gpuAddress, buffer.size, descIndex, bufInf.typ);
 
-                std.debug.print("Buffer ID {} (in List {}), Type {}, Update {} created! Descriptor Index {} ", .{ bufInf.id.val, 0, bufInf.typ, bufInf.update, descIndex });
+                std.debug.print("Buffer ID {} created! (FlightId {}) ({}) ({}) (Descriptor {}) ", .{ bufInf.id.val, 0, bufInf.typ, bufInf.update, descIndex });
                 self.vma.printMemoryInfo(buffer.allocation);
 
                 self.resStorages[0].addBuf(bufInf.id, buffer);
@@ -112,7 +112,7 @@ pub const ResourceMan = struct {
                     buffer.descIndex = descIndex;
                     try self.descMan.queueBufferDescriptor(buffer.gpuAddress, buffer.size, descIndex, bufInf.typ);
 
-                    std.debug.print("Buffer ID {} (in List {}), Type {}, Update {} created! Descriptor Index {} ", .{ bufInf.id.val, i, bufInf.typ, bufInf.update, descIndex });
+                    std.debug.print("Buffer ID {} created! (FlightId {}) ({}) ({}) (Descriptor {}) ", .{ bufInf.id.val, i, bufInf.typ, bufInf.update, descIndex });
                     self.vma.printMemoryInfo(buffer.allocation);
 
                     self.resStorages[i].addBuf(bufInf.id, buffer);
@@ -132,7 +132,7 @@ pub const ResourceMan = struct {
                 tex.descIndex = descIndex;
                 try self.descMan.queueTextureDescriptor(&texMeta, tex.img, descIndex);
 
-                std.debug.print("Texture ID {} (in List {}), Type {}, Update {} created! Descriptor Index {} ", .{ texInf.id.val, 0, texInf.typ, texInf.update, descIndex });
+                std.debug.print("Texture ID {} created! (FlightId {}) ({}) ({}) (Descriptor {}) ", .{ texInf.id.val, 0, texInf.typ, texInf.update, descIndex });
                 self.vma.printMemoryInfo(tex.allocation);
 
                 self.resStorages[0].addTex(texInf.id, tex);
@@ -144,7 +144,7 @@ pub const ResourceMan = struct {
                     tex.descIndex = descIndex;
                     try self.descMan.queueTextureDescriptor(&texMeta, tex.img, descIndex);
 
-                    std.debug.print("Buffer ID {} (in List {}), Type {}, Update {} created! Descriptor Index {} ", .{ texInf.id.val, i, texInf.typ, texInf.update, descIndex });
+                    std.debug.print("Texture ID {} created! (FlightId {}) ({}) ({}) (Descriptor {}) ", .{ texInf.id.val, i, texInf.typ, texInf.update, descIndex });
                     self.vma.printMemoryInfo(tex.allocation);
 
                     self.resStorages[i].addTex(texInf.id, tex);
@@ -169,30 +169,22 @@ pub const ResourceMan = struct {
     }
 
     pub fn updateBuffer(self: *ResourceMan, bufInf: BufferMeta.BufInf, data: anytype, flightId: u8) !void {
-        const DataType = @TypeOf(data);
-        const bytes: []const u8 = switch (@typeInfo(DataType)) {
-            .pointer => |ptr| switch (ptr.size) {
-                .one => std.mem.asBytes(data),
-                .slice => std.mem.sliceAsBytes(data),
-                else => return error.UnsupportedPointerType,
-            },
-            else => return error.ExpectedPointer,
-        };
-
+        const bytes = try convertToByteSlice(data);
         const bufMeta = try self.getBufMeta(bufInf.id);
+
         const realFlightId = switch (bufMeta.update) {
             .Overwrite => 0,
             .PerFrame => flightId,
         };
 
-        const buffer = try self.getBuf(bufInf.id, realFlightId);
-
+        var targetStorage = &self.resStorages[realFlightId];
+        const buffer = try targetStorage.getBuf(bufInf.id);
         if (bytes.len > buffer.size) return error.BufferBaseTooSmallForUpdate;
-
-        var resStorage = &self.resStorages[flightId];
 
         switch (bufInf.mem) {
             .Gpu => {
+                var resStorage = &self.resStorages[flightId];
+
                 const stagingOffset = resStorage.stagingOffset;
                 if (stagingOffset + bytes.len > rc.STAGING_BUF_SIZE) return error.StagingBufferFull;
 
@@ -211,10 +203,7 @@ pub const ResourceMan = struct {
         }
         try self.descMan.queueBufferDescriptor(buffer.gpuAddress, bytes.len, buffer.descIndex, bufMeta.typ);
         buffer.curCount = @intCast(bytes.len / bufInf.elementSize);
-
-        if (bufMeta.update == .PerFrame) {
-            bufMeta.updateId = flightId;
-        }
+        if (bufMeta.update == .PerFrame) bufMeta.updateId = flightId;
     }
 
     pub fn queueTextureDestruction(self: *ResourceMan, texId: TextureMeta.TexId, _: u64) !void {
@@ -245,14 +234,14 @@ pub const ResourceMan = struct {
         const bufZombies = resStorage.getBufZombies();
         if (bufZombies.len > 0) {
             for (bufZombies) |*bufZombie| self.destroyBuffer(bufZombie);
-            std.debug.print("Buffers destroyed (Count {}) (Frame {}) (queued Frame {})\n", .{ bufZombies.len, curFrame, targetFrame });
+            std.debug.print("Buffers destroyed ({}) (in Frame {}) (FlightId {})\n", .{ bufZombies.len, curFrame, flightIndex });
         }
         resStorage.clearBufZombies();
 
         const texZombies = resStorage.getTexZombies();
         if (texZombies.len > 0) {
             for (texZombies) |*texZombie| self.destroyTexture(texZombie);
-            std.debug.print("Textures destroyed (Count {}) (Frame {}) (queued Frame {})\n", .{ texZombies.len, curFrame, targetFrame });
+            std.debug.print("Textures destroyed ({}) (in Frame {}) (FlightId {})\n", .{ texZombies.len, curFrame, flightIndex });
         }
         resStorage.clearTexZombies();
     }
@@ -267,3 +256,15 @@ pub const ResourceMan = struct {
         self.descMan.freeDescriptor(bufBase.descIndex);
     }
 };
+
+fn convertToByteSlice(data: anytype) ![]const u8 {
+    const DataType = @TypeOf(data);
+    return switch (@typeInfo(DataType)) {
+        .pointer => |ptr| switch (ptr.size) {
+            .one => std.mem.asBytes(data),
+            .slice => std.mem.sliceAsBytes(data),
+            else => return error.UnsupportedPointerType,
+        },
+        else => return error.ExpectedPointer,
+    };
+}

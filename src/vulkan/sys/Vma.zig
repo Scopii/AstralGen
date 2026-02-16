@@ -64,7 +64,7 @@ pub const Vma = struct {
         const flags = memProps.memoryTypes[allocInf.memoryType].propertyFlags;
         const memory = if ((flags & vk.VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) != 0) "VRAM" else "DRAM";
         const visible = if ((flags & vk.VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) != 0) "Visible" else "hidden";
-        std.debug.print("(is in {s}, CPU {s})\n", .{ memory, visible });
+        std.debug.print("(CPU {s} in {s})\n", .{ visible, memory });
     }
 
     pub fn createBufferMeta(_: *const Vma, bufInf: BufferMeta.BufInf) BufferMeta {
