@@ -103,7 +103,7 @@ pub const Renderer = struct {
         if (new.width != old.width or new.height != old.height) {
             try self.resMan.queueTextureKills(texId);
             try self.resMan.createTexture(.{ .id = texId, .width = new.width, .height = new.height, .depth = 1, .typ = oldType, .mem = .Gpu, .update = .PerFrame });
-            std.debug.print("Render Texture ID {} recreated {}x{} to {}x{}\n", .{ texId.val, old.width, old.height, new.width, new.height });
+            std.debug.print("Render Texture (ID {}) recreated {}x{} to {}x{}\n", .{ texId.val, old.width, old.height, new.width, new.height });
         }
     }
 

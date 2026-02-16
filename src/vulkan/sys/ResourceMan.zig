@@ -98,7 +98,7 @@ pub const ResourceMan = struct {
             buf.descIndex = try self.descMan.getFreeDescriptorIndex();
             try self.descMan.queueBufferDescriptor(buf.gpuAddress, buf.size, buf.descIndex, bufInf.typ);
 
-            std.debug.print("Buffer ID {} created! (FlightId {}) ({}) ({}) (Descriptor {}) ", .{ bufInf.id.val, i, bufInf.typ, bufInf.update, buf.descIndex });
+            std.debug.print("Buffer created! (ID {}) (FlightId {}) ({}) ({}) (Descriptor {}) ", .{ bufInf.id.val, i, bufInf.typ, bufInf.update, buf.descIndex });
             self.vma.printMemoryInfo(buf.allocation);
 
             self.resStorages[i].addBuffer(bufInf.id, buf);
@@ -114,7 +114,7 @@ pub const ResourceMan = struct {
             tex.descIndex = try self.descMan.getFreeDescriptorIndex();
             try self.descMan.queueTextureDescriptor(&texMeta, tex.img, tex.descIndex);
 
-            std.debug.print("Texture ID {} created! (FlightId {}) ({}) ({}) (Descriptor {}) ", .{ texInf.id.val, i, texInf.typ, texInf.update, tex.descIndex });
+            std.debug.print("Texture created! (ID {}) (FlightId {}) ({}) ({}) (Descriptor {}) ", .{ texInf.id.val, i, texInf.typ, texInf.update, tex.descIndex });
             self.vma.printMemoryInfo(tex.allocation);
 
             self.resStorages[i].addTexture(texInf.id, tex);
@@ -164,6 +164,7 @@ pub const ResourceMan = struct {
         if (buf.curCount != newCount) {
             buf.curCount = newCount;
             try self.descMan.queueBufferDescriptor(buf.gpuAddress, bytes.len, buf.descIndex, bufMeta.typ);
+            if (rc.DESCRIPTOR_DEBUG == true) std.debug.print("Descriptor update queued! (Index {}) (Buffer ID {})\n", .{ buf.descIndex, bufInf.id.val });
         }
 
         switch (bufMeta.update) {
@@ -186,6 +187,7 @@ pub const ResourceMan = struct {
 
     fn cleanupResources(self: *ResourceMan, curFrame: u64) !void {
         if (curFrame < rc.MAX_IN_FLIGHT) return; // Only clean up resources queued MAX_IN_FLIGHT ago (safety check for startup)
+        const start = if (rc.RESOURCE_DEBUG == true) std.time.microTimestamp() else 0;
 
         const targetFrame = curFrame - rc.MAX_IN_FLIGHT;
         const flightIndex = targetFrame % rc.MAX_IN_FLIGHT;
@@ -194,16 +196,22 @@ pub const ResourceMan = struct {
         const bufZombies = resStorage.getBufZombies();
         if (bufZombies.len > 0) {
             for (bufZombies) |*bufZombie| self.destroyBuffer(bufZombie);
-            std.debug.print("Buffers destroyed ({}) (in Frame {}) (FlightId {})\n", .{ bufZombies.len, curFrame, flightIndex });
+
+            if (rc.RESOURCE_DEBUG == true) std.debug.print("Buffers destroyed ({}) (in Frame {}) (FlightId {})\n", .{ bufZombies.len, curFrame, flightIndex });
         }
         resStorage.clearBufZombies();
 
         const texZombies = resStorage.getTexZombies();
         if (texZombies.len > 0) {
             for (texZombies) |*texZombie| self.destroyTexture(texZombie);
-            std.debug.print("Textures destroyed ({}) (in Frame {}) (FlightId {})\n", .{ texZombies.len, curFrame, flightIndex });
+            if (rc.RESOURCE_DEBUG == true) std.debug.print("Textures destroyed ({}) (in Frame {}) (FlightId {})\n", .{ texZombies.len, curFrame, flightIndex });
         }
         resStorage.clearTexZombies();
+
+        if (rc.RESOURCE_DEBUG == true) {
+            const end = std.time.microTimestamp();
+            std.debug.print("Cleanup Zombie Resources {d:.3} ms\n", .{@as(f64, @floatFromInt(end - start)) / 1_000.0});
+        }
     }
 
     fn destroyTexture(self: *ResourceMan, texBase: *const Texture) void {

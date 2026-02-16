@@ -94,7 +94,6 @@ pub const DescriptorMan = struct {
             },
         );
         try self.queuedHostRanges.append(self.createDescriptorAdressRange(descIndex));
-        if (rc.DESCRIPTOR_DEBUG) std.debug.print("Queued Texture Descriptor\n", .{});
     }
 
     pub fn queueBufferDescriptor(self: *DescriptorMan, gpuAddress: u64, size: u64, descIndex: u32, bufTyp: vhE.BufferType) !void {
@@ -110,7 +109,6 @@ pub const DescriptorMan = struct {
             .data = .{ .pAddressRange = devRangePtr },
         });
         try self.queuedHostRanges.append(self.createDescriptorAdressRange(descIndex));
-        if (rc.DESCRIPTOR_DEBUG) std.debug.print("QUEUED BUFFER DESCRIPTOR\n", .{});
     }
 
     fn createDescriptorAdressRange(self: *DescriptorMan, descIndex: u32) vk.VkHostAddressRangeEXT {
@@ -125,6 +123,7 @@ pub const DescriptorMan = struct {
 
     pub fn updateDescriptors(self: *DescriptorMan) !void {
         if (self.queuedDescInfos.len == 0) return;
+        const start = if (rc.DESCRIPTOR_DEBUG == true) std.time.microTimestamp() else 0;
 
         const descCount: u32 = @intCast(self.queuedDescInfos.len);
         try vhF.check(vkFn.vkWriteResourceDescriptorsEXT.?(self.gpi, descCount, &self.queuedDescInfos.buffer, &self.queuedHostRanges.buffer), "Failed to write Descriptor");
@@ -136,7 +135,10 @@ pub const DescriptorMan = struct {
         self.imgDescStorage.clear();
         self.devRangeStorage.clear();
 
-        if (rc.DESCRIPTOR_DEBUG == true) std.debug.print("Descriptors Updated ({})\n", .{descCount});
+        if (rc.DESCRIPTOR_DEBUG == true) {
+            const end = std.time.microTimestamp();
+            std.debug.print("Descriptors updated ({}) {d:.3} ms\n", .{ descCount, @as(f64, @floatFromInt(end - start)) / 1_000.0 });
+        }
     }
 };
 
