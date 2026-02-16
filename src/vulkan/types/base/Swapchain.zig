@@ -1,6 +1,6 @@
-const TextureBase = @import("../res/TextureBase.zig").TextureBase;
 const TexId = @import("../res/TextureMeta.zig").TextureMeta.TexId;
 const rc = @import("../../../configs/renderConfig.zig");
+const Texture = @import("../res/Texture.zig").Texture;
 const vk = @import("../../../modules/vk.zig").c;
 const vhF = @import("../../help/Functions.zig");
 const Allocator = std.mem.Allocator;
@@ -13,7 +13,7 @@ pub const Swapchain = struct {
     renderTexId: TexId,
     acquireSems: []vk.VkSemaphore, // indexed by max-in-flight.
     renderSems: []vk.VkSemaphore, // indexed by swapchain images
-    textures: []TextureBase, // indexed by swapchain images
+    textures: []Texture, // indexed by swapchain images
     subRange: vk.VkImageSubresourceRange,
     extent: vk.VkExtent2D,
     inUse: bool = true,
@@ -61,7 +61,7 @@ pub const Swapchain = struct {
         defer alloc.free(images);
         try vhF.check(vk.vkGetSwapchainImagesKHR(gpi, handle, &realImgCount, images.ptr), "Could not get Swapchain Images");
 
-        const baseTextures = try alloc.alloc(TextureBase, realImgCount);
+        const baseTextures = try alloc.alloc(Texture, realImgCount);
         errdefer alloc.free(baseTextures);
 
         const subRange = vhF.createSubresourceRange(vk.VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1);
@@ -72,7 +72,7 @@ pub const Swapchain = struct {
             var view: vk.VkImageView = undefined;
             try vhF.check(vk.vkCreateImageView(gpi, &viewInf, null, &view), "Failed to create image view");
 
-            baseTextures[i] = TextureBase{
+            baseTextures[i] = Texture{
                 .img = images[i],
                 .view = view,
                 .allocation = undefined, // MANAGED BY OS!
@@ -123,7 +123,7 @@ pub const Swapchain = struct {
         return vk.vkAcquireNextImageKHR(gpi, self.handle, std.math.maxInt(u64), self.acquireSems[flightId], null, &self.curIndex);
     }
 
-    pub fn getCurTexture(self: *Swapchain) *TextureBase {
+    pub fn getCurTexture(self: *Swapchain) *Texture {
         return &self.textures[self.curIndex];
     }
 

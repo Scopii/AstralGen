@@ -1,7 +1,7 @@
-const TextureBase = @import("../types/res/TextureBase.zig").TextureBase;
 const TextureMeta = @import("../types/res/TextureMeta.zig").TextureMeta;
 const BufferMeta = @import("../types/res/BufferMeta.zig").BufferMeta;
-const BufferBase = @import("../types/res/BufferBase.zig").BufferBase;
+const Texture = @import("../types/res/Texture.zig").Texture;
+const Buffer = @import("../types/res/Buffer.zig").Buffer;
 const rc = @import("../../configs/renderConfig.zig");
 const vkFn = @import("../../modules/vk.zig");
 const vhF = @import("../help/Functions.zig");
@@ -40,7 +40,7 @@ pub const Vma = struct {
         vk.vmaDestroyAllocator(self.handle);
     }
 
-    pub fn allocDescriptorHeap(self: *const Vma, size: vk.VkDeviceSize) !BufferBase {
+    pub fn allocDescriptorHeap(self: *const Vma, size: vk.VkDeviceSize) !Buffer {
         const bufUse = vk.VK_BUFFER_USAGE_DESCRIPTOR_HEAP_BIT_EXT | vk.VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
         const allocFlags = vk.VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | vk.VMA_ALLOCATION_CREATE_MAPPED_BIT;
         const buf = try self.allocBuffer(size, bufUse, vk.VMA_MEMORY_USAGE_CPU_TO_GPU, allocFlags);
@@ -48,7 +48,7 @@ pub const Vma = struct {
         return buf;
     }
 
-    pub fn allocStagingBuffer(self: *const Vma, size: vk.VkDeviceSize) !BufferBase {
+    pub fn allocStagingBuffer(self: *const Vma, size: vk.VkDeviceSize) !Buffer {
         const allocFlags = vk.VMA_ALLOCATION_CREATE_MAPPED_BIT | vk.VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
         const buf = try self.allocBuffer(size, vk.VK_BUFFER_USAGE_TRANSFER_SRC_BIT, vk.VMA_MEMORY_USAGE_CPU_ONLY, allocFlags); // TEST CPU_TO_GPU and AUTO
         std.debug.print("Created Staging Buffer\n", .{});
@@ -75,7 +75,7 @@ pub const Vma = struct {
         };
     }
 
-    pub fn allocDefinedBuffer(self: *const Vma, bufInf: BufferMeta.BufInf) !BufferBase {
+    pub fn allocDefinedBuffer(self: *const Vma, bufInf: BufferMeta.BufInf) !Buffer {
         const bufByteSize = @as(vk.VkDeviceSize, bufInf.len) * bufInf.elementSize;
         if (bufByteSize == 0) return error.BufferByteSizeIsZero;
 
@@ -86,7 +86,7 @@ pub const Vma = struct {
         return try self.allocBuffer(bufByteSize, bufUse, memUse, allocFlags);
     }
 
-    pub fn allocBuffer(self: *const Vma, size: vk.VkDeviceSize, bufUse: vk.VkBufferUsageFlags, memUse: vk.VmaMemoryUsage, memFlags: vk.VmaAllocationCreateFlags) !BufferBase {
+    pub fn allocBuffer(self: *const Vma, size: vk.VkDeviceSize, bufUse: vk.VkBufferUsageFlags, memUse: vk.VmaMemoryUsage, memFlags: vk.VmaAllocationCreateFlags) !Buffer {
         const bufCreateInf = vk.VkBufferCreateInfo{
             .sType = vk.VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
             .size = size,
@@ -131,7 +131,7 @@ pub const Vma = struct {
         };
     }
 
-    pub fn allocDefinedTexture(self: *Vma, texInf: TextureMeta.TexInf) !TextureBase {
+    pub fn allocDefinedTexture(self: *Vma, texInf: TextureMeta.TexInf) !Texture {
         const memUsage = vhF.getMemUsage(texInf.mem);
         const texUse = vhF.getImageUse(texInf.typ);
         const format = vhF.getImageFormat(texInf.typ);
@@ -150,7 +150,7 @@ pub const Vma = struct {
         extent: vk.VkExtent3D,
         subRange: vk.VkImageSubresourceRange,
         viewType: vk.VkImageViewType,
-    ) !TextureBase {
+    ) !Texture {
         var img: vk.VkImage = undefined;
         var allocation: vk.VmaAllocation = undefined;
         const imgInf = createImageInf(format, imgUse, extent, subRange, vk.VK_IMAGE_TYPE_2D);
@@ -173,11 +173,11 @@ pub const Vma = struct {
         vk.vmaDestroyBuffer(self.handle, buffer, allocation);
     }
 
-    pub fn freeBufferBase(self: *const Vma, bufBase: *const BufferBase) void {
+    pub fn freeBufferBase(self: *const Vma, bufBase: *const Buffer) void {
         vk.vmaDestroyBuffer(self.handle, bufBase.handle, bufBase.allocation);
     }
 
-    pub fn freeTextureBase(self: *const Vma, texBase: *const TextureBase) void {
+    pub fn freeTextureBase(self: *const Vma, texBase: *const Texture) void {
         vk.vkDestroyImageView(self.gpi, texBase.view, null);
         vk.vmaDestroyImage(self.handle, texBase.img, texBase.allocation);
     }

@@ -1,12 +1,12 @@
 const CreateMapArray = @import("../../structures/MapArray.zig").CreateMapArray;
 const TextureMeta = @import("../types/res/TextureMeta.zig").TextureMeta;
-const TextureBase = @import("../types/res/TextureBase.zig").TextureBase;
 const ResourceStorage = @import("ResourceStorage.zig").ResourceStorage;
 const FixedList = @import("../../structures/FixedList.zig").FixedList;
 const BufferMeta = @import("../types/res/BufferMeta.zig").BufferMeta;
-const BufferBase = @import("../types/res/BufferBase.zig").BufferBase;
 const DescriptorMan = @import("DescriptorMan.zig").DescriptorMan;
 const PushData = @import("../types/res/PushData.zig").PushData;
+const Texture = @import("../types/res/Texture.zig").Texture;
+const Buffer = @import("../types/res/Buffer.zig").Buffer;
 const rc = @import("../../configs/renderConfig.zig");
 const Context = @import("Context.zig").Context;
 const vk = @import("../../modules/vk.zig").c;
@@ -66,7 +66,7 @@ pub const ResourceMan = struct {
         self.resStorages[flightId].resetTransfers();
     }
 
-    pub fn getTex(self: *ResourceMan, texId: TextureMeta.TexId, flightId: u8) !*TextureBase {
+    pub fn getTex(self: *ResourceMan, texId: TextureMeta.TexId, flightId: u8) !*Texture {
         const texMeta = try self.getTexMeta(texId);
         const realIndex = switch (texMeta.update) {
             .Overwrite => 0,
@@ -75,7 +75,7 @@ pub const ResourceMan = struct {
         return try self.resStorages[realIndex].getTex(texId);
     }
 
-    pub fn getBuf(self: *ResourceMan, bufId: BufferMeta.BufId, flightId: u8) !*BufferBase {
+    pub fn getBuf(self: *ResourceMan, bufId: BufferMeta.BufId, flightId: u8) !*Buffer {
         const bufMeta = try self.getBufMeta(bufId);
         const realIndex = switch (bufMeta.update) {
             .Overwrite => 0,
@@ -151,8 +151,7 @@ pub const ResourceMan = struct {
 
         switch (bufInf.mem) {
             .Gpu => {
-                var resStorage = &self.resStorages[flightId];
-                try resStorage.stageBufferUpdate(bufInf.id, bytes);
+                try self.resStorages[flightId].stageBufferUpdate(bufInf.id, bytes);
             },
             .CpuWrite => {
                 const pMappedData = buf.mappedPtr orelse return error.BufferNotMapped;
@@ -164,8 +163,8 @@ pub const ResourceMan = struct {
 
         const newCount: u32 = @intCast(bytes.len / bufInf.elementSize);
         if (buf.curCount != newCount) {
-            try self.descMan.queueBufferDescriptor(buf.gpuAddress, bytes.len, buf.descIndex, bufMeta.typ);
             buf.curCount = newCount;
+            try self.descMan.queueBufferDescriptor(buf.gpuAddress, bytes.len, buf.descIndex, bufMeta.typ);
         }
 
         switch (bufMeta.update) {
@@ -208,12 +207,12 @@ pub const ResourceMan = struct {
         resStorage.clearTexZombies();
     }
 
-    fn destroyTexture(self: *ResourceMan, texBase: *const TextureBase) void {
+    fn destroyTexture(self: *ResourceMan, texBase: *const Texture) void {
         self.vma.freeTextureBase(texBase);
         self.descMan.freeDescriptor(texBase.descIndex);
     }
 
-    fn destroyBuffer(self: *ResourceMan, bufBase: *const BufferBase) void {
+    fn destroyBuffer(self: *ResourceMan, bufBase: *const Buffer) void {
         self.vma.freeBufferBase(bufBase);
         self.descMan.freeDescriptor(bufBase.descIndex);
     }

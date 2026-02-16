@@ -1,11 +1,11 @@
 const CreateMapArray = @import("../../structures/MapArray.zig").CreateMapArray;
 const TextureMeta = @import("../types/res/TextureMeta.zig").TextureMeta;
-const TextureBase = @import("../types/res/TextureBase.zig").TextureBase;
 const FixedList = @import("../../structures/FixedList.zig").FixedList;
 const BufferMeta = @import("../types/res/BufferMeta.zig").BufferMeta;
-const BufferBase = @import("../types/res/BufferBase.zig").BufferBase;
 const DescriptorMan = @import("DescriptorMan.zig").DescriptorMan;
 const PushData = @import("../types/res/PushData.zig").PushData;
+const Texture = @import("../types/res/Texture.zig").Texture;
+const Buffer = @import("../types/res/Buffer.zig").Buffer;
 const rc = @import("../../configs/renderConfig.zig");
 const Context = @import("Context.zig").Context;
 const vk = @import("../../modules/vk.zig").c;
@@ -23,15 +23,15 @@ pub const Transfer = struct {
 };
 
 pub const ResourceStorage = struct {
-    stagingBuffer: BufferBase,
+    stagingBuffer: Buffer,
     stagingOffset: u64 = 0,
     transfers: std.array_list.Managed(Transfer),
 
-    buffers: CreateMapArray(BufferBase, rc.BUF_MAX, u32, rc.BUF_MAX, 0) = .{},
-    textures: CreateMapArray(TextureBase, rc.TEX_MAX, u32, rc.TEX_MAX, 0) = .{},
+    buffers: CreateMapArray(Buffer, rc.BUF_MAX, u32, rc.BUF_MAX, 0) = .{},
+    textures: CreateMapArray(Texture, rc.TEX_MAX, u32, rc.TEX_MAX, 0) = .{},
 
-    bufZombies: FixedList(BufferBase, rc.BUF_MAX) = .{},
-    texZombies: FixedList(TextureBase, rc.TEX_MAX) = .{},
+    bufZombies: FixedList(Buffer, rc.BUF_MAX) = .{},
+    texZombies: FixedList(Texture, rc.TEX_MAX) = .{},
 
     pub fn init(alloc: Allocator, vma: *const Vma) !ResourceStorage {
         return .{
@@ -55,19 +55,19 @@ pub const ResourceStorage = struct {
         self.transfers.clearRetainingCapacity();
     }
 
-    pub fn addBuf(self: *ResourceStorage, bufId: BufferMeta.BufId, buffer: BufferBase) void {
+    pub fn addBuf(self: *ResourceStorage, bufId: BufferMeta.BufId, buffer: Buffer) void {
         self.buffers.set(bufId.val, buffer);
     }
 
-    pub fn addTex(self: *ResourceStorage, texId: TextureMeta.TexId, tex: TextureBase) void {
+    pub fn addTex(self: *ResourceStorage, texId: TextureMeta.TexId, tex: Texture) void {
         self.textures.set(texId.val, tex);
     }
 
-    pub fn getBuf(self: *ResourceStorage, bufId: BufferMeta.BufId) !*BufferBase {
+    pub fn getBuf(self: *ResourceStorage, bufId: BufferMeta.BufId) !*Buffer {
         if (self.buffers.isKeyUsed(bufId.val) == true) return self.buffers.getPtr(bufId.val) else return error.TextureIdNotUsed;
     }
 
-    pub fn getTex(self: *ResourceStorage, texId: TextureMeta.TexId) !*TextureBase {
+    pub fn getTex(self: *ResourceStorage, texId: TextureMeta.TexId) !*Texture {
         if (self.textures.isKeyUsed(texId.val) == true) return self.textures.getPtr(texId.val) else return error.TextureIdNotUsed;
     }
 
@@ -98,11 +98,11 @@ pub const ResourceStorage = struct {
         }
     }
 
-    pub fn getTexZombies(self: *ResourceStorage) []const TextureBase {
+    pub fn getTexZombies(self: *ResourceStorage) []const Texture {
         return self.texZombies.constSlice();
     }
 
-    pub fn getBufZombies(self: *ResourceStorage) []const BufferBase {
+    pub fn getBufZombies(self: *ResourceStorage) []const Buffer {
         return self.bufZombies.constSlice();
     }
 

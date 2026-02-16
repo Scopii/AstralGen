@@ -3,7 +3,7 @@ const PushData = @import("PushData.zig").PushData;
 const vk = @import("../../../modules/vk.zig").c;
 const vhE = @import("../../help/Enums.zig");
 
-pub const BufferBase = struct {
+pub const Buffer = struct {
     handle: vk.VkBuffer,
     allocation: vk.VmaAllocation,
     mappedPtr: ?*anyopaque,
@@ -19,7 +19,7 @@ pub const BufferBase = struct {
         access: vhE.PipeAccess = .None,
     };
 
-    pub fn createBufferBarrier(self: *BufferBase, newState: BufferState) vk.VkBufferMemoryBarrier2 {
+    pub fn createBufferBarrier(self: *Buffer, newState: BufferState) vk.VkBufferMemoryBarrier2 {
         const barrier = vk.VkBufferMemoryBarrier2{
             .sType = vk.VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2,
             .srcStageMask = @intFromEnum(self.state.stage),

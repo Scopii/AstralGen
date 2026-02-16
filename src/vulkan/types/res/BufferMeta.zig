@@ -1,7 +1,8 @@
-const BufferBase = @import("BufferBase.zig").BufferBase;
+
 const rc = @import("../../../configs/renderConfig.zig");
 const PushData = @import("PushData.zig").PushData;
 const vk = @import("../../../modules/vk.zig").c;
+const Buffer = @import("Buffer.zig").Buffer;
 const vhE = @import("../../help/Enums.zig");
 
 pub const BufferMeta = struct {

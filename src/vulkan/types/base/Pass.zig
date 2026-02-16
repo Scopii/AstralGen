@@ -1,9 +1,9 @@
 const ShaderId = @import("../../../core/ShaderCompiler.zig").ShaderInf.ShaderId;
 const RenderState = @import("../base/RenderState.zig").RenderState;
-const TextureBase = @import("../res/TextureBase.zig").TextureBase;
 const TextureMeta = @import("../res/TextureMeta.zig").TextureMeta;
-const BufferBase = @import("../res/BufferBase.zig").BufferBase;
 const BufferMeta = @import("../res/BufferMeta.zig").BufferMeta;
+const Texture = @import("../res/Texture.zig").Texture;
+const Buffer = @import("../res/Buffer.zig").Buffer;
 const vhE = @import("../../help/Enums.zig");
 
 pub const Pass = struct {
@@ -109,7 +109,7 @@ pub const Attachment = struct {
         return .{ .texId = id, .stage = stage, .access = access, .layout = .Attachment, .clear = clear };
     }
 
-    pub fn getNeededState(self: *const Attachment) TextureBase.TextureState {
+    pub fn getNeededState(self: *const Attachment) Texture.TextureState {
         return .{ .stage = self.stage, .access = self.access, .layout = self.layout };
     }
 };
@@ -125,7 +125,7 @@ pub const TextureUse = struct {
         return .{ .texId = id, .stage = stage, .access = access, .layout = layout, .shaderSlot = if (shaderSlot) |slot| slot else null };
     }
 
-    pub fn getNeededState(self: *const TextureUse) TextureBase.TextureState {
+    pub fn getNeededState(self: *const TextureUse) Texture.TextureState {
         return .{ .stage = self.stage, .access = self.access, .layout = self.layout };
     }
 };
@@ -140,7 +140,7 @@ pub const BufferUse = struct {
         return .{ .bufId = bufId, .stage = stage, .access = access, .shaderSlot = if (shaderSlot) |slot| slot else null };
     }
 
-    pub fn getNeededState(self: *const BufferUse) BufferBase.BufferState {
+    pub fn getNeededState(self: *const BufferUse) Buffer.BufferState {
         return .{ .stage = self.stage, .access = self.access };
     }
 };

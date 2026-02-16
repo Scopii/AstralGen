@@ -1,7 +1,8 @@
-const TextureBase = @import("TextureBase.zig").TextureBase;
+
 const rc = @import("../../../configs/renderConfig.zig");
 const PushData = @import("PushData.zig").PushData;
 const vk = @import("../../../modules/vk.zig").c;
+const Texture = @import("Texture.zig").Texture;
 const vhE = @import("../../help/Enums.zig");
 
 pub const TextureMeta = struct {

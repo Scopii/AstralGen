@@ -2,7 +2,7 @@ const vk = @import("../../../modules/vk.zig").c;
 const vhF = @import("../../help/Functions.zig");
 const vhE = @import("../../help/Enums.zig");
 
-pub const TextureBase = struct {
+pub const Texture = struct {
     img: vk.VkImage,
     view: vk.VkImageView,
     allocation: vk.VmaAllocation,
@@ -17,7 +17,7 @@ pub const TextureBase = struct {
         layout: vhE.ImageLayout = .Undefined,
     };
 
-    pub fn createAttachment(self: *const TextureBase, texType: vhE.TextureType, clear: bool) vk.VkRenderingAttachmentInfo {
+    pub fn createAttachment(self: *const Texture, texType: vhE.TextureType, clear: bool) vk.VkRenderingAttachmentInfo {
         const clearValue: vk.VkClearValue = switch (texType) {
             .Color => .{ .color = .{ .float32 = .{ 0.0, 0.0, 0.1, 1.0 } } },
             .Depth, .Stencil => .{ .depthStencil = .{ .depth = 1.0, .stencil = 0 } },
@@ -33,7 +33,7 @@ pub const TextureBase = struct {
         };
     }
 
-    pub fn createImageBarrier(self: *TextureBase, newState: TextureState, subRange: vk.VkImageSubresourceRange) vk.VkImageMemoryBarrier2 {
+    pub fn createImageBarrier(self: *Texture, newState: TextureState, subRange: vk.VkImageSubresourceRange) vk.VkImageMemoryBarrier2 {
         const barrier = vk.VkImageMemoryBarrier2{
             .sType = vk.VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
             .srcStageMask = @intFromEnum(self.state.stage),

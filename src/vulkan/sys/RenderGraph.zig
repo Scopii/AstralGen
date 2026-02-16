@@ -1,10 +1,11 @@
-const TextureBase = @import("../types/res/TextureBase.zig").TextureBase;
+
 const TexId = @import("../types/res/TextureMeta.zig").TextureMeta.TexId;
 const BufferMeta = @import("../types/res/BufferMeta.zig").BufferMeta;
-const BufferBase = @import("../types/res/BufferBase.zig").BufferBase;
 const Swapchain = @import("../types/base/Swapchain.zig").Swapchain;
 const PushData = @import("../types/res/PushData.zig").PushData;
+const Texture = @import("../types/res/Texture.zig").Texture;
 const ResourceMan = @import("ResourceMan.zig").ResourceMan;
+const Buffer = @import("../types/res/Buffer.zig").Buffer;
 const ShaderManager = @import("ShaderMan.zig").ShaderMan;
 const rc = @import("../../configs/renderConfig.zig");
 const FrameData = @import("../../App.zig").FrameData;
@@ -94,13 +95,13 @@ pub const RenderGraph = struct {
         cmd.endQuery(.BotOfPipe, 40);
     }
 
-    fn checkImageState(self: *RenderGraph, tex: *TextureBase, subRange: vk.VkImageSubresourceRange, neededState: TextureBase.TextureState) !void {
+    fn checkImageState(self: *RenderGraph, tex: *Texture, subRange: vk.VkImageSubresourceRange, neededState: Texture.TextureState) !void {
         const state = tex.state;
         if (state.stage == neededState.stage and state.access == neededState.access and state.layout == neededState.layout) return;
         try self.imgBarriers.append(tex.createImageBarrier(neededState, subRange));
     }
 
-    fn checkBufferState(self: *RenderGraph, buffer: *BufferBase, neededState: BufferBase.BufferState) !void {
+    fn checkBufferState(self: *RenderGraph, buffer: *Buffer, neededState: Buffer.BufferState) !void {
         const state = buffer.state;
         if ((state.stage == neededState.stage and state.access == neededState.access) or
             (state.access == .ShaderRead or state.access == .IndirectRead and
