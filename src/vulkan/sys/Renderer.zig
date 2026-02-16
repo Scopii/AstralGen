@@ -93,15 +93,15 @@ pub const Renderer = struct {
     }
 
     pub fn updateRenderTexture(self: *Renderer, texId: TextureMeta.TexId) !void {
-        const texMeta = try self.resMan.getTexMeta(texId);
-        const tex = try self.resMan.getTex(texId, 0);
+        const texMeta = try self.resMan.getTextureMeta(texId);
+        const tex = try self.resMan.getTexture(texId, 0);
 
         const old = tex.extent;
         const oldType = texMeta.texType;
         const new = self.swapMan.getMaxRenderExtent(texId);
 
         if (new.width != old.width or new.height != old.height) {
-            try self.resMan.queueTextureDestruction(texId);
+            try self.resMan.queueTextureKills(texId);
             try self.resMan.createTexture(.{ .id = texId, .width = new.width, .height = new.height, .depth = 1, .typ = oldType, .mem = .Gpu, .update = .PerFrame });
             std.debug.print("Render Texture ID {} recreated {}x{} to {}x{}\n", .{ texId.val, old.width, old.height, new.width, new.height });
         }

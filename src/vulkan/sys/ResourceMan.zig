@@ -53,12 +53,12 @@ pub const ResourceMan = struct {
     }
 
     pub fn getBufferDescriptor(self: *ResourceMan, bufId: BufferMeta.BufId, flightId: u8) !u32 {
-        const buffer = try self.getBuf(bufId, flightId);
+        const buffer = try self.getBuffer(bufId, flightId);
         return buffer.descIndex;
     }
 
     pub fn getTextureDescriptor(self: *ResourceMan, texId: TextureMeta.TexId, flightId: u8) !u32 {
-        const tex = try self.getTex(texId, flightId);
+        const tex = try self.getTexture(texId, flightId);
         return tex.descIndex;
     }
 
@@ -66,29 +66,29 @@ pub const ResourceMan = struct {
         self.resStorages[flightId].resetTransfers();
     }
 
-    pub fn getTex(self: *ResourceMan, texId: TextureMeta.TexId, flightId: u8) !*Texture {
-        const texMeta = try self.getTexMeta(texId);
+    pub fn getTexture(self: *ResourceMan, texId: TextureMeta.TexId, flightId: u8) !*Texture {
+        const texMeta = try self.getTextureMeta(texId);
         const realIndex = switch (texMeta.update) {
             .Overwrite => 0,
             .PerFrame => flightId,
         };
-        return try self.resStorages[realIndex].getTex(texId);
+        return try self.resStorages[realIndex].getTexture(texId);
     }
 
-    pub fn getBuf(self: *ResourceMan, bufId: BufferMeta.BufId, flightId: u8) !*Buffer {
-        const bufMeta = try self.getBufMeta(bufId);
+    pub fn getBuffer(self: *ResourceMan, bufId: BufferMeta.BufId, flightId: u8) !*Buffer {
+        const bufMeta = try self.getBufferMeta(bufId);
         const realIndex = switch (bufMeta.update) {
             .Overwrite => 0,
             .PerFrame => if (bufMeta.typ == .Indirect) flightId else bufMeta.updateId,
         };
-        return try self.resStorages[realIndex].getBuf(bufId);
+        return try self.resStorages[realIndex].getBuffer(bufId);
     }
 
-    pub fn getTexMeta(self: *ResourceMan, texId: TextureMeta.TexId) !*TextureMeta {
+    pub fn getTextureMeta(self: *ResourceMan, texId: TextureMeta.TexId) !*TextureMeta {
         if (self.texMetas.isKeyUsed(texId.val) == true) return self.texMetas.getPtr(texId.val) else return error.TextureIdNotUsed;
     }
 
-    pub fn getBufMeta(self: *ResourceMan, bufId: BufferMeta.BufId) !*BufferMeta {
+    pub fn getBufferMeta(self: *ResourceMan, bufId: BufferMeta.BufId) !*BufferMeta {
         if (self.bufMetas.isKeyUsed(bufId.val) == true) return self.bufMetas.getPtr(bufId.val) else return error.BufferIdNotUsed;
     }
 
@@ -101,7 +101,7 @@ pub const ResourceMan = struct {
             std.debug.print("Buffer ID {} created! (FlightId {}) ({}) ({}) (Descriptor {}) ", .{ bufInf.id.val, i, bufInf.typ, bufInf.update, buf.descIndex });
             self.vma.printMemoryInfo(buf.allocation);
 
-            self.resStorages[i].addBuf(bufInf.id, buf);
+            self.resStorages[i].addBuffer(bufInf.id, buf);
         }
         self.bufMetas.set(bufInf.id.val, self.vma.createBufferMeta(bufInf));
     }
@@ -117,28 +117,27 @@ pub const ResourceMan = struct {
             std.debug.print("Texture ID {} created! (FlightId {}) ({}) ({}) (Descriptor {}) ", .{ texInf.id.val, i, texInf.typ, texInf.update, tex.descIndex });
             self.vma.printMemoryInfo(tex.allocation);
 
-            self.resStorages[i].addTex(texInf.id, tex);
+            self.resStorages[i].addTexture(texInf.id, tex);
         }
         self.texMetas.set(texInf.id.val, texMeta);
     }
 
-    pub fn getBufferDataPtr(self: *ResourceMan, bufId: BufferMeta.BufId, comptime T: type, flightId: u8) !*T {
-        const buffer = try self.getBuf(bufId, flightId);
-
+    fn getBufferDataPtr(self: *ResourceMan, bufId: BufferMeta.BufId, comptime T: type, flightId: u8) !*T {
+        const buffer = try self.getBuffer(bufId, flightId);
         if (buffer.mappedPtr) |ptr| {
             return @as(*T, @ptrCast(@alignCast(ptr)));
         }
         return error.BufferNotHostVisible;
     }
 
-    pub fn printReadbackBuffer(self: *ResourceMan, bufId: BufferMeta.BufId, comptime T: type, flightId: u8) !void {
+    fn printReadbackBuffer(self: *ResourceMan, bufId: BufferMeta.BufId, comptime T: type, flightId: u8) !void {
         const readbackPtr = try self.getBufferDataPtr(bufId, T, flightId);
         std.debug.print("Readback: {}\n", .{readbackPtr.*});
     }
 
     pub fn updateBuffer(self: *ResourceMan, bufInf: BufferMeta.BufInf, data: anytype, flightId: u8) !void {
         const bytes = try convertToByteSlice(data);
-        const bufMeta = try self.getBufMeta(bufInf.id);
+        const bufMeta = try self.getBufferMeta(bufInf.id);
 
         const realFlightId = switch (bufMeta.update) {
             .Overwrite => 0,
@@ -146,7 +145,7 @@ pub const ResourceMan = struct {
         };
 
         var targetStorage = &self.resStorages[realFlightId];
-        const buf = try targetStorage.getBuf(bufInf.id);
+        const buf = try targetStorage.getBuffer(bufInf.id);
         if (bytes.len > buf.size) return error.BufferBaseTooSmallForUpdate;
 
         switch (bufInf.mem) {
@@ -173,19 +172,19 @@ pub const ResourceMan = struct {
         }
     }
 
-    pub fn queueTextureDestruction(self: *ResourceMan, texId: TextureMeta.TexId) !void {
-        const texMeta = try self.getTexMeta(texId);
-        for (0..texMeta.update.getCount()) |i| try self.resStorages[i].queueTexDestruction(texId);
+    pub fn queueTextureKills(self: *ResourceMan, texId: TextureMeta.TexId) !void {
+        const texMeta = try self.getTextureMeta(texId);
+        for (0..texMeta.update.getCount()) |i| try self.resStorages[i].queueTextureKill(texId);
         self.texMetas.removeAtKey(texId.val);
     }
 
-    pub fn queueBufferDestruction(self: *ResourceMan, bufId: BufferMeta.BufId) !void {
-        const bufMeta = try self.getBufMeta(bufId);
-        for (0..bufMeta.update.getCount()) |i| try self.resStorages[i].queueBufDestruction(bufId);
+    pub fn queueBufferKills(self: *ResourceMan, bufId: BufferMeta.BufId) !void {
+        const bufMeta = try self.getBufferMeta(bufId);
+        for (0..bufMeta.update.getCount()) |i| try self.resStorages[i].queueBufferKill(bufId);
         self.bufMetas.removeAtKey(bufId.val);
     }
 
-    pub fn cleanupResources(self: *ResourceMan, curFrame: u64) !void {
+    fn cleanupResources(self: *ResourceMan, curFrame: u64) !void {
         if (curFrame < rc.MAX_IN_FLIGHT) return; // Only clean up resources queued MAX_IN_FLIGHT ago (safety check for startup)
 
         const targetFrame = curFrame - rc.MAX_IN_FLIGHT;

@@ -38,7 +38,7 @@ pub const PushData = extern struct {
 
         const mainTexId = pass.getMainTexId();
         if (mainTexId) |texId| {
-            const mainTex = try resMan.getTex(texId, flightId);
+            const mainTex = try resMan.getTexture(texId, flightId);
             pcs.width = mainTex.extent.width;
             pcs.height = mainTex.extent.height;
         }
