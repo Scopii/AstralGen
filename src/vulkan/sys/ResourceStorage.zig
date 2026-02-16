@@ -27,6 +27,12 @@ pub const ResourceStorage = struct {
     stagingOffset: u64 = 0,
     transfers: std.array_list.Managed(Transfer),
 
+    buffers: CreateMapArray(BufferBase, rc.BUF_MAX, u32, rc.BUF_MAX, 0) = .{},
+    textures: CreateMapArray(TextureBase, rc.TEX_MAX, u32, rc.TEX_MAX, 0) = .{},
+
+    bufZombies: FixedList(BufferBase, rc.BUF_MAX) = .{},
+    texZombies: FixedList(TextureBase, rc.TEX_MAX) = .{},
+
     pub fn init(alloc: Allocator, vma: *const Vma) !ResourceStorage {
         return .{
             .stagingBuffer = try vma.allocStagingBuffer(rc.STAGING_BUF_SIZE),
@@ -37,10 +43,63 @@ pub const ResourceStorage = struct {
     pub fn deinit(self: *ResourceStorage, vma: *const Vma) void {
         vma.freeRawBuffer(self.stagingBuffer.handle, self.stagingBuffer.allocation);
         self.transfers.deinit();
+
+        for (self.buffers.getElements()) |*bufBase| vma.freeBufferBase(bufBase);
+        for (self.textures.getElements()) |*texBase| vma.freeTextureBase(texBase);
+        for (self.bufZombies.constSlice()) |*bufZombie| vma.freeBufferBase(bufZombie);
+        for (self.texZombies.constSlice()) |*texZombie| vma.freeTextureBase(texZombie);
     }
 
     pub fn resetTransfers(self: *ResourceStorage) void {
         self.stagingOffset = 0;
         self.transfers.clearRetainingCapacity();
+    }
+
+    pub fn addBuf(self: *ResourceStorage, bufId: BufferMeta.BufId, buffer: BufferBase) void {
+        self.buffers.set(bufId.val, buffer);
+    }
+
+    pub fn addTex(self: *ResourceStorage, texId: TextureMeta.TexId, tex: TextureBase) void {
+        self.textures.set(texId.val, tex);
+    }
+
+    pub fn getBuf(self: *ResourceStorage, bufId: BufferMeta.BufId) !*BufferBase {
+        if (self.buffers.isKeyUsed(bufId.val) == true) return self.buffers.getPtr(bufId.val) else return error.TextureIdNotUsed;
+    }
+
+    pub fn getTex(self: *ResourceStorage, texId: TextureMeta.TexId) !*TextureBase {
+        if (self.textures.isKeyUsed(texId.val) == true) return self.textures.getPtr(texId.val) else return error.TextureIdNotUsed;
+    }
+
+    pub fn queueTexDestruction(self: *ResourceStorage, texId: TextureMeta.TexId) !void {
+        if (self.textures.isKeyUsed(texId.val)) {
+            const tex = self.textures.getPtr(texId.val);
+            try self.texZombies.append(tex.*);
+            self.textures.removeAtKey(texId.val);
+        }
+    }
+
+    pub fn queueBufDestruction(self: *ResourceStorage, bufId: BufferMeta.BufId) !void {
+        if (self.buffers.isKeyUsed(bufId.val)) {
+            const buffer = self.buffers.getPtr(bufId.val);
+            try self.bufZombies.append(buffer.*);
+            self.buffers.removeAtKey(bufId.val);
+        }
+    }
+
+    pub fn getTexZombies(self: *ResourceStorage) []const TextureBase {
+        return self.texZombies.constSlice();
+    }
+
+    pub fn getBufZombies(self: *ResourceStorage) []const BufferBase {
+        return self.bufZombies.constSlice();
+    }
+
+    pub fn clearTexZombies(self: *ResourceStorage) void {
+        self.texZombies.clear();
+    }
+
+    pub fn clearBufZombies(self: *ResourceStorage) void {
+        self.bufZombies.clear();
     }
 };
