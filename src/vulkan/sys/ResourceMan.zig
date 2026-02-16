@@ -95,27 +95,25 @@ pub const ResourceMan = struct {
     pub fn createBuffer(self: *ResourceMan, bufInf: BufferMeta.BufInf) !void {
         switch (bufInf.update) {
             .Overwrite => {
-                var buffer = try self.vma.allocDefinedBuffer(bufInf);
-                const descIndex = try self.descMan.getFreeDescriptorIndex();
-                buffer.descIndex = descIndex;
-                try self.descMan.queueBufferDescriptor(buffer.gpuAddress, buffer.size, descIndex, bufInf.typ);
+                var buf = try self.vma.allocDefinedBuffer(bufInf);
+                buf.descIndex = try self.descMan.getFreeDescriptorIndex();
+                try self.descMan.queueBufferDescriptor(buf.gpuAddress, buf.size, buf.descIndex, bufInf.typ);
 
-                std.debug.print("Buffer ID {} created! (FlightId {}) ({}) ({}) (Descriptor {}) ", .{ bufInf.id.val, 0, bufInf.typ, bufInf.update, descIndex });
-                self.vma.printMemoryInfo(buffer.allocation);
+                std.debug.print("Buffer ID {} created! (FlightId {}) ({}) ({}) (Descriptor {}) ", .{ bufInf.id.val, 0, bufInf.typ, bufInf.update, buf.descIndex });
+                self.vma.printMemoryInfo(buf.allocation);
 
-                self.resStorages[0].addBuf(bufInf.id, buffer);
+                self.resStorages[0].addBuf(bufInf.id, buf);
             },
             .PerFrame => {
                 for (0..rc.MAX_IN_FLIGHT) |i| {
-                    var buffer = try self.vma.allocDefinedBuffer(bufInf);
-                    const descIndex = try self.descMan.getFreeDescriptorIndex();
-                    buffer.descIndex = descIndex;
-                    try self.descMan.queueBufferDescriptor(buffer.gpuAddress, buffer.size, descIndex, bufInf.typ);
+                    var buf = try self.vma.allocDefinedBuffer(bufInf);
+                    buf.descIndex = try self.descMan.getFreeDescriptorIndex();
+                    try self.descMan.queueBufferDescriptor(buf.gpuAddress, buf.size, buf.descIndex, bufInf.typ);
 
-                    std.debug.print("Buffer ID {} created! (FlightId {}) ({}) ({}) (Descriptor {}) ", .{ bufInf.id.val, i, bufInf.typ, bufInf.update, descIndex });
-                    self.vma.printMemoryInfo(buffer.allocation);
+                    std.debug.print("Buffer ID {} created! (FlightId {}) ({}) ({}) (Descriptor {}) ", .{ bufInf.id.val, i, bufInf.typ, bufInf.update, buf.descIndex });
+                    self.vma.printMemoryInfo(buf.allocation);
 
-                    self.resStorages[i].addBuf(bufInf.id, buffer);
+                    self.resStorages[i].addBuf(bufInf.id, buf);
                 }
             },
         }
@@ -128,11 +126,10 @@ pub const ResourceMan = struct {
         switch (texInf.update) {
             .Overwrite => {
                 var tex = try self.vma.allocDefinedTexture(texInf);
-                const descIndex = try self.descMan.getFreeDescriptorIndex();
-                tex.descIndex = descIndex;
-                try self.descMan.queueTextureDescriptor(&texMeta, tex.img, descIndex);
+                tex.descIndex = try self.descMan.getFreeDescriptorIndex();
+                try self.descMan.queueTextureDescriptor(&texMeta, tex.img, tex.descIndex);
 
-                std.debug.print("Texture ID {} created! (FlightId {}) ({}) ({}) (Descriptor {}) ", .{ texInf.id.val, 0, texInf.typ, texInf.update, descIndex });
+                std.debug.print("Texture ID {} created! (FlightId {}) ({}) ({}) (Descriptor {}) ", .{ texInf.id.val, 0, texInf.typ, texInf.update, tex.descIndex });
                 self.vma.printMemoryInfo(tex.allocation);
 
                 self.resStorages[0].addTex(texInf.id, tex);
@@ -140,11 +137,10 @@ pub const ResourceMan = struct {
             .PerFrame => {
                 for (0..rc.MAX_IN_FLIGHT) |i| {
                     var tex = try self.vma.allocDefinedTexture(texInf);
-                    const descIndex = try self.descMan.getFreeDescriptorIndex();
-                    tex.descIndex = descIndex;
-                    try self.descMan.queueTextureDescriptor(&texMeta, tex.img, descIndex);
+                    tex.descIndex = try self.descMan.getFreeDescriptorIndex();
+                    try self.descMan.queueTextureDescriptor(&texMeta, tex.img, tex.descIndex);
 
-                    std.debug.print("Texture ID {} created! (FlightId {}) ({}) ({}) (Descriptor {}) ", .{ texInf.id.val, i, texInf.typ, texInf.update, descIndex });
+                    std.debug.print("Texture ID {} created! (FlightId {}) ({}) ({}) (Descriptor {}) ", .{ texInf.id.val, i, texInf.typ, texInf.update, tex.descIndex });
                     self.vma.printMemoryInfo(tex.allocation);
 
                     self.resStorages[i].addTex(texInf.id, tex);
