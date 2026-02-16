@@ -197,8 +197,12 @@ pub const ResourceMan = struct {
             },
             .CpuRead => return error.CpuReadBufferCantUpdate,
         }
-        try self.descMan.queueBufferDescriptor(buffer.gpuAddress, bytes.len, buffer.descIndex, bufMeta.typ);
-        buffer.curCount = @intCast(bytes.len / bufInf.elementSize);
+        const newCount:u32 = @intCast(bytes.len / bufInf.elementSize);
+
+        if (buffer.curCount != newCount) {
+            try self.descMan.queueBufferDescriptor(buffer.gpuAddress, bytes.len, buffer.descIndex, bufMeta.typ);
+            buffer.curCount = @intCast(bytes.len / bufInf.elementSize);
+        }
         if (bufMeta.update == .PerFrame) bufMeta.updateId = flightId;
     }
 
