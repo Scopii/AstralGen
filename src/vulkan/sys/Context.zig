@@ -166,16 +166,18 @@ fn pickGPU(alloc: Allocator, instance: vk.VkInstance) !vk.VkPhysicalDevice {
 }
 
 pub fn checkGPU(gpu: vk.VkPhysicalDevice) bool {
-    var properties: vk.VkPhysicalDeviceProperties = undefined;
-    vk.vkGetPhysicalDeviceProperties(gpu, &properties);
-    var features: vk.VkPhysicalDeviceFeatures = undefined;
-    vk.vkGetPhysicalDeviceFeatures(gpu, &features);
+    var driverProps: vk.VkPhysicalDeviceDriverProperties = .{ .sType = vk.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DRIVER_PROPERTIES };
+    var props2: vk.VkPhysicalDeviceProperties2 = .{ .sType = vk.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2, .pNext = &driverProps };
+    vk.vkGetPhysicalDeviceProperties2(gpu, &props2);
 
-    std.debug.print("Testing: {s}\n", .{properties.deviceName});
-    if (properties.deviceType != vk.VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) {
-        std.debug.print("Device not discrete GPU\n", .{});
+    std.debug.print("Testing: {s}\n", .{props2.properties.deviceName});
+
+    if (props2.properties.deviceType != vk.VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) {
+        std.debug.print("Device not discrete GPU!\n", .{});
         return false;
-    }
+    } else std.debug.print("Device valid\n", .{});
+    
+    std.debug.print("Driver: {s} {s}\n", .{ driverProps.driverName, driverProps.driverInfo });
     return true;
 }
 
@@ -278,7 +280,7 @@ fn createGPI(alloc: Allocator, gpu: vk.VkPhysicalDevice, families: QueueFamilies
 
     // Dynamic State 3
     try checkFeature("Polygon Mode", supported.dynState3.extendedDynamicState3PolygonMode, &needed.dynState3.extendedDynamicState3PolygonMode);
-    try checkFeature("Raster Samples", supported.dynState3.extendedDynamicState3RasterizationSamples,&needed.dynState3.extendedDynamicState3RasterizationSamples);
+    try checkFeature("Raster Samples", supported.dynState3.extendedDynamicState3RasterizationSamples, &needed.dynState3.extendedDynamicState3RasterizationSamples);
     try checkFeature("Sample Mask", supported.dynState3.extendedDynamicState3SampleMask, &needed.dynState3.extendedDynamicState3SampleMask);
     try checkFeature("Depth Clamp", supported.dynState3.extendedDynamicState3DepthClampEnable, &needed.dynState3.extendedDynamicState3DepthClampEnable);
     try checkFeature("Color Blend", supported.dynState3.extendedDynamicState3ColorBlendEnable, &needed.dynState3.extendedDynamicState3ColorBlendEnable);
@@ -334,21 +336,7 @@ fn createGPI(alloc: Allocator, gpu: vk.VkPhysicalDevice, families: QueueFamilies
     try checkFeature("Shader Int 64", supported.device.features.shaderInt64, &needed.device.features.shaderInt64);
     try checkFeature("Wide Lines", supported.device.features.wideLines, &needed.device.features.wideLines);
 
-    const gpuExtensions = [_][*c]const u8{
-        "VK_KHR_swapchain",
-        "VK_EXT_mesh_shader",
-        "VK_EXT_shader_object",
-        "VK_EXT_extended_dynamic_state",
-        "VK_EXT_extended_dynamic_state2",
-        "VK_EXT_extended_dynamic_state3",
-        "VK_EXT_conservative_rasterization",
-        "VK_KHR_fragment_shading_rate",
-        "VK_KHR_shader_non_semantic_info",
-        "VK_EXT_descriptor_heap",
-        "VK_KHR_shader_untyped_pointers",
-        "VK_KHR_maintenance5",
-        "VK_EXT_vertex_input_dynamic_state"
-    };
+    const gpuExtensions = [_][*c]const u8{ "VK_KHR_swapchain", "VK_EXT_mesh_shader", "VK_EXT_shader_object", "VK_EXT_extended_dynamic_state", "VK_EXT_extended_dynamic_state2", "VK_EXT_extended_dynamic_state3", "VK_EXT_conservative_rasterization", "VK_KHR_fragment_shading_rate", "VK_KHR_shader_non_semantic_info", "VK_EXT_descriptor_heap", "VK_KHR_shader_untyped_pointers", "VK_KHR_maintenance5", "VK_EXT_vertex_input_dynamic_state" };
 
     const createInf = vk.VkDeviceCreateInfo{
         .sType = vk.VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
