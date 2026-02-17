@@ -176,11 +176,12 @@ pub fn checkGPU(gpu: vk.VkPhysicalDevice) bool {
         std.debug.print("Device not discrete GPU!\n", .{});
         return false;
     } else std.debug.print("Device valid\n", .{});
-    
+
     std.debug.print("Driver: {s} {s}\n", .{ driverProps.driverName, driverProps.driverInfo });
     return true;
 }
 
+// VALIDATE THIS FUNCTION?
 fn checkGPUfeatures(alloc: Allocator, gpu: vk.VkPhysicalDevice) !bool {
     var extensions: u32 = 0;
     try vhF.check(vk.vkEnumerateDeviceExtensionProperties(gpu, null, &extensions, null), "Failed to enumerate device extensions");
@@ -189,7 +190,7 @@ fn checkGPUfeatures(alloc: Allocator, gpu: vk.VkPhysicalDevice) !bool {
     defer alloc.free(supported);
     try vhF.check(vk.vkEnumerateDeviceExtensionProperties(gpu, null, &extensions, supported.ptr), "Failed to get device extensions");
 
-    const required = [_][]const u8{"VK_KHR_swapchain"};
+    const required = [_][]const u8{"VK_KHR_swapchain"}; // SHOULD TAKE ACTUAL EXTENSIONS
     var matched: u32 = 0;
 
     for (supported) |extension| {

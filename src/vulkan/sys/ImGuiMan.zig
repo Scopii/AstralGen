@@ -5,10 +5,12 @@ const rc = @import("../../configs/renderConfig.zig");
 const zgui = @import("zgui");
 const std = @import("std");
 
+const ig = @cImport(@cInclude("imgui_ctx.h"));
+
 pub const ImGuiMan = struct {
     uiActive: bool = true,
 
-    pub fn init(context: *const Context, sdl_window: *vk.SDL_Window) !ImGuiMan {
+    pub fn init(context: *const Context, sdlWindow: *vk.SDL_Window) !ImGuiMan {
         zgui.init(std.heap.c_allocator);
 
         const loaded = zgui.backend.loadFunctions(
@@ -20,7 +22,7 @@ pub const ImGuiMan = struct {
             return error.VulkanFunctionLoadingFailed;
         }
 
-        const swapchain_format = vk.VK_FORMAT_B8G8R8A8_UNORM;
+        const swapchainFormat = vk.VK_FORMAT_B8G8R8A8_UNORM;
 
         zgui.backend.init(
             .{
@@ -41,12 +43,12 @@ pub const ImGuiMan = struct {
                     .s_type = vk.VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
                     .view_mask = 0, //vk.VK_SAMPLE_COUNT_1_BIT
                     .color_attachment_count = 1,
-                    .p_color_attachment_formats = @ptrCast(&swapchain_format),
+                    .p_color_attachment_formats = @ptrCast(&swapchainFormat),
                     .depth_attachment_format = vk.VK_FORMAT_UNDEFINED,
                     .stencil_attachment_format = vk.VK_FORMAT_UNDEFINED,
                 },
             },
-            sdl_window,
+            sdlWindow,
         );
         return .{};
     }

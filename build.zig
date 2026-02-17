@@ -21,6 +21,11 @@ pub fn build(b: *std.Build) void {
 
     exe.root_module.addImport("c", c_module);
 
+    exe.addCSourceFile(.{
+        .file = b.path("src/modules/imgui_ctx.cpp"),
+        .flags = &.{"-std=c++17"},
+    });
+
     exe.linkLibCpp();
     exe.linkLibC();
 
@@ -33,6 +38,7 @@ pub fn build(b: *std.Build) void {
     });
     exe.root_module.addImport("zgui", zgui_dep.module("root"));
     exe.linkLibrary(zgui_dep.artifact("imgui"));
+    exe.addIncludePath(zgui_dep.path("libs/imgui"));
 
     // 3. Setup Include Paths
     const local_include_path = b.path("include"); // Cause imgui_bridge.h
