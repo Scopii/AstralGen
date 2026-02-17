@@ -3,6 +3,7 @@ const ShaderCompiler = @import("core/ShaderCompiler.zig").ShaderCompiler;
 const MemoryManager = @import("core/MemoryManager.zig").MemoryManager;
 const EntityManager = @import("ecs/EntityManager.zig").EntityManager;
 const EventManager = @import("core/EventManager.zig").EventManager;
+const UiManager = @import("core/UiManager.zig").UiManager;
 const TimeManager = @import("core/TimeManager.zig").TimeManager;
 const RNGenerator = @import("core/RNGenerator.zig").RNGenerator;
 const Renderer = @import("vulkan/sys/Renderer.zig").Renderer;
@@ -16,6 +17,7 @@ const std = @import("std");
 pub const App = struct {
     memoryMan: *MemoryManager,
     windowMan: WindowManager,
+    uiMan: UiManager,
     renderer: Renderer,
     timeMan: TimeManager,
     cam: Camera,
@@ -30,6 +32,11 @@ pub const App = struct {
             return error.WindowManagerFailed;
         };
         errdefer windowMan.deinit();
+
+        const uiMan = UiManager.init() catch |err| {
+            std.debug.print("Astral App Error UIManager could not launch, Err {}\n", .{err});
+            return error.WindowManagerFailed;
+        };
 
         var shaderCompiler = ShaderCompiler.init(memoryMan.getAllocator()) catch |err| {
             windowMan.showErrorBox("Astral App Error", "File Manager could not launch");
@@ -65,6 +72,7 @@ pub const App = struct {
             .eventMan = EventManager{},
             .memoryMan = memoryMan,
             .windowMan = windowMan,
+            .uiMan = uiMan,
             .renderer = renderer,
             .shaderCompiler = shaderCompiler,
             .ecs = ecs,
