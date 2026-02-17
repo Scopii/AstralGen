@@ -30,12 +30,12 @@ pub const Renderer = struct {
     imguiMan: ImGuiMan,
     passes: std.array_list.Managed(Pass),
 
-    pub fn init(memoryMan: *MemoryManager, mainWindow: *vk.SDL_Window) !Renderer {
+    pub fn init(memoryMan: *MemoryManager) !Renderer {
         const alloc = memoryMan.getAllocator();
         const context = try Context.init(alloc);
         const resMan = try ResourceMan.init(alloc, &context);
 
-        const imguiMan = try ImGuiMan.init(&context, mainWindow);
+        const imguiMan = ImGuiMan.init(&context);
 
         return .{
             .alloc = alloc,
@@ -53,7 +53,7 @@ pub const Renderer = struct {
 
     pub fn deinit(self: *Renderer) void {
         _ = vk.vkDeviceWaitIdle(self.context.gpi);
-        self.imguiMan.deinit(self.context.gpi);
+        self.imguiMan.deinit();
         self.scheduler.deinit();
         self.swapMan.deinit();
         self.shaderMan.deinit();
@@ -74,9 +74,15 @@ pub const Renderer = struct {
 
         for (tempWindows, 0..) |window, i| {
             switch (window.state) {
-                .needCreation => try self.swapMan.createSwapchain(window),
+                .needCreation => {
+                    try self.swapMan.createSwapchain(window);
+                    try self.imguiMan.addWindowContext(window.id.val, window.handle);
+                },
                 .needUpdate => try self.swapMan.recreateSwapchain(window.id, window.extent),
-                .needDelete => self.swapMan.removeSwapchains(window.id),
+                .needDelete => {
+                    self.swapMan.removeSwapchains(window.id);
+                    self.imguiMan.removeWindowContext(window.id.val);
+                },
                 .needActive, .needInactive => self.swapMan.changeState(window.id, if (window.state == .needActive) true else false),
                 else => std.debug.print("Warning: Window State {s} cant be handled in Renderer\n", .{@tagName(window.state)}),
             }
@@ -117,8 +123,10 @@ pub const Renderer = struct {
         const flightId = try self.scheduler.beginFrame();
         const targets = try self.swapMan.getUpdatedTargets(flightId);
 
-        self.imguiMan.newFrame();
-        self.imguiMan.drawUi();
+        for (targets) |swapchain| {
+            self.imguiMan.newFrame(@intCast(swapchain.windowId), swapchain.extent.width, swapchain.extent.height);
+            self.imguiMan.drawUi(@intCast(swapchain.windowId));
+        }
 
         const cmd = try self.renderGraph.recordFrame(self.passes.items, flightId, self.scheduler.totalFrames, frameData, targets, &self.resMan, &self.shaderMan, &self.imguiMan);
 

@@ -17,8 +17,9 @@ pub const Swapchain = struct {
     subRange: vk.VkImageSubresourceRange,
     extent: vk.VkExtent2D,
     inUse: bool = true,
+    windowId: u32,
 
-    pub fn init(alloc: Allocator, gpi: vk.VkDevice, surface: vk.VkSurfaceKHR, extent: vk.VkExtent2D, gpu: vk.VkPhysicalDevice, renderTexId: TexId, oldHandle: ?vk.VkSwapchainKHR) !Swapchain {
+    pub fn init(alloc: Allocator, gpi: vk.VkDevice, surface: vk.VkSurfaceKHR, extent: vk.VkExtent2D, gpu: vk.VkPhysicalDevice, renderTexId: TexId, oldHandle: ?vk.VkSwapchainKHR, windowId: u32) !Swapchain {
         const mode = rc.DISPLAY_MODE; //try context.pickPresentMode();
         const caps = try getSurfaceCaps(gpu, surface);
         const realExtent = pickExtent(&caps, extent);
@@ -98,6 +99,7 @@ pub const Swapchain = struct {
             .renderSems = renderDoneSems,
             .renderTexId = renderTexId,
             .subRange = subRange,
+            .windowId = windowId,
         };
     }
 
@@ -114,7 +116,7 @@ pub const Swapchain = struct {
     }
 
     pub fn recreate(self: *Swapchain, alloc: Allocator, gpi: vk.VkDevice, gpu: vk.VkPhysicalDevice, instance: vk.VkInstance, newExtent: vk.VkExtent2D) !void {
-        const swapchain = try Swapchain.init(alloc, gpi, self.surface, newExtent, gpu, self.renderTexId, self.handle);
+        const swapchain = try Swapchain.init(alloc, gpi, self.surface, newExtent, gpu, self.renderTexId, self.handle, self.windowId);
         self.deinit(alloc, gpi, instance, .withoutSurface);
         self.* = swapchain;
     }

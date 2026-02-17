@@ -246,7 +246,7 @@ pub const RenderGraph = struct {
             const colorAtt = target.createAttachment(.Color, false);
 
             cmd.beginRendering(swapchain.extent.width, swapchain.extent.height, &[_]vk.VkRenderingAttachmentInfo{colorAtt}, null, null);
-            imguiMan.render(cmd);
+            imguiMan.render(swapchain.windowId, cmd);
             cmd.endRendering();
 
             try self.checkImageState(target, swapchain.subRange, .{ .stage = .BotOfPipe, .access = .None, .layout = .PresentSrc });

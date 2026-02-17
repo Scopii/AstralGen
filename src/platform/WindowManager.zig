@@ -20,7 +20,7 @@ pub const WindowManager = struct {
     openWindows: u8 = 0,
     appExit: bool = false,
     windowProps: sdl.SDL_PropertiesID,
-    uiActive: bool = true,
+    uiActive: bool = false,
 
     inputEvents: FixedList(KeyEvent, 127) = .{},
     mouseMoveX: f32 = 0,

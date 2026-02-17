@@ -92,7 +92,7 @@ pub const SwapchainMan = struct {
 
     pub fn createSwapchain(self: *SwapchainMan, window: Window) !void {
         const surface = try createSurface(window.handle, self.instance);
-        const swapchain = try Swapchain.init(self.alloc, self.gpi, surface, window.extent, self.gpu, window.renderTexId, null);
+        const swapchain = try Swapchain.init(self.alloc, self.gpi, surface, window.extent, self.gpu, window.renderTexId, null, window.id.val);
         self.swapchains.set(window.id.val, swapchain);
         std.debug.print("Swapchain added to Window {}\n", .{window.id.val});
     }
