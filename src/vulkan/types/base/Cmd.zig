@@ -76,14 +76,14 @@ pub const Cmd = struct {
 
     pub fn startQuery(self: *Cmd, pipeStage: vhE.PipeStage, queryId: u8, name: []const u8) void {
         if (self.querys.isKeyUsed(queryId) == true) {
-            std.debug.print("Cmd Warning: Query ID {} in use by {s}\n!", .{ queryId, self.querys.getPtr(queryId).name });
+            std.debug.print("Cmd Warning: Query ID {} in use by {s}\n!", .{ queryId, self.querys.getPtrByKey(queryId).name });
             return;
         }
         const idx = self.queryCounter;
         if (idx >= rc.GPU_QUERYS) return; // Safety check
 
         self.writeTimestamp(self.queryPool, @intFromEnum(pipeStage), idx);
-        self.querys.set(queryId, .{ .name = name, .startIndex = idx });
+        self.querys.upsert(queryId, .{ .name = name, .startIndex = idx });
         self.queryCounter += 1;
     }
 
@@ -97,7 +97,7 @@ pub const Cmd = struct {
         if (idx >= rc.GPU_QUERYS) return; // Safety check
 
         self.writeTimestamp(self.queryPool, @intFromEnum(pipeStage), idx);
-        const query = self.querys.getPtr(queryId);
+        const query = self.querys.getPtrByKey(queryId);
         query.endIndex = idx;
         self.queryCounter += 1;
     }
@@ -113,11 +113,11 @@ pub const Cmd = struct {
         const flags = vk.VK_QUERY_RESULT_64_BIT | vk.VK_QUERY_RESULT_WAIT_BIT;
         try vhF.check(vk.vkGetQueryPoolResults(gpi, self.queryPool, 0, count, @sizeOf(u64) * 128, &results, @sizeOf(u64), flags), "Failed getting Cmd Queries");
 
-        const frameStartIndex = self.querys.getAtIndex(0).startIndex;
+        const frameStartIndex = self.querys.getByIndex(0).startIndex;
         const frameStart = results[frameStartIndex];
         var frameEnd: u64 = 0;
 
-        for (self.querys.getElements()) |query| {
+        for (self.querys.getItems()) |query| {
             const endTime = results[query.endIndex];
             if (endTime > frameEnd) frameEnd = endTime;
         }
@@ -129,7 +129,7 @@ pub const Cmd = struct {
 
         var untrackedMs: f64 = gpuFrameMs;
 
-        for (self.querys.getElements()) |query| {
+        for (self.querys.getItems()) |query| {
             const diff = results[query.endIndex] - results[query.startIndex];
             const gpuQueryMs = (@as(f64, @floatFromInt(diff)) * timestampPeriod) / 1_000_000.0;
             untrackedMs -= gpuQueryMs;
@@ -146,14 +146,14 @@ pub const Cmd = struct {
 
     pub fn bakeBarriers(self: *const Cmd, imgBarriers: []const vk.VkImageMemoryBarrier2, bufBarriers: []const vk.VkBufferMemoryBarrier2) void {
         const depInf = vk.VkDependencyInfo{
-            //.dependencyFlags = 
+            //.dependencyFlags =
             .sType = vk.VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
             .imageMemoryBarrierCount = @intCast(imgBarriers.len),
             .pImageMemoryBarriers = imgBarriers.ptr,
             .bufferMemoryBarrierCount = @intCast(bufBarriers.len),
             .pBufferMemoryBarriers = bufBarriers.ptr,
             //.memoryBarrierCount =
-            //.pMemoryBarriers =  
+            //.pMemoryBarriers =
         };
         vk.vkCmdPipelineBarrier2(self.handle, &depInf);
     }

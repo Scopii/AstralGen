@@ -4,57 +4,62 @@ fn FindSmallestIntType(number: usize) type {
     return std.math.IntFittingRange(0, number);
 }
 
-pub fn CreateMapArray(comptime elementType: type, comptime size: u32, comptime keyType: type, comptime keyMax: u32, comptime keyMin: u32) type {
+pub fn CreateMapArray(comptime itemType: type, comptime capacity: u32, comptime keyType: type, comptime keyMax: u32, comptime keyMin: u32) type {
     comptime {
-        if (keyMax < size) @compileError("MapArray: keyMax must be >= size");
+        if (keyMax < capacity) @compileError("MapArray: keyMax must be >= size");
         if (keyMin > keyMax) @compileError("MapArray: keyMax must be > keyMin");
     }
-    const elementLimit = size - 1;
 
-    const usedKeyCount = keyMax - keyMin + 1;
-    const sentinel = usedKeyCount + 1;
+    const keyRange = keyMax - keyMin + 1;
+    const sentinel = keyRange + 1;
     const smallKeyType = FindSmallestIntType(sentinel);
-    const indexType = FindSmallestIntType(size + 1); //
+    const indexType = FindSmallestIntType(capacity + 1);
 
     return struct {
         const Self = @This();
-        count: indexType = 0,
+        len: indexType = 0,
 
-        keys: [usedKeyCount]smallKeyType = .{sentinel} ** usedKeyCount,
-        links: [size]smallKeyType = .{sentinel} ** size,
-        elements: [size]elementType = undefined,
+        keys: [keyRange]smallKeyType = .{sentinel} ** keyRange,
+        links: [capacity]smallKeyType = .{sentinel} ** capacity,
+        items: [capacity]itemType = undefined,
 
-        pub fn set(self: *Self, key: keyType, element: elementType) void {
+        pub fn upsert(self: *Self, key: keyType, item: itemType) void {
             const castedKey: smallKeyType = @truncate(key - keyMin);
 
             if (self.keys[castedKey] == sentinel) {
-                const index = self.count;
+                // Insert
+                const index = self.len;
                 self.keys[castedKey] = index;
                 self.links[index] = castedKey;
-                self.elements[index] = element;
-                self.count += 1;
+                self.items[index] = item;
+                self.len += 1;
             } else {
+                // Update
                 const index = self.keys[castedKey];
-                self.elements[index] = element;
+                self.items[index] = item;
             }
         }
 
-        pub fn setMany(self: *Self, keys: []const keyType, elements: []const elementType) void {
-            for (keys, elements) |key, element| self.set(key, element);
+        pub fn insert(self: *Self, key: keyType, item: itemType) void {
+            const castedKey: smallKeyType = @truncate(key - keyMin);
+            const index = self.len;
+            
+            self.keys[castedKey] = index;
+            self.links[index] = castedKey;
+            self.items[index] = item;
+            self.len += 1;
         }
 
-        pub fn overwriteAtIndex(self: *Self, index: u32, element: elementType) void {
-            self.elements[index] = element;
+        pub fn update(self: *Self, key: keyType, item: itemType) void {
+            const castedKey: smallKeyType = @truncate(key - keyMin);
+            const index = self.keys[castedKey];
+            self.items[index] = item;
         }
 
-        pub fn append(self: *Self, element: elementType) void {
-            self.elements[self.count] = element;
-            self.links[self.count] = sentinel;
-            self.count += 1;
-        }
-
-        pub fn appendMany(self: *Self, elements: []const elementType) void {
-            for (elements) |element| self.append(element);
+        pub fn appendUnlinked(self: *Self, item: itemType) void {
+            self.items[self.len] = item;
+            self.links[self.len] = sentinel;
+            self.len += 1;
         }
 
         pub fn link(self: *Self, index: u32, key: keyType) void {
@@ -68,10 +73,10 @@ pub fn CreateMapArray(comptime elementType: type, comptime size: u32, comptime k
 
         pub fn unlink(self: *Self, key: keyType) void {
             const castedKey: smallKeyType = @truncate(key - keyMin);
-            self.unlinkAtIndex(self.keys[castedKey]);
+            self.unlinkIndex(self.keys[castedKey]);
         }
 
-        pub fn unlinkAtIndex(self: *Self, index: u32) void {
+        pub fn unlinkIndex(self: *Self, index: u32) void {
             const key = self.links[index];
             if (key != sentinel) {
                 self.keys[key] = sentinel;
@@ -80,65 +85,53 @@ pub fn CreateMapArray(comptime elementType: type, comptime size: u32, comptime k
         }
 
         pub fn clear(self: *Self) void {
-            self.count = 0;
+            self.len = 0;
             @memset(&self.keys, sentinel);
             @memset(&self.links, sentinel);
         }
 
         pub fn removeLast(self: *Self) void {
-            const key = self.links[self.count - 1];
+            const key = self.links[self.len - 1];
             if (key != sentinel) self.keys[key] = sentinel;
 
-            self.links[self.count - 1] = sentinel;
-            self.count -= 1;
+            self.links[self.len - 1] = sentinel;
+            self.len -= 1;
         }
 
-        pub fn removeMany(self: *Self, number: u32) void {
-            for (number) |_| self.removeLast();
+        pub fn remove(self: *Self, key: keyType) void {
+            const castedKey: smallKeyType = @truncate(key - keyMin);
+            self.removeIndex(self.keys[castedKey]);
         }
 
-        pub fn removeAtKey(self: *Self, key: keyType) void {
-            self.removeAtIndex(self.keys[key - keyMin]);
-        }
-
-        pub fn removeAtIndex(self: *Self, index: u32) void {
+        pub fn removeIndex(self: *Self, index: u32) void {
             const keyIndex = self.links[index];
             if (keyIndex != sentinel) self.keys[keyIndex] = sentinel;
 
-            const lastIndex = self.count - 1;
-            self.count -= 1;
+            const lastIndex = self.len - 1;
+            self.len -= 1;
 
             if (index != lastIndex) {
                 const lastKey = self.links[lastIndex];
-                // Move last element to removed position
-                self.elements[index] = self.elements[lastIndex];
+                // Move last item to removed position
+                self.items[index] = self.items[lastIndex];
                 self.links[index] = lastKey;
-                // Update key mapping if last element has a key
+                // Update key mapping if last item has a key
                 if (lastKey != sentinel) self.keys[lastKey] = @truncate(index);
             }
             self.links[lastIndex] = sentinel;
         }
 
-        pub fn swapOnlyElement(self: *Self, key1: keyType, key2: keyType) void {
-            self.swapOnlyElementAtIndex(self.keys[key1 - keyMin], self.keys[key2 - keyMin]);
-        }
-
-        pub fn swapOnlyElementAtIndex(self: *Self, index1: u32, index2: u32) void {
-            if (index1 == index2) return;
-            const tempElement = self.elements[index1];
-            self.elements[index1] = self.elements[index2];
-            self.elements[index2] = tempElement;
-        }
-
         pub fn swap(self: *Self, key1: keyType, key2: keyType) void {
-            self.swapAtIndex(self.keys[key1 - keyMin], self.keys[key2 - keyMin]);
+            const castedKey1: smallKeyType = @truncate(key1 - keyMin);
+            const castedKey2: smallKeyType = @truncate(key2 - keyMin);
+            self.swapIndices(self.keys[castedKey1], self.keys[castedKey2]);
         }
 
-        pub fn swapAtIndex(self: *Self, index1: u32, index2: u32) void {
+        pub fn swapIndices(self: *Self, index1: u32, index2: u32) void {
             if (index1 == index2) return;
-            const tempElement = self.elements[index1];
-            self.elements[index1] = self.elements[index2];
-            self.elements[index2] = tempElement;
+            const tempItem = self.items[index1];
+            self.items[index1] = self.items[index2];
+            self.items[index2] = tempItem;
 
             const tempLink = self.links[index1];
             self.links[index1] = self.links[index2];
@@ -148,115 +141,89 @@ pub fn CreateMapArray(comptime elementType: type, comptime size: u32, comptime k
             if (self.links[index2] != sentinel) self.keys[self.links[index2]] = @truncate(index2);
         }
 
-        pub fn isKeyUsedAndValid(self: *const Self, key: keyType) bool {
-            if (self.isKeyValid(key) == false) return false;
-            const castedKey: smallKeyType = @truncate(key - keyMin);
-            return self.keys[castedKey] != sentinel;
-        }
-
         pub fn isKeyUsed(self: *const Self, key: keyType) bool {
             const castedKey: smallKeyType = @truncate(key - keyMin);
             return self.keys[castedKey] != sentinel;
         }
 
         pub inline fn isKeyValid(_: *const Self, key: keyType) bool {
-            return key >= keyMin and (key - keyMin) < usedKeyCount;
+            return key >= keyMin and (key - keyMin) < keyRange;
         }
 
         pub inline fn isIndexUsed(self: *const Self, index: u32) bool {
-            return index < self.count;
+            return index < self.len;
         }
 
         pub inline fn isIndexValid(_: *const Self, index: u32) bool {
-            return index <= elementLimit;
+            return index < capacity;
         }
 
         pub inline fn isFull(self: *const Self) bool {
-            return self.count >= size;
+            return self.len >= capacity;
         }
 
         pub inline fn isLinked(self: *const Self, index: u32) bool {
             return self.links[index] != sentinel;
         }
 
-        pub inline fn getElements(self: *Self) []elementType {
-            return self.elements[0..self.count];
+        pub inline fn getItems(self: *Self) []itemType {
+            return self.items[0..self.len];
         }
 
-        pub inline fn getElementsArrayPtr(self: *Self) *[size]elementType {
-            return &self.elements;
-        }
-
-        pub inline fn getUpperKeyLimit(_: *const Self) u32 {
+        pub inline fn getKeyMax(_: *const Self) u32 {
             return keyMax;
         }
 
-        pub inline fn getLowerKeyLimit(_: *const Self) u32 {
+        pub inline fn getKeyMin(_: *const Self) u32 {
             return keyMin;
         }
 
-        pub inline fn getKeyFromIndex(self: *const Self, index: u32) u32 { // UNTESTED
+        pub inline fn getKeyByIndex(self: *const Self, index: u32) u32 {
             return self.links[index] + keyMin;
         }
 
-        pub inline fn getLastValidIndex(_: *const Self) u32 {
-            return size - 1;
+        pub inline fn getCapacity(_: *const Self) u32 {
+            return capacity;
         }
 
-        pub inline fn getMaximumElements(_: *const Self) u32 {
-            return size;
+        pub inline fn getByKey(self: *const Self, key: keyType) itemType {
+            return self.items[self.keys[(key - keyMin)]];
         }
 
-        pub inline fn getPossibleKeyCount(_: *const Self) u32 {
-            return usedKeyCount;
+        pub inline fn getIndexByKey(self: *const Self, key: keyType) smallKeyType {
+            return self.keys[(key - keyMin)];
         }
 
-        pub inline fn get(self: *const Self, key: keyType) elementType {
-            return self.elements[self.keys[(key - keyMin)]];
+        pub inline fn getPtrByKey(self: *Self, key: keyType) *itemType {
+            return &self.items[self.keys[(key - keyMin)]];
         }
 
-        pub inline fn getIndex(self: *const Self, key: keyType) smallKeyType {
-            return self.keys[(key - keyMin)]; // NOT TESTED YET
+        pub inline fn getByIndex(self: *const Self, index: u32) itemType {
+            return self.items[index];
         }
 
-        pub inline fn getPtr(self: *Self, key: keyType) *elementType {
-            return &self.elements[self.keys[(key - keyMin)]];
+        pub inline fn getPtrByIndex(self: *Self, index: u32) *itemType {
+            return &self.items[index];
         }
 
-        pub inline fn getAtIndex(self: *const Self, index: u32) elementType {
-            return self.elements[index];
+        pub inline fn getFirst(self: *const Self) itemType {
+            return self.items[0];
         }
 
-        pub inline fn getPtrAtIndex(self: *Self, index: u32) *elementType {
-            return &self.elements[index];
+        pub inline fn getFirstPtr(self: *Self) *itemType {
+            return &self.items[0];
         }
 
-        pub inline fn getFirst(self: *const Self) elementType {
-            return self.elements[0];
+        pub inline fn getLast(self: *const Self) itemType {
+            return self.items[self.len - 1];
         }
 
-        pub inline fn getFirstPtr(self: *Self) *elementType {
-            return &self.elements[0];
+        pub inline fn getLastPtr(self: *Self) *itemType {
+            return &self.items[self.len - 1];
         }
 
-        pub inline fn getLast(self: *const Self) elementType {
-            return self.elements[self.count - 1];
-        }
-
-        pub inline fn getLastPtr(self: *Self) *elementType {
-            return &self.elements[self.count - 1];
-        }
-
-        pub inline fn getNextFreeIndex(self: *const Self) u32 {
-            return self.count;
-        }
-
-        pub inline fn getCount(self: *const Self) u32 {
-            return self.count;
-        }
-
-        pub inline fn getUnusedCount(self: *const Self) u32 {
-            return size - self.count;
+        pub inline fn getLength(self: *const Self) u32 {
+            return self.len;
         }
     };
 }

@@ -21,7 +21,7 @@ pub const ShaderMan = struct {
 
     pub fn deinit(self: *ShaderMan) void {
         const gpi = self.gpi;
-        for (self.shaders.getElements()) |*shader| shader.deinit(gpi);
+        for (self.shaders.getItems()) |*shader| shader.deinit(gpi);
     }
 
     pub fn isShaderIdUsed(self: *ShaderMan, shaderId: u8) bool {
@@ -35,17 +35,17 @@ pub const ShaderMan = struct {
             const name = loadedShader.shaderInf.spvFile;
 
             if (self.shaders.isKeyUsed(id) == true) {
-                self.shaders.getPtr(id).*.deinit(self.gpi);
+                self.shaders.getPtrByKey(id).*.deinit(self.gpi);
                 std.debug.print("Shader {} updated ({s})\n", .{ id, name });
             } else std.debug.print("Shader {} created ({s})\n", .{ id, name });
-            self.shaders.set(id, shaderObj);
+            self.shaders.upsert(id, shaderObj);
         }
     }
 
     pub fn getShaders(self: *ShaderMan, shaderIds: []const ShaderId) [8]Shader {
         var shaders: [8]Shader = undefined;
         for (0..shaderIds.len) |i| {
-            shaders[i] = self.shaders.get(shaderIds[i].val);
+            shaders[i] = self.shaders.getByKey(shaderIds[i].val);
         }
         return shaders;
     }

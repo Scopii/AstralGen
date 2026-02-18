@@ -44,8 +44,8 @@ pub const ResourceStorage = struct {
         vma.freeRawBuffer(self.stagingBuffer.handle, self.stagingBuffer.allocation);
         self.transfers.deinit();
 
-        for (self.buffers.getElements()) |*bufBase| vma.freeBufferBase(bufBase);
-        for (self.textures.getElements()) |*texBase| vma.freeTextureBase(texBase);
+        for (self.buffers.getItems()) |*bufBase| vma.freeBufferBase(bufBase);
+        for (self.textures.getItems()) |*texBase| vma.freeTextureBase(texBase);
         for (self.bufZombies.constSlice()) |*bufZombie| vma.freeBufferBase(bufZombie);
         for (self.texZombies.constSlice()) |*texZombie| vma.freeTextureBase(texZombie);
     }
@@ -56,19 +56,19 @@ pub const ResourceStorage = struct {
     }
 
     pub fn addBuffer(self: *ResourceStorage, bufId: BufferMeta.BufId, buffer: Buffer) void {
-        self.buffers.set(bufId.val, buffer);
+        self.buffers.upsert(bufId.val, buffer);
     }
 
     pub fn addTexture(self: *ResourceStorage, texId: TextureMeta.TexId, tex: Texture) void {
-        self.textures.set(texId.val, tex);
+        self.textures.upsert(texId.val, tex);
     }
 
     pub fn getBuffer(self: *ResourceStorage, bufId: BufferMeta.BufId) !*Buffer {
-        if (self.buffers.isKeyUsed(bufId.val) == true) return self.buffers.getPtr(bufId.val) else return error.TextureIdNotUsed;
+        if (self.buffers.isKeyUsed(bufId.val) == true) return self.buffers.getPtrByKey(bufId.val) else return error.TextureIdNotUsed;
     }
 
     pub fn getTexture(self: *ResourceStorage, texId: TextureMeta.TexId) !*Texture {
-        if (self.textures.isKeyUsed(texId.val) == true) return self.textures.getPtr(texId.val) else return error.TextureIdNotUsed;
+        if (self.textures.isKeyUsed(texId.val) == true) return self.textures.getPtrByKey(texId.val) else return error.TextureIdNotUsed;
     }
 
     pub fn stageBufferUpdate(self: *ResourceStorage, bufId: BufferMeta.BufId, bytes: []const u8) !void {
@@ -84,17 +84,17 @@ pub const ResourceStorage = struct {
 
     pub fn queueTextureKill(self: *ResourceStorage, texId: TextureMeta.TexId) !void {
         if (self.textures.isKeyUsed(texId.val)) {
-            const tex = self.textures.getPtr(texId.val);
+            const tex = self.textures.getPtrByKey(texId.val);
             try self.texZombies.append(tex.*);
-            self.textures.removeAtKey(texId.val);
+            self.textures.remove(texId.val);
         } else std.debug.print("WARNING: Tried to queue Texture destruction ID {} but ID empty", .{texId.val});
     }
 
     pub fn queueBufferKill(self: *ResourceStorage, bufId: BufferMeta.BufId) !void {
         if (self.buffers.isKeyUsed(bufId.val)) {
-            const buffer = self.buffers.getPtr(bufId.val);
+            const buffer = self.buffers.getPtrByKey(bufId.val);
             try self.bufZombies.append(buffer.*);
-            self.buffers.removeAtKey(bufId.val);
+            self.buffers.remove(bufId.val);
         } else std.debug.print("WARNING: Tried to queue Buffer destruction ID {} but ID empty", .{bufId.val});
     }
 

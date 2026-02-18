@@ -31,14 +31,14 @@ pub const EventManager = struct {
             }
 
             if (self.keyStates.isKeyUsed(keyEvent.key)) {
-                const keyState = self.keyStates.get(keyEvent.key);
+                const keyState = self.keyStates.getByKey(keyEvent.key);
                 if (keyState == .blocked and keyEvent.event == .pressed) continue;
             }
 
-            self.keyStates.set(keyEvent.key, if (keyEvent.event == .pressed) .pressed else .released);
+            self.keyStates.upsert(keyEvent.key, if (keyEvent.event == .pressed) .pressed else .released);
             if (ac.KEY_EVENT_INFO == true) std.debug.print("Key {} pressed \n", .{keyEvent.key});
         }
-        if (ac.KEY_EVENT_INFO == true) std.debug.print("KeyStates {}\n", .{self.keyStates.count});
+        if (ac.KEY_EVENT_INFO == true) std.debug.print("KeyStates {}\n", .{self.keyStates.len});
     }
 
     pub fn getAppEvents(self: *EventManager) []AppEvent {
@@ -49,12 +49,12 @@ pub const EventManager = struct {
             };
             // If key is valid check if value at key is same as assignment state
             if (self.keyStates.isKeyUsed(actualKey) == true) {
-                const keyState = self.keyStates.get(actualKey);
+                const keyState = self.keyStates.getByKey(actualKey);
 
                 if (keyState == assignment.state) {
                     self.appendAppEvent(assignment.appEvent);
-                    if (assignment.cycle == .oneTime) self.keyStates.set(actualKey, .released);
-                    if (assignment.cycle == .oneBlock) self.keyStates.set(actualKey, .blocked);
+                    if (assignment.cycle == .oneTime) self.keyStates.upsert(actualKey, .released);
+                    if (assignment.cycle == .oneBlock) self.keyStates.upsert(actualKey, .blocked);
                 }
             }
         }
@@ -69,5 +69,4 @@ pub const EventManager = struct {
     pub fn clearAppEvents(self: *EventManager) void {
         self.appEvents.clear();
     }
-
 };

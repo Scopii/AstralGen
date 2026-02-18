@@ -41,21 +41,21 @@ pub const WindowManager = struct {
     }
 
     pub fn deinit(self: *WindowManager) void {
-        for (self.windows.getElements()) |*win| win.deinit();
+        for (self.windows.getItems()) |*win| win.deinit();
         sdl.SDL_DestroyProperties(self.windowProps);
         sdl.SDL_Quit();
     }
 
     pub fn showAllWindows(self: *WindowManager) void {
-        for (self.windows.getElements()) |*win| win.show();
+        for (self.windows.getItems()) |*win| win.show();
     }
 
     pub fn hideAllWindows(self: *WindowManager) void {
-        for (self.windows.getElements()) |*win| win.hide();
+        for (self.windows.getItems()) |*win| win.hide();
     }
 
     pub fn showOpacityAllWindows(self: *WindowManager) void {
-        for (self.windows.getElements()) |*win| win.setOpacity(1.0);
+        for (self.windows.getItems()) |*win| win.setOpacity(1.0);
     }
 
     pub fn addWindow(self: *WindowManager, title: [*c]const u8, width: c_int, height: c_int, renderTexId: TextureMeta.TexId, xPos: c_int, yPos: c_int, resizeTex: bool) !void {
@@ -73,10 +73,10 @@ pub const WindowManager = struct {
 
         //window.setRelativeMouseMode(true);
 
-        self.windows.set(window.id.val, window);
-        try self.changedWindows.append(self.windows.get(window.id.val));
+        self.windows.upsert(window.id.val, window);
+        try self.changedWindows.append(self.windows.getByKey(window.id.val));
         self.openWindows += 1;
-        self.mainWindow = self.windows.getPtr(window.id.val);
+        self.mainWindow = self.windows.getPtrByKey(window.id.val);
         std.debug.print("Window ID {} created to present Render ID {}\n", .{ window.id.val, renderTexId.val });
     }
 
@@ -90,7 +90,7 @@ pub const WindowManager = struct {
 
     pub fn cleanupWindows(self: *WindowManager) void {
         for (self.changedWindows.slice()) |tempWindow| {
-            const actualWindow = self.windows.getPtr(tempWindow.id.val);
+            const actualWindow = self.windows.getPtrByKey(tempWindow.id.val);
 
             switch (tempWindow.state) {
                 .needDelete => self.destroyWindow(actualWindow.id),
@@ -129,9 +129,9 @@ pub const WindowManager = struct {
     }
 
     fn destroyWindow(self: *WindowManager, windowId: Window.WindowId) void {
-        const window = self.windows.get(windowId.val);
+        const window = self.windows.getByKey(windowId.val);
         window.deinit();
-        self.windows.removeAtKey(windowId.val);
+        self.windows.remove(windowId.val);
     }
 
     pub fn consumeKeyEvents(self: *WindowManager) []KeyEvent {
@@ -166,7 +166,7 @@ pub const WindowManager = struct {
 
     pub fn processWindowEvent(self: *WindowManager, event: *sdl.SDL_Event) !void {
         const id = event.window.windowID;
-        const window = self.windows.getPtr(id);
+        const window = self.windows.getPtrByKey(id);
 
         switch (event.type) {
             sdl.SDL_EVENT_WINDOW_FOCUS_LOST => {

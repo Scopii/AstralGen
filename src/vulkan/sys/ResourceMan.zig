@@ -85,11 +85,11 @@ pub const ResourceMan = struct {
     }
 
     pub fn getTextureMeta(self: *ResourceMan, texId: TextureMeta.TexId) !*TextureMeta {
-        if (self.texMetas.isKeyUsed(texId.val) == true) return self.texMetas.getPtr(texId.val) else return error.TextureIdNotUsed;
+        if (self.texMetas.isKeyUsed(texId.val) == true) return self.texMetas.getPtrByKey(texId.val) else return error.TextureIdNotUsed;
     }
 
     pub fn getBufferMeta(self: *ResourceMan, bufId: BufferMeta.BufId) !*BufferMeta {
-        if (self.bufMetas.isKeyUsed(bufId.val) == true) return self.bufMetas.getPtr(bufId.val) else return error.BufferIdNotUsed;
+        if (self.bufMetas.isKeyUsed(bufId.val) == true) return self.bufMetas.getPtrByKey(bufId.val) else return error.BufferIdNotUsed;
     }
 
     pub fn createBuffer(self: *ResourceMan, bufInf: BufferMeta.BufInf) !void {
@@ -103,7 +103,7 @@ pub const ResourceMan = struct {
 
             self.resStorages[i].addBuffer(bufInf.id, buf);
         }
-        self.bufMetas.set(bufInf.id.val, self.vma.createBufferMeta(bufInf));
+        self.bufMetas.upsert(bufInf.id.val, self.vma.createBufferMeta(bufInf));
     }
 
     pub fn createTexture(self: *ResourceMan, texInf: TextureMeta.TexInf) !void {
@@ -119,7 +119,7 @@ pub const ResourceMan = struct {
 
             self.resStorages[i].addTexture(texInf.id, tex);
         }
-        self.texMetas.set(texInf.id.val, texMeta);
+        self.texMetas.upsert(texInf.id.val, texMeta);
     }
 
     fn getBufferDataPtr(self: *ResourceMan, bufId: BufferMeta.BufId, comptime T: type, flightId: u8) !*T {
@@ -176,13 +176,13 @@ pub const ResourceMan = struct {
     pub fn queueTextureKills(self: *ResourceMan, texId: TextureMeta.TexId) !void {
         const texMeta = try self.getTextureMeta(texId);
         for (0..texMeta.update.getCount()) |i| try self.resStorages[i].queueTextureKill(texId);
-        self.texMetas.removeAtKey(texId.val);
+        self.texMetas.remove(texId.val);
     }
 
     pub fn queueBufferKills(self: *ResourceMan, bufId: BufferMeta.BufId) !void {
         const bufMeta = try self.getBufferMeta(bufId);
         for (0..bufMeta.update.getCount()) |i| try self.resStorages[i].queueBufferKill(bufId);
-        self.bufMetas.removeAtKey(bufId.val);
+        self.bufMetas.remove(bufId.val);
     }
 
     fn cleanupResources(self: *ResourceMan, curFrame: u64) !void {
