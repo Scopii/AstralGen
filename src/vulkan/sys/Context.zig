@@ -337,7 +337,22 @@ fn createGPI(alloc: Allocator, gpu: vk.VkPhysicalDevice, families: QueueFamilies
     try checkFeature("Shader Int 64", supported.device.features.shaderInt64, &needed.device.features.shaderInt64);
     try checkFeature("Wide Lines", supported.device.features.wideLines, &needed.device.features.wideLines);
 
-    const gpuExtensions = [_][*c]const u8{ "VK_KHR_swapchain", "VK_EXT_mesh_shader", "VK_EXT_shader_object", "VK_EXT_extended_dynamic_state", "VK_EXT_extended_dynamic_state2", "VK_EXT_extended_dynamic_state3", "VK_EXT_conservative_rasterization", "VK_KHR_fragment_shading_rate", "VK_KHR_shader_non_semantic_info", "VK_EXT_descriptor_heap", "VK_KHR_shader_untyped_pointers", "VK_KHR_maintenance5", "VK_EXT_vertex_input_dynamic_state" };
+    const gpuExtensions = [_][*c]const u8{
+        "VK_KHR_swapchain",
+        "VK_EXT_mesh_shader",
+        "VK_EXT_shader_object",
+        "VK_EXT_extended_dynamic_state",
+        "VK_EXT_extended_dynamic_state2",
+        "VK_EXT_extended_dynamic_state3",
+        "VK_EXT_conservative_rasterization",
+        "VK_KHR_fragment_shading_rate",
+        "VK_KHR_shader_non_semantic_info",
+        "VK_EXT_descriptor_heap",
+        "VK_KHR_shader_untyped_pointers",
+        "VK_KHR_maintenance5",
+        "VK_EXT_vertex_input_dynamic_state",
+        "VK_EXT_descriptor_buffer", // Needed for GPU-AV
+    };
 
     const createInf = vk.VkDeviceCreateInfo{
         .sType = vk.VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
