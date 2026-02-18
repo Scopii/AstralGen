@@ -4,7 +4,7 @@ fn FindSmallestIntType(number: usize) type {
     return std.math.IntFittingRange(0, number);
 }
 
-pub fn CreateMapArray(comptime itemType: type, comptime capacity: u32, comptime keyType: type, comptime keyMax: u32, comptime keyMin: u32) type {
+pub fn LinkedMap(comptime itemType: type, comptime capacity: u32, comptime keyType: type, comptime keyMax: u32, comptime keyMin: u32) type {
     comptime {
         if (keyMax < capacity) @compileError("MapArray: keyMax must be >= size");
         if (keyMin > keyMax) @compileError("MapArray: keyMax must be > keyMin");
@@ -43,7 +43,7 @@ pub fn CreateMapArray(comptime itemType: type, comptime capacity: u32, comptime 
         pub fn insert(self: *Self, key: keyType, item: itemType) void {
             const castedKey: smallKeyType = @truncate(key - keyMin);
             const index = self.len;
-            
+
             self.keys[castedKey] = index;
             self.links[index] = castedKey;
             self.items[index] = item;

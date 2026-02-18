@@ -1,5 +1,5 @@
-const CreateMapArray = @import("../structures/MapArray.zig").CreateMapArray;
 const FixedList = @import("../structures/FixedList.zig").FixedList;
+const LinkedMap = @import("../structures/LinkedMap.zig").LinkedMap;
 const AppEvent = @import("../configs/appConfig.zig").AppEvent;
 const ac = @import("../configs/appConfig.zig");
 const std = @import("std");
@@ -20,7 +20,7 @@ pub const SDL_KEY_MAX = 512;
 pub const SDL_MOUSE_MAX = 24;
 
 pub const EventManager = struct {
-    keyStates: CreateMapArray(KeyState, SDL_KEY_MAX + SDL_MOUSE_MAX, c_uint, SDL_KEY_MAX + SDL_MOUSE_MAX, 0) = .{}, // 512 SDL Keys, 24 for Mouse
+    keyStates: LinkedMap(KeyState, SDL_KEY_MAX + SDL_MOUSE_MAX, c_uint, SDL_KEY_MAX + SDL_MOUSE_MAX, 0) = .{}, // 512 SDL Keys, 24 for Mouse
     appEvents: FixedList(AppEvent, 127) = .{},
 
     pub fn mapKeyEvents(self: *EventManager, keyEvents: []KeyEvent) void {

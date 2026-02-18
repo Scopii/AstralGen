@@ -1,7 +1,7 @@
 const TextureMeta = @import("../vulkan/types/res/TextureMeta.zig").TextureMeta;
-const CreateMapArray = @import("../structures/MapArray.zig").CreateMapArray;
 const MouseMovement = @import("../core/EventManager.zig").MouseMovement;
 const FixedList = @import("../structures/FixedList.zig").FixedList;
+const LinkedMap = @import("../structures/LinkedMap.zig").LinkedMap;
 const KeyEvent = @import("../core/EventManager.zig").KeyEvent;
 const Window = @import("Window.zig").Window;
 const sdl = @import("../modules/sdl.zig").c;
@@ -14,7 +14,7 @@ const ImGuiMan = @import("../vulkan/sys/ImGuiMan.zig").ImGuiMan;
 const zgui = @import("zgui");
 
 pub const WindowManager = struct {
-    windows: CreateMapArray(Window, MAX_WINDOWS, u32, 32 + MAX_WINDOWS, 0) = .{},
+    windows: LinkedMap(Window, MAX_WINDOWS, u32, 32 + MAX_WINDOWS, 0) = .{},
     mainWindow: ?*Window = null,
     changedWindows: FixedList(Window, MAX_WINDOWS) = .{},
     openWindows: u8 = 0,

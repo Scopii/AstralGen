@@ -1,6 +1,6 @@
-const CreateMapArray = @import("../../structures/MapArray.zig").CreateMapArray;
 const TextureMeta = @import("../types/res/TextureMeta.zig").TextureMeta;
 const FixedList = @import("../../structures/FixedList.zig").FixedList;
+const LinkedMap = @import("../../structures/LinkedMap.zig").LinkedMap;
 const BufferMeta = @import("../types/res/BufferMeta.zig").BufferMeta;
 const DescriptorMan = @import("DescriptorMan.zig").DescriptorMan;
 const PushData = @import("../types/res/PushData.zig").PushData;
@@ -27,8 +27,8 @@ pub const ResourceStorage = struct {
     stagingOffset: u64 = 0,
     transfers: std.array_list.Managed(Transfer),
 
-    buffers: CreateMapArray(Buffer, rc.BUF_MAX, u32, rc.BUF_MAX, 0) = .{},
-    textures: CreateMapArray(Texture, rc.TEX_MAX, u32, rc.TEX_MAX, 0) = .{},
+    buffers: LinkedMap(Buffer, rc.BUF_MAX, u32, rc.BUF_MAX, 0) = .{},
+    textures: LinkedMap(Texture, rc.TEX_MAX, u32, rc.TEX_MAX, 0) = .{},
 
     bufZombies: FixedList(Buffer, rc.BUF_MAX) = .{},
     texZombies: FixedList(Texture, rc.TEX_MAX) = .{},

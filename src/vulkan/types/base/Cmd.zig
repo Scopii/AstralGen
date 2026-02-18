@@ -1,4 +1,4 @@
-const CreateMapArray = @import("../../../structures/MapArray.zig").CreateMapArray;
+const LinkedMap = @import("../../../structures/LinkedMap.zig").LinkedMap;
 const Transfer = @import("../../sys/ResourceMan.zig").Transfer;
 const RenderState = @import("RenderState.zig").RenderState;
 const rc = @import("../../../configs/renderConfig.zig");
@@ -21,7 +21,7 @@ pub const Cmd = struct {
     frame: u64 = 0,
     queryPool: vk.VkQueryPool,
     queryCounter: u8 = 0,
-    querys: CreateMapArray(Query, rc.GPU_QUERYS, u8, rc.GPU_QUERYS * 2, 0) = .{},
+    querys: LinkedMap(Query, rc.GPU_QUERYS, u8, rc.GPU_QUERYS * 2, 0) = .{},
     renderState: ?RenderState = null,
 
     pub fn init(cmdPool: vk.VkCommandPool, level: vk.VkCommandBufferLevel, gpi: vk.VkDevice) !Cmd {

@@ -1,5 +1,4 @@
-const CreateMapArray = @import("../structures/MapArray.zig").CreateMapArray;
-const Allocator = std.mem.Allocator;
+const LinkedMap = @import("../structures/LinkedMap.zig").LinkedMap;
 const std = @import("std");
 const zm = @import("zmath");
 

@@ -1,7 +1,7 @@
-const CreateMapArray = @import("../../structures/MapArray.zig").CreateMapArray;
 const TextureMeta = @import("../types/res/TextureMeta.zig").TextureMeta;
 const ResourceStorage = @import("ResourceStorage.zig").ResourceStorage;
 const FixedList = @import("../../structures/FixedList.zig").FixedList;
+const LinkedMap = @import("../../structures/LinkedMap.zig").LinkedMap;
 const BufferMeta = @import("../types/res/BufferMeta.zig").BufferMeta;
 const DescriptorMan = @import("DescriptorMan.zig").DescriptorMan;
 const PushData = @import("../types/res/PushData.zig").PushData;
@@ -23,8 +23,8 @@ pub const ResourceMan = struct {
 
     resStorages: [rc.MAX_IN_FLIGHT]ResourceStorage,
 
-    bufMetas: CreateMapArray(BufferMeta, rc.BUF_MAX, u32, rc.BUF_MAX, 0) = .{},
-    texMetas: CreateMapArray(TextureMeta, rc.TEX_MAX, u32, rc.TEX_MAX, 0) = .{},
+    bufMetas: LinkedMap(BufferMeta, rc.BUF_MAX, u32, rc.BUF_MAX, 0) = .{},
+    texMetas: LinkedMap(TextureMeta, rc.TEX_MAX, u32, rc.TEX_MAX, 0) = .{},
 
     pub fn init(alloc: Allocator, context: *const Context) !ResourceMan {
         const vma = try Vma.init(context.instance, context.gpi, context.gpu);

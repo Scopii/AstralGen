@@ -1,5 +1,5 @@
-const CreateMapArray = @import("../../structures/MapArray.zig").CreateMapArray;
 const TexId = @import("../types/res/TextureMeta.zig").TextureMeta.TexId;
+const LinkedMap = @import("../../structures/LinkedMap.zig").LinkedMap;
 const Swapchain = @import("../types/base/Swapchain.zig").Swapchain;
 const Window = @import("../../platform/Window.zig").Window;
 const rc = @import("../../configs/renderConfig.zig");
@@ -15,7 +15,7 @@ pub const SwapchainMan = struct {
     gpi: vk.VkDevice,
     gpu: vk.VkPhysicalDevice,
     instance: vk.VkInstance,
-    swapchains: CreateMapArray(Swapchain, rc.MAX_WINDOWS, u32, 32 + rc.MAX_WINDOWS, 0) = .{},
+    swapchains: LinkedMap(Swapchain, rc.MAX_WINDOWS, u32, 32 + rc.MAX_WINDOWS, 0) = .{},
     targetPtrs: [rc.MAX_WINDOWS]*Swapchain = undefined,
 
     pub fn init(alloc: Allocator, context: *const Context) !SwapchainMan {

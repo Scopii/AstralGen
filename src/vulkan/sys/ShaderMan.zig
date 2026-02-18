@@ -1,7 +1,7 @@
-const CreateMapArray = @import("../../structures/MapArray.zig").CreateMapArray;
 const ShaderId = @import("../../core/ShaderCompiler.zig").ShaderInf.ShaderId;
 const LoadedShader = @import("../../core/ShaderCompiler.zig").LoadedShader;
 const DescriptorMan = @import("../sys/DescriptorMan.zig").DescriptorMan;
+const LinkedMap = @import("../../structures/LinkedMap.zig").LinkedMap;
 const shaderCon = @import("../../configs/shaderConfig.zig");
 const ResourceMan = @import("ResourceMan.zig").ResourceMan;
 const Shader = @import("../types/base/Shader.zig").Shader;
@@ -13,7 +13,7 @@ const std = @import("std");
 
 pub const ShaderMan = struct {
     gpi: vk.VkDevice,
-    shaders: CreateMapArray(Shader, shaderCon.SHADER_MAX, u8, shaderCon.SHADER_MAX, 0) = .{},
+    shaders: LinkedMap(Shader, shaderCon.SHADER_MAX, u8, shaderCon.SHADER_MAX, 0) = .{},
 
     pub fn init(context: *const Context) !ShaderMan {
         return .{ .gpi = context.gpi };
