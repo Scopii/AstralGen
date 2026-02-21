@@ -75,10 +75,10 @@ pub const Renderer = struct {
         for (tempWindows, 0..) |window, i| {
             switch (window.state) {
                 .needCreation => {
-                    try self.swapMan.createSwapchain(window);
+                    try self.swapMan.createSwapchain(window, self.renderGraph.cmdMan.cmdPool);
                     try self.imguiMan.addWindowContext(window.id.val, window.handle);
                 },
-                .needUpdate => try self.swapMan.recreateSwapchain(window.id, window.extent),
+                .needUpdate => try self.swapMan.recreateSwapchain(window.id, window.extent,  self.renderGraph.cmdMan.cmdPool),
                 .needDelete => {
                     self.swapMan.removeSwapchains(window.id);
                     self.imguiMan.removeWindowContext(window.id.val);

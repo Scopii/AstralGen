@@ -14,6 +14,7 @@ pub const SwapchainMan = struct {
     alloc: Allocator,
     gpi: vk.VkDevice,
     gpu: vk.VkPhysicalDevice,
+    queueHandle: vk.VkQueue,
     instance: vk.VkInstance,
     swapchains: LinkedMap(Swapchain, rc.MAX_WINDOWS, u32, 32 + rc.MAX_WINDOWS, 0) = .{},
     targetPtrs: [rc.MAX_WINDOWS]*Swapchain = undefined,
@@ -23,6 +24,7 @@ pub const SwapchainMan = struct {
             .alloc = alloc,
             .gpi = context.gpi,
             .gpu = context.gpu,
+            .queueHandle = context.graphicsQ.handle,
             .instance = context.instance,
         };
     }
@@ -90,16 +92,18 @@ pub const SwapchainMan = struct {
         return vk.VkExtent2D{ .width = maxWidth, .height = maxHeight };
     }
 
-    pub fn createSwapchain(self: *SwapchainMan, window: Window) !void {
+    pub fn createSwapchain(self: *SwapchainMan, window: Window, _: vk.VkCommandPool) !void {
         const surface = try createSurface(window.handle, self.instance);
         const swapchain = try Swapchain.init(self.alloc, self.gpi, surface, window.extent, self.gpu, window.renderTexId, null, window.id.val);
+        //try clearSwapchainImages(self.gpi, self.queueHandle, cmdPool, &swapchain);
         self.swapchains.upsert(window.id.val, swapchain);
         std.debug.print("Swapchain added to Window {}\n", .{window.id.val});
     }
 
-    pub fn recreateSwapchain(self: *SwapchainMan, windowId: Window.WindowId, newExtent: vk.VkExtent2D) !void {
+    pub fn recreateSwapchain(self: *SwapchainMan, windowId: Window.WindowId, newExtent: vk.VkExtent2D, _: vk.VkCommandPool) !void {
         const swapchainPtr = self.swapchains.getPtrByKey(windowId.val);
         try swapchainPtr.recreate(self.alloc, self.gpi, self.gpu, self.instance, newExtent);
+        //try clearSwapchainImages(self.gpi, self.queueHandle, cmdPool, swapchainPtr);
         std.debug.print("Swapchain recreated\n", .{});
     }
 
@@ -121,4 +125,47 @@ fn createSurface(window: *sdl.SDL_Window, instance: vk.VkInstance) !vk.VkSurface
         return error.VkSurface;
     }
     return surface;
+}
+
+fn clearSwapchainImages(device: vk.VkDevice, graphicsQueue: vk.VkQueue, cmdPool: vk.VkCommandPool, swapchain: *const Swapchain) !void {
+    // Allocate One-Shot Command Buffer
+    const allocInf = vk.VkCommandBufferAllocateInfo{
+        .sType = vk.VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+        .level = vk.VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+        .commandPool = cmdPool,
+        .commandBufferCount = 1,
+    };
+    var cmd: vk.VkCommandBuffer = undefined;
+    try vhF.check(vk.vkAllocateCommandBuffers(device, &allocInf, &cmd), "Failed alloc clear cmd");
+
+    const beginInf = vk.VkCommandBufferBeginInfo{
+        .sType = vk.VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+        .flags = vk.VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+    };
+    try vhF.check(vk.vkBeginCommandBuffer(cmd, &beginInf), "Failed begin clear cmd");
+
+    const clearColor = vk.VkClearColorValue{ .float32 = .{ 0.0, 0.0, 0.0, 1.0 } };
+    const subRange = vhF.createSubresourceRange(vk.VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1);
+
+    // Record Barriers and Clears
+    for (swapchain.textures) |*tex| {
+        const toTransfer = tex.createImageBarrier(.{ .stage = .TopOfPipe, .access = .None, .layout = .Undefined }, swapchain.subRange);
+        const dep1 = vk.VkDependencyInfo{ .sType = vk.VK_STRUCTURE_TYPE_DEPENDENCY_INFO, .imageMemoryBarrierCount = 1, .pImageMemoryBarriers = &toTransfer };
+        vk.vkCmdPipelineBarrier2(cmd, &dep1);
+
+        vk.vkCmdClearColorImage(cmd, tex.img, vk.VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clearColor, 1, &subRange);
+
+        const toBlit = tex.createImageBarrier(.{ .stage = .Clear, .access = .None, .layout = undefined }, swapchain.subRange);
+        const dep2 = vk.VkDependencyInfo{ .sType = vk.VK_STRUCTURE_TYPE_DEPENDENCY_INFO, .imageMemoryBarrierCount = 1, .pImageMemoryBarriers = &toBlit };
+        vk.vkCmdPipelineBarrier2(cmd, &dep2);
+    }
+
+    try vhF.check(vk.vkEndCommandBuffer(cmd), "Failed end clear cmd");
+
+    // Submit and Wait
+    const submitInfo = vk.VkSubmitInfo{ .sType = vk.VK_STRUCTURE_TYPE_SUBMIT_INFO, .commandBufferCount = 1, .pCommandBuffers = &cmd };
+    try vhF.check(vk.vkQueueSubmit(graphicsQueue, 1, &submitInfo, null), "Failed submit clear");
+    try vhF.check(vk.vkQueueWaitIdle(graphicsQueue), "Queue wait idle failed");
+
+    vk.vkFreeCommandBuffers(device, cmdPool, 1, &cmd);
 }

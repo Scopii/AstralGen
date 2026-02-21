@@ -153,7 +153,7 @@ fn getSurfaceCaps(gpu: vk.VkPhysicalDevice, surface: vk.VkSurfaceKHR) !vk.VkSurf
     return caps;
 }
 
-fn pickPresentMode(alloc: Allocator, gpu: vk.VkPhysicalDevice, surface: vk.VkSurfaceKHR ) !vk.VkPresentModeKHR {
+fn pickPresentMode(alloc: Allocator, gpu: vk.VkPhysicalDevice, surface: vk.VkSurfaceKHR) !vk.VkPresentModeKHR {
     var modeCount: u32 = 0;
     try vhE.check(vk.vkGetPhysicalDeviceSurfacePresentModesKHR(gpu, surface, &modeCount, null), "Failed to get present mode count");
     if (modeCount == 0) return vk.VK_PRESENT_MODE_FIFO_KHR; // FIFO is always supported
