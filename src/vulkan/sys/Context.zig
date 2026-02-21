@@ -8,38 +8,25 @@ const vhE = @import("../help/Enums.zig");
 const Allocator = std.mem.Allocator;
 const std = @import("std");
 
-pub const QueueFamilies = struct {
-    graphics: u32,
-    present: u32,
-};
-
 pub const Context = struct {
     alloc: Allocator,
     instance: vk.VkInstance,
     gpu: vk.VkPhysicalDevice,
-    families: QueueFamilies,
     gpi: vk.VkDevice,
     graphicsQ: Queue,
-    presentQ: Queue,
 
     pub fn init(alloc: Allocator) !Context {
         const instance = try createInstance(alloc);
-
         const gpu = try pickGPU(alloc, instance);
-        const families = try checkGPUfamilies(alloc, gpu);
-        const gpi = try createGPI(alloc, gpu, families);
-
-        const graphicsQ = Queue.init(gpi, families.graphics, 0);
-        const presentQ = Queue.init(gpi, families.present, 0);
+        const familiy = try findGpuFamily(alloc, gpu, vk.VK_QUEUE_GRAPHICS_BIT | vk.VK_QUEUE_COMPUTE_BIT);
+        const gpi = try createGPI(alloc, gpu, familiy);
 
         return .{
             .alloc = alloc,
             .instance = instance,
             .gpu = gpu,
-            .families = families,
             .gpi = gpi,
-            .graphicsQ = graphicsQ,
-            .presentQ = presentQ,
+            .graphicsQ = Queue.init(gpi, familiy, 0),
         };
     }
 
@@ -64,37 +51,34 @@ pub fn createInstance(alloc: Allocator) !vk.VkInstance {
         try extensions.append("VK_EXT_debug_utils");
         try layers.append("VK_LAYER_KHRONOS_validation");
     }
-
-    var extraValidationFeatures = switch (rc.BEST_PRACTICES) {
-        true => if (rc.GPU_VALIDATION == true) [_]vk.VkValidationFeatureEnableEXT{
-            vk.VK_VALIDATION_FEATURE_ENABLE_BEST_PRACTICES_EXT,
-            vk.VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT,
-            vk.VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_RESERVE_BINDING_SLOT_EXT,
-            vk.VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT,
-            vk.VK_VALIDATION_FEATURE_ENABLE_DEBUG_PRINTF_EXT,
-        } else [_]vk.VkValidationFeatureEnableEXT{vk.VK_VALIDATION_FEATURE_ENABLE_BEST_PRACTICES_EXT},
-        false => [_]vk.VkValidationFeatureEnableEXT{
-            vk.VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT,
-            vk.VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_RESERVE_BINDING_SLOT_EXT, // ?? Needs Descriptor ?
-            vk.VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT,
-            vk.VK_VALIDATION_FEATURE_ENABLE_DEBUG_PRINTF_EXT,
-        },
-    };
-
     std.debug.print("Vulkan Validation: {}\n", .{rc.VALIDATION});
+
+    var extraCount: u8 = 0;
+    var extraValidation: [5]vk.VkValidationFeatureEnableEXT = undefined;
+
+    if (rc.GPU_VALIDATION) {
+        extraValidation[0] = vk.VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT;
+        extraValidation[1] = vk.VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_RESERVE_BINDING_SLOT_EXT;
+        extraValidation[2] = vk.VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT;
+        extraValidation[3] = vk.VK_VALIDATION_FEATURE_ENABLE_DEBUG_PRINTF_EXT;
+        extraCount += 4;
+    }
     std.debug.print("Extra Validation: {}\n", .{rc.GPU_VALIDATION});
+
+    if (rc.BEST_PRACTICES) {
+        extraValidation[extraCount] = vk.VK_VALIDATION_FEATURE_ENABLE_BEST_PRACTICES_EXT;
+        extraCount += 1;
+    }
     std.debug.print("Best Practices: {}\n", .{rc.BEST_PRACTICES});
 
     var extraValidationExtensions = vk.VkValidationFeaturesEXT{
         .sType = vk.VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT,
         .pNext = null,
-        .enabledValidationFeatureCount = extraValidationFeatures.len,
-        .pEnabledValidationFeatures = &extraValidationFeatures,
+        .enabledValidationFeatureCount = extraCount,
+        .pEnabledValidationFeatures = &extraValidation,
         .disabledValidationFeatureCount = 0,
         .pDisabledValidationFeatures = null,
     };
-
-    std.debug.print("Instance Extensions {}\n", .{extensions.items.len});
 
     const appInf = vk.VkApplicationInfo{
         .sType = vk.VK_STRUCTURE_TYPE_APPLICATION_INFO,
@@ -106,6 +90,8 @@ pub fn createInstance(alloc: Allocator) !vk.VkInstance {
         .apiVersion = vk.VK_API_VERSION_1_3,
     };
 
+    std.debug.print("Instance Extensions {}\n", .{extensions.items.len});
+
     const instanceInf = vk.VkInstanceCreateInfo{
         .sType = vk.VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
         .pNext = if (rc.GPU_VALIDATION or rc.BEST_PRACTICES) @ptrCast(&extraValidationExtensions) else null,
@@ -116,7 +102,6 @@ pub fn createInstance(alloc: Allocator) !vk.VkInstance {
         .enabledExtensionCount = @intCast(extensions.items.len),
         .ppEnabledExtensionNames = extensions.items.ptr,
     };
-
     var instance: vk.VkInstance = undefined;
     try vhF.check(vk.vkCreateInstance(&instanceInf, null, &instance), "Unable to create Vulkan instance!");
     return instance;
@@ -134,27 +119,35 @@ fn pickGPU(alloc: Allocator, instance: vk.VkInstance) !vk.VkPhysicalDevice {
     try vhF.check(vk.vkEnumeratePhysicalDevices(instance, &gpuCount, gpus.ptr), "Failed to get GPUs");
 
     var chosen: ?vk.VkPhysicalDevice = null;
+
     for (gpus) |gpu| {
-        if (checkGPU(gpu) and try checkGPUfeatures(alloc, gpu)) {
+        if (checkGPU(gpu, vk.VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) and try checkGPUfeatures(alloc, gpu)) {
             chosen = gpu;
             break;
         }
     }
-    if (chosen == null) {
-        std.log.err("No suitable GPUs found\n", .{});
-        return error.NoDevice;
+    if (chosen) |gpu| return gpu;
+
+    for (gpus) |gpu| {
+        if (checkGPU(gpu, vk.VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU) and try checkGPUfeatures(alloc, gpu)) {
+            chosen = gpu;
+            break;
+        }
     }
-    return chosen.?;
+    if (chosen) |gpu| return gpu;
+
+    std.log.err("No suitable GPUs found\n", .{});
+    return error.NoDevice;
 }
 
-pub fn checkGPU(gpu: vk.VkPhysicalDevice) bool {
+pub fn checkGPU(gpu: vk.VkPhysicalDevice, deviceType: vk.VkPhysicalDeviceType) bool {
     var driverProps: vk.VkPhysicalDeviceDriverProperties = .{ .sType = vk.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DRIVER_PROPERTIES };
     var props2: vk.VkPhysicalDeviceProperties2 = .{ .sType = vk.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2, .pNext = &driverProps };
     vk.vkGetPhysicalDeviceProperties2(gpu, &props2);
 
     std.debug.print("Testing: {s}\n", .{props2.properties.deviceName});
 
-    if (props2.properties.deviceType != vk.VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) {
+    if (props2.properties.deviceType != deviceType) {
         std.debug.print("Device not discrete GPU!\n", .{});
         return false;
     } else std.debug.print("Device valid\n", .{});
@@ -163,7 +156,6 @@ pub fn checkGPU(gpu: vk.VkPhysicalDevice) bool {
     return true;
 }
 
-// VALIDATE THIS FUNCTION?
 fn checkGPUfeatures(alloc: Allocator, gpu: vk.VkPhysicalDevice) !bool {
     var extensions: u32 = 0;
     try vhF.check(vk.vkEnumerateDeviceExtensionProperties(gpu, null, &extensions, null), "Failed to enumerate device extensions");
@@ -172,7 +164,7 @@ fn checkGPUfeatures(alloc: Allocator, gpu: vk.VkPhysicalDevice) !bool {
     defer alloc.free(supported);
     try vhF.check(vk.vkEnumerateDeviceExtensionProperties(gpu, null, &extensions, supported.ptr), "Failed to get device extensions");
 
-    const required = [_][]const u8{"VK_KHR_swapchain"}; // SHOULD TAKE ACTUAL EXTENSIONS
+    const required = [_][]const u8{"VK_KHR_swapchain"}; // SHOULD TAKE ACTUAL EXTENSIONS ??
     var matched: u32 = 0;
 
     for (supported) |extension| {
@@ -189,24 +181,7 @@ fn checkGPUfeatures(alloc: Allocator, gpu: vk.VkPhysicalDevice) !bool {
     return matched == required.len;
 }
 
-// fn findFamily(families: []const vk.VkQueueFamilyProperties) ?u32 {
-//     for (families, 0..) |family, i| {
-//         if (family.queueCount > 0 and (family.queueFlags & vk.VK_QUEUE_GRAPHICS_BIT != 0) and (family.queueFlags & vk.VK_QUEUE_COMPUTE_BIT != 0)) return @intCast(i);
-//     }
-//     return null;
-// }
-
-// // Not in use because using the same Family because most Graphics Queues support Presentation and this avoids creating a Surface for setup
-// fn findPresentFamily(families: []const vk.VkQueueFamilyProperties, gpu: vk.VkPhysicalDevice) !?u32 {
-//     for (families, 0..) |family, i| {
-//         var presentSupport: vk.VkBool32 = vk.VK_FALSE;
-//         try vh.check(vk.vkGetPhysicalDeviceSurfaceSupportKHR(gpu, @intCast(i), null, &presentSupport), "Failed to get present support");
-//         if (presentSupport == vk.VK_TRUE and family.queueCount != 0) return @intCast(i);
-//     }
-//     return null;
-// }
-
-fn checkGPUfamilies(alloc: Allocator, gpu: vk.VkPhysicalDevice) !QueueFamilies {
+fn findGpuFamily(alloc: Allocator, gpu: vk.VkPhysicalDevice, queueFlags: vk.VkQueueFlags) !u32 {
     var familyCount: u32 = 0;
     vk.vkGetPhysicalDeviceQueueFamilyProperties(gpu, &familyCount, null);
 
@@ -215,38 +190,23 @@ fn checkGPUfamilies(alloc: Allocator, gpu: vk.VkPhysicalDevice) !QueueFamilies {
     vk.vkGetPhysicalDeviceQueueFamilyProperties(gpu, &familyCount, families.ptr);
 
     for (families, 0..) |family, i| {
-        const hasGraphics = (family.queueFlags & vk.VK_QUEUE_GRAPHICS_BIT) != 0;
-        //var hasPresent: vk.VkBool32 = vk.VK_FALSE;
-        //vk.vkGetPhysicalDeviceSurfaceSupportKHR(gpu, @intCast(i), surface, &hasPresent);
-        if (hasGraphics == true) {
-            return QueueFamilies{ .graphics = @intCast(i), .present = @intCast(i) };
-        }
+        if ((family.queueFlags & queueFlags) != 0) return @intCast(i);
     }
     return error.NoSuitableQueueFamily;
 }
 
-fn createGPI(alloc: Allocator, gpu: vk.VkPhysicalDevice, families: QueueFamilies) !vk.VkDevice {
+fn createGPI(alloc: Allocator, gpu: vk.VkPhysicalDevice, family: u32) !vk.VkDevice {
     var priority: f32 = 1.0;
     var queueInfos = std.array_list.Managed(vk.VkDeviceQueueCreateInfo).init(alloc);
     defer queueInfos.deinit();
 
     const graphicsInf = vk.VkDeviceQueueCreateInfo{
         .sType = vk.VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
-        .queueFamilyIndex = families.graphics,
+        .queueFamilyIndex = family,
         .queueCount = 1,
         .pQueuePriorities = &priority,
     };
     try queueInfos.append(graphicsInf);
-
-    if (families.graphics != families.present) {
-        const presentInf = vk.VkDeviceQueueCreateInfo{
-            .sType = vk.VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
-            .queueFamilyIndex = families.present,
-            .queueCount = 1,
-            .pQueuePriorities = &priority,
-        };
-        try queueInfos.append(presentInf);
-    }
 
     var supported = std.mem.zeroes(DeviceFeatures);
     supported.prepare();
@@ -333,7 +293,7 @@ fn createGPI(alloc: Allocator, gpu: vk.VkPhysicalDevice, families: QueueFamilies
         "VK_KHR_shader_untyped_pointers",
         "VK_KHR_maintenance5",
         "VK_EXT_vertex_input_dynamic_state",
-        "VK_EXT_descriptor_buffer", // Needed for GPU-AV
+        "VK_EXT_descriptor_buffer", // Needed for GPU-AV for some reason
     };
 
     const createInf = vk.VkDeviceCreateInfo{

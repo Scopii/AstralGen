@@ -4,12 +4,17 @@ const vk = @import("../../../modules/vk.zig").c;
 const vhF = @import("../../help/Functions.zig");
 
 pub const Queue = struct {
-    handle: vk.VkQueue = undefined,
+    handle: vk.VkQueue,
+    family: u32,
 
     pub fn init(gpi: vk.VkDevice, family: u32, index: u32) Queue {
         var queue: vk.VkQueue = undefined;
         vk.vkGetDeviceQueue(gpi, family, index, &queue);
-        return .{ .handle = queue };
+        
+        return .{
+            .handle = queue,
+            .family = family,
+        };
     }
 
     pub fn submit(self: *const Queue, waitSemInfos: []const vk.VkSemaphoreSubmitInfo, cmdSubmitInf: []const vk.VkCommandBufferSubmitInfo, signalSemInfos: []const vk.VkSemaphoreSubmitInfo) !void {

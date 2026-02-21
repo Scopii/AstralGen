@@ -17,7 +17,7 @@ pub const CmdMan = struct {
 
     pub fn init(alloc: Allocator, context: *const Context, maxInFlight: u8) !CmdMan {
         const gpi = context.gpi;
-        const cmdPool = try createCmdPool(gpi, context.families.graphics);
+        const cmdPool = try createCmdPool(gpi, context.graphicsQ.family);
 
         const cmds = try alloc.alloc(Cmd, maxInFlight);
         for (0..maxInFlight) |i| cmds[i] = try Cmd.init(cmdPool, vk.VK_COMMAND_BUFFER_LEVEL_PRIMARY, gpi);

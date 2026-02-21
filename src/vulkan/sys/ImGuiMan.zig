@@ -26,7 +26,7 @@ pub const ImGuiMan = struct {
             .instance = context.instance,
             .gpu = context.gpu,
             .gpi = context.gpi,
-            .graphicsFamily = context.families.graphics,
+            .graphicsFamily = context.graphicsQ.family,
             .graphicsQueue = context.graphicsQ.handle,
         };
     }
