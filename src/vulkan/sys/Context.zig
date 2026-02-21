@@ -169,9 +169,9 @@ fn checkGPUfeatures(alloc: Allocator, gpu: vk.VkPhysicalDevice) !bool {
 
     for (supported) |extension| {
         for (required) |reqExtension| {
-            const ext_name: [*c]const u8 = @ptrCast(extension.extensionName[0..]);
+            const extName: [*c]const u8 = @ptrCast(extension.extensionName[0..]);
 
-            const match = std.mem.eql(u8, reqExtension, std.mem.span(ext_name));
+            const match = std.mem.eql(u8, reqExtension, std.mem.span(extName));
             if (match) {
                 matched += 1;
                 break;
@@ -208,76 +208,75 @@ fn createGPI(alloc: Allocator, gpu: vk.VkPhysicalDevice, family: u32) !vk.VkDevi
     };
     try queueInfos.append(graphicsInf);
 
-    var supported = std.mem.zeroes(DeviceFeatures);
-    supported.prepare();
-    supported.fillSupportedFeatures(gpu);
+    var sup = std.mem.zeroes(DeviceFeatures); // Supported Features
+    sup.init(gpu);
 
-    var needed = std.mem.zeroes(DeviceFeatures);
-    needed.prepare();
+    var need = std.mem.zeroes(DeviceFeatures); // Needed Features
+    need.init(null);
 
     // Untyped Ptr
-    try checkFeature("Descriptor Untyped Ptr", supported.descUntyped.shaderUntypedPointers, &needed.descUntyped.shaderUntypedPointers);
+    try checkFeature("Descriptor Untyped Ptr", sup.descUntyped.shaderUntypedPointers, &need.descUntyped.shaderUntypedPointers);
 
     // Descriptor Heaps
-    try checkFeature("Descriptor Heaps", supported.descHeaps.descriptorHeap, &needed.descHeaps.descriptorHeap);
+    try checkFeature("Descriptor Heaps", sup.descHeaps.descriptorHeap, &need.descHeaps.descriptorHeap);
 
     // Dynamic State 3
-    try checkFeature("Polygon Mode", supported.dynState3.extendedDynamicState3PolygonMode, &needed.dynState3.extendedDynamicState3PolygonMode);
-    try checkFeature("Raster Samples", supported.dynState3.extendedDynamicState3RasterizationSamples, &needed.dynState3.extendedDynamicState3RasterizationSamples);
-    try checkFeature("Sample Mask", supported.dynState3.extendedDynamicState3SampleMask, &needed.dynState3.extendedDynamicState3SampleMask);
-    try checkFeature("Depth Clamp", supported.dynState3.extendedDynamicState3DepthClampEnable, &needed.dynState3.extendedDynamicState3DepthClampEnable);
-    try checkFeature("Color Blend", supported.dynState3.extendedDynamicState3ColorBlendEnable, &needed.dynState3.extendedDynamicState3ColorBlendEnable);
-    try checkFeature("Color Blend Equation", supported.dynState3.extendedDynamicState3ColorBlendEquation, &needed.dynState3.extendedDynamicState3ColorBlendEquation);
-    try checkFeature("Color Write Mask", supported.dynState3.extendedDynamicState3ColorWriteMask, &needed.dynState3.extendedDynamicState3ColorWriteMask);
-    try checkFeature("Alpha to Coverage", supported.dynState3.extendedDynamicState3AlphaToCoverageEnable, &needed.dynState3.extendedDynamicState3AlphaToCoverageEnable);
-    try checkFeature("Alpha to One", supported.dynState3.extendedDynamicState3AlphaToOneEnable, &needed.dynState3.extendedDynamicState3AlphaToOneEnable);
+    try checkFeature("Polygon Mode", sup.dynState3.extendedDynamicState3PolygonMode, &need.dynState3.extendedDynamicState3PolygonMode);
+    try checkFeature("Raster Samples", sup.dynState3.extendedDynamicState3RasterizationSamples, &need.dynState3.extendedDynamicState3RasterizationSamples);
+    try checkFeature("Sample Mask", sup.dynState3.extendedDynamicState3SampleMask, &need.dynState3.extendedDynamicState3SampleMask);
+    try checkFeature("Depth Clamp", sup.dynState3.extendedDynamicState3DepthClampEnable, &need.dynState3.extendedDynamicState3DepthClampEnable);
+    try checkFeature("Color Blend", sup.dynState3.extendedDynamicState3ColorBlendEnable, &need.dynState3.extendedDynamicState3ColorBlendEnable);
+    try checkFeature("Color Blend Equation", sup.dynState3.extendedDynamicState3ColorBlendEquation, &need.dynState3.extendedDynamicState3ColorBlendEquation);
+    try checkFeature("Color Write Mask", sup.dynState3.extendedDynamicState3ColorWriteMask, &need.dynState3.extendedDynamicState3ColorWriteMask);
+    try checkFeature("Alpha to Coverage", sup.dynState3.extendedDynamicState3AlphaToCoverageEnable, &need.dynState3.extendedDynamicState3AlphaToCoverageEnable);
+    try checkFeature("Alpha to One", sup.dynState3.extendedDynamicState3AlphaToOneEnable, &need.dynState3.extendedDynamicState3AlphaToOneEnable);
 
     // Dynamic State 2
-    try checkFeature("Extended State 2", supported.dynState2.extendedDynamicState2, &needed.dynState2.extendedDynamicState2);
-    try checkFeature("Extended State 2 Logic Op", supported.dynState2.extendedDynamicState2LogicOp, &needed.dynState2.extendedDynamicState2LogicOp);
-    try checkFeature("Extended State 2 Patch Control", supported.dynState2.extendedDynamicState2PatchControlPoints, &needed.dynState2.extendedDynamicState2PatchControlPoints);
+    try checkFeature("Extended State 2", sup.dynState2.extendedDynamicState2, &need.dynState2.extendedDynamicState2);
+    try checkFeature("Extended State 2 Logic Op", sup.dynState2.extendedDynamicState2LogicOp, &need.dynState2.extendedDynamicState2LogicOp);
+    try checkFeature("Extended State 2 Patch Control", sup.dynState2.extendedDynamicState2PatchControlPoints, &need.dynState2.extendedDynamicState2PatchControlPoints);
 
     // Vairable Shading Rate
-    try checkFeature("Pipeline Fragment Shading Rate", supported.shadingRate.pipelineFragmentShadingRate, &needed.shadingRate.pipelineFragmentShadingRate);
-    try checkFeature("Primitive Fragment Shading Rate", supported.shadingRate.primitiveFragmentShadingRate, &needed.shadingRate.primitiveFragmentShadingRate);
-    try checkFeature("Attachment Fragment Shading Rate", supported.shadingRate.attachmentFragmentShadingRate, &needed.shadingRate.attachmentFragmentShadingRate);
+    try checkFeature("Pipeline Fragment Shading Rate", sup.shadingRate.pipelineFragmentShadingRate, &need.shadingRate.pipelineFragmentShadingRate);
+    try checkFeature("Primitive Fragment Shading Rate", sup.shadingRate.primitiveFragmentShadingRate, &need.shadingRate.primitiveFragmentShadingRate);
+    try checkFeature("Attachment Fragment Shading Rate", sup.shadingRate.attachmentFragmentShadingRate, &need.shadingRate.attachmentFragmentShadingRate);
 
     // Shader Objects
-    try checkFeature("Shader Objects", supported.shaderObj.shaderObject, &needed.shaderObj.shaderObject);
+    try checkFeature("Shader Objects", sup.shaderObj.shaderObject, &need.shaderObj.shaderObject);
 
     // Mesh/Task Shaders
-    try checkFeature("Mesh Shaders", supported.meshShaders.meshShader, &needed.meshShaders.meshShader);
-    try checkFeature("Task Shaders", supported.meshShaders.taskShader, &needed.meshShaders.taskShader);
+    try checkFeature("Mesh Shaders", sup.meshShaders.meshShader, &need.meshShaders.meshShader);
+    try checkFeature("Task Shaders", sup.meshShaders.taskShader, &need.meshShaders.taskShader);
 
     // Vk11 Features
-    try checkFeature("Shader Draw Parameters", supported.vk11.shaderDrawParameters, &needed.vk11.shaderDrawParameters);
-    try checkFeature("Storage Buffer 16Bit Access", supported.vk11.storageBuffer16BitAccess, &needed.vk11.storageBuffer16BitAccess);
-    try checkFeature("Uniform/Storage Buffer 16Bit Access", supported.vk11.uniformAndStorageBuffer16BitAccess, &needed.vk11.uniformAndStorageBuffer16BitAccess);
+    try checkFeature("Shader Draw Parameters", sup.vk11.shaderDrawParameters, &need.vk11.shaderDrawParameters);
+    try checkFeature("Storage Buffer 16Bit Access", sup.vk11.storageBuffer16BitAccess, &need.vk11.storageBuffer16BitAccess);
+    try checkFeature("Uniform/Storage Buffer 16Bit Access", sup.vk11.uniformAndStorageBuffer16BitAccess, &need.vk11.uniformAndStorageBuffer16BitAccess);
 
     // Vk12 Features
-    try checkFeature("Buffer Device Address", supported.vk12.bufferDeviceAddress, &needed.vk12.bufferDeviceAddress);
-    try checkFeature("Descriptor Indexing", supported.vk12.descriptorIndexing, &needed.vk12.descriptorIndexing);
-    try checkFeature("Desc-Bind StorageImg Update After Bind", supported.vk12.descriptorBindingStorageImageUpdateAfterBind, &needed.vk12.descriptorBindingStorageImageUpdateAfterBind);
-    try checkFeature("Desc-Bind SampledImg Update After Bind", supported.vk12.descriptorBindingSampledImageUpdateAfterBind, &needed.vk12.descriptorBindingSampledImageUpdateAfterBind);
-    try checkFeature("Descriptor Binding Partially Bound", supported.vk12.descriptorBindingPartiallyBound, &needed.vk12.descriptorBindingPartiallyBound);
-    try checkFeature("Timeline Semaphores", supported.vk12.timelineSemaphore, &needed.vk12.timelineSemaphore);
-    try checkFeature("Tunetime Descriptor Array", supported.vk12.runtimeDescriptorArray, &needed.vk12.runtimeDescriptorArray);
-    try checkFeature("Shader StorageImg Array-NonUniform-Indexing", supported.vk12.shaderStorageImageArrayNonUniformIndexing, &needed.vk12.shaderStorageImageArrayNonUniformIndexing);
-    try checkFeature("Shader SampledImg Array-NonUniform-Indexing", supported.vk12.shaderSampledImageArrayNonUniformIndexing, &needed.vk12.shaderSampledImageArrayNonUniformIndexing);
-    try checkFeature("Shader Float 16", supported.vk12.shaderFloat16, &needed.vk12.shaderFloat16);
-    try checkFeature("Shader Buffer Int64 Atomics", supported.vk12.shaderBufferInt64Atomics, &needed.vk12.shaderBufferInt64Atomics);
+    try checkFeature("Buffer Device Address", sup.vk12.bufferDeviceAddress, &need.vk12.bufferDeviceAddress);
+    try checkFeature("Descriptor Indexing", sup.vk12.descriptorIndexing, &need.vk12.descriptorIndexing);
+    try checkFeature("Desc-Bind StorageImg Update After Bind", sup.vk12.descriptorBindingStorageImageUpdateAfterBind, &need.vk12.descriptorBindingStorageImageUpdateAfterBind);
+    try checkFeature("Desc-Bind SampledImg Update After Bind", sup.vk12.descriptorBindingSampledImageUpdateAfterBind, &need.vk12.descriptorBindingSampledImageUpdateAfterBind);
+    try checkFeature("Descriptor Binding Partially Bound", sup.vk12.descriptorBindingPartiallyBound, &need.vk12.descriptorBindingPartiallyBound);
+    try checkFeature("Timeline Semaphores", sup.vk12.timelineSemaphore, &need.vk12.timelineSemaphore);
+    try checkFeature("Tunetime Descriptor Array", sup.vk12.runtimeDescriptorArray, &need.vk12.runtimeDescriptorArray);
+    try checkFeature("Shader StorageImg Array-NonUniform-Indexing", sup.vk12.shaderStorageImageArrayNonUniformIndexing, &need.vk12.shaderStorageImageArrayNonUniformIndexing);
+    try checkFeature("Shader SampledImg Array-NonUniform-Indexing", sup.vk12.shaderSampledImageArrayNonUniformIndexing, &need.vk12.shaderSampledImageArrayNonUniformIndexing);
+    try checkFeature("Shader Float 16", sup.vk12.shaderFloat16, &need.vk12.shaderFloat16);
+    try checkFeature("Shader Buffer Int64 Atomics", sup.vk12.shaderBufferInt64Atomics, &need.vk12.shaderBufferInt64Atomics);
 
     // Vk13 Features
-    try checkFeature("Dynamic Rendering", supported.vk13.dynamicRendering, &needed.vk13.dynamicRendering);
-    try checkFeature("Synchronization 2", supported.vk13.synchronization2, &needed.vk13.synchronization2);
-    try checkFeature("Maintenance 4", supported.vk13.maintenance4, &needed.vk13.maintenance4);
+    try checkFeature("Dynamic Rendering", sup.vk13.dynamicRendering, &need.vk13.dynamicRendering);
+    try checkFeature("Synchronization 2", sup.vk13.synchronization2, &need.vk13.synchronization2);
+    try checkFeature("Maintenance 4", sup.vk13.maintenance4, &need.vk13.maintenance4);
 
     // Vk14 Features
-    try checkFeature("Maintenance 5", supported.maint5.maintenance5, &needed.maint5.maintenance5);
+    try checkFeature("Maintenance 5", sup.maint5.maintenance5, &need.maint5.maintenance5);
 
     // Device2 Features
-    try checkFeature("Shader Int 64", supported.device.features.shaderInt64, &needed.device.features.shaderInt64);
-    try checkFeature("Wide Lines", supported.device.features.wideLines, &needed.device.features.wideLines);
+    try checkFeature("Shader Int 64", sup.devFeatures2.features.shaderInt64, &need.devFeatures2.features.shaderInt64);
+    try checkFeature("Wide Lines", sup.devFeatures2.features.wideLines, &need.devFeatures2.features.wideLines);
 
     const gpuExtensions = [_][*c]const u8{
         "VK_KHR_swapchain",
@@ -298,7 +297,7 @@ fn createGPI(alloc: Allocator, gpu: vk.VkPhysicalDevice, family: u32) !vk.VkDevi
 
     const createInf = vk.VkDeviceCreateInfo{
         .sType = vk.VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
-        .pNext = &needed.device,
+        .pNext = &need.devFeatures2,
         .pQueueCreateInfos = queueInfos.items.ptr,
         .queueCreateInfoCount = @intCast(queueInfos.items.len),
         .pEnabledFeatures = null,
@@ -385,9 +384,9 @@ const DeviceFeatures = struct {
     vk12: vk.VkPhysicalDeviceVulkan12Features,
     vk13: vk.VkPhysicalDeviceVulkan13Features,
     maint5: vk.VkPhysicalDeviceMaintenance5FeaturesKHR,
-    device: vk.VkPhysicalDeviceFeatures2,
+    devFeatures2: vk.VkPhysicalDeviceFeatures2,
 
-    pub fn prepare(self: *DeviceFeatures) void {
+    pub fn init(self: *DeviceFeatures, gpu: ?vk.VkPhysicalDevice) void {
         self.descUntyped.sType = vk.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_UNTYPED_POINTERS_FEATURES_KHR;
         self.descUntyped.pNext = null;
 
@@ -421,11 +420,9 @@ const DeviceFeatures = struct {
         self.maint5.sType = vk.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_5_FEATURES_KHR;
         self.maint5.pNext = &self.vk13;
 
-        self.device.sType = vk.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
-        self.device.pNext = &self.maint5;
-    }
+        self.devFeatures2.sType = vk.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+        self.devFeatures2.pNext = &self.maint5;
 
-    pub fn fillSupportedFeatures(self: *DeviceFeatures, gpu: vk.VkPhysicalDevice) void {
-        vk.vkGetPhysicalDeviceFeatures2(gpu, &self.device);
+        if (gpu) |validGpu| vk.vkGetPhysicalDeviceFeatures2(validGpu, &self.devFeatures2);
     }
 };
