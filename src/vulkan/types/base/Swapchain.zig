@@ -3,6 +3,7 @@ const rc = @import("../../../configs/renderConfig.zig");
 const Texture = @import("../res/Texture.zig").Texture;
 const vk = @import("../../../modules/vk.zig").c;
 const vhF = @import("../../help/Functions.zig");
+const vhE = @import("../../help/Enums.zig");
 const Allocator = std.mem.Allocator;
 const std = @import("std");
 
@@ -150,6 +151,21 @@ fn getSurfaceCaps(gpu: vk.VkPhysicalDevice, surface: vk.VkSurfaceKHR) !vk.VkSurf
     var caps: vk.VkSurfaceCapabilitiesKHR = undefined;
     try vhF.check(vk.vkGetPhysicalDeviceSurfaceCapabilitiesKHR(gpu, surface, &caps), "Failed to get surface capabilities");
     return caps;
+}
+
+fn pickPresentMode(alloc: Allocator, gpu: vk.VkPhysicalDevice, surface: vk.VkSurfaceKHR ) !vk.VkPresentModeKHR {
+    var modeCount: u32 = 0;
+    try vhE.check(vk.vkGetPhysicalDeviceSurfacePresentModesKHR(gpu, surface, &modeCount, null), "Failed to get present mode count");
+    if (modeCount == 0) return vk.VK_PRESENT_MODE_FIFO_KHR; // FIFO is always supported
+
+    const modes = try alloc.alloc(vk.VkPresentModeKHR, modeCount);
+    defer alloc.free(modes);
+
+    try vhE.check(vk.vkGetPhysicalDeviceSurfacePresentModesKHR(gpu, surface, &modeCount, modes.ptr), "Failed to get present modes");
+    // Prefer mailbox (triple buffering), then immediate, fallback to FIFO
+    for (modes) |mode| if (mode == vk.VK_PRESENT_MODE_MAILBOX_KHR) return mode;
+    for (modes) |mode| if (mode == vk.VK_PRESENT_MODE_IMMEDIATE_KHR) return mode;
+    return vk.VK_PRESENT_MODE_FIFO_KHR;
 }
 
 fn pickSurfaceFormat(alloc: Allocator, gpu: vk.VkPhysicalDevice, surface: vk.VkSurfaceKHR) !vk.VkSurfaceFormatKHR {

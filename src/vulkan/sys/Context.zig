@@ -47,24 +47,6 @@ pub const Context = struct {
         vk.vkDestroyDevice(self.gpi, null);
         vk.vkDestroyInstance(self.instance, null);
     }
-
-    fn pickPresentMode(self: *const Context) !vk.VkPresentModeKHR {
-        const gpu = self.gpu;
-        const surface = self.surface;
-
-        var modeCount: u32 = 0;
-        try vhE.check(vk.vkGetPhysicalDeviceSurfacePresentModesKHR(gpu, surface, &modeCount, null), "Failed to get present mode count");
-        if (modeCount == 0) return vk.VK_PRESENT_MODE_FIFO_KHR; // FIFO is always supported
-
-        const modes = try self.alloc.alloc(vk.VkPresentModeKHR, modeCount);
-        defer self.alloc.free(modes);
-
-        try vhE.check(vk.vkGetPhysicalDeviceSurfacePresentModesKHR(gpu, surface, &modeCount, modes.ptr), "Failed to get present modes");
-        // Prefer mailbox (triple buffering), then immediate, fallback to FIFO
-        for (modes) |mode| if (mode == vk.VK_PRESENT_MODE_MAILBOX_KHR) return mode;
-        for (modes) |mode| if (mode == vk.VK_PRESENT_MODE_IMMEDIATE_KHR) return mode;
-        return vk.VK_PRESENT_MODE_FIFO_KHR;
-    }
 };
 
 pub fn createInstance(alloc: Allocator) !vk.VkInstance {
