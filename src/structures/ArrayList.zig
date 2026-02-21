@@ -60,8 +60,6 @@ pub fn ArrayList(comptime T: type, comptime cap: usize) type {
             }
         }
 
-        pub fn getField(self: *const Self, index: usize);
-
         pub fn get(self: *const Self, index: usize) T {
             std.debug.assert(index < self.len);
             var result: T = undefined;
