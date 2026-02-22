@@ -4,7 +4,9 @@ const rc = @import("../../configs/renderConfig.zig");
 pub const UpdateType = enum {
     Overwrite, // Resource once in Memory, updates blocked
     PerFrame, // Resource Created for Every Frame in Flight, updates done per Frame via Staging Buffer
-    // Async, // Resource Created Twice, Cycling Between Front and Back Representations to start next batch update when previous update is done
+
+    // Async, // Resource Created Twice, Collecting + Cycling Between Front and Back Representations to start next batch update when previous update is done (maybe multiple Frames)
+    // OnDemand // Resource Created Once, Creating a new Resource on Update 
 
     pub fn getCount(self: UpdateType) u8 {
         return switch (self) {
