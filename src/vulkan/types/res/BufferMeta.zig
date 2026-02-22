@@ -1,4 +1,3 @@
-
 const rc = @import("../../../configs/renderConfig.zig");
 const PushData = @import("PushData.zig").PushData;
 const vk = @import("../../../modules/vk.zig").c;
@@ -8,8 +7,10 @@ const vhE = @import("../../help/Enums.zig");
 pub const BufferMeta = struct {
     updateId: u8 = 0,
     elementSize: u32,
+
     typ: vhE.BufferType,
     update: vhE.UpdateType,
+    resize: vhE.ResizeType,
 
     pub const BufId = packed struct { val: u32 };
 
@@ -20,6 +21,7 @@ pub const BufferMeta = struct {
         len: u32,
         typ: vhE.BufferType,
         update: vhE.UpdateType,
+        resize: vhE.ResizeType = .Block,
     };
 
     pub fn create(bufInf: BufInf) BufInf {

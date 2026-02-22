@@ -64,7 +64,7 @@ pub const ResourceStorage = struct {
     }
 
     pub fn getBuffer(self: *ResourceStorage, bufId: BufferMeta.BufId) !*Buffer {
-        if (self.buffers.isKeyUsed(bufId.val) == true) return self.buffers.getPtrByKey(bufId.val) else return error.TextureIdNotUsed;
+        if (self.buffers.isKeyUsed(bufId.val) == true) return self.buffers.getPtrByKey(bufId.val) else return error.BufferIdNotUsed;
     }
 
     pub fn getTexture(self: *ResourceStorage, texId: TextureMeta.TexId) !*Texture {
@@ -87,7 +87,7 @@ pub const ResourceStorage = struct {
             const tex = self.textures.getPtrByKey(texId.val);
             try self.texZombies.append(tex.*);
             self.textures.remove(texId.val);
-        } else std.debug.print("WARNING: Tried to queue Texture destruction ID {} but ID empty", .{texId.val});
+        } else std.debug.print("WARNING: Tried to queue Texture destruction ID {} but ID empty\n", .{texId.val});
     }
 
     pub fn queueBufferKill(self: *ResourceStorage, bufId: BufferMeta.BufId) !void {
@@ -95,7 +95,7 @@ pub const ResourceStorage = struct {
             const buffer = self.buffers.getPtrByKey(bufId.val);
             try self.bufZombies.append(buffer.*);
             self.buffers.remove(bufId.val);
-        } else std.debug.print("WARNING: Tried to queue Buffer destruction ID {} but ID empty", .{bufId.val});
+        } else std.debug.print("WARNING: Tried to queue Buffer destruction ID {} but ID empty\n", .{bufId.val});
     }
 
     pub fn getTexZombies(self: *ResourceStorage) []const Texture {

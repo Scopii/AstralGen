@@ -52,8 +52,8 @@ pub const TEX_DEPTH_FORMAT = vk.VK_FORMAT_D32_SFLOAT;
 pub const indirectSB = BufferMeta.create(.{ .id = .{ .val = 41 }, .mem = .Gpu, .typ = .Indirect, .len = 1, .elementSize = @sizeOf(vhT.IndirectData), .update = .PerFrame }); // Can be Overwrite?
 pub const readbackSB = BufferMeta.create(.{ .id = .{ .val = 45 }, .mem = .CpuRead, .typ = .Storage, .len = 1, .elementSize = @sizeOf(vhT.ReadbackData), .update = .PerFrame });
 
-pub const objectSB = BufferMeta.create(.{ .id = .{ .val = 1 }, .mem = .Gpu, .typ = .Storage, .len = 100, .elementSize = @sizeOf(Object), .update = .PerFrame });
-pub const cameraUB = BufferMeta.create(.{ .id = .{ .val = 40 }, .mem = .Gpu, .typ = .Uniform, .len = 1, .elementSize = @sizeOf(CameraData), .update = .PerFrame });
+pub const objectSB = BufferMeta.create(.{ .id = .{ .val = 1 }, .mem = .Gpu, .typ = .Storage, .len = 20, .elementSize = @sizeOf(Object), .update = .PerFrame, .resize = .Fit });
+pub const cameraUB = BufferMeta.create(.{ .id = .{ .val = 40 }, .mem = .Gpu, .typ = .Uniform, .len = 1, .elementSize = @sizeOf(CameraData), .update = .PerFrame, .resize = .Fit });
 pub const BUFFERS: []const BufferMeta.BufInf = &.{ objectSB, cameraUB, indirectSB, readbackSB };
 
 // Textures

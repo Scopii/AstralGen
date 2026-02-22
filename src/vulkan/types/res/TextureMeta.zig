@@ -1,4 +1,3 @@
-
 const rc = @import("../../../configs/renderConfig.zig");
 const PushData = @import("PushData.zig").PushData;
 const vk = @import("../../../modules/vk.zig").c;
@@ -12,6 +11,7 @@ pub const TextureMeta = struct {
 
     texType: vhE.TextureType,
     update: vhE.UpdateType,
+    resize: vhE.ResizeType,
     mem: vhE.MemUsage,
 
     pub const TexId = packed struct { val: u32 };
@@ -24,6 +24,7 @@ pub const TextureMeta = struct {
         height: u32,
         depth: u32 = 1,
         update: vhE.UpdateType,
+        resize: vhE.ResizeType = .Block,
     };
 
     pub fn create(texInf: TexInf) TexInf {

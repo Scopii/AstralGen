@@ -146,12 +146,43 @@ pub const ResourceMan = struct {
         };
 
         var targetStorage = &self.resStorages[realFlightId];
-        const buf = try targetStorage.getBuffer(bufInf.id);
-        if (bytes.len > buf.size) return error.BufferBaseTooSmallForUpdate;
+        var buf = try targetStorage.getBuffer(bufInf.id);
+
+        switch (bufInf.resize) {
+            .Block => {
+                if (bytes.len > buf.size) {
+                    std.debug.print("Buffer Update cant fit BufId {}\n", .{bufInf.id});
+                    return error.BufferBaseTooSmallForUpdate;
+                }
+            },
+            .Grow, .Fit => {
+                if ((bufInf.resize == .Fit and bytes.len != buf.size) or
+                    (bufInf.resize == .Grow and bytes.len > buf.size))
+                {
+                    var newInf = bufInf;
+                    newInf.len = @intCast((bytes.len + bufInf.elementSize - 1) / bufInf.elementSize);
+
+                    var newBuf = try self.vma.allocDefinedBuffer(newInf);
+                    newBuf.descIndex = buf.descIndex;
+                    try self.descMan.queueBufferDescriptor(newBuf.gpuAddress, newBuf.size, newBuf.descIndex, newInf.typ);
+
+                    std.debug.print("Buffer resized! (ID {}) (Container {}) ({}) ({}) (Descriptor {}) ", .{ newInf.id.val, realFlightId, newInf.typ, newInf.update, newBuf.descIndex });
+                    std.debug.print("Length {} ({} Bytes) -> Length {} ({} Bytes) ", .{ bufInf.len, buf.size, newInf.len, newBuf.size });
+                    self.vma.printMemoryInfo(newBuf.allocation);
+
+                    buf.descIndex = std.math.maxInt(u32);
+                    try self.resStorages[realFlightId].queueBufferKill(newInf.id);
+                    self.resStorages[realFlightId].addBuffer(newInf.id, newBuf);
+                    self.bufMetas.upsert(newInf.id.val, self.vma.createBufferMeta(newInf));
+
+                    buf = try targetStorage.getBuffer(bufInf.id); // Refresh
+                }
+            },
+        }
 
         switch (bufInf.mem) {
             .Gpu => {
-                try self.resStorages[flightId].stageBufferUpdate(bufInf.id, bytes);
+                try self.resStorages[realFlightId].stageBufferUpdate(bufInf.id, bytes);
             },
             .CpuWrite => {
                 const pMappedData = buf.mappedPtr orelse return error.BufferNotMapped;
@@ -222,7 +253,7 @@ pub const ResourceMan = struct {
 
     fn destroyBuffer(self: *ResourceMan, bufBase: *const Buffer) void {
         self.vma.freeBufferBase(bufBase);
-        self.descMan.freeDescriptor(bufBase.descIndex);
+        if (bufBase.descIndex != std.math.maxInt(u32)) self.descMan.freeDescriptor(bufBase.descIndex);
     }
 };
 

@@ -6,7 +6,7 @@ pub const UpdateType = enum {
     PerFrame, // Resource Created for Every Frame in Flight, updates done per Frame via Staging Buffer
 
     // Async, // Resource Created Twice, Collecting + Cycling Between Front and Back Representations to start next batch update when previous update is done (maybe multiple Frames)
-    // OnDemand // Resource Created Once, Creating a new Resource on Update 
+    // OnDemand // Resource Created Once, Creating a new Resource on Update
 
     pub fn getCount(self: UpdateType) u8 {
         return switch (self) {
@@ -14,6 +14,12 @@ pub const UpdateType = enum {
             .PerFrame => rc.MAX_IN_FLIGHT,
         };
     }
+};
+
+pub const ResizeType = enum {
+    Block, // Can never Resize
+    Grow, // Keeps growing
+    Fit, // Resizes on every update
 };
 
 pub const TextureType = enum {

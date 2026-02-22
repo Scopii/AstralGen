@@ -72,6 +72,7 @@ pub const Vma = struct {
             .typ = bufInf.typ,
             .update = bufInf.update,
             .elementSize = bufInf.elementSize,
+            .resize = bufInf.resize,
         };
     }
 
@@ -126,6 +127,7 @@ pub const Vma = struct {
             .texType = texInf.typ,
             .update = texInf.update,
             .mem = texInf.mem,
+            .resize = texInf.resize,
             .viewType = vk.VK_IMAGE_VIEW_TYPE_2D,
             .format = vhF.getImageFormat(texInf.typ),
             .subRange = vhF.createSubresourceRange(vhF.getImageAspectFlags(texInf.typ), 0, 1, 0, 1),
