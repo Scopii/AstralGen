@@ -219,7 +219,7 @@ pub const App = struct {
             };
             defer memoryMan.*.resetArena();
 
-            if (rc.CPU_PROFILING or rc.GPU_PROFILING or rc.SWAPCHAIN_PROFILING) std.debug.print("\n", .{});
+            if (rc.CPU_PROFILING or self.renderer.renderGraph.useGpuProfiling or rc.SWAPCHAIN_PROFILING) std.debug.print("\n", .{});
 
             if (firstFrame == false) continue;
             windowMan.showOpacityAllWindows();
