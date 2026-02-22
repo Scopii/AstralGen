@@ -19,10 +19,11 @@ pub const Cmd = struct {
     handle: vk.VkCommandBuffer,
     flightId: u8 = 0,
     frame: u64 = 0,
-    queryPool: vk.VkQueryPool,
+    renderState: ?RenderState = null,
+
+    queryPool: ?vk.VkQueryPool = null,
     queryCounter: u8 = 0,
     querys: LinkedMap(Query, rc.GPU_QUERYS, u8, rc.GPU_QUERYS * 2, 0) = .{},
-    renderState: ?RenderState = null,
 
     pub fn init(cmdPool: vk.VkCommandPool, level: vk.VkCommandBufferLevel, gpi: vk.VkDevice) !Cmd {
         const allocInf = vk.VkCommandBufferAllocateInfo{
@@ -34,22 +35,34 @@ pub const Cmd = struct {
         var cmd: vk.VkCommandBuffer = undefined;
         try vhF.check(vk.vkAllocateCommandBuffers(gpi, &allocInf, &cmd), "Could not create Cmd");
 
-        const poolInfo = vk.VkQueryPoolCreateInfo{
-            .sType = vk.VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO,
-            .queryType = vk.VK_QUERY_TYPE_TIMESTAMP,
-            .queryCount = rc.GPU_QUERYS * 2,
-        };
-        var queryPool: vk.VkQueryPool = undefined;
-        try vhF.check(vk.vkCreateQueryPool(gpi, &poolInfo, null, &queryPool), "Could not init Cmd QueryPool");
-
         return .{
             .handle = cmd,
-            .queryPool = queryPool,
+            .queryPool = null,
         };
     }
 
     pub fn deinit(self: *const Cmd, gpi: vk.VkDevice) void {
-        vk.vkDestroyQueryPool(gpi, self.queryPool, null);
+        if (self.queryPool) |qPool| vk.vkDestroyQueryPool(gpi, qPool, null);
+    }
+
+    pub fn enableQuerys(self: *Cmd, gpi: vk.VkDevice) !void {
+        if (self.queryPool == null) {
+            const poolInfo = vk.VkQueryPoolCreateInfo{
+                .sType = vk.VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO,
+                .queryType = vk.VK_QUERY_TYPE_TIMESTAMP,
+                .queryCount = rc.GPU_QUERYS * 2,
+            };
+            var tempQueryPool: vk.VkQueryPool = undefined;
+            try vhF.check(vk.vkCreateQueryPool(gpi, &poolInfo, null, &tempQueryPool), "Could not init Cmd QueryPool");
+            self.queryPool = tempQueryPool;
+        }
+    }
+
+    pub fn disableQuerys(self: *Cmd, gpi: vk.VkDevice) void {
+        if (self.queryPool) |qPool| {
+            vk.vkDestroyQueryPool(gpi, qPool, null);
+            self.queryPool = null;
+        }
     }
 
     pub fn begin(self: *Cmd, flightId: u8, frame: u64) !void {
@@ -75,73 +88,81 @@ pub const Cmd = struct {
     }
 
     pub fn startQuery(self: *Cmd, pipeStage: vhE.PipeStage, queryId: u8, name: []const u8) void {
-        if (self.querys.isKeyUsed(queryId) == true) {
-            std.debug.print("Cmd Warning: Query ID {} in use by {s}\n!", .{ queryId, self.querys.getPtrByKey(queryId).name });
-            return;
-        }
-        const idx = self.queryCounter;
-        if (idx >= rc.GPU_QUERYS) return; // Safety check
+        if (self.queryPool) |qPool| {
+            if (self.querys.isKeyUsed(queryId) == true) {
+                std.debug.print("Cmd Warning: Query ID {} in use by {s}\n!", .{ queryId, self.querys.getPtrByKey(queryId).name });
+                return;
+            }
+            const idx = self.queryCounter;
+            if (idx >= rc.GPU_QUERYS) return; // Safety check
 
-        self.writeTimestamp(self.queryPool, @intFromEnum(pipeStage), idx);
-        self.querys.upsert(queryId, .{ .name = name, .startIndex = idx });
-        self.queryCounter += 1;
+            self.writeTimestamp(qPool, @intFromEnum(pipeStage), idx);
+            self.querys.upsert(queryId, .{ .name = name, .startIndex = idx });
+            self.queryCounter += 1;
+        }
     }
 
     pub fn endQuery(self: *Cmd, pipeStage: vhE.PipeStage, queryId: u8) void {
-        if (self.querys.isKeyUsed(queryId) == false) {
-            std.debug.print("Cmd Error: QueryId {} not registered", .{queryId});
-            return;
+        if (self.queryPool) |qPool| {
+            if (self.querys.isKeyUsed(queryId) == false) {
+                std.debug.print("Cmd Error: QueryId {} not registered", .{queryId});
+                return;
+            }
+
+            const idx = self.queryCounter;
+            if (idx >= rc.GPU_QUERYS) return; // Safety check
+
+            self.writeTimestamp(qPool, @intFromEnum(pipeStage), idx);
+            const query = self.querys.getPtrByKey(queryId);
+            query.endIndex = idx;
+            self.queryCounter += 1;
         }
-
-        const idx = self.queryCounter;
-        if (idx >= rc.GPU_QUERYS) return; // Safety check
-
-        self.writeTimestamp(self.queryPool, @intFromEnum(pipeStage), idx);
-        const query = self.querys.getPtrByKey(queryId);
-        query.endIndex = idx;
-        self.queryCounter += 1;
     }
 
     pub fn printQueryResults(self: *Cmd, gpi: vk.VkDevice, timestampPeriod: f32) !void {
-        const count = self.queryCounter;
-        if (count == 0 or count > rc.GPU_QUERYS) {
-            std.debug.print("No Querys in Cmd to print\n", .{});
-            return;
+        if (self.queryPool) |qPool| {
+            const count = self.queryCounter;
+            if (count == 0 or count > rc.GPU_QUERYS) {
+                std.debug.print("No Querys in Cmd to print\n", .{});
+                return;
+            }
+
+            var results: [rc.GPU_QUERYS * 2]u64 = undefined;
+            const flags = vk.VK_QUERY_RESULT_64_BIT | vk.VK_QUERY_RESULT_WAIT_BIT;
+            try vhF.check(vk.vkGetQueryPoolResults(gpi, qPool, 0, count, @sizeOf(u64) * 128, &results, @sizeOf(u64), flags), "Failed getting Cmd Queries");
+
+            const frameStartIndex = self.querys.getByIndex(0).startIndex;
+            const frameStart = results[frameStartIndex];
+            var frameEnd: u64 = 0;
+
+            for (self.querys.getItems()) |query| {
+                const endTime = results[query.endIndex];
+                if (endTime > frameEnd) frameEnd = endTime;
+            }
+
+            const ticks = frameEnd - frameStart;
+            const gpuFrameMs = (@as(f64, @floatFromInt(ticks)) * timestampPeriod) / 1_000_000.0;
+            std.debug.print("GPU Frame {} (FlightID {}) ({}/{} Queries)\n", .{ self.frame, self.flightId, self.querys.getLength(), rc.GPU_QUERYS });
+            std.debug.print("{d:.3} ms ({d:.1} FPS) ({} GPU Ticks):\n", .{ gpuFrameMs, 1000.0 / gpuFrameMs, ticks });
+
+            var untrackedMs: f64 = gpuFrameMs;
+
+            for (self.querys.getItems()) |query| {
+                const diff = results[query.endIndex] - results[query.startIndex];
+                const gpuQueryMs = (@as(f64, @floatFromInt(diff)) * timestampPeriod) / 1_000_000.0;
+                untrackedMs -= gpuQueryMs;
+                std.debug.print(" - {d:.3} ms ({d:5.2} %) {s}\n", .{ gpuQueryMs, (gpuQueryMs / gpuFrameMs) * 100, query.name });
+            }
+            std.debug.print("Untracked {d:.3} ms ({d:5.2} %)\n", .{ untrackedMs + 0.00001, untrackedMs * 100 + 0.00001 }); // + 0.00001 to avoid negative through precision loss
         }
-
-        var results: [rc.GPU_QUERYS * 2]u64 = undefined;
-        const flags = vk.VK_QUERY_RESULT_64_BIT | vk.VK_QUERY_RESULT_WAIT_BIT;
-        try vhF.check(vk.vkGetQueryPoolResults(gpi, self.queryPool, 0, count, @sizeOf(u64) * 128, &results, @sizeOf(u64), flags), "Failed getting Cmd Queries");
-
-        const frameStartIndex = self.querys.getByIndex(0).startIndex;
-        const frameStart = results[frameStartIndex];
-        var frameEnd: u64 = 0;
-
-        for (self.querys.getItems()) |query| {
-            const endTime = results[query.endIndex];
-            if (endTime > frameEnd) frameEnd = endTime;
-        }
-
-        const ticks = frameEnd - frameStart;
-        const gpuFrameMs = (@as(f64, @floatFromInt(ticks)) * timestampPeriod) / 1_000_000.0;
-        std.debug.print("GPU Frame {} (FlightID {}) ({}/{} Queries)\n", .{ self.frame, self.flightId, self.querys.getCount(), rc.GPU_QUERYS });
-        std.debug.print("{d:.3} ms ({d:.1} FPS) ({} GPU Ticks):\n", .{ gpuFrameMs, 1000.0 / gpuFrameMs, ticks });
-
-        var untrackedMs: f64 = gpuFrameMs;
-
-        for (self.querys.getItems()) |query| {
-            const diff = results[query.endIndex] - results[query.startIndex];
-            const gpuQueryMs = (@as(f64, @floatFromInt(diff)) * timestampPeriod) / 1_000_000.0;
-            untrackedMs -= gpuQueryMs;
-            std.debug.print(" - {d:.3} ms ({d:5.2} %) {s}\n", .{ gpuQueryMs, (gpuQueryMs / gpuFrameMs) * 100, query.name });
-        }
-        std.debug.print("Untracked {d:.3} ms ({d:5.2} %)\n", .{ untrackedMs + 0.00001, untrackedMs * 100 + 0.00001 }); // + 0.00001 to avoid negative through precision loss
     }
 
     pub fn resetQuerys(self: *Cmd) void {
-        vk.vkCmdResetQueryPool(self.handle, self.queryPool, 0, rc.GPU_QUERYS * 2);
-        self.queryCounter = 0;
-        self.querys.clear();
+        if (self.queryPool) |qPool| {
+            vk.vkCmdResetQueryPool(self.handle, qPool, 0, rc.GPU_QUERYS * 2);
+            self.queryCounter = 0;
+            self.querys.clear();
+        }
     }
 
     pub fn bakeBarriers(self: *const Cmd, imgBarriers: []const vk.VkImageMemoryBarrier2, bufBarriers: []const vk.VkBufferMemoryBarrier2) void {

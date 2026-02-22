@@ -26,6 +26,7 @@ pub const RenderGraph = struct {
     cmdMan: CmdManager,
     imgBarriers: std.array_list.Managed(vk.VkImageMemoryBarrier2),
     bufBarriers: std.array_list.Managed(vk.VkBufferMemoryBarrier2),
+    useGpuProfiling: bool = rc.GPU_PROFILING,
 
     pub fn init(alloc: Allocator, context: *const Context) !RenderGraph {
         return .{
@@ -43,6 +44,10 @@ pub const RenderGraph = struct {
         self.cmdMan.deinit();
     }
 
+    pub fn toggleGpuProfiling(self: *RenderGraph) void {
+        if (self.useGpuProfiling == true) self.useGpuProfiling = false else self.useGpuProfiling = true;
+    }
+
     pub fn recordFrame(
         self: *RenderGraph,
         passes: []Pass,
@@ -57,6 +62,7 @@ pub const RenderGraph = struct {
         var cmd = try self.cmdMan.getCmd(flightId);
         try cmd.begin(flightId, frame);
 
+        if (self.useGpuProfiling == true) try cmd.enableQuerys(self.gpi) else cmd.disableQuerys(self.gpi);
         cmd.resetQuerys();
 
         cmd.startQuery(.TopOfPipe, 76, "Descriptor Heap");

@@ -20,7 +20,9 @@ pub const CmdMan = struct {
         const cmdPool = try createCmdPool(gpi, context.graphicsQ.family);
 
         const cmds = try alloc.alloc(Cmd, maxInFlight);
-        for (0..maxInFlight) |i| cmds[i] = try Cmd.init(cmdPool, vk.VK_COMMAND_BUFFER_LEVEL_PRIMARY, gpi);
+        for (0..maxInFlight) |i| {
+            cmds[i] = try Cmd.init(cmdPool, vk.VK_COMMAND_BUFFER_LEVEL_PRIMARY, gpi);
+        }
 
         var props: vk.VkPhysicalDeviceProperties = undefined;
         vk.vkGetPhysicalDeviceProperties(context.gpu, &props);
@@ -39,16 +41,11 @@ pub const CmdMan = struct {
         self.alloc.free(self.cmds);
         vk.vkDestroyCommandPool(self.gpi, self.cmdPool, null);
     }
-
+    
     pub fn getCmd(self: *CmdMan, flightId: u8) !*Cmd {
         const cmd = &self.cmds[flightId];
-        if (rc.GPU_PROFILING == true) try self.printQueryResults(flightId);
-        return cmd;
-    }
-
-    pub fn printQueryResults(self: *CmdMan, flightId: u8) !void {
-        var cmd = self.cmds[flightId];
         try cmd.printQueryResults(self.gpi, self.timestampPeriod);
+        return cmd;
     }
 };
 

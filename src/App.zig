@@ -164,6 +164,7 @@ pub const App = struct {
                         return;
                     },
                     .toggleFullscreen => windowMan.toggleMainFullscreen(),
+                    .toggleGpuProfiling => self.renderer.renderGraph.toggleGpuProfiling(),
 
                     .toggleImgui => {
                         self.windowMan.toogleUiMode();
