@@ -1,4 +1,5 @@
 const TexId = @import("../vulkan/types/res/TextureMeta.zig").TextureMeta.TexId;
+const rc = @import("../configs/renderConfig.zig");
 const sdl = @import("../modules/sdl.zig").c;
 const vk = @import("../modules/vk.zig").c;
 const std = @import("std");
@@ -8,19 +9,33 @@ pub const Window = struct {
     handle: *sdl.SDL_Window,
     state: WindowState = .needCreation,
     renderTexId: TexId,
+    linkedTexIds: [rc.LINKED_TEX_MAX]?TexId,
     extent: vk.VkExtent2D,
     id: WindowId,
     resizeTex: bool,
 
     pub const WindowId = packed struct { val: u32 };
 
-    pub fn init(windowProps: sdl.SDL_PropertiesID, renderTexId: TexId, extent: vk.VkExtent2D, resizeTex: bool) !Window {
+    pub fn init(windowProps: sdl.SDL_PropertiesID, renderTexId: TexId, extent: vk.VkExtent2D, resizeTex: bool, linkedTexIds: []const TexId) !Window {
+        if (linkedTexIds.len > rc.LINKED_TEX_MAX) return error.WindowLinkedTexturesOverflow;
+
         const winHandle = sdl.SDL_CreateWindowWithProperties(windowProps) orelse {
             std.log.err("SDL_CreateWindowWithProperties failed: {s}\n", .{sdl.SDL_GetError()});
             return error.WindowInitFailed;
         };
         const windowId = sdl.SDL_GetWindowID(winHandle);
-        return Window{ .handle = winHandle, .renderTexId = renderTexId, .extent = extent, .id = .{ .val = windowId }, .resizeTex = resizeTex };
+
+        var actualTexIds: [rc.LINKED_TEX_MAX]?TexId = .{null} ** rc.LINKED_TEX_MAX;
+        for (0..linkedTexIds.len) |i| actualTexIds[i] = linkedTexIds[i];
+
+        return Window{
+            .handle = winHandle,
+            .renderTexId = renderTexId,
+            .extent = extent,
+            .id = .{ .val = windowId },
+            .resizeTex = resizeTex,
+            .linkedTexIds = actualTexIds,
+        };
     }
 
     pub fn deinit(self: *const Window) void {

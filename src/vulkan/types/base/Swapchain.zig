@@ -12,6 +12,7 @@ pub const Swapchain = struct {
     handle: vk.VkSwapchainKHR,
     curIndex: u32 = 0,
     renderTexId: TexId,
+    linkedTexIds: [rc.LINKED_TEX_MAX]?TexId,
     acquireSems: []vk.VkSemaphore, // indexed by max-in-flight.
     renderSems: []vk.VkSemaphore, // indexed by swapchain images
     textures: []Texture, // indexed by swapchain images
@@ -20,8 +21,18 @@ pub const Swapchain = struct {
     inUse: bool = true,
     windowId: u32,
 
-    pub fn init(alloc: Allocator, gpi: vk.VkDevice, surface: vk.VkSurfaceKHR, extent: vk.VkExtent2D, gpu: vk.VkPhysicalDevice, renderTexId: TexId, oldHandle: ?vk.VkSwapchainKHR, windowId: u32) !Swapchain {
-        const mode = rc.DISPLAY_MODE; //try context.pickPresentMode();
+    pub fn init(
+        alloc: Allocator,
+        gpi: vk.VkDevice,
+        surface: vk.VkSurfaceKHR,
+        extent: vk.VkExtent2D,
+        gpu: vk.VkPhysicalDevice,
+        renderTexId: TexId,
+        linkedTexIds: [rc.LINKED_TEX_MAX]?TexId,
+        oldHandle: ?vk.VkSwapchainKHR,
+        windowId: u32,
+    ) !Swapchain {
+        const mode = rc.DISPLAY_MODE; //try pickPresentMode();
         const caps = try getSurfaceCaps(gpu, surface);
         const realExtent = pickExtent(&caps, extent);
         const surfaceFormat = try pickSurfaceFormat(alloc, gpu, surface);
@@ -101,6 +112,7 @@ pub const Swapchain = struct {
             .renderTexId = renderTexId,
             .subRange = subRange,
             .windowId = windowId,
+            .linkedTexIds = linkedTexIds,
         };
     }
 
@@ -117,7 +129,7 @@ pub const Swapchain = struct {
     }
 
     pub fn recreate(self: *Swapchain, alloc: Allocator, gpi: vk.VkDevice, gpu: vk.VkPhysicalDevice, instance: vk.VkInstance, newExtent: vk.VkExtent2D) !void {
-        const swapchain = try Swapchain.init(alloc, gpi, self.surface, newExtent, gpu, self.renderTexId, self.handle, self.windowId);
+        const swapchain = try Swapchain.init(alloc, gpi, self.surface, newExtent, gpu, self.renderTexId, self.linkedTexIds, self.handle, self.windowId);
         self.deinit(alloc, gpi, instance, .withoutSurface);
         self.* = swapchain;
     }

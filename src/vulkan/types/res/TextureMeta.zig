@@ -12,6 +12,7 @@ pub const TextureMeta = struct {
 
     texType: vhE.TextureType,
     update: vhE.UpdateType,
+    mem: vhE.MemUsage,
 
     pub const TexId = packed struct { val: u32 };
 

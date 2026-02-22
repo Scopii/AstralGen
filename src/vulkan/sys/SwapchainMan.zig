@@ -79,7 +79,7 @@ pub const SwapchainMan = struct {
         self.swapchains.getPtrByKey(windowId.val).inUse = inUse;
     }
 
-    pub fn getMaxRenderExtent(self: *SwapchainMan, texId: TexId) vk.VkExtent2D {
+    pub fn getMaxExtent(self: *SwapchainMan, texId: TexId) vk.VkExtent2D {
         var maxWidth: u32 = 1;
         var maxHeight: u32 = 1;
 
@@ -88,13 +88,20 @@ pub const SwapchainMan = struct {
                 maxWidth = @max(maxWidth, swapchain.extent.width);
                 maxHeight = @max(maxHeight, swapchain.extent.height);
             }
+            for (swapchain.linkedTexIds) |linkedId| {
+                if (linkedId == null) break;
+                if (linkedId == texId) {
+                    maxWidth = @max(maxWidth, swapchain.extent.width);
+                    maxHeight = @max(maxHeight, swapchain.extent.height);
+                }
+            }
         }
         return vk.VkExtent2D{ .width = maxWidth, .height = maxHeight };
     }
 
     pub fn createSwapchain(self: *SwapchainMan, window: Window, _: vk.VkCommandPool) !void {
         const surface = try createSurface(window.handle, self.instance);
-        const swapchain = try Swapchain.init(self.alloc, self.gpi, surface, window.extent, self.gpu, window.renderTexId, null, window.id.val);
+        const swapchain = try Swapchain.init(self.alloc, self.gpi, surface, window.extent, self.gpu, window.renderTexId, window.linkedTexIds, null, window.id.val);
         //try clearSwapchainImages(self.gpi, self.queueHandle, cmdPool, &swapchain);
         self.swapchains.upsert(window.id.val, swapchain);
         std.debug.print("Swapchain added to Window {}\n", .{window.id.val});

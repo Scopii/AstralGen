@@ -1,3 +1,4 @@
+const TexId = @import("vulkan/types/res/TextureMeta.zig").TextureMeta.TexId;
 const WindowManager = @import("platform/WindowManager.zig").WindowManager;
 const ShaderCompiler = @import("core/ShaderCompiler.zig").ShaderCompiler;
 const MemoryManager = @import("core/MemoryManager.zig").MemoryManager;
@@ -101,7 +102,7 @@ pub const App = struct {
         // try self.windowMan.addWindow("Compute", 16 * 52, 9 * 52, rc.compTex.id, 960, 50, true);
         // try self.windowMan.addWindow("Graphics", 16 * 52, 9 * 52, rc.grapTex.id, 960, 550, true);
 
-        try self.windowMan.addWindow("Main Rendering", 16 * 80, 9 * 80, rc.quantTex.id, 300, 200, true);
+        try self.windowMan.addWindow("Main Rendering", 16 * 80, 9 * 80, rc.quantTex.id, 300, 200, true, &[_]TexId{rc.quantDepthTex.id});
     }
 
     pub fn run(self: *App) !void {
@@ -164,6 +165,7 @@ pub const App = struct {
                         return;
                     },
                     .toggleFullscreen => windowMan.toggleMainFullscreen(),
+
                     .toggleGpuProfiling => self.renderer.renderGraph.toggleGpuProfiling(),
 
                     .toggleImgui => {

@@ -1,4 +1,4 @@
-const TextureMeta = @import("../vulkan/types/res/TextureMeta.zig").TextureMeta;
+const TexId = @import("../vulkan/types/res/TextureMeta.zig").TextureMeta.TexId;
 const MouseMovement = @import("../core/EventManager.zig").MouseMovement;
 const FixedList = @import("../structures/FixedList.zig").FixedList;
 const LinkedMap = @import("../structures/LinkedMap.zig").LinkedMap;
@@ -58,7 +58,7 @@ pub const WindowManager = struct {
         for (self.windows.getItems()) |*win| win.setOpacity(1.0);
     }
 
-    pub fn addWindow(self: *WindowManager, title: [*c]const u8, width: c_int, height: c_int, renderTexId: TextureMeta.TexId, xPos: c_int, yPos: c_int, resizeTex: bool) !void {
+    pub fn addWindow(self: *WindowManager, title: [*c]const u8, width: c_int, height: c_int, renderTexId: TexId, xPos: c_int, yPos: c_int, resizeTex: bool, linkedTexIds: []const TexId) !void {
         const props = self.windowProps;
         const flags = sdl.SDL_WINDOW_VULKAN | sdl.SDL_WINDOW_RESIZABLE | sdl.SDL_WINDOW_HIDDEN;
         _ = sdl.SDL_SetNumberProperty(props, sdl.SDL_PROP_WINDOW_CREATE_FLAGS_NUMBER, @intCast(flags));
@@ -68,7 +68,7 @@ pub const WindowManager = struct {
         _ = sdl.SDL_SetNumberProperty(props, sdl.SDL_PROP_WINDOW_CREATE_HEIGHT_NUMBER, @intCast(height));
         _ = sdl.SDL_SetStringProperty(props, sdl.SDL_PROP_WINDOW_CREATE_TITLE_STRING, title);
 
-        const window = try Window.init(props, renderTexId, vk.VkExtent2D{ .width = @intCast(width), .height = @intCast(height) }, resizeTex);
+        const window = try Window.init(props, renderTexId, vk.VkExtent2D{ .width = @intCast(width), .height = @intCast(height) }, resizeTex, linkedTexIds);
         window.setOpacity(0.0);
 
         //window.setRelativeMouseMode(true);

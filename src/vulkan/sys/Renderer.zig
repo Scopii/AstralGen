@@ -70,15 +70,14 @@ pub const Renderer = struct {
                 break;
             }
         }
-        var texIds: [rc.MAX_WINDOWS]?TextureMeta.TexId = .{null} ** rc.MAX_WINDOWS;
 
-        for (tempWindows, 0..) |window, i| {
+        for (tempWindows) |window| {
             switch (window.state) {
                 .needCreation => {
                     try self.swapMan.createSwapchain(window, self.renderGraph.cmdMan.cmdPool);
                     try self.imguiMan.addWindowContext(window.id.val, window.handle);
                 },
-                .needUpdate => try self.swapMan.recreateSwapchain(window.id, window.extent,  self.renderGraph.cmdMan.cmdPool),
+                .needUpdate => try self.swapMan.recreateSwapchain(window.id, window.extent, self.renderGraph.cmdMan.cmdPool),
                 .needDelete => {
                     self.swapMan.removeSwapchains(window.id);
                     self.imguiMan.removeWindowContext(window.id.val);
@@ -86,29 +85,30 @@ pub const Renderer = struct {
                 .needActive, .needInactive => self.swapMan.changeState(window.id, if (window.state == .needActive) true else false),
                 else => std.debug.print("Warning: Window State {s} cant be handled in Renderer\n", .{@tagName(window.state)}),
             }
-            if (window.resizeTex == true) texIds[i] = window.renderTexId;
-        }
 
-        if (rc.RENDER_TEX_AUTO_RESIZE == true) {
-            for (0..texIds.len) |i| {
-                if (texIds[i] == null) break;
-                const texId = texIds[i].?;
-                try self.updateRenderTexture(texId);
+            if (window.resizeTex == true and rc.RENDER_TEX_AUTO_RESIZE and window.state != .needDelete) {
+                try self.updateRenderTexture(window.renderTexId);
+
+                for (0..window.linkedTexIds.len) |i| {
+                    if (window.linkedTexIds[i] == null) break;
+                    const texId = window.linkedTexIds[i].?;
+                    try self.updateRenderTexture(texId);
+                }
             }
         }
     }
 
     pub fn updateRenderTexture(self: *Renderer, texId: TextureMeta.TexId) !void {
         const texMeta = try self.resMan.getTextureMeta(texId);
-        const tex = try self.resMan.getTexture(texId, 0);
+        const oldMeta = texMeta.*;
 
+        const tex = try self.resMan.getTexture(texId, 0); // warning! only checks flightId 0!
         const old = tex.extent;
-        const oldType = texMeta.texType;
-        const new = self.swapMan.getMaxRenderExtent(texId);
+        const new = self.swapMan.getMaxExtent(texId);
 
         if (new.width != old.width or new.height != old.height) {
             try self.resMan.queueTextureKills(texId);
-            try self.resMan.createTexture(.{ .id = texId, .width = new.width, .height = new.height, .depth = 1, .typ = oldType, .mem = .Gpu, .update = .PerFrame });
+            try self.resMan.createTexture(.{ .id = texId, .width = new.width, .height = new.height, .depth = 1, .typ = oldMeta.texType, .mem = oldMeta.mem, .update = oldMeta.update });
             std.debug.print("Render Texture (ID {}) recreated {}x{} to {}x{}\n", .{ texId.val, old.width, old.height, new.width, new.height });
         }
     }

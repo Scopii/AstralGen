@@ -33,6 +33,7 @@ pub const MAX_IN_FLIGHT: u8 = 2; // (Frames)
 pub const DESIRED_SWAPCHAIN_IMAGES: u8 = 3;
 pub const DISPLAY_MODE = vk.VK_PRESENT_MODE_IMMEDIATE_KHR;
 pub const MAX_WINDOWS: u8 = 8;
+pub const LINKED_TEX_MAX = 3;
 pub const RENDER_TEX_AUTO_RESIZE = true;
 pub const RENDER_TEX_STRETCH = true; // Ignored on AUTO_RESIZE
 

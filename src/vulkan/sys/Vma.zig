@@ -125,6 +125,7 @@ pub const Vma = struct {
         return .{
             .texType = texInf.typ,
             .update = texInf.update,
+            .mem = texInf.mem,
             .viewType = vk.VK_IMAGE_VIEW_TYPE_2D,
             .format = vhF.getImageFormat(texInf.typ),
             .subRange = vhF.createSubresourceRange(vhF.getImageAspectFlags(texInf.typ), 0, 1, 0, 1),
