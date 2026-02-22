@@ -50,7 +50,7 @@ pub const ResourceMan = struct {
     pub fn update(self: *ResourceMan, flightId: u8, frame: u64) !void {
         if (rc.GPU_READBACK == true) try self.printReadbackBuffer(rc.readbackSB.id, vhT.ReadbackData, flightId);
         try self.cleanupResources(frame);
-        try self.descMan.updateDescriptors();
+        try self.descMan.updateDescriptors(flightId);
     }
 
     pub fn getBufferDescriptor(self: *ResourceMan, bufId: BufferMeta.BufId, flightId: u8) !u32 {
@@ -80,7 +80,7 @@ pub const ResourceMan = struct {
         const bufMeta = try self.getBufferMeta(bufId);
         const realIndex = switch (bufMeta.update) {
             .Overwrite => 0,
-            .PerFrame => if (bufMeta.typ == .Indirect) flightId else bufMeta.updateId,
+            .PerFrame => if (bufMeta.typ == .Indirect) flightId else bufMeta.updateId, // Indirect written by GPU so always current flightId.
         };
         return try self.resStorages[realIndex].getBuffer(bufId);
     }
@@ -97,7 +97,7 @@ pub const ResourceMan = struct {
         for (0..bufInf.update.getCount()) |i| {
             var buf = try self.vma.allocDefinedBuffer(bufInf);
             buf.descIndex = try self.descMan.getFreeDescriptorIndex();
-            try self.descMan.queueBufferDescriptor(buf.gpuAddress, buf.size, buf.descIndex, bufInf.typ);
+            try self.descMan.queueBufferDescriptor(buf.gpuAddress, buf.size, buf.descIndex, bufInf.typ, @intCast(i));
 
             std.debug.print("Buffer created! (ID {}) (FlightId {}) ({}) ({}) (Descriptor {}) ", .{ bufInf.id.val, i, bufInf.typ, bufInf.update, buf.descIndex });
             self.vma.printMemoryInfo(buf.allocation);
@@ -113,7 +113,7 @@ pub const ResourceMan = struct {
         for (0..texInf.update.getCount()) |i| {
             var tex = try self.vma.allocDefinedTexture(texInf);
             tex.descIndex = try self.descMan.getFreeDescriptorIndex();
-            try self.descMan.queueTextureDescriptor(&texMeta, tex.img, tex.descIndex);
+            try self.descMan.queueTextureDescriptor(&texMeta, tex.img, tex.descIndex, @intCast(i));
 
             std.debug.print("Texture created! (ID {}) (FlightId {}) ({}) ({}) (Descriptor {}) ", .{ texInf.id.val, i, texInf.typ, texInf.update, tex.descIndex });
             self.vma.printMemoryInfo(tex.allocation);
@@ -164,7 +164,6 @@ pub const ResourceMan = struct {
 
                     var newBuf = try self.vma.allocDefinedBuffer(newInf);
                     newBuf.descIndex = buf.descIndex;
-                    try self.descMan.queueBufferDescriptor(newBuf.gpuAddress, newBuf.size, newBuf.descIndex, newInf.typ);
 
                     std.debug.print("Buffer resized! (ID {}) (Container {}) ({}) ({}) (Descriptor {}) ", .{ newInf.id.val, realFlightId, newInf.typ, newInf.update, newBuf.descIndex });
                     std.debug.print("Length {} ({} Bytes) -> Length {} ({} Bytes) ", .{ bufInf.len, buf.size, newInf.len, newBuf.size });
@@ -195,7 +194,7 @@ pub const ResourceMan = struct {
         const newCount: u32 = @intCast(bytes.len / bufInf.elementSize);
         if (buf.curCount != newCount) {
             buf.curCount = newCount;
-            try self.descMan.queueBufferDescriptor(buf.gpuAddress, bytes.len, buf.descIndex, bufMeta.typ);
+            try self.descMan.queueBufferDescriptor(buf.gpuAddress, bytes.len, buf.descIndex, bufMeta.typ, flightId);
             if (rc.DESCRIPTOR_DEBUG == true) std.debug.print("Descriptor update queued! (Index {}) (Buffer ID {})\n", .{ buf.descIndex, bufInf.id.val });
         }
 
