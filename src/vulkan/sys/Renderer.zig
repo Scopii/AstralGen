@@ -118,9 +118,8 @@ pub const Renderer = struct {
     }
 
     pub fn draw(self: *Renderer, frameData: FrameData) !void {
-        try self.resMan.update(self.scheduler.flightId, self.scheduler.totalFrames + 1); // + 1?
-
         const flightId = try self.scheduler.beginFrame();
+        try self.resMan.update(flightId, self.scheduler.totalFrames + 1);
         const targets = try self.swapMan.getUpdatedTargets(flightId);
 
         for (targets) |swapchain| {
@@ -161,7 +160,7 @@ pub const Renderer = struct {
     }
 
     pub fn updateBuffer(self: *Renderer, bufInf: BufferMeta.BufInf, data: anytype) !void {
-        try self.resMan.updateBuffer(bufInf, data, @intCast(self.scheduler.totalFrames % @as(u64, rc.MAX_IN_FLIGHT)));
+        try self.resMan.updateBuffer(bufInf, data, self.scheduler.flightId);
     }
 
     pub fn createTexture(self: *Renderer, texInfos: []const TextureMeta.TexInf) !void {
