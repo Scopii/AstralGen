@@ -14,6 +14,7 @@ const sc = @import("shaderConfig.zig");
 pub const VALIDATION = true;
 pub const GPU_VALIDATION = false;
 pub const BEST_PRACTICES = false;
+pub const ROBUST_VALIDATION = false;
 
 // Normal Profiling
 pub const GPU_PROFILING = false;

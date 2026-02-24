@@ -43,3 +43,5 @@ pub var vkCmdSetFragmentShadingRateKHR: c.PFN_vkCmdSetFragmentShadingRateKHR = n
 
 // Debug
 pub var vkSetDebugUtilsObjectNameEXT: c.PFN_vkSetDebugUtilsObjectNameEXT = null;
+pub var vkCmdBeginDebugUtilsLabelEXT: c.PFN_vkCmdBeginDebugUtilsLabelEXT = null;
+pub var vkCmdEndDebugUtilsLabelEXT: c.PFN_vkCmdEndDebugUtilsLabelEXT = null;

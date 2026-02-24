@@ -45,6 +45,21 @@ pub const Cmd = struct {
         if (self.queryPool) |qPool| vk.vkDestroyQueryPool(gpi, qPool, null);
     }
 
+    pub fn beginLabel(self: *const Cmd, label: [:0]const u8, color: ?[4]f32) void {
+        if (rc.VALIDATION == true) {
+            const labelInf = vk.VkDebugUtilsLabelEXT{
+                .sType = vk.VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT,
+                .pLabelName = label.ptr,
+                .color = if (color) |col| col else [4]f32{ 1.0, 1.0, 1.0, 1.0 },
+            };
+            vkFn.vkCmdBeginDebugUtilsLabelEXT.?(self.handle, &labelInf);
+        }
+    }
+
+    pub fn endLabel(self: *const Cmd) void {
+        if (rc.VALIDATION == true) vkFn.vkCmdEndDebugUtilsLabelEXT.?(self.handle);
+    }
+
     pub fn enableQuerys(self: *Cmd, gpi: vk.VkDevice) !void {
         if (self.queryPool == null) {
             const poolInfo = vk.VkQueryPoolCreateInfo{
@@ -94,7 +109,10 @@ pub const Cmd = struct {
                 return;
             }
             const idx = self.queryCounter;
-            if (idx >= rc.GPU_QUERYS) return; // Safety check
+            if (idx >= rc.GPU_QUERYS) {
+                std.debug.print("GPU Querys full\n", .{});
+                return;
+            }
 
             self.writeTimestamp(qPool, @intFromEnum(pipeStage), idx);
             self.querys.upsert(queryId, .{ .name = name, .startIndex = idx });
@@ -110,7 +128,10 @@ pub const Cmd = struct {
             }
 
             const idx = self.queryCounter;
-            if (idx >= rc.GPU_QUERYS) return; // Safety check
+            if (idx >= rc.GPU_QUERYS) {
+                std.debug.print("GPU Querys full\n", .{});
+                return;
+            }
 
             self.writeTimestamp(qPool, @intFromEnum(pipeStage), idx);
             const query = self.querys.getPtrByKey(queryId);

@@ -50,6 +50,7 @@ pub fn createInstance(alloc: Allocator) !vk.VkInstance {
     if (rc.VALIDATION) {
         try extensions.append("VK_EXT_debug_utils");
         try layers.append("VK_LAYER_KHRONOS_validation");
+        //try layers.append("VK_EXT_layer_settings");
     }
     std.debug.print("Vulkan Validation: {}\n", .{rc.VALIDATION});
 
@@ -80,6 +81,27 @@ pub fn createInstance(alloc: Allocator) !vk.VkInstance {
         .pDisabledValidationFeatures = null,
     };
 
+    // // Layer settings (equivalent to vkconfig JSON, chains into instanceInf.pNext)
+    // const layerName: [*c]const u8 = "VK_LAYER_KHRONOS_validation";
+    // const settingNames = [_][*c]const u8{
+    //     "enables", // fine-grained enables
+    //     "gpuav_enable", // GPU-AV on/off
+    //     "gpuav_descriptor_checks",
+    //     "printf_enable",
+    // };
+    // const enableVal: [*c]const u8 = if (rc.GPU_VALIDATION) "VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT" else "";
+    // // VkLayerSettingEXT per setting...
+    // var layerSettings: [4]vk.VkLayerSettingEXT = .{
+    //     .{ .pLayerName = layerName, .pSettingName = settingNames[0], .type = vk.VK_LAYER_SETTING_TYPE_STRING_EXT, .valueCount = 1, .pValues = &enableVal },
+    //     // ... etc
+    // };
+    // var layerSettingsInf = vk.VkLayerSettingsCreateInfoEXT{
+    //     .sType = vk.VK_STRUCTURE_TYPE_LAYER_SETTINGS_CREATE_INFO_EXT,
+    //     .pNext = if (rc.GPU_VALIDATION or rc.BEST_PRACTICES) @ptrCast(&extraValidationExtensions) else null, // chain after existing
+    //     .settingCount = layerSettings.len,
+    //     .pSettings = &layerSettings,
+    // };
+
     const appInf = vk.VkApplicationInfo{
         .sType = vk.VK_STRUCTURE_TYPE_APPLICATION_INFO,
         .pNext = null,
@@ -94,7 +116,7 @@ pub fn createInstance(alloc: Allocator) !vk.VkInstance {
 
     const instanceInf = vk.VkInstanceCreateInfo{
         .sType = vk.VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
-        .pNext = if (rc.GPU_VALIDATION or rc.BEST_PRACTICES) @ptrCast(&extraValidationExtensions) else null,
+        .pNext = if (rc.GPU_VALIDATION or rc.BEST_PRACTICES) @ptrCast(&extraValidationExtensions) else null, // layerSettingsInf
         .flags = 0,
         .pApplicationInfo = &appInf,
         .enabledLayerCount = @intCast(layers.items.len),
@@ -216,6 +238,11 @@ fn createGPI(alloc: Allocator, gpu: vk.VkPhysicalDevice, family: u32) !vk.VkDevi
 
     var fullSup = true;
 
+    if (rc.ROBUST_VALIDATION == true) {
+        fullSup &= checkFeature("Robust Buffer Access 2", sup.robustness2.robustBufferAccess2, &need.robustness2.robustBufferAccess2);
+        fullSup &= checkFeature("Robust Image Access 2", sup.robustness2.robustImageAccess2, &need.robustness2.robustImageAccess2);
+    }
+
     // Untyped Ptr
     fullSup &= checkFeature("Descriptor Untyped Ptr", sup.descUntyped.shaderUntypedPointers, &need.descUntyped.shaderUntypedPointers);
 
@@ -300,7 +327,10 @@ fn createGPI(alloc: Allocator, gpu: vk.VkPhysicalDevice, family: u32) !vk.VkDevi
         "VK_KHR_maintenance5",
         "VK_EXT_vertex_input_dynamic_state",
         "VK_EXT_descriptor_buffer", // Needed for GPU-AV for some reason
+        "VK_EXT_robustness2",
     };
+
+    const usedGpuExtensions = if (rc.ROBUST_VALIDATION == true) gpuExtensions.len else gpuExtensions.len - 1;
 
     const createInf = vk.VkDeviceCreateInfo{
         .sType = vk.VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
@@ -308,7 +338,7 @@ fn createGPI(alloc: Allocator, gpu: vk.VkPhysicalDevice, family: u32) !vk.VkDevi
         .pQueueCreateInfos = queueInfos.items.ptr,
         .queueCreateInfoCount = @intCast(queueInfos.items.len),
         .pEnabledFeatures = null,
-        .enabledExtensionCount = gpuExtensions.len,
+        .enabledExtensionCount = usedGpuExtensions,
         .ppEnabledExtensionNames = &gpuExtensions,
         .enabledLayerCount = 0,
         .ppEnabledLayerNames = null,
@@ -356,7 +386,11 @@ fn createGPI(alloc: Allocator, gpu: vk.VkPhysicalDevice, family: u32) !vk.VkDevi
     try loadVkProc(gpi, &vkFn.vkCmdSetFragmentShadingRateKHR, "vkCmdSetFragmentShadingRateKHR");
 
     // Debug
-    if (rc.VALIDATION == true) try loadVkProc(gpi, &vkFn.vkSetDebugUtilsObjectNameEXT, "vkSetDebugUtilsObjectNameEXT");
+    if (rc.VALIDATION == true) {
+        try loadVkProc(gpi, &vkFn.vkSetDebugUtilsObjectNameEXT, "vkSetDebugUtilsObjectNameEXT");
+        try loadVkProc(gpi, &vkFn.vkCmdBeginDebugUtilsLabelEXT, "vkCmdBeginDebugUtilsLabelEXT");
+        try loadVkProc(gpi, &vkFn.vkCmdEndDebugUtilsLabelEXT, "vkCmdEndDebugUtilsLabelEXT");
+    }
 
     return gpi;
 }
@@ -381,6 +415,7 @@ pub fn loadVkProc(handle: anytype, comptime functionPtr: anytype, comptime name:
 }
 
 const DeviceFeatures = struct {
+    robustness2: vk.VkPhysicalDeviceRobustness2FeaturesEXT,
     descUntyped: vk.VkPhysicalDeviceShaderUntypedPointersFeaturesKHR,
     descHeaps: vk.VkPhysicalDeviceDescriptorHeapFeaturesEXT,
     dynState3: vk.VkPhysicalDeviceExtendedDynamicState3FeaturesEXT,
@@ -395,8 +430,11 @@ const DeviceFeatures = struct {
     devFeatures2: vk.VkPhysicalDeviceFeatures2,
 
     pub fn init(self: *DeviceFeatures, gpu: ?vk.VkPhysicalDevice) void {
+        self.robustness2.sType = vk.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ROBUSTNESS_2_FEATURES_EXT;
+        self.robustness2.pNext = null;
+
         self.descUntyped.sType = vk.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_UNTYPED_POINTERS_FEATURES_KHR;
-        self.descUntyped.pNext = null;
+        self.descUntyped.pNext = &self.robustness2;
 
         self.descHeaps.sType = vk.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_HEAP_FEATURES_EXT;
         self.descHeaps.pNext = &self.descUntyped;
