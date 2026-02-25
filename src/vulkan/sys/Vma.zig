@@ -172,15 +172,15 @@ pub const Vma = struct {
         };
     }
 
-    pub fn freeRawBuffer(self: *const Vma, buffer: vk.VkBuffer, allocation: vk.VmaAllocation) void {
+    pub fn freeBufferRaw(self: *const Vma, buffer: vk.VkBuffer, allocation: vk.VmaAllocation) void {
         vk.vmaDestroyBuffer(self.handle, buffer, allocation);
     }
 
-    pub fn freeBufferBase(self: *const Vma, bufBase: *const Buffer) void {
+    pub fn freeBuffer(self: *const Vma, bufBase: *const Buffer) void {
         vk.vmaDestroyBuffer(self.handle, bufBase.handle, bufBase.allocation);
     }
 
-    pub fn freeTextureBase(self: *const Vma, texBase: *const Texture) void {
+    pub fn freeTexture(self: *const Vma, texBase: *const Texture) void {
         vk.vkDestroyImageView(self.gpi, texBase.view, null);
         vk.vmaDestroyImage(self.handle, texBase.img, texBase.allocation);
     }

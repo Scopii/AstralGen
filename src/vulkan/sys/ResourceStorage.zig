@@ -41,13 +41,13 @@ pub const ResourceStorage = struct {
     }
 
     pub fn deinit(self: *ResourceStorage, vma: *const Vma) void {
-        vma.freeRawBuffer(self.stagingBuffer.handle, self.stagingBuffer.allocation);
+        vma.freeBufferRaw(self.stagingBuffer.handle, self.stagingBuffer.allocation);
         self.transfers.deinit();
 
-        for (self.buffers.getItems()) |*bufBase| vma.freeBufferBase(bufBase);
-        for (self.textures.getItems()) |*texBase| vma.freeTextureBase(texBase);
-        for (self.bufZombies.constSlice()) |*bufZombie| vma.freeBufferBase(bufZombie);
-        for (self.texZombies.constSlice()) |*texZombie| vma.freeTextureBase(texZombie);
+        for (self.buffers.getItems()) |*bufBase| vma.freeBuffer(bufBase);
+        for (self.textures.getItems()) |*texBase| vma.freeTexture(texBase);
+        for (self.bufZombies.constSlice()) |*bufZombie| vma.freeBuffer(bufZombie);
+        for (self.texZombies.constSlice()) |*texZombie| vma.freeTexture(texZombie);
     }
 
     pub fn resetTransfers(self: *ResourceStorage) void {

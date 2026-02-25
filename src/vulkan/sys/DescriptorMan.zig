@@ -21,9 +21,7 @@ pub const DescriptorMan = struct {
     driverReservedSize: u64,
     descStride: u64,
     startOffset: u64,
-    resourceCount: u32 = 0,
 
-    freedDescIndices: FixedList(u32, rc.RESOURCE_MAX * rc.MAX_IN_FLIGHT) = .{},
     descStorages: [rc.MAX_IN_FLIGHT]DescriptorStorage,
 
     pub fn init(vma: Vma, gpi: vk.VkDevice, gpu: vk.VkPhysicalDevice) !DescriptorMan {
@@ -37,7 +35,10 @@ pub const DescriptorMan = struct {
         const heapSize = rc.MAX_IN_FLIGHT * descStride * (rc.RESOURCE_MAX);
 
         var descStorages: [rc.MAX_IN_FLIGHT]DescriptorStorage = undefined;
-        for (0..rc.MAX_IN_FLIGHT) |i| descStorages[i] = .{};
+        for (0..rc.MAX_IN_FLIGHT) |i| {
+            const flight: u32 = @intCast(i);
+            descStorages[i] = DescriptorStorage.init(flight * rc.RESOURCE_MAX);
+        }
 
         return .{
             .gpi = gpi,
@@ -50,28 +51,15 @@ pub const DescriptorMan = struct {
     }
 
     pub fn deinit(self: *DescriptorMan, vma: *const Vma) void {
-        vma.freeRawBuffer(self.descHeap.handle, self.descHeap.allocation);
+        vma.freeBufferRaw(self.descHeap.handle, self.descHeap.allocation);
     }
 
-    pub fn getFreeDescriptorIndex(self: *DescriptorMan) !u32 {
-        if (self.freedDescIndices.len > 0) {
-            const descIndex = self.freedDescIndices.pop();
-            if (descIndex) |index| return index else return error.CouldNotPopDescriptorIndex;
-        }
-        if (self.resourceCount >= self.freedDescIndices.buffer.len) return error.DescriptorHeapFull;
-
-        const descIndex = self.resourceCount;
-        self.resourceCount += 1;
-        return descIndex;
+    pub fn getFreeDescriptorIndex(self: *DescriptorMan, flightId: u8) !u32 {
+        return try self.descStorages[flightId].getFreeDescriptorIndex();
     }
 
-    pub fn freeDescriptor(self: *DescriptorMan, descIndex: u32) void {
-        if (descIndex >= self.resourceCount) {
-            std.debug.print("Descriptor Index {} is unused and cant be freed\n", .{descIndex});
-        }
-        self.freedDescIndices.append(descIndex) catch |err| {
-            std.debug.print("Descriptor Append Failed {}\n", .{err});
-        };
+    pub fn freeDescriptor(self: *DescriptorMan, descIndex: u32, flightId: u8) void {
+        self.descStorages[flightId].freeDescriptor(descIndex);
     }
 
     pub fn queueTextureDescriptor(self: *DescriptorMan, texMeta: *const TextureMeta, img: vk.VkImage, descIndex: u32, flightId: u8) !void {

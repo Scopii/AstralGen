@@ -14,12 +14,41 @@ const Vma = @import("Vma.zig").Vma;
 const std = @import("std");
 
 pub const DescriptorStorage = struct {
-    queuedDescInfos: FixedList(vk.VkResourceDescriptorInfoEXT, rc.RESOURCE_MAX ) = .{},
-    queuedHostRanges: FixedList(vk.VkHostAddressRangeEXT, rc.RESOURCE_MAX ) = .{},
+    queuedDescInfos: FixedList(vk.VkResourceDescriptorInfoEXT, rc.RESOURCE_MAX) = .{},
+    queuedHostRanges: FixedList(vk.VkHostAddressRangeEXT, rc.RESOURCE_MAX) = .{},
 
-    imgViewStorage: FixedList(vk.VkImageViewCreateInfo, rc.TEX_MAX ) = .{},
-    imgDescStorage: FixedList(vk.VkImageDescriptorInfoEXT, rc.TEX_MAX ) = .{},
-    devRangeStorage: FixedList(vk.VkDeviceAddressRangeEXT, rc.BUF_MAX ) = .{},
+    imgViewStorage: FixedList(vk.VkImageViewCreateInfo, rc.TEX_MAX) = .{},
+    imgDescStorage: FixedList(vk.VkImageDescriptorInfoEXT, rc.TEX_MAX) = .{},
+    devRangeStorage: FixedList(vk.VkDeviceAddressRangeEXT, rc.BUF_MAX) = .{},
+
+    freedDescIndices: FixedList(u32, rc.RESOURCE_MAX) = .{},
+    descCount: u32 = 0,
+    startIndex: u32,
+
+    pub fn init(startIndex: u32) DescriptorStorage {
+        return .{ .startIndex = startIndex };
+    }
+
+    pub fn getFreeDescriptorIndex(self: *DescriptorStorage) !u32 {
+        if (self.freedDescIndices.len > 0) {
+            const descIndex = self.freedDescIndices.pop();
+            if (descIndex) |index| return index else return error.CouldNotPopDescriptorIndex;
+        }
+        if (self.descCount >= self.freedDescIndices.buffer.len) return error.DescriptorHeapFull;
+
+        const descIndex = self.descCount;
+        self.descCount += 1;
+        return descIndex + self.startIndex;
+    }
+
+    pub fn freeDescriptor(self: *DescriptorStorage, descIndex: u32) void {
+        if (descIndex >= self.descCount) {
+            std.debug.print("Descriptor Index {} is unused and cant be freed\n", .{descIndex});
+        }
+        self.freedDescIndices.append(descIndex) catch |err| {
+            std.debug.print("Descriptor Append Failed {}\n", .{err});
+        };
+    }
 
     pub fn queueTextureDescriptor(self: *DescriptorStorage, texMeta: *const TextureMeta, img: vk.VkImage, hostAddressRange: vk.VkHostAddressRangeEXT) !void {
         const imgViewPtr = try self.imgViewStorage.appendReturnPtr(
@@ -45,7 +74,7 @@ pub const DescriptorStorage = struct {
         try self.queuedHostRanges.append(hostAddressRange);
     }
 
-    pub fn queueBufferDescriptor(self: *DescriptorStorage, gpuAddress: u64, size: u64, bufTyp: vhE.BufferType, hostAddressRange: vk.VkHostAddressRangeEXT ) !void {
+    pub fn queueBufferDescriptor(self: *DescriptorStorage, gpuAddress: u64, size: u64, bufTyp: vhE.BufferType, hostAddressRange: vk.VkHostAddressRangeEXT) !void {
         const devRangePtr = try self.devRangeStorage.appendReturnPtr(
             vk.VkDeviceAddressRangeEXT{
                 .address = gpuAddress,

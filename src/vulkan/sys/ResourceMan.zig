@@ -96,7 +96,7 @@ pub const ResourceMan = struct {
     pub fn createBuffer(self: *ResourceMan, bufInf: BufferMeta.BufInf) !void {
         for (0..bufInf.update.getCount()) |i| {
             var buf = try self.vma.allocDefinedBuffer(bufInf);
-            buf.descIndex = try self.descMan.getFreeDescriptorIndex();
+            buf.descIndex = try self.descMan.getFreeDescriptorIndex(@intCast(i));
             try self.descMan.queueBufferDescriptor(buf.gpuAddress, buf.size, buf.descIndex, bufInf.typ, @intCast(i));
 
             std.debug.print("Buffer created! (ID {}) (FlightId {}) ({}) ({}) (Descriptor {}) ", .{ bufInf.id.val, i, bufInf.typ, bufInf.update, buf.descIndex });
@@ -112,7 +112,7 @@ pub const ResourceMan = struct {
 
         for (0..texInf.update.getCount()) |i| {
             var tex = try self.vma.allocDefinedTexture(texInf);
-            tex.descIndex = try self.descMan.getFreeDescriptorIndex();
+            tex.descIndex = try self.descMan.getFreeDescriptorIndex(@intCast(i));
             try self.descMan.queueTextureDescriptor(&texMeta, tex.img, tex.descIndex, @intCast(i));
 
             std.debug.print("Texture created! (ID {}) (FlightId {}) ({}) ({}) (Descriptor {}) ", .{ texInf.id.val, i, texInf.typ, texInf.update, tex.descIndex });
@@ -226,15 +226,20 @@ pub const ResourceMan = struct {
 
         const bufZombies = resStorage.getBufZombies();
         if (bufZombies.len > 0) {
-            for (bufZombies) |*bufZombie| self.destroyBuffer(bufZombie);
-
+            for (bufZombies) |*bufZombie| {
+                if (bufZombie.descIndex != std.math.maxInt(u32)) self.descMan.freeDescriptor(bufZombie.descIndex, @intCast(flightIndex));
+                self.vma.freeBuffer(bufZombie);
+            }
             if (rc.RESOURCE_DEBUG == true) std.debug.print("Buffers destroyed ({}) (in Frame {}) (FlightId {})\n", .{ bufZombies.len, curFrame, flightIndex });
         }
         resStorage.clearBufZombies();
 
         const texZombies = resStorage.getTexZombies();
         if (texZombies.len > 0) {
-            for (texZombies) |*texZombie| self.destroyTexture(texZombie);
+            for (texZombies) |*texZombie| {
+                if (texZombie.descIndex != std.math.maxInt(u32)) self.descMan.freeDescriptor(texZombie.descIndex, @intCast(flightIndex));
+                self.vma.freeTexture(texZombie);
+            }
             if (rc.RESOURCE_DEBUG == true) std.debug.print("Textures destroyed ({}) (in Frame {}) (FlightId {})\n", .{ texZombies.len, curFrame, flightIndex });
         }
         resStorage.clearTexZombies();
@@ -243,16 +248,6 @@ pub const ResourceMan = struct {
             const end = std.time.microTimestamp();
             std.debug.print("Cleanup Zombie Resources {d:.3} ms\n", .{@as(f64, @floatFromInt(end - start)) / 1_000.0});
         }
-    }
-
-    fn destroyTexture(self: *ResourceMan, texBase: *const Texture) void {
-        self.vma.freeTextureBase(texBase);
-        self.descMan.freeDescriptor(texBase.descIndex);
-    }
-
-    fn destroyBuffer(self: *ResourceMan, bufBase: *const Buffer) void {
-        self.vma.freeBufferBase(bufBase);
-        if (bufBase.descIndex != std.math.maxInt(u32)) self.descMan.freeDescriptor(bufBase.descIndex);
     }
 };
 
