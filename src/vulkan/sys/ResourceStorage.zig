@@ -122,7 +122,8 @@ pub const ResourceStorage = struct {
     }
 
     fn freeDescriptor(self: *ResourceStorage, descIndex: u32) void {
-        if (descIndex >= self.descCount) {
+        const localIndex = descIndex - self.startIndex;
+        if (localIndex >= self.descCount) {
             std.debug.print("Descriptor Index {} is unused and cant be freed\n", .{descIndex});
         }
         self.freedDescIndices.append(descIndex) catch |err| {
@@ -196,7 +197,7 @@ pub const ResourceStorage = struct {
         const bufZombies = self.bufZombies.constSlice();
         if (bufZombies.len > 0) {
             for (bufZombies) |*bufZombie| {
-                if (bufZombie.descIndex != std.math.maxInt(u32)) self.freeDescriptor(bufZombie.descIndex);
+                self.freeDescriptor(bufZombie.descIndex);
                 vma.freeBuffer(bufZombie);
             }
             self.bufZombies.clear();
@@ -208,7 +209,7 @@ pub const ResourceStorage = struct {
         const texZombies = self.texZombies.constSlice();
         if (texZombies.len > 0) {
             for (texZombies) |*texZombie| {
-                if (texZombie.descIndex != std.math.maxInt(u32)) self.freeDescriptor(texZombie.descIndex);
+                self.freeDescriptor(texZombie.descIndex);
                 vma.freeTexture(texZombie);
             }
             self.texZombies.clear();

@@ -188,16 +188,15 @@ pub const ResourceMan = struct {
                     newInf.len = @intCast((bytes.len + bufInf.elementSize - 1) / bufInf.elementSize);
 
                     var newBuf = try self.vma.allocDefinedBuffer(newInf);
-                    newBuf.descIndex = buf.descIndex;
-
+                    newBuf.descIndex = try self.resStorages[realFlightId].getFreeDescriptorIndex();
+                    
                     std.debug.print("Buffer resized! (ID {}) (Container {}) ({}) ({}) (Descriptor {}) ", .{ newInf.id.val, realFlightId, newInf.typ, newInf.update, newBuf.descIndex });
                     std.debug.print("Length {} ({} Bytes) -> Length {} ({} Bytes) ", .{ bufInf.len, buf.size, newInf.len, newBuf.size });
                     self.vma.printMemoryInfo(newBuf.allocation);
 
-                    buf.descIndex = std.math.maxInt(u32);
                     try self.resStorages[realFlightId].queueBufferKill(newInf.id);
-
                     self.resStorages[realFlightId].addBuffer(newInf.id, newBuf);
+
                     self.bufMetas.upsert(newInf.id.val, self.vma.createBufferMeta(newInf));
                     buf = try self.resStorages[realFlightId].getBuffer(bufInf.id); // Refresh
                 }
