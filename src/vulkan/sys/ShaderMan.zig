@@ -1,6 +1,5 @@
 const ShaderId = @import("../../core/ShaderCompiler.zig").ShaderInf.ShaderId;
 const LoadedShader = @import("../../core/ShaderCompiler.zig").LoadedShader;
-const DescriptorMan = @import("../sys/DescriptorMan.zig").DescriptorMan;
 const LinkedMap = @import("../../structures/LinkedMap.zig").LinkedMap;
 const shaderCon = @import("../../configs/shaderConfig.zig");
 const ResourceMan = @import("ResourceMan.zig").ResourceMan;
@@ -28,9 +27,9 @@ pub const ShaderMan = struct {
         return self.shaders.isKeyUsed(shaderId);
     }
 
-    pub fn createShaders(self: *ShaderMan, loadedShaders: []const LoadedShader, descMan: *const DescriptorMan) !void {
+    pub fn createShaders(self: *ShaderMan, loadedShaders: []const LoadedShader, resMan: *const ResourceMan) !void {
         for (loadedShaders) |loadedShader| {
-            const shaderObj = try Shader.init(self.gpi, loadedShader, descMan);
+            const shaderObj = try Shader.init(self.gpi, loadedShader, resMan);
             const id = loadedShader.shaderInf.id.val;
             const name = loadedShader.shaderInf.spvFile;
 

@@ -152,7 +152,7 @@ pub const Renderer = struct {
                 break;
             }
         }
-        try self.shaderMan.createShaders(loadedShaders, &self.resMan.descMan);
+        try self.shaderMan.createShaders(loadedShaders, &self.resMan);
     }
 
     pub fn createBuffers(self: *Renderer, bufInfos: []const BufferMeta.BufInf) !void {

@@ -2,7 +2,6 @@ const TextureMeta = @import("../types/res/TextureMeta.zig").TextureMeta;
 const FixedList = @import("../../structures/FixedList.zig").FixedList;
 const LinkedMap = @import("../../structures/LinkedMap.zig").LinkedMap;
 const BufferMeta = @import("../types/res/BufferMeta.zig").BufferMeta;
-const DescriptorMan = @import("DescriptorMan.zig").DescriptorMan;
 const PushData = @import("../types/res/PushData.zig").PushData;
 const Texture = @import("../types/res/Texture.zig").Texture;
 const Buffer = @import("../types/res/Buffer.zig").Buffer;

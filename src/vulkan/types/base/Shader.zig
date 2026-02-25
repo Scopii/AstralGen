@@ -1,5 +1,5 @@
 const LoadedShader = @import("../../../core/ShaderCompiler.zig").LoadedShader;
-const DescriptorMan = @import("../../sys/DescriptorMan.zig").DescriptorMan;
+const ResourceMan = @import("../../sys/ResourceMan.zig").ResourceMan;
 const PushData = @import("../../types/res/PushData.zig").PushData;
 const SpecData = @import("../../help/Types.zig").SpecData;
 const vk = @import("../../../modules/vk.zig").c;
@@ -11,7 +11,7 @@ pub const Shader = struct {
     handle: vk.VkShaderEXT,
     stage: vhE.ShaderStage,
 
-    pub fn init(gpi: vk.VkDevice, shader: LoadedShader, descMan: *const DescriptorMan) !Shader {
+    pub fn init(gpi: vk.VkDevice, shader: LoadedShader, resMan: *const ResourceMan) !Shader {
         const stageEnum = shader.shaderInf.typ;
         const vkStage = vhF.getShaderBit(stageEnum);
 
@@ -55,8 +55,8 @@ pub const Shader = struct {
 
             .sourceData = .{
                 .constantOffset = .{
-                    .heapOffset = @intCast(descMan.startOffset),
-                    .heapArrayStride = @intCast(descMan.descStride),
+                    .heapOffset = @intCast(resMan.startOffset),
+                    .heapArrayStride = @intCast(resMan.descStride),
                     .pEmbeddedSampler = null,
                     .samplerHeapOffset = 0,
                     .samplerHeapArrayStride = 0,

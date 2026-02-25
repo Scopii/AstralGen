@@ -66,7 +66,7 @@ pub const RenderGraph = struct {
         cmd.resetQuerys();
 
         cmd.startQuery(.TopOfPipe, 76, "Descriptor Heap");
-        cmd.bindDescriptorHeap(resMan.descMan.descHeap.gpuAddress, resMan.descMan.descHeap.size, resMan.descMan.driverReservedSize);
+        cmd.bindDescriptorHeap(resMan.descHeap.gpuAddress, resMan.descHeap.size, resMan.driverReservedSize);
         cmd.endQuery(.BotOfPipe, 76);
 
         try self.recordTransfers(cmd, resMan);
