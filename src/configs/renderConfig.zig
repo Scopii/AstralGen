@@ -25,7 +25,7 @@ pub const SWAPCHAIN_PROFILING = false;
 
 // Additional Debug Prints
 pub const BARRIER_DEBUG = false;
-pub const RESOURCE_DEBUG = false;
+pub const RESOURCE_DEBUG = true;
 pub const DESCRIPTOR_DEBUG = true;
 
 // Rendering, Swapchains and Windows

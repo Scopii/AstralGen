@@ -119,7 +119,7 @@ pub const Renderer = struct {
 
     pub fn draw(self: *Renderer, frameData: FrameData) !void {
         const flightId = try self.scheduler.beginFrame();
-        try self.resMan.update(flightId, self.scheduler.totalFrames + 1);
+        try self.resMan.update(flightId, self.scheduler.totalFrames); // +1 frame?
         const targets = try self.swapMan.getUpdatedTargets(flightId);
 
         for (targets) |swapchain| {
