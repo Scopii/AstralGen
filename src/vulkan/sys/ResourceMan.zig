@@ -171,8 +171,7 @@ pub const ResourceMan = struct {
             .PerFrame => flightId,
         };
 
-        var targetStorage = &self.resStorages[realFlightId];
-        var buf = try targetStorage.getBuffer(bufInf.id);
+        var buf = try self.resStorages[realFlightId].getBuffer(bufInf.id);
 
         switch (bufInf.resize) {
             .Block => {
@@ -196,18 +195,18 @@ pub const ResourceMan = struct {
                     self.vma.printMemoryInfo(newBuf.allocation);
 
                     buf.descIndex = std.math.maxInt(u32);
-                    try targetStorage.queueBufferKill(newInf.id);
-                    targetStorage.addBuffer(newInf.id, newBuf);
-                    self.bufMetas.upsert(newInf.id.val, self.vma.createBufferMeta(newInf));
+                    try self.resStorages[realFlightId].queueBufferKill(newInf.id);
 
-                    buf = try targetStorage.getBuffer(bufInf.id); // Refresh
+                    self.resStorages[realFlightId].addBuffer(newInf.id, newBuf);
+                    self.bufMetas.upsert(newInf.id.val, self.vma.createBufferMeta(newInf));
+                    buf = try self.resStorages[realFlightId].getBuffer(bufInf.id); // Refresh
                 }
             },
         }
 
         switch (bufInf.mem) {
             .Gpu => {
-                try targetStorage.stageBufferUpdate(bufInf.id, bytes);
+                try self.resStorages[realFlightId].stageBufferUpdate(bufInf.id, bytes);
             },
             .CpuWrite => {
                 const pMappedData = buf.mappedPtr orelse return error.BufferNotMapped;
