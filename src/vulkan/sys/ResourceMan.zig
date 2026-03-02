@@ -121,92 +121,99 @@ pub const ResourceMan = struct {
         if (self.bufMetas.isKeyUsed(bufId.val) == true) return self.bufMetas.getPtrByKey(bufId.val) else return error.BufferIdNotUsed;
     }
 
+    fn initBuffer(self: *ResourceMan, bufInf: BufferMeta.BufInf, flightId: u8) !*Buffer {
+        var buf = try self.vma.allocDefinedBuffer(bufInf);
+        buf.descIndex = try self.resStorages[flightId].getFreeDescriptorIndex();
+        
+        self.resStorages[flightId].addBuffer(bufInf.id, buf);
+        return try self.resStorages[flightId].getBuffer(bufInf.id);
+    }
+
+    fn initTexture(self: *ResourceMan, texInf: TextureMeta.TexInf, flightId: u8) !*Texture {
+        var tex = try self.vma.allocDefinedTexture(texInf);
+        tex.descIndex = try self.resStorages[flightId].getFreeDescriptorIndex();
+
+        self.resStorages[flightId].addTexture(texInf.id, tex);
+        return try self.resStorages[flightId].getTexture(texInf.id);
+    }
+
     pub fn createBuffer(self: *ResourceMan, bufInf: BufferMeta.BufInf) !void {
         for (0..bufInf.update.getCount()) |i| {
-            var buf = try self.vma.allocDefinedBuffer(bufInf);
-            buf.descIndex = try self.resStorages[i].getFreeDescriptorIndex();
-            try self.resStorages[i].queueBufferDescriptor(buf.gpuAddress, buf.size, bufInf.typ, self.createHostAddressRange(buf.descIndex));
-            self.resStorages[i].addBuffer(bufInf.id, buf);
+            const flightId: u8 = @intCast(i);
+            
+            const buf = try self.initBuffer(bufInf, flightId);
+            const initialBytes = bufInf.len * bufInf.elementSize;
+            try self.updateBufferDescriptor(buf, bufInf.id, bufInf.typ, initialBytes, bufInf.elementSize, flightId);
 
-            std.debug.print("Buffer created! (ID {}) (FlightId {}) ({}) ({}) (Descriptor {}) ", .{ bufInf.id.val, i, bufInf.typ, bufInf.update, buf.descIndex });
+            std.debug.print("Buffer created! (ID {}) (FlightId {}) ({}) ({}) (Descriptor {})\n", .{ bufInf.id.val, i, bufInf.typ, bufInf.update, buf.descIndex });
             self.vma.printMemoryInfo(buf.allocation);
         }
         self.bufMetas.upsert(bufInf.id.val, self.vma.createBufferMeta(bufInf));
     }
 
     pub fn createTexture(self: *ResourceMan, texInf: TextureMeta.TexInf) !void {
-        var texMeta: TextureMeta = self.vma.createTextureMeta(texInf);
-
+        const texMeta: TextureMeta = self.vma.createTextureMeta(texInf);
         for (0..texInf.update.getCount()) |i| {
-            var tex = try self.vma.allocDefinedTexture(texInf);
-            tex.descIndex = try self.resStorages[i].getFreeDescriptorIndex();
-            try self.resStorages[i].queueTextureDescriptor(&texMeta, tex.img, self.createHostAddressRange(tex.descIndex));
-            self.resStorages[i].addTexture(texInf.id, tex);
+            const flightId: u8 = @intCast(i);
+            
+            const tex = try self.initTexture(texInf, flightId);
+            try self.resStorages[flightId].queueTextureDescriptor(&texMeta, tex.img, self.createHostAddressRange(tex.descIndex));
 
-            std.debug.print("Texture created! (ID {}) (FlightId {}) ({}) ({}) (Descriptor {}) ", .{ texInf.id.val, i, texInf.typ, texInf.update, tex.descIndex });
+            std.debug.print("Texture created! (ID {}) (FlightId {}) ({}) ({}) (Descriptor {})\n", .{ texInf.id.val, i, texInf.typ, texInf.update, tex.descIndex });
             self.vma.printMemoryInfo(tex.allocation);
         }
         self.texMetas.upsert(texInf.id.val, texMeta);
     }
 
-    fn getBufferDataPtr(self: *ResourceMan, bufId: BufferMeta.BufId, comptime T: type, flightId: u8) !*T {
-        const buffer = try self.getBuffer(bufId, flightId);
-        if (buffer.mappedPtr) |ptr| {
-            return @as(*T, @ptrCast(@alignCast(ptr)));
-        }
-        return error.BufferNotHostVisible;
-    }
-
-    fn printReadbackBuffer(self: *ResourceMan, bufId: BufferMeta.BufId, comptime T: type, flightId: u8) !void {
-        const readbackPtr = try self.getBufferDataPtr(bufId, T, flightId);
-        std.debug.print("Readback: {}\n", .{readbackPtr.*});
-    }
-
     pub fn updateBuffer(self: *ResourceMan, bufInf: BufferMeta.BufInf, data: anytype, flightId: u8) !void {
         const bytes = try convertToByteSlice(data);
         const bufMeta = try self.getBufferMeta(bufInf.id);
-
         const realFlightId = switch (bufMeta.update) {
             .Overwrite => 0,
             .PerFrame => flightId,
         };
 
         var buf = try self.resStorages[realFlightId].getBuffer(bufInf.id);
+        buf = try self.updateBufferSize(buf, bufInf, bytes.len, realFlightId);
+        try self.uploadBufferData(buf, bufInf, bytes, realFlightId);
+        try self.updateBufferDescriptor(buf, bufInf.id, bufMeta.typ, bytes.len, bufInf.elementSize, flightId);
 
+        switch (bufMeta.update) {
+            .Overwrite => {},
+            .PerFrame => bufMeta.updateId = flightId,
+        }
+    }
+
+    fn updateBufferSize(self: *ResourceMan, oldBuf: *Buffer, bufInf: BufferMeta.BufInf, bytesLength: usize, realFlightId: u8) !*Buffer {
         switch (bufInf.resize) {
             .Block => {
-                if (bytes.len > buf.size) {
-                    std.debug.print("Buffer Update cant fit BufId {}\n", .{bufInf.id});
-                    return error.BufferBaseTooSmallForUpdate;
-                }
+                if (bytesLength > oldBuf.size) return error.BufferBaseTooSmallForUpdate;
+                return oldBuf;
             },
             .Grow, .Fit => {
-                if ((bufInf.resize == .Fit and bytes.len != buf.size) or
-                    (bufInf.resize == .Grow and bytes.len > buf.size))
+                if ((bufInf.resize == .Fit and bytesLength != oldBuf.size) or
+                    (bufInf.resize == .Grow and bytesLength > oldBuf.size))
                 {
                     var newInf = bufInf;
-                    newInf.len = @intCast((bytes.len + bufInf.elementSize - 1) / bufInf.elementSize);
+                    newInf.len = @intCast((bytesLength + bufInf.elementSize - 1) / bufInf.elementSize);
 
-                    var newBuf = try self.vma.allocDefinedBuffer(newInf);
-                    newBuf.descIndex = try self.resStorages[realFlightId].getFreeDescriptorIndex();
-                    
-                    std.debug.print("Buffer resized! (ID {}) (Container {}) ({}) ({}) (Descriptor {}) ", .{ newInf.id.val, realFlightId, newInf.typ, newInf.update, newBuf.descIndex });
-                    std.debug.print("Length {} ({} Bytes) -> Length {} ({} Bytes) ", .{ bufInf.len, buf.size, newInf.len, newBuf.size });
-                    self.vma.printMemoryInfo(newBuf.allocation);
+                    std.debug.print("Buffer resized! (ID {}) (Container {}) ({}) ({})", .{ newInf.id.val, realFlightId, newInf.typ, newInf.update });
+                    std.debug.print(" Length {} ({} Bytes) -> Length {} ({} Bytes) ", .{ bufInf.len, oldBuf.size, newInf.len, bytesLength });
 
                     try self.resStorages[realFlightId].queueBufferKill(newInf.id);
-                    self.resStorages[realFlightId].addBuffer(newInf.id, newBuf);
 
-                    self.bufMetas.upsert(newInf.id.val, self.vma.createBufferMeta(newInf));
-                    buf = try self.resStorages[realFlightId].getBuffer(bufInf.id); // Refresh
+                    const newBuf = try self.initBuffer(newInf, realFlightId);
+                    self.vma.printMemoryInfo(newBuf.allocation);
+                    return newBuf;
                 }
+                return oldBuf;
             },
         }
+    }
 
+    fn uploadBufferData(self: *ResourceMan, buf: *Buffer, bufInf: BufferMeta.BufInf, bytes: []const u8, realFlightId: u8) !void {
         switch (bufInf.mem) {
-            .Gpu => {
-                try self.resStorages[realFlightId].stageBufferUpdate(bufInf.id, bytes);
-            },
+            .Gpu => try self.resStorages[realFlightId].stageBufferUpdate(bufInf.id, bytes),
             .CpuWrite => {
                 const pMappedData = buf.mappedPtr orelse return error.BufferNotMapped;
                 const destPtr: [*]u8 = @ptrCast(pMappedData);
@@ -214,17 +221,16 @@ pub const ResourceMan = struct {
             },
             .CpuRead => return error.CpuReadBufferCantUpdate,
         }
+    }
 
-        const newCount: u32 = @intCast(bytes.len / bufInf.elementSize);
+    fn updateBufferDescriptor(self: *ResourceMan, buf: *Buffer, bufId: BufferMeta.BufId, bufTyp: vhE.BufferType, bytesLength: usize, elementSize: usize, flightId: u8) !void {
+        const newCount: u32 = @intCast(bytesLength / elementSize);
+
         if (buf.curCount != newCount) {
             buf.curCount = newCount;
-            try self.resStorages[flightId].queueBufferDescriptor(buf.gpuAddress, bytes.len, bufMeta.typ, self.createHostAddressRange(buf.descIndex));
-            if (rc.DESCRIPTOR_DEBUG == true) std.debug.print("Descriptor update queued! (Index {}) (Buffer ID {})\n", .{ buf.descIndex, bufInf.id.val });
-        }
-
-        switch (bufMeta.update) {
-            .Overwrite => {}, // Always references flightId 0
-            .PerFrame => bufMeta.updateId = flightId,
+            const activeByteSize = buf.curCount * elementSize; 
+            try self.resStorages[flightId].queueBufferDescriptor(buf.gpuAddress, activeByteSize, bufTyp, self.createHostAddressRange(buf.descIndex));
+            if (rc.DESCRIPTOR_DEBUG == true) std.debug.print("Descriptor updated! (Index {}) (Buffer ID {})\n", .{ buf.descIndex, bufId.val });
         }
     }
 

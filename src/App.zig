@@ -168,6 +168,11 @@ pub const App = struct {
 
                     .toggleGpuProfiling => self.renderer.renderGraph.toggleGpuProfiling(),
 
+                    .toggleFreezeFrustum => {
+                        cam.toggleFreezeFrustum();
+                        std.debug.print("Frustum Freeze: {}\n", .{cam.freezeFrustum});
+                    },
+
                     .toggleImgui => {
                         self.windowMan.toogleUiMode();
                         self.renderer.imguiMan.toogleUiMode();

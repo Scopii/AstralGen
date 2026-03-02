@@ -49,13 +49,22 @@ void main(
     out indices uint3 tris[12]
     // out indices uint2 outLines[12]
 ) {
-    SetMeshOutputCounts(8, 12);
-
     ConstantBuffer<CameraData> cam = heapCameraBuffers[pc.resources[1]];
 
     float3 gridPos = float3(groupId.x, groupId.y, groupId.z) * 4.00; // World Pos of Cube
 
     float3 worldOrigin = gridPos - float3(15.0, 15.0, 15.0); // Offset grid
+
+    // frustum cull — bounding sphere of cube (half-diagonal of ±1 cube = sqrt(3))
+    float radius = 1.733;
+    for (int i = 0; i < 6; i++) {
+        if (dot(cam.frustumPlanes[i].xyz, worldOrigin) + cam.frustumPlanes[i].w < -radius) {
+            SetMeshOutputCounts(0, 0);
+            return;
+        }
+    }
+
+    SetMeshOutputCounts(8, 12);
 
     for (uint i = 0; i < 8; ++i) {
         float3 worldPos = cubeVerts[i] + worldOrigin; // Local Cube Pos + Grid Offset

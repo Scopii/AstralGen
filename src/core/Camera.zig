@@ -9,6 +9,8 @@ pub const CameraData = struct {
     viewProj: [4][4]f32,
     camPosAndFov: [4]f32,
     camDir: [4]f32,
+    frustumCorners: [8][4]f32,
+    frustumPlanes: [6][4]f32,
 };
 
 pub const Camera = struct {
@@ -22,11 +24,85 @@ pub const Camera = struct {
     yaw: f32 = 0.0,
     needsUpdate: bool = true,
 
+    freezeFrustum: bool = false,
+    frozenCorners: [8][4]f32 = .{.{ 0, 0, 0, 1 }} ** 8,
+
     pub fn init(cam: Camera) Camera {
         return cam;
     }
 
     pub fn deinit() void {}
+
+    fn computeFrustumCorners(self: *Camera) [8][4]f32 {
+        const visFar: f32 = self.far; // cap so far corners stay within live camera range
+
+        const forward = self.getForward();
+        const right = zm.normalize3(zm.cross3(forward, self.up));
+        const camUp = zm.normalize3(zm.cross3(right, forward));
+
+        const tanHalf = std.math.tan(self.fov * (std.math.pi / 180.0) * 0.5);
+        const nearH = self.near * tanHalf;
+        const nearW = nearH * self.aspectRatio;
+        const farH = visFar * tanHalf; // not self.far
+        const farW = farH * self.aspectRatio;
+
+        const nc = self.pos + forward * zm.splat(zm.Vec, self.near);
+        const fc = self.pos + forward * zm.splat(zm.Vec, visFar); // not self.far
+
+        const pts = [8]zm.Vec{
+            nc - right * zm.splat(zm.Vec, nearW) - camUp * zm.splat(zm.Vec, nearH),
+            nc + right * zm.splat(zm.Vec, nearW) - camUp * zm.splat(zm.Vec, nearH),
+            nc - right * zm.splat(zm.Vec, nearW) + camUp * zm.splat(zm.Vec, nearH),
+            nc + right * zm.splat(zm.Vec, nearW) + camUp * zm.splat(zm.Vec, nearH),
+            fc - right * zm.splat(zm.Vec, farW) - camUp * zm.splat(zm.Vec, farH),
+            fc + right * zm.splat(zm.Vec, farW) - camUp * zm.splat(zm.Vec, farH),
+            fc - right * zm.splat(zm.Vec, farW) + camUp * zm.splat(zm.Vec, farH),
+            fc + right * zm.splat(zm.Vec, farW) + camUp * zm.splat(zm.Vec, farH),
+        };
+        var corners: [8][4]f32 = undefined;
+        for (pts, &corners) |p, *c| c.* = .{ p[0], p[1], p[2], 1.0 };
+        return corners;
+    }
+
+    fn makePlane(p0: zm.Vec, p1: zm.Vec, p2: zm.Vec, centroid: zm.Vec) [4]f32 {
+        var n = zm.normalize3(zm.cross3(p1 - p0, p2 - p0));
+        if (zm.dot3(n, centroid - p0)[0] < 0) n = -n; // ensure inward-facing
+        return .{ n[0], n[1], n[2], -zm.dot3(n, p0)[0] };
+    }
+
+    fn cornersToPlanes(c: [8][4]f32) [6][4]f32 {
+        // centroid as inward reference
+        var cx: f32 = 0;
+        var cy: f32 = 0;
+        var cz: f32 = 0;
+        for (c) |p| {
+            cx += p[0];
+            cy += p[1];
+            cz += p[2];
+        }
+        const cent = zm.f32x4(cx / 8, cy / 8, cz / 8, 0);
+
+        const v = struct {
+            fn get(p: [4]f32) zm.Vec {
+                return zm.f32x4(p[0], p[1], p[2], 0);
+            }
+        }.get;
+
+        // corner layout: 0-3 near (bl,br,tl,tr), 4-7 far (bl,br,tl,tr)
+        var planes: [6][4]f32 = undefined;
+        planes[0] = makePlane(v(c[0]), v(c[4]), v(c[2]), cent); // left
+        planes[1] = makePlane(v(c[1]), v(c[3]), v(c[5]), cent); // right
+        planes[2] = makePlane(v(c[0]), v(c[1]), v(c[4]), cent); // bottom
+        planes[3] = makePlane(v(c[2]), v(c[6]), v(c[3]), cent); // top
+        planes[4] = makePlane(v(c[0]), v(c[2]), v(c[1]), cent); // near
+        planes[5] = makePlane(v(c[4]), v(c[5]), v(c[6]), cent); // far
+        return planes;
+    }
+
+    pub fn toggleFreezeFrustum(self: *Camera) void {
+        self.freezeFrustum = !self.freezeFrustum;
+        self.needsUpdate = true;
+    }
 
     pub fn rotate(self: *Camera, x: f32, y: f32) void {
         self.yaw -= x * ac.CAM_SENS; // Horizontal mouse movement affects yaw
@@ -41,10 +117,20 @@ pub const Camera = struct {
     }
 
     pub fn getCameraData(self: *Camera) CameraData {
-        return CameraData{
-            .viewProj = self.getViewProj(),
+        const vp = self.getViewProj();
+        const liveCorners = self.computeFrustumCorners();
+        if (!self.freezeFrustum) self.frozenCorners = liveCorners;
+
+        // when frozen: cull against frozen frustum so you can verify it visually
+        // when live: cull against current camera
+        const cullCorners = if (self.freezeFrustum) self.frozenCorners else liveCorners;
+
+        return .{
+            .viewProj = vp,
             .camPosAndFov = self.getPosAndFov(),
             .camDir = self.getForward(),
+            .frustumCorners = self.frozenCorners,
+            .frustumPlanes = cornersToPlanes(cullCorners), // was always liveCorners before
         };
     }
 

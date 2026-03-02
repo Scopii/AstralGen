@@ -14,11 +14,14 @@ pub const SPRV_PATH: []const u8 = "/zig-out/shader";
 pub const quantComp = ShaderInf.init(20, .comp, "quant/comp.slang", "quantComp.spv");
 pub const quantMesh = ShaderInf.init(22, .meshNoTask, "quant/mesh.slang", "quantMesh.spv");
 pub const quantFrag = ShaderInf.init(23, .frag, "quant/frag.slang", "quantFrag.spv");
+pub const frustumMesh = ShaderInf.init(24, .meshNoTask, "quant/frustum.slang", "frustumMesh.spv");
+
 
 pub const COMPILING_SHADERS: []const ShaderInf = &.{
     quantComp,
     quantMesh,
     quantFrag,
+    frustumMesh,
 };
 
 // pub const t1Comp = ShaderInf.init(0, .comp, "compTest/comp.slang", "t1Comp.spv");

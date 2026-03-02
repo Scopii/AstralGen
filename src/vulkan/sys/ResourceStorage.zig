@@ -28,6 +28,9 @@ pub const ResourceStorage = struct {
     stagingOffset: u64 = 0,
     transfers: std.array_list.Managed(Transfer),
 
+    // newBuffers: LinkedMap(BufferMeta.BufInf, rc.BUF_MAX, u32, rc.BUF_MAX, 0) = .{},
+    // newTextures: LinkedMap(TextureMeta.TexInf, rc.TEX_MAX, u32, rc.TEX_MAX, 0) = .{},
+
     buffers: LinkedMap(Buffer, rc.BUF_MAX, u32, rc.BUF_MAX, 0) = .{},
     textures: LinkedMap(Texture, rc.TEX_MAX, u32, rc.TEX_MAX, 0) = .{},
 
@@ -72,7 +75,7 @@ pub const ResourceStorage = struct {
     pub fn addTexture(self: *ResourceStorage, texId: TextureMeta.TexId, tex: Texture) void {
         self.textures.upsert(texId.val, tex);
     }
-
+    
     pub fn getBuffer(self: *ResourceStorage, bufId: BufferMeta.BufId) !*Buffer {
         if (self.buffers.isKeyUsed(bufId.val) == true) return self.buffers.getPtrByKey(bufId.val) else return error.BufferIdNotUsed;
     }

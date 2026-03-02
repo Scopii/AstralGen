@@ -14,7 +14,7 @@ pub const AppEvent = enum {
     camDown,
     camFovIncrease,
     camFovDecrease,
-
+    toggleFreezeFrustum,
     toggleFullscreen,
     closeApp,
     toggleImgui,
@@ -41,11 +41,13 @@ pub const keyMap = [_]KeyMapping{
     .{ .device = .keyboard, .state = .pressed, .cycle = .repeat, .key = sdl.SDL_SCANCODE_E, .appEvent = .camDown },
     .{ .device = .keyboard, .state = .pressed, .cycle = .repeat, .key = sdl.SDL_SCANCODE_DOWN, .appEvent = .camFovIncrease },
     .{ .device = .keyboard, .state = .pressed, .cycle = .repeat, .key = sdl.SDL_SCANCODE_UP, .appEvent = .camFovDecrease },
+
+    .{ .device = .keyboard, .state = .pressed, .cycle = .oneTime, .key = sdl.SDL_SCANCODE_F, .appEvent = .toggleFreezeFrustum },
     // App Control
     .{ .device = .keyboard, .state = .pressed, .cycle = .oneTime, .key = sdl.SDL_SCANCODE_ESCAPE, .appEvent = .closeApp },
     .{ .device = .keyboard, .state = .pressed, .cycle = .oneTime, .key = sdl.SDL_SCANCODE_R, .appEvent = .toggleImgui },
     .{ .device = .keyboard, .state = .pressed, .cycle = .oneBlock, .key = sdl.SDL_SCANCODE_LCTRL, .appEvent = .toggleFullscreen },
     .{ .device = .keyboard, .state = .pressed, .cycle = .oneBlock, .key = sdl.SDL_SCANCODE_P, .appEvent = .toggleGpuProfiling },
     // Mouse
-    // .{ .device = .mouse, .state = .pressed, .cycle = .repeat, .key = sdl.SDL_BUTTON_LEFT, .appEvent = .camForward },
+    .{ .device = .mouse, .state = .pressed, .cycle = .repeat, .key = sdl.SDL_BUTTON_LEFT, .appEvent = .camForward },
 };

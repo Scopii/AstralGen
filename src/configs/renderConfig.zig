@@ -63,7 +63,7 @@ pub const quantDepthTex = TextureMeta.create(.{ .id = .{ .val = 11 }, .mem = .Gp
 pub const TEXTURES: []const TextureMeta.TexInf = &.{ quantTex, quantDepthTex };
 
 // Passes
-pub const PASSES: []const Pass = &.{ quantComp, quant };
+pub const PASSES: []const Pass = &.{ quantComp, quant, frustumPass };
 
 pub const quantComp: Pass = .{
     .name = "Quant-Comp",
@@ -101,6 +101,27 @@ const quant: Pass = .{
     .bufUses = &.{
         BufferUse.init(indirectSB.id, .DrawIndirect, .IndirectRead, null),
         BufferUse.init(cameraUB.id, .FragShader, .ShaderRead, 1),
+    },
+};
+
+pub const frustumPass: Pass = .{
+    .name = "Frustum",
+    .shaderIds = &.{ sc.frustumMesh.id, sc.quantFrag.id },
+    .typ = Pass.createClassic(.{
+        .classicTyp = Pass.ClassicTyp.taskMeshData(.{
+            .workgroups = .{ .x = 1, .y = 1, .z = 1 },
+        }),
+        .mainTexId = quantTex.id,
+        .colorAtts = &.{Attachment.init(quantTex.id, .ColorAtt, .ColorAttReadWrite, false)},
+        .depthAtt = Attachment.init(quantDepthTex.id, .EarlyFragTest, .DepthStencilWrite, false),
+        .renderState = .{
+            .depthTest = vk.VK_FALSE,
+            .depthWrite = vk.VK_FALSE,
+            .lineWidth = 2.0,
+        },
+    }),
+    .bufUses = &.{
+        BufferUse.init(cameraUB.id, .MeshShader, .ShaderRead, 0),
     },
 };
 
