@@ -26,7 +26,8 @@ pub const Transfer = struct {
 pub const ResourceStorage = struct {
     stagingBuffer: Buffer,
     stagingOffset: u64 = 0,
-    transfers: std.array_list.Managed(Transfer),
+    fullUpdates: LinkedMap(Transfer, rc.BUF_MAX, u32, rc.BUF_MAX, 0) = .{},
+    // transfers: std.array_list.Managed(Transfer),
 
     // newBuffers: LinkedMap(BufferMeta.BufInf, rc.BUF_MAX, u32, rc.BUF_MAX, 0) = .{},
     // newTextures: LinkedMap(TextureMeta.TexInf, rc.TEX_MAX, u32, rc.TEX_MAX, 0) = .{},
@@ -49,13 +50,17 @@ pub const ResourceStorage = struct {
     descCount: u32 = 0,
     startIndex: u32,
 
-    pub fn init(alloc: Allocator, vma: *const Vma, startIndex: u32) !ResourceStorage {
-        return .{ .stagingBuffer = try vma.allocStagingBuffer(rc.STAGING_BUF_SIZE), .transfers = std.array_list.Managed(Transfer).init(alloc), .startIndex = startIndex };
+    pub fn init(_: Allocator, vma: *const Vma, startIndex: u32) !ResourceStorage {
+        return .{
+            .stagingBuffer = try vma.allocStagingBuffer(rc.STAGING_BUF_SIZE),
+            // .transfers = std.array_list.Managed(Transfer).init(alloc),
+            .startIndex = startIndex,
+        };
     }
 
     pub fn deinit(self: *ResourceStorage, vma: *const Vma) void {
         vma.freeBufferRaw(self.stagingBuffer.handle, self.stagingBuffer.allocation);
-        self.transfers.deinit();
+        // self.transfers.deinit();
 
         for (self.buffers.getItems()) |*bufBase| vma.freeBuffer(bufBase);
         for (self.textures.getItems()) |*texBase| vma.freeTexture(texBase);
@@ -65,7 +70,8 @@ pub const ResourceStorage = struct {
 
     pub fn resetTransfers(self: *ResourceStorage) void {
         self.stagingOffset = 0;
-        self.transfers.clearRetainingCapacity();
+        // self.transfers.clearRetainingCapacity();
+        self.fullUpdates.clear();
     }
 
     pub fn addBuffer(self: *ResourceStorage, bufId: BufferMeta.BufId, buffer: Buffer) void {
@@ -75,7 +81,7 @@ pub const ResourceStorage = struct {
     pub fn addTexture(self: *ResourceStorage, texId: TextureMeta.TexId, tex: Texture) void {
         self.textures.upsert(texId.val, tex);
     }
-    
+
     pub fn getBuffer(self: *ResourceStorage, bufId: BufferMeta.BufId) !*Buffer {
         if (self.buffers.isKeyUsed(bufId.val) == true) return self.buffers.getPtrByKey(bufId.val) else return error.BufferIdNotUsed;
     }
@@ -88,7 +94,8 @@ pub const ResourceStorage = struct {
         const stagingOffset = self.stagingOffset;
         if (stagingOffset + bytes.len > rc.STAGING_BUF_SIZE) return error.StagingBufferFull;
 
-        try self.transfers.append(.{ .srcOffset = stagingOffset, .dstResId = bufId, .dstOffset = 0, .size = bytes.len });
+        // try self.transfers.append(.{ .srcOffset = stagingOffset, .dstResId = bufId, .dstOffset = 0, .size = bytes.len });
+        self.fullUpdates.upsert(bufId.val, .{ .srcOffset = stagingOffset, .dstResId = bufId, .dstOffset = 0, .size = bytes.len });
         self.stagingOffset += (bytes.len + 15) & ~@as(u64, 15);
 
         const stagingPtr: [*]u8 = @ptrCast(self.stagingBuffer.mappedPtr);

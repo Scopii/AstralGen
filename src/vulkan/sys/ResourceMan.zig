@@ -64,6 +64,19 @@ pub const ResourceMan = struct {
         self.vma.deinit();
     }
 
+    fn getBufferDataPtr(self: *ResourceMan, bufId: BufferMeta.BufId, comptime T: type, flightId: u8) !*T {
+        const buffer = try self.getBuffer(bufId, flightId);
+        if (buffer.mappedPtr) |ptr| {
+            return @as(*T, @ptrCast(@alignCast(ptr)));
+        }
+        return error.BufferNotHostVisible;
+    }
+
+    fn printReadbackBuffer(self: *ResourceMan, bufId: BufferMeta.BufId, comptime T: type, flightId: u8) !void {
+        const readbackPtr = try self.getBufferDataPtr(bufId, T, flightId);
+        std.debug.print("Readback: {}\n", .{readbackPtr.*});
+    }
+
     pub fn update(self: *ResourceMan, flightId: u8, curFrame: u64) !void {
         if (rc.GPU_READBACK == true) try self.printReadbackBuffer(rc.readbackSB.id, vhT.ReadbackData, flightId);
 

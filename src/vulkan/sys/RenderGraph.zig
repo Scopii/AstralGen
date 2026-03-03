@@ -80,11 +80,12 @@ pub const RenderGraph = struct {
 
     pub fn recordTransfers(self: *RenderGraph, cmd: *Cmd, resMan: *ResourceMan) !void {
         const resStorage = &resMan.resStorages[cmd.flightId];
+        const transfers = resStorage.fullUpdates.getItems();
 
-        if (resStorage.transfers.items.len == 0) return;
+        if (transfers.len == 0) return;
         cmd.startQuery(.TopOfPipe, 40, "Transfers");
 
-        for (resStorage.transfers.items) |transfer| {
+        for (transfers) |transfer| {
             const buffer = try resMan.getBuffer(transfer.dstResId, cmd.flightId);
             try self.checkBufferState(buffer, .{ .stage = .Transfer, .access = .TransferWrite });
 
