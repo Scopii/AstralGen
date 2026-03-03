@@ -1,6 +1,7 @@
 // const DescriptorStorage = @import("DescriptorStorage.zig").DescriptorStorage;
 const TextureMeta = @import("../types/res/TextureMeta.zig").TextureMeta;
 const ResourceStorage = @import("ResourceStorage.zig").ResourceStorage;
+const DescriptorMan = @import("DescriptorMan.zig").DescriptorMan;
 const FixedList = @import("../../structures/FixedList.zig").FixedList;
 const LinkedMap = @import("../../structures/LinkedMap.zig").LinkedMap;
 const ArrayList = @import("../../structures/ArrayList.zig").ArrayList;
@@ -20,12 +21,9 @@ const std = @import("std");
 pub const ResourceMan = struct {
     vma: Vma,
     alloc: Allocator,
-    descHeap: Buffer,
-    descStride: u64,
-    startOffset: u64,
-    driverReservedSize: u64,
 
     resStorages: [rc.MAX_IN_FLIGHT]ResourceStorage,
+    descMan: DescriptorMan,
     bufMetas: LinkedMap(BufferMeta, rc.BUF_MAX, u32, rc.BUF_MAX, 0) = .{},
     texMetas: LinkedMap(TextureMeta, rc.TEX_MAX, u32, rc.TEX_MAX, 0) = .{},
 
@@ -34,33 +32,20 @@ pub const ResourceMan = struct {
 
         var resStorages: [rc.MAX_IN_FLIGHT]ResourceStorage = undefined;
         for (0..rc.MAX_IN_FLIGHT) |i| {
-            const flight: u32 = @intCast(i);
-            resStorages[i] = try ResourceStorage.init(alloc, &vma, flight * rc.RESOURCE_MAX);
+            resStorages[i] = try ResourceStorage.init(alloc, &vma);
         }
-
-        const heapProps = getDescriptorHeapProperties(context.gpu);
-        const driverReservedSize = heapProps.minResourceHeapReservedRange;
-
-        const alignment = heapProps.resourceHeapAlignment;
-        const startOffset = (driverReservedSize + (alignment - 1)) & ~(alignment - 1);
-
-        const descStride = @max(heapProps.bufferDescriptorSize, heapProps.imageDescriptorSize);
-        const heapSize = rc.MAX_IN_FLIGHT * descStride * (rc.RESOURCE_MAX);
 
         return .{
             .vma = vma,
             .alloc = alloc,
-            .descHeap = try vma.allocDescriptorHeap(startOffset + heapSize),
-            .driverReservedSize = driverReservedSize,
-            .descStride = descStride,
-            .startOffset = startOffset,
             .resStorages = resStorages,
+            .descMan = try DescriptorMan.init(&vma, context.gpu),
         };
     }
 
     pub fn deinit(self: *ResourceMan) void {
         for (0..rc.MAX_IN_FLIGHT) |i| self.resStorages[i].deinit(&self.vma);
-        self.vma.freeBufferRaw(self.descHeap.handle, self.descHeap.allocation);
+        self.descMan.deinit(&self.vma);
         self.vma.deinit();
     }
 
@@ -80,13 +65,13 @@ pub const ResourceMan = struct {
     pub fn update(self: *ResourceMan, flightId: u8, curFrame: u64) !void {
         if (rc.GPU_READBACK == true) try self.printReadbackBuffer(rc.readbackSB.id, vhT.ReadbackData, flightId);
 
-        try self.resStorages[flightId].updateDescriptors(self.vma.gpi, flightId);
+        try self.descMan.updateDescriptors(self.vma.gpi, flightId);
 
         if (curFrame < rc.MAX_IN_FLIGHT) return; // Only clean up resources queued MAX_IN_FLIGHT ago (safety check for startup)
         const start = if (rc.RESOURCE_DEBUG == true) std.time.microTimestamp() else 0;
 
-        const bufCount = self.resStorages[flightId].cleanupBuffers(self.vma);
-        const texCount = self.resStorages[flightId].cleanupTextures(self.vma);
+        const bufCount = self.resStorages[flightId].cleanupBuffers(self.vma, &self.descMan);
+        const texCount = self.resStorages[flightId].cleanupTextures(self.vma, &self.descMan);
 
         if (rc.RESOURCE_DEBUG == true and bufCount + texCount > 0) {
             const time = @as(f64, @floatFromInt(std.time.microTimestamp() - start)) / 1_000.0;
@@ -95,13 +80,21 @@ pub const ResourceMan = struct {
     }
 
     pub fn getBufferDescriptor(self: *ResourceMan, bufId: BufferMeta.BufId, flightId: u8) !u32 {
-        const buffer = try self.getBuffer(bufId, flightId);
-        return buffer.descIndex;
+        const bufMeta = try self.getBufferMeta(bufId);
+        const realIndex = switch (bufMeta.update) {
+            .Overwrite => 0,
+            .PerFrame => if (bufMeta.typ == .Indirect) flightId else bufMeta.updateId, // Indirect written by GPU so always current flightId.
+        };
+        return (try self.descMan.getBufferDescriptor(bufId, realIndex));
     }
 
     pub fn getTextureDescriptor(self: *ResourceMan, texId: TextureMeta.TexId, flightId: u8) !u32 {
-        const tex = try self.getTexture(texId, flightId);
-        return tex.descIndex;
+        const texMeta = try self.getTextureMeta(texId);
+        const realIndex = switch (texMeta.update) {
+            .Overwrite => 0,
+            .PerFrame => flightId,
+        };
+        return (try self.descMan.getTextureDescriptor(texId, realIndex));
     }
 
     pub fn resetTransfers(self: *ResourceMan, flightId: u8) void {
@@ -135,17 +128,13 @@ pub const ResourceMan = struct {
     }
 
     fn initBuffer(self: *ResourceMan, bufInf: BufferMeta.BufInf, flightId: u8) !*Buffer {
-        var buf = try self.vma.allocDefinedBuffer(bufInf);
-        buf.descIndex = try self.resStorages[flightId].getFreeDescriptorIndex();
-        
+        const buf = try self.vma.allocDefinedBuffer(bufInf);
         self.resStorages[flightId].addBuffer(bufInf.id, buf);
         return try self.resStorages[flightId].getBuffer(bufInf.id);
     }
 
     fn initTexture(self: *ResourceMan, texInf: TextureMeta.TexInf, flightId: u8) !*Texture {
-        var tex = try self.vma.allocDefinedTexture(texInf);
-        tex.descIndex = try self.resStorages[flightId].getFreeDescriptorIndex();
-
+        const tex = try self.vma.allocDefinedTexture(texInf);
         self.resStorages[flightId].addTexture(texInf.id, tex);
         return try self.resStorages[flightId].getTexture(texInf.id);
     }
@@ -153,12 +142,13 @@ pub const ResourceMan = struct {
     pub fn createBuffer(self: *ResourceMan, bufInf: BufferMeta.BufInf) !void {
         for (0..bufInf.update.getCount()) |i| {
             const flightId: u8 = @intCast(i);
-            
+
             const buf = try self.initBuffer(bufInf, flightId);
             const initialBytes = bufInf.len * bufInf.elementSize;
             try self.updateBufferDescriptor(buf, bufInf.id, bufInf.typ, initialBytes, bufInf.elementSize, flightId);
 
-            std.debug.print("Buffer created! (ID {}) (FlightId {}) ({}) ({}) (Descriptor {})\n", .{ bufInf.id.val, i, bufInf.typ, bufInf.update, buf.descIndex });
+            const descIndex = try self.descMan.getBufferDescriptor(bufInf.id, flightId);
+            std.debug.print("Buffer created! (ID {}) (FlightId {}) ({}) ({}) (Descriptor {})\n", .{ bufInf.id.val, i, bufInf.typ, bufInf.update, descIndex });
             self.vma.printMemoryInfo(buf.allocation);
         }
         self.bufMetas.upsert(bufInf.id.val, self.vma.createBufferMeta(bufInf));
@@ -168,11 +158,12 @@ pub const ResourceMan = struct {
         const texMeta: TextureMeta = self.vma.createTextureMeta(texInf);
         for (0..texInf.update.getCount()) |i| {
             const flightId: u8 = @intCast(i);
-            
-            const tex = try self.initTexture(texInf, flightId);
-            try self.resStorages[flightId].queueTextureDescriptor(&texMeta, tex.img, self.createHostAddressRange(tex.descIndex));
 
-            std.debug.print("Texture created! (ID {}) (FlightId {}) ({}) ({}) (Descriptor {})\n", .{ texInf.id.val, i, texInf.typ, texInf.update, tex.descIndex });
+            const tex = try self.initTexture(texInf, flightId);
+            try self.descMan.queueTextureDescriptor(&texMeta, tex.img, texInf.id, flightId);
+
+            const descIndex = try self.descMan.getTextureDescriptor(texInf.id, flightId);
+            std.debug.print("Texture created! (ID {}) (FlightId {}) ({}) ({}) (Descriptor {})\n", .{ texInf.id.val, i, texInf.typ, texInf.update, descIndex });
             self.vma.printMemoryInfo(tex.allocation);
         }
         self.texMetas.upsert(texInf.id.val, texMeta);
@@ -213,7 +204,7 @@ pub const ResourceMan = struct {
                     std.debug.print("Buffer resized! (ID {}) (Container {}) ({}) ({})", .{ newInf.id.val, realFlightId, newInf.typ, newInf.update });
                     std.debug.print(" Length {} ({} Bytes) -> Length {} ({} Bytes) ", .{ bufInf.len, oldBuf.size, newInf.len, bytesLength });
 
-                    try self.resStorages[realFlightId].queueBufferKill(newInf.id);
+                    try self.resStorages[realFlightId].queueBufferKill(newInf.id, self.descMan.removeBufferDescriptor(newInf.id, realFlightId));
 
                     const newBuf = try self.initBuffer(newInf, realFlightId);
                     self.vma.printMemoryInfo(newBuf.allocation);
@@ -241,41 +232,35 @@ pub const ResourceMan = struct {
 
         if (buf.curCount != newCount) {
             buf.curCount = newCount;
-            const activeByteSize = buf.curCount * elementSize; 
-            try self.resStorages[flightId].queueBufferDescriptor(buf.gpuAddress, activeByteSize, bufTyp, self.createHostAddressRange(buf.descIndex));
-            if (rc.DESCRIPTOR_DEBUG == true) std.debug.print("Descriptor updated! (Index {}) (Buffer ID {})\n", .{ buf.descIndex, bufId.val });
+            const activeByteSize = buf.curCount * elementSize;
+            try self.descMan.queueBufferDescriptor(buf.gpuAddress, activeByteSize, bufTyp, bufId, flightId);
+
+            if (rc.DESCRIPTOR_DEBUG == true) {
+                const descIndex = try self.descMan.getBufferDescriptor(bufId, flightId);
+                std.debug.print("Descriptor updated! (Index {}) (Buffer ID {})\n", .{ descIndex, bufId.val });
+            }
         }
     }
 
     pub fn queueTextureKills(self: *ResourceMan, texId: TextureMeta.TexId) !void {
         const texMeta = try self.getTextureMeta(texId);
-        for (0..texMeta.update.getCount()) |i| try self.resStorages[i].queueTextureKill(texId);
+        for (0..texMeta.update.getCount()) |i| {
+            const descIndex = self.descMan.removeTextureDescriptor(texId, @intCast(i));
+            try self.resStorages[i].queueTextureKill(texId, descIndex);
+        }
         self.texMetas.remove(texId.val);
     }
 
+    // queueBufferKills: same pattern
     pub fn queueBufferKills(self: *ResourceMan, bufId: BufferMeta.BufId) !void {
         const bufMeta = try self.getBufferMeta(bufId);
-        for (0..bufMeta.update.getCount()) |i| try self.resStorages[i].queueBufferKill(bufId);
+        for (0..bufMeta.update.getCount()) |i| {
+            const descIndex = self.descMan.removeBufferDescriptor(bufId, @intCast(i));
+            try self.resStorages[i].queueBufferKill(bufId, descIndex);
+        }
         self.bufMetas.remove(bufId.val);
     }
-
-    fn createHostAddressRange(self: *ResourceMan, descIndex: u32) vk.VkHostAddressRangeEXT {
-        const finalOffset = self.startOffset + (descIndex * self.descStride);
-        const mappedData = @as([*]u8, @ptrCast(self.descHeap.mappedPtr));
-
-        return vk.VkHostAddressRangeEXT{
-            .address = mappedData + finalOffset,
-            .size = self.descStride,
-        };
-    }
 };
-
-fn getDescriptorHeapProperties(gpu: vk.VkPhysicalDevice) vk.VkPhysicalDeviceDescriptorHeapPropertiesEXT {
-    var heapProps = vk.VkPhysicalDeviceDescriptorHeapPropertiesEXT{ .sType = vk.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_HEAP_PROPERTIES_EXT };
-    var physDevProps = vk.VkPhysicalDeviceProperties2{ .sType = vk.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2, .pNext = &heapProps };
-    vk.vkGetPhysicalDeviceProperties2(gpu, &physDevProps);
-    return heapProps;
-}
 
 fn convertToByteSlice(data: anytype) ![]const u8 {
     const DataType = @TypeOf(data);

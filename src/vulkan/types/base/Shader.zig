@@ -55,8 +55,8 @@ pub const Shader = struct {
 
             .sourceData = .{
                 .constantOffset = .{
-                    .heapOffset = @intCast(resMan.startOffset),
-                    .heapArrayStride = @intCast(resMan.descStride),
+                    .heapOffset = @intCast(resMan.descMan.startOffset),
+                    .heapArrayStride = @intCast(resMan.descMan.descStride),
                     .pEmbeddedSampler = null,
                     .samplerHeapOffset = 0,
                     .samplerHeapArrayStride = 0,

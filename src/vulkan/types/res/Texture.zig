@@ -9,8 +9,6 @@ pub const Texture = struct {
     extent: vk.VkExtent3D,
     state: TextureState = .{},
 
-    descIndex: u32 = 0,
-
     pub const TextureState = struct {
         stage: vhE.PipeStage = .TopOfPipe,
         access: vhE.PipeAccess = .None,
