@@ -123,26 +123,26 @@ pub const DescriptorMan = struct {
     }
 
     fn bufferHasUpdate(self: *DescriptorMan, descIndex: u32) bool {
-        return self.bufUpdates.isKeyUsed(descIndex); 
+        return self.bufUpdates.isKeyUsed(descIndex);
     }
 
     fn textureHasUpdate(self: *DescriptorMan, descIndex: u32) bool {
-        return self.texUpdates.isKeyUsed(descIndex); 
+        return self.texUpdates.isKeyUsed(descIndex);
     }
 
     fn createTextureUpdate(self: *DescriptorMan, descIndex: u32) DescUpdate {
         const texLen = self.texUpdates.getLength();
-        const bufLen = self.bufUpdates.getLength(); 
+        const bufLen = self.bufUpdates.getLength();
         const update = DescUpdate{ .mainIndex = texLen + bufLen, .specificIndex = texLen };
-        self.texUpdates.upsert(descIndex, update); 
+        self.texUpdates.upsert(descIndex, update);
         return update;
     }
 
     fn createBufferUpdate(self: *DescriptorMan, descIndex: u32) DescUpdate {
         const texLen = self.texUpdates.getLength();
-        const bufLen = self.bufUpdates.getLength(); 
+        const bufLen = self.bufUpdates.getLength();
         const update = DescUpdate{ .mainIndex = texLen + bufLen, .specificIndex = bufLen };
-        self.bufUpdates.upsert(descIndex, update); 
+        self.bufUpdates.upsert(descIndex, update);
         return update;
     }
 
@@ -150,17 +150,24 @@ pub const DescriptorMan = struct {
         const hasDesc = self.textureHasDescriptor(texId, flightId);
         const descIndex = if (hasDesc) self.texDescIndices[flightId].getByKey(texId.val) else try self.getFreeDescriptorIndex();
 
-        const hasUpdate = self.textureHasUpdate(descIndex); 
-        const descUpdate = if (hasUpdate) self.texUpdates.getByKey(descIndex) else self.createTextureUpdate(descIndex); 
+        const hasUpdate = self.textureHasUpdate(descIndex);
+        const descUpdate = if (hasUpdate) self.texUpdates.getByKey(descIndex) else self.createTextureUpdate(descIndex);
 
         self.imgViews[descUpdate.specificIndex] = vhF.getViewCreateInfo(img, texMeta.viewType, texMeta.format, texMeta.subRange);
+
         const imgDescPtr = &self.imgDescs[descUpdate.specificIndex];
-        imgDescPtr.* = .{ .sType = vk.VK_STRUCTURE_TYPE_IMAGE_DESCRIPTOR_INFO_EXT, .pView = &self.imgViews[descUpdate.specificIndex], .layout = vk.VK_IMAGE_LAYOUT_GENERAL };
+        imgDescPtr.* = .{
+            .sType = vk.VK_STRUCTURE_TYPE_IMAGE_DESCRIPTOR_INFO_EXT,
+            .pView = &self.imgViews[descUpdate.specificIndex],
+            .layout = vk.VK_IMAGE_LAYOUT_GENERAL,
+        };
+
         self.descInfos[descUpdate.mainIndex] = .{
             .sType = vk.VK_STRUCTURE_TYPE_RESOURCE_DESCRIPTOR_INFO_EXT,
             .type = if (texMeta.texType == .Color) vk.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE else vk.VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
             .data = .{ .pImage = imgDescPtr },
         };
+
         if (!hasUpdate) self.hostRanges[descUpdate.mainIndex] = self.createHostAddressRange(descIndex);
         if (!hasDesc) self.texDescIndices[flightId].upsert(texId.val, descIndex);
     }
@@ -169,15 +176,17 @@ pub const DescriptorMan = struct {
         const hasDesc = self.bufferHasDescriptor(bufId, flightId);
         const descIndex = if (hasDesc) self.bufDescIndices[flightId].getByKey(bufId.val) else try self.getFreeDescriptorIndex();
 
-        const hasUpdate = self.bufferHasUpdate(descIndex); 
+        const hasUpdate = self.bufferHasUpdate(descIndex);
         const descUpdate = if (hasUpdate) self.bufUpdates.getByKey(descIndex) else self.createBufferUpdate(descIndex);
 
         self.devRanges[descUpdate.specificIndex] = .{ .address = gpuAddress, .size = size };
+
         self.descInfos[descUpdate.mainIndex] = .{
             .sType = vk.VK_STRUCTURE_TYPE_RESOURCE_DESCRIPTOR_INFO_EXT,
             .type = if (bufTyp == .Uniform) vk.VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER else vk.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
             .data = .{ .pAddressRange = &self.devRanges[descUpdate.specificIndex] },
         };
+        
         if (!hasUpdate) self.hostRanges[descUpdate.mainIndex] = self.createHostAddressRange(descIndex);
         if (!hasDesc) self.bufDescIndices[flightId].upsert(bufId.val, descIndex);
     }
