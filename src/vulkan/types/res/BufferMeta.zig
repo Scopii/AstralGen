@@ -11,6 +11,7 @@ pub const BufferMeta = struct {
     typ: vhE.BufferType,
     update: vhE.UpdateType,
     resize: vhE.ResizeType,
+    mem: vhE.MemUsage,
 
     pub const BufId = packed struct { val: u32 };
 

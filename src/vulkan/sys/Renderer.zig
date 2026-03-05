@@ -15,7 +15,6 @@ const ImGuiMan = @import("ImGuiMan.zig").ImGuiMan;
 const Context = @import("Context.zig").Context;
 const vk = @import("../../modules/vk.zig").c;
 const Allocator = std.mem.Allocator;
-const zgui = @import("zgui");
 const std = @import("std");
 
 pub const Renderer = struct {
@@ -99,18 +98,8 @@ pub const Renderer = struct {
     }
 
     pub fn updateRenderTexture(self: *Renderer, texId: TextureMeta.TexId) !void {
-        const texMeta = try self.resMan.getTextureMeta(texId);
-        const oldMeta = texMeta.*;
-
-        const tex = try self.resMan.getTexture(texId, 0); // warning! only checks flightId 0!
-        const old = tex.extent;
-        const new = self.swapMan.getMaxExtent(texId);
-
-        if (new.width != old.width or new.height != old.height) {
-            try self.resMan.queueTextureKills(texId);
-            try self.resMan.createTexture(.{ .id = texId, .width = new.width, .height = new.height, .depth = 1, .typ = oldMeta.texType, .mem = oldMeta.mem, .update = oldMeta.update });
-            std.debug.print("Render Texture (ID {}) recreated {}x{} to {}x{}\n", .{ texId.val, old.width, old.height, new.width, new.height });
-        }
+        const newExtent = self.swapMan.getMaxExtent(texId);
+        try self.resMan.resizeTextureResource(texId, newExtent.width, newExtent.height, self.scheduler.totalFrames, self.scheduler.flightId);
     }
 
     pub fn waitForGpu(self: *Renderer) !void {
@@ -156,14 +145,14 @@ pub const Renderer = struct {
     }
 
     pub fn createBuffers(self: *Renderer, bufInfos: []const BufferMeta.BufInf) !void {
-        for (bufInfos) |bufInf| try self.resMan.createBuffer(bufInf);
+        for (bufInfos) |bufInf| self.resMan.addBufferResource(bufInf, self.scheduler.totalFrames);
     }
 
     pub fn updateBuffer(self: *Renderer, bufInf: BufferMeta.BufInf, data: anytype) !void {
-        try self.resMan.updateBuffer(bufInf, data, self.scheduler.flightId);
+        try self.resMan.updateBufferResource(bufInf.id, data, self.scheduler.totalFrames, self.scheduler.flightId);
     }
 
     pub fn createTexture(self: *Renderer, texInfos: []const TextureMeta.TexInf) !void {
-        for (texInfos) |texInf| try self.resMan.createTexture(texInf);
+        for (texInfos) |texInf| self.resMan.addTextureResource(texInf, self.scheduler.totalFrames);
     }
 };

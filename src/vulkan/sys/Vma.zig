@@ -73,6 +73,7 @@ pub const Vma = struct {
             .update = bufInf.update,
             .elementSize = bufInf.elementSize,
             .resize = bufInf.resize,
+            .mem = bufInf.mem,
         };
     }
 

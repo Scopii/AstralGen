@@ -1,5 +1,4 @@
 const TexId = @import("../types/res/TextureMeta.zig").TextureMeta.TexId;
-const BufferMeta = @import("../types/res/BufferMeta.zig").BufferMeta;
 const Swapchain = @import("../types/base/Swapchain.zig").Swapchain;
 const PushData = @import("../types/res/PushData.zig").PushData;
 const Texture = @import("../types/res/Texture.zig").Texture;
@@ -13,9 +12,7 @@ const ImGuiMan = @import("ImGuiMan.zig").ImGuiMan;
 const Cmd = @import("../types/base/Cmd.zig").Cmd;
 const CmdManager = @import("CmdMan.zig").CmdMan;
 const Context = @import("Context.zig").Context;
-const vhF = @import("../help/Functions.zig");
 const vk = @import("../../modules/vk.zig").c;
-const vhE = @import("../help/Enums.zig");
 const vhT = @import("../help/Types.zig");
 const Allocator = std.mem.Allocator;
 const std = @import("std");
@@ -79,8 +76,8 @@ pub const RenderGraph = struct {
     }
 
     pub fn recordTransfers(self: *RenderGraph, cmd: *Cmd, resMan: *ResourceMan) !void {
-        const resStorage = &resMan.resStorages[cmd.flightId];
-        const transfers = resStorage.fullUpdates.getItems();
+        const resUpdater = resMan.getResourceUpdater(cmd.flightId);
+        const transfers = resUpdater.fullUpdates.getItems();
 
         if (transfers.len == 0) return;
         cmd.startQuery(.TopOfPipe, 40, "Transfers");
@@ -94,9 +91,9 @@ pub const RenderGraph = struct {
                 .dstOffset = transfer.dstOffset,
                 .size = transfer.size,
             };
-            vk.vkCmdCopyBuffer(cmd.handle, resStorage.stagingBuffer.handle, buffer.handle, 1, &copyRegion);
+            vk.vkCmdCopyBuffer(cmd.handle, resUpdater.stagingBuffer.handle, buffer.handle, 1, &copyRegion);
         }
-        resMan.resetTransfers(cmd.flightId);
+        resUpdater.resetUpdates();
         self.bakeBarriers(cmd, "Transfers");
         cmd.endQuery(.BotOfPipe, 40);
     }
