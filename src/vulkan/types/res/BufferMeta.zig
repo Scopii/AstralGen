@@ -5,7 +5,7 @@ const Buffer = @import("Buffer.zig").Buffer;
 const vhE = @import("../../help/Enums.zig");
 
 pub const BufferMeta = struct {
-    updateId: u8 = 0,
+    updateSlot: u8 = rc.MAX_IN_FLIGHT - 1,
     elementSize: u32,
 
     typ: vhE.BufferType,

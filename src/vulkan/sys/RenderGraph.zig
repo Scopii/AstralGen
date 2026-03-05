@@ -83,7 +83,7 @@ pub const RenderGraph = struct {
         cmd.startQuery(.TopOfPipe, 40, "Transfers");
 
         for (transfers) |transfer| {
-            const buffer = try resMan.getBuffer(transfer.dstResId, cmd.flightId);
+            const buffer = try resMan.getBuffer(transfer.dstResId, transfer.dstSlot);
             try self.checkBufferState(buffer, .{ .stage = .Transfer, .access = .TransferWrite });
 
             const copyRegion = vk.VkBufferCopy{
@@ -106,9 +106,12 @@ pub const RenderGraph = struct {
 
     fn checkBufferState(self: *RenderGraph, buffer: *Buffer, neededState: Buffer.BufferState) !void {
         const state = buffer.state;
-        if ((state.stage == neededState.stage and state.access == neededState.access) or
-            (state.access == .ShaderRead or state.access == .IndirectRead and
-                neededState.access == .ShaderRead or neededState.access == .IndirectRead)) return;
+        if (state.stage == neededState.stage and state.access == neededState.access) return;
+
+        const curReadOnly = state.access == .ShaderRead or state.access == .IndirectRead;
+        const newReadOnly = neededState.access == .ShaderRead or neededState.access == .IndirectRead;
+        if (state.stage == neededState.stage and state.access == neededState.access) return;
+        if (curReadOnly and newReadOnly) return; // read to read needs no barrier
 
         try self.bufBarriers.append(buffer.createBufferBarrier(neededState));
     }

@@ -1,4 +1,3 @@
-
 const LinkedMap = @import("../../structures/LinkedMap.zig").LinkedMap;
 const BufferMeta = @import("../types/res/BufferMeta.zig").BufferMeta;
 const Buffer = @import("../types/res/Buffer.zig").Buffer;
@@ -12,6 +11,7 @@ pub const Transfer = struct {
     dstResId: BufferMeta.BufId,
     dstOffset: u64,
     size: u64,
+    dstSlot: u8,
 };
 
 pub const ResourceUpdater = struct {
@@ -34,11 +34,11 @@ pub const ResourceUpdater = struct {
         self.fullUpdates.clear();
     }
 
-    pub fn stageBufferUpdate(self: *ResourceUpdater, bufId: BufferMeta.BufId, bytes: []const u8) !void {
+    pub fn stageBufferUpdate(self: *ResourceUpdater, bufId: BufferMeta.BufId, bytes: []const u8, dstSlot: u8) !void {
         const stagingOffset = self.stagingOffset;
         if (stagingOffset + bytes.len > rc.STAGING_BUF_SIZE) return error.StagingBufferFull;
 
-        self.fullUpdates.upsert(bufId.val, .{ .srcOffset = stagingOffset, .dstResId = bufId, .dstOffset = 0, .size = bytes.len });
+        self.fullUpdates.upsert(bufId.val, .{ .srcOffset = stagingOffset, .dstResId = bufId, .dstOffset = 0, .size = bytes.len, .dstSlot = dstSlot });
         self.stagingOffset += (bytes.len + 15) & ~@as(u64, 15);
 
         const stagingPtr: [*]u8 = @ptrCast(self.stagingBuffer.mappedPtr);

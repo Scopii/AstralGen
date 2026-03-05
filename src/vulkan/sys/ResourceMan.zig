@@ -12,6 +12,7 @@ const Buffer = @import("../types/res/Buffer.zig").Buffer;
 const rc = @import("../../configs/renderConfig.zig");
 const Context = @import("Context.zig").Context;
 const vhT = @import("../help/Types.zig");
+const vhE = @import("../help/Enums.zig");
 const Allocator = std.mem.Allocator;
 const Vma = @import("Vma.zig").Vma;
 const std = @import("std");
@@ -125,7 +126,7 @@ pub const ResourceMan = struct {
         const bufMeta = try self.getBufferMeta(bufId);
         const realIndex = switch (bufMeta.update) {
             .Overwrite => 0,
-            .PerFrame => if (bufMeta.typ == .Indirect) flightId else bufMeta.updateId,
+            .PerFrame => if (bufMeta.typ == .Indirect) flightId else bufMeta.updateSlot,
         };
         return (try self.descMan.getBufferDescriptor(bufId, realIndex));
     }
@@ -138,19 +139,11 @@ pub const ResourceMan = struct {
         return (try self.descMan.getTextureDescriptor(texId, realIndex));
     }
 
-    pub fn getBufferMeta(self: *ResourceMan, bufId: BufId) !*BufferMeta {
-        if (self.bufMetas.isKeyUsed(bufId.val) == true) return self.bufMetas.getPtrByKey(bufId.val) else return error.BufferMetaIdNotUsed;
-    }
-
-    pub fn getTextureMeta(self: *ResourceMan, texId: TexId) !*TextureMeta {
-        if (self.texMetas.isKeyUsed(texId.val) == true) return self.texMetas.getPtrByKey(texId.val) else return error.TextureMetaIdNotUsed;
-    }
-
     pub fn getBuffer(self: *ResourceMan, bufId: BufId, flightId: u8) !*Buffer {
         const bufMeta = try self.getBufferMeta(bufId);
         return switch (bufMeta.update) {
             .Overwrite => try self.staticHolder.getBuffer(bufId),
-            .PerFrame => try self.dynHolders[flightId].getBuffer(bufId),
+            .PerFrame => if (bufMeta.typ == .Indirect) try self.dynHolders[flightId].getBuffer(bufId) else try self.dynHolders[bufMeta.updateSlot].getBuffer(bufId),
         };
     }
 
@@ -186,18 +179,16 @@ pub const ResourceMan = struct {
         const bytes = try convertToByteSlice(data);
         const newCount: u32 = @intCast(bytes.len / bufMeta.elementSize);
 
-        try self.resUpdaters[flightId].stageBufferUpdate(bufId, bytes);
-
-        const realFlight: u8 = switch (bufMeta.update) {
+        bufMeta.updateSlot = (bufMeta.updateSlot + 1) % bufMeta.update.getCount(); // advance on each update
+        const realFlight = switch (bufMeta.update) {
             .Overwrite => 0,
-            .PerFrame => flightId,
+            .PerFrame => bufMeta.updateSlot, // slot not flightId
         };
+
         const resHolder = switch (bufMeta.update) {
             .Overwrite => &self.staticHolder,
-            .PerFrame => &self.dynHolders[flightId],
+            .PerFrame => &self.dynHolders[bufMeta.updateSlot],
         };
-
-        bufMeta.updateId = realFlight;
 
         // Check if the buffer is actively alive for THIS flight
         if (resHolder.buffers.isKeyUsed(bufId.val)) { // DEDICATED FUNCTION?
@@ -259,6 +250,7 @@ pub const ResourceMan = struct {
                 }
             }
         }
+        try self.resUpdaters[flightId].stageBufferUpdate(bufId, bytes, bufMeta.updateSlot);
     }
 
     pub fn resizeTextureResource(self: *ResourceMan, texId: TexId, newWidth: u32, newHeight: u32, curFrame: u64, flightId: u8) !void {
@@ -338,9 +330,8 @@ pub const ResourceMan = struct {
             }
         }
         // Abort
-        for (0..QUEUE_COUNT) |i| {
-            self.queues[i].invalidateTextureCreation(texId);
-        }
+        for (0..QUEUE_COUNT) |i| self.queues[i].invalidateTextureCreation(texId);
+
         if (rc.RESOURCE_DEBUG == true) std.debug.print("Texture Removed! (ID {}) (Frame {})\n", .{ texId.val, curFrame });
     }
 
@@ -395,6 +386,28 @@ pub const ResourceMan = struct {
         self.vma.freeTexture(&texZom.tex);
         self.descMan.freeDescriptorIndex(texZom.descIndex);
     }
+
+    pub fn getBufferMeta(self: *ResourceMan, bufId: BufId) !*BufferMeta {
+        if (self.bufMetas.isKeyUsed(bufId.val) == true) return self.bufMetas.getPtrByKey(bufId.val) else return error.BufferMetaIdNotUsed;
+    }
+
+    pub fn getTextureMeta(self: *ResourceMan, texId: TexId) !*TextureMeta {
+        if (self.texMetas.isKeyUsed(texId.val) == true) return self.texMetas.getPtrByKey(texId.val) else return error.TextureMetaIdNotUsed;
+    }
+
+    // inline fn getResourceIndex(self: *ResourceMan, updateTyp: vhE.UpdateType, isIndirectBuf: bool) u8 {
+    //     const realIndex = switch (updateTyp) {
+    //         .Overwrite => 0,
+    //         .PerFrame => if (bufMeta.typ == .Indirect) flightId else bufMeta.updateSlot,
+    //     };
+    // }
+
+    // inline fn getResHolder(self: *ResourceMan, flightId: u8, updateTyp: vhE.UpdateType) *ResourceHolder {
+    //     return switch (updateTyp) {
+    //         .Overwrite => &self.staticHolder,
+    //         .PerFrame => &self.dynHolders[flightId],
+    //     };
+    // }
 };
 
 fn convertToByteSlice(data: anytype) ![]const u8 {
