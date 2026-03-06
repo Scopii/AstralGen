@@ -95,7 +95,7 @@ pub const DescriptorMan = struct {
     }
 
     pub fn removeBufferDescriptor(self: *DescriptorMan, bufId: BufferMeta.BufId, flightId: u8) u32 {
-        const idx = self.bufDescIndices[flightId].getByKey(bufId.val); // get before removing
+        const idx = self.bufDescIndices[flightId].getByKey(bufId.val);
         self.bufDescIndices[flightId].remove(bufId.val);
         return idx;
     }

@@ -2,16 +2,16 @@ const vk = @import("../../modules/vk.zig").c;
 const rc = @import("../../configs/renderConfig.zig");
 
 pub const UpdateType = enum {
-    Recreation, // Resource once in Memory, updates create a new Resource
-    OnDemand, // Resource Created for Every Frame in Flight, updates done per Frame via Staging Buffer
-    PerFrame,
-    
+    Rarely, // Resource once in Memory, updates create a new Resource
+    Often, // Resource Created for Every Frame in Flight, keeps Reference to Subresource if Buffer does not change
+    PerFrame, // Resource Created for Every Frame in Flight, Descriptor Reference cycles through Sub-Resources always
+
     // Async, // Resource Created Twice, Collecting + Cycling Between Front and Back Representations to start next batch update when previous update is done (maybe multiple Frames)
 
     pub fn getCount(self: UpdateType) u8 {
         return switch (self) {
-            .Recreation => 1,
-            .OnDemand => rc.MAX_IN_FLIGHT,
+            .Rarely => 1,
+            .Often => rc.MAX_IN_FLIGHT,
             .PerFrame => rc.MAX_IN_FLIGHT,
         };
     }

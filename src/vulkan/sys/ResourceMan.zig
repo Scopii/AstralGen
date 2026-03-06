@@ -170,12 +170,12 @@ pub const ResourceMan = struct {
         const newCount: u32 = @intCast(bytes.len / bufMeta.elementSize);
 
         switch (bufMeta.update) {
-            .Recreation => try self.updateOverwriteBuffer(bufId, bufMeta, bytes, newCount, curFrame, flightId),
-            .PerFrame, .OnDemand => try self.updateDynBuffer(bufId, bufMeta, bytes, newCount, curFrame, flightId),
+            .Rarely => try self.updateStaticBuffer(bufId, bufMeta, bytes, newCount, curFrame, flightId),
+            .PerFrame, .Often => try self.updateDynamicBuffer(bufId, bufMeta, bytes, newCount, curFrame, flightId),
         }
     }
 
-    fn updateOverwriteBuffer(self: *ResourceMan, bufId: BufId, bufMeta: *BufferMeta, bytes: []const u8, newCount: u32, curFrame: u64, flightId: u8) !void {
+    fn updateStaticBuffer(self: *ResourceMan, bufId: BufId, bufMeta: *BufferMeta, bytes: []const u8, newCount: u32, curFrame: u64, flightId: u8) !void {
         if (self.staticHolder.buffers.isKeyUsed(bufId.val)) {
             const oldBuf = try self.staticHolder.getBuffer(bufId);
 
@@ -220,7 +220,7 @@ pub const ResourceMan = struct {
         try self.resUpdaters[flightId].stageBufferUpdate(bufId, bytes, 0);
     }
 
-    fn updateDynBuffer(self: *ResourceMan, bufId: BufId, bufMeta: *BufferMeta, bytes: []const u8, newCount: u32, curFrame: u64, flightId: u8) !void {
+    fn updateDynamicBuffer(self: *ResourceMan, bufId: BufId, bufMeta: *BufferMeta, bytes: []const u8, newCount: u32, curFrame: u64, flightId: u8) !void {
         bufMeta.updateSlot = (bufMeta.updateSlot + 1) % bufMeta.update.getCount();
         const realFlight = getRealFlightId(bufMeta.update, flightId, bufMeta.updateSlot);
         const resHolder = self.getResHolder(bufMeta.update, flightId, bufMeta.updateSlot);
@@ -264,8 +264,8 @@ pub const ResourceMan = struct {
         for (0..texMeta.update.getCount()) |i| { // Check all alive sub-resources
             const fi: u8 = @intCast(i);
             const resHolder = switch (texMeta.update) {
-                .Recreation => &self.staticHolder,
-                .PerFrame, .OnDemand => &self.dynHolders[fi],
+                .Rarely => &self.staticHolder,
+                .PerFrame, .Often => &self.dynHolders[fi],
             };
             if (resHolder.textures.isKeyUsed(texId.val)) {
                 const tex = try resHolder.getTexture(texId);
@@ -307,8 +307,8 @@ pub const ResourceMan = struct {
 
         for (0..bufMeta.update.getCount()) |flightId| { // Kill
             const resHolder = switch (bufMeta.update) {
-                .Recreation => &self.staticHolder,
-                .OnDemand, .PerFrame => &self.dynHolders[flightId],
+                .Rarely => &self.staticHolder,
+                .Often, .PerFrame => &self.dynHolders[flightId],
             };
             if (resHolder.removeBuffer(bufId)) |buf| {
                 const descIndex = self.descMan.removeBufferDescriptor(bufId, @intCast(flightId));
@@ -325,8 +325,8 @@ pub const ResourceMan = struct {
 
         for (0..texMeta.update.getCount()) |flightId| { // Kill
             const resHolder = switch (texMeta.update) {
-                .Recreation => &self.staticHolder,
-                .OnDemand, .PerFrame => &self.dynHolders[flightId],
+                .Rarely => &self.staticHolder,
+                .Often, .PerFrame => &self.dynHolders[flightId],
             };
             if (resHolder.removeTexture(texId)) |tex| {
                 const descIndex = self.descMan.removeTextureDescriptor(texId, @intCast(flightId));
@@ -345,11 +345,11 @@ pub const ResourceMan = struct {
         const activeByteSize = buf.curCount * bufInf.elementSize;
 
         switch (bufInf.update) {
-            .Recreation => {
+            .Rarely => {
                 self.staticHolder.addBuffer(bufInf.id, buf);
                 try self.descMan.queueBufferDescriptor(buf.gpuAddress, activeByteSize, bufInf.typ, bufInf.id, 0); // Overwrite Desc always 0
             },
-            .OnDemand, .PerFrame => {
+            .Often, .PerFrame => {
                 self.dynHolders[flightId].addBuffer(bufInf.id, buf);
                 try self.descMan.queueBufferDescriptor(buf.gpuAddress, activeByteSize, bufInf.typ, bufInf.id, flightId);
             },
@@ -365,11 +365,11 @@ pub const ResourceMan = struct {
         const tex = try self.vma.allocDefinedTexture(texInf);
 
         switch (texInf.update) {
-            .Recreation => {
+            .Rarely => {
                 self.staticHolder.addTexture(texInf.id, tex);
                 try self.descMan.queueTextureDescriptor(&texMeta, tex.img, texInf.id, 0); // Overwrite Desc always 0
             },
-            .OnDemand, .PerFrame => {
+            .Often, .PerFrame => {
                 self.dynHolders[flightId].addTexture(texInf.id, tex);
                 try self.descMan.queueTextureDescriptor(&texMeta, tex.img, texInf.id, flightId);
             },
@@ -402,8 +402,8 @@ pub const ResourceMan = struct {
 
     inline fn getResHolder(self: *ResourceMan, updateTyp: vhE.UpdateType, flightId: u8, updateSlot: u8) *ResourceHolder {
         return switch (updateTyp) {
-            .Recreation => &self.staticHolder,
-            .OnDemand => &self.dynHolders[updateSlot],
+            .Rarely => &self.staticHolder,
+            .Often => &self.dynHolders[updateSlot],
             .PerFrame => &self.dynHolders[flightId],
         };
     }
@@ -419,8 +419,8 @@ inline fn checkResize(resize: vhE.ResizeType, newSize: u64, oldSize: u64) !bool 
 
 inline fn getRealFlightId(updateTyp: vhE.UpdateType, flightId: u8, updateSlot: u8) u8 {
     return switch (updateTyp) {
-        .Recreation => 0, // Overwrite Desc always 0
-        .OnDemand => updateSlot,
+        .Rarely => 0, // Overwrite Desc always 0
+        .Often => updateSlot,
         .PerFrame => flightId,
     };
 }
