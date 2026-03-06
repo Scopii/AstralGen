@@ -156,13 +156,13 @@ pub const DescriptorMan = struct {
         self.imgViews[descUpdate.specificIndex] = vhF.getViewCreateInfo(img, texMeta.viewType, texMeta.format, texMeta.subRange);
 
         const imgDescPtr = &self.imgDescs[descUpdate.specificIndex];
-        imgDescPtr.* = .{
+        imgDescPtr.* = vk.VkImageDescriptorInfoEXT{
             .sType = vk.VK_STRUCTURE_TYPE_IMAGE_DESCRIPTOR_INFO_EXT,
             .pView = &self.imgViews[descUpdate.specificIndex],
             .layout = vk.VK_IMAGE_LAYOUT_GENERAL,
         };
 
-        self.descInfos[descUpdate.mainIndex] = .{
+        self.descInfos[descUpdate.mainIndex] = vk.VkResourceDescriptorInfoEXT{
             .sType = vk.VK_STRUCTURE_TYPE_RESOURCE_DESCRIPTOR_INFO_EXT,
             .type = if (texMeta.texType == .Color) vk.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE else vk.VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
             .data = .{ .pImage = imgDescPtr },
@@ -179,14 +179,14 @@ pub const DescriptorMan = struct {
         const hasUpdate = self.bufferHasUpdate(descIndex);
         const descUpdate = if (hasUpdate) self.bufUpdates.getByKey(descIndex) else self.createBufferUpdate(descIndex);
 
-        self.devRanges[descUpdate.specificIndex] = .{ .address = gpuAddress, .size = size };
+        self.devRanges[descUpdate.specificIndex] = vk.VkDeviceAddressRangeEXT{ .address = gpuAddress, .size = size };
 
-        self.descInfos[descUpdate.mainIndex] = .{
+        self.descInfos[descUpdate.mainIndex] = vk.VkResourceDescriptorInfoEXT{
             .sType = vk.VK_STRUCTURE_TYPE_RESOURCE_DESCRIPTOR_INFO_EXT,
             .type = if (bufTyp == .Uniform) vk.VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER else vk.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
             .data = .{ .pAddressRange = &self.devRanges[descUpdate.specificIndex] },
         };
-        
+
         if (!hasUpdate) self.hostRanges[descUpdate.mainIndex] = self.createHostAddressRange(descIndex);
         if (!hasDesc) self.bufDescIndices[flightId].upsert(bufId.val, descIndex);
     }
