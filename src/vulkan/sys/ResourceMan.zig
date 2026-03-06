@@ -124,13 +124,13 @@ pub const ResourceMan = struct {
     // Getters
     pub fn getBufferDescriptor(self: *ResourceMan, bufId: BufId, flightId: u8) !u32 {
         const bufMeta = try self.getBufferMeta(bufId);
-        const realDescId = self.getRealFlightId(bufMeta.update, flightId, bufMeta.updateSlot);
+        const realDescId = getRealFlightId(bufMeta.update, flightId, bufMeta.updateSlot);
         return try self.descMan.getBufferDescriptor(bufId, realDescId);
     }
 
     pub fn getTextureDescriptor(self: *ResourceMan, texId: TexId, flightId: u8) !u32 {
         const texMeta = try self.getTextureMeta(texId);
-        const realDescId = self.getRealFlightId(texMeta.update, flightId, texMeta.updateSlot);
+        const realDescId = getRealFlightId(texMeta.update, flightId, texMeta.updateSlot);
         return try self.descMan.getTextureDescriptor(texId, realDescId);
     }
 
@@ -178,6 +178,7 @@ pub const ResourceMan = struct {
     fn updateOverwriteBuffer(self: *ResourceMan, bufId: BufId, bufMeta: *BufferMeta, bytes: []const u8, newCount: u32, curFrame: u64, flightId: u8) !void {
         if (self.staticHolder.buffers.isKeyUsed(bufId.val)) {
             const oldBuf = try self.staticHolder.getBuffer(bufId);
+
             switch (bufMeta.resize) {
                 .Block => {
                     if (bytes.len > oldBuf.size) return error.BufferBaseTooSmallForUpdate;
@@ -221,24 +222,12 @@ pub const ResourceMan = struct {
 
     fn updateDynBuffer(self: *ResourceMan, bufId: BufId, bufMeta: *BufferMeta, bytes: []const u8, newCount: u32, curFrame: u64, flightId: u8) !void {
         bufMeta.updateSlot = (bufMeta.updateSlot + 1) % bufMeta.update.getCount();
-        const realFlight = self.getRealFlightId(bufMeta.update, flightId, bufMeta.updateSlot);
+        const realFlight = getRealFlightId(bufMeta.update, flightId, bufMeta.updateSlot);
         const resHolder = self.getResHolder(bufMeta.update, flightId, bufMeta.updateSlot);
 
         if (resHolder.buffers.isKeyUsed(bufId.val)) {
             const buf = try resHolder.getBuffer(bufId);
-            var needsRealloc = false;
-
-            switch (bufMeta.resize) {
-                .Block => {
-                    if (bytes.len > buf.size) return error.BufferBaseTooSmallForUpdate;
-                },
-                .Grow => {
-                    if (bytes.len > buf.size) needsRealloc = true;
-                },
-                .Fit => {
-                    if (bytes.len != buf.size) needsRealloc = true;
-                },
-            }
+            const needsRealloc = try checkResize(bufMeta.resize, bytes.len, buf.size);
 
             if (needsRealloc) {
                 const newInf = BufInf{
@@ -262,17 +251,7 @@ pub const ResourceMan = struct {
 
         for (0..QUEUE_COUNT) |i| {
             if (self.queues[i].checkBufferCreation(bufId)) |bufInf| {
-                switch (bufMeta.resize) {
-                    .Block => {
-                        if (newCount > bufInf.len) return error.BufferBaseTooSmallForUpdate;
-                    },
-                    .Grow => {
-                        if (newCount > bufInf.len) bufInf.len = newCount;
-                    },
-                    .Fit => {
-                        bufInf.len = newCount;
-                    },
-                }
+                if (try checkResize(bufMeta.resize, newCount, bufInf.len) == true) bufInf.len = newCount;
             }
         }
         try self.resUpdaters[flightId].stageBufferUpdate(bufId, bytes, bufMeta.updateSlot);
@@ -390,9 +369,7 @@ pub const ResourceMan = struct {
                 self.staticHolder.addTexture(texInf.id, tex);
                 try self.descMan.queueTextureDescriptor(&texMeta, tex.img, texInf.id, 0); // Overwrite Desc always 0
             },
-            .OnDemand,
-            .PerFrame,
-            => {
+            .OnDemand, .PerFrame => {
                 self.dynHolders[flightId].addTexture(texInf.id, tex);
                 try self.descMan.queueTextureDescriptor(&texMeta, tex.img, texInf.id, flightId);
             },
@@ -421,13 +398,7 @@ pub const ResourceMan = struct {
         if (self.texMetas.isKeyUsed(texId.val) == true) return self.texMetas.getPtrByKey(texId.val) else return error.TextureMetaIdNotUsed;
     }
 
-    inline fn getRealFlightId(_: *ResourceMan, updateTyp: vhE.UpdateType, flightId: u8, updateSlot: u8) u8 {
-        return switch (updateTyp) {
-            .Recreation => 0, // Overwrite Desc always 0
-            .OnDemand => updateSlot,
-            .PerFrame => flightId,
-        };
-    }
+    // Helpers
 
     inline fn getResHolder(self: *ResourceMan, updateTyp: vhE.UpdateType, flightId: u8, updateSlot: u8) *ResourceHolder {
         return switch (updateTyp) {
@@ -437,6 +408,22 @@ pub const ResourceMan = struct {
         };
     }
 };
+
+inline fn checkResize(resize: vhE.ResizeType, newSize: u64, oldSize: u64) !bool {
+    return switch (resize) {
+        .Block => if (newSize > oldSize) error.BufferBaseTooSmallForUpdate else false,
+        .Grow => newSize > oldSize,
+        .Fit => newSize != oldSize,
+    };
+}
+
+inline fn getRealFlightId(updateTyp: vhE.UpdateType, flightId: u8, updateSlot: u8) u8 {
+    return switch (updateTyp) {
+        .Recreation => 0, // Overwrite Desc always 0
+        .OnDemand => updateSlot,
+        .PerFrame => flightId,
+    };
+}
 
 fn convertToByteSlice(data: anytype) ![]const u8 {
     const DataType = @TypeOf(data);
