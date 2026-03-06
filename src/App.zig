@@ -90,10 +90,10 @@ pub const App = struct {
 
     pub fn setupApp(self: *App) !void {
         // RENDERING SET UP
-        try self.renderer.createBuffers(rc.BUFFERS);
-        try self.renderer.createTexture(rc.TEXTURES);
+        for (rc.BUFFERS) |bufInf| try self.renderer.createBuffer(bufInf, null);
+        for (rc.TEXTURES) |texInf| try self.renderer.createTexture(texInf);
         try self.renderer.createPasses(rc.PASSES);
-        try self.renderer.updateBuffer(rc.objectSB, self.ecs.getObjects());
+        try self.renderer.updateBuffer(rc.objectSB.id, self.ecs.getObjects());
     }
 
     pub fn initWindows(self: *App) !void {
@@ -212,7 +212,7 @@ pub const App = struct {
 
             if (cam.needsUpdate == true) {
                 const camData = cam.getCameraData();
-                try renderer.updateBuffer(rc.cameraUB, &camData);
+                try renderer.updateBuffer(rc.cameraUB.id, &camData);
                 cam.needsUpdate = false;
             }
 

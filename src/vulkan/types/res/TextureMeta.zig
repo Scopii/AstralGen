@@ -5,6 +5,7 @@ const Texture = @import("Texture.zig").Texture;
 const vhE = @import("../../help/Enums.zig");
 
 pub const TextureMeta = struct {
+    updateSlot: u8 = rc.MAX_IN_FLIGHT - 1,
     subRange: vk.VkImageSubresourceRange,
     viewType: vk.VkImageViewType,
     format: vk.VkFormat,

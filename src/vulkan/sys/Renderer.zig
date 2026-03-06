@@ -144,15 +144,15 @@ pub const Renderer = struct {
         try self.shaderMan.createShaders(loadedShaders, &self.resMan);
     }
 
-    pub fn createBuffers(self: *Renderer, bufInfos: []const BufferMeta.BufInf) !void {
-        for (bufInfos) |bufInf| self.resMan.addBufferResource(bufInf, self.scheduler.totalFrames);
+    pub fn createBuffer(self: *Renderer, bufInf: BufferMeta.BufInf, data: anytype) !void {
+        try self.resMan.addBufferResource(bufInf, self.scheduler.totalFrames, self.scheduler.flightId, data);
     }
 
-    pub fn updateBuffer(self: *Renderer, bufInf: BufferMeta.BufInf, data: anytype) !void {
-        try self.resMan.updateBufferResource(bufInf.id, data, self.scheduler.totalFrames, self.scheduler.flightId);
+    pub fn updateBuffer(self: *Renderer, bufId: BufferMeta.BufId, data: anytype) !void {
+        try self.resMan.updateBufferResource(bufId, self.scheduler.totalFrames, self.scheduler.flightId, data);
     }
 
-    pub fn createTexture(self: *Renderer, texInfos: []const TextureMeta.TexInf) !void {
-        for (texInfos) |texInf| self.resMan.addTextureResource(texInf, self.scheduler.totalFrames);
+    pub fn createTexture(self: *Renderer, texInf: TextureMeta.TexInf) !void {
+        self.resMan.addTextureResource(texInf, self.scheduler.totalFrames);
     }
 };
