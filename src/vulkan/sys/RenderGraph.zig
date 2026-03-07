@@ -76,7 +76,7 @@ pub const RenderGraph = struct {
     }
 
     pub fn recordTransfers(self: *RenderGraph, cmd: *Cmd, resMan: *ResourceMan) !void {
-        var resUpdater = &resMan.resUpdater;
+        var resUpdater = &resMan.updater;
         const transfers = resUpdater.getUpdates(cmd.flightId);
 
         if (transfers.len == 0) return;
