@@ -27,10 +27,6 @@ pub const DescriptorMan = struct {
     startOffset: u64,
     driverReservedSize: u64,
 
-    // Global Descriptor Indices
-    bufDescIndices: [rc.MAX_IN_FLIGHT]LinkedMap(u32, rc.BUF_MAX, u32, rc.BUF_MAX, 0),
-    texDescIndices: [rc.MAX_IN_FLIGHT]LinkedMap(u32, rc.TEX_MAX, u32, rc.TEX_MAX, 0),
-
     // Descriptor Updates
     descInfos: [rc.RESOURCE_MAX]vk.VkResourceDescriptorInfoEXT = undefined,
     hostRanges: [rc.RESOURCE_MAX]vk.VkHostAddressRangeEXT = undefined,
@@ -57,20 +53,11 @@ pub const DescriptorMan = struct {
         const descStride = @max(heapProps.bufferDescriptorSize, heapProps.imageDescriptorSize);
         const heapSize = rc.MAX_IN_FLIGHT * descStride * (rc.RESOURCE_MAX);
 
-        var bufDescIndices: [rc.MAX_IN_FLIGHT]LinkedMap(u32, rc.BUF_MAX, u32, rc.BUF_MAX, 0) = undefined;
-        var texDescIndices: [rc.MAX_IN_FLIGHT]LinkedMap(u32, rc.TEX_MAX, u32, rc.TEX_MAX, 0) = undefined;
-        for (0..rc.MAX_IN_FLIGHT) |i| {
-            bufDescIndices[i] = .{};
-            texDescIndices[i] = .{};
-        }
-
         return .{
             .descHeap = try vma.allocDescriptorHeap(startOffset + heapSize),
             .driverReservedSize = driverReservedSize,
             .descStride = descStride,
             .startOffset = startOffset,
-            .bufDescIndices = bufDescIndices,
-            .texDescIndices = texDescIndices,
         };
     }
 
@@ -92,34 +79,6 @@ pub const DescriptorMan = struct {
 
     pub fn freeDescriptorIndex(self: *DescriptorMan, index: u32) void {
         self.freedDescIndices.append(index) catch |err| std.debug.print("freeDescriptorIndex failed {}\n", .{err});
-    }
-
-    pub fn removeBufferDescriptor(self: *DescriptorMan, bufId: BufferMeta.BufId, flightId: u8) u32 {
-        const idx = self.bufDescIndices[flightId].getByKey(bufId.val);
-        self.bufDescIndices[flightId].remove(bufId.val);
-        return idx;
-    }
-
-    pub fn removeTextureDescriptor(self: *DescriptorMan, texId: TextureMeta.TexId, flightId: u8) u32 {
-        const idx = self.texDescIndices[flightId].getByKey(texId.val);
-        self.texDescIndices[flightId].remove(texId.val);
-        return idx;
-    }
-
-    fn bufferHasDescriptor(self: *DescriptorMan, bufId: BufferMeta.BufId, flightId: u8) bool {
-        return self.bufDescIndices[flightId].isKeyUsed(bufId.val);
-    }
-
-    fn textureHasDescriptor(self: *DescriptorMan, texId: TextureMeta.TexId, flightId: u8) bool {
-        return self.texDescIndices[flightId].isKeyUsed(texId.val);
-    }
-
-    pub fn getTextureDescriptor(self: *DescriptorMan, texId: TextureMeta.TexId, flightId: u8) !u32 {
-        if (self.texDescIndices[flightId].isKeyUsed(texId.val) == true) return self.texDescIndices[flightId].getByKey(texId.val) else return error.TexIdHasNoDescriptor;
-    }
-
-    pub fn getBufferDescriptor(self: *DescriptorMan, bufId: BufferMeta.BufId, flightId: u8) !u32 {
-        if (self.bufDescIndices[flightId].isKeyUsed(bufId.val) == true) return self.bufDescIndices[flightId].getByKey(bufId.val) else return error.BufIdHasNoDescriptor;
     }
 
     fn bufferHasUpdate(self: *DescriptorMan, descIndex: u32) bool {
@@ -146,14 +105,14 @@ pub const DescriptorMan = struct {
         return update;
     }
 
-    pub fn queueTextureDescriptor(self: *DescriptorMan, texMeta: *const TextureMeta, img: vk.VkImage, texId: TextureMeta.TexId, flightId: u8) !void {
-        const hasDesc = self.textureHasDescriptor(texId, flightId);
-        const descIndex = if (hasDesc) self.texDescIndices[flightId].getByKey(texId.val) else try self.getFreeDescriptorIndex();
+    pub fn queueTextureDescriptor(self: *DescriptorMan, texMeta: *const TextureMeta, texture: *Texture) !void {
+        if (texture.descIndex == null) texture.descIndex = try self.getFreeDescriptorIndex();
 
-        const hasUpdate = self.textureHasUpdate(descIndex);
-        const descUpdate = if (hasUpdate) self.texUpdates.getByKey(descIndex) else self.createTextureUpdate(descIndex);
+        const hasUpdate = self.textureHasUpdate(texture.descIndex.?);
+        const descUpdate = if (hasUpdate) self.texUpdates.getByKey(texture.descIndex.?) else self.createTextureUpdate(texture.descIndex.?);
+        if (!hasUpdate) self.hostRanges[descUpdate.mainIndex] = self.createHostAddressRange(texture.descIndex.?);
 
-        self.imgViews[descUpdate.specificIndex] = vhF.getViewCreateInfo(img, texMeta.viewType, texMeta.format, texMeta.subRange);
+        self.imgViews[descUpdate.specificIndex] = vhF.getViewCreateInfo(texture.img, texMeta.viewType, texMeta.format, texMeta.subRange);
 
         const imgDescPtr = &self.imgDescs[descUpdate.specificIndex];
         imgDescPtr.* = vk.VkImageDescriptorInfoEXT{
@@ -167,17 +126,14 @@ pub const DescriptorMan = struct {
             .type = if (texMeta.texType == .Color) vk.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE else vk.VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
             .data = .{ .pImage = imgDescPtr },
         };
-
-        if (!hasUpdate) self.hostRanges[descUpdate.mainIndex] = self.createHostAddressRange(descIndex);
-        if (!hasDesc) self.texDescIndices[flightId].upsert(texId.val, descIndex);
     }
 
-    pub fn queueBufferDescriptor(self: *DescriptorMan, gpuAddress: u64, size: u64, bufTyp: vhE.BufferType, bufId: BufferMeta.BufId, flightId: u8) !void {
-        const hasDesc = self.bufferHasDescriptor(bufId, flightId);
-        const descIndex = if (hasDesc) self.bufDescIndices[flightId].getByKey(bufId.val) else try self.getFreeDescriptorIndex();
+    pub fn queueBufferDescriptor(self: *DescriptorMan, gpuAddress: u64, size: u64, bufTyp: vhE.BufferType, buffer: *Buffer) !void {
+        if (buffer.descIndex == null) buffer.descIndex = try self.getFreeDescriptorIndex();
 
-        const hasUpdate = self.bufferHasUpdate(descIndex);
-        const descUpdate = if (hasUpdate) self.bufUpdates.getByKey(descIndex) else self.createBufferUpdate(descIndex);
+        const hasUpdate = self.bufferHasUpdate(buffer.descIndex.?);
+        const descUpdate = if (hasUpdate) self.bufUpdates.getByKey(buffer.descIndex.?) else self.createBufferUpdate(buffer.descIndex.?);
+        if (!hasUpdate) self.hostRanges[descUpdate.mainIndex] = self.createHostAddressRange(buffer.descIndex.?);
 
         self.devRanges[descUpdate.specificIndex] = vk.VkDeviceAddressRangeEXT{ .address = gpuAddress, .size = size };
 
@@ -186,9 +142,6 @@ pub const DescriptorMan = struct {
             .type = if (bufTyp == .Uniform) vk.VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER else vk.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
             .data = .{ .pAddressRange = &self.devRanges[descUpdate.specificIndex] },
         };
-
-        if (!hasUpdate) self.hostRanges[descUpdate.mainIndex] = self.createHostAddressRange(descIndex);
-        if (!hasDesc) self.bufDescIndices[flightId].upsert(bufId.val, descIndex);
     }
 
     pub fn updateDescriptors(self: *DescriptorMan, gpi: vk.VkDevice, flightId: u8) !void {

@@ -26,6 +26,9 @@ pub const ResourceRegistry = struct {
     staticHolder: ResourceHolder,
     dynHolders: [rc.MAX_IN_FLIGHT]ResourceHolder,
 
+    bufMetas: LinkedMap(BufferMeta, rc.BUF_MAX, u32, rc.BUF_MAX, 0) = .{},
+    texMetas: LinkedMap(TextureMeta, rc.TEX_MAX, u32, rc.TEX_MAX, 0) = .{},
+
     pub fn init() ResourceRegistry {
         var dynHolders: [rc.MAX_IN_FLIGHT]ResourceHolder = undefined;
         for (0..rc.MAX_IN_FLIGHT) |i| dynHolders[i] = ResourceHolder.init();
@@ -41,12 +44,44 @@ pub const ResourceRegistry = struct {
         self.staticHolder.deinit(vma);
     }
 
-    pub fn addBuffer(self: *ResourceRegistry, bufId: BufId, buffer: Buffer, updateTyp: vhE.UpdateType, flightId: u8) void {
-        self.getHolder(updateTyp, flightId).addBuffer(bufId, buffer);
+    // Meta
+
+    pub fn addBufferMeta(self: *ResourceRegistry, bufId: BufId, bufMeta: BufferMeta) void {
+        self.bufMetas.upsert(bufId.val, bufMeta);
     }
 
-    pub fn addTexture(self: *ResourceRegistry, texId: TexId, tex: Texture, updateTyp: vhE.UpdateType, flightId: u8) void {
-        self.getHolder(updateTyp, flightId).addTexture(texId, tex);
+    pub fn addTextureMeta(self: *ResourceRegistry, texId: TexId, texMeta: TextureMeta) void {
+        self.texMetas.upsert(texId.val, texMeta);
+    }
+
+    pub fn getBufferMeta(self: *ResourceRegistry, bufId: BufId) !*BufferMeta {
+        if (self.bufMetas.isKeyUsed(bufId.val) == true) return self.bufMetas.getPtrByKey(bufId.val) else return error.BufferMetaIdNotUsed;
+    }
+
+    pub fn getTextureMeta(self: *ResourceRegistry, texId: TexId) !*TextureMeta {
+        if (self.texMetas.isKeyUsed(texId.val) == true) return self.texMetas.getPtrByKey(texId.val) else return error.TextureMetaIdNotUsed;
+    }
+
+    pub fn removeBufferMeta(self: *ResourceRegistry, bufId: BufId) void {
+        self.bufMetas.remove(bufId.val);
+    }
+
+    pub fn removeTextureMeta(self: *ResourceRegistry, texId: TexId) void {
+        self.texMetas.remove(texId.val);
+    }
+
+    // Resources
+
+    pub fn addBuffer(self: *ResourceRegistry, bufId: BufId, buffer: Buffer, updateTyp: vhE.UpdateType, flightId: u8) *Buffer {
+        const holder = self.getHolder(updateTyp, flightId);
+        holder.addBuffer(bufId, buffer);
+        return holder.getBuffer(bufId) catch unreachable;
+    }
+
+    pub fn addTexture(self: *ResourceRegistry, texId: TexId, tex: Texture, updateTyp: vhE.UpdateType, flightId: u8) *Texture {
+        const holder = self.getHolder(updateTyp, flightId);
+        holder.addTexture(texId, tex);
+        return holder.getTexture(texId) catch unreachable;
     }
 
     pub fn getBuffer(self: *ResourceRegistry, bufId: BufId, updateTyp: vhE.UpdateType, flightId: u8, updateSlot: u8) !*Buffer {

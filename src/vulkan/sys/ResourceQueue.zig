@@ -6,8 +6,8 @@ const Texture = @import("../types/res/Texture.zig").Texture;
 const Buffer = @import("../types/res/Buffer.zig").Buffer;
 const rc = @import("../../configs/renderConfig.zig");
 
-pub const BufferZombie = struct { buf: Buffer, descIndex: u32 };
-pub const TextureZombie = struct { tex: Texture, descIndex: u32 };
+pub const BufferZombie = struct { buf: Buffer};
+pub const TextureZombie = struct { tex: Texture};
 
 pub const ResourceQueue = struct {
     bufCreations: LinkedMap(BufferMeta.BufInf, rc.BUF_MAX, u32, rc.BUF_MAX, 0) = .{},
