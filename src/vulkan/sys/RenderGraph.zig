@@ -76,16 +76,17 @@ pub const RenderGraph = struct {
     }
 
     pub fn recordTransfers(self: *RenderGraph, cmd: *Cmd, resMan: *ResourceMan) !void {
-        var resUpdater = resMan.resUpdater;
+        var resUpdater = &resMan.resUpdater;
         const transfers = resUpdater.getUpdates(cmd.flightId);
 
         if (transfers.len == 0) return;
         cmd.startQuery(.TopOfPipe, 40, "Transfers");
+        const stagingBuf = resUpdater.getStagingBuffer(cmd.flightId);
 
         for (transfers) |transfer| {
             const buffer = try resMan.getBuffer(transfer.dstResId, transfer.dstSlot);
             try self.checkBufferState(buffer, .{ .stage = .Transfer, .access = .TransferWrite });
-            cmd.copyBuffer(resUpdater.getStagingBuffer(cmd.flightId), &transfer, buffer.handle);
+            cmd.copyBuffer(stagingBuf, transfer, buffer.handle);
         }
         resUpdater.resetUpdates(cmd.flightId);
         self.bakeBarriers(cmd, "Transfers");

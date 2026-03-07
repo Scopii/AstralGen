@@ -344,7 +344,7 @@ pub const Cmd = struct {
         vk.vkCmdFillBuffer(self.handle, buffer, offset, size, data);
     }
 
-    pub fn copyBuffer(self: *const Cmd, srcBuffer: vk.VkBuffer, transfer: *const Transfer, dstBuffer: vk.VkBuffer) void {
+    pub fn copyBuffer(self: *const Cmd, srcBuffer: vk.VkBuffer, transfer: Transfer, dstBuffer: vk.VkBuffer) void {
         const copy = vk.VkBufferCopy{ .srcOffset = transfer.srcOffset, .dstOffset = transfer.dstOffset, .size = transfer.size };
         vk.vkCmdCopyBuffer(self.handle, srcBuffer, dstBuffer, 1, &copy);
     }
