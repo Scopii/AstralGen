@@ -12,7 +12,6 @@ pub const TextureZombie = struct { tex: Texture, descIndex: u32 };
 pub const ResourceQueue = struct {
     bufCreations: LinkedMap(BufferMeta.BufInf, rc.BUF_MAX, u32, rc.BUF_MAX, 0) = .{},
     texCreations: LinkedMap(TextureMeta.TexInf, rc.TEX_MAX, u32, rc.TEX_MAX, 0) = .{},
-
     bufDeletions: FixedList(BufferZombie, rc.BUF_MAX) = .{},
     texDeletions: FixedList(TextureZombie, rc.TEX_MAX) = .{},
 
@@ -65,10 +64,19 @@ pub const ResourceQueue = struct {
         if (self.texCreations.isKeyUsed(texId.val) == true) return self.texCreations.getPtrByKey(texId.val) else return null;
     }
 
-    pub fn clear(self: *ResourceQueue) void {
+    pub fn clearBufferCreations(self: *ResourceQueue) void {
         self.bufCreations.clear();
+    }
+
+    pub fn clearTextureCreations(self: *ResourceQueue) void {
         self.texCreations.clear();
+    }
+
+    pub fn clearBufferDeletions(self: *ResourceQueue) void {
         self.bufDeletions.clear();
+    }
+
+    pub fn clearTextureDeletions(self: *ResourceQueue) void {
         self.texDeletions.clear();
     }
 };

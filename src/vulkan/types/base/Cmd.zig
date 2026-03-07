@@ -1,5 +1,5 @@
 const LinkedMap = @import("../../../structures/LinkedMap.zig").LinkedMap;
-const Transfer = @import("../../sys/ResourceMan.zig").Transfer;
+const Transfer = @import("../../sys/ResourceUpdater.zig").Transfer;
 const RenderState = @import("RenderState.zig").RenderState;
 const rc = @import("../../../configs/renderConfig.zig");
 const vk = @import("../../../modules/vk.zig").c;
@@ -345,7 +345,7 @@ pub const Cmd = struct {
     }
 
     pub fn copyBuffer(self: *const Cmd, srcBuffer: vk.VkBuffer, transfer: *const Transfer, dstBuffer: vk.VkBuffer) void {
-        const copy = vk.VkBufferCopy{ .srcOffset = transfer.srcOffset, .dstOffset = 0, .size = transfer.size };
+        const copy = vk.VkBufferCopy{ .srcOffset = transfer.srcOffset, .dstOffset = transfer.dstOffset, .size = transfer.size };
         vk.vkCmdCopyBuffer(self.handle, srcBuffer, dstBuffer, 1, &copy);
     }
 

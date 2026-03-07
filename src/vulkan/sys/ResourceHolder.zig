@@ -35,6 +35,14 @@ pub const ResourceHolder = struct {
         if (self.textures.isKeyUsed(texId.val) == true) return self.textures.getPtrByKey(texId.val) else return error.TextureIdNotUsed;
     }
 
+    pub fn checkBuffer(self: *ResourceHolder, bufId: BufferMeta.BufId) ?*Buffer {
+        if (self.buffers.isKeyUsed(bufId.val)) return self.buffers.getPtrByKey(bufId.val) else return null;
+    }
+
+    pub fn checkTexture(self: *ResourceHolder, texId: TextureMeta.TexId) ?*Texture {
+        if (self.textures.isKeyUsed(texId.val)) return self.textures.getPtrByKey(texId.val) else return null;
+    }
+
     pub fn removeBuffer(self: *ResourceHolder, bufId: BufferMeta.BufId) ?Buffer {
         if (self.buffers.isKeyUsed(bufId.val) == true) {
             const buf = self.buffers.getPtrByKey(bufId.val).*;

@@ -76,8 +76,8 @@ pub const RenderGraph = struct {
     }
 
     pub fn recordTransfers(self: *RenderGraph, cmd: *Cmd, resMan: *ResourceMan) !void {
-        const resUpdater = resMan.getResourceUpdater(cmd.flightId);
-        const transfers = resUpdater.fullUpdates.getItems();
+        var resUpdater = resMan.resUpdater;
+        const transfers = resUpdater.getUpdates(cmd.flightId);
 
         if (transfers.len == 0) return;
         cmd.startQuery(.TopOfPipe, 40, "Transfers");
@@ -85,15 +85,9 @@ pub const RenderGraph = struct {
         for (transfers) |transfer| {
             const buffer = try resMan.getBuffer(transfer.dstResId, transfer.dstSlot);
             try self.checkBufferState(buffer, .{ .stage = .Transfer, .access = .TransferWrite });
-
-            const copyRegion = vk.VkBufferCopy{
-                .srcOffset = transfer.srcOffset,
-                .dstOffset = transfer.dstOffset,
-                .size = transfer.size,
-            };
-            vk.vkCmdCopyBuffer(cmd.handle, resUpdater.stagingBuffer.handle, buffer.handle, 1, &copyRegion);
+            cmd.copyBuffer(resUpdater.getStagingBuffer(cmd.flightId), &transfer, buffer.handle);
         }
-        resUpdater.resetUpdates();
+        resUpdater.resetUpdates(cmd.flightId);
         self.bakeBarriers(cmd, "Transfers");
         cmd.endQuery(.BotOfPipe, 40);
     }
