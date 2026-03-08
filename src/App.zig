@@ -90,8 +90,8 @@ pub const App = struct {
 
     pub fn setupApp(self: *App) !void {
         // RENDERING SET UP
-        for (rc.BUFFERS) |bufInf| try self.renderer.createBuffer(bufInf, null);
-        for (rc.TEXTURES) |texInf| try self.renderer.createTexture(texInf);
+        for (rc.BUFFERS) |bufInf| try self.renderer.addResource(bufInf, null);
+        for (rc.TEXTURES) |texInf| try self.renderer.addResource(texInf, null);
         try self.renderer.createPasses(rc.PASSES);
         try self.renderer.updateBuffer(rc.objectSB.id, self.ecs.getObjects());
     }

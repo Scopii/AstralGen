@@ -1,15 +1,13 @@
 const vk = @import("../../../modules/vk.zig").c;
-const vhF = @import("../../help/Functions.zig");
 const vhE = @import("../../help/Enums.zig");
 
 pub const Texture = struct {
-    img: vk.VkImage,
-    view: vk.VkImageView,
-    allocation: vk.VmaAllocation,
-    extent: vk.VkExtent3D,
-    state: TextureState = .{},
-
-    descIndex: ?u32 = null,
+    img: vk.VkImage, 
+    view: vk.VkImageView, 
+    allocation: vk.VmaAllocation, 
+    state: TextureState = .{}, 
+    extent: vk.VkExtent3D, 
+    descIndex: ?u31 = null, 
 
     pub const TextureState = struct {
         stage: vhE.PipeStage = .TopOfPipe,

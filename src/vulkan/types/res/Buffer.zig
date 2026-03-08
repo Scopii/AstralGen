@@ -1,18 +1,16 @@
 const rc = @import("../../../configs/renderConfig.zig");
-const PushData = @import("PushData.zig").PushData;
 const vk = @import("../../../modules/vk.zig").c;
 const vhE = @import("../../help/Enums.zig");
 
 pub const Buffer = struct {
+    descIndex: ?u31 = null,
+    curCount: u32 = 0,
     handle: vk.VkBuffer,
     allocation: vk.VmaAllocation,
-    mappedPtr: ?*anyopaque,
     gpuAddress: u64,
     size: vk.VkDeviceSize,
-    curCount: u32 = 0,
     state: BufferState = .{},
-
-    descIndex: ?u32 = null,
+    mappedPtr: ?*anyopaque,
 
     pub const BufferState = struct {
         stage: vhE.PipeStage = .TopOfPipe,

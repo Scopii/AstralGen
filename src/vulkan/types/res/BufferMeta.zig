@@ -1,17 +1,14 @@
 const rc = @import("../../../configs/renderConfig.zig");
-const PushData = @import("PushData.zig").PushData;
 const vk = @import("../../../modules/vk.zig").c;
-const Buffer = @import("Buffer.zig").Buffer;
 const vhE = @import("../../help/Enums.zig");
 
 pub const BufferMeta = struct {
-    updateSlot: u8 = rc.MAX_IN_FLIGHT - 1,
-    elementSize: u32,
-
     typ: vhE.BufferType,
     update: vhE.UpdateType,
     resize: vhE.ResizeType,
     mem: vhE.MemUsage,
+    updateSlot: u8 = rc.MAX_IN_FLIGHT - 1,
+    elementSize: u32,
 
     pub const BufId = packed struct { val: u32 };
 

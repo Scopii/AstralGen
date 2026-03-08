@@ -1,19 +1,16 @@
 const rc = @import("../../../configs/renderConfig.zig");
-const PushData = @import("PushData.zig").PushData;
 const vk = @import("../../../modules/vk.zig").c;
-const Texture = @import("Texture.zig").Texture;
 const vhE = @import("../../help/Enums.zig");
 
 pub const TextureMeta = struct {
-    updateSlot: u8 = rc.MAX_IN_FLIGHT - 1,
-    subRange: vk.VkImageSubresourceRange,
-    viewType: vk.VkImageViewType,
-    format: vk.VkFormat,
-
     texType: vhE.TextureType,
     update: vhE.UpdateType,
     resize: vhE.ResizeType,
     mem: vhE.MemUsage,
+    updateSlot: u8 = rc.MAX_IN_FLIGHT - 1,
+    viewType: vk.VkImageViewType,
+    format: vk.VkFormat,
+    subRange: vk.VkImageSubresourceRange,
 
     pub const TexId = packed struct { val: u32 };
 

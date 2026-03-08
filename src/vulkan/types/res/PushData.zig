@@ -19,7 +19,7 @@ pub const PushData = extern struct {
 
             if (shaderSlot) |slot| {
                 if (mask[slot] == false) {
-                    pcs.resourceSlots[slot] = try resMan.getBufferDescriptor(bufUse.bufId, flightId);
+                    pcs.resourceSlots[slot] = try resMan.getDescriptor(bufUse.bufId, flightId);
                     mask[slot] = true;
                 } else std.debug.print("Pass Shader Slot {} already used\n", .{slot});
             }
@@ -30,7 +30,7 @@ pub const PushData = extern struct {
 
             if (shaderSlot) |slot| {
                 if (mask[slot] == false) {
-                    pcs.resourceSlots[slot] = try resMan.getTextureDescriptor(texUse.texId, flightId);
+                    pcs.resourceSlots[slot] = try resMan.getDescriptor(texUse.texId, flightId);
                     mask[slot] = true;
                 } else std.debug.print("Pass Shader Slot {} already used\n", .{slot});
             }
@@ -38,7 +38,7 @@ pub const PushData = extern struct {
 
         const mainTexId = pass.getMainTexId();
         if (mainTexId) |texId| {
-            const mainTex = try resMan.getTexture(texId, flightId);
+            const mainTex = try resMan.get(texId, flightId);
             pcs.width = mainTex.extent.width;
             pcs.height = mainTex.extent.height;
         }

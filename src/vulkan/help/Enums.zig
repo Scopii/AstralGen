@@ -99,7 +99,7 @@ pub const PipeAccess = enum(vk.VkAccessFlagBits2) {
     //more exist
 };
 
-pub const ShaderStage = enum(vk.VkShaderStageFlagBits) {
+pub const ShaderStage = enum {
     comp,
     vert,
     tessControl,

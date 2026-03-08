@@ -40,8 +40,8 @@ pub const DescriptorMan = struct {
     imgViews: [rc.TEX_MAX]vk.VkImageViewCreateInfo = undefined,
     imgDescs: [rc.TEX_MAX]vk.VkImageDescriptorInfoEXT = undefined,
 
-    freedDescIndices: FixedList(u32, rc.RESOURCE_MAX) = .{},
-    descCount: u32 = 0,
+    freedDescIndices: FixedList(u31, rc.RESOURCE_MAX) = .{},
+    descCount: u31 = 0,
 
     pub fn init(vma: *const Vma, gpu: vk.VkPhysicalDevice) !DescriptorMan {
         const heapProps = getDescriptorHeapProperties(gpu);
@@ -65,7 +65,7 @@ pub const DescriptorMan = struct {
         vma.freeBufferRaw(self.descHeap.handle, self.descHeap.allocation);
     }
 
-    pub fn getFreeDescriptorIndex(self: *DescriptorMan) !u32 {
+    pub fn getFreeDescriptorIndex(self: *DescriptorMan) !u31 {
         if (self.freedDescIndices.len > 0) {
             const descIndex = self.freedDescIndices.pop();
             if (descIndex) |index| return index else return error.CouldNotPopDescriptorIndex;
@@ -77,45 +77,43 @@ pub const DescriptorMan = struct {
         return descIndex;
     }
 
-    pub fn freeDescriptorIndex(self: *DescriptorMan, index: u32) void {
+    pub fn freeDescriptorIndex(self: *DescriptorMan, index: u31) void {
         self.freedDescIndices.append(index) catch |err| std.debug.print("freeDescriptorIndex failed {}\n", .{err});
     }
 
-    fn bufferHasUpdate(self: *DescriptorMan, descIndex: u32) bool {
-        return self.bufUpdates.isKeyUsed(descIndex);
-    }
+    fn getOrCreateUpdate(self: *DescriptorMan, descIndex: u31, comptime T: type) DescUpdate {
+        const updates = if (T == Buffer) &self.bufUpdates else &self.texUpdates;
+        
+        if (updates.isKeyUsed(descIndex)) return updates.getByKey(descIndex);
 
-    fn textureHasUpdate(self: *DescriptorMan, descIndex: u32) bool {
-        return self.texUpdates.isKeyUsed(descIndex);
-    }
-
-    fn createTextureUpdate(self: *DescriptorMan, descIndex: u32) DescUpdate {
         const texLen = self.texUpdates.getLength();
         const bufLen = self.bufUpdates.getLength();
-        const update = DescUpdate{ .mainIndex = texLen + bufLen, .specificIndex = texLen };
-        self.texUpdates.upsert(descIndex, update);
+        const update = DescUpdate{ .mainIndex = texLen + bufLen, .specificIndex = if (T == Buffer) bufLen else texLen };
+
+        updates.upsert(descIndex, update);
+        self.hostRanges[update.mainIndex] = self.createHostAddressRange(descIndex);
         return update;
     }
 
-    fn createBufferUpdate(self: *DescriptorMan, descIndex: u32) DescUpdate {
-        const texLen = self.texUpdates.getLength();
-        const bufLen = self.bufUpdates.getLength();
-        const update = DescUpdate{ .mainIndex = texLen + bufLen, .specificIndex = bufLen };
-        self.bufUpdates.upsert(descIndex, update);
-        return update;
+    pub fn queueBufferDescriptor(self: *DescriptorMan, gpuAddress: u64, size: u64, bufTyp: vhE.BufferType, buffer: *Buffer) !void {
+        if (buffer.descIndex == null) buffer.descIndex = try self.getFreeDescriptorIndex();
+        const descUpdate = self.getOrCreateUpdate(buffer.descIndex.?, Buffer);
+
+        self.devRanges[descUpdate.specificIndex] = vk.VkDeviceAddressRangeEXT{ .address = gpuAddress, .size = size };
+        self.descInfos[descUpdate.mainIndex] = vk.VkResourceDescriptorInfoEXT{
+            .sType = vk.VK_STRUCTURE_TYPE_RESOURCE_DESCRIPTOR_INFO_EXT,
+            .type = if (bufTyp == .Uniform) vk.VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER else vk.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+            .data = .{ .pAddressRange = &self.devRanges[descUpdate.specificIndex] },
+        };
     }
 
     pub fn queueTextureDescriptor(self: *DescriptorMan, texMeta: *const TextureMeta, texture: *Texture) !void {
         if (texture.descIndex == null) texture.descIndex = try self.getFreeDescriptorIndex();
-
-        const hasUpdate = self.textureHasUpdate(texture.descIndex.?);
-        const descUpdate = if (hasUpdate) self.texUpdates.getByKey(texture.descIndex.?) else self.createTextureUpdate(texture.descIndex.?);
-        if (!hasUpdate) self.hostRanges[descUpdate.mainIndex] = self.createHostAddressRange(texture.descIndex.?);
+        const descUpdate = self.getOrCreateUpdate(texture.descIndex.?, Texture);
 
         self.imgViews[descUpdate.specificIndex] = vhF.getViewCreateInfo(texture.img, texMeta.viewType, texMeta.format, texMeta.subRange);
 
-        const imgDescPtr = &self.imgDescs[descUpdate.specificIndex];
-        imgDescPtr.* = vk.VkImageDescriptorInfoEXT{
+        self.imgDescs[descUpdate.specificIndex] = vk.VkImageDescriptorInfoEXT{
             .sType = vk.VK_STRUCTURE_TYPE_IMAGE_DESCRIPTOR_INFO_EXT,
             .pView = &self.imgViews[descUpdate.specificIndex],
             .layout = vk.VK_IMAGE_LAYOUT_GENERAL,
@@ -124,23 +122,7 @@ pub const DescriptorMan = struct {
         self.descInfos[descUpdate.mainIndex] = vk.VkResourceDescriptorInfoEXT{
             .sType = vk.VK_STRUCTURE_TYPE_RESOURCE_DESCRIPTOR_INFO_EXT,
             .type = if (texMeta.texType == .Color) vk.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE else vk.VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-            .data = .{ .pImage = imgDescPtr },
-        };
-    }
-
-    pub fn queueBufferDescriptor(self: *DescriptorMan, gpuAddress: u64, size: u64, bufTyp: vhE.BufferType, buffer: *Buffer) !void {
-        if (buffer.descIndex == null) buffer.descIndex = try self.getFreeDescriptorIndex();
-
-        const hasUpdate = self.bufferHasUpdate(buffer.descIndex.?);
-        const descUpdate = if (hasUpdate) self.bufUpdates.getByKey(buffer.descIndex.?) else self.createBufferUpdate(buffer.descIndex.?);
-        if (!hasUpdate) self.hostRanges[descUpdate.mainIndex] = self.createHostAddressRange(buffer.descIndex.?);
-
-        self.devRanges[descUpdate.specificIndex] = vk.VkDeviceAddressRangeEXT{ .address = gpuAddress, .size = size };
-
-        self.descInfos[descUpdate.mainIndex] = vk.VkResourceDescriptorInfoEXT{
-            .sType = vk.VK_STRUCTURE_TYPE_RESOURCE_DESCRIPTOR_INFO_EXT,
-            .type = if (bufTyp == .Uniform) vk.VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER else vk.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-            .data = .{ .pAddressRange = &self.devRanges[descUpdate.specificIndex] },
+            .data = .{ .pImage = &self.imgDescs[descUpdate.specificIndex] },
         };
     }
 

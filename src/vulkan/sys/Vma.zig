@@ -67,7 +67,7 @@ pub const Vma = struct {
         std.debug.print("(CPU {s} in {s})\n", .{ visible, memory });
     }
 
-    pub fn createBufferMeta(_: *const Vma, bufInf: BufferMeta.BufInf) BufferMeta {
+    pub fn createBufferMeta(_: *const Vma, bufInf: *const BufferMeta.BufInf) BufferMeta {
         return .{
             .typ = bufInf.typ,
             .update = bufInf.update,
@@ -77,7 +77,7 @@ pub const Vma = struct {
         };
     }
 
-    pub fn allocDefinedBuffer(self: *const Vma, bufInf: BufferMeta.BufInf) !Buffer {
+    pub fn allocDefinedBuffer(self: *const Vma, bufInf: *const BufferMeta.BufInf) !Buffer {
         const bufByteSize = @as(vk.VkDeviceSize, bufInf.len) * bufInf.elementSize;
         if (bufByteSize == 0) return error.BufferByteSizeIsZero;
 
@@ -123,7 +123,7 @@ pub const Vma = struct {
         };
     }
 
-    pub fn createTextureMeta(_: *const Vma, texInf: TextureMeta.TexInf) TextureMeta {
+    pub fn createTextureMeta(_: *const Vma, texInf: *const TextureMeta.TexInf) TextureMeta {
         return .{
             .texType = texInf.typ,
             .update = texInf.update,
@@ -135,7 +135,7 @@ pub const Vma = struct {
         };
     }
 
-    pub fn allocDefinedTexture(self: *Vma, texInf: TextureMeta.TexInf) !Texture {
+    pub fn allocDefinedTexture(self: *Vma, texInf: *const TextureMeta.TexInf) !Texture {
         const memUsage = vhF.getMemUsage(texInf.mem);
         const texUse = vhF.getImageUse(texInf.typ);
         const format = vhF.getImageFormat(texInf.typ);

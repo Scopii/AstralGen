@@ -5,78 +5,69 @@ const BufferMeta = @import("../types/res/BufferMeta.zig").BufferMeta;
 const Texture = @import("../types/res/Texture.zig").Texture;
 const Buffer = @import("../types/res/Buffer.zig").Buffer;
 const rc = @import("../../configs/renderConfig.zig");
-
-pub const BufferZombie = struct { buf: Buffer};
-pub const TextureZombie = struct { tex: Texture};
+const rH = @import("ResHelpers.zig");
 
 pub const ResourceQueue = struct {
     bufCreations: LinkedMap(BufferMeta.BufInf, rc.BUF_MAX, u32, rc.BUF_MAX, 0) = .{},
     texCreations: LinkedMap(TextureMeta.TexInf, rc.TEX_MAX, u32, rc.TEX_MAX, 0) = .{},
-    bufDeletions: FixedList(BufferZombie, rc.BUF_MAX) = .{},
-    texDeletions: FixedList(TextureZombie, rc.TEX_MAX) = .{},
+    bufDeletions: FixedList(Buffer, rc.BUF_MAX) = .{},
+    texDeletions: FixedList(Texture, rc.TEX_MAX) = .{},
 
-
-    pub fn addBufferCreation(self: *ResourceQueue, bufInf: BufferMeta.BufInf) void {
-        self.bufCreations.upsert(bufInf.id.val, bufInf);
+    pub fn addCreation(self: *ResourceQueue, inf: anytype) void {
+        self.creationMapOf(rH.ResOfInf(@TypeOf(inf))).upsert(inf.id.val, inf);
     }
 
-    pub fn addTextureCreation(self: *ResourceQueue, texInf: TextureMeta.TexInf) void {
-        self.texCreations.upsert(texInf.id.val, texInf);
+    pub fn addDeletion(self: *ResourceQueue, val: anytype) !void {
+        try self.deletionListOf(@TypeOf(val)).append(val);
     }
 
-    pub fn addBufferDeletion(self: *ResourceQueue, bufZom: BufferZombie) !void {
-        try self.bufDeletions.append(bufZom);
+    pub fn getCreations(self: *ResourceQueue, comptime T: type) []rH.InfOfRes(T) {
+        return self.creationMapOf(T).getItems();
     }
 
-    pub fn addTextureDeletion(self: *ResourceQueue, texZom: TextureZombie) !void {
-        try self.texDeletions.append(texZom);
+    pub fn getDeletions(self: *ResourceQueue, comptime T: type) []T {
+        return self.deletionListOf(T).slice();
     }
 
-    pub fn getBufferCreations(self: *ResourceQueue) []BufferMeta.BufInf {
-        return self.bufCreations.getItems();
+    pub fn checkCreation(self: *ResourceQueue, id: anytype) ?*rH.InfOfId(@TypeOf(id)) {
+        const map = self.creationMapOf(rH.ResOfId(@TypeOf(id)));
+        return if (map.isKeyUsed(id.val)) map.getPtrByKey(id.val) else null;
     }
 
-    pub fn getTextureCreations(self: *ResourceQueue) []TextureMeta.TexInf {
-        return self.texCreations.getItems();
+    pub fn invalidateCreation(self: *ResourceQueue, id: anytype) void {
+        const map = self.creationMapOf(rH.ResOfId(@TypeOf(id)));
+        if (map.isKeyUsed(id.val)) map.remove(id.val);
     }
 
-    pub fn getBufferDeletions(self: *ResourceQueue) []BufferZombie {
-        return self.bufDeletions.slice();
+    pub fn clearCreations(self: *ResourceQueue, comptime T: type) void {
+        self.creationMapOf(T).clear();
     }
 
-    pub fn getTextureDeletions(self: *ResourceQueue) []TextureZombie {
-        return self.texDeletions.slice();
+    pub fn clearDeletions(self: *ResourceQueue, comptime T: type) void {
+        self.deletionListOf(T).clear();
     }
 
-    pub fn invalidateBufferCreation(self: *ResourceQueue, bufId: BufferMeta.BufId) void {
-        if (self.bufCreations.isKeyUsed(bufId.val) == true) self.bufCreations.remove(bufId.val);
+    fn creationMapOf(self: *ResourceQueue, comptime T: type) switch (T) {
+        Buffer => *@TypeOf(self.bufCreations),
+        Texture => *@TypeOf(self.texCreations),
+        else => @compileError("unsupported type"),
+    } {
+        return switch (T) {
+            Buffer => &self.bufCreations,
+            Texture => &self.texCreations,
+            else => unreachable,
+        };
     }
 
-    pub fn invalidateTextureCreation(self: *ResourceQueue, texId: TextureMeta.TexId) void {
-        if (self.texCreations.isKeyUsed(texId.val) == true) self.texCreations.remove(texId.val);
-    }
-
-    pub fn checkBufferCreation(self: *ResourceQueue, bufId: BufferMeta.BufId) ?*BufferMeta.BufInf {
-        if (self.bufCreations.isKeyUsed(bufId.val) == true) return self.bufCreations.getPtrByKey(bufId.val) else return null;
-    }
-
-    pub fn checkTextureCreation(self: *ResourceQueue, texId: TextureMeta.TexId) ?*TextureMeta.TexInf {
-        if (self.texCreations.isKeyUsed(texId.val) == true) return self.texCreations.getPtrByKey(texId.val) else return null;
-    }
-
-    pub fn clearBufferCreations(self: *ResourceQueue) void {
-        self.bufCreations.clear();
-    }
-
-    pub fn clearTextureCreations(self: *ResourceQueue) void {
-        self.texCreations.clear();
-    }
-
-    pub fn clearBufferDeletions(self: *ResourceQueue) void {
-        self.bufDeletions.clear();
-    }
-
-    pub fn clearTextureDeletions(self: *ResourceQueue) void {
-        self.texDeletions.clear();
+    fn deletionListOf(self: *ResourceQueue, comptime T: type) switch (T) {
+        Buffer => *@TypeOf(self.bufDeletions),
+        Texture => *@TypeOf(self.texDeletions),
+        else => @compileError("unsupported type"),
+    } {
+        return switch (T) {
+            Buffer => &self.bufDeletions,
+            Texture => &self.texDeletions,
+            else => unreachable,
+        };
     }
 };
