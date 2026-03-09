@@ -11,17 +11,30 @@ pub const SHADER_PATH: []const u8 = "/src/shader";
 pub const SPRV_PATH: []const u8 = "/zig-out/shader";
 
 // Shaders
-pub const quantComp = ShaderInf.init(20, .comp, "quant/comp.slang", "quantComp.spv");
-pub const quantMesh = ShaderInf.init(22, .meshNoTask, "quant/mesh.slang", "quantMesh.spv");
-pub const quantFrag = ShaderInf.init(23, .frag, "quant/frag.slang", "quantFrag.spv");
-pub const frustumMesh = ShaderInf.init(24, .meshNoTask, "quant/frustum.slang", "frustumMesh.spv");
+pub const cullTestComp = ShaderInf.init(20, .comp, "cullTest/comp.slang", "cullTestComp.spv");
+pub const cullTestMesh = ShaderInf.init(22, .meshNoTask, "cullTest/mesh.slang", "cullTestMesh.spv");
+pub const frustumMesh = ShaderInf.init(23, .meshNoTask, "cullTest/frustum.slang", "frustumMesh.spv");
+pub const cullTestFrag = ShaderInf.init(24, .frag, "cullTest/frag.slang", "cullTestFrag.spv");
 
+pub const quantComp = ShaderInf.init(25, .comp, "quant/comp.slang", "quantComp.spv");
+pub const quantMesh = ShaderInf.init(26, .meshNoTask, "quant/mesh.slang", "quantMesh.spv");
+pub const quantFrag = ShaderInf.init(27, .frag, "quant/frag.slang", "quantFrag.spv");
+
+pub const editorGridMesh = ShaderInf.init(28, .meshNoTask, "editorGrid/mesh.slang", "editorGridMesh.spv");
+pub const editorGridFrag = ShaderInf.init(29, .frag, "editorGrid/frag.slang", "editorGridFrag.spv");
 
 pub const COMPILING_SHADERS: []const ShaderInf = &.{
+    cullTestComp,
+    cullTestMesh,
+    frustumMesh,
+    cullTestFrag,
+
     quantComp,
     quantMesh,
     quantFrag,
-    frustumMesh,
+
+    editorGridMesh,
+    editorGridFrag,
 };
 
 // pub const t1Comp = ShaderInf.init(0, .comp, "compTest/comp.slang", "t1Comp.spv");

@@ -8,7 +8,7 @@ const std = @import("std");
 const ig = @cImport(@cInclude("imgui_ctx.h"));
 
 pub const ImGuiMan = struct {
-    uiActive: bool = true,
+    uiActive: bool = false,
 
     instance: vk.VkInstance,
     gpu: vk.VkPhysicalDevice,

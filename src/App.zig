@@ -91,8 +91,8 @@ pub const App = struct {
 
     pub fn setupApp(self: *App) !void {
         // CAMERA
-        self.camMan.createCamera(.{ .val = 0 }, Camera.init(.{ .bufId = rc.cameraUB.id, .pos = zm.f32x4(0, 5, -20, 0), .yaw = 170 }));
-        self.camMan.createCamera(.{ .val = 1 }, Camera.init(.{ .bufId = rc.camera2UB.id, .pos = zm.f32x4(0, 20, -50, 0), .yaw = 170 }));
+        self.camMan.createCamera(.{ .val = 0 }, Camera.init(.{ .bufId = rc.cameraUB.id, .pos = zm.f32x4(0, 5, -20, 0), .yaw = 170, .near = 0.1, .far = 100, .fov = 60 }));
+        self.camMan.createCamera(.{ .val = 1 }, Camera.init(.{ .bufId = rc.camera2UB.id, .pos = zm.f32x4(0, 20, -45, 0), .yaw = 170, .near = 0.1, .far = 300, .fov = 110 }));
 
         // RENDERING SET UP
         for (rc.BUFFERS) |bufInf| try self.renderer.addResource(bufInf, null);

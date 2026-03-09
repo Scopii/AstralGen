@@ -32,7 +32,7 @@ pub const DESCRIPTOR_DEBUG = true;
 pub const EARLY_GPU_WAIT = true; // (Reflex Mode)
 pub const MAX_IN_FLIGHT: u8 = 2; // (Frames)
 pub const DESIRED_SWAPCHAIN_IMAGES: u8 = 3;
-pub const DISPLAY_MODE = vk.VK_PRESENT_MODE_IMMEDIATE_KHR;
+pub const DISPLAY_MODE = vk.VK_PRESENT_MODE_MAILBOX_KHR; //vk.VK_PRESENT_MODE_IMMEDIATE_KHR
 pub const MAX_WINDOWS: u8 = 8;
 pub const LINKED_TEX_MAX = 3;
 pub const RENDER_TEX_AUTO_RESIZE = true;
@@ -67,11 +67,23 @@ pub const quantDebugDepthTex = TextureMeta.create(.{ .id = .{ .val = 4 }, .mem =
 pub const TEXTURES: []const TextureMeta.TexInf = &.{ quantTex, quantDepthTex, quantDebugTex, quantDebugDepthTex };
 
 // Passes
-pub const PASSES: []const Pass = &.{ quantComp, quant, quantDebug, frustumPass };
+pub const PASSES: []const Pass = &.{
+    compCull,
+    mainCull,
+    debugCull,
+    frustum,
 
-pub const quantComp: Pass = .{
-    .name = "Quant-Comp",
-    .shaderIds = &.{sc.quantComp.id},
+    // comp,
+    // main,
+    // debug,
+
+    editorGrid,
+};
+
+// Cull Test
+pub const compCull: Pass = .{
+    .name = "Comp",
+    .shaderIds = &.{sc.cullTestComp.id}, // sc.quantComp.id // sc.cullTestComp.id
     .typ = Pass.createCompute(.{
         .workgroups = .{ .x = 1, .y = 1, .z = 1 },
     }),
@@ -81,9 +93,9 @@ pub const quantComp: Pass = .{
     },
 };
 
-const quant: Pass = .{
-    .name = "Quant",
-    .shaderIds = &.{ sc.quantMesh.id, sc.quantFrag.id },
+const mainCull: Pass = .{
+    .name = "Main",
+    .shaderIds = &.{ sc.cullTestMesh.id, sc.cullTestFrag.id }, // sc.quantMesh.id, sc.quantFrag.id // sc.cullTestMesh.id, sc.cullTestFrag.id
     .typ = Pass.createClassic(.{
         .classicTyp = Pass.ClassicTyp.taskMeshData(.{
             .workgroups = .{ .x = 1, .y = 1, .z = 1 },
@@ -109,9 +121,9 @@ const quant: Pass = .{
     },
 };
 
-const quantDebug: Pass = .{
-    .name = "Quant",
-    .shaderIds = &.{ sc.quantMesh.id, sc.quantFrag.id },
+const debugCull: Pass = .{
+    .name = "Debug",
+    .shaderIds = &.{ sc.cullTestMesh.id, sc.cullTestFrag.id }, // sc.quantMesh.id, sc.quantFrag.id // sc.cullTestMesh.id, sc.cullTestFrag.id
     .typ = Pass.createClassic(.{
         .classicTyp = Pass.ClassicTyp.taskMeshData(.{
             .workgroups = .{ .x = 1, .y = 1, .z = 1 },
@@ -137,7 +149,76 @@ const quantDebug: Pass = .{
     },
 };
 
-pub const frustumPass: Pass = .{
+// Normal Pass
+pub const comp: Pass = .{
+    .name = "Comp",
+    .shaderIds = &.{sc.quantComp.id}, // sc.quantComp.id // sc.cullTestComp.id
+    .typ = Pass.createCompute(.{
+        .workgroups = .{ .x = 1, .y = 1, .z = 1 },
+    }),
+    .bufUses = &.{
+        BufferUse.init(indirectSB.id, .ComputeShader, .ShaderReadWrite, 0),
+        BufferUse.init(objectSB.id, .ComputeShader, .ShaderRead, 1),
+    },
+};
+
+const main: Pass = .{
+    .name = "Main",
+    .shaderIds = &.{ sc.quantMesh.id, sc.quantFrag.id }, // sc.quantMesh.id, sc.quantFrag.id // sc.cullTestMesh.id, sc.cullTestFrag.id
+    .typ = Pass.createClassic(.{
+        .classicTyp = Pass.ClassicTyp.taskMeshData(.{
+            .workgroups = .{ .x = 1, .y = 1, .z = 1 },
+            .indirectBuf = .{ .id = indirectSB.id, .offset = 0 },
+        }),
+        .mainTexId = quantTex.id,
+        .colorAtts = &.{Attachment.init(quantTex.id, .ColorAtt, .ColorAttReadWrite, true)},
+        .depthAtt = Attachment.init(quantDepthTex.id, .EarlyFragTest, .DepthStencilWrite, true),
+        .renderState = .{
+            .depthTest = vk.VK_TRUE,
+            .depthWrite = vk.VK_TRUE,
+            .depthCompare = vk.VK_COMPARE_OP_LESS,
+            .cullMode = vk.VK_CULL_MODE_NONE,
+            // .polygonMode = vk.VK_PRIMITIVE_TOPOLOGY_LINE_LIST,
+            // .lineWidth = 2.0,
+            // .frontFace = vk.VK_FRONT_FACE_COUNTER_CLOCKWISE,
+        },
+    }),
+    .bufUses = &.{
+        BufferUse.init(indirectSB.id, .DrawIndirect, .IndirectRead, null),
+        BufferUse.init(cameraUB.id, .FragShader, .ShaderRead, 0),
+        BufferUse.init(cameraUB.id, .FragShader, .ShaderRead, 1),
+    },
+};
+
+const debug: Pass = .{
+    .name = "Debug",
+    .shaderIds = &.{ sc.quantMesh.id, sc.quantFrag.id }, // sc.quantMesh.id, sc.quantFrag.id // sc.cullTestMesh.id, sc.cullTestFrag.id
+    .typ = Pass.createClassic(.{
+        .classicTyp = Pass.ClassicTyp.taskMeshData(.{
+            .workgroups = .{ .x = 1, .y = 1, .z = 1 },
+            .indirectBuf = .{ .id = indirectSB.id, .offset = 0 },
+        }),
+        .mainTexId = quantDebugTex.id,
+        .colorAtts = &.{Attachment.init(quantDebugTex.id, .ColorAtt, .ColorAttReadWrite, true)},
+        .depthAtt = Attachment.init(quantDebugDepthTex.id, .EarlyFragTest, .DepthStencilWrite, true),
+        .renderState = .{
+            .depthTest = vk.VK_TRUE,
+            .depthWrite = vk.VK_TRUE,
+            .depthCompare = vk.VK_COMPARE_OP_LESS,
+            .cullMode = vk.VK_CULL_MODE_NONE,
+            // .polygonMode = vk.VK_PRIMITIVE_TOPOLOGY_LINE_LIST,
+            // .lineWidth = 2.0,
+            // .frontFace = vk.VK_FRONT_FACE_COUNTER_CLOCKWISE,
+        },
+    }),
+    .bufUses = &.{
+        BufferUse.init(indirectSB.id, .DrawIndirect, .IndirectRead, null),
+        BufferUse.init(camera2UB.id, .FragShader, .ShaderRead, 0),
+        BufferUse.init(cameraUB.id, .FragShader, .ShaderRead, 1),
+    },
+};
+
+pub const frustum: Pass = .{
     .name = "Frustum",
     .shaderIds = &.{ sc.frustumMesh.id, sc.quantFrag.id },
     .typ = Pass.createClassic(.{
@@ -156,6 +237,28 @@ pub const frustumPass: Pass = .{
     .bufUses = &.{
         BufferUse.init(cameraUB.id, .MeshShader, .ShaderRead, 0),
         BufferUse.init(camera2UB.id, .MeshShader, .ShaderRead, 1),
+    },
+};
+
+pub const editorGrid: Pass = .{
+    .name = "Editor-Grid",
+    .shaderIds = &.{ sc.editorGridMesh.id, sc.editorGridFrag.id },
+    .typ = Pass.createClassic(.{
+        .classicTyp = Pass.ClassicTyp.taskMeshData(.{
+            .workgroups = .{ .x = 1, .y = 1, .z = 1 },
+        }),
+        .mainTexId = quantDebugTex.id,
+        .colorAtts = &.{Attachment.init(quantDebugTex.id, .ColorAtt, .ColorAttReadWrite, false)},
+        .depthAtt = Attachment.init(quantDebugDepthTex.id, .EarlyFragTest, .DepthStencilWrite, false),
+        .renderState = .{
+            .depthTest = vk.VK_TRUE,
+            .depthWrite = vk.VK_TRUE,
+            .depthCompare = vk.VK_COMPARE_OP_LESS,
+            .cullMode = vk.VK_CULL_MODE_NONE,
+        },
+    }),
+    .bufUses = &.{
+        BufferUse.init(camera2UB.id, .MeshShader, .ShaderRead, 0),
     },
 };
 
