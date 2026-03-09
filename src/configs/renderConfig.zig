@@ -50,20 +50,24 @@ pub const TEX_COLOR_FORMAT = vk.VK_FORMAT_R16G16B16A16_SFLOAT;
 pub const TEX_DEPTH_FORMAT = vk.VK_FORMAT_D32_SFLOAT;
 
 // Buffers
-pub const indirectSB = BufferMeta.create(.{ .id = .{ .val = 41 }, .mem = .Gpu, .typ = .Indirect, .len = 1, .elementSize = @sizeOf(vhT.IndirectData), .update = .PerFrame });
-pub const readbackSB = BufferMeta.create(.{ .id = .{ .val = 45 }, .mem = .CpuRead, .typ = .Storage, .len = 1, .elementSize = @sizeOf(vhT.ReadbackData), .update = .PerFrame });
+pub const indirectSB = BufferMeta.create(.{ .id = .{ .val = 1 }, .mem = .Gpu, .typ = .Indirect, .len = 1, .elementSize = @sizeOf(vhT.IndirectData), .update = .PerFrame });
+pub const readbackSB = BufferMeta.create(.{ .id = .{ .val = 2 }, .mem = .CpuRead, .typ = .Storage, .len = 1, .elementSize = @sizeOf(vhT.ReadbackData), .update = .PerFrame });
 
-pub const objectSB = BufferMeta.create(.{ .id = .{ .val = 1 }, .mem = .Gpu, .typ = .Storage, .len = 20, .elementSize = @sizeOf(Object), .update = .Rarely, .resize = .Fit });
-pub const cameraUB = BufferMeta.create(.{ .id = .{ .val = 40 }, .mem = .Gpu, .typ = .Uniform, .len = 1, .elementSize = @sizeOf(CameraData), .update = .Often, .resize = .Fit });
-pub const BUFFERS: []const BufferMeta.BufInf = &.{ objectSB, cameraUB, indirectSB, readbackSB };
+pub const objectSB = BufferMeta.create(.{ .id = .{ .val = 3 }, .mem = .Gpu, .typ = .Storage, .len = 20, .elementSize = @sizeOf(Object), .update = .Rarely, .resize = .Fit });
+pub const cameraUB = BufferMeta.create(.{ .id = .{ .val = 4 }, .mem = .Gpu, .typ = .Uniform, .len = 1, .elementSize = @sizeOf(CameraData), .update = .Often, .resize = .Fit });
+pub const camera2UB = BufferMeta.create(.{ .id = .{ .val = 5 }, .mem = .Gpu, .typ = .Uniform, .len = 1, .elementSize = @sizeOf(CameraData), .update = .Often, .resize = .Fit });
+pub const BUFFERS: []const BufferMeta.BufInf = &.{ objectSB, cameraUB, camera2UB, indirectSB, readbackSB };
 
 // Textures
-pub const quantTex = TextureMeta.create(.{ .id = .{ .val = 5 }, .mem = .Gpu, .typ = .Color, .width = 1920, .height = 1080, .update = .Rarely });
-pub const quantDepthTex = TextureMeta.create(.{ .id = .{ .val = 11 }, .mem = .Gpu, .typ = .Depth, .width = 1920, .height = 1080, .update = .Rarely });
-pub const TEXTURES: []const TextureMeta.TexInf = &.{ quantTex, quantDepthTex };
+pub const quantTex = TextureMeta.create(.{ .id = .{ .val = 1 }, .mem = .Gpu, .typ = .Color, .width = 1920, .height = 1080, .update = .Rarely });
+pub const quantDepthTex = TextureMeta.create(.{ .id = .{ .val = 2 }, .mem = .Gpu, .typ = .Depth, .width = 1920, .height = 1080, .update = .Rarely });
+
+pub const quantDebugTex = TextureMeta.create(.{ .id = .{ .val = 3 }, .mem = .Gpu, .typ = .Color, .width = 1920, .height = 1080, .update = .Rarely });
+pub const quantDebugDepthTex = TextureMeta.create(.{ .id = .{ .val = 4 }, .mem = .Gpu, .typ = .Depth, .width = 1920, .height = 1080, .update = .Rarely });
+pub const TEXTURES: []const TextureMeta.TexInf = &.{ quantTex, quantDepthTex, quantDebugTex, quantDebugDepthTex };
 
 // Passes
-pub const PASSES: []const Pass = &.{ quantComp, quant, frustumPass };
+pub const PASSES: []const Pass = &.{ quantComp, quant, quantDebug, frustumPass };
 
 pub const quantComp: Pass = .{
     .name = "Quant-Comp",
@@ -100,6 +104,35 @@ const quant: Pass = .{
     }),
     .bufUses = &.{
         BufferUse.init(indirectSB.id, .DrawIndirect, .IndirectRead, null),
+        BufferUse.init(cameraUB.id, .FragShader, .ShaderRead, 0),
+        BufferUse.init(cameraUB.id, .FragShader, .ShaderRead, 1),
+    },
+};
+
+const quantDebug: Pass = .{
+    .name = "Quant",
+    .shaderIds = &.{ sc.quantMesh.id, sc.quantFrag.id },
+    .typ = Pass.createClassic(.{
+        .classicTyp = Pass.ClassicTyp.taskMeshData(.{
+            .workgroups = .{ .x = 1, .y = 1, .z = 1 },
+            .indirectBuf = .{ .id = indirectSB.id, .offset = 0 },
+        }),
+        .mainTexId = quantDebugTex.id,
+        .colorAtts = &.{Attachment.init(quantDebugTex.id, .ColorAtt, .ColorAttReadWrite, true)},
+        .depthAtt = Attachment.init(quantDebugDepthTex.id, .EarlyFragTest, .DepthStencilWrite, true),
+        .renderState = .{
+            .depthTest = vk.VK_TRUE,
+            .depthWrite = vk.VK_TRUE,
+            .depthCompare = vk.VK_COMPARE_OP_LESS,
+            .cullMode = vk.VK_CULL_MODE_NONE,
+            // .polygonMode = vk.VK_PRIMITIVE_TOPOLOGY_LINE_LIST,
+            // .lineWidth = 2.0,
+            // .frontFace = vk.VK_FRONT_FACE_COUNTER_CLOCKWISE,
+        },
+    }),
+    .bufUses = &.{
+        BufferUse.init(indirectSB.id, .DrawIndirect, .IndirectRead, null),
+        BufferUse.init(camera2UB.id, .FragShader, .ShaderRead, 0),
         BufferUse.init(cameraUB.id, .FragShader, .ShaderRead, 1),
     },
 };
@@ -111,9 +144,9 @@ pub const frustumPass: Pass = .{
         .classicTyp = Pass.ClassicTyp.taskMeshData(.{
             .workgroups = .{ .x = 1, .y = 1, .z = 1 },
         }),
-        .mainTexId = quantTex.id,
-        .colorAtts = &.{Attachment.init(quantTex.id, .ColorAtt, .ColorAttReadWrite, false)},
-        .depthAtt = Attachment.init(quantDepthTex.id, .EarlyFragTest, .DepthStencilWrite, false),
+        .mainTexId = quantDebugTex.id,
+        .colorAtts = &.{Attachment.init(quantDebugTex.id, .ColorAtt, .ColorAttReadWrite, false)},
+        .depthAtt = Attachment.init(quantDebugDepthTex.id, .EarlyFragTest, .DepthStencilWrite, false),
         .renderState = .{
             .depthTest = vk.VK_FALSE,
             .depthWrite = vk.VK_FALSE,
@@ -122,6 +155,7 @@ pub const frustumPass: Pass = .{
     }),
     .bufUses = &.{
         BufferUse.init(cameraUB.id, .MeshShader, .ShaderRead, 0),
+        BufferUse.init(camera2UB.id, .MeshShader, .ShaderRead, 1),
     },
 };
 

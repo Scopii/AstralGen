@@ -4,6 +4,8 @@ const sdl = @import("../modules/sdl.zig").c;
 const vk = @import("../modules/vk.zig").c;
 const std = @import("std");
 
+const CamId = @import("../core/CameraMan.zig").CamId;
+
 pub const Window = struct {
     pub const WindowState = enum { active, inactive, needCreation, needUpdate, needDelete, needInactive, needActive };
     handle: *sdl.SDL_Window,
@@ -13,10 +15,12 @@ pub const Window = struct {
     extent: vk.VkExtent2D,
     id: WindowId,
     resizeTex: bool,
+    relativeMouse: bool = false,
+    camIndex: CamId,
 
     pub const WindowId = packed struct { val: u32 };
 
-    pub fn init(windowProps: sdl.SDL_PropertiesID, renderTexId: TexId, extent: vk.VkExtent2D, resizeTex: bool, linkedTexIds: []const TexId) !Window {
+    pub fn init(windowProps: sdl.SDL_PropertiesID, renderTexId: TexId, extent: vk.VkExtent2D, resizeTex: bool, linkedTexIds: []const TexId, camIndex: u8) !Window {
         if (linkedTexIds.len > rc.LINKED_TEX_MAX) return error.WindowLinkedTexturesOverflow;
 
         const winHandle = sdl.SDL_CreateWindowWithProperties(windowProps) orelse {
@@ -35,6 +39,7 @@ pub const Window = struct {
             .id = .{ .val = windowId },
             .resizeTex = resizeTex,
             .linkedTexIds = actualTexIds,
+            .camIndex = .{.val = camIndex},
         };
     }
 
@@ -70,8 +75,9 @@ pub const Window = struct {
         _ = sdl.SDL_SetWindowBordered(self.handle, val);
     }
 
-    pub fn setRelativeMouseMode(self: *const Window, val: bool) void {
+    pub fn setRelativeMouseMode(self: *Window, val: bool) void {
         _ = sdl.SDL_SetWindowRelativeMouseMode(self.handle, val);
+        self.relativeMouse = val;
     }
 
     pub fn setFullscreenExclusive(self: *Window, val: bool) void {

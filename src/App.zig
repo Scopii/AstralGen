@@ -7,12 +7,14 @@ const EventManager = @import("core/EventManager.zig").EventManager;
 const TimeManager = @import("core/TimeManager.zig").TimeManager;
 const RNGenerator = @import("core/RNGenerator.zig").RNGenerator;
 const Renderer = @import("vulkan/sys/Renderer.zig").Renderer;
+const CameraMan = @import("core/CameraMan.zig").CameraMan;
 const UiManager = @import("core/UiManager.zig").UiManager;
 const shaderCon = @import("configs/shaderConfig.zig");
 const Window = @import("platform/Window.zig").Window;
 const Camera = @import("core/Camera.zig").Camera;
 const rc = @import("configs/renderConfig.zig");
 const ac = @import("configs/appConfig.zig");
+const zm = @import("zmath");
 const std = @import("std");
 
 pub const App = struct {
@@ -21,7 +23,7 @@ pub const App = struct {
     uiMan: UiManager,
     renderer: Renderer,
     timeMan: TimeManager,
-    cam: Camera,
+    camMan: CameraMan = .{},
     eventMan: EventManager,
     shaderCompiler: ShaderCompiler,
     ecs: EntityManager,
@@ -68,7 +70,6 @@ pub const App = struct {
         shaderCompiler.freeFreshShaders();
 
         return .{
-            .cam = Camera.init(.{}),
             .timeMan = TimeManager.init(),
             .eventMan = EventManager{},
             .memoryMan = memoryMan,
@@ -89,6 +90,10 @@ pub const App = struct {
     }
 
     pub fn setupApp(self: *App) !void {
+        // CAMERA
+        self.camMan.createCamera(.{ .val = 0 }, Camera.init(.{ .bufId = rc.cameraUB.id, .pos = zm.f32x4(0, 5, -20, 0), .yaw = 170 }));
+        self.camMan.createCamera(.{ .val = 1 }, Camera.init(.{ .bufId = rc.camera2UB.id, .pos = zm.f32x4(0, 20, -50, 0), .yaw = 170 }));
+
         // RENDERING SET UP
         for (rc.BUFFERS) |bufInf| try self.renderer.addResource(bufInf, null);
         for (rc.TEXTURES) |texInf| try self.renderer.addResource(texInf, null);
@@ -102,7 +107,8 @@ pub const App = struct {
         // try self.windowMan.addWindow("Compute", 16 * 52, 9 * 52, rc.compTex.id, 960, 50, true);
         // try self.windowMan.addWindow("Graphics", 16 * 52, 9 * 52, rc.grapTex.id, 960, 550, true);
 
-        try self.windowMan.addWindow("Main Rendering", 16 * 80, 9 * 80, rc.quantTex.id, 300, 200, true, &[_]TexId{rc.quantDepthTex.id});
+        try self.windowMan.addWindow("Debug", 1920 / 2, 1080 / 2, rc.quantDebugTex.id, 1920 / 2 - 10, 1080 / 2 - 10, true, &[_]TexId{rc.quantDebugDepthTex.id}, 1);
+        try self.windowMan.addWindow("Main", 1920 / 2, 1080 / 2, rc.quantTex.id, 10, 40, true, &[_]TexId{rc.quantDepthTex.id}, 0);
     }
 
     pub fn run(self: *App) !void {
@@ -111,7 +117,6 @@ pub const App = struct {
         const renderer = &self.renderer;
         const eventMan = &self.eventMan;
         const timeMan = &self.timeMan;
-        const cam = &self.cam;
 
         var firstFrame = true;
         var frameData: FrameData = undefined;
@@ -128,10 +133,12 @@ pub const App = struct {
             if (rc.EARLY_GPU_WAIT == true) try renderer.waitForGpu();
 
             // Poll Inputs
-            windowMan.pollEvents() catch |err| {
+            windowMan.pollEvents(&self.renderer.imguiMan) catch |err| {
                 std.log.err("Error in pollEvents(): {}", .{err});
                 break;
             };
+
+            const activeCam = if (self.windowMan.mainWindow) |mainWindow| try self.camMan.getCamera(mainWindow.camIndex) else null;
 
             // Handle Inputs
             if (windowMan.inputEvents.len > 0) eventMan.mapKeyEvents(windowMan.consumeKeyEvents());
@@ -169,8 +176,10 @@ pub const App = struct {
                     .toggleGpuProfiling => self.renderer.renderGraph.toggleGpuProfiling(),
 
                     .toggleFreezeFrustum => {
-                        cam.toggleFreezeFrustum();
-                        std.debug.print("Frustum Freeze: {}\n", .{cam.freezeFrustum});
+                        // if (activeCam) |cam| {
+                        //     cam.toggleFreezeFrustum();
+                        //     std.debug.print("Frustum Freeze: {}\n", .{cam.freezeFrustum});
+                        // }
                     },
 
                     .toggleImgui => {
@@ -181,16 +190,18 @@ pub const App = struct {
                     },
                     else => {
                         if (self.windowMan.uiActive == false) {
-                            switch (appEvent) {
-                                .camForward => cam.moveForward(dt),
-                                .camBackward => cam.moveBackward(dt),
-                                .camUp => cam.moveUp(dt),
-                                .camDown => cam.moveDown(dt),
-                                .camLeft => cam.moveLeft(dt),
-                                .camRight => cam.moveRight(dt),
-                                .camFovIncrease => cam.increaseFov(dt),
-                                .camFovDecrease => cam.decreaseFov(dt),
-                                else => {},
+                            if (activeCam) |cam| {
+                                switch (appEvent) {
+                                    .camForward => cam.moveForward(dt),
+                                    .camBackward => cam.moveBackward(dt),
+                                    .camUp => cam.moveUp(dt),
+                                    .camDown => cam.moveDown(dt),
+                                    .camLeft => cam.moveLeft(dt),
+                                    .camRight => cam.moveRight(dt),
+                                    .camFovIncrease => cam.increaseFov(dt),
+                                    .camFovDecrease => cam.decreaseFov(dt),
+                                    else => {},
+                                }
                             }
                         }
                     },
@@ -200,7 +211,7 @@ pub const App = struct {
 
             if (self.windowMan.uiActive == false) {
                 if (windowMan.mouseMoveX != 0 or windowMan.mouseMoveY != 0) {
-                    cam.rotate(windowMan.mouseMoveX, windowMan.mouseMoveY);
+                    if (activeCam) |cam| cam.rotate(windowMan.mouseMoveX, windowMan.mouseMoveY);
                     if (ac.MOUSE_MOVEMENT_INFO == true) std.debug.print("Mouse Total Movement x:{} y:{}\n", .{ windowMan.mouseMoveX, windowMan.mouseMoveY });
                     windowMan.mouseMoveX = 0;
                     windowMan.mouseMoveY = 0;
@@ -210,10 +221,12 @@ pub const App = struct {
                 windowMan.mouseMoveY = 0;
             }
 
-            if (cam.needsUpdate == true) {
-                const camData = cam.getCameraData();
-                try renderer.updateBuffer(rc.cameraUB.id, &camData);
-                cam.needsUpdate = false;
+            for (self.camMan.cameras.getItems()) |*cam| {
+                if (cam.needsUpdate) {
+                    const camData = cam.getCameraData();
+                    try renderer.updateBuffer(cam.bufId, &camData);
+                    cam.needsUpdate = false;
+                }
             }
 
             if (firstFrame) windowMan.showAllWindows();

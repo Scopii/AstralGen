@@ -49,7 +49,8 @@ void main(
     out indices uint3 tris[12]
     // out indices uint2 outLines[12]
 ) {
-    ConstantBuffer<CameraData> cam = heapCameraBuffers[pc.resources[1]];
+    ConstantBuffer<CameraData> cam = heapCameraBuffers[pc.resources[0]];
+    ConstantBuffer<CameraData> cullCam = heapCameraBuffers[pc.resources[1]];
 
     float3 gridPos = float3(groupId.x, groupId.y, groupId.z) * 4.00; // World Pos of Cube
 
@@ -58,7 +59,7 @@ void main(
     // frustum cull — bounding sphere of cube (half-diagonal of ±1 cube = sqrt(3))
     float radius = 1.733;
     for (int i = 0; i < 6; i++) {
-        if (dot(cam.frustumPlanes[i].xyz, worldOrigin) + cam.frustumPlanes[i].w < -radius) {
+        if (dot(cullCam.frustumPlanes[i].xyz, worldOrigin) + cullCam.frustumPlanes[i].w < -radius) {
             SetMeshOutputCounts(0, 0);
             return;
         }

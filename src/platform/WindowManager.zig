@@ -58,20 +58,20 @@ pub const WindowManager = struct {
         for (self.windows.getItems()) |*win| win.setOpacity(1.0);
     }
 
-    pub fn addWindow(self: *WindowManager, title: [*c]const u8, width: c_int, height: c_int, renderTexId: TexId, xPos: c_int, yPos: c_int, resizeTex: bool, linkedTexIds: []const TexId) !void {
+    pub fn addWindow(self: *WindowManager, title: [*c]const u8, w: c_int, h: c_int, renderTexId: TexId, x: c_int, y: c_int, resize: bool, texIds: []const TexId, camIndex: u8) !void {
         const props = self.windowProps;
         const flags = sdl.SDL_WINDOW_VULKAN | sdl.SDL_WINDOW_RESIZABLE | sdl.SDL_WINDOW_HIDDEN;
         _ = sdl.SDL_SetNumberProperty(props, sdl.SDL_PROP_WINDOW_CREATE_FLAGS_NUMBER, @intCast(flags));
-        _ = sdl.SDL_SetNumberProperty(props, sdl.SDL_PROP_WINDOW_CREATE_X_NUMBER, @intCast(xPos));
-        _ = sdl.SDL_SetNumberProperty(props, sdl.SDL_PROP_WINDOW_CREATE_Y_NUMBER, @intCast(yPos));
-        _ = sdl.SDL_SetNumberProperty(props, sdl.SDL_PROP_WINDOW_CREATE_WIDTH_NUMBER, @intCast(width));
-        _ = sdl.SDL_SetNumberProperty(props, sdl.SDL_PROP_WINDOW_CREATE_HEIGHT_NUMBER, @intCast(height));
+        _ = sdl.SDL_SetNumberProperty(props, sdl.SDL_PROP_WINDOW_CREATE_X_NUMBER, @intCast(x));
+        _ = sdl.SDL_SetNumberProperty(props, sdl.SDL_PROP_WINDOW_CREATE_Y_NUMBER, @intCast(y));
+        _ = sdl.SDL_SetNumberProperty(props, sdl.SDL_PROP_WINDOW_CREATE_WIDTH_NUMBER, @intCast(w));
+        _ = sdl.SDL_SetNumberProperty(props, sdl.SDL_PROP_WINDOW_CREATE_HEIGHT_NUMBER, @intCast(h));
         _ = sdl.SDL_SetStringProperty(props, sdl.SDL_PROP_WINDOW_CREATE_TITLE_STRING, title);
 
-        const window = try Window.init(props, renderTexId, vk.VkExtent2D{ .width = @intCast(width), .height = @intCast(height) }, resizeTex, linkedTexIds);
+        var window = try Window.init(props, renderTexId, vk.VkExtent2D{ .width = @intCast(w), .height = @intCast(h) }, resize, texIds, camIndex);
         window.setOpacity(0.0);
 
-        //window.setRelativeMouseMode(true);
+        // window.setRelativeMouseMode(false);
 
         self.windows.upsert(window.id.val, window);
         try self.changedWindows.append(self.windows.getByKey(window.id.val));
@@ -108,24 +108,35 @@ pub const WindowManager = struct {
         if (self.mainWindow) |window| window.setRelativeMouseMode(!self.uiActive);
     }
 
-    pub fn pollEvents(self: *WindowManager) !void {
+    pub fn pollEvents(self: *WindowManager, imguiMan: ?*ImGuiMan) !void {
         var event: sdl.SDL_Event = undefined;
 
         if (self.openWindows == 0) {
             if (sdl.SDL_WaitEvent(&event)) { // On pause wait for an event and process
                 try self.processEvent(&event);
-                if (self.uiActive == true) _ = zgui.backend.processEvent(&event);
+                if (self.uiActive == true) if (imguiMan) |im| im.processEvent(getEventWindowId(&event), &event);
             }
             while (sdl.SDL_PollEvent(&event)) { // drain remaining events
                 try self.processEvent(&event);
-                if (self.uiActive == true) _ = zgui.backend.processEvent(&event);
+                if (self.uiActive == true) if (imguiMan) |im| im.processEvent(getEventWindowId(&event), &event);
             }
         } else {
             while (sdl.SDL_PollEvent(&event)) { // When active process all events in queue
                 try self.processEvent(&event);
-                if (self.uiActive == true) _ = zgui.backend.processEvent(&event);
+                if (self.uiActive == true) if (imguiMan) |im| im.processEvent(getEventWindowId(&event), &event);
             }
         }
+    }
+
+    fn getEventWindowId(event: *sdl.SDL_Event) u32 {
+        return switch (event.type) {
+            sdl.SDL_EVENT_MOUSE_BUTTON_DOWN, sdl.SDL_EVENT_MOUSE_BUTTON_UP => event.button.windowID,
+            sdl.SDL_EVENT_MOUSE_MOTION => event.motion.windowID,
+            sdl.SDL_EVENT_MOUSE_WHEEL => event.wheel.windowID,
+            sdl.SDL_EVENT_KEY_DOWN, sdl.SDL_EVENT_KEY_UP => event.key.windowID,
+            sdl.SDL_EVENT_TEXT_INPUT => event.text.windowID,
+            else => 0,
+        };
     }
 
     fn destroyWindow(self: *WindowManager, windowId: Window.WindowId) void {
@@ -166,16 +177,19 @@ pub const WindowManager = struct {
 
     pub fn processWindowEvent(self: *WindowManager, event: *sdl.SDL_Event) !void {
         const id = event.window.windowID;
-        const window = self.windows.getPtrByKey(id);
+        var window = self.windows.getPtrByKey(id);
 
         switch (event.type) {
             sdl.SDL_EVENT_WINDOW_FOCUS_LOST => {
                 std.debug.print("Main Window Lost\n", .{});
+                window.setRelativeMouseMode(false);
                 self.mainWindow = null;
                 return; // Should not append window changes?
             },
             sdl.SDL_EVENT_WINDOW_FOCUS_GAINED => {
                 std.debug.print("Main Window Set\n", .{});
+                // const shouldBeRelative = if (self.uiActive == true) window.relativeMouse else false;
+                window.setRelativeMouseMode(!self.uiActive);
                 self.mainWindow = window;
                 return; // Should not append window changes?
             },

@@ -1,3 +1,4 @@
+const BufId = @import("../vulkan/types/res/BufferMeta.zig").BufferMeta.BufId;
 const ac = @import("../configs/appConfig.zig");
 const std = @import("std");
 const zm = @import("zmath");
@@ -24,8 +25,7 @@ pub const Camera = struct {
     yaw: f32 = 0.0,
     needsUpdate: bool = true,
 
-    freezeFrustum: bool = false,
-    frozenCorners: [8][4]f32 = .{.{ 0, 0, 0, 1 }} ** 8,
+    bufId: BufId,
 
     pub fn init(cam: Camera) Camera {
         return cam;
@@ -119,18 +119,13 @@ pub const Camera = struct {
     pub fn getCameraData(self: *Camera) CameraData {
         const vp = self.getViewProj();
         const liveCorners = self.computeFrustumCorners();
-        if (!self.freezeFrustum) self.frozenCorners = liveCorners;
-
-        // when frozen: cull against frozen frustum so you can verify it visually
-        // when live: cull against current camera
-        const cullCorners = if (self.freezeFrustum) self.frozenCorners else liveCorners;
 
         return .{
             .viewProj = vp,
             .camPosAndFov = self.getPosAndFov(),
             .camDir = self.getForward(),
-            .frustumCorners = self.frozenCorners,
-            .frustumPlanes = cornersToPlanes(cullCorners), // was always liveCorners before
+            .frustumCorners = liveCorners,
+            .frustumPlanes = cornersToPlanes(liveCorners),
         };
     }
 

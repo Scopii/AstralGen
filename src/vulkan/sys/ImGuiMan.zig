@@ -68,11 +68,37 @@ pub const ImGuiMan = struct {
             self.backendInitialized = true;
             self.bootstrapWindowId = windowIdx;
         } else {
-            // subsequent windows share font atlas from context 0
-            const atlas = ig.igui_get_font_atlas();
-            const newCtx = ig.igui_create_context(atlas);
-            ig.igui_copy_backend_to_context(newCtx); // copy SDL+Vulkan backend ptrs
+            const newCtx = ig.igui_create_context(null); // own atlas
+            ig.igui_set_current_context(newCtx);
+
+            const swapchainFormat = vk.VK_FORMAT_B8G8R8A8_UNORM;
+            zgui.backend.init(.{ // full independent backend init for this context
+                .api_version = vk.VK_API_VERSION_1_3,
+                .instance = self.instance,
+                .physical_device = self.gpu,
+                .device = self.gpi,
+                .queue_family = self.graphicsFamily,
+                .queue = self.graphicsQueue,
+                .descriptor_pool = null,
+                .min_image_count = rc.DESIRED_SWAPCHAIN_IMAGES,
+                .image_count = rc.DESIRED_SWAPCHAIN_IMAGES,
+                .msaa_samples = 0,
+                .descriptor_pool_size = 1000,
+                .use_dynamic_rendering = true,
+                .render_pass = null,
+                .pipeline_rendering_create_info = .{
+                    .s_type = vk.VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
+                    .view_mask = 0,
+                    .color_attachment_count = 1,
+                    .p_color_attachment_formats = @ptrCast(&swapchainFormat),
+                    .depth_attachment_format = vk.VK_FORMAT_UNDEFINED,
+                    .stencil_attachment_format = vk.VK_FORMAT_UNDEFINED,
+                },
+            }, sdlWindow);
+
             self.contexts[windowIdx] = newCtx;
+            ig.igui_set_current_context(self.contexts[self.bootstrapWindowId].?); // restore
+
         }
     }
 
@@ -85,15 +111,17 @@ pub const ImGuiMan = struct {
 
     pub fn deinit(self: *ImGuiMan) void {
         if (!self.backendInitialized) return;
-        // find and skip whichever index holds the bootstrap context
-        const bootstrapCtx = self.contexts[self.bootstrapWindowId]; // need to store this
-        for (self.contexts, 0..) |maybeCtx, i| {
-            _ = i;
+        const bootstrapCtx = self.contexts[self.bootstrapWindowId];
+
+        for (self.contexts) |maybeCtx| { // non-bootstrap first
             if (maybeCtx) |ctx| {
-                if (ctx == bootstrapCtx) continue; // zgui.deinit handles this one
+                if (ctx == bootstrapCtx) continue;
+                ig.igui_set_current_context(ctx);
+                zgui.backend.deinit();
                 ig.igui_destroy_context(ctx);
             }
         }
+        ig.igui_set_current_context(bootstrapCtx.?);
         zgui.backend.deinit();
         zgui.deinit();
     }
@@ -102,6 +130,12 @@ pub const ImGuiMan = struct {
         const ctx = self.contexts[windowIdx] orelse return false;
         ig.igui_set_current_context(ctx);
         return true;
+    }
+
+    pub fn processEvent(self: *ImGuiMan, windowId: u32, event: anytype) void {
+        if (!self.backendInitialized) return;
+        if (!self.setContext(windowId)) return;
+        _ = zgui.backend.processEvent(event);
     }
 
     pub fn newFrame(self: *ImGuiMan, windowIdx: u32, width: u32, height: u32) void {

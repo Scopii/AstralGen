@@ -39,6 +39,7 @@ extern "C"
         dstIO.BackendRendererUserData = srcIO.BackendRendererUserData; // Vulkan backend
         dstIO.BackendPlatformName = srcIO.BackendPlatformName;
         dstIO.BackendRendererName = srcIO.BackendRendererName;
+        dstIO.BackendFlags = srcIO.BackendFlags;
         ImGui::SetCurrentContext(src); // restore
     }
 }
