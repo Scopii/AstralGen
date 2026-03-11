@@ -17,6 +17,11 @@ const ac = @import("configs/appConfig.zig");
 const zm = @import("zmath");
 const std = @import("std");
 
+pub const FrameData = struct {
+    runTime: f32,
+    deltaTime: f32,
+};
+
 pub const App = struct {
     memoryMan: *MemoryManager,
     windowMan: WindowManager,
@@ -123,6 +128,7 @@ pub const App = struct {
 
         // Main loop
         while (true) {
+
             // Shader Hotloading
             if (shaderCon.SHADER_HOTLOAD == true) {
                 try self.shaderCompiler.checkShaderUpdates();
@@ -241,14 +247,20 @@ pub const App = struct {
 
             if (rc.CPU_PROFILING or self.renderer.renderGraph.useGpuProfiling or rc.SWAPCHAIN_PROFILING) std.debug.print("\n", .{});
 
+            // const endTime = std.time.nanoTimestamp();
+            // const nsPerSecond = std.time.ns_per_s;
+            // const frameLimit = 480;
+
+            // const waitNs: u64 = nsPerSecond / frameLimit;
+
+            // const frame_time = endTime - startTime;
+            // if (frame_time < waitNs) {
+            //     std.Thread.sleep(@intCast(waitNs - frame_time));
+            // }
+
             if (firstFrame == false) continue;
             windowMan.showOpacityAllWindows();
             firstFrame = false;
         }
     }
-};
-
-pub const FrameData = struct {
-    runTime: f32,
-    deltaTime: f32,
 };

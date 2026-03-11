@@ -44,14 +44,19 @@ FragOut main(VertexOut pin) {
 
     // Distance Fade
     float dist = length(hitPos - rayOrigin);
-    float alpha = lineWeight * max(0.0, 1.0 - (dist / 100.0));
-    if (alpha < 0.01) discard;
+    float alpha = lineWeight * max(0.0, 1.0 - (dist / 150.0));
+
+    // float alphaLerp = alpha; // Standard
+    // float alphaLerp = lerp(0, lineWeight, alpha);
+    float alphaLerp = lerp(0, alpha, 1.0 - (dist / 150.0));
+
+    if (alphaLerp < 0.01) discard;
 
     // Calculate actual depth for the Z-buffer
     float4 clipPos = mul(cam.viewProj, float4(hitPos, 1.0));
-    
+
     FragOut out;
-    out.color = float4(color, alpha);
+    out.color = float4(color, alphaLerp);
     out.depth = clipPos.z / clipPos.w;
     return out;
 }
