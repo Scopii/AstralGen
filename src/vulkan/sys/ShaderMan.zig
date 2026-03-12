@@ -1,4 +1,4 @@
-const ShaderId = @import("../../ids/shaderId.zig").ShaderId;
+const ShaderId = @import("../../core/ShaderCompiler.zig").ShaderId;
 const LoadedShader = @import("../../types/LoadedShader.zig").LoadedShader;
 const LinkedMap = @import("../../structures/LinkedMap.zig").LinkedMap;
 const shaderCon = @import("../../configs/shaderConfig.zig");

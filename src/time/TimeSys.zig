@@ -1,5 +1,5 @@
 const std = @import("std");
-const TimeState = @import("../state/TimeState.zig").TimeState;
+const TimeState = @import("../time/TimeState.zig").TimeState;
 
 pub const TimeUnit = enum { seconds, milli, micro, nano };
 

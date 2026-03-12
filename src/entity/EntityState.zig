@@ -1,6 +1,6 @@
 const RNGenerator = @import("../core/RNGenerator.zig").RNGenerator;
 const LinkedMap = @import("../structures/LinkedMap.zig").LinkedMap;
-const Entity = @import("../types/Entity.zig").Entity;
+const Entity = @import("../entity/Entity.zig").Entity;
 const std = @import("std");
 
 const objCount = 30;

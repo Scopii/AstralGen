@@ -4,30 +4,30 @@ const MemoryManager = @import("core/MemoryManager.zig").MemoryManager;
 const RNGenerator = @import("core/RNGenerator.zig").RNGenerator;
 const Renderer = @import("vulkan/sys/Renderer.zig").Renderer;
 const shaderCon = @import("configs/shaderConfig.zig");
-const Window = @import("types/Window.zig").Window;
-const Camera = @import("types/Camera.zig").Camera;
+const Window = @import("window/Window.zig").Window;
+const Camera = @import("camera/Camera.zig").Camera;
 const rc = @import("configs/renderConfig.zig");
 const ac = @import("configs/appConfig.zig");
 const zm = @import("zmath");
 const std = @import("std");
 
-const WindowState = @import("state/WindowState.zig").WindowState;
-const WindowSys = @import("sys/WindowSys.zig").WindowSys;
+const WindowState = @import("window/WindowState.zig").WindowState;
+const WindowSys = @import("window/WindowSys.zig").WindowSys;
 
-const InputState = @import("state/InputState.zig").InputState;
-const InputSys = @import("sys/InputSys.zig").InputSys;
+const InputState = @import("input/InputState.zig").InputState;
+const InputSys = @import("input/InputSys.zig").InputSys;
 
 const EngineQueue = @import("state/EngineQueue.zig").EngineQueue;
 const EngineSys = @import("sys/EngineSys.zig").EngineSys;
 
-const TimeState = @import("state/TimeState.zig").TimeState;
-const TimeSys = @import("sys/TimeSys.zig").TimeSys;
+const TimeState = @import("time/TimeState.zig").TimeState;
+const TimeSys = @import("time/TimeSys.zig").TimeSys;
 
-const EntityState = @import("state/EntityState.zig").EntityState;
-const EntitySys = @import("sys/EntitySys.zig").EntitySys;
+const EntityState = @import("entity/EntityState.zig").EntityState;
+const EntitySys = @import("entity/EntitySys.zig").EntitySys;
 
-const CameraState = @import("state/CameraState.zig").CameraState;
-const CameraSys = @import("sys/CameraSys.zig").CameraSys;
+const CameraState = @import("camera/CameraState.zig").CameraState;
+const CameraSys = @import("camera/CameraSys.zig").CameraSys;
 
 pub const FrameData = struct {
     runTime: f32,

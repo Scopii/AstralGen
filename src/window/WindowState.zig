@@ -1,6 +1,6 @@
 const FixedList = @import("../structures/FixedList.zig").FixedList;
 const LinkedMap = @import("../structures/LinkedMap.zig").LinkedMap;
-const Window = @import("../types/Window.zig").Window;
+const Window = @import("../window/Window.zig").Window;
 const sdl = @import("../modules/sdl.zig").c;
 const vk = @import("../modules/vk.zig").c;
 const MAX_WINDOWS = @import("../configs/renderConfig.zig").MAX_WINDOWS;

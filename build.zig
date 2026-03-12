@@ -1,4 +1,5 @@
 const std = @import("std");
+const sc = @import("src/configs/shaderConfig.zig");
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
@@ -103,8 +104,8 @@ pub fn build(b: *std.Build) void {
     b.installArtifact(exe);
 
     // Create Shader directory if needed
-    std.fs.cwd().makePath("zig-out/shader") catch |err| {
-        std.debug.print("Failed to create directory '{s}': {}\n", .{ "zig-out/shader", err });
+    std.fs.cwd().makePath(sc.SPRV_PATH) catch |err| {
+        std.debug.print("Failed to create directory '{s}': {}\n", .{ sc.SPRV_PATH, err });
     };
 
     const run_cmd = b.addRunArtifact(exe);

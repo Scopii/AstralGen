@@ -1,4 +1,4 @@
-const ShaderId = @import("../../../ids/shaderId.zig").ShaderId;
+const ShaderId = @import("../../../core/ShaderCompiler.zig").ShaderId;
 const RenderState = @import("../base/RenderState.zig").RenderState;
 const TextureMeta = @import("../res/TextureMeta.zig").TextureMeta;
 const BufferMeta = @import("../res/BufferMeta.zig").BufferMeta;

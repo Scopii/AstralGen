@@ -7,8 +7,8 @@ pub const SHADER_STARTUP_COMPILATION = true;
 pub const SHADER_MAX = 31;
 // Paths
 pub const ROOT_PATH: []const u8 = "../..";
-pub const SHADER_PATH: []const u8 = "/src/shader";
-pub const SPRV_PATH: []const u8 = "/zig-out/shader";
+pub const SHADER_PATH: []const u8 = "assets/shaders";
+pub const SPRV_PATH: []const u8 = "zig-out/shaders";
 
 // Shaders
 pub const cullTestComp = ShaderInf.init(20, .comp, "cullTest/comp.slang", "cullTestComp.spv");

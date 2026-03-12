@@ -1,7 +1,7 @@
 const LinkedMap = @import("../structures/LinkedMap.zig").LinkedMap;
-const Camera = @import("../types/Camera.zig").Camera;
+const Camera = @import("../camera/Camera.zig").Camera;
 
-const CameraState = @import("../state/CameraState.zig").CameraState;
+const CameraState = @import("../camera/CameraState.zig").CameraState;
 
 pub const CamId = packed struct { val: u8 };
 

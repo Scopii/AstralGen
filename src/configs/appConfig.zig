@@ -1,4 +1,4 @@
-const KeyMapping = @import("../sys/InputSys.zig").KeyMapping;
+const KeyMapping = @import("../input/InputSys.zig").KeyMapping;
 const sdl = @import("../modules/sdl.zig").c;
 
 // Dev Mode

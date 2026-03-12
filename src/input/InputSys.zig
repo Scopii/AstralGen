@@ -1,7 +1,7 @@
 pub const EngineQueue = @import("../state/EngineQueue.zig").EngineQueue;
 const FixedList = @import("../structures/FixedList.zig").FixedList;
 const LinkedMap = @import("../structures/LinkedMap.zig").LinkedMap;
-const InputState = @import("../state/InputState.zig").InputState;
+const InputState = @import("../input/InputState.zig").InputState;
 const AppEvent = @import("../configs/appConfig.zig").AppEvent;
 const ac = @import("../configs/appConfig.zig");
 const sdl = @import("../modules/sdl.zig").c;

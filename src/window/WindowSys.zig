@@ -1,15 +1,15 @@
 const TexId = @import("../vulkan/types/res/TextureMeta.zig").TextureMeta.TexId;
-const WindowState = @import("../state/WindowState.zig").WindowState;
-const InputState = @import("../state/InputState.zig").InputState;
-const KeyEvent = @import("../sys/InputSys.zig").KeyEvent;
-const InputSys = @import("../sys/InputSys.zig").InputSys;
-const Window = @import("../types/Window.zig").Window;
+const WindowState = @import("../window/WindowState.zig").WindowState;
+const InputState = @import("../input/InputState.zig").InputState;
+const KeyEvent = @import("../input/InputSys.zig").KeyEvent;
+const InputSys = @import("../input/InputSys.zig").InputSys;
+const Window = @import("../window/Window.zig").Window;
 const sdl = @import("../modules/sdl.zig").c;
 const vk = @import("../modules/vk.zig").c;
 const std = @import("std");
 
 const MAX_WINDOWS = @import("../configs/renderConfig.zig").MAX_WINDOWS;
-const SDL_KEY_MAX = @import("../sys/InputSys.zig").SDL_KEY_MAX;
+const SDL_KEY_MAX = @import("../input/InputSys.zig").SDL_KEY_MAX;
 
 const ImGuiMan = @import("../vulkan/sys/ImGuiMan.zig").ImGuiMan;
 const zgui = @import("zgui");

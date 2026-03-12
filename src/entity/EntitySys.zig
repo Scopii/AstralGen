@@ -1,15 +1,15 @@
+const EntityState = @import("../entity/EntityState.zig").EntityState;
 const RNGenerator = @import("../core/RNGenerator.zig").RNGenerator;
+const Entity = @import("../entity/Entity.zig").Entity;
 const std = @import("std");
 
-const EntityState = @import("../state/EntityState.zig").EntityState;
-const EntityId = @import("../ids/entityId.zig").EntityId;
-const Entity = @import("../types/Entity.zig").Entity;
+const ENTITY_COUNT = 30;
 
-const objCount = 30;
+pub const EntityId = packed struct { val: u32 };
 
 pub const EntitySys = struct {
     pub fn init(entityState: *EntityState, rng: *RNGenerator) !void {
-        for (0..objCount) |i| {
+        for (0..ENTITY_COUNT) |i| {
             const id = rng.intRangeFixed(u32, 0, @typeInfo(Entity.SDF).@"enum".fields.len - 1);
 
             const entity = Entity{
