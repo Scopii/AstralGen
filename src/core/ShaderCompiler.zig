@@ -1,27 +1,11 @@
 const sc = @import("../configs/shaderConfig.zig");
 const vkE = @import("../vulkan/help/Enums.zig");
+const ShaderId = @import("../ids/shaderId.zig").ShaderId;
 const Allocator = std.mem.Allocator;
 const std = @import("std");
 
-pub const ShaderInf = struct {
-    pub const ShaderId = packed struct { val: u8 };
-
-    id: ShaderId,
-    typ: vkE.ShaderStage,
-    file: []const u8,
-    spvFile: []const u8,
-
-    pub fn init(id: u32, typ: vkE.ShaderStage, file: []const u8, spvFile: []const u8) ShaderInf {
-        return .{ .id = .{ .val = id }, .typ = typ, .file = file, .spvFile = spvFile };
-    }
-};
-
-pub const LoadedShader = struct {
-    const alignedShader = []align(@alignOf(u32)) u8;
-    data: []align(@alignOf(u32)) u8,
-    timeStamp: i128,
-    shaderInf: ShaderInf,
-};
+const LoadedShader = @import("../types/LoadedShader.zig").LoadedShader;
+const ShaderInf = @import("../types/ShaderInf.zig").ShaderInf;
 
 pub const ShaderCompiler = struct {
     alloc: Allocator,
@@ -152,7 +136,7 @@ fn threadCompile(src: []const u8, dst: []const u8, stage: vkE.ShaderStage, inclu
 
     //transpileSlang(alloc, src, dst, "hlsl")
     const result = compileShader(alloc, src, dst, stage, includePath);
-    if (result == error.ShaderCompilationFailed) failedBool.store(true, .seq_cst); 
+    if (result == error.ShaderCompilationFailed) failedBool.store(true, .seq_cst);
 
     std.heap.page_allocator.free(src);
     std.heap.page_allocator.free(dst);
@@ -162,7 +146,7 @@ pub fn compileShadersParallel(alloc: std.mem.Allocator, absShaderPath: []const u
     var threads = std.array_list.Managed(std.Thread).init(alloc);
     defer threads.deinit();
 
-    var failed = std.atomic.Value(bool).init(false); 
+    var failed = std.atomic.Value(bool).init(false);
 
     for (shaders) |shader| {
         const src = try joinPath(std.heap.page_allocator, absShaderPath, shader.file);
@@ -171,7 +155,7 @@ pub fn compileShadersParallel(alloc: std.mem.Allocator, absShaderPath: []const u
         try threads.append(t);
     }
     for (threads.items) |thread| thread.join();
-    
+
     if (failed.load(.seq_cst)) return error.ShaderCompilationFailed;
 }
 

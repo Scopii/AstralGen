@@ -1,32 +1,21 @@
 const TexId = @import("../vulkan/types/res/TextureMeta.zig").TextureMeta.TexId;
-const MouseMovement = @import("../core/EventManager.zig").MouseMovement;
 const FixedList = @import("../structures/FixedList.zig").FixedList;
 const LinkedMap = @import("../structures/LinkedMap.zig").LinkedMap;
-const KeyEvent = @import("../core/EventManager.zig").KeyEvent;
-const Window = @import("Window.zig").Window;
+const Window = @import("../types/Window.zig").Window;
 const sdl = @import("../modules/sdl.zig").c;
 const vk = @import("../modules/vk.zig").c;
 const std = @import("std");
 const MAX_WINDOWS = @import("../configs/renderConfig.zig").MAX_WINDOWS;
-const SDL_KEY_MAX = @import("../core/EventManager.zig").SDL_KEY_MAX;
 
 const ImGuiMan = @import("../vulkan/sys/ImGuiMan.zig").ImGuiMan;
 const zgui = @import("zgui");
 
-pub const WindowManager = struct {
-    windows: LinkedMap(Window, MAX_WINDOWS, u32, 32 + MAX_WINDOWS, 0) = .{},
-    mainWindow: ?*Window = null,
-    changedWindows: FixedList(Window, MAX_WINDOWS) = .{},
-    openWindows: u8 = 0,
-    appExit: bool = false,
-    windowProps: sdl.SDL_PropertiesID,
-    uiActive: bool = false,
+const WindowState = @import("../state/WindowState.zig").WindowState;
+const InputState = @import("../state/InputState.zig").InputState;
+const InputSys = @import("../sys/InputSys.zig").InputSys;
 
-    inputEvents: FixedList(KeyEvent, 127) = .{},
-    mouseMoveX: f32 = 0,
-    mouseMoveY: f32 = 0,
-
-    pub fn init() !WindowManager {
+pub const WindowSys = struct {
+    pub fn init(osState: *WindowState) !void {
         if (sdl.SDL_Init(sdl.SDL_INIT_VIDEO) != true) {
             std.log.err("SDL_Init failed: {s}\n", .{sdl.SDL_GetError()});
             return error.SdlInitFailed;
@@ -37,29 +26,29 @@ pub const WindowManager = struct {
             std.log.err("SDL_CreateProperties failed: {s}\n", .{sdl.SDL_GetError()});
             return error.WindowInitFailed;
         }
-        return .{ .windowProps = windowProps };
+        osState.windowProps = windowProps;
     }
 
-    pub fn deinit(self: *WindowManager) void {
-        for (self.windows.getItems()) |*win| win.deinit();
-        sdl.SDL_DestroyProperties(self.windowProps);
+    pub fn deinit(osState: *WindowState) void {
+        for (osState.windows.getItems()) |*win| win.deinit();
+        sdl.SDL_DestroyProperties(osState.windowProps);
         sdl.SDL_Quit();
     }
 
-    pub fn showAllWindows(self: *WindowManager) void {
-        for (self.windows.getItems()) |*win| win.show();
+    pub fn showAllWindows(osState: *WindowState) void {
+        for (osState.windows.getItems()) |*win| win.show();
     }
 
-    pub fn hideAllWindows(self: *WindowManager) void {
-        for (self.windows.getItems()) |*win| win.hide();
+    pub fn hideAllWindows(osState: *WindowState) void {
+        for (osState.windows.getItems()) |*win| win.hide();
     }
 
-    pub fn showOpacityAllWindows(self: *WindowManager) void {
-        for (self.windows.getItems()) |*win| win.setOpacity(1.0);
+    pub fn showOpacityAllWindows(osState: *WindowState) void {
+        for (osState.windows.getItems()) |*win| win.setOpacity(1.0);
     }
 
-    pub fn addWindow(self: *WindowManager, title: [*c]const u8, w: c_int, h: c_int, renderTexId: TexId, x: c_int, y: c_int, resize: bool, texIds: []const TexId, camIndex: u8) !void {
-        const props = self.windowProps;
+    pub fn addWindow(osState: *WindowState, title: [*c]const u8, w: c_int, h: c_int, renderTexId: TexId, x: c_int, y: c_int, resize: bool, texIds: []const TexId, camIndex: u8) !void {
+        const props = osState.windowProps;
         const flags = sdl.SDL_WINDOW_VULKAN | sdl.SDL_WINDOW_RESIZABLE | sdl.SDL_WINDOW_HIDDEN;
         _ = sdl.SDL_SetNumberProperty(props, sdl.SDL_PROP_WINDOW_CREATE_FLAGS_NUMBER, @intCast(flags));
         _ = sdl.SDL_SetNumberProperty(props, sdl.SDL_PROP_WINDOW_CREATE_X_NUMBER, @intCast(x));
@@ -73,57 +62,57 @@ pub const WindowManager = struct {
 
         // window.setRelativeMouseMode(false);
 
-        self.windows.upsert(window.id.val, window);
-        try self.changedWindows.append(self.windows.getByKey(window.id.val));
-        self.openWindows += 1;
-        self.mainWindow = self.windows.getPtrByKey(window.id.val);
+        osState.windows.upsert(window.id.val, window);
+        try osState.changedWindows.append(osState.windows.getByKey(window.id.val));
+        osState.openWindows += 1;
+        osState.mainWindow = osState.windows.getPtrByKey(window.id.val);
         std.debug.print("Window ID {} created to present Render ID {}\n", .{ window.id.val, renderTexId.val });
     }
 
-    pub fn showErrorBox(_: *WindowManager, title: [:0]const u8, message: [:0]const u8) void {
+    pub fn showErrorBox(title: [:0]const u8, message: [:0]const u8) void {
         _ = sdl.SDL_ShowSimpleMessageBox(sdl.SDL_MESSAGEBOX_ERROR, title.ptr, message.ptr, null);
     }
 
-    pub fn getChangedWindows(self: *WindowManager) []Window {
-        return self.changedWindows.slice();
+    pub fn getChangedWindows(osState: *WindowState) []Window {
+        return osState.changedWindows.slice();
     }
 
-    pub fn cleanupWindows(self: *WindowManager) void {
-        for (self.changedWindows.slice()) |tempWindow| {
-            const actualWindow = self.windows.getPtrByKey(tempWindow.id.val);
+    pub fn cleanupWindows(osState: *WindowState) void {
+        for (osState.changedWindows.slice()) |tempWindow| {
+            const actualWindow = osState.windows.getPtrByKey(tempWindow.id.val);
 
             switch (tempWindow.state) {
-                .needDelete => self.destroyWindow(actualWindow.id),
+                .needDelete => destroyWindow(osState, actualWindow.id),
                 .needUpdate, .needCreation => actualWindow.state = .active,
                 .needActive => actualWindow.state = .active,
                 .needInactive => actualWindow.state = .inactive,
                 else => std.debug.print("WindowManager: Window {} State {s} should not need cleanup\n", .{ tempWindow.id.val, @tagName(tempWindow.state) }),
             }
         }
-        self.changedWindows.clear();
+        osState.changedWindows.clear();
     }
 
-    pub fn toogleUiMode(self: *WindowManager) void {
-        if (self.uiActive == true) self.uiActive = false else self.uiActive = true;
-        if (self.mainWindow) |window| window.setRelativeMouseMode(!self.uiActive);
+    pub fn toogleUiMode(osState: *WindowState) void {
+        if (osState.uiActive == true) osState.uiActive = false else osState.uiActive = true;
+        if (osState.mainWindow) |window| window.setRelativeMouseMode(!osState.uiActive);
     }
 
-    pub fn pollEvents(self: *WindowManager, imguiMan: ?*ImGuiMan) !void {
+    pub fn pollEvents(osState: *WindowState, inputState: *InputState, imguiMan: ?*ImGuiMan) !void {
         var event: sdl.SDL_Event = undefined;
 
-        if (self.openWindows == 0) {
+        if (osState.openWindows == 0) {
             if (sdl.SDL_WaitEvent(&event)) { // On pause wait for an event and process
-                try self.processEvent(&event);
-                if (self.uiActive == true) if (imguiMan) |im| im.processEvent(getEventWindowId(&event), &event);
+                try processEvent(osState, inputState, &event);
+                if (osState.uiActive == true) if (imguiMan) |im| im.processEvent(getEventWindowId(&event), &event);
             }
             while (sdl.SDL_PollEvent(&event)) { // drain remaining events
-                try self.processEvent(&event);
-                if (self.uiActive == true) if (imguiMan) |im| im.processEvent(getEventWindowId(&event), &event);
+                try processEvent(osState, inputState, &event);
+                if (osState.uiActive == true) if (imguiMan) |im| im.processEvent(getEventWindowId(&event), &event);
             }
         } else {
             while (sdl.SDL_PollEvent(&event)) { // When active process all events in queue
-                try self.processEvent(&event);
-                if (self.uiActive == true) if (imguiMan) |im| im.processEvent(getEventWindowId(&event), &event);
+                try processEvent(osState, inputState, &event);
+                if (osState.uiActive == true) if (imguiMan) |im| im.processEvent(getEventWindowId(&event), &event);
             }
         }
     }
@@ -139,29 +128,20 @@ pub const WindowManager = struct {
         };
     }
 
-    fn destroyWindow(self: *WindowManager, windowId: Window.WindowId) void {
-        const window = self.windows.getByKey(windowId.val);
+    fn destroyWindow(osState: *WindowState, windowId: Window.WindowId) void {
+        const window = osState.windows.getByKey(windowId.val);
         window.deinit();
-        self.windows.remove(windowId.val);
+        osState.windows.remove(windowId.val);
     }
 
-    pub fn consumeKeyEvents(self: *WindowManager) []KeyEvent {
-        defer self.inputEvents.clear();
-        return self.inputEvents.slice();
-    }
-    pub fn consumeMouseMovements(self: *WindowManager) []MouseMovement {
-        defer self.mouseMoves.clear();
-        return self.mouseMoves.slice();
-    }
-
-    pub fn resetMainWindowOpacity(self: *WindowManager) void {
-        if (self.mainWindow) |window| {
+    pub fn resetMainWindowOpacity(osState: *WindowState) void {
+        if (osState.mainWindow) |window| {
             if (window.getOpacity() == 0) window.setOpacity(1.0);
         }
     }
 
-    pub fn toggleMainFullscreen(self: *WindowManager) void {
-        if (self.mainWindow) |window| {
+    pub fn toggleMainFullscreen(osState: *WindowState) void {
+        if (osState.mainWindow) |window| {
             if (window.isFullscreen() == false) {
                 // window.setBordered(false);
                 window.setOpacity(0);
@@ -175,22 +155,22 @@ pub const WindowManager = struct {
         }
     }
 
-    pub fn processWindowEvent(self: *WindowManager, event: *sdl.SDL_Event) !void {
+    pub fn processWindowEvent(osState: *WindowState, event: *sdl.SDL_Event) !void {
         const id = event.window.windowID;
-        var window = self.windows.getPtrByKey(id);
+        var window = osState.windows.getPtrByKey(id);
 
         switch (event.type) {
             sdl.SDL_EVENT_WINDOW_FOCUS_LOST => {
                 std.debug.print("Main Window Lost\n", .{});
                 window.setRelativeMouseMode(false);
-                self.mainWindow = null;
+                osState.mainWindow = null;
                 return; // Should not append window changes?
             },
             sdl.SDL_EVENT_WINDOW_FOCUS_GAINED => {
                 std.debug.print("Main Window Set\n", .{});
                 // const shouldBeRelative = if (self.uiActive == true) window.relativeMouse else false;
-                window.setRelativeMouseMode(!self.uiActive);
-                self.mainWindow = window;
+                window.setRelativeMouseMode(!osState.uiActive);
+                osState.mainWindow = window;
                 return; // Should not append window changes?
             },
             sdl.SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED => { // Signaled for every pixel change if CPU isnt blocked
@@ -198,16 +178,16 @@ pub const WindowManager = struct {
                 return; // Should not append window changes?
             },
             sdl.SDL_EVENT_WINDOW_CLOSE_REQUESTED => {
-                if (window.getState() == .active) self.openWindows -= 1;
+                if (window.getState() == .active) osState.openWindows -= 1;
                 window.setState(.needDelete);
             },
             sdl.SDL_EVENT_WINDOW_MINIMIZED => {
-                self.openWindows -= 1;
+                osState.openWindows -= 1;
                 window.setState(.needInactive);
             },
             sdl.SDL_EVENT_WINDOW_RESTORED => {
                 if (window.getState() == .active) return;
-                self.openWindows += 1;
+                osState.openWindows += 1;
                 window.setState(.needActive);
             },
             sdl.SDL_EVENT_WINDOW_RESIZED => {
@@ -219,32 +199,14 @@ pub const WindowManager = struct {
                 return;
             },
         }
-        try self.changedWindows.append(window.*);
+        try osState.changedWindows.append(window.*);
         std.debug.print("State of Window {} now {s}\n", .{ id, @tagName(window.state) });
     }
 
-    pub fn processKeyEvent(self: *WindowManager, event: *sdl.SDL_Event) void {
-        var keyEvent: KeyEvent = undefined;
-
-        switch (event.type) {
-            sdl.SDL_EVENT_MOUSE_BUTTON_DOWN => keyEvent = .{ .key = @as(c_uint, event.button.button) + SDL_KEY_MAX, .event = .pressed },
-            sdl.SDL_EVENT_MOUSE_BUTTON_UP => keyEvent = .{ .key = @as(c_uint, event.button.button) + SDL_KEY_MAX, .event = .released },
-            sdl.SDL_EVENT_KEY_DOWN => keyEvent = .{ .key = event.key.scancode, .event = .pressed },
-            sdl.SDL_EVENT_KEY_UP => keyEvent = .{ .key = event.key.scancode, .event = .released },
-            else => {
-                std.debug.print("Key Event {} could not be processed! \n", .{event.type});
-                return;
-            },
-        }
-        self.inputEvents.append(keyEvent) catch |err| {
-            std.debug.print("WindowManager: mouseButtonEvents append failed {}\n", .{err});
-        };
-    }
-
-    pub fn processEvent(self: *WindowManager, event: *sdl.SDL_Event) !void {
+    pub fn processEvent(osState: *WindowState, inputState: *InputState, event: *sdl.SDL_Event) !void {
         switch (event.type) {
             sdl.SDL_EVENT_QUIT => {
-                self.appExit = true;
+                osState.appExit = true;
             },
             sdl.SDL_EVENT_WINDOW_FOCUS_LOST,
             sdl.SDL_EVENT_WINDOW_FOCUS_GAINED,
@@ -253,18 +215,17 @@ pub const WindowManager = struct {
             sdl.SDL_EVENT_WINDOW_MINIMIZED,
             sdl.SDL_EVENT_WINDOW_RESTORED,
             sdl.SDL_EVENT_WINDOW_RESIZED,
-            => try self.processWindowEvent(event),
+            => try processWindowEvent(osState, event),
 
+            // Route to InputSys
             sdl.SDL_EVENT_MOUSE_BUTTON_DOWN,
             sdl.SDL_EVENT_MOUSE_BUTTON_UP,
             sdl.SDL_EVENT_KEY_DOWN,
             sdl.SDL_EVENT_KEY_UP,
-            => self.processKeyEvent(event),
+            => InputSys.processKeyEvent(inputState, event),
 
-            sdl.SDL_EVENT_MOUSE_MOTION => {
-                self.mouseMoveX += event.motion.xrel;
-                self.mouseMoveY += event.motion.yrel;
-            },
+            sdl.SDL_EVENT_MOUSE_MOTION,
+            => InputSys.processMouseEvent(inputState, event),
             else => {},
         }
     }

@@ -1,3 +1,7 @@
 .zig-cache
 zig-out
+zigzag-reports
+zig.conf.json
+.cache
 *.res
+imgui.ini

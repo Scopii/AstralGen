@@ -4,7 +4,7 @@ const sdl = @import("../modules/sdl.zig").c;
 const vk = @import("../modules/vk.zig").c;
 const std = @import("std");
 
-const CamId = @import("../core/CameraMan.zig").CamId;
+const CamId = @import("../sys/CameraSys.zig").CamId;
 
 pub const Window = struct {
     pub const WindowState = enum { active, inactive, needCreation, needUpdate, needDelete, needInactive, needActive };

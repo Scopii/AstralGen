@@ -2,13 +2,10 @@ const std = @import("std");
 
 pub const RNGenerator = struct {
     prng: std.Random.Xoshiro256,
-    random: std.Random,
 
     pub fn init(comptime PrngType: type, seed: u64) RNGenerator {
-        var prng = PrngType.init(seed); // Create instance
         return .{
-            .prng = prng,
-            .random = prng.random(),
+            .prng = PrngType.init(seed),
         };
     }
 
@@ -30,7 +27,7 @@ pub const RNGenerator = struct {
 
     // float of specified type (0.0 <= x < 1.0).
     pub fn float(self: *RNGenerator, comptime T: type) T {
-        return self.random.float(T);
+        return self.prng.random().float(T);
     }
     pub fn floatFixed(self: *RNGenerator, comptime T: type) T {
         return self.prng.random().float(T);
@@ -38,7 +35,7 @@ pub const RNGenerator = struct {
 
     // boolean (true or false).
     pub fn boolean(self: *RNGenerator) bool {
-        return self.random.boolean();
+        return self.prng.random().boolean();
     }
     pub fn booleanFixed(self: *RNGenerator) bool {
         return self.prng.random().boolean();
@@ -46,7 +43,7 @@ pub const RNGenerator = struct {
 
     // element from slice.
     pub fn choice(self: *RNGenerator, comptime T: type, items: []const T) T {
-        const index = self.random.intRangeLessThan(usize, 0, items.len);
+        const index = self.prng.random().intRangeLessThan(usize, 0, items.len);
         return items[index];
     }
     pub fn choiceFixed(self: *RNGenerator, comptime T: type, items: []const T) T {
@@ -56,7 +53,7 @@ pub const RNGenerator = struct {
 
     // fills slice with random bytes
     pub fn bytes(self: *RNGenerator, buf: []u8) void {
-        self.random.bytes(buf);
+        self.prng.random().bytes(buf);
     }
     pub fn bytesFixed(self: *RNGenerator, buf: []u8) void {
         self.prng.random().bytes(buf);

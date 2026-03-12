@@ -1,4 +1,4 @@
-const LoadedShader = @import("../../../core/ShaderCompiler.zig").LoadedShader;
+const LoadedShader = @import("../../../types/LoadedShader.zig").LoadedShader;
 const ResourceMan = @import("../../sys/ResourceMan.zig").ResourceMan;
 const PushData = @import("../../types/res/PushData.zig").PushData;
 const SpecData = @import("../../help/Types.zig").SpecData;

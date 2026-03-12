@@ -1,4 +1,4 @@
-const KeyMapping = @import("../core/EventManager.zig").KeyMapping;
+const KeyMapping = @import("../sys/EventSys.zig").KeyMapping;
 const sdl = @import("../modules/sdl.zig").c;
 
 // Dev Mode
