@@ -17,8 +17,8 @@ const WindowSys = @import("sys/WindowSys.zig").WindowSys;
 const InputState = @import("state/InputState.zig").InputState;
 const InputSys = @import("sys/InputSys.zig").InputSys;
 
-const EventState = @import("state/EventState.zig").EventState;
-const EventSys = @import("sys/EventSys.zig").EventSys;
+const EngineQueue = @import("state/EngineQueue.zig").EngineQueue;
+const EngineSys = @import("sys/EngineSys.zig").EngineSys;
 
 const TimeState = @import("state/TimeState.zig").TimeState;
 const TimeSys = @import("sys/TimeSys.zig").TimeSys;
@@ -37,7 +37,7 @@ pub const FrameData = struct {
 pub const App = struct {
     windowState: WindowState,
     inputState: InputState,
-    eventState: EventState,
+    eventState: EngineQueue,
     timeState: TimeState,
     entityState: EntityState,
     cameraState: CameraState,
@@ -50,7 +50,7 @@ pub const App = struct {
     pub fn init(memoryMan: *MemoryManager) !App {
         var osState: WindowState = .{};
         const inputState: InputState = .{};
-        const eventState: EventState = .{};
+        const eventState: EngineQueue = .{};
         const timeState: TimeState = .{};
         var entityState: EntityState = .{};
         const cameraState: CameraState = .{};
@@ -167,7 +167,7 @@ pub const App = struct {
             const activeCam = if (osState.mainWindow) |mainWindow| try CameraSys.getCamera(cameraState, mainWindow.camIndex) else null;
 
             // Handle Inputs
-            if (inputState.inputEvents.len > 0) EventSys.mapKeyEvents(eventState, inputState);
+            if (inputState.inputEvents.len > 0) InputSys.updateKeyStates(inputState);
             InputSys.clearKeyEvents(inputState);
 
             // Process Window Changes
@@ -191,8 +191,10 @@ pub const App = struct {
             const dt = TimeSys.getDeltaTime(timeState, .nano, f64);
             if (rc.CPU_PROFILING == true) std.debug.print("Cpu Delta {d:.3} ms, ({d:.1} Real FPS)\n", .{ dt * 0.000001, 1.0 / (dt * 0.000000001) });
 
+            InputSys.mapAppEvents(inputState, eventState);
+
             // Generate and Process and clear Events
-            for (EventSys.getAppEvents(eventState)) |appEvent| {
+            for (eventState.appEvents.slice()) |appEvent| {
                 switch (appEvent) {
                     .closeApp => {
                         WindowSys.hideAllWindows(osState);
@@ -234,7 +236,7 @@ pub const App = struct {
                     },
                 }
             }
-            EventSys.clearAppEvents(eventState);
+            EngineSys.clearAppEvents(eventState);
 
             if (osState.uiActive == false) {
                 if (inputState.mouseMoveX != 0 or inputState.mouseMoveY != 0) {

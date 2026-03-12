@@ -1,21 +1,21 @@
 const TexId = @import("../vulkan/types/res/TextureMeta.zig").TextureMeta.TexId;
-const FixedList = @import("../structures/FixedList.zig").FixedList;
-const LinkedMap = @import("../structures/LinkedMap.zig").LinkedMap;
+const WindowState = @import("../state/WindowState.zig").WindowState;
+const InputState = @import("../state/InputState.zig").InputState;
+const KeyEvent = @import("../sys/InputSys.zig").KeyEvent;
+const InputSys = @import("../sys/InputSys.zig").InputSys;
 const Window = @import("../types/Window.zig").Window;
 const sdl = @import("../modules/sdl.zig").c;
 const vk = @import("../modules/vk.zig").c;
 const std = @import("std");
+
 const MAX_WINDOWS = @import("../configs/renderConfig.zig").MAX_WINDOWS;
+const SDL_KEY_MAX = @import("../sys/InputSys.zig").SDL_KEY_MAX;
 
 const ImGuiMan = @import("../vulkan/sys/ImGuiMan.zig").ImGuiMan;
 const zgui = @import("zgui");
 
-const WindowState = @import("../state/WindowState.zig").WindowState;
-const InputState = @import("../state/InputState.zig").InputState;
-const InputSys = @import("../sys/InputSys.zig").InputSys;
-
 pub const WindowSys = struct {
-    pub fn init(osState: *WindowState) !void {
+    pub fn init(windowState: *WindowState) !void {
         if (sdl.SDL_Init(sdl.SDL_INIT_VIDEO) != true) {
             std.log.err("SDL_Init failed: {s}\n", .{sdl.SDL_GetError()});
             return error.SdlInitFailed;
@@ -26,29 +26,29 @@ pub const WindowSys = struct {
             std.log.err("SDL_CreateProperties failed: {s}\n", .{sdl.SDL_GetError()});
             return error.WindowInitFailed;
         }
-        osState.windowProps = windowProps;
+        windowState.windowProps = windowProps;
     }
 
-    pub fn deinit(osState: *WindowState) void {
-        for (osState.windows.getItems()) |*win| win.deinit();
-        sdl.SDL_DestroyProperties(osState.windowProps);
+    pub fn deinit(windowState: *WindowState) void {
+        for (windowState.windows.getItems()) |*win| win.deinit();
+        sdl.SDL_DestroyProperties(windowState.windowProps);
         sdl.SDL_Quit();
     }
 
-    pub fn showAllWindows(osState: *WindowState) void {
-        for (osState.windows.getItems()) |*win| win.show();
+    pub fn showAllWindows(windowState: *WindowState) void {
+        for (windowState.windows.getItems()) |*win| win.show();
     }
 
-    pub fn hideAllWindows(osState: *WindowState) void {
-        for (osState.windows.getItems()) |*win| win.hide();
+    pub fn hideAllWindows(windowState: *WindowState) void {
+        for (windowState.windows.getItems()) |*win| win.hide();
     }
 
-    pub fn showOpacityAllWindows(osState: *WindowState) void {
-        for (osState.windows.getItems()) |*win| win.setOpacity(1.0);
+    pub fn showOpacityAllWindows(windowState: *WindowState) void {
+        for (windowState.windows.getItems()) |*win| win.setOpacity(1.0);
     }
 
-    pub fn addWindow(osState: *WindowState, title: [*c]const u8, w: c_int, h: c_int, renderTexId: TexId, x: c_int, y: c_int, resize: bool, texIds: []const TexId, camIndex: u8) !void {
-        const props = osState.windowProps;
+    pub fn addWindow(windowState: *WindowState, title: [*c]const u8, w: c_int, h: c_int, renderTexId: TexId, x: c_int, y: c_int, resize: bool, texIds: []const TexId, camIndex: u8) !void {
+        const props = windowState.windowProps;
         const flags = sdl.SDL_WINDOW_VULKAN | sdl.SDL_WINDOW_RESIZABLE | sdl.SDL_WINDOW_HIDDEN;
         _ = sdl.SDL_SetNumberProperty(props, sdl.SDL_PROP_WINDOW_CREATE_FLAGS_NUMBER, @intCast(flags));
         _ = sdl.SDL_SetNumberProperty(props, sdl.SDL_PROP_WINDOW_CREATE_X_NUMBER, @intCast(x));
@@ -62,10 +62,10 @@ pub const WindowSys = struct {
 
         // window.setRelativeMouseMode(false);
 
-        osState.windows.upsert(window.id.val, window);
-        try osState.changedWindows.append(osState.windows.getByKey(window.id.val));
-        osState.openWindows += 1;
-        osState.mainWindow = osState.windows.getPtrByKey(window.id.val);
+        windowState.windows.upsert(window.id.val, window);
+        try windowState.changedWindows.append(windowState.windows.getByKey(window.id.val));
+        windowState.openWindows += 1;
+        windowState.mainWindow = windowState.windows.getPtrByKey(window.id.val);
         std.debug.print("Window ID {} created to present Render ID {}\n", .{ window.id.val, renderTexId.val });
     }
 
@@ -73,46 +73,46 @@ pub const WindowSys = struct {
         _ = sdl.SDL_ShowSimpleMessageBox(sdl.SDL_MESSAGEBOX_ERROR, title.ptr, message.ptr, null);
     }
 
-    pub fn getChangedWindows(osState: *WindowState) []Window {
-        return osState.changedWindows.slice();
+    pub fn getChangedWindows(windowState: *WindowState) []Window {
+        return windowState.changedWindows.slice();
     }
 
-    pub fn cleanupWindows(osState: *WindowState) void {
-        for (osState.changedWindows.slice()) |tempWindow| {
-            const actualWindow = osState.windows.getPtrByKey(tempWindow.id.val);
+    pub fn cleanupWindows(windowState: *WindowState) void {
+        for (windowState.changedWindows.slice()) |tempWindow| {
+            const actualWindow = windowState.windows.getPtrByKey(tempWindow.id.val);
 
             switch (tempWindow.state) {
-                .needDelete => destroyWindow(osState, actualWindow.id),
+                .needDelete => destroyWindow(windowState, actualWindow.id),
                 .needUpdate, .needCreation => actualWindow.state = .active,
                 .needActive => actualWindow.state = .active,
                 .needInactive => actualWindow.state = .inactive,
                 else => std.debug.print("WindowManager: Window {} State {s} should not need cleanup\n", .{ tempWindow.id.val, @tagName(tempWindow.state) }),
             }
         }
-        osState.changedWindows.clear();
+        windowState.changedWindows.clear();
     }
 
-    pub fn toogleUiMode(osState: *WindowState) void {
-        if (osState.uiActive == true) osState.uiActive = false else osState.uiActive = true;
-        if (osState.mainWindow) |window| window.setRelativeMouseMode(!osState.uiActive);
+    pub fn toogleUiMode(windowState: *WindowState) void {
+        if (windowState.uiActive == true) windowState.uiActive = false else windowState.uiActive = true;
+        if (windowState.mainWindow) |window| window.setRelativeMouseMode(!windowState.uiActive);
     }
 
-    pub fn pollEvents(osState: *WindowState, inputState: *InputState, imguiMan: ?*ImGuiMan) !void {
+    pub fn pollEvents(windowState: *WindowState, inputState: *InputState, imguiMan: ?*ImGuiMan) !void {
         var event: sdl.SDL_Event = undefined;
 
-        if (osState.openWindows == 0) {
+        if (windowState.openWindows == 0) {
             if (sdl.SDL_WaitEvent(&event)) { // On pause wait for an event and process
-                try processEvent(osState, inputState, &event);
-                if (osState.uiActive == true) if (imguiMan) |im| im.processEvent(getEventWindowId(&event), &event);
+                try processEvent(windowState, inputState, &event);
+                if (windowState.uiActive == true) if (imguiMan) |im| im.processEvent(getEventWindowId(&event), &event);
             }
             while (sdl.SDL_PollEvent(&event)) { // drain remaining events
-                try processEvent(osState, inputState, &event);
-                if (osState.uiActive == true) if (imguiMan) |im| im.processEvent(getEventWindowId(&event), &event);
+                try processEvent(windowState, inputState, &event);
+                if (windowState.uiActive == true) if (imguiMan) |im| im.processEvent(getEventWindowId(&event), &event);
             }
         } else {
             while (sdl.SDL_PollEvent(&event)) { // When active process all events in queue
-                try processEvent(osState, inputState, &event);
-                if (osState.uiActive == true) if (imguiMan) |im| im.processEvent(getEventWindowId(&event), &event);
+                try processEvent(windowState, inputState, &event);
+                if (windowState.uiActive == true) if (imguiMan) |im| im.processEvent(getEventWindowId(&event), &event);
             }
         }
     }
@@ -128,20 +128,20 @@ pub const WindowSys = struct {
         };
     }
 
-    fn destroyWindow(osState: *WindowState, windowId: Window.WindowId) void {
-        const window = osState.windows.getByKey(windowId.val);
+    fn destroyWindow(windowState: *WindowState, windowId: Window.WindowId) void {
+        const window = windowState.windows.getByKey(windowId.val);
         window.deinit();
-        osState.windows.remove(windowId.val);
+        windowState.windows.remove(windowId.val);
     }
 
-    pub fn resetMainWindowOpacity(osState: *WindowState) void {
-        if (osState.mainWindow) |window| {
+    pub fn resetMainWindowOpacity(windowState: *WindowState) void {
+        if (windowState.mainWindow) |window| {
             if (window.getOpacity() == 0) window.setOpacity(1.0);
         }
     }
 
-    pub fn toggleMainFullscreen(osState: *WindowState) void {
-        if (osState.mainWindow) |window| {
+    pub fn toggleMainFullscreen(windowState: *WindowState) void {
+        if (windowState.mainWindow) |window| {
             if (window.isFullscreen() == false) {
                 // window.setBordered(false);
                 window.setOpacity(0);
@@ -155,22 +155,22 @@ pub const WindowSys = struct {
         }
     }
 
-    pub fn processWindowEvent(osState: *WindowState, event: *sdl.SDL_Event) !void {
+    pub fn processWindowEvent(windowState: *WindowState, event: *sdl.SDL_Event) !void {
         const id = event.window.windowID;
-        var window = osState.windows.getPtrByKey(id);
+        var window = windowState.windows.getPtrByKey(id);
 
         switch (event.type) {
             sdl.SDL_EVENT_WINDOW_FOCUS_LOST => {
                 std.debug.print("Main Window Lost\n", .{});
                 window.setRelativeMouseMode(false);
-                osState.mainWindow = null;
+                windowState.mainWindow = null;
                 return; // Should not append window changes?
             },
             sdl.SDL_EVENT_WINDOW_FOCUS_GAINED => {
                 std.debug.print("Main Window Set\n", .{});
                 // const shouldBeRelative = if (self.uiActive == true) window.relativeMouse else false;
-                window.setRelativeMouseMode(!osState.uiActive);
-                osState.mainWindow = window;
+                window.setRelativeMouseMode(!windowState.uiActive);
+                windowState.mainWindow = window;
                 return; // Should not append window changes?
             },
             sdl.SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED => { // Signaled for every pixel change if CPU isnt blocked
@@ -178,16 +178,16 @@ pub const WindowSys = struct {
                 return; // Should not append window changes?
             },
             sdl.SDL_EVENT_WINDOW_CLOSE_REQUESTED => {
-                if (window.getState() == .active) osState.openWindows -= 1;
+                if (window.getState() == .active) windowState.openWindows -= 1;
                 window.setState(.needDelete);
             },
             sdl.SDL_EVENT_WINDOW_MINIMIZED => {
-                osState.openWindows -= 1;
+                windowState.openWindows -= 1;
                 window.setState(.needInactive);
             },
             sdl.SDL_EVENT_WINDOW_RESTORED => {
                 if (window.getState() == .active) return;
-                osState.openWindows += 1;
+                windowState.openWindows += 1;
                 window.setState(.needActive);
             },
             sdl.SDL_EVENT_WINDOW_RESIZED => {
@@ -199,14 +199,14 @@ pub const WindowSys = struct {
                 return;
             },
         }
-        try osState.changedWindows.append(window.*);
+        try windowState.changedWindows.append(window.*);
         std.debug.print("State of Window {} now {s}\n", .{ id, @tagName(window.state) });
     }
 
-    pub fn processEvent(osState: *WindowState, inputState: *InputState, event: *sdl.SDL_Event) !void {
+    pub fn processEvent(windowState: *WindowState, inputState: *InputState, event: *sdl.SDL_Event) !void {
         switch (event.type) {
             sdl.SDL_EVENT_QUIT => {
-                osState.appExit = true;
+                windowState.appExit = true;
             },
             sdl.SDL_EVENT_WINDOW_FOCUS_LOST,
             sdl.SDL_EVENT_WINDOW_FOCUS_GAINED,
@@ -215,18 +215,39 @@ pub const WindowSys = struct {
             sdl.SDL_EVENT_WINDOW_MINIMIZED,
             sdl.SDL_EVENT_WINDOW_RESTORED,
             sdl.SDL_EVENT_WINDOW_RESIZED,
-            => try processWindowEvent(osState, event),
+            => try processWindowEvent(windowState, event),
 
             // Route to InputSys
             sdl.SDL_EVENT_MOUSE_BUTTON_DOWN,
             sdl.SDL_EVENT_MOUSE_BUTTON_UP,
             sdl.SDL_EVENT_KEY_DOWN,
             sdl.SDL_EVENT_KEY_UP,
-            => InputSys.processKeyEvent(inputState, event),
+            => processKeyEvent(inputState, event),
 
             sdl.SDL_EVENT_MOUSE_MOTION,
-            => InputSys.processMouseEvent(inputState, event),
+            => processMouseEvent(inputState, event),
             else => {},
         }
+    }
+
+    fn processKeyEvent(inputState: *InputState, event: *const sdl.SDL_Event) void {
+        var keyEvent: KeyEvent = undefined;
+
+        switch (event.type) {
+            sdl.SDL_EVENT_MOUSE_BUTTON_DOWN => keyEvent = .{ .key = @as(c_uint, event.button.button) + SDL_KEY_MAX, .event = .pressed },
+            sdl.SDL_EVENT_MOUSE_BUTTON_UP => keyEvent = .{ .key = @as(c_uint, event.button.button) + SDL_KEY_MAX, .event = .released },
+            sdl.SDL_EVENT_KEY_DOWN => keyEvent = .{ .key = event.key.scancode, .event = .pressed },
+            sdl.SDL_EVENT_KEY_UP => keyEvent = .{ .key = event.key.scancode, .event = .released },
+            else => {
+                std.debug.print("Key Event {} could not be processed! \n", .{event.type});
+                return;
+            },
+        }
+        inputState.inputEvents.append(keyEvent) catch |err| std.debug.print("WindowManager: mouseButtonEvents append failed {}\n", .{err});
+    }
+
+    fn processMouseEvent(inputState: *InputState, event: *const sdl.SDL_Event) void {
+        inputState.mouseMoveX += event.motion.xrel;
+        inputState.mouseMoveY += event.motion.yrel;
     }
 };
