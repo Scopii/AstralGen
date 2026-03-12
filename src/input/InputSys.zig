@@ -1,10 +1,10 @@
-pub const EngineQueue = @import("../state/EngineQueue.zig").EngineQueue;
-const FixedList = @import("../structures/FixedList.zig").FixedList;
-const LinkedMap = @import("../structures/LinkedMap.zig").LinkedMap;
-const InputState = @import("../input/InputState.zig").InputState;
-const AppEvent = @import("../configs/appConfig.zig").AppEvent;
-const ac = @import("../configs/appConfig.zig");
-const sdl = @import("../modules/sdl.zig").c;
+pub const EngineQueue = @import("../engine/EngineQueue.zig").EngineQueue;
+const FixedList = @import("../.structures/FixedList.zig").FixedList;
+const LinkedMap = @import("../.structures/LinkedMap.zig").LinkedMap;
+const InputData = @import("../input/InputData.zig").InputData;
+const AppEvent = @import("../.configs/appConfig.zig").AppEvent;
+const ac = @import("../.configs/appConfig.zig");
+const sdl = @import("../.modules/sdl.zig").c;
 const std = @import("std");
 
 pub const KeyState = enum { pressed, released, blocked };
@@ -23,11 +23,11 @@ pub const SDL_KEY_MAX = 512;
 pub const SDL_MOUSE_MAX = 24;
 
 pub const InputSys = struct {
-    pub fn getKeyEvents(inputState: *InputState) []KeyEvent {
+    pub fn getKeyEvents(inputState: *InputData) []KeyEvent {
         return inputState.inputEvents.slice();
     }
 
-    pub fn updateKeyStates(inputState: *InputState) void {
+    pub fn updateKeyStates(inputState: *InputData) void {
         for (inputState.inputEvents.slice()) |keyEvent| {
             if (inputState.keyStates.isIndexValid(keyEvent.key) == false) {
                 std.debug.print("Key {} Invalid\n", .{keyEvent.key});
@@ -45,7 +45,7 @@ pub const InputSys = struct {
         if (ac.KEY_EVENT_INFO == true) std.debug.print("KeyStates {}\n", .{inputState.keyStates.len});
     }
 
-    pub fn mapAppEvents(inputState: *InputState, eventState: *EngineQueue) void {
+    pub fn mapAppEvents(inputState: *InputData, eventState: *EngineQueue) void {
         for (ac.keyMap) |assignment| {
             const actualKey = switch (assignment.device) {
                 .keyboard => assignment.key,
@@ -68,7 +68,7 @@ pub const InputSys = struct {
         eventState.appEvents.append(event) catch |err| std.debug.print("EventManager.appendEvent failed: {}\n", .{err});
     }
 
-    pub fn clearKeyEvents(inputState: *InputState) void {
+    pub fn clearKeyEvents(inputState: *InputData) void {
         inputState.inputEvents.clear();
     }
 };

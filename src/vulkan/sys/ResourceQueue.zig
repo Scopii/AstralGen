@@ -1,10 +1,10 @@
 const TextureMeta = @import("../types/res/TextureMeta.zig").TextureMeta;
-const FixedList = @import("../../structures/FixedList.zig").FixedList;
-const LinkedMap = @import("../../structures/LinkedMap.zig").LinkedMap;
+const FixedList = @import("../../.structures/FixedList.zig").FixedList;
+const LinkedMap = @import("../../.structures/LinkedMap.zig").LinkedMap;
 const BufferMeta = @import("../types/res/BufferMeta.zig").BufferMeta;
 const Texture = @import("../types/res/Texture.zig").Texture;
 const Buffer = @import("../types/res/Buffer.zig").Buffer;
-const rc = @import("../../configs/renderConfig.zig");
+const rc = @import("../../.configs/renderConfig.zig");
 const rH = @import("ResHelpers.zig");
 
 pub const ResourceQueue = struct {

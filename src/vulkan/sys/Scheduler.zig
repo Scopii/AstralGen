@@ -1,10 +1,10 @@
 const Swapchain = @import("../types/base/Swapchain.zig").Swapchain;
 const Queue = @import("../types/base/Queue.zig").Queue;
-const rc = @import("../../configs/renderConfig.zig");
+const rc = @import("../../.configs/renderConfig.zig");
 const Cmd = @import("../types/base/Cmd.zig").Cmd;
 const Context = @import("Context.zig").Context;
 const vhF = @import("../help/Functions.zig");
-const vk = @import("../../modules/vk.zig").c;
+const vk = @import("../../.modules/vk.zig").c;
 const vkE = @import("../help/Enums.zig");
 const std = @import("std");
 

@@ -1,5 +1,5 @@
 const BufId = @import("../vulkan/types/res/BufferMeta.zig").BufferMeta.BufId;
-const ac = @import("../configs/appConfig.zig");
+const ac = @import("../.configs/appConfig.zig");
 const std = @import("std");
 const zm = @import("zmath");
 
@@ -181,7 +181,7 @@ pub const Camera = struct {
         self.pos = self.pos + movement;
         self.needsUpdate = true;
     }
-
+    
     fn getProjection(self: *const Camera) zm.Mat {
         var proj = zm.perspectiveFovRh(self.fov * (std.math.pi / 180.0), self.aspectRatio, self.near, self.far);
         proj[1][1] *= -1.0;

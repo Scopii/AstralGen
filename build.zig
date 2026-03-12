@@ -1,5 +1,5 @@
 const std = @import("std");
-const sc = @import("src/configs/shaderConfig.zig");
+const sc = @import("src/.configs/shaderConfig.zig");
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
@@ -7,7 +7,7 @@ pub fn build(b: *std.Build) void {
 
     const check = b.step("check", "check everything");
 
-    const c_module = b.addModule("c", .{ .root_source_file = b.path("src/modules/c.zig") });
+    const c_module = b.addModule("c", .{ .root_source_file = b.path("src/.modules/c.zig") });
 
     const exe = b.addExecutable(.{
         .name = "AstralGen",
@@ -23,7 +23,7 @@ pub fn build(b: *std.Build) void {
     exe.root_module.addImport("c", c_module);
 
     exe.addCSourceFile(.{
-        .file = b.path("src/modules/imgui_ctx.cpp"),
+        .file = b.path("src/.modules/imgui_ctx.cpp"),
         .flags = &.{"-std=c++17"},
     });
 
@@ -54,7 +54,7 @@ pub fn build(b: *std.Build) void {
     }
 
     exe.addCSourceFile(.{
-        .file = b.path("src/modules/vmaLink.cpp"),
+        .file = b.path("src/.modules/vmaLink.cpp"),
         .flags = &.{"-std=c++17"}, //"-O3", "-g0"
     });
 

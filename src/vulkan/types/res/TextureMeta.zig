@@ -1,5 +1,5 @@
-const rc = @import("../../../configs/renderConfig.zig");
-const vk = @import("../../../modules/vk.zig").c;
+const rc = @import("../../../.configs/renderConfig.zig");
+const vk = @import("../../../.modules/vk.zig").c;
 const vhE = @import("../../help/Enums.zig");
 
 pub const TextureMeta = struct {

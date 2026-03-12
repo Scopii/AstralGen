@@ -1,12 +1,12 @@
 const ShaderId = @import("../../core/ShaderCompiler.zig").ShaderId;
-const LoadedShader = @import("../../types/LoadedShader.zig").LoadedShader;
-const LinkedMap = @import("../../structures/LinkedMap.zig").LinkedMap;
-const shaderCon = @import("../../configs/shaderConfig.zig");
+const LoadedShader = @import("../../core/LoadedShader.zig").LoadedShader;
+const LinkedMap = @import("../../.structures/LinkedMap.zig").LinkedMap;
+const shaderCon = @import("../../.configs/shaderConfig.zig");
 const ResourceMan = @import("ResourceMan.zig").ResourceMan;
 const Shader = @import("../types/base/Shader.zig").Shader;
 const Pass = @import("../types/base/Pass.zig").Pass;
 const Context = @import("Context.zig").Context;
-const vk = @import("../../modules/vk.zig").c;
+const vk = @import("../../.modules/vk.zig").c;
 const Allocator = std.mem.Allocator;
 const std = @import("std");
 

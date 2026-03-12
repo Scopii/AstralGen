@@ -1,5 +1,5 @@
 const vkE = @import("../vulkan/help/Enums.zig");
-const ShaderInf = @import("../types/ShaderInf.zig").ShaderInf;
+const ShaderInf = @import("../core/ShaderInf.zig").ShaderInf;
 
 // Shader Compilation
 pub const SHADER_HOTLOAD = true;

@@ -1,6 +1,6 @@
-const rc = @import("../../configs/renderConfig.zig");
-const vk = @import("../../modules/vk.zig").c;
-const vkFn = @import("../../modules/vk.zig");
+const rc = @import("../../.configs/renderConfig.zig");
+const vk = @import("../../.modules/vk.zig").c;
+const vkFn = @import("../../.modules/vk.zig");
 const vhE = @import("Enums.zig");
 const std = @import("std");
 

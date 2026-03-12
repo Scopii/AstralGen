@@ -1,14 +1,14 @@
 const TexId = @import("../vulkan/types/res/TextureMeta.zig").TextureMeta.TexId;
-const WindowState = @import("../window/WindowState.zig").WindowState;
-const InputState = @import("../input/InputState.zig").InputState;
+const WindowState = @import("../window/WindowState.zig").WindowData;
+const InputData = @import("../input/InputData.zig").InputData;
 const KeyEvent = @import("../input/InputSys.zig").KeyEvent;
 const InputSys = @import("../input/InputSys.zig").InputSys;
 const Window = @import("../window/Window.zig").Window;
-const sdl = @import("../modules/sdl.zig").c;
-const vk = @import("../modules/vk.zig").c;
+const sdl = @import("../.modules/sdl.zig").c;
+const vk = @import("../.modules/vk.zig").c;
 const std = @import("std");
 
-const MAX_WINDOWS = @import("../configs/renderConfig.zig").MAX_WINDOWS;
+const MAX_WINDOWS = @import("../.configs/renderConfig.zig").MAX_WINDOWS;
 const SDL_KEY_MAX = @import("../input/InputSys.zig").SDL_KEY_MAX;
 
 const ImGuiMan = @import("../vulkan/sys/ImGuiMan.zig").ImGuiMan;
@@ -97,7 +97,7 @@ pub const WindowSys = struct {
         if (windowState.mainWindow) |window| window.setRelativeMouseMode(!windowState.uiActive);
     }
 
-    pub fn pollEvents(windowState: *WindowState, inputState: *InputState, imguiMan: ?*ImGuiMan) !void {
+    pub fn pollEvents(windowState: *WindowState, inputState: *InputData, imguiMan: ?*ImGuiMan) !void {
         var event: sdl.SDL_Event = undefined;
 
         if (windowState.openWindows == 0) {
@@ -203,7 +203,7 @@ pub const WindowSys = struct {
         std.debug.print("State of Window {} now {s}\n", .{ id, @tagName(window.state) });
     }
 
-    pub fn processEvent(windowState: *WindowState, inputState: *InputState, event: *sdl.SDL_Event) !void {
+    pub fn processEvent(windowState: *WindowState, inputState: *InputData, event: *sdl.SDL_Event) !void {
         switch (event.type) {
             sdl.SDL_EVENT_QUIT => {
                 windowState.appExit = true;
@@ -230,7 +230,7 @@ pub const WindowSys = struct {
         }
     }
 
-    fn processKeyEvent(inputState: *InputState, event: *const sdl.SDL_Event) void {
+    fn processKeyEvent(inputState: *InputData, event: *const sdl.SDL_Event) void {
         var keyEvent: KeyEvent = undefined;
 
         switch (event.type) {
@@ -246,7 +246,7 @@ pub const WindowSys = struct {
         inputState.inputEvents.append(keyEvent) catch |err| std.debug.print("WindowManager: mouseButtonEvents append failed {}\n", .{err});
     }
 
-    fn processMouseEvent(inputState: *InputState, event: *const sdl.SDL_Event) void {
+    fn processMouseEvent(inputState: *InputData, event: *const sdl.SDL_Event) void {
         inputState.mouseMoveX += event.motion.xrel;
         inputState.mouseMoveY += event.motion.yrel;
     }

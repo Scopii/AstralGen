@@ -2,10 +2,10 @@ const TextureMeta = @import("../types/res/TextureMeta.zig").TextureMeta;
 const BufferMeta = @import("../types/res/BufferMeta.zig").BufferMeta;
 const Texture = @import("../types/res/Texture.zig").Texture;
 const Buffer = @import("../types/res/Buffer.zig").Buffer;
-const rc = @import("../../configs/renderConfig.zig");
-const vkFn = @import("../../modules/vk.zig");
+const rc = @import("../../.configs/renderConfig.zig");
+const vkFn = @import("../../.modules/vk.zig");
 const vhF = @import("../help/Functions.zig");
-const vk = @import("../../modules/vk.zig").c;
+const vk = @import("../../.modules/vk.zig").c;
 const vhE = @import("../help/Enums.zig");
 const std = @import("std");
 

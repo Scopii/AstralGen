@@ -1,5 +1,5 @@
 const MemoryManager = @import("../../core/MemoryManager.zig").MemoryManager;
-const LoadedShader = @import("../../types/LoadedShader.zig").LoadedShader;
+const LoadedShader = @import("../../core/LoadedShader.zig").LoadedShader;
 const TextureMeta = @import("../types/res/TextureMeta.zig").TextureMeta;
 const BufferMeta = @import("../types/res/BufferMeta.zig").BufferMeta;
 const SwapchainMan = @import("SwapchainMan.zig").SwapchainMan;
@@ -7,13 +7,13 @@ const ResourceMan = @import("ResourceMan.zig").ResourceMan;
 const Window = @import("../../window/Window.zig").Window;
 const RenderGraph = @import("RenderGraph.zig").RenderGraph;
 const ShaderMan = @import("ShaderMan.zig").ShaderMan;
-const rc = @import("../../configs/renderConfig.zig");
+const rc = @import("../../.configs/renderConfig.zig");
 const FrameData = @import("../../App.zig").FrameData;
 const Scheduler = @import("Scheduler.zig").Scheduler;
 const Pass = @import("../types/base/Pass.zig").Pass;
 const ImGuiMan = @import("ImGuiMan.zig").ImGuiMan;
 const Context = @import("Context.zig").Context;
-const vk = @import("../../modules/vk.zig").c;
+const vk = @import("../../.modules/vk.zig").c;
 const Allocator = std.mem.Allocator;
 const std = @import("std");
 

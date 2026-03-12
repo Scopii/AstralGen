@@ -1,10 +1,10 @@
-const sc = @import("../configs/shaderConfig.zig");
+const sc = @import("../.configs/shaderConfig.zig");
 const vkE = @import("../vulkan/help/Enums.zig");
 const Allocator = std.mem.Allocator;
 const std = @import("std");
 
-const LoadedShader = @import("../types/LoadedShader.zig").LoadedShader;
-const ShaderInf = @import("../types/ShaderInf.zig").ShaderInf;
+const LoadedShader = @import("../core/LoadedShader.zig").LoadedShader;
+const ShaderInf = @import("../core/ShaderInf.zig").ShaderInf;
 
 pub const ShaderId = packed struct { val: u8 };
 

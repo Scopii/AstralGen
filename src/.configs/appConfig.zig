@@ -1,5 +1,5 @@
 const KeyMapping = @import("../input/InputSys.zig").KeyMapping;
-const sdl = @import("../modules/sdl.zig").c;
+const sdl = @import("../.modules/sdl.zig").c;
 
 // Dev Mode
 pub const CLOSE_WITH_CONSOLE = false;

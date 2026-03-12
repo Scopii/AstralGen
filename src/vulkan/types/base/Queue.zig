@@ -1,6 +1,6 @@
 const Swapchain = @import("../../types/base/Swapchain.zig").Swapchain;
-const rc = @import("../../../configs/renderConfig.zig");
-const vk = @import("../../../modules/vk.zig").c;
+const rc = @import("../../../.configs/renderConfig.zig");
+const vk = @import("../../../.modules/vk.zig").c;
 const vhF = @import("../../help/Functions.zig");
 
 pub const Queue = struct {

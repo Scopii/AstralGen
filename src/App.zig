@@ -3,30 +3,30 @@ const ShaderCompiler = @import("core/ShaderCompiler.zig").ShaderCompiler;
 const MemoryManager = @import("core/MemoryManager.zig").MemoryManager;
 const RNGenerator = @import("core/RNGenerator.zig").RNGenerator;
 const Renderer = @import("vulkan/sys/Renderer.zig").Renderer;
-const shaderCon = @import("configs/shaderConfig.zig");
+const shaderCon = @import(".configs/shaderConfig.zig");
 const Window = @import("window/Window.zig").Window;
 const Camera = @import("camera/Camera.zig").Camera;
-const rc = @import("configs/renderConfig.zig");
-const ac = @import("configs/appConfig.zig");
+const rc = @import(".configs/renderConfig.zig");
+const ac = @import(".configs/appConfig.zig");
 const zm = @import("zmath");
 const std = @import("std");
 
-const WindowState = @import("window/WindowState.zig").WindowState;
+const WindowState = @import("window/WindowState.zig").WindowData;
 const WindowSys = @import("window/WindowSys.zig").WindowSys;
 
-const InputState = @import("input/InputState.zig").InputState;
+const InputData = @import("input/InputData.zig").InputData;
 const InputSys = @import("input/InputSys.zig").InputSys;
 
-const EngineQueue = @import("state/EngineQueue.zig").EngineQueue;
-const EngineSys = @import("sys/EngineSys.zig").EngineSys;
+const EngineQueue = @import("engine/EngineQueue.zig").EngineQueue;
+const EngineSys = @import("engine/EngineSys.zig").EngineSys;
 
 const TimeState = @import("time/TimeState.zig").TimeState;
 const TimeSys = @import("time/TimeSys.zig").TimeSys;
 
-const EntityState = @import("entity/EntityState.zig").EntityState;
+const EntityData = @import("entity/EntityData.zig").EntityData;
 const EntitySys = @import("entity/EntitySys.zig").EntitySys;
 
-const CameraState = @import("camera/CameraState.zig").CameraState;
+const CameraData = @import("camera/CameraData.zig").CameraData;
 const CameraSys = @import("camera/CameraSys.zig").CameraSys;
 
 pub const FrameData = struct {
@@ -36,11 +36,11 @@ pub const FrameData = struct {
 
 pub const App = struct {
     windowState: WindowState,
-    inputState: InputState,
+    inputState: InputData,
     eventState: EngineQueue,
     timeState: TimeState,
-    entityState: EntityState,
-    cameraState: CameraState,
+    entityState: EntityData,
+    cameraState: CameraData,
 
     memoryMan: *MemoryManager,
     renderer: Renderer,
@@ -49,11 +49,11 @@ pub const App = struct {
 
     pub fn init(memoryMan: *MemoryManager) !App {
         var osState: WindowState = .{};
-        const inputState: InputState = .{};
+        const inputState: InputData = .{};
         const eventState: EngineQueue = .{};
         const timeState: TimeState = .{};
-        var entityState: EntityState = .{};
-        const cameraState: CameraState = .{};
+        var entityState: EntityData = .{};
+        const cameraState: CameraData = .{};
 
         WindowSys.init(&osState) catch |err| {
             std.debug.print("Astral App Error WindowManager could not launch, Err {}\n", .{err});
@@ -214,7 +214,6 @@ pub const App = struct {
                     .toggleImgui => {
                         WindowSys.toogleUiMode(osState);
                         self.renderer.imguiMan.toogleUiMode();
-                        osState.uiActive = self.renderer.imguiMan.uiActive;
                         std.debug.print("UI Toggle: {}\n", .{osState.uiActive});
                     },
                     else => {

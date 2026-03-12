@@ -1,7 +1,7 @@
-const vk = @import("../../modules/vk.zig").c;
+const vk = @import("../../.modules/vk.zig").c;
 const Context = @import("Context.zig").Context;
 const Cmd = @import("../types/base/Cmd.zig").Cmd;
-const rc = @import("../../configs/renderConfig.zig");
+const rc = @import("../../.configs/renderConfig.zig");
 const zgui = @import("zgui");
 const std = @import("std");
 

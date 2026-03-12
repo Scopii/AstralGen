@@ -7,7 +7,7 @@ const CameraData = @import("../camera/Camera.zig").CameraData;
 const Pass = @import("../vulkan/types/base/Pass.zig").Pass;
 const Entity = @import("../entity/Entity.zig").Entity;
 const vhT = @import("../vulkan/help/Types.zig");
-const vk = @import("../modules/vk.zig").c;
+const vk = @import("../.modules/vk.zig").c;
 const sc = @import("shaderConfig.zig");
 
 // Vulkan Validation Layers

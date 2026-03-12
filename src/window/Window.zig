@@ -1,7 +1,7 @@
 const TexId = @import("../vulkan/types/res/TextureMeta.zig").TextureMeta.TexId;
-const rc = @import("../configs/renderConfig.zig");
-const sdl = @import("../modules/sdl.zig").c;
-const vk = @import("../modules/vk.zig").c;
+const rc = @import("../.configs/renderConfig.zig");
+const sdl = @import("../.modules/sdl.zig").c;
+const vk = @import("../.modules/vk.zig").c;
 const std = @import("std");
 
 const CamId = @import("../camera/CameraSys.zig").CamId;

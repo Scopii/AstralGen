@@ -1,10 +1,10 @@
-const LoadedShader = @import("../../../types/LoadedShader.zig").LoadedShader;
+const LoadedShader = @import("../../../core/LoadedShader.zig").LoadedShader;
 const ResourceMan = @import("../../sys/ResourceMan.zig").ResourceMan;
 const PushData = @import("../../types/res/PushData.zig").PushData;
 const SpecData = @import("../../help/Types.zig").SpecData;
-const vk = @import("../../../modules/vk.zig").c;
+const vk = @import("../../../.modules/vk.zig").c;
 const vhF = @import("../../help/Functions.zig");
-const vkFn = @import("../../../modules/vk.zig");
+const vkFn = @import("../../../.modules/vk.zig");
 const vhE = @import("../../help/Enums.zig");
 
 pub const Shader = struct {

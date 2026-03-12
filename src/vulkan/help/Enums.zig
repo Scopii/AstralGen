@@ -1,5 +1,5 @@
-const vk = @import("../../modules/vk.zig").c;
-const rc = @import("../../configs/renderConfig.zig");
+const vk = @import("../../.modules/vk.zig").c;
+const rc = @import("../../.configs/renderConfig.zig");
 
 pub const UpdateType = enum {
     Rarely, // Resource once in Memory, updates create a new Resource

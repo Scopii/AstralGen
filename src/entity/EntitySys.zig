@@ -1,4 +1,4 @@
-const EntityState = @import("../entity/EntityState.zig").EntityState;
+const EntityData = @import("../entity/EntityData.zig").EntityData;
 const RNGenerator = @import("../core/RNGenerator.zig").RNGenerator;
 const Entity = @import("../entity/Entity.zig").Entity;
 const std = @import("std");
@@ -8,7 +8,7 @@ const ENTITY_COUNT = 30;
 pub const EntityId = packed struct { val: u32 };
 
 pub const EntitySys = struct {
-    pub fn init(entityState: *EntityState, rng: *RNGenerator) !void {
+    pub fn init(entityState: *EntityData, rng: *RNGenerator) !void {
         for (0..ENTITY_COUNT) |i| {
             const id = rng.intRangeFixed(u32, 0, @typeInfo(Entity.SDF).@"enum".fields.len - 1);
 
@@ -29,13 +29,13 @@ pub const EntitySys = struct {
         std.debug.print("Created {} Objects\n", .{entityState.entitys.getLength()});
     }
 
-    pub fn deinit(_: *EntityState) void {}
+    pub fn deinit(_: *EntityData) void {}
 
-    pub fn addEntity(entityState: *EntityState, entityId: EntityId, entity: Entity) !void {
+    pub fn addEntity(entityState: *EntityData, entityId: EntityId, entity: Entity) !void {
         entityState.entitys.upsert(entityId.val, entity);
     }
 
-    pub fn getObjects(entityState: *EntityState) []Entity {
+    pub fn getObjects(entityState: *EntityData) []Entity {
         return entityState.entitys.getItems();
     }
 };

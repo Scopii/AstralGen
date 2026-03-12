@@ -1,4 +1,4 @@
-const CLOSE_WITH_CONSOLE = @import("configs/appConfig.zig").CLOSE_WITH_CONSOLE;
+const CLOSE_WITH_CONSOLE = @import(".configs/appConfig.zig").CLOSE_WITH_CONSOLE;
 const MemoryManager = @import("core/MemoryManager.zig").MemoryManager;
 const App = @import("App.zig").App;
 const std = @import("std");
