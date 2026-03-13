@@ -1,4 +1,4 @@
-const vkE = @import("../vulkan/help/Enums.zig");
+const vkE = @import("../render/help/Enums.zig");
 const ShaderInf = @import("../core/ShaderInf.zig").ShaderInf;
 
 // Shader Compilation

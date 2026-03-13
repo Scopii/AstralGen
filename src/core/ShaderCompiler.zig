@@ -1,5 +1,5 @@
 const sc = @import("../.configs/shaderConfig.zig");
-const vkE = @import("../vulkan/help/Enums.zig");
+const vkE = @import("../render/help/Enums.zig");
 const Allocator = std.mem.Allocator;
 const std = @import("std");
 

@@ -1,5 +1,5 @@
 const ShaderId = @import("../core/ShaderCompiler.zig").ShaderId;
-const vkE = @import("../vulkan/help/Enums.zig");
+const vkE = @import("../render/help/Enums.zig");
 
 pub const ShaderInf = struct {
     id: ShaderId,

@@ -1,4 +1,4 @@
-const BufId = @import("../vulkan/types/res/BufferMeta.zig").BufferMeta.BufId;
+const BufId = @import("../render/types/res/BufferMeta.zig").BufferMeta.BufId;
 const ac = @import("../.configs/appConfig.zig");
 const std = @import("std");
 const zm = @import("zmath");
