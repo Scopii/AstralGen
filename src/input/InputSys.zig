@@ -1,7 +1,10 @@
-pub const EngineQueue = @import("../engine/EngineQueue.zig").EngineQueue;
 const FixedList = @import("../.structures/FixedList.zig").FixedList;
 const LinkedMap = @import("../.structures/LinkedMap.zig").LinkedMap;
 const InputData = @import("../input/InputData.zig").InputData;
+const InputQueue = @import("../input/InputQueue.zig").InputQueue;
+const CameraQueue = @import("../camera/CameraQueue.zig").CameraQueue;
+const WindowQueue = @import("../window/WindowQueue.zig").WindowQueue;
+const RendererQueue = @import("../render/RendererQueue.zig").RendererQueue;
 const AppEvent = @import("../.configs/appConfig.zig").AppEvent;
 const ac = @import("../.configs/appConfig.zig");
 const sdl = @import("../.modules/sdl.zig").c;
@@ -23,52 +26,76 @@ pub const SDL_KEY_MAX = 512;
 pub const SDL_MOUSE_MAX = 24;
 
 pub const InputSys = struct {
-    pub fn getKeyEvents(inputState: *InputData) []KeyEvent {
-        return inputState.inputEvents.slice();
-    }
+    pub fn update(inputData: *InputData, inputQueue: *InputQueue) void {
+        for (inputQueue.get()) |inputEvent| {
+            switch (inputEvent) {
+                .keyEvent => |keyEvent| {
+                    if (inputData.keyStates.isIndexValid(keyEvent.key) == false) {
+                        std.debug.print("Key {} Invalid\n", .{keyEvent.key});
+                        continue;
+                    }
 
-    pub fn updateKeyStates(inputState: *InputData) void {
-        for (inputState.inputEvents.slice()) |keyEvent| {
-            if (inputState.keyStates.isIndexValid(keyEvent.key) == false) {
-                std.debug.print("Key {} Invalid\n", .{keyEvent.key});
-                continue;
+                    if (inputData.keyStates.isKeyUsed(keyEvent.key)) {
+                        const keyState = inputData.keyStates.getByKey(keyEvent.key);
+                        if (keyState == .blocked and keyEvent.event == .pressed) continue;
+                    }
+
+                    inputData.keyStates.upsert(keyEvent.key, if (keyEvent.event == .pressed) .pressed else .released);
+                    if (ac.KEY_EVENT_INFO == true) std.debug.print("Key {} pressed \n", .{keyEvent.key});
+                },
+                .mouseMove => |mouseMove| {
+                    inputData.mouseMoveX += mouseMove.x;
+                    inputData.mouseMoveY += mouseMove.y;
+                },
             }
-
-            if (inputState.keyStates.isKeyUsed(keyEvent.key)) {
-                const keyState = inputState.keyStates.getByKey(keyEvent.key);
-                if (keyState == .blocked and keyEvent.event == .pressed) continue;
-            }
-
-            inputState.keyStates.upsert(keyEvent.key, if (keyEvent.event == .pressed) .pressed else .released);
-            if (ac.KEY_EVENT_INFO == true) std.debug.print("Key {} pressed \n", .{keyEvent.key});
         }
-        if (ac.KEY_EVENT_INFO == true) std.debug.print("KeyStates {}\n", .{inputState.keyStates.len});
+        inputQueue.clear();
+        if (ac.KEY_EVENT_INFO == true) std.debug.print("KeyStates {}\n", .{inputData.keyStates.len});
     }
 
-    pub fn mapAppEvents(inputState: *InputData, eventState: *EngineQueue) void {
+    pub fn convert(inputData: *InputData, camQueue: *CameraQueue, windowQueue: *WindowQueue, rendererQueue: *RendererQueue) void {
         for (ac.keyMap) |assignment| {
             const actualKey = switch (assignment.device) {
                 .keyboard => assignment.key,
                 .mouse => assignment.key + SDL_KEY_MAX,
             };
             // If key is valid check if value at key is same as assignment state
-            if (inputState.keyStates.isKeyUsed(actualKey) == true) {
-                const keyState = inputState.keyStates.getByKey(actualKey);
+            if (inputData.keyStates.isKeyUsed(actualKey) == true) {
+                const keyState = inputData.keyStates.getByKey(actualKey);
 
                 if (keyState == assignment.state) {
-                    appendAppEvent(eventState, assignment.appEvent);
-                    if (assignment.cycle == .oneTime) inputState.keyStates.upsert(actualKey, .released);
-                    if (assignment.cycle == .oneBlock) inputState.keyStates.upsert(actualKey, .blocked);
+
+                    // Append Events for Queues:
+                    switch (assignment.appEvent) {
+                        .camForward => camQueue.append(.camForward),
+                        .camBackward => camQueue.append(.camBackward),
+                        .camLeft => camQueue.append(.camLeft),
+                        .camRight => camQueue.append(.camRight),
+                        .camUp => camQueue.append(.camUp),
+                        .camDown => camQueue.append(.camDown),
+                        .camFovIncrease => camQueue.append(.camFovInc),
+                        .camFovDecrease => camQueue.append(.camFovDec),
+
+                        .toggleFullscreen => windowQueue.append(.toggleMainFullscreen),
+                        .closeApp => windowQueue.append(.closeApp),
+                        .toggleImgui => {
+                            windowQueue.append(.toggleUi);
+                            rendererQueue.append(.toggleUi);
+                        },
+                        .toggleGpuProfiling => rendererQueue.append(.toggleGpuProfiling),
+                    }
+
+                    if (assignment.cycle == .oneTime) inputData.keyStates.upsert(actualKey, .released);
+                    if (assignment.cycle == .oneBlock) inputData.keyStates.upsert(actualKey, .blocked);
                 }
             }
         }
-    }
 
-    pub fn appendAppEvent(eventState: *EngineQueue, event: AppEvent) void {
-        eventState.appEvents.append(event) catch |err| std.debug.print("EventManager.appendEvent failed: {}\n", .{err});
-    }
-
-    pub fn clearKeyEvents(inputState: *InputData) void {
-        inputState.inputEvents.clear();
+        // Mouse Movement
+        if (inputData.mouseMoveX != 0 or inputData.mouseMoveY != 0) {
+            camQueue.append(.{ .camRotate = .{ .x = inputData.mouseMoveX, .y = inputData.mouseMoveY } });
+            inputData.mouseMoveX = 0;
+            inputData.mouseMoveY = 0;
+        }
     }
 };

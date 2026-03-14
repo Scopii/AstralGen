@@ -3,12 +3,14 @@ const TextureUse = @import("../render/types/base/Pass.zig").TextureUse;
 const BufferUse = @import("../render/types/base/Pass.zig").BufferUse;
 const TextureMeta = @import("../render/types/res/TextureMeta.zig").TextureMeta;
 const BufferMeta = @import("../render/types/res/BufferMeta.zig").BufferMeta;
-const CameraData = @import("../camera/Camera.zig").CameraData;
+const CameraData = @import("../camera/Camera.zig").CamData;
 const Pass = @import("../render/types/base/Pass.zig").Pass;
 const Entity = @import("../entity/Entity.zig").Entity;
 const vhT = @import("../render/help/Types.zig");
 const vk = @import("../.modules/vk.zig").c;
 const sc = @import("shaderConfig.zig");
+
+pub const ENTITY_COUNT = 30;
 
 // Vulkan Validation Layers
 pub const VALIDATION = true;

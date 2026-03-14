@@ -6,7 +6,7 @@ const zm = @import("zmath");
 const M_PI = 3.14159; //3.1415927
 const TWO_PI = 2 * M_PI;
 
-pub const CameraData = struct {
+pub const CamData = struct {
     viewProj: [4][4]f32,
     camPosAndFov: [4]f32,
     camDir: [4]f32,
@@ -116,7 +116,7 @@ pub const Camera = struct {
         self.needsUpdate = true;
     }
 
-    pub fn getCameraData(self: *Camera) CameraData {
+    pub fn getCameraData(self: *Camera) CamData {
         const vp = self.getViewProj();
         const liveCorners = self.computeFrustumCorners();
 
@@ -181,7 +181,7 @@ pub const Camera = struct {
         self.pos = self.pos + movement;
         self.needsUpdate = true;
     }
-    
+
     fn getProjection(self: *const Camera) zm.Mat {
         var proj = zm.perspectiveFovRh(self.fov * (std.math.pi / 180.0), self.aspectRatio, self.near, self.far);
         proj[1][1] *= -1.0;

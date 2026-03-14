@@ -1,10 +1,10 @@
 const RNGenerator = @import("../core/RNGenerator.zig").RNGenerator;
 const LinkedMap = @import("../.structures/LinkedMap.zig").LinkedMap;
 const Entity = @import("../entity/Entity.zig").Entity;
+const rc = @import("../.configs/renderConfig.zig");
 const std = @import("std");
 
-const objCount = 30;
 
 pub const EntityData = struct {
-    entitys: LinkedMap(Entity, objCount, u32, objCount, 0) = .{},
+    entitys: LinkedMap(Entity, rc.ENTITY_COUNT, u32, rc.ENTITY_COUNT, 0) = .{},
 };

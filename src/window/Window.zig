@@ -16,11 +16,11 @@ pub const Window = struct {
     id: WindowId,
     resizeTex: bool,
     relativeMouse: bool = false,
-    camIndex: CamId,
+    camId: CamId,
 
     pub const WindowId = packed struct { val: u32 };
 
-    pub fn init(windowProps: sdl.SDL_PropertiesID, renderTexId: TexId, extent: vk.VkExtent2D, resizeTex: bool, linkedTexIds: []const TexId, camIndex: u8) !Window {
+    pub fn init(windowProps: sdl.SDL_PropertiesID, renderTexId: TexId, extent: vk.VkExtent2D, resizeTex: bool, linkedTexIds: []const TexId, camId: CamId) !Window {
         if (linkedTexIds.len > rc.LINKED_TEX_MAX) return error.WindowLinkedTexturesOverflow;
 
         const winHandle = sdl.SDL_CreateWindowWithProperties(windowProps) orelse {
@@ -39,7 +39,7 @@ pub const Window = struct {
             .id = .{ .val = windowId },
             .resizeTex = resizeTex,
             .linkedTexIds = actualTexIds,
-            .camIndex = .{.val = camIndex},
+            .camId = camId,
         };
     }
 

@@ -2,7 +2,6 @@ const TexId = @import("render/types/res/TextureMeta.zig").TextureMeta.TexId;
 const ShaderCompiler = @import("core/ShaderCompiler.zig").ShaderCompiler;
 const MemoryManager = @import("core/MemoryManager.zig").MemoryManager;
 const RNGenerator = @import("core/RNGenerator.zig").RNGenerator;
-const Renderer = @import("render/Renderer.zig").Renderer;
 const shaderCon = @import(".configs/shaderConfig.zig");
 const Window = @import("window/Window.zig").Window;
 const Camera = @import("camera/Camera.zig").Camera;
@@ -11,23 +10,28 @@ const ac = @import(".configs/appConfig.zig");
 const zm = @import("zmath");
 const std = @import("std");
 
-const WindowState = @import("window/WindowState.zig").WindowData;
-const WindowSys = @import("window/WindowSys.zig").WindowSys;
-
-const InputData = @import("input/InputData.zig").InputData;
-const InputSys = @import("input/InputSys.zig").InputSys;
-
-const EngineQueue = @import("engine/EngineQueue.zig").EngineQueue;
-const EngineSys = @import("engine/EngineSys.zig").EngineSys;
-
 const TimeState = @import("time/TimeState.zig").TimeState;
 const TimeSys = @import("time/TimeSys.zig").TimeSys;
 
+/// Systems
+const WindowQueue = @import("window/WindowQueue.zig").WindowQueue;
+const WindowState = @import("window/WindowState.zig").WindowData;
+const WindowSys = @import("window/WindowSys.zig").WindowSys;
+
+const InputQueue = @import("input/InputQueue.zig").InputQueue;
+const InputData = @import("input/InputData.zig").InputData;
+const InputSys = @import("input/InputSys.zig").InputSys;
+
+const EntityQueue = @import("entity/EntityQueue.zig").EntityQueue;
 const EntityData = @import("entity/EntityData.zig").EntityData;
 const EntitySys = @import("entity/EntitySys.zig").EntitySys;
 
+const CameraQueue = @import("camera/CameraQueue.zig").CameraQueue;
 const CameraData = @import("camera/CameraData.zig").CameraData;
 const CameraSys = @import("camera/CameraSys.zig").CameraSys;
+
+const RendererQueue = @import("render/RendererQueue.zig").RendererQueue;
+const Renderer = @import("render/Renderer.zig").Renderer;
 
 pub const FrameData = struct {
     runTime: f32,
@@ -35,31 +39,35 @@ pub const FrameData = struct {
 };
 
 pub const App = struct {
-    windowState: WindowState,
-    inputState: InputData,
-    eventState: EngineQueue,
-    timeState: TimeState,
-    entityState: EntityData,
-    cameraState: CameraData,
+    timeState: TimeState = .{},
+
+    windowQueue: WindowQueue = .{},
+    windowData: WindowState,
+
+    inputQueue: InputQueue = .{},
+    inputData: InputData = .{},
+
+    entityQueue: EntityQueue = .{},
+    entityData: EntityData = .{},
+
+    cameraQueue: CameraQueue = .{},
+    cameraData: CameraData = .{},
+
+    rendererQueue: RendererQueue = .{},
+    renderer: Renderer,
 
     memoryMan: *MemoryManager,
-    renderer: Renderer,
     shaderCompiler: ShaderCompiler,
     rng: RNGenerator,
 
     pub fn init(memoryMan: *MemoryManager) !App {
-        var osState: WindowState = .{};
-        const inputState: InputData = .{};
-        const eventState: EngineQueue = .{};
-        const timeState: TimeState = .{};
-        var entityState: EntityData = .{};
-        const cameraState: CameraData = .{};
+        var windowState: WindowState = .{};
 
-        WindowSys.init(&osState) catch |err| {
+        WindowSys.init(&windowState) catch |err| {
             std.debug.print("Astral App Error WindowManager could not launch, Err {}\n", .{err});
             return error.WindowManagerFailed;
         };
-        errdefer WindowSys.deinit(&osState);
+        errdefer WindowSys.deinit(&windowState);
 
         var shaderCompiler = ShaderCompiler.init(memoryMan.getAllocator()) catch |err| {
             WindowSys.showErrorBox("Astral App Error", "File Manager could not launch");
@@ -70,15 +78,6 @@ pub const App = struct {
 
         try shaderCompiler.loadShaders(shaderCon.COMPILING_SHADERS);
 
-        var rng = RNGenerator.init(std.Random.Xoshiro256, 1000);
-
-        EntitySys.init(&entityState, &rng) catch |err| {
-            WindowSys.showErrorBox("Astral App Error", "Entity Manager could not launch");
-            std.debug.print("Err {}\n", .{err});
-            return error.EntityManagerFailed;
-        };
-        errdefer EntitySys.deinit(&entityState);
-
         var renderer = Renderer.init(memoryMan) catch |err| {
             WindowSys.showErrorBox("Astral App Error", "Renderer could not launch");
             std.debug.print("Err {}\n", .{err});
@@ -86,69 +85,78 @@ pub const App = struct {
         };
         errdefer renderer.deinit();
 
-        try renderer.addShaders(shaderCompiler.pullFreshShaders());
-        shaderCompiler.freeFreshShaders();
-
         return .{
-            .windowState = osState,
-            .inputState = inputState,
-            .eventState = eventState,
-            .timeState = timeState,
-            .entityState = entityState,
-            .cameraState = cameraState,
-
+            .windowData = windowState,
             .memoryMan = memoryMan,
             .renderer = renderer,
             .shaderCompiler = shaderCompiler,
-            .rng = rng,
+            .rng = RNGenerator.init(std.Random.Xoshiro256, 1000),
         };
     }
 
     pub fn deinit(self: *App) void {
         self.renderer.deinit();
         self.shaderCompiler.deinit();
-        WindowSys.deinit(&self.windowState);
+        WindowSys.deinit(&self.windowData);
         self.memoryMan.deinit();
     }
 
     pub fn setupApp(self: *App) !void {
-        // CAMERA
-        CameraSys.createCamera(&self.cameraState, .{ .val = 0 }, Camera.init(.{ .bufId = rc.cameraUB.id, .pos = zm.f32x4(0, 5, -20, 0), .yaw = 170, .near = 0.1, .far = 100, .fov = 60 }));
-        CameraSys.createCamera(&self.cameraState, .{ .val = 1 }, Camera.init(.{ .bufId = rc.camera2UB.id, .pos = zm.f32x4(0, 20, -45, 0), .yaw = 170, .near = 0.1, .far = 300, .fov = 110 }));
+        try self.renderer.addShaders(self.shaderCompiler.pullFreshShaders());
+        self.shaderCompiler.freeFreshShaders();
+
+        const mainCam = Camera.init(.{ .bufId = rc.cameraUB.id, .pos = zm.f32x4(0, 5, -20, 0), .yaw = 170, .near = 0.1, .far = 100, .fov = 60 });
+        const debugCam = Camera.init(.{ .bufId = rc.camera2UB.id, .pos = zm.f32x4(0, 20, -45, 0), .yaw = 170, .near = 0.1, .far = 300, .fov = 110 });
+        self.cameraQueue.append(.{ .camAdd = .{ .camId = .{ .val = 0 }, .cam = mainCam } });
+        self.cameraQueue.append(.{ .camAdd = .{ .camId = .{ .val = 1 }, .cam = debugCam } });
+
+        for (0..rc.ENTITY_COUNT) |i| self.entityQueue.append(.{ .addRandomEntity = .{ .val = @intCast(i) } });
+        EntitySys.update(&self.entityData, &self.entityQueue, &self.rng);
 
         // RENDERING SET UP
         for (rc.BUFFERS) |bufInf| try self.renderer.addResource(bufInf, null);
-        for (rc.TEXTURES) |texInf| try self.renderer.addResource(texInf, null);
-        try self.renderer.createPasses(rc.PASSES);
-        try self.renderer.updateBuffer(rc.objectSB.id, EntitySys.getObjects(&self.entityState));
+        for (rc.TEXTURES) |texInf| self.rendererQueue.append(.{ .addTexture = texInf }); //(texInf, null);
+        for (rc.PASSES) |pass| self.rendererQueue.append(.{ .createPass = pass });
+        
+        try self.renderer.updateBuffer(rc.objectSB.id, EntitySys.getEntitys(&self.entityData));
     }
 
     pub fn initWindows(self: *App) !void {
-        // try self.windowMan.addWindow("Task", 16 * 52, 9 * 52, rc.taskTex.id, 120, 50, true);
-        // try self.windowMan.addWindow("Mesh", 16 * 52, 9 * 52, rc.meshTex.id, 120, 550, true);
-        // try self.windowMan.addWindow("Compute", 16 * 52, 9 * 52, rc.compTex.id, 960, 50, true);
-        // try self.windowMan.addWindow("Graphics", 16 * 52, 9 * 52, rc.grapTex.id, 960, 550, true);
+        // try WindowSys.addWindow(&self.windowData, "Debug", 1920 / 2, 1080 / 2, rc.quantDebugTex.id, 1920 / 2 - 10, 1080 / 2 - 10, true, &[_]TexId{rc.quantDebugDepthTex.id}, 1);
+        // try WindowSys.addWindow(&self.windowData, "Main", 1920 / 2, 1080 / 2, rc.quantTex.id, 10, 40, true, &[_]TexId{rc.quantDepthTex.id}, 0);
 
-        try WindowSys.addWindow(&self.windowState, "Debug", 1920 / 2, 1080 / 2, rc.quantDebugTex.id, 1920 / 2 - 10, 1080 / 2 - 10, true, &[_]TexId{rc.quantDebugDepthTex.id}, 1);
-        try WindowSys.addWindow(&self.windowState, "Main", 1920 / 2, 1080 / 2, rc.quantTex.id, 10, 40, true, &[_]TexId{rc.quantDepthTex.id}, 0);
+        self.windowQueue.append(.{ .addWindow = .{
+            .title = "Debug",
+            .w = 1920 / 2,
+            .h = 1080 / 2,
+            .renderTexId = rc.quantDebugTex.id,
+            .x = 1920 / 2 - 10,
+            .y = 1080 / 2 - 10,
+            .resize = true,
+            .texIds = &[_]TexId{rc.quantDebugDepthTex.id},
+            .camId = .{ .val = 1 },
+        } });
+
+        self.windowQueue.append(.{ .addWindow = .{
+            .title = "Main",
+            .w = 1920 / 2,
+            .h = 1080 / 2,
+            .renderTexId = rc.quantTex.id,
+            .x = 10,
+            .y = 40,
+            .resize = true,
+            .texIds = &[_]TexId{rc.quantDepthTex.id},
+            .camId = .{ .val = 0 },
+        } });
     }
 
     pub fn run(self: *App) !void {
-        const osState = &self.windowState;
-        const inputState = &self.inputState;
-        const eventState = &self.eventState;
-        const timeState = &self.timeState;
-        const cameraState = &self.cameraState;
-
-        const memoryMan = &self.memoryMan;
         const renderer = &self.renderer;
-
         var firstFrame = true;
         var frameData: FrameData = undefined;
 
         // Main loop
         while (true) {
-
             // Shader Hotloading
             if (shaderCon.SHADER_HOTLOAD == true) {
                 try self.shaderCompiler.checkShaderUpdates();
@@ -159,105 +167,35 @@ pub const App = struct {
             if (rc.EARLY_GPU_WAIT == true) try renderer.waitForGpu();
 
             // Poll Inputs
-            WindowSys.pollEvents(osState, inputState, &self.renderer.imguiMan) catch |err| {
+            WindowSys.pollEvents(&self.windowData, &self.inputQueue, &self.renderer.imguiMan) catch |err| {
                 std.log.err("Error in pollEvents(): {}", .{err});
                 break;
             };
 
-            const activeCam = if (osState.mainWindow) |mainWindow| try CameraSys.getCamera(cameraState, mainWindow.camIndex) else null;
-
             // Handle Inputs
-            if (inputState.inputEvents.len > 0) InputSys.updateKeyStates(inputState);
-            InputSys.clearKeyEvents(inputState);
+            InputSys.update(&self.inputData, &self.inputQueue);
+            InputSys.convert(&self.inputData, &self.cameraQueue, &self.windowQueue, &self.rendererQueue);
 
-            // Process Window Changes
-            if (osState.changedWindows.len > 0) {
-                try renderer.updateWindowStates(WindowSys.getChangedWindows(osState));
-                WindowSys.cleanupWindows(osState);
-
-                if (renderer.imguiMan.backendInitialized) {
-                    osState.uiActive = renderer.imguiMan.uiActive; // sync
-                }
-            }
+            try WindowSys.update(&self.windowData, &self.windowQueue, &self.rendererQueue);
 
             // Close Or Idle
-            if (osState.appExit == true) return;
-            if (osState.openWindows == 0) continue;
+            if (self.windowData.appExit == true) return;
+            if (self.windowData.openWindows == 0) continue;
 
             // Update Time
-            TimeSys.update(timeState);
-            frameData.runTime = TimeSys.getRuntime(timeState, .seconds, f32);
-            frameData.deltaTime = TimeSys.getDeltaTime(timeState, .seconds, f32);
-            const dt = TimeSys.getDeltaTime(timeState, .nano, f64);
+            TimeSys.update(&self.timeState);
+            const dt = TimeSys.getDeltaTime(&self.timeState, .nano, f64);
+            frameData.runTime = TimeSys.getRuntime(&self.timeState, .seconds, f32);
+            frameData.deltaTime = @floatCast(dt);
+
             if (rc.CPU_PROFILING == true) std.debug.print("Cpu Delta {d:.3} ms, ({d:.1} Real FPS)\n", .{ dt * 0.000001, 1.0 / (dt * 0.000000001) });
 
-            InputSys.mapAppEvents(inputState, eventState);
+            CameraSys.update(&self.cameraData, &self.cameraQueue, dt, &self.windowData, &self.rendererQueue);
 
             // Generate and Process and clear Events
-            for (eventState.appEvents.slice()) |appEvent| {
-                switch (appEvent) {
-                    .closeApp => {
-                        WindowSys.hideAllWindows(osState);
-                        return;
-                    },
-                    .toggleFullscreen => WindowSys.toggleMainFullscreen(osState),
+            try self.renderer.update(&self.rendererQueue);
 
-                    .toggleGpuProfiling => self.renderer.renderGraph.toggleGpuProfiling(),
-
-                    .toggleFreezeFrustum => {
-                        // if (activeCam) |cam| {
-                        //     cam.toggleFreezeFrustum();
-                        //     std.debug.print("Frustum Freeze: {}\n", .{cam.freezeFrustum});
-                        // }
-                    },
-
-                    .toggleImgui => {
-                        WindowSys.toogleUiMode(osState);
-                        self.renderer.imguiMan.toogleUiMode();
-                        std.debug.print("UI Toggle: {}\n", .{osState.uiActive});
-                    },
-                    else => {
-                        if (osState.uiActive == false) {
-                            if (activeCam) |cam| {
-                                switch (appEvent) {
-                                    .camForward => cam.moveForward(dt),
-                                    .camBackward => cam.moveBackward(dt),
-                                    .camUp => cam.moveUp(dt),
-                                    .camDown => cam.moveDown(dt),
-                                    .camLeft => cam.moveLeft(dt),
-                                    .camRight => cam.moveRight(dt),
-                                    .camFovIncrease => cam.increaseFov(dt),
-                                    .camFovDecrease => cam.decreaseFov(dt),
-                                    else => {},
-                                }
-                            }
-                        }
-                    },
-                }
-            }
-            EngineSys.clearAppEvents(eventState);
-
-            if (osState.uiActive == false) {
-                if (inputState.mouseMoveX != 0 or inputState.mouseMoveY != 0) {
-                    if (activeCam) |cam| cam.rotate(inputState.mouseMoveX, inputState.mouseMoveY);
-                    if (ac.MOUSE_MOVEMENT_INFO == true) std.debug.print("Mouse Total Movement x:{} y:{}\n", .{ inputState.mouseMoveX, inputState.mouseMoveY });
-                    inputState.mouseMoveX = 0;
-                    inputState.mouseMoveY = 0;
-                }
-            } else {
-                inputState.mouseMoveX = 0;
-                inputState.mouseMoveY = 0;
-            }
-
-            for (cameraState.cameras.getItems()) |*cam| {
-                if (cam.needsUpdate) {
-                    const camData = cam.getCameraData();
-                    try renderer.updateBuffer(cam.bufId, &camData);
-                    cam.needsUpdate = false;
-                }
-            }
-
-            if (firstFrame) WindowSys.showAllWindows(osState);
+            if (firstFrame) WindowSys.showAllWindows(&self.windowData);
 
             if (rc.EARLY_GPU_WAIT == false) try renderer.waitForGpu();
             // Draw and reset Frame Arena
@@ -265,24 +203,14 @@ pub const App = struct {
                 std.log.err("Error in renderer.draw(): {}", .{err});
                 break;
             };
-            defer memoryMan.*.resetArena();
+            defer self.memoryMan.resetArena();
+
+            if (firstFrame == true) {
+                WindowSys.showOpacityAllWindows(&self.windowData);
+                firstFrame = false;
+            }
 
             if (rc.CPU_PROFILING or self.renderer.renderGraph.useGpuProfiling or rc.SWAPCHAIN_PROFILING) std.debug.print("\n", .{});
-
-            // const endTime = std.time.nanoTimestamp();
-            // const nsPerSecond = std.time.ns_per_s;
-            // const frameLimit = 480;
-
-            // const waitNs: u64 = nsPerSecond / frameLimit;
-
-            // const frame_time = endTime - startTime;
-            // if (frame_time < waitNs) {
-            //     std.Thread.sleep(@intCast(waitNs - frame_time));
-            // }
-
-            if (firstFrame == false) continue;
-            WindowSys.showOpacityAllWindows(osState);
-            firstFrame = false;
         }
     }
 };

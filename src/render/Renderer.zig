@@ -17,6 +17,8 @@ const vk = @import("../.modules/vk.zig").c;
 const Allocator = std.mem.Allocator;
 const std = @import("std");
 
+const RendererQueue = @import("RendererQueue.zig").RendererQueue;
+
 pub const Renderer = struct {
     alloc: Allocator,
     arenaAlloc: Allocator,
@@ -62,7 +64,25 @@ pub const Renderer = struct {
         self.passes.deinit();
     }
 
-    pub fn updateWindowStates(self: *Renderer, tempWindows: []const Window) !void {
+    pub fn update(self: *Renderer, rendererQueue: *RendererQueue) !void {
+        for (rendererQueue.get()) |rendererEvent| {
+            switch (rendererEvent) {
+                .updateCam => |inf| try self.updateBuffer(inf.bufId, &inf.camData),
+                .toggleGpuProfiling => self.renderGraph.toggleGpuProfiling(),
+                .toggleUi => self.imguiMan.toogleUiMode(),
+                .updateWindowState => |window| try self.updateWindowStates(&[_]Window{window}),
+                .createPass => |pass| try self.createPasses(&[_]Pass{pass}),
+                .addTexture => |texInf| try self.addResource(texInf, null),
+
+                .addShader => std.debug.print("EVENT NOT HANDLED YET! {s}\n", .{@tagName(rendererEvent)}),
+                .addBuffer => std.debug.print("EVENT NOT HANDLED YET! {s}\n", .{@tagName(rendererEvent)}),
+                .updateBuffer => std.debug.print("EVENT NOT HANDLED YET! {s}\n", .{@tagName(rendererEvent)}),
+            }
+        }
+        rendererQueue.clear();
+    }
+
+    fn updateWindowStates(self: *Renderer, tempWindows: []const Window) !void {
         for (tempWindows) |tempWindow| {
             if (tempWindow.state == .needDelete or tempWindow.state == .needUpdate) {
                 _ = vk.vkDeviceWaitIdle(self.context.gpi);
@@ -97,7 +117,7 @@ pub const Renderer = struct {
         }
     }
 
-    pub fn updateRenderTexture(self: *Renderer, texId: TextureMeta.TexId) !void {
+    fn updateRenderTexture(self: *Renderer, texId: TextureMeta.TexId) !void {
         const newExtent = self.swapMan.getMaxExtent(texId);
         try self.resMan.resizeTextureResource(texId, newExtent.width, newExtent.height, self.scheduler.totalFrames, self.scheduler.flightId);
     }
@@ -124,7 +144,7 @@ pub const Renderer = struct {
         self.scheduler.endFrame();
     }
 
-    pub fn createPasses(self: *Renderer, passes: []const Pass) !void {
+    fn createPasses(self: *Renderer, passes: []const Pass) !void {
         for (passes) |pass| {
             if (self.shaderMan.isPassValid(pass) == false) {
                 std.debug.print("Error: Pass ShaderLayout does not match Pass Type -> not appended\n", .{});
