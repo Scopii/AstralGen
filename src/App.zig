@@ -108,7 +108,6 @@ pub const App = struct {
     pub fn setupApp(self: *App) !void {
         const arena = self.memoryMan.getGlobalArena();
 
-        try ShaderSys.checkShaderUpdates(&self.shaderData, self.memoryMan.getAllocator());
         try ShaderSys.update(&self.shaderData, &self.shaderQueue, &self.rendererQueue, self.memoryMan);
 
         const CamAddPtr = @FieldType(CameraQueue.CameraEvent, "camAdd");
@@ -198,17 +197,15 @@ pub const App = struct {
         var firstFrame = true;
         var frameData: FrameData = undefined;
 
-        // Main loop
         while (true) {
             // Shader Hotloading
             if (shaderCon.SHADER_HOTLOAD == true) {
-                try ShaderSys.checkShaderUpdates(&self.shaderData, self.memoryMan.getAllocator());
                 try ShaderSys.update(&self.shaderData, &self.shaderQueue, &self.rendererQueue, self.memoryMan);
             }
 
             if (rc.EARLY_GPU_WAIT == true) try renderer.waitForGpu();
 
-            // Poll Inputs
+            // Poll OS Events
             WindowSys.pollEvents(&self.windowData, &self.inputQueue, &renderer.imguiMan) catch |err| {
                 std.log.err("Error in pollEvents(): {}", .{err});
                 break;
@@ -236,16 +233,16 @@ pub const App = struct {
 
             try self.renderer.update(&self.rendererQueue);
 
-            if (firstFrame) WindowSys.showAllWindows(&self.windowData);
-
             if (rc.EARLY_GPU_WAIT == false) try renderer.waitForGpu();
+
+            if (firstFrame) WindowSys.showAllWindows(&self.windowData);
 
             renderer.draw(frameData) catch |err| {
                 std.log.err("Error in renderer.draw(): {}", .{err});
                 break;
             };
-            self.memoryMan.resetArena();
 
+            self.memoryMan.resetArena();
             ShaderSys.freeFreshShaders(&self.shaderData, self.memoryMan.getAllocator()); // SHOULD CHANGE TO USE ARENA
 
             if (rc.CPU_PROFILING or renderer.renderGraph.useGpuProfiling or rc.SWAPCHAIN_PROFILING) std.debug.print("\n", .{});

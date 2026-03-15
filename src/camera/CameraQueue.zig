@@ -1,5 +1,4 @@
 const FixedList = @import("../.structures/FixedList.zig").FixedList;
-const LinkedMap = @import("../.structures/LinkedMap.zig").LinkedMap;
 const std = @import("std");
 const CamId = @import("CameraSys.zig").CamId;
 const Camera = @import("Camera.zig").Camera;

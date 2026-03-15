@@ -1,5 +1,4 @@
 const LinkedMap = @import("../.structures/LinkedMap.zig").LinkedMap;
-// const KeyEvent = @import("../input/InputSys.zig").KeyEvent;
 const KeyState = @import("../input/InputSys.zig").KeyState;
 
 pub const SDL_KEY_MAX = 512;

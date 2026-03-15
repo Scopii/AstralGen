@@ -20,7 +20,7 @@ pub const EntityQueue = struct {
 };
 
 pub const EntityEvent = union(enum) {
-    addEntity: struct { entityId: EntityId, entity: Entity },
+    addEntity: *const struct { entityId: EntityId, entity: Entity },
     addRandomEntity: EntityId,
     removeEntity: EntityId,
 };

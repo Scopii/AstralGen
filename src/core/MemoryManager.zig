@@ -3,7 +3,8 @@ const std = @import("std");
 
 pub const MemoryManager = struct {
     alloc: std.mem.Allocator,
-    arena: std.heap.ArenaAllocator, // adding FixedBufferAllocator?
+    arena: std.heap.ArenaAllocator, 
+    // adding FixedBufferAllocator?
 
     pub fn init(baseAllocator: Allocator) MemoryManager {
         return .{

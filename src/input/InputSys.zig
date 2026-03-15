@@ -1,18 +1,17 @@
-const FixedList = @import("../.structures/FixedList.zig").FixedList;
-const LinkedMap = @import("../.structures/LinkedMap.zig").LinkedMap;
-const InputData = @import("../input/InputData.zig").InputData;
-const InputQueue = @import("../input/InputQueue.zig").InputQueue;
+const RendererQueue = @import("../render/RendererQueue.zig").RendererQueue;
 const CameraQueue = @import("../camera/CameraQueue.zig").CameraQueue;
 const WindowQueue = @import("../window/WindowQueue.zig").WindowQueue;
-const RendererQueue = @import("../render/RendererQueue.zig").RendererQueue;
+const FixedList = @import("../.structures/FixedList.zig").FixedList;
+const LinkedMap = @import("../.structures/LinkedMap.zig").LinkedMap;
+const InputQueue = @import("../input/InputQueue.zig").InputQueue;
 const AppEvent = @import("../.configs/appConfig.zig").AppEvent;
+const InputData = @import("../input/InputData.zig").InputData;
 const ac = @import("../.configs/appConfig.zig");
 const sdl = @import("../.modules/sdl.zig").c;
 const std = @import("std");
 
 pub const KeyState = enum { pressed, released, blocked };
 pub const KeyEvent = struct { key: c_uint, event: KeyState };
-pub const MouseMovement = struct { xChange: f32, yChange: f32 };
 
 pub const KeyMapping = struct {
     device: enum { mouse, keyboard },

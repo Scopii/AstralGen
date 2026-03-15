@@ -52,6 +52,8 @@ pub const ShaderSys = struct {
         //     }
         // }
 
+        try checkShaderUpdates(shaderData, memoryMan.getAllocator());
+
         for (shaderData.freshShaders.items) |freshShader| {
             // const PayloadPtr = @FieldType(RendererQueue.RendererEvent, "compileShader");
             // const Payload = std.meta.Child(PayloadPtr);
@@ -84,7 +86,7 @@ pub const ShaderSys = struct {
         shaderData.freshShaders.clearRetainingCapacity();
     }
 
-    pub fn checkShaderUpdates(shaderData: *ShaderData, alloc: Allocator) !void {
+    fn checkShaderUpdates(shaderData: *ShaderData, alloc: Allocator) !void {
         for (shaderData.allShaders.items) |*loadedShader| {
             const filePath = try joinPath(alloc, shaderData.shaderPath, loadedShader.shaderInf.file);
             defer alloc.free(filePath);

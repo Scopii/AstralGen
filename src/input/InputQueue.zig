@@ -1,6 +1,6 @@
 const FixedList = @import("../.structures/FixedList.zig").FixedList;
+const KeyEvent = @import("InputSys.zig").KeyEvent;
 const std = @import("std");
-const keyEvent = @import("InputSys.zig").KeyEvent;
 
 pub const InputQueue = struct {
     inputEvents: FixedList(InputEvent, 127) = .{},
@@ -19,6 +19,6 @@ pub const InputQueue = struct {
 };
 
 pub const InputEvent = union(enum) {
-    keyEvent: keyEvent,
+    keyEvent: KeyEvent,
     mouseMove: struct { x: f32, y: f32 },
 };

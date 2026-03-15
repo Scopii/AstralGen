@@ -1,4 +1,4 @@
-const LinkedMap = @import("../.structures/LinkedMap.zig").LinkedMap;
+
 const Camera = @import("../camera/Camera.zig").Camera;
 const CamData = @import("../camera/Camera.zig").CamData;
 const std = @import("std");

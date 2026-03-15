@@ -34,7 +34,7 @@ pub const DESCRIPTOR_DEBUG = true;
 pub const EARLY_GPU_WAIT = true; // (Reflex Mode)
 pub const MAX_IN_FLIGHT: u8 = 2; // (Frames)
 pub const DESIRED_SWAPCHAIN_IMAGES: u8 = 3;
-pub const DISPLAY_MODE = vk.VK_PRESENT_MODE_MAILBOX_KHR; //vk.VK_PRESENT_MODE_IMMEDIATE_KHR
+pub const DISPLAY_MODE = vk.VK_PRESENT_MODE_IMMEDIATE_KHR; //vk.VK_PRESENT_MODE_IMMEDIATE_KHR
 pub const MAX_WINDOWS: u8 = 8;
 pub const LINKED_TEX_MAX = 3;
 pub const RENDER_TEX_AUTO_RESIZE = true;
@@ -97,7 +97,7 @@ pub const compCull: Pass = .{
 
 const mainCull: Pass = .{
     .name = "Main",
-    .shaderIds = &.{ sc.cullTestMesh.id, sc.cullTestFrag.id }, 
+    .shaderIds = &.{ sc.cullTestMesh.id, sc.cullTestFrag.id },
     .typ = Pass.createClassic(.{
         .classicTyp = Pass.ClassicTyp.taskMeshData(.{
             .workgroups = .{ .x = 1, .y = 1, .z = 1 },
@@ -125,7 +125,7 @@ const mainCull: Pass = .{
 
 const debugCull: Pass = .{
     .name = "Debug",
-    .shaderIds = &.{ sc.cullTestMesh.id, sc.cullTestFrag.id }, 
+    .shaderIds = &.{ sc.cullTestMesh.id, sc.cullTestFrag.id },
     .typ = Pass.createClassic(.{
         .classicTyp = Pass.ClassicTyp.taskMeshData(.{
             .workgroups = .{ .x = 1, .y = 1, .z = 1 },
@@ -154,7 +154,7 @@ const debugCull: Pass = .{
 // Normal Pass
 pub const comp: Pass = .{
     .name = "Comp",
-    .shaderIds = &.{sc.quantComp.id}, 
+    .shaderIds = &.{sc.quantComp.id},
     .typ = Pass.createCompute(.{
         .workgroups = .{ .x = 1, .y = 1, .z = 1 },
     }),
@@ -166,7 +166,7 @@ pub const comp: Pass = .{
 
 const main: Pass = .{
     .name = "Main",
-    .shaderIds = &.{ sc.quantMesh.id, sc.quantFrag.id }, 
+    .shaderIds = &.{ sc.quantMesh.id, sc.quantFrag.id },
     .typ = Pass.createClassic(.{
         .classicTyp = Pass.ClassicTyp.taskMeshData(.{
             .workgroups = .{ .x = 1, .y = 1, .z = 1 },
@@ -194,7 +194,7 @@ const main: Pass = .{
 
 const debug: Pass = .{
     .name = "Debug",
-    .shaderIds = &.{ sc.quantMesh.id, sc.quantFrag.id }, 
+    .shaderIds = &.{ sc.quantMesh.id, sc.quantFrag.id },
     .typ = Pass.createClassic(.{
         .classicTyp = Pass.ClassicTyp.taskMeshData(.{
             .workgroups = .{ .x = 1, .y = 1, .z = 1 },

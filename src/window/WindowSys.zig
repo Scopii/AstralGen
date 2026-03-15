@@ -49,10 +49,7 @@ pub const WindowSys = struct {
                 .showAllWindows => {},
                 .toggleMainFullscreen => toggleMainFullscreen(windowData),
                 .toggleUi => toogleUiMode(windowData),
-                .closeApp => {
-                    hideAllWindows(windowData);
-                    windowData.appExit = true;
-                },
+                .closeApp => windowData.appExit = true,
             }
         }
         windowQueue.clear();
@@ -68,10 +65,6 @@ pub const WindowSys = struct {
 
     pub fn showAllWindows(windowData: *WindowData) void {
         for (windowData.windows.getItems()) |*win| win.show();
-    }
-
-    pub fn hideAllWindows(windowData: *WindowData) void {
-        for (windowData.windows.getItems()) |*win| win.hide();
     }
 
     pub fn showOpacityAllWindows(windowData: *WindowData) void {
@@ -211,6 +204,7 @@ pub const WindowSys = struct {
             },
             sdl.SDL_EVENT_WINDOW_CLOSE_REQUESTED => {
                 if (window.getState() == .active) windowData.openWindows -= 1;
+                window.hide();
                 window.setState(.needDelete);
             },
             sdl.SDL_EVENT_WINDOW_MINIMIZED => {
