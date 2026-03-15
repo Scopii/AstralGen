@@ -1,4 +1,4 @@
-const ShaderId = @import("../core/ShaderCompiler.zig").ShaderId;
+const ShaderId = @import("../shader/ShaderSys.zig").ShaderId;
 const vkE = @import("../render/help/Enums.zig");
 
 pub const ShaderInf = struct {

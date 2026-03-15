@@ -1,11 +1,11 @@
 const TexId = @import("../render/types/res/TextureMeta.zig").TextureMeta.TexId;
-const WindowData = @import("WindowState.zig").WindowData;
+const WindowData = @import("WindowData.zig").WindowData;
 const InputQueue = @import("../input/InputQueue.zig").InputQueue;
 const RendererQueue = @import("../render/RendererQueue.zig").RendererQueue;
+const MemoryManager = @import("../core/MemoryManager.zig").MemoryManager;
 const WindowQueue = @import("WindowQueue.zig").WindowQueue;
 const KeyEvent = @import("../input/InputSys.zig").KeyEvent;
 const InputSys = @import("../input/InputSys.zig").InputSys;
-const Window = @import("Window.zig").Window;
 const sdl = @import("../.modules/sdl.zig").c;
 const vk = @import("../.modules/vk.zig").c;
 const std = @import("std");
@@ -16,6 +16,8 @@ const SDL_KEY_MAX = @import("../input/InputSys.zig").SDL_KEY_MAX;
 const ImGuiMan = @import("../render/sys/ImGuiMan.zig").ImGuiMan;
 const zgui = @import("zgui");
 const CamId = @import("../camera/CameraSys.zig").CamId;
+
+const Window = @import("../window/Window.zig").Window;
 
 pub const WindowSys = struct {
     pub fn init(windowState: *WindowData) !void {
@@ -38,7 +40,7 @@ pub const WindowSys = struct {
         sdl.SDL_Quit();
     }
 
-    pub fn update(windowData: *WindowData, windowQueue: *WindowQueue, rendererQueue: *RendererQueue) !void {
+    pub fn update(windowData: *WindowData, windowQueue: *WindowQueue, rendererQueue: *RendererQueue, memoryMan: *MemoryManager) !void {
         for (windowQueue.get()) |windowEvent| {
             switch (windowEvent) {
                 .addWindow => |inf| try addWindow(windowData, inf.title, inf.w, inf.h, inf.renderTexId, inf.x, inf.y, inf.resize, inf.texIds, inf.camId),
@@ -57,7 +59,9 @@ pub const WindowSys = struct {
 
         const changedWindows = getChangedWindows(windowData);
         for (changedWindows) |changedWindow| {
-            rendererQueue.append(.{ .updateWindowState = changedWindow });
+            const updatedWindowPtr = try memoryMan.arena.allocator().create(Window);
+            updatedWindowPtr.* = changedWindow;
+            rendererQueue.append(.{ .updateWindowState = updatedWindowPtr });
         }
         cleanupWindows(windowData);
     }

@@ -61,12 +61,12 @@ pub const camera2UB = BufferMeta.create(.{ .id = .{ .val = 5 }, .mem = .Gpu, .ty
 pub const BUFFERS: []const BufferMeta.BufInf = &.{ objectSB, cameraUB, camera2UB, indirectSB, readbackSB };
 
 // Textures
-pub const quantTex = TextureMeta.create(.{ .id = .{ .val = 1 }, .mem = .Gpu, .typ = .Color, .width = 1920, .height = 1080, .update = .Rarely });
-pub const quantDepthTex = TextureMeta.create(.{ .id = .{ .val = 2 }, .mem = .Gpu, .typ = .Depth, .width = 1920, .height = 1080, .update = .Rarely });
+pub const mainTex = TextureMeta.create(.{ .id = .{ .val = 1 }, .mem = .Gpu, .typ = .Color, .width = 1920, .height = 1080, .update = .Rarely });
+pub const mainDepthTex = TextureMeta.create(.{ .id = .{ .val = 2 }, .mem = .Gpu, .typ = .Depth, .width = 1920, .height = 1080, .update = .Rarely });
 
-pub const quantDebugTex = TextureMeta.create(.{ .id = .{ .val = 3 }, .mem = .Gpu, .typ = .Color, .width = 1920, .height = 1080, .update = .Rarely });
-pub const quantDebugDepthTex = TextureMeta.create(.{ .id = .{ .val = 4 }, .mem = .Gpu, .typ = .Depth, .width = 1920, .height = 1080, .update = .Rarely });
-pub const TEXTURES: []const TextureMeta.TexInf = &.{ quantTex, quantDepthTex, quantDebugTex, quantDebugDepthTex };
+pub const debugTex = TextureMeta.create(.{ .id = .{ .val = 3 }, .mem = .Gpu, .typ = .Color, .width = 1920, .height = 1080, .update = .Rarely });
+pub const debugDepthTex = TextureMeta.create(.{ .id = .{ .val = 4 }, .mem = .Gpu, .typ = .Depth, .width = 1920, .height = 1080, .update = .Rarely });
+pub const TEXTURES: []const TextureMeta.TexInf = &.{ mainTex, mainDepthTex, debugTex, debugDepthTex };
 
 // Passes
 pub const PASSES: []const Pass = &.{
@@ -85,7 +85,7 @@ pub const PASSES: []const Pass = &.{
 // Cull Test
 pub const compCull: Pass = .{
     .name = "Comp",
-    .shaderIds = &.{sc.cullTestComp.id}, // sc.quantComp.id // sc.cullTestComp.id
+    .shaderIds = &.{sc.cullTestComp.id},
     .typ = Pass.createCompute(.{
         .workgroups = .{ .x = 1, .y = 1, .z = 1 },
     }),
@@ -97,15 +97,15 @@ pub const compCull: Pass = .{
 
 const mainCull: Pass = .{
     .name = "Main",
-    .shaderIds = &.{ sc.cullTestMesh.id, sc.cullTestFrag.id }, // sc.quantMesh.id, sc.quantFrag.id // sc.cullTestMesh.id, sc.cullTestFrag.id
+    .shaderIds = &.{ sc.cullTestMesh.id, sc.cullTestFrag.id }, 
     .typ = Pass.createClassic(.{
         .classicTyp = Pass.ClassicTyp.taskMeshData(.{
             .workgroups = .{ .x = 1, .y = 1, .z = 1 },
             .indirectBuf = .{ .id = indirectSB.id, .offset = 0 },
         }),
-        .mainTexId = quantTex.id,
-        .colorAtts = &.{Attachment.init(quantTex.id, .ColorAtt, .ColorAttReadWrite, true)},
-        .depthAtt = Attachment.init(quantDepthTex.id, .EarlyFragTest, .DepthStencilWrite, true),
+        .mainTexId = mainTex.id,
+        .colorAtts = &.{Attachment.init(mainTex.id, .ColorAtt, .ColorAttReadWrite, true)},
+        .depthAtt = Attachment.init(mainDepthTex.id, .EarlyFragTest, .DepthStencilWrite, true),
         .renderState = .{
             .depthTest = vk.VK_TRUE,
             .depthWrite = vk.VK_TRUE,
@@ -125,15 +125,15 @@ const mainCull: Pass = .{
 
 const debugCull: Pass = .{
     .name = "Debug",
-    .shaderIds = &.{ sc.cullTestMesh.id, sc.cullTestFrag.id }, // sc.quantMesh.id, sc.quantFrag.id // sc.cullTestMesh.id, sc.cullTestFrag.id
+    .shaderIds = &.{ sc.cullTestMesh.id, sc.cullTestFrag.id }, 
     .typ = Pass.createClassic(.{
         .classicTyp = Pass.ClassicTyp.taskMeshData(.{
             .workgroups = .{ .x = 1, .y = 1, .z = 1 },
             .indirectBuf = .{ .id = indirectSB.id, .offset = 0 },
         }),
-        .mainTexId = quantDebugTex.id,
-        .colorAtts = &.{Attachment.init(quantDebugTex.id, .ColorAtt, .ColorAttReadWrite, true)},
-        .depthAtt = Attachment.init(quantDebugDepthTex.id, .EarlyFragTest, .DepthStencilWrite, true),
+        .mainTexId = debugTex.id,
+        .colorAtts = &.{Attachment.init(debugTex.id, .ColorAtt, .ColorAttReadWrite, true)},
+        .depthAtt = Attachment.init(debugDepthTex.id, .EarlyFragTest, .DepthStencilWrite, true),
         .renderState = .{
             .depthTest = vk.VK_TRUE,
             .depthWrite = vk.VK_TRUE,
@@ -154,7 +154,7 @@ const debugCull: Pass = .{
 // Normal Pass
 pub const comp: Pass = .{
     .name = "Comp",
-    .shaderIds = &.{sc.quantComp.id}, // sc.quantComp.id // sc.cullTestComp.id
+    .shaderIds = &.{sc.quantComp.id}, 
     .typ = Pass.createCompute(.{
         .workgroups = .{ .x = 1, .y = 1, .z = 1 },
     }),
@@ -166,15 +166,15 @@ pub const comp: Pass = .{
 
 const main: Pass = .{
     .name = "Main",
-    .shaderIds = &.{ sc.quantMesh.id, sc.quantFrag.id }, // sc.quantMesh.id, sc.quantFrag.id // sc.cullTestMesh.id, sc.cullTestFrag.id
+    .shaderIds = &.{ sc.quantMesh.id, sc.quantFrag.id }, 
     .typ = Pass.createClassic(.{
         .classicTyp = Pass.ClassicTyp.taskMeshData(.{
             .workgroups = .{ .x = 1, .y = 1, .z = 1 },
             .indirectBuf = .{ .id = indirectSB.id, .offset = 0 },
         }),
-        .mainTexId = quantTex.id,
-        .colorAtts = &.{Attachment.init(quantTex.id, .ColorAtt, .ColorAttReadWrite, true)},
-        .depthAtt = Attachment.init(quantDepthTex.id, .EarlyFragTest, .DepthStencilWrite, true),
+        .mainTexId = mainTex.id,
+        .colorAtts = &.{Attachment.init(mainTex.id, .ColorAtt, .ColorAttReadWrite, true)},
+        .depthAtt = Attachment.init(mainDepthTex.id, .EarlyFragTest, .DepthStencilWrite, true),
         .renderState = .{
             .depthTest = vk.VK_TRUE,
             .depthWrite = vk.VK_TRUE,
@@ -194,15 +194,15 @@ const main: Pass = .{
 
 const debug: Pass = .{
     .name = "Debug",
-    .shaderIds = &.{ sc.quantMesh.id, sc.quantFrag.id }, // sc.quantMesh.id, sc.quantFrag.id // sc.cullTestMesh.id, sc.cullTestFrag.id
+    .shaderIds = &.{ sc.quantMesh.id, sc.quantFrag.id }, 
     .typ = Pass.createClassic(.{
         .classicTyp = Pass.ClassicTyp.taskMeshData(.{
             .workgroups = .{ .x = 1, .y = 1, .z = 1 },
             .indirectBuf = .{ .id = indirectSB.id, .offset = 0 },
         }),
-        .mainTexId = quantDebugTex.id,
-        .colorAtts = &.{Attachment.init(quantDebugTex.id, .ColorAtt, .ColorAttReadWrite, true)},
-        .depthAtt = Attachment.init(quantDebugDepthTex.id, .EarlyFragTest, .DepthStencilWrite, true),
+        .mainTexId = debugTex.id,
+        .colorAtts = &.{Attachment.init(debugTex.id, .ColorAtt, .ColorAttReadWrite, true)},
+        .depthAtt = Attachment.init(debugDepthTex.id, .EarlyFragTest, .DepthStencilWrite, true),
         .renderState = .{
             .depthTest = vk.VK_TRUE,
             .depthWrite = vk.VK_TRUE,
@@ -227,9 +227,9 @@ pub const frustum: Pass = .{
         .classicTyp = Pass.ClassicTyp.taskMeshData(.{
             .workgroups = .{ .x = 1, .y = 1, .z = 1 },
         }),
-        .mainTexId = quantDebugTex.id,
-        .colorAtts = &.{Attachment.init(quantDebugTex.id, .ColorAtt, .ColorAttReadWrite, false)},
-        .depthAtt = Attachment.init(quantDebugDepthTex.id, .EarlyFragTest, .DepthStencilWrite, false),
+        .mainTexId = debugTex.id,
+        .colorAtts = &.{Attachment.init(debugTex.id, .ColorAtt, .ColorAttReadWrite, false)},
+        .depthAtt = Attachment.init(debugDepthTex.id, .EarlyFragTest, .DepthStencilWrite, false),
         .renderState = .{
             .depthTest = vk.VK_FALSE,
             .depthWrite = vk.VK_FALSE,
@@ -249,9 +249,9 @@ pub const editorGrid: Pass = .{
         .classicTyp = Pass.ClassicTyp.taskMeshData(.{
             .workgroups = .{ .x = 1, .y = 1, .z = 1 },
         }),
-        .mainTexId = quantDebugTex.id,
-        .colorAtts = &.{Attachment.init(quantDebugTex.id, .ColorAtt, .ColorAttReadWrite, false)},
-        .depthAtt = Attachment.init(quantDebugDepthTex.id, .EarlyFragTest, .DepthStencilWrite, false),
+        .mainTexId = debugTex.id,
+        .colorAtts = &.{Attachment.init(debugTex.id, .ColorAtt, .ColorAttReadWrite, false)},
+        .depthAtt = Attachment.init(debugDepthTex.id, .EarlyFragTest, .DepthStencilWrite, false),
         .renderState = .{
             .depthTest = vk.VK_TRUE,
             .depthWrite = vk.VK_TRUE,

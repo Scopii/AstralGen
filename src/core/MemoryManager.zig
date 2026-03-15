@@ -24,6 +24,15 @@ pub const MemoryManager = struct {
         return self.arena.allocator();
     }
 
+    pub fn arenaAllocUpload(self: *MemoryManager, dataSlice: anytype) ![]u8 {
+        const arena = self.getGlobalArena();
+        const byteSlice = std.mem.sliceAsBytes(dataSlice);
+
+        const arenaSlice = try arena.alloc(u8, byteSlice.len);
+        @memcpy(arenaSlice, byteSlice);
+        return arenaSlice;
+    } 
+
     pub fn createArena(self: *MemoryManager) std.heap.ArenaAllocator {
         return std.heap.ArenaAllocator.init(self.alloc);
     }

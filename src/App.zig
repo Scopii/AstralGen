@@ -1,5 +1,4 @@
 const TexId = @import("render/types/res/TextureMeta.zig").TextureMeta.TexId;
-const ShaderCompiler = @import("core/ShaderCompiler.zig").ShaderCompiler;
 const MemoryManager = @import("core/MemoryManager.zig").MemoryManager;
 const RNGenerator = @import("core/RNGenerator.zig").RNGenerator;
 const shaderCon = @import(".configs/shaderConfig.zig");
@@ -13,9 +12,12 @@ const std = @import("std");
 const TimeState = @import("time/TimeState.zig").TimeState;
 const TimeSys = @import("time/TimeSys.zig").TimeSys;
 
-/// Systems
+const ShaderQueue = @import("shader/ShaderQueue.zig").ShaderQueue;
+const ShaderData = @import("shader/ShaderData.zig").ShaderData;
+const ShaderSys = @import("shader/ShaderSys.zig").ShaderSys;
+
 const WindowQueue = @import("window/WindowQueue.zig").WindowQueue;
-const WindowState = @import("window/WindowState.zig").WindowData;
+const WindowData = @import("window/WindowData.zig").WindowData;
 const WindowSys = @import("window/WindowSys.zig").WindowSys;
 
 const InputQueue = @import("input/InputQueue.zig").InputQueue;
@@ -39,10 +41,15 @@ pub const FrameData = struct {
 };
 
 pub const App = struct {
+    memoryMan: *MemoryManager,
+    rng: RNGenerator,
     timeState: TimeState = .{},
 
+    shaderQueue: ShaderQueue = .{},
+    shaderData: ShaderData = .{},
+
     windowQueue: WindowQueue = .{},
-    windowData: WindowState,
+    windowData: WindowData,
 
     inputQueue: InputQueue = .{},
     inputData: InputData = .{},
@@ -56,12 +63,8 @@ pub const App = struct {
     rendererQueue: RendererQueue = .{},
     renderer: Renderer,
 
-    memoryMan: *MemoryManager,
-    shaderCompiler: ShaderCompiler,
-    rng: RNGenerator,
-
     pub fn init(memoryMan: *MemoryManager) !App {
-        var windowState: WindowState = .{};
+        var windowState: WindowData = .{};
 
         WindowSys.init(&windowState) catch |err| {
             std.debug.print("Astral App Error WindowManager could not launch, Err {}\n", .{err});
@@ -69,14 +72,15 @@ pub const App = struct {
         };
         errdefer WindowSys.deinit(&windowState);
 
-        var shaderCompiler = ShaderCompiler.init(memoryMan.getAllocator()) catch |err| {
+        var shaderData: ShaderData = .{};
+        ShaderSys.init(&shaderData, memoryMan.getAllocator()) catch |err| {
             WindowSys.showErrorBox("Astral App Error", "File Manager could not launch");
             std.debug.print("Err {}\n", .{err});
             return error.ShaderCompilerFailed;
         };
-        errdefer shaderCompiler.deinit();
+        errdefer ShaderSys.deinit(&shaderData, memoryMan.getAllocator());
 
-        try shaderCompiler.loadShaders(shaderCon.COMPILING_SHADERS);
+        try ShaderSys.loadShaders(&shaderData, memoryMan.getAllocator(), shaderCon.COMPILING_SHADERS);
 
         var renderer = Renderer.init(memoryMan) catch |err| {
             WindowSys.showErrorBox("Astral App Error", "Renderer could not launch");
@@ -89,51 +93,90 @@ pub const App = struct {
             .windowData = windowState,
             .memoryMan = memoryMan,
             .renderer = renderer,
-            .shaderCompiler = shaderCompiler,
+            .shaderData = shaderData,
             .rng = RNGenerator.init(std.Random.Xoshiro256, 1000),
         };
     }
 
     pub fn deinit(self: *App) void {
         self.renderer.deinit();
-        self.shaderCompiler.deinit();
+        ShaderSys.deinit(&self.shaderData, self.memoryMan.getAllocator());
         WindowSys.deinit(&self.windowData);
         self.memoryMan.deinit();
     }
 
     pub fn setupApp(self: *App) !void {
-        try self.renderer.addShaders(self.shaderCompiler.pullFreshShaders());
-        self.shaderCompiler.freeFreshShaders();
+        const arena = self.memoryMan.getGlobalArena();
+
+        try ShaderSys.checkShaderUpdates(&self.shaderData, self.memoryMan.getAllocator());
+        try ShaderSys.update(&self.shaderData, &self.shaderQueue, &self.rendererQueue, self.memoryMan);
+
+        const CamAddPtr = @FieldType(CameraQueue.CameraEvent, "camAdd");
+        const CamAdd = std.meta.Child(CamAddPtr);
 
         const mainCam = Camera.init(.{ .bufId = rc.cameraUB.id, .pos = zm.f32x4(0, 5, -20, 0), .yaw = 170, .near = 0.1, .far = 100, .fov = 60 });
+        const camAddPtr = try arena.create(CamAdd);
+        camAddPtr.* = .{ .camId = .{ .val = 0 }, .cam = mainCam };
+        self.cameraQueue.append(.{ .camAdd = camAddPtr });
+
         const debugCam = Camera.init(.{ .bufId = rc.camera2UB.id, .pos = zm.f32x4(0, 20, -45, 0), .yaw = 170, .near = 0.1, .far = 300, .fov = 110 });
-        self.cameraQueue.append(.{ .camAdd = .{ .camId = .{ .val = 0 }, .cam = mainCam } });
-        self.cameraQueue.append(.{ .camAdd = .{ .camId = .{ .val = 1 }, .cam = debugCam } });
+        const cam2AddPtr = try arena.create(CamAdd);
+        cam2AddPtr.* = .{ .camId = .{ .val = 1 }, .cam = debugCam };
+        self.cameraQueue.append(.{ .camAdd = cam2AddPtr });
 
         for (0..rc.ENTITY_COUNT) |i| self.entityQueue.append(.{ .addRandomEntity = .{ .val = @intCast(i) } });
         EntitySys.update(&self.entityData, &self.entityQueue, &self.rng);
 
         // RENDERING SET UP
-        for (rc.BUFFERS) |bufInf| try self.renderer.addResource(bufInf, null);
-        for (rc.TEXTURES) |texInf| self.rendererQueue.append(.{ .addTexture = texInf }); //(texInf, null);
-        for (rc.PASSES) |pass| self.rendererQueue.append(.{ .createPass = pass });
-        
-        try self.renderer.updateBuffer(rc.objectSB.id, EntitySys.getEntitys(&self.entityData));
+        for (rc.BUFFERS) |bufInf| {
+            const AddBufPtr = @FieldType(RendererQueue.RendererEvent, "addBuffer");
+            const AddBuf = std.meta.Child(AddBufPtr);
+
+            const bufferPtr = try arena.create(AddBuf);
+            bufferPtr.* = .{ .bufInf = bufInf, .data = null };
+            self.rendererQueue.append(.{ .addBuffer = bufferPtr });
+        }
+
+        for (rc.TEXTURES) |texInf| {
+            const AddTexPtr = @FieldType(RendererQueue.RendererEvent, "addTexture");
+            const AddTex = std.meta.Child(AddTexPtr);
+
+            const addTextureDataPtr = try arena.create(AddTex);
+            addTextureDataPtr.* = .{ .texInf = texInf, .data = null };
+            self.rendererQueue.append(.{ .addTexture = addTextureDataPtr });
+        }
+
+        for (rc.PASSES) |*pass| {
+            const AddPassPtr = @FieldType(RendererQueue.RendererEvent, "addPass");
+            const AddPass = std.meta.Child(AddPassPtr);
+
+            const addPassDataPtr = try arena.create(AddPass);
+            addPassDataPtr.* = pass.*;
+            self.rendererQueue.append(.{ .addPass = addPassDataPtr });
+        }
+
+        // Entity Upload
+        const entityData = EntitySys.getEntitys(&self.entityData);
+        const slice = try self.memoryMan.arenaAllocUpload(entityData);
+
+        const PayloadPtr = @FieldType(RendererQueue.RendererEvent, "updateBuffer");
+        const Payload = std.meta.Child(PayloadPtr);
+
+        const updateBufferPtr = try self.memoryMan.getGlobalArena().create(Payload);
+        updateBufferPtr.* = .{ .bufId = rc.objectSB.id, .data = slice };
+        self.rendererQueue.append(.{ .updateBuffer = updateBufferPtr });
     }
 
     pub fn initWindows(self: *App) !void {
-        // try WindowSys.addWindow(&self.windowData, "Debug", 1920 / 2, 1080 / 2, rc.quantDebugTex.id, 1920 / 2 - 10, 1080 / 2 - 10, true, &[_]TexId{rc.quantDebugDepthTex.id}, 1);
-        // try WindowSys.addWindow(&self.windowData, "Main", 1920 / 2, 1080 / 2, rc.quantTex.id, 10, 40, true, &[_]TexId{rc.quantDepthTex.id}, 0);
-
         self.windowQueue.append(.{ .addWindow = .{
             .title = "Debug",
             .w = 1920 / 2,
             .h = 1080 / 2,
-            .renderTexId = rc.quantDebugTex.id,
+            .renderTexId = rc.debugTex.id,
             .x = 1920 / 2 - 10,
             .y = 1080 / 2 - 10,
             .resize = true,
-            .texIds = &[_]TexId{rc.quantDebugDepthTex.id},
+            .texIds = &[_]TexId{rc.debugDepthTex.id},
             .camId = .{ .val = 1 },
         } });
 
@@ -141,11 +184,11 @@ pub const App = struct {
             .title = "Main",
             .w = 1920 / 2,
             .h = 1080 / 2,
-            .renderTexId = rc.quantTex.id,
+            .renderTexId = rc.mainTex.id,
             .x = 10,
             .y = 40,
             .resize = true,
-            .texIds = &[_]TexId{rc.quantDepthTex.id},
+            .texIds = &[_]TexId{rc.mainDepthTex.id},
             .camId = .{ .val = 0 },
         } });
     }
@@ -159,15 +202,14 @@ pub const App = struct {
         while (true) {
             // Shader Hotloading
             if (shaderCon.SHADER_HOTLOAD == true) {
-                try self.shaderCompiler.checkShaderUpdates();
-                try renderer.addShaders(self.shaderCompiler.pullFreshShaders());
-                self.shaderCompiler.freeFreshShaders();
+                try ShaderSys.checkShaderUpdates(&self.shaderData, self.memoryMan.getAllocator());
+                try ShaderSys.update(&self.shaderData, &self.shaderQueue, &self.rendererQueue, self.memoryMan);
             }
 
             if (rc.EARLY_GPU_WAIT == true) try renderer.waitForGpu();
 
             // Poll Inputs
-            WindowSys.pollEvents(&self.windowData, &self.inputQueue, &self.renderer.imguiMan) catch |err| {
+            WindowSys.pollEvents(&self.windowData, &self.inputQueue, &renderer.imguiMan) catch |err| {
                 std.log.err("Error in pollEvents(): {}", .{err});
                 break;
             };
@@ -176,7 +218,7 @@ pub const App = struct {
             InputSys.update(&self.inputData, &self.inputQueue);
             InputSys.convert(&self.inputData, &self.cameraQueue, &self.windowQueue, &self.rendererQueue);
 
-            try WindowSys.update(&self.windowData, &self.windowQueue, &self.rendererQueue);
+            try WindowSys.update(&self.windowData, &self.windowQueue, &self.rendererQueue, self.memoryMan);
 
             // Close Or Idle
             if (self.windowData.appExit == true) return;
@@ -188,29 +230,30 @@ pub const App = struct {
             frameData.runTime = TimeSys.getRuntime(&self.timeState, .seconds, f32);
             frameData.deltaTime = @floatCast(dt);
 
-            if (rc.CPU_PROFILING == true) std.debug.print("Cpu Delta {d:.3} ms, ({d:.1} Real FPS)\n", .{ dt * 0.000001, 1.0 / (dt * 0.000000001) });
+            try CameraSys.update(&self.cameraData, &self.cameraQueue, dt, &self.windowData, &self.rendererQueue, self.memoryMan);
 
-            CameraSys.update(&self.cameraData, &self.cameraQueue, dt, &self.windowData, &self.rendererQueue);
+            if (rc.CPU_PROFILING) std.debug.print("Cpu pre-Renderer Delta {d:.3} ms, ({d:.1} Real FPS)\n", .{ dt * 0.000001, 1.0 / (dt * 0.000000001) });
 
-            // Generate and Process and clear Events
             try self.renderer.update(&self.rendererQueue);
 
             if (firstFrame) WindowSys.showAllWindows(&self.windowData);
 
             if (rc.EARLY_GPU_WAIT == false) try renderer.waitForGpu();
-            // Draw and reset Frame Arena
+
             renderer.draw(frameData) catch |err| {
                 std.log.err("Error in renderer.draw(): {}", .{err});
                 break;
             };
-            defer self.memoryMan.resetArena();
+            self.memoryMan.resetArena();
+
+            ShaderSys.freeFreshShaders(&self.shaderData, self.memoryMan.getAllocator()); // SHOULD CHANGE TO USE ARENA
+
+            if (rc.CPU_PROFILING or renderer.renderGraph.useGpuProfiling or rc.SWAPCHAIN_PROFILING) std.debug.print("\n", .{});
 
             if (firstFrame == true) {
                 WindowSys.showOpacityAllWindows(&self.windowData);
                 firstFrame = false;
             }
-
-            if (rc.CPU_PROFILING or self.renderer.renderGraph.useGpuProfiling or rc.SWAPCHAIN_PROFILING) std.debug.print("\n", .{});
         }
     }
 };

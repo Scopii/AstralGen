@@ -1,5 +1,5 @@
 const MemoryManager = @import("../core/MemoryManager.zig").MemoryManager;
-const LoadedShader = @import("../core/LoadedShader.zig").LoadedShader;
+const LoadedShader = @import("../shader/LoadedShader.zig").LoadedShader;
 const TextureMeta = @import("types/res/TextureMeta.zig").TextureMeta;
 const BufferMeta = @import("types/res/BufferMeta.zig").BufferMeta;
 const SwapchainMan = @import("sys/SwapchainMan.zig").SwapchainMan;
@@ -67,16 +67,15 @@ pub const Renderer = struct {
     pub fn update(self: *Renderer, rendererQueue: *RendererQueue) !void {
         for (rendererQueue.get()) |rendererEvent| {
             switch (rendererEvent) {
-                .updateCam => |inf| try self.updateBuffer(inf.bufId, &inf.camData),
                 .toggleGpuProfiling => self.renderGraph.toggleGpuProfiling(),
                 .toggleUi => self.imguiMan.toogleUiMode(),
-                .updateWindowState => |window| try self.updateWindowStates(&[_]Window{window}),
-                .createPass => |pass| try self.createPasses(&[_]Pass{pass}),
-                .addTexture => |texInf| try self.addResource(texInf, null),
+                .updateWindowState => |window| try self.updateWindowStates(&[_]Window{window.*}),
+                .addPass => |pass| try self.createPasses(&[_]Pass{pass.*}),
+                .addTexture => |inf| try self.addResource(inf.texInf, inf.data),
+                .addBuffer => |inf| try self.addResource(inf.bufInf, inf.data),
+                .updateBuffer => |inf| try self.updateBuffer(inf.bufId, inf.data),
 
-                .addShader => std.debug.print("EVENT NOT HANDLED YET! {s}\n", .{@tagName(rendererEvent)}),
-                .addBuffer => std.debug.print("EVENT NOT HANDLED YET! {s}\n", .{@tagName(rendererEvent)}),
-                .updateBuffer => std.debug.print("EVENT NOT HANDLED YET! {s}\n", .{@tagName(rendererEvent)}),
+                .addShader => |loadedShader| try self.addShaders(&[_]LoadedShader{loadedShader.*}),
             }
         }
         rendererQueue.clear();

@@ -3,20 +3,18 @@ const vkE = @import("../render/help/Enums.zig");
 const Allocator = std.mem.Allocator;
 const std = @import("std");
 
-const LoadedShader = @import("../core/LoadedShader.zig").LoadedShader;
-const ShaderInf = @import("../core/ShaderInf.zig").ShaderInf;
+const LoadedShader = @import("LoadedShader.zig").LoadedShader;
+const ShaderInf = @import("ShaderInf.zig").ShaderInf;
+const MemoryManager = @import("../core/MemoryManager.zig").MemoryManager;
+
+const ShaderData = @import("ShaderData.zig").ShaderData;
+const ShaderQueue = @import("ShaderQueue.zig").ShaderQueue;
+const RendererQueue = @import("../render/RendererQueue.zig").RendererQueue;
 
 pub const ShaderId = packed struct { val: u8 };
 
-pub const ShaderCompiler = struct {
-    alloc: Allocator,
-    rootPath: []u8,
-    shaderPath: []const u8,
-    shaderOutputPath: []const u8,
-    freshShaders: std.array_list.Managed(LoadedShader),
-    allShaders: std.array_list.Managed(LoadedShader),
-
-    pub fn init(alloc: Allocator) !ShaderCompiler {
+pub const ShaderSys = struct {
+    pub fn init(shaderData: *ShaderData, alloc: Allocator) !void {
         // Assign paths
         const root = try resolveProjectRoot(alloc, sc.ROOT_PATH);
         std.debug.print("Root Path {s}\n", .{root});
@@ -25,65 +23,78 @@ pub const ShaderCompiler = struct {
         const shaderOutputPath = try joinPath(alloc, root, sc.SPRV_PATH);
         std.debug.print("Shader Output Path {s}\n", .{shaderOutputPath});
 
-        return .{
-            .alloc = alloc,
-            .rootPath = root,
-            .shaderPath = shaderPath,
-            .shaderOutputPath = shaderOutputPath,
-            .freshShaders = std.array_list.Managed(LoadedShader).init(alloc),
-            .allShaders = std.array_list.Managed(LoadedShader).init(alloc),
-        };
+        shaderData.rootPath = root;
+        shaderData.shaderPath = shaderPath;
+        shaderData.shaderOutputPath = shaderOutputPath;
+        shaderData.freshShaders = std.array_list.Managed(LoadedShader).init(alloc);
+        shaderData.allShaders = std.array_list.Managed(LoadedShader).init(alloc);
     }
 
-    pub fn deinit(self: *ShaderCompiler) void {
-        self.alloc.free(self.rootPath);
-        self.alloc.free(self.shaderPath);
-        self.alloc.free(self.shaderOutputPath);
-        self.freshShaders.deinit();
-        self.allShaders.deinit();
+    pub fn deinit(shaderData: *const ShaderData, alloc: Allocator) void {
+        alloc.free(shaderData.rootPath);
+        alloc.free(shaderData.shaderPath);
+        alloc.free(shaderData.shaderOutputPath);
+        shaderData.freshShaders.deinit();
+        shaderData.allShaders.deinit();
     }
 
-    pub fn pullFreshShaders(self: *ShaderCompiler) []LoadedShader {
-        return self.freshShaders.items;
+    pub fn update(shaderData: *ShaderData, _: *ShaderQueue, rendererQueue: *RendererQueue, memoryMan: *MemoryManager) !void {
+        // for (shaderQueue.get()) |shaderEvent| {
+        //     switch (shaderEvent) {
+        //         .compileShader => {
+        //             const PayloadPtr = @FieldType(RendererQueue.RendererEvent, "compileShader");
+        //             const Payload = std.meta.Child(PayloadPtr);
+
+        //             const loadedShaderPtr = try memoryMan.getGlobalArena().create(Payload);
+        //             loadedShaderPtr.* = .{ .bufId = rc.objectSB.id, .data = slice };
+        //             self.rendererQueue.append(.{ .updateBuffer = loadedShaderPtr });
+        //         },
+        //     }
+        // }
+
+        for (shaderData.freshShaders.items) |freshShader| {
+            // const PayloadPtr = @FieldType(RendererQueue.RendererEvent, "compileShader");
+            // const Payload = std.meta.Child(PayloadPtr);
+            const loadedShaderPtr = try memoryMan.getGlobalArena().create(LoadedShader);
+            loadedShaderPtr.* = freshShader;
+            rendererQueue.append(.{ .addShader = loadedShaderPtr });
+        }
     }
 
-    pub fn loadShaders(self: *ShaderCompiler, shaderInfos: []const ShaderInf) !void {
-        const alloc = self.alloc;
+    pub fn loadShaders(shaderData: *ShaderData, alloc: Allocator, shaderInfos: []const ShaderInf) !void {
         if (sc.SHADER_STARTUP_COMPILATION) {
-            try compileShadersParallel(alloc, self.shaderPath, self.shaderOutputPath, shaderInfos);
+            try compileShadersParallel(alloc, shaderData.shaderPath, shaderData.shaderOutputPath, shaderInfos);
         }
         const curTime = std.time.nanoTimestamp();
 
         for (shaderInfos) |shaderConfig| {
-            const spvPath = try joinPath(alloc, self.shaderOutputPath, shaderConfig.spvFile);
+            const spvPath = try joinPath(alloc, shaderData.shaderOutputPath, shaderConfig.spvFile);
             defer alloc.free(spvPath);
             const data = try loadShader(alloc, spvPath);
             const newShader = LoadedShader{ .shaderInf = shaderConfig, .timeStamp = curTime, .data = data };
-            try self.freshShaders.append(newShader);
-            try self.allShaders.append(newShader);
+            try shaderData.freshShaders.append(newShader);
+            try shaderData.allShaders.append(newShader);
         }
     }
 
-    pub fn freeFreshShaders(self: *ShaderCompiler) void {
-        for (self.freshShaders.items) |*loadedShader| {
-            self.alloc.free(loadedShader.data);
+    pub fn freeFreshShaders(shaderData: *ShaderData, alloc: Allocator) void {
+        for (shaderData.freshShaders.items) |*loadedShader| {
+            alloc.free(loadedShader.data);
         }
-        self.freshShaders.clearRetainingCapacity();
+        shaderData.freshShaders.clearRetainingCapacity();
     }
 
-    pub fn checkShaderUpdates(self: *ShaderCompiler) !void {
-        const alloc = self.alloc;
-
-        for (self.allShaders.items) |*loadedShader| {
-            const filePath = try joinPath(alloc, self.shaderPath, loadedShader.shaderInf.file);
+    pub fn checkShaderUpdates(shaderData: *ShaderData, alloc: Allocator) !void {
+        for (shaderData.allShaders.items) |*loadedShader| {
+            const filePath = try joinPath(alloc, shaderData.shaderPath, loadedShader.shaderInf.file);
             defer alloc.free(filePath);
             const newTimeStamp = try getFileTimeStamp(filePath);
 
             if (loadedShader.timeStamp < newTimeStamp) {
-                const shaderOutputPath = try joinPath(alloc, self.shaderOutputPath, loadedShader.shaderInf.spvFile);
+                const shaderOutputPath = try joinPath(alloc, shaderData.shaderOutputPath, loadedShader.shaderInf.spvFile);
                 defer alloc.free(shaderOutputPath);
 
-                compileShader(alloc, filePath, shaderOutputPath, loadedShader.shaderInf.typ, self.shaderPath) catch |err| {
+                compileShader(alloc, filePath, shaderOutputPath, loadedShader.shaderInf.typ, shaderData.shaderPath) catch |err| {
                     std.debug.print("Tried updating Shader but compilation failed {}\n", .{err});
                 };
 
@@ -91,7 +102,7 @@ pub const ShaderCompiler = struct {
                 loadedShader.data = data;
                 loadedShader.timeStamp = newTimeStamp;
 
-                try self.freshShaders.append(loadedShader.*);
+                try shaderData.freshShaders.append(loadedShader.*);
                 std.debug.print("Hotloaded: {s}\n", .{loadedShader.shaderInf.file});
             }
         }

@@ -1,17 +1,18 @@
 const LinkedMap = @import("../.structures/LinkedMap.zig").LinkedMap;
 const Camera = @import("../camera/Camera.zig").Camera;
+const CamData = @import("../camera/Camera.zig").CamData;
 const std = @import("std");
 
 const CameraData = @import("../camera/CameraData.zig").CameraData;
-const WindowData = @import("../window/WindowState.zig").WindowData;
+const WindowData = @import("../window/WindowData.zig").WindowData;
 const RendererQueue = @import("../render/RendererQueue.zig").RendererQueue;
 const CameraQueue = @import("../camera/CameraQueue.zig").CameraQueue;
+const MemoryManager = @import("../core/MemoryManager.zig").MemoryManager;
 
 pub const CamId = packed struct { val: u8 };
 
 pub const CameraSys = struct {
-    pub fn update(cameraData: *CameraData, camQueue: *CameraQueue, dt: f64, windowData: *const WindowData, rendererQueue: *RendererQueue) void {
-
+    pub fn update(cameraData: *CameraData, camQueue: *CameraQueue, dt: f64, windowData: *const WindowData, rendererQueue: *RendererQueue, memoryMan: *MemoryManager) !void {
         const camId = if (windowData.mainWindow) |window| window.camId else null;
         const idUsed = if (camId) |id| isCamIdUsed(cameraData, id) else false;
         const mainCam = if (idUsed and !windowData.uiActive) getCamera(cameraData, camId.?) else null; // Only update if Cam is used and UI is disabled
@@ -37,8 +38,20 @@ pub const CameraSys = struct {
 
         for (cameraData.cameras.getItems()) |*cam| {
             if (cam.needsUpdate) {
-                const camData = cam.getCameraData();
-                rendererQueue.append(.{ .updateCam = .{ .bufId = cam.bufId, .camData = camData } });
+                const arena = memoryMan.getGlobalArena();
+
+                const camDataPtr = try arena.create(CamData);
+                camDataPtr.* = cam.getCameraData();
+
+                const PayloadPtr = @FieldType(RendererQueue.RendererEvent, "updateBuffer");
+                const Payload = std.meta.Child(PayloadPtr);
+
+                const updateBufferPtr = try arena.create(Payload);
+                const byteSlice = std.mem.asBytes(camDataPtr);
+                updateBufferPtr.* = .{ .bufId = cam.bufId, .data = byteSlice };
+
+                rendererQueue.append(.{ .updateBuffer = updateBufferPtr });
+
                 cam.needsUpdate = false;
             }
         }

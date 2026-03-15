@@ -18,19 +18,19 @@ pub const CameraQueue = struct {
     pub fn clear(self: *CameraQueue) void {
         self.cameraEvents.clear();
     }
-};
 
-pub const CameraEvent = union(enum) {
-    camAdd: struct { camId: CamId, cam: Camera },
-    camRemove: CamId,
+    pub const CameraEvent = union(enum) {
+        camAdd: *const struct { camId: CamId, cam: Camera },
+        camRemove: CamId,
 
-    camForward,
-    camBackward,
-    camLeft,
-    camRight,
-    camUp,
-    camDown,
-    camFovInc,
-    camFovDec,
-    camRotate: struct { x: f32, y: f32 },
+        camForward,
+        camBackward,
+        camLeft,
+        camRight,
+        camUp,
+        camDown,
+        camFovInc,
+        camFovDec,
+        camRotate: struct { x: f32, y: f32 },
+    };
 };
