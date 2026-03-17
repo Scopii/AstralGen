@@ -17,3 +17,8 @@ pub const SpecData = packed struct {
     threadY: u32, 
     threadZ: u32, 
 };
+
+pub const GpuObjectData = extern struct {
+    posAndSize: [4]f32,  // x, y, z, size
+    colorAndSdf: [4]f32, // r, g, b, sdfId
+};

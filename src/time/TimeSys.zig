@@ -1,16 +1,16 @@
 const std = @import("std");
-const TimeState = @import("../time/TimeState.zig").TimeState;
+const TimeData = @import("../time/TimeData.zig").TimeData;
 
 pub const TimeUnit = enum { seconds, milli, micro, nano };
 
 pub const TimeSys = struct {
-    pub fn init(timeState: *TimeState) void {
+    pub fn init(timeState: *TimeData) void {
         const curTime = std.time.nanoTimestamp();
         timeState.startup = curTime;
         timeState.lastTime = curTime;
     }
 
-    pub fn update(timeState: *TimeState) void {
+    pub fn update(timeState: *TimeData) void {
         const newtime = std.time.nanoTimestamp();
         timeState.deltaTime = newtime - timeState.lastTime;
         timeState.lastTime = newtime;
@@ -26,23 +26,23 @@ pub const TimeSys = struct {
         };
     }
 
-    pub fn getStartup(timeState: *TimeState, unit: TimeUnit, comptime T: type) T {
+    pub fn getStartup(timeState: *TimeData, unit: TimeUnit, comptime T: type) T {
         return convertTime(timeState.startup, unit, T);
     }
 
-    pub fn getLastTime(timeState: *TimeState, unit: TimeUnit, comptime T: type) T {
+    pub fn getLastTime(timeState: *TimeData, unit: TimeUnit, comptime T: type) T {
         return convertTime(timeState.lastTime, unit, T);
     }
 
-    pub fn getRuntime(timeState: *TimeState, unit: TimeUnit, comptime T: type) T {
+    pub fn getRuntime(timeState: *TimeData, unit: TimeUnit, comptime T: type) T {
         return convertTime(timeState.runtime, unit, T);
     }
 
-    pub fn getDeltaTime(timeState: *TimeState, unit: TimeUnit, comptime T: type) T {
+    pub fn getDeltaTime(timeState: *TimeData, unit: TimeUnit, comptime T: type) T {
         return convertTime(timeState.deltaTime, unit, T);
     }
 
-    pub fn printTimeInfo(timeState: *TimeState) void {
+    pub fn printTimeInfo(timeState: *TimeData) void {
         std.debug.print("Startup as Float {d:.4}\n", .{getStartup(timeState, .seconds, f32)});
         std.debug.print("Startup as Int {}\n", .{getStartup(timeState, .seconds, u32)});
         std.debug.print("LastTime as Float {d:.4}\n", .{timeState, getLastTime(.seconds, f32)});

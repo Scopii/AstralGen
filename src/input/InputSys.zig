@@ -1,5 +1,4 @@
 const RendererQueue = @import("../render/RendererQueue.zig").RendererQueue;
-const CameraQueue = @import("../camera/CameraQueue.zig").CameraQueue;
 const WindowQueue = @import("../window/WindowQueue.zig").WindowQueue;
 const FixedList = @import("../.structures/FixedList.zig").FixedList;
 const LinkedMap = @import("../.structures/LinkedMap.zig").LinkedMap;
@@ -26,6 +25,8 @@ pub const SDL_MOUSE_MAX = 24;
 
 pub const InputSys = struct {
     pub fn update(inputData: *InputData, inputQueue: *InputQueue) void {
+        inputData.resetMouseState();
+
         for (inputQueue.get()) |inputEvent| {
             switch (inputEvent) {
                 .keyEvent => |keyEvent| {
@@ -52,7 +53,9 @@ pub const InputSys = struct {
         if (ac.KEY_EVENT_INFO == true) std.debug.print("KeyStates {}\n", .{inputData.keyStates.len});
     }
 
-    pub fn convert(inputData: *InputData, camQueue: *CameraQueue, windowQueue: *WindowQueue, rendererQueue: *RendererQueue) void {
+    pub fn convert(inputData: *InputData, rendererQueue: *RendererQueue) void {
+        inputData.resetState();
+
         for (ac.keyMap) |assignment| {
             const actualKey = switch (assignment.device) {
                 .keyboard => assignment.key,
@@ -66,35 +69,29 @@ pub const InputSys = struct {
 
                     // Append Events for Queues:
                     switch (assignment.appEvent) {
-                        .camForward => camQueue.append(.camForward),
-                        .camBackward => camQueue.append(.camBackward),
-                        .camLeft => camQueue.append(.camLeft),
-                        .camRight => camQueue.append(.camRight),
-                        .camUp => camQueue.append(.camUp),
-                        .camDown => camQueue.append(.camDown),
-                        .camFovIncrease => camQueue.append(.camFovInc),
-                        .camFovDecrease => camQueue.append(.camFovDec),
+                        .camForward => inputData.camForward = true,
+                        .camBackward => inputData.camBackward = true,
+                        .camLeft => inputData.camLeft = true,
+                        .camRight => inputData.camRight = true,
+                        .camUp => inputData.camUp = true,
+                        .camDown => inputData.camDown = true,
+                        .camFovIncrease => inputData.camFovInc = true,
+                        .camFovDecrease => inputData.camFovDec = true,
 
-                        .toggleFullscreen => windowQueue.append(.toggleMainFullscreen),
-                        .closeApp => windowQueue.append(.closeApp),
+                        .toggleFullscreen => inputData.toggleFullscreen = true,
+                        .closeApp => inputData.closeApp = true,
                         .toggleImgui => {
-                            windowQueue.append(.toggleUi);
+                            inputData.toggleImgui = true;
                             rendererQueue.append(.toggleUi);
                         },
-                        .toggleGpuProfiling => rendererQueue.append(.toggleGpuProfiling),
+                        .toggleGpuProfiling => inputData.toggleGpuProfiling = true,
+                        .speedMode => inputData.speedMode = true,
                     }
 
                     if (assignment.cycle == .oneTime) inputData.keyStates.upsert(actualKey, .released);
                     if (assignment.cycle == .oneBlock) inputData.keyStates.upsert(actualKey, .blocked);
                 }
             }
-        }
-
-        // Mouse Movement
-        if (inputData.mouseMoveX != 0 or inputData.mouseMoveY != 0) {
-            camQueue.append(.{ .camRotate = .{ .x = inputData.mouseMoveX, .y = inputData.mouseMoveY } });
-            inputData.mouseMoveX = 0;
-            inputData.mouseMoveY = 0;
         }
     }
 };

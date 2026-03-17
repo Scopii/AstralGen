@@ -1,6 +1,6 @@
 const std = @import("std");
 
-pub const TimeState = struct {
+pub const TimeData = struct {
     // Set and used
     startup: i128 = 0,
     lastTime: i128 = 0,

@@ -1,23 +1,20 @@
 const TexId = @import("../render/types/res/TextureMeta.zig").TextureMeta.TexId;
-const WindowData = @import("WindowData.zig").WindowData;
-const InputQueue = @import("../input/InputQueue.zig").InputQueue;
 const RendererQueue = @import("../render/RendererQueue.zig").RendererQueue;
 const MemoryManager = @import("../core/MemoryManager.zig").MemoryManager;
+const InputQueue = @import("../input/InputQueue.zig").InputQueue;
+const ImGuiMan = @import("../render/sys/ImGuiMan.zig").ImGuiMan;
+const EngineData = @import("../EngineData.zig").EngineData;
 const WindowQueue = @import("WindowQueue.zig").WindowQueue;
 const KeyEvent = @import("../input/InputSys.zig").KeyEvent;
 const InputSys = @import("../input/InputSys.zig").InputSys;
+const EntityId = @import("../ecs/EntityData.zig").EntityId;
+const WindowData = @import("WindowData.zig").WindowData;
+const Window = @import("../window/Window.zig").Window;
 const sdl = @import("../.modules/sdl.zig").c;
 const vk = @import("../.modules/vk.zig").c;
 const std = @import("std");
-
-const MAX_WINDOWS = @import("../.configs/renderConfig.zig").MAX_WINDOWS;
 const SDL_KEY_MAX = @import("../input/InputSys.zig").SDL_KEY_MAX;
 
-const ImGuiMan = @import("../render/sys/ImGuiMan.zig").ImGuiMan;
-const zgui = @import("zgui");
-const CamId = @import("../camera/CameraSys.zig").CamId;
-
-const Window = @import("../window/Window.zig").Window;
 
 pub const WindowSys = struct {
     pub fn init(windowState: *WindowData) !void {
@@ -40,19 +37,16 @@ pub const WindowSys = struct {
         sdl.SDL_Quit();
     }
 
-    pub fn update(windowData: *WindowData, windowQueue: *WindowQueue, rendererQueue: *RendererQueue, memoryMan: *MemoryManager) !void {
+    pub fn update(windowData: *WindowData, state: *const EngineData, windowQueue: *WindowQueue, rendererQueue: *RendererQueue, memoryMan: *MemoryManager) !void {
         for (windowQueue.get()) |windowEvent| {
             switch (windowEvent) {
-                .addWindow => |inf| try addWindow(windowData, inf.title, inf.w, inf.h, inf.renderTexId, inf.x, inf.y, inf.resize, inf.texIds, inf.camId),
-                .removeWindow => {},
-                .hideAllWindows => {},
-                .showAllWindows => {},
-                .toggleMainFullscreen => toggleMainFullscreen(windowData),
-                .toggleUi => toogleUiMode(windowData),
-                .closeApp => windowData.appExit = true,
+                .addWindow => |inf| try addWindow(windowData, inf.title, inf.w, inf.h, inf.renderTexId, inf.x, inf.y, inf.resize, inf.texIds, inf.camEntityId),
             }
         }
         windowQueue.clear();
+
+        if (state.input.toggleFullscreen) toggleMainFullscreen(windowData);
+        if (state.input.toggleImgui) toogleUiMode(windowData);
 
         const changedWindows = getChangedWindows(windowData);
         for (changedWindows) |changedWindow| {
@@ -71,7 +65,7 @@ pub const WindowSys = struct {
         for (windowData.windows.getItems()) |*win| win.setOpacity(1.0);
     }
 
-    fn addWindow(windowData: *WindowData, title: [*c]const u8, w: c_int, h: c_int, renderTexId: TexId, x: c_int, y: c_int, resize: bool, texIds: []const TexId, camId: CamId) !void {
+    fn addWindow(windowData: *WindowData, title: [*c]const u8, w: c_int, h: c_int, renderTexId: TexId, x: c_int, y: c_int, resize: bool, texIds: []const TexId, camEntityId: EntityId) !void {
         const props = windowData.windowProps;
         const flags = sdl.SDL_WINDOW_VULKAN | sdl.SDL_WINDOW_RESIZABLE | sdl.SDL_WINDOW_HIDDEN;
         _ = sdl.SDL_SetNumberProperty(props, sdl.SDL_PROP_WINDOW_CREATE_FLAGS_NUMBER, @intCast(flags));
@@ -81,7 +75,7 @@ pub const WindowSys = struct {
         _ = sdl.SDL_SetNumberProperty(props, sdl.SDL_PROP_WINDOW_CREATE_HEIGHT_NUMBER, @intCast(h));
         _ = sdl.SDL_SetStringProperty(props, sdl.SDL_PROP_WINDOW_CREATE_TITLE_STRING, title);
 
-        var window = try Window.init(props, renderTexId, vk.VkExtent2D{ .width = @intCast(w), .height = @intCast(h) }, resize, texIds, camId);
+        var window = try Window.init(props, renderTexId, vk.VkExtent2D{ .width = @intCast(w), .height = @intCast(h) }, resize, texIds, camEntityId);
         window.setOpacity(0.0);
 
         // window.setRelativeMouseMode(false);
@@ -166,6 +160,8 @@ pub const WindowSys = struct {
     }
 
     fn toggleMainFullscreen(windowData: *WindowData) void {
+        std.debug.print("TOGGLED MAIN FULLSCREEN\n", .{});
+
         if (windowData.mainWindow) |window| {
             if (window.isFullscreen() == false) {
                 // window.setBordered(false);

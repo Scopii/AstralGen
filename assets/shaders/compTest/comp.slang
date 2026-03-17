@@ -4,10 +4,14 @@ import Globals;
 [[vk::constant_id(1)]] const uint THREAD_Y = 8;
 [[vk::constant_id(2)]] const uint THREAD_Z = 1;
 
-[[vk::binding(0, 0)]] RWTexture2D<float4> globalImages[];
-[[vk::binding(1, 0)]] StructuredBuffer<Object> globalObjectBuffers[];
-[[vk::binding(1, 0)]] RWStructuredBuffer<ReadbackData> globalReadbacks[];
-[[vk::binding(1, 0)]] StructuredBuffer<CameraData> globalCameraBuffers[];
+// Images
+[[vk::binding(0, 0)]] RWTexture2D<float4> heapRWImages[];
+[[vk::binding(0, 0)]] Texture2D<float4> heapSampledImages[];
+// Buffers
+[[vk::binding(0, 0)]] StructuredBuffer<Object> heapObjectBuffers[];
+[[vk::binding(0, 0)]] ConstantBuffer<CameraData> heapCameraBuffers[];
+[[vk::binding(0, 0)]] RWStructuredBuffer<IndirectCommand> heapIndirectBuffers[];
+
 [[vk::push_constant]] ConstantBuffer<PushConstants> pc;
 
 // Marching Constants
@@ -21,16 +25,22 @@ MapResult map(float3 pos, StructuredBuffer<Object> objectBuffer) {
     float closestDist = MAX_DIST;
     int closestIndex = -1;
 
-    uint objectCount = pc.resources[0].count;
+    uint objectCount = objectBuffer.getCount();
 
     for (uint i = 0; i < objectCount; i++) {
         Object obj = objectBuffer[i];
-        float3 objPos = float3(obj.posX, obj.posY, obj.posZ);
+
+        // Unpack the data exactly how Zig packed it
+        float3 objPos = obj.posAndSize.xyz;
+        float objSize = obj.posAndSize.w;
+        uint sdfId = (uint)obj.colorAndSdf.w;
 
         float dist = MAX_DIST;
-        if (obj.sdfId == 0) dist = sdSphere(pos - objPos, obj.size);
-        else if (obj.sdfId == 1) dist = sdBox(pos - objPos, float3(obj.size));
-        else dist = sdTorus(pos - objPos, float2(obj.size));
+        if (sdfId == 0) dist = sdSphere(pos - objPos, objSize);
+        else if (sdfId == 1) dist = sdBox(pos - objPos, float3(objSize));
+        // A torus needs an inner and outer radius, so doing float2(size, size) makes a blob.
+        // Doing size * 0.25 makes a proper donut shape!
+        else dist = sdTorus(pos - objPos, float2(objSize, objSize * 0.25));
 
         if (dist < closestDist) {
             closestDist = dist;
@@ -57,16 +67,15 @@ float3 getNormal(float3 pos, StructuredBuffer<Object> objectBuffer) {
 [shader("compute")]
 [numthreads(THREAD_X, THREAD_Y, THREAD_Z)]
 void main(uint3 id: SV_DispatchThreadID) {
-    RWStructuredBuffer<ReadbackData> readback = globalReadbacks[pc.resources[3].index];
-    readback[0].runtime = pc.runtime;
-    readback[0].deltaTime = pc.deltaTime;
-    readback[0].width = pc.width;
-    readback[0].height = pc.height;
+    // RWStructuredBuffer<ReadbackData> readback = heapReadbackBuffers[pc.resources[3]];
+    // readback[0].runtime = pc.runtime;
+    // readback[0].deltaTime = pc.deltaTime;
+    // readback[0].width = pc.width;
+    // readback[0].height = pc.height;
 
-    RWTexture2D<float4> renderImg = globalImages[pc.resources[2].index];
-    StructuredBuffer<Object> objectBuffer = globalObjectBuffers[pc.resources[0].index];
-    StructuredBuffer<CameraData> camData = globalCameraBuffers[pc.resources[1].index];
-    CameraData cam = camData[0];
+    RWTexture2D<float4> renderImg = heapRWImages[pc.resources[2]];
+    StructuredBuffer<Object> objectBuffer = heapObjectBuffers[pc.resources[0]];
+    ConstantBuffer<CameraData> cam = heapCameraBuffers[pc.resources[1]];
 
     // Bounds check (because group size is 8x8)
     uint renderWidth = pc.width;
@@ -97,13 +106,13 @@ void main(uint3 id: SV_DispatchThreadID) {
 
         if (result.dist < MIN_DIST) {
             hit = true;
-            hitIndex = result.index; // Safe capture
+            hitIndex = result.index; 
             break;
         }
         march += result.dist;
         if(march > MAX_DIST) break;
     }
-    
+
     // Output
     if (hit && hitIndex != -1) {
         float3 normal = getNormal(pos, objectBuffer);
@@ -111,8 +120,10 @@ void main(uint3 id: SV_DispatchThreadID) {
         float lighting = max(dot(normal, lightDir), 0.1);
 
         Object hitObj = objectBuffer[hitIndex];
-        float3 surfaceColor = float3(hitObj.colorR, hitObj.colorG, hitObj.colorB);
-        
+
+        // Unpack color
+        float3 surfaceColor = hitObj.colorAndSdf.xyz;
+
         float4 finalColor = lerp(float4(surfaceColor * lighting, 1.0), float4(0.0, 0.0, 0.0, 1.0), march / MAX_DIST);
         renderImg[id.xy] = finalColor;
     } else renderImg[id.xy] = float4(0.1, 0.0, 0.15, 1.0);

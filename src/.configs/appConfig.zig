@@ -18,6 +18,7 @@ pub const AppEvent = enum {
     closeApp,
     toggleImgui,
     toggleGpuProfiling,
+    speedMode,
 };
 
 pub const MOUSE_MOVEMENT_INFO = false;
@@ -46,5 +47,5 @@ pub const keyMap = [_]KeyMapping{
     .{ .device = .keyboard, .state = .pressed, .cycle = .oneBlock, .key = sdl.SDL_SCANCODE_LCTRL, .appEvent = .toggleFullscreen },
     .{ .device = .keyboard, .state = .pressed, .cycle = .oneBlock, .key = sdl.SDL_SCANCODE_P, .appEvent = .toggleGpuProfiling },
     // Mouse
-    .{ .device = .mouse, .state = .pressed, .cycle = .repeat, .key = sdl.SDL_BUTTON_LEFT, .appEvent = .camForward },
+    .{ .device = .mouse, .state = .pressed, .cycle = .repeat, .key = sdl.SDL_BUTTON_LEFT, .appEvent = .speedMode },
 };

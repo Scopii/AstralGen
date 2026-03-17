@@ -3,14 +3,16 @@ const TextureUse = @import("../render/types/base/Pass.zig").TextureUse;
 const BufferUse = @import("../render/types/base/Pass.zig").BufferUse;
 const TextureMeta = @import("../render/types/res/TextureMeta.zig").TextureMeta;
 const BufferMeta = @import("../render/types/res/BufferMeta.zig").BufferMeta;
-const CameraData = @import("../camera/Camera.zig").CamData;
+const CameraData = @import("../camera/CameraSys.zig").CamData;
 const Pass = @import("../render/types/base/Pass.zig").Pass;
-const Entity = @import("../entity/Entity.zig").Entity;
 const vhT = @import("../render/help/Types.zig");
 const vk = @import("../.modules/vk.zig").c;
 const sc = @import("shaderConfig.zig");
 
+const GpuObjectData = @import("../render/help/Types.zig").GpuObjectData;
+
 pub const ENTITY_COUNT = 30;
+pub const ENTITY_MAX = 512;
 
 // Vulkan Validation Layers
 pub const VALIDATION = true;
@@ -55,7 +57,7 @@ pub const TEX_DEPTH_FORMAT = vk.VK_FORMAT_D32_SFLOAT;
 pub const indirectSB = BufferMeta.create(.{ .id = .{ .val = 1 }, .mem = .Gpu, .typ = .Indirect, .len = 1, .elementSize = @sizeOf(vhT.IndirectData), .update = .PerFrame });
 pub const readbackSB = BufferMeta.create(.{ .id = .{ .val = 2 }, .mem = .CpuRead, .typ = .Storage, .len = 1, .elementSize = @sizeOf(vhT.ReadbackData), .update = .PerFrame });
 
-pub const objectSB = BufferMeta.create(.{ .id = .{ .val = 3 }, .mem = .Gpu, .typ = .Storage, .len = 20, .elementSize = @sizeOf(Entity), .update = .Rarely, .resize = .Fit });
+pub const objectSB = BufferMeta.create(.{ .id = .{ .val = 3 }, .mem = .Gpu, .typ = .Storage, .len = ENTITY_COUNT, .elementSize = @sizeOf(GpuObjectData), .update = .Rarely, .resize = .Fit });
 pub const cameraUB = BufferMeta.create(.{ .id = .{ .val = 4 }, .mem = .Gpu, .typ = .Uniform, .len = 1, .elementSize = @sizeOf(CameraData), .update = .Often, .resize = .Fit });
 pub const camera2UB = BufferMeta.create(.{ .id = .{ .val = 5 }, .mem = .Gpu, .typ = .Uniform, .len = 1, .elementSize = @sizeOf(CameraData), .update = .Often, .resize = .Fit });
 pub const BUFFERS: []const BufferMeta.BufInf = &.{ objectSB, cameraUB, camera2UB, indirectSB, readbackSB };
@@ -79,7 +81,26 @@ pub const PASSES: []const Pass = &.{
     // main,
     // debug,
 
+    compRayMarch,
+
     editorGrid,
+};
+
+pub const compRayMarch: Pass = .{
+    .name = "CompTest",
+    .shaderIds = &.{sc.t1Comp.id},
+    .typ = Pass.createCompute(.{
+        .mainTexId = mainTex.id,
+        .workgroups = .{ .x = 8, .y = 8, .z = 1 },
+    }),
+    .bufUses = &.{
+        BufferUse.init(objectSB.id, .ComputeShader, .ShaderRead, 0),
+        BufferUse.init(cameraUB.id, .ComputeShader, .ShaderRead, 1),
+        BufferUse.init(readbackSB.id, .ComputeShader, .ShaderWrite, 3),
+    },
+    .texUses = &.{
+        TextureUse.init(mainTex.id, .ComputeShader, .ShaderWrite, .General, 2),
+    },
 };
 
 // Cull Test

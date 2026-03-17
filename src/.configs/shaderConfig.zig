@@ -23,6 +23,8 @@ pub const quantFrag = ShaderInf.init(27, .frag, "quant/frag.slang", "quantFrag.s
 pub const editorGridMesh = ShaderInf.init(28, .meshNoTask, "editorGrid/mesh.slang", "editorGridMesh.spv");
 pub const editorGridFrag = ShaderInf.init(29, .frag, "editorGrid/frag.slang", "editorGridFrag.spv");
 
+pub const t1Comp = ShaderInf.init(0, .comp, "compTest/comp.slang", "t1Comp.spv");
+
 pub const COMPILING_SHADERS: []const ShaderInf = &.{
     cullTestComp,
     cullTestMesh,
@@ -35,6 +37,8 @@ pub const COMPILING_SHADERS: []const ShaderInf = &.{
 
     editorGridMesh,
     editorGridFrag,
+
+    t1Comp,
 };
 
 // pub const t1Comp = ShaderInf.init(0, .comp, "compTest/comp.slang", "t1Comp.spv");

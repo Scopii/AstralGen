@@ -1,16 +1,10 @@
 const FixedList = @import("../.structures/FixedList.zig").FixedList;
 const std = @import("std");
-
 const BufId = @import("../render/types/res/BufferMeta.zig").BufferMeta.BufId;
-
 const TexInf = @import("../render/types/res/TextureMeta.zig").TextureMeta.TexInf;
 const BufInf = @import("../render/types/res/BufferMeta.zig").BufferMeta.BufInf;
-
 const Pass = @import("../render/types/base/Pass.zig").Pass;
-const CamData = @import("../camera/Camera.zig").CamData;
-
 const Window = @import("../window/Window.zig").Window;
-
 const LoadedShader = @import("../shader/LoadedShader.zig").LoadedShader;
 
 pub const RendererQueue = struct {

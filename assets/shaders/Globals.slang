@@ -10,15 +10,8 @@ public struct ReadbackData {
 }
 
 public struct Object {
-    public float posX;
-    public float posY;
-    public float posZ;
-    public float size;
-    public float colorR;
-    public float colorG;
-    public float colorB;
-    public uint sdfId;
-    public uint4 _padding; 
+    public float4 posAndSize;
+    public float4 colorAndSdf;
 };
 
 public struct CameraData {
