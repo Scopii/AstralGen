@@ -74,7 +74,7 @@ pub const Renderer = struct {
                 .addTexture => |inf| try self.addResource(inf.texInf, inf.data),
                 .addBuffer => |inf| try self.addResource(inf.bufInf, inf.data),
                 .updateBuffer => |inf| try self.updateBuffer(inf.bufId, inf.data),
-
+                .updateBufferSegment => |inf| try self.updateBufferSegment(inf.bufId, inf.data, inf.elementOffset),
                 .addShader => |loadedShader| try self.addShaders(&[_]LoadedShader{loadedShader.*}),
             }
         }
@@ -169,5 +169,9 @@ pub const Renderer = struct {
 
     pub fn updateBuffer(self: *Renderer, bufId: BufferMeta.BufId, data: anytype) !void {
         try self.resMan.updateBufferResource(bufId, self.scheduler.totalFrames, self.scheduler.flightId, data);
+    }
+
+    pub fn updateBufferSegment(self: *Renderer, bufId: BufferMeta.BufId, data: anytype, element: u32) !void {
+        try self.resMan.updateBufferResourceSegment(bufId, self.scheduler.flightId, data, element);
     }
 };

@@ -29,14 +29,10 @@ pub const RendererQueue = struct {
         addTexture: *const struct { texInf: TexInf, data: ?[]const u8 },
         addBuffer: *const struct { bufInf: BufInf, data: ?[]const u8 },
         updateBuffer: *const struct { bufId: BufId, data: []const u8 },
+        updateBufferSegment: *const struct { bufId: BufId, data: []const u8, elementOffset: u32 },
         updateWindowState: *const Window,
         addPass: *const Pass,
 
         addShader: *const LoadedShader,
-
-        pub fn getTagType(self: *RendererEvent, name: []const u8) type {
-            const PayloadPtr = @FieldType(self, name);
-            return std.meta.Child(PayloadPtr);
-        }
     };
 };

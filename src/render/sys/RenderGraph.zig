@@ -77,20 +77,37 @@ pub const RenderGraph = struct {
 
     pub fn recordTransfers(self: *RenderGraph, cmd: *Cmd, resMan: *ResourceMan) !void {
         var resUpdater = &resMan.updater;
-        const transfers = resUpdater.getUpdates(cmd.flightId);
-
-        if (transfers.len == 0) return;
-        cmd.startQuery(.TopOfPipe, 40, "Transfers");
         const stagingBuf = resUpdater.getStagingBuffer(cmd.flightId);
 
-        for (transfers) |transfer| {
-            const buffer = try resMan.get(transfer.dstResId, transfer.dstSlot);
-            try self.checkBufferState(buffer, .{ .stage = .Transfer, .access = .TransferWrite });
-            cmd.copyBuffer(stagingBuf, transfer, buffer.handle);
+        const fullTransfers = resUpdater.getFullUpdates(cmd.flightId);
+
+        if (fullTransfers.len != 0) {
+            cmd.startQuery(.TopOfPipe, 40, "Full Transfers");
+
+            for (fullTransfers) |transfer| {
+                const buffer = try resMan.get(transfer.dstResId, transfer.dstSlot);
+                try self.checkBufferState(buffer, .{ .stage = .Transfer, .access = .TransferWrite });
+                cmd.copyBuffer(stagingBuf, transfer, buffer.handle);
+            }
+            resUpdater.resetFullUpdates(cmd.flightId);
+            self.bakeBarriers(cmd, "Full Transfers");
+            cmd.endQuery(.BotOfPipe, 40);
         }
-        resUpdater.resetUpdates(cmd.flightId);
-        self.bakeBarriers(cmd, "Transfers");
-        cmd.endQuery(.BotOfPipe, 40);
+
+        const partialTransfers = resUpdater.getSegmentUpdates(cmd.flightId);
+
+        if (partialTransfers.len != 0) {
+            cmd.startQuery(.TopOfPipe, 41, "Partial Transfers");
+
+            for (partialTransfers) |transfer| {
+                const buffer = try resMan.get(transfer.dstResId, transfer.dstSlot);
+                try self.checkBufferState(buffer, .{ .stage = .Transfer, .access = .TransferWrite });
+                cmd.copyBuffer(stagingBuf, transfer, buffer.handle);
+            }
+            resUpdater.resetSegmentUpdates(cmd.flightId);
+            self.bakeBarriers(cmd, "Segment Transfers");
+            cmd.endQuery(.BotOfPipe, 41);
+        }
     }
 
     fn checkImageState(self: *RenderGraph, tex: *Texture, subRange: vk.VkImageSubresourceRange, neededState: Texture.TextureState) !void {

@@ -84,7 +84,9 @@ pub const InputSys = struct {
                             inputData.toggleImgui = true;
                             rendererQueue.append(.toggleUi);
                         },
-                        .toggleGpuProfiling => inputData.toggleGpuProfiling = true,
+                        .toggleGpuProfiling => {
+                            rendererQueue.append(.toggleGpuProfiling);
+                        },
                         .speedMode => inputData.speedMode = true,
                     }
 

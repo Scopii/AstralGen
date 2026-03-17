@@ -45,7 +45,7 @@ pub const ResourceMan = struct {
             .alloc = alloc,
             .queues = queues,
             .registry = ResourceRegistry.init(),
-            .updater = try ResourceUpdater.init(&vma),
+            .updater = try ResourceUpdater.init(alloc, &vma),
             .descMan = try DescriptorMan.init(&vma, context.gpu),
         };
     }
@@ -253,6 +253,39 @@ pub const ResourceMan = struct {
         const newBufPtr = self.registry.add(bufId, newBuf, .Rarely, 0); // 0 — .Rarely always slot 0
         try self.descMan.queueBufferDescriptor(newBuf.gpuAddress, bytes.len, meta.typ, newBufPtr);
         try self.updater.stageBufferUpdate(bufId, bytes, 0, flightId);
+    }
+
+    pub fn updateBufferResourceSegment(self: *ResourceMan, bufId: BufId, flightId: u8, data: anytype, element: u32) !void {
+        const bufMeta = try self.getMeta(bufId);
+        const bytes = try rH.convertToByteSlice(data);
+        const elementOffset: u64 = @as(u64, bufMeta.elementSize) * element;
+
+        switch (bufMeta.update) {
+            .Rarely => try self.updateStaticBufferSegment(bufId, bytes, flightId, elementOffset),
+            .PerFrame, .Often => try self.updateDynamicBufferSegment(bufId, bufMeta, bytes, flightId, elementOffset),
+        }
+    }
+
+    fn getBufferSize(self: *ResourceMan, bufId: BufId, updateTyp: vhE.UpdateType, flightId: u8, updateSlot: u8) u64 {
+        if (self.registry.check(bufId, updateTyp, flightId, updateSlot)) |buf| return buf.size;
+        for (0..QUEUE_COUNT) |i| {
+            if (self.queues[i].checkCreation(bufId)) |inf| return @as(u64, inf.len) * inf.elementSize;
+        }
+        return 0;
+    }
+
+    fn updateStaticBufferSegment(self: *ResourceMan, bufId: BufId, bytes: []const u8, flightId: u8, offset: u64) !void {
+        const bufSize = self.getBufferSize(bufId, .Rarely, 0, 0);
+        if (bufSize == 0) return;
+        if (offset + bytes.len > bufSize) return error.SegmentWriteOutOfBounds;
+        try self.updater.stageBufferSegmentUpdate(bufId, bytes, 0, flightId, offset);
+    }
+
+    fn updateDynamicBufferSegment(self: *ResourceMan, bufId: BufId, meta: *BufferMeta, bytes: []const u8, flightId: u8, offset: u64) !void {
+        const bufSize = self.getBufferSize(bufId, meta.update, flightId, meta.updateSlot);
+        if (bufSize == 0) return;
+        if (offset + bytes.len > bufSize) return error.SegmentWriteOutOfBounds;
+        try self.updater.stageBufferSegmentUpdate(bufId, bytes, meta.updateSlot, flightId, offset);
     }
 
     pub fn resizeTextureResource(self: *ResourceMan, texId: TexId, newWidth: u32, newHeight: u32, curFrame: u64, flightId: u8) !void {

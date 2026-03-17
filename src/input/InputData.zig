@@ -20,7 +20,6 @@ pub const InputData = struct {
     toggleFullscreen: bool = false,
     closeApp: bool = false,
     toggleImgui: bool = false,
-    toggleGpuProfiling: bool = false,
     speedMode: bool = false,
 
     pub fn resetMouseState(self: *InputData) void {
@@ -40,7 +39,6 @@ pub const InputData = struct {
         self.toggleFullscreen = false;
         self.closeApp = false;
         self.toggleImgui = false;
-        self.toggleGpuProfiling = false;
         self.speedMode = false;
     }
 };
