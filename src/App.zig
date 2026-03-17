@@ -195,7 +195,7 @@ pub const App = struct {
 
             try CameraSys.update(&self.data.entityData, dt, &self.data, &self.rendererQueue, self.memoryMan);
 
-            try RenderPrepSys.extractEntity(&self.data.entityData, &self.rendererQueue, self.memoryMan);
+            try RenderPrepSys.extractEntities(&self.data.entityData, &self.rendererQueue, self.memoryMan);
 
             if (rc.CPU_PROFILING) std.debug.print("Cpu pre-Renderer Delta {d:.3} ms, ({d:.1} Real FPS)\n", .{ dt * 0.000001, 1.0 / (dt * 0.000000001) });
 
