@@ -102,10 +102,23 @@ pub const ImGuiMan = struct {
         }
     }
 
+    // pub fn removeWindowContext(self: *ImGuiMan, windowIdx: u32) void {
+    //     if (self.contexts[windowIdx]) |ctx| {
+    //         ig.igui_destroy_context(ctx);
+    //         self.contexts[windowIdx] = null;
+    //     }
+    // }
+
     pub fn removeWindowContext(self: *ImGuiMan, windowIdx: u32) void {
         if (self.contexts[windowIdx]) |ctx| {
+            ig.igui_set_current_context(ctx);
+            zgui.backend.deinit(); // must come before destroy
             ig.igui_destroy_context(ctx);
             self.contexts[windowIdx] = null;
+            // restore active context to bootstrap if it still exists
+            if (self.contexts[self.bootstrapWindowId]) |bootstrap| {
+                ig.igui_set_current_context(bootstrap);
+            }
         }
     }
 

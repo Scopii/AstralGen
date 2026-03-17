@@ -83,7 +83,6 @@ pub const App = struct {
         self.renderer.deinit();
         ShaderSys.deinit(&self.data.shader, self.memoryMan.getAllocator());
         WindowSys.deinit(&self.data.window);
-        self.memoryMan.deinit();
     }
 
     pub fn setupEntitys(self: *App) !void {

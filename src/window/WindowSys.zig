@@ -54,6 +54,7 @@ pub const WindowSys = struct {
             updatedWindowPtr.* = changedWindow;
             rendererQueue.append(.{ .updateWindowState = updatedWindowPtr });
         }
+
         cleanupWindows(windowData);
     }
 
@@ -178,6 +179,9 @@ pub const WindowSys = struct {
 
     fn processWindowEvent(windowData: *WindowData, event: *sdl.SDL_Event) !void {
         const id = event.window.windowID;
+
+        if (!windowData.windows.isKeyUsed(id)) return;
+
         var window = windowData.windows.getPtrByKey(id);
 
         switch (event.type) {
