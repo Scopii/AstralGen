@@ -1,8 +1,13 @@
 import Globals;
 
-[[vk::binding(0, 0)]] RWTexture2D<float4> globalImages[];
-[[vk::binding(1, 0)]] StructuredBuffer<Object> globalObjectBuffers[];
-[[vk::binding(1, 0)]] StructuredBuffer<CameraData> globalCameraBuffers[];
+// Images
+[[vk::binding(0, 0)]] RWTexture2D<float4> heapRWImages[];
+[[vk::binding(0, 0)]] Texture2D<float4> heapSampledImages[];
+// Buffers
+[[vk::binding(0, 0)]] StructuredBuffer<Object> heapObjectBuffers[];
+[[vk::binding(0, 0)]] ConstantBuffer<CameraData> heapCameraBuffers[];
+[[vk::binding(0, 0)]] RWStructuredBuffer<IndirectCommand> heapIndirectBuffers[];
+
 [[vk::push_constant]] ConstantBuffer<PushConstants> pc;
 
 // Marching Constants
@@ -12,21 +17,26 @@ static const float MAX_DIST = 200.0;
 // Other Constants
 static const float EPSILON = 0.001;
 
-
 MapResult map(float3 pos, StructuredBuffer<Object> objectBuffer) {
     float closestDist = MAX_DIST;
     int closestIndex = -1;
 
-    uint objectCount = pc.resources[0].count;
+    uint objectCount = objectBuffer.getCount();
 
     for (uint i = 0; i < objectCount; i++) {
         Object obj = objectBuffer[i];
-        float3 objPos = float3(obj.posX, obj.posY, obj.posZ);
+
+        // Unpack the data exactly how Zig packed it
+        float3 objPos = obj.posAndSize.xyz;
+        float objSize = obj.posAndSize.w;
+        uint sdfId = (uint)obj.colorAndSdf.w;
 
         float dist = MAX_DIST;
-        if (obj.sdfId == 0) dist = sdSphere(pos - objPos, obj.size);
-        else if (obj.sdfId == 1) dist = sdBox(pos - objPos, float3(obj.size));
-        else dist = sdTorus(pos - objPos, float2(obj.size));
+        if (sdfId == 0) dist = sdSphere(pos - objPos, objSize);
+        else if (sdfId == 1) dist = sdBox(pos - objPos, float3(objSize));
+        // A torus needs an inner and outer radius, so doing float2(size, size) makes a blob.
+        // Doing size * 0.25 makes a proper donut shape!
+        else dist = sdTorus(pos - objPos, float2(objSize, objSize * 0.25));
 
         if (dist < closestDist) {
             closestDist = dist;
@@ -52,9 +62,9 @@ float3 getNormal(float3 pos, StructuredBuffer<Object> objectBuffer) {
 // SHADER
 [shader("fragment")]
 float4 main(float4 pixelPos: SV_Position) : SV_Target {
-    StructuredBuffer<Object> objectBuffer = globalObjectBuffers[pc.resources[0].index];
-    StructuredBuffer<CameraData> camData = globalCameraBuffers[pc.resources[1].index];
-    CameraData cam = camData[0];
+    RWTexture2D<float4> renderImg = heapRWImages[pc.resources[2]];
+    StructuredBuffer<Object> objectBuffer = heapObjectBuffers[pc.resources[0]];
+    ConstantBuffer<CameraData> cam = heapCameraBuffers[pc.resources[1]];
 
     uint width = pc.width;
     uint height = pc.height;
@@ -92,12 +102,14 @@ float4 main(float4 pixelPos: SV_Position) : SV_Target {
     // Output
     if (hit && hitIndex != -1) {
         float3 normal = getNormal(pos, objectBuffer);
-        float3 lightDirection = normalize(float3(1.0, 1.0, -1.0));
-        float lighting = max(dot(normal, lightDirection), 0.1);
+        float3 lightDir = normalize(float3(1.0, 1.0, -1.0));
+        float lighting = max(dot(normal, lightDir), 0.1);
 
         Object hitObj = objectBuffer[hitIndex];
-        float3 objColor = float3(hitObj.colorR, hitObj.colorG, hitObj.colorB);
 
-        return lerp(float4(objColor * lighting, 1.0), float4(0.0, 0.0, 0.0, 1.0), march / MAX_DIST);
+        // Unpack color
+        float3 surfaceColor = hitObj.colorAndSdf.xyz;
+
+        return lerp(float4(surfaceColor * lighting, 1.0), float4(0.0, 0.0, 0.0, 1.0), march / MAX_DIST);
     } else return float4(0.1, 0.0, 0.0, 1.0);
 }

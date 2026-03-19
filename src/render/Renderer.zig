@@ -17,6 +17,8 @@ const vk = @import("../.modules/vk.zig").c;
 const Allocator = std.mem.Allocator;
 const std = @import("std");
 
+const EngineData = @import("../EngineData.zig").EngineData;
+
 const RendererQueue = @import("RendererQueue.zig").RendererQueue;
 
 pub const Renderer = struct {
@@ -97,8 +99,8 @@ pub const Renderer = struct {
                 },
                 .needUpdate => try self.swapMan.recreateSwapchain(window.id, window.extent, self.renderGraph.cmdMan.cmdPool),
                 .needDelete => {
-                    self.swapMan.removeSwapchains(window.id);
                     self.imguiMan.removeWindowContext(window.id.val);
+                    self.swapMan.removeSwapchains(window.id);
                 },
                 .needActive, .needInactive => self.swapMan.changeState(window.id, if (window.state == .needActive) true else false),
                 else => std.debug.print("Warning: Window State {s} cant be handled in Renderer\n", .{@tagName(window.state)}),
@@ -125,9 +127,9 @@ pub const Renderer = struct {
         try self.scheduler.waitForGPU();
     }
 
-    pub fn draw(self: *Renderer, frameData: FrameData) !void {
+    pub fn draw(self: *Renderer, frameData: FrameData, windows: []const Window, data: *const EngineData) !void {
         const flightId = try self.scheduler.beginFrame();
-        try self.resMan.update(flightId, self.scheduler.totalFrames); // +1 frame?
+        try self.resMan.update(flightId, self.scheduler.totalFrames);
         const targets = try self.swapMan.getUpdatedTargets(flightId);
 
         for (targets) |swapchain| {
@@ -135,7 +137,7 @@ pub const Renderer = struct {
             self.imguiMan.drawUi(@intCast(swapchain.windowId));
         }
 
-        const cmd = try self.renderGraph.recordFrame(self.passes.items, flightId, self.scheduler.totalFrames, frameData, targets, &self.resMan, &self.shaderMan, &self.imguiMan);
+        const cmd = try self.renderGraph.recordFrame(self.passes.items, flightId, self.scheduler.totalFrames, frameData, targets, &self.resMan, &self.shaderMan, &self.imguiMan, windows, data);
 
         try self.scheduler.queueSubmit(cmd, targets, self.context.graphicsQ);
         try self.scheduler.queuePresent(targets, self.context.graphicsQ);

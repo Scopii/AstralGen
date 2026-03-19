@@ -1,12 +1,11 @@
 const TexId = @import("render/types/res/TextureMeta.zig").TextureMeta.TexId;
 const MemoryManager = @import("core/MemoryManager.zig").MemoryManager;
 const RNGenerator = @import("core/RNGenerator.zig").RNGenerator;
+const EngineData = @import("EngineData.zig").EngineData;
 const shaderCon = @import(".configs/shaderConfig.zig");
 const rc = @import(".configs/renderConfig.zig");
 const zm = @import("zmath");
 const std = @import("std");
-
-const EngineData = @import("EngineData.zig").EngineData;
 
 const TimeSys = @import("time/TimeSys.zig").TimeSys;
 
@@ -24,6 +23,10 @@ const InputSys = @import("input/InputSys.zig").InputSys;
 const CameraSys = @import("camera/CameraSys.zig").CameraSys;
 
 const RenderPrepSys = @import("renderPrep/RenderPrepSys.zig").RenderPrepSys;
+
+const ViewportSys = @import("viewport/ViewportSys.zig").ViewportSys;
+const ViewportId = @import("viewport/ViewportSys.zig").ViewportId;
+const Viewport = @import("viewport/Viewport.zig").Viewport;
 
 const RendererQueue = @import("render/RendererQueue.zig").RendererQueue;
 const Renderer = @import("render/Renderer.zig").Renderer;
@@ -88,8 +91,12 @@ pub const App = struct {
     pub fn setupEntitys(self: *App) !void {
         try ShaderSys.update(&self.data.shader, &self.shaderQueue, &self.rendererQueue, self.memoryMan);
 
-        const mainCamId = self.data.entityData.createCameraEntity(.{ .pos = zm.f32x4(0, 5, -20, 0), .yaw = 170 }, .{ .bufId = rc.cameraUB.id, .near = 0.1, .far = 100, .fov = 60 });
-        const debugCamId = self.data.entityData.createCameraEntity(.{ .pos = zm.f32x4(0, 20, -45, 0), .yaw = 170 }, .{ .bufId = rc.camera2UB.id, .near = 0.1, .far = 300, .fov = 110 });
+        const mainCamId = self.data.entityData.createCameraEntity(.{ .pos = zm.f32x4(0, 5, -20, 0), .yaw = 170 }, .{ .bufId = rc.camUB.id, .near = 0.1, .far = 100, .fov = 60 });
+        const debugCamId = self.data.entityData.createCameraEntity(.{ .pos = zm.f32x4(0, 20, -45, 0), .yaw = 170 }, .{ .bufId = rc.cam2UB.id, .near = 0.1, .far = 300, .fov = 110 });
+
+        self.data.viewport.viewports.upsert(2, Viewport{ .cameraEntity = mainCamId, .sourceTexId = rc.mainTex.id, .areaX = 0.5, .areaY = 0.0, .areaWidth = 0.5, .areaHeight = 0.5 });
+        self.data.viewport.viewports.upsert(1, Viewport{ .cameraEntity = debugCamId, .sourceTexId = rc.debugTex.id, .areaX = 0.0, .areaY = 0.0, .areaWidth = 0.5, .areaHeight = 0.5 });
+        self.data.viewport.viewports.upsert(3, Viewport{ .cameraEntity = mainCamId, .sourceTexId = rc.mainTex.id, .areaX = 0.0, .areaY = 0.0, .areaWidth = 1.0, .areaHeight = 1.0 });
 
         for (0..rc.ENTITY_COUNT) |_| _ = self.data.entityData.createRandomRenderEntity(&self.rng);
 
@@ -103,7 +110,7 @@ pub const App = struct {
                 .y = 1080 / 2 - 10,
                 .resize = true,
                 .texIds = &[_]TexId{rc.debugDepthTex.id},
-                .camEntityId = debugCamId,
+                .viewIds = [4]?ViewportId{ .{ .val = 1 }, .{ .val = 2 }, null, null },
             },
         });
 
@@ -117,7 +124,7 @@ pub const App = struct {
                 .y = 40,
                 .resize = true,
                 .texIds = &[_]TexId{rc.mainDepthTex.id},
-                .camEntityId = mainCamId,
+                .viewIds = [4]?ViewportId{ .{ .val = 3 }, .{ .val = 1 }, null, null },
             },
         });
     }
@@ -181,6 +188,8 @@ pub const App = struct {
             InputSys.update(&self.data.input, &self.inputQueue);
             InputSys.convert(&self.data.input, &self.rendererQueue);
 
+            ViewportSys.update(&self.data.viewport, &self.data);
+
             try WindowSys.update(&self.data.window, &self.data, &self.windowQueue, &self.rendererQueue, self.memoryMan);
 
             // Close Or Idle
@@ -205,7 +214,7 @@ pub const App = struct {
 
             if (firstFrame) WindowSys.showAllWindows(&self.data.window);
 
-            renderer.draw(frameData) catch |err| {
+            renderer.draw(frameData, self.data.window.windows.getConstItems(), &self.data) catch |err| {
                 std.log.err("Error in renderer.draw(): {}", .{err});
                 break;
             };

@@ -1,13 +1,13 @@
 const TexId = @import("../render/types/res/TextureMeta.zig").TextureMeta.TexId;
 const RendererQueue = @import("../render/RendererQueue.zig").RendererQueue;
 const MemoryManager = @import("../core/MemoryManager.zig").MemoryManager;
+const ViewportId = @import("../viewport/ViewportSys.zig").ViewportId;
 const InputQueue = @import("../input/InputQueue.zig").InputQueue;
 const ImGuiMan = @import("../render/sys/ImGuiMan.zig").ImGuiMan;
 const EngineData = @import("../EngineData.zig").EngineData;
 const WindowQueue = @import("WindowQueue.zig").WindowQueue;
 const KeyEvent = @import("../input/InputSys.zig").KeyEvent;
 const InputSys = @import("../input/InputSys.zig").InputSys;
-const EntityId = @import("../ecs/EntityData.zig").EntityId;
 const WindowData = @import("WindowData.zig").WindowData;
 const Window = @import("../window/Window.zig").Window;
 const sdl = @import("../.modules/sdl.zig").c;
@@ -40,7 +40,7 @@ pub const WindowSys = struct {
     pub fn update(windowData: *WindowData, state: *const EngineData, windowQueue: *WindowQueue, rendererQueue: *RendererQueue, memoryMan: *MemoryManager) !void {
         for (windowQueue.get()) |windowEvent| {
             switch (windowEvent) {
-                .addWindow => |inf| try addWindow(windowData, inf.title, inf.w, inf.h, inf.renderTexId, inf.x, inf.y, inf.resize, inf.texIds, inf.camEntityId),
+                .addWindow => |inf| try addWindow(windowData, inf.title, inf.w, inf.h, inf.renderTexId, inf.x, inf.y, inf.resize, inf.texIds, inf.viewIds),
             }
         }
         windowQueue.clear();
@@ -66,7 +66,7 @@ pub const WindowSys = struct {
         for (windowData.windows.getItems()) |*win| win.setOpacity(1.0);
     }
 
-    fn addWindow(windowData: *WindowData, title: [*c]const u8, w: c_int, h: c_int, renderTexId: TexId, x: c_int, y: c_int, resize: bool, texIds: []const TexId, camEntityId: EntityId) !void {
+    fn addWindow(windowData: *WindowData, title: [*c]const u8, w: c_int, h: c_int, renderTexId: TexId, x: c_int, y: c_int, resize: bool, texIds: []const TexId, viewIds: [4]?ViewportId) !void {
         const props = windowData.windowProps;
         const flags = sdl.SDL_WINDOW_VULKAN | sdl.SDL_WINDOW_RESIZABLE | sdl.SDL_WINDOW_HIDDEN;
         _ = sdl.SDL_SetNumberProperty(props, sdl.SDL_PROP_WINDOW_CREATE_FLAGS_NUMBER, @intCast(flags));
@@ -76,7 +76,7 @@ pub const WindowSys = struct {
         _ = sdl.SDL_SetNumberProperty(props, sdl.SDL_PROP_WINDOW_CREATE_HEIGHT_NUMBER, @intCast(h));
         _ = sdl.SDL_SetStringProperty(props, sdl.SDL_PROP_WINDOW_CREATE_TITLE_STRING, title);
 
-        var window = try Window.init(props, renderTexId, vk.VkExtent2D{ .width = @intCast(w), .height = @intCast(h) }, resize, texIds, camEntityId);
+        var window = try Window.init(props, renderTexId, vk.VkExtent2D{ .width = @intCast(w), .height = @intCast(h) }, resize, texIds, viewIds);
         window.setOpacity(0.0);
 
         // window.setRelativeMouseMode(false);

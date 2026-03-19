@@ -247,8 +247,8 @@ pub const Cmd = struct {
         vkFn.vkCmdBindResourceHeapEXT.?(self.handle, &bindInf);
     }
 
-    pub fn copyImageToImage(self: *const Cmd, srcImg: vk.VkImage, srcExtent: vk.VkExtent3D, dstImg: vk.VkImage, dstExtent: vk.VkExtent3D, stretch: bool) void {
-        const blitOffsets = calculateBlitOffsets(srcExtent, dstExtent, stretch);
+    pub fn copyImageToImage(self: *const Cmd, srcImg: vk.VkImage, srcExtent: vk.VkExtent3D, dstImg: vk.VkImage, dstExtent: vk.VkExtent3D, dstOffset: vk.VkOffset3D, stretch: bool) void {
+        const blitOffsets = calculateBlitOffsets(srcExtent, dstExtent, dstOffset, stretch);
 
         const blitRegion = vk.VkImageBlit2{
             .sType = vk.VK_STRUCTURE_TYPE_IMAGE_BLIT_2,
@@ -270,6 +270,24 @@ pub const Cmd = struct {
         vk.vkCmdBlitImage2(self.handle, &blitInf);
     }
 
+    pub fn setViewportAndScissor(self: *const Cmd, x: f32, y: f32, width: f32, height: f32) void {
+        const viewport = vk.VkViewport{
+            .x = x,
+            .y = y,
+            .width = width,
+            .height = height,
+            .minDepth = 0.0,
+            .maxDepth = 1.0,
+        };
+        vk.vkCmdSetViewportWithCount(self.handle, 1, &viewport);
+
+        const scissor = vk.VkRect2D{
+            .offset = .{ .x = @intFromFloat(x), .y = @intFromFloat(y) },
+            .extent = .{ .width = @intFromFloat(width), .height = @intFromFloat(height) },
+        };
+        vk.vkCmdSetScissorWithCount(self.handle, 1, &scissor);
+    }
+
     pub fn beginRendering(
         self: *const Cmd,
         width: u32,
@@ -278,22 +296,10 @@ pub const Cmd = struct {
         depthInf: ?*const vk.VkRenderingAttachmentInfo,
         stencilInf: ?*const vk.VkRenderingAttachmentInfo,
     ) void {
-        const viewport = vk.VkViewport{
-            .x = 0,
-            .y = 0,
-            .width = @floatFromInt(width),
-            .height = @floatFromInt(height),
-            .minDepth = 0.0,
-            .maxDepth = 1.0,
-        };
-        vk.vkCmdSetViewportWithCount(self.handle, 1, &viewport);
-
         const scissor = vk.VkRect2D{
             .offset = .{ .x = 0, .y = 0 },
             .extent = .{ .width = width, .height = height },
         };
-
-        vk.vkCmdSetScissorWithCount(self.handle, 1, &scissor);
 
         const renderInf = vk.VkRenderingInfo{
             .sType = vk.VK_STRUCTURE_TYPE_RENDERING_INFO,
@@ -444,22 +450,24 @@ fn createSubresourceLayers(mask: u32, mipLevel: u32, arrayLayer: u32, layerCount
     return vk.VkImageSubresourceLayers{ .aspectMask = mask, .mipLevel = mipLevel, .baseArrayLayer = arrayLayer, .layerCount = layerCount };
 }
 
-fn calculateBlitOffsets(srcImgExtent: vk.VkExtent3D, dstImgExtent: vk.VkExtent3D, stretch: bool) struct { srcOffsets: [2]vk.VkOffset3D, dstOffsets: [2]vk.VkOffset3D } {
+fn calculateBlitOffsets(srcExtent: vk.VkExtent3D, dstExtent: vk.VkExtent3D, dstOffset: vk.VkOffset3D, stretch: bool) struct { srcOffsets: [2]vk.VkOffset3D, dstOffsets: [2]vk.VkOffset3D } {
     var srcOffsets: [2]vk.VkOffset3D = undefined;
     var dstOffsets: [2]vk.VkOffset3D = undefined;
 
     if (stretch == true) {
         // Stretch: Source is full image, Dest is full window
         srcOffsets[0] = .{ .x = 0, .y = 0, .z = 0 };
-        srcOffsets[1] = .{ .x = @intCast(srcImgExtent.width), .y = @intCast(srcImgExtent.height), .z = 1 };
-        dstOffsets[0] = .{ .x = 0, .y = 0, .z = 0 };
-        dstOffsets[1] = .{ .x = @intCast(dstImgExtent.width), .y = @intCast(dstImgExtent.height), .z = 1 };
+        srcOffsets[1] = .{ .x = @intCast(srcExtent.width), .y = @intCast(srcExtent.height), .z = 1 };
+        dstOffsets[0] = .{ .x = dstOffset.x, .y = dstOffset.y, .z = 0 };
+        const winW: i32 = @intCast(dstExtent.width);
+        const winH: i32 = @intCast(dstExtent.height);
+        dstOffsets[1] = .{ .x = winW + dstOffset.x, .y = winH + dstOffset.y, .z = 1 };
     } else {
         // No Stretch (Center / Crop)
-        const srcW: i32 = @intCast(srcImgExtent.width);
-        const srcH: i32 = @intCast(srcImgExtent.height);
-        const winW: i32 = @intCast(dstImgExtent.width);
-        const winH: i32 = @intCast(dstImgExtent.height);
+        const srcW: i32 = @intCast(srcExtent.width);
+        const srcH: i32 = @intCast(srcExtent.height);
+        const winW: i32 = @intCast(dstExtent.width);
+        const winH: i32 = @intCast(dstExtent.height);
         // Determine the size of the region to copy (smaller of the two dimensions)
         const blitW = @min(srcW, winW);
         const blitH = @min(srcH, winH);
@@ -475,8 +483,9 @@ fn calculateBlitOffsets(srcImgExtent: vk.VkExtent3D, dstImgExtent: vk.VkExtent3D
         // If Window > Source, this centers the image on screen. If Window < Source, this is 0.
         const dstX = @divFloor(winW - blitW, 2);
         const dstY = @divFloor(winH - blitH, 2);
-        dstOffsets[0] = .{ .x = dstX, .y = dstY, .z = 0 };
-        dstOffsets[1] = .{ .x = dstX + blitW, .y = dstY + blitH, .z = 1 };
+        dstOffsets[0] = .{ .x = dstX + dstOffset.x, .y = dstY + dstOffset.y, .z = 0 };
+
+        dstOffsets[1] = .{ .x = dstX + blitW + dstOffset.x, .y = dstY + blitH + dstOffset.y, .z = 1 };
     }
     return .{ .srcOffsets = srcOffsets, .dstOffsets = dstOffsets };
 }

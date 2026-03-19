@@ -165,6 +165,10 @@ pub fn LinkedMap(comptime itemType: type, comptime capacity: u32, comptime keyTy
             return self.slotMap.getItems();
         }
 
+        pub inline fn getConstItems(self: *const Self) []const itemType {
+            return self.slotMap.getConstItems();
+        }
+
         pub inline fn getKeyMax(self: *const Self) u32 {
             return self.slotMap.getKeyMax();
         }

@@ -4,7 +4,7 @@ const sdl = @import("../.modules/sdl.zig").c;
 const vk = @import("../.modules/vk.zig").c;
 const std = @import("std");
 
-const EntityId = @import("../ecs/EntityData.zig").EntityId;
+const ViewportId = @import("../viewport/ViewportSys.zig").ViewportId;
 
 pub const Window = struct {
     pub const WindowState = enum { active, inactive, needCreation, needUpdate, needDelete, needInactive, needActive };
@@ -16,11 +16,11 @@ pub const Window = struct {
     id: WindowId,
     resizeTex: bool,
     relativeMouse: bool = false,
-    camEntityId: EntityId, 
+    viewIds: [4]?ViewportId = .{null} ** 4, 
 
     pub const WindowId = packed struct { val: u32 };
 
-    pub fn init(windowProps: sdl.SDL_PropertiesID, renderTexId: TexId, extent: vk.VkExtent2D, resizeTex: bool, linkedTexIds: []const TexId, camEntityId: EntityId) !Window {
+    pub fn init(windowProps: sdl.SDL_PropertiesID, renderTexId: TexId, extent: vk.VkExtent2D, resizeTex: bool, linkedTexIds: []const TexId, viewIds: [4]?ViewportId) !Window {
         if (linkedTexIds.len > rc.LINKED_TEX_MAX) return error.WindowLinkedTexturesOverflow;
 
         const winHandle = sdl.SDL_CreateWindowWithProperties(windowProps) orelse {
@@ -39,7 +39,7 @@ pub const Window = struct {
             .id = .{ .val = windowId },
             .resizeTex = resizeTex,
             .linkedTexIds = actualTexIds,
-            .camEntityId = camEntityId,
+            .viewIds = viewIds,
         };
     }
 

@@ -17,6 +17,9 @@ const vhT = @import("../help/Types.zig");
 const Allocator = std.mem.Allocator;
 const std = @import("std");
 
+const Window = @import("../../window/Window.zig").Window;
+const EngineData = @import("../../EngineData.zig").EngineData;
+
 pub const RenderGraph = struct {
     alloc: Allocator,
     gpi: vk.VkDevice,
@@ -45,17 +48,7 @@ pub const RenderGraph = struct {
         if (self.useGpuProfiling == true) self.useGpuProfiling = false else self.useGpuProfiling = true;
     }
 
-    pub fn recordFrame(
-        self: *RenderGraph,
-        passes: []Pass,
-        flightId: u8,
-        frame: u64,
-        frameData: FrameData,
-        targets: []const *Swapchain,
-        resMan: *ResourceMan,
-        shaderMan: *ShaderManager,
-        imguiMan: *ImGuiMan,
-    ) !*Cmd {
+    pub fn recordFrame(self: *RenderGraph, passes: []Pass, flightId: u8, frame: u64, frameData: FrameData, targets: []const *Swapchain, resMan: *ResourceMan, shaderMan: *ShaderManager, imguiMan: *ImGuiMan, windows: []const Window, data: *const EngineData) !*Cmd {
         var cmd = try self.cmdMan.getCmd(flightId);
         try cmd.begin(flightId, frame);
 
@@ -68,7 +61,7 @@ pub const RenderGraph = struct {
 
         try self.recordTransfers(cmd, resMan);
         try self.recordPasses(cmd, passes, frameData, resMan, shaderMan);
-        try self.recordSwapchainBlits(cmd, targets, resMan);
+        try self.recordSwapchainBlits(cmd, targets, resMan, windows, data);
         try self.recordImGui(cmd, targets, imguiMan);
 
         try cmd.end();
@@ -215,6 +208,7 @@ pub const RenderGraph = struct {
             colorInfs[i] = tex.createAttachment(texMeta.texType, colorAtt.clear);
         }
 
+        cmd.setViewportAndScissor(0, 0, @floatFromInt(width), @floatFromInt(height));
         cmd.beginRendering(width, height, colorInfs[0..passData.colorAtts.len], if (depthInf) |*d| d else null, if (stencilInf) |*s| s else null);
 
         switch (passData.classicTyp) {
@@ -234,14 +228,24 @@ pub const RenderGraph = struct {
         cmd.endRendering();
     }
 
-    pub fn recordSwapchainBlits(self: *RenderGraph, cmd: *Cmd, swapchains: []const *Swapchain, resMan: *ResourceMan) !void {
+    pub fn recordSwapchainBlits(self: *RenderGraph, cmd: *Cmd, swapchains: []const *Swapchain, resMan: *ResourceMan, windows: []const Window, data: *const EngineData) !void {
         cmd.startQuery(.TopOfPipe, 54, "Blits Prep");
 
         for (swapchains) |swapchain| { // Render Texture and Swapchain Preperations
-            const renderTexMeta = try resMan.getMeta(swapchain.renderTexId);
-            const renderTex = try resMan.get(swapchain.renderTexId, cmd.flightId);
-            try self.checkImageState(renderTex, renderTexMeta.subRange, .{ .stage = .Transfer, .access = .TransferRead, .layout = .TransferSrc });
-            try self.checkImageState(&swapchain.textures[swapchain.curIndex], swapchain.subRange, .{ .stage = .Transfer, .access = .TransferWrite, .layout = .TransferDst });
+            for (windows) |window| {
+                if (window.id.val != swapchain.windowId) continue; // only if swapchain belongs to window
+
+                for (window.viewIds) |viewId| {
+                    if (viewId) |id| {
+                        const viewport = data.viewport.viewports.getByKey(id.val);
+                        const renderTexMeta = try resMan.getMeta(viewport.sourceTexId);
+                        const renderTex = try resMan.get(viewport.sourceTexId, cmd.flightId);
+
+                        try self.checkImageState(renderTex, renderTexMeta.subRange, .{ .stage = .Transfer, .access = .TransferRead, .layout = .TransferSrc });
+                        try self.checkImageState(&swapchain.textures[swapchain.curIndex], swapchain.subRange, .{ .stage = .Transfer, .access = .TransferWrite, .layout = .TransferDst });
+                    }
+                }
+            }
         }
         self.bakeBarriers(cmd, "Blits Prep");
         cmd.endQuery(.BotOfPipe, 54);
@@ -249,9 +253,27 @@ pub const RenderGraph = struct {
         cmd.startQuery(.TopOfPipe, 55, "Blits Present");
 
         for (swapchains) |swapchain| { // Blits + Swapchain Presentation Barriers
-            const renderTex = try resMan.get(swapchain.renderTexId, cmd.flightId);
-            cmd.copyImageToImage(renderTex.img, renderTex.extent, swapchain.getCurTexture().img, swapchain.getExtent3D(), rc.RENDER_TEX_STRETCH);
-            try self.checkImageState(swapchain.getCurTexture(), swapchain.subRange, .{ .stage = .ColorAtt, .access = .ColorAttReadWrite, .layout = .Attachment });
+            for (windows) |window| {
+                if (window.id.val != swapchain.windowId) continue; // only if swapchain belongs to window
+
+                for (window.viewIds) |viewId| {
+                    if (viewId) |id| {
+                        const viewport = data.viewport.viewports.getByKey(id.val);
+                        const renderTex = try resMan.get(viewport.sourceTexId, cmd.flightId);
+                        const extent = swapchain.getExtent2D();
+                        const width: f32 = @as(f32, @floatFromInt(extent.width)) * viewport.areaWidth;
+                        const height: f32 = @as(f32, @floatFromInt(extent.height)) * viewport.areaHeight;
+                        const viewArea = vk.VkExtent3D{ .width = @intFromFloat(width), .height = @intFromFloat(height), .depth = 1 };
+
+                        const areaX: f32 = @as(f32, @floatFromInt(extent.width)) * viewport.areaX;
+                        const areaY: f32 = @as(f32, @floatFromInt(extent.height)) * viewport.areaY;
+                        const viewOffset = vk.VkOffset3D{ .x = @intFromFloat(areaX), .y = @intFromFloat(areaY), .z = 1 };
+
+                        cmd.copyImageToImage(renderTex.img, renderTex.extent, swapchain.getCurTexture().img, viewArea, viewOffset, rc.RENDER_TEX_STRETCH);
+                        try self.checkImageState(swapchain.getCurTexture(), swapchain.subRange, .{ .stage = .ColorAtt, .access = .ColorAttReadWrite, .layout = .Attachment });
+                    }
+                }
+            }
         }
         self.bakeBarriers(cmd, "Blits Present");
         cmd.endQuery(.BotOfPipe, 55);

@@ -114,6 +114,10 @@ pub fn SlotMap(comptime itemType: type, comptime capacity: u32, comptime keyType
             return self.items[0..self.len];
         }
 
+        pub inline fn getConstItems(self: *const Self) []const itemType {
+            return self.items[0..self.len];
+        }
+
         pub inline fn getKeyMax(_: *const Self) u32 {
             return keyMax;
         }

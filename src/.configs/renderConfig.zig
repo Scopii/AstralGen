@@ -58,9 +58,9 @@ pub const indirectSB = BufferMeta.create(.{ .id = .{ .val = 1 }, .mem = .Gpu, .t
 pub const readbackSB = BufferMeta.create(.{ .id = .{ .val = 2 }, .mem = .CpuRead, .typ = .Storage, .len = 1, .elementSize = @sizeOf(vhT.ReadbackData), .update = .PerFrame });
 
 pub const objectSB = BufferMeta.create(.{ .id = .{ .val = 3 }, .mem = .Gpu, .typ = .Storage, .len = ENTITY_COUNT, .elementSize = @sizeOf(GpuObjectData), .update = .Rarely, .resize = .Fit });
-pub const cameraUB = BufferMeta.create(.{ .id = .{ .val = 4 }, .mem = .Gpu, .typ = .Uniform, .len = 1, .elementSize = @sizeOf(CameraData), .update = .Often, .resize = .Fit });
-pub const camera2UB = BufferMeta.create(.{ .id = .{ .val = 5 }, .mem = .Gpu, .typ = .Uniform, .len = 1, .elementSize = @sizeOf(CameraData), .update = .Often, .resize = .Fit });
-pub const BUFFERS: []const BufferMeta.BufInf = &.{ objectSB, cameraUB, camera2UB, indirectSB, readbackSB };
+pub const camUB = BufferMeta.create(.{ .id = .{ .val = 4 }, .mem = .Gpu, .typ = .Uniform, .len = 1, .elementSize = @sizeOf(CameraData), .update = .Often, .resize = .Fit });
+pub const cam2UB = BufferMeta.create(.{ .id = .{ .val = 5 }, .mem = .Gpu, .typ = .Uniform, .len = 1, .elementSize = @sizeOf(CameraData), .update = .Often, .resize = .Fit });
+pub const BUFFERS: []const BufferMeta.BufInf = &.{ objectSB, camUB, cam2UB, indirectSB, readbackSB };
 
 // Textures
 pub const mainTex = TextureMeta.create(.{ .id = .{ .val = 1 }, .mem = .Gpu, .typ = .Color, .width = 1920, .height = 1080, .update = .Rarely });
@@ -81,7 +81,7 @@ pub const PASSES: []const Pass = &.{
     // main,
     // debug,
 
-    compRayMarch,
+    // compRayMarch,
 
     editorGrid,
 };
@@ -95,7 +95,7 @@ pub const compRayMarch: Pass = .{
     }),
     .bufUses = &.{
         BufferUse.init(objectSB.id, .ComputeShader, .ShaderRead, 0),
-        BufferUse.init(cameraUB.id, .ComputeShader, .ShaderRead, 1),
+        BufferUse.init(camUB.id, .ComputeShader, .ShaderRead, 1),
         BufferUse.init(readbackSB.id, .ComputeShader, .ShaderWrite, 3),
     },
     .texUses = &.{
@@ -116,7 +116,7 @@ pub const compCull: Pass = .{
     },
 };
 
-const mainCull: Pass = .{
+pub const mainCull: Pass = .{
     .name = "Main",
     .shaderIds = &.{ sc.cullTestMesh.id, sc.cullTestFrag.id },
     .typ = Pass.createClassic(.{
@@ -139,12 +139,12 @@ const mainCull: Pass = .{
     }),
     .bufUses = &.{
         BufferUse.init(indirectSB.id, .DrawIndirect, .IndirectRead, null),
-        BufferUse.init(cameraUB.id, .FragShader, .ShaderRead, 0),
-        BufferUse.init(cameraUB.id, .FragShader, .ShaderRead, 1),
+        BufferUse.init(camUB.id, .FragShader, .ShaderRead, 0),
+        BufferUse.init(camUB.id, .FragShader, .ShaderRead, 1),
     },
 };
 
-const debugCull: Pass = .{
+pub const debugCull: Pass = .{
     .name = "Debug",
     .shaderIds = &.{ sc.cullTestMesh.id, sc.cullTestFrag.id },
     .typ = Pass.createClassic(.{
@@ -167,8 +167,8 @@ const debugCull: Pass = .{
     }),
     .bufUses = &.{
         BufferUse.init(indirectSB.id, .DrawIndirect, .IndirectRead, null),
-        BufferUse.init(camera2UB.id, .FragShader, .ShaderRead, 0),
-        BufferUse.init(cameraUB.id, .FragShader, .ShaderRead, 1),
+        BufferUse.init(cam2UB.id, .FragShader, .ShaderRead, 0),
+        BufferUse.init(camUB.id, .FragShader, .ShaderRead, 1),
     },
 };
 
@@ -185,7 +185,7 @@ pub const comp: Pass = .{
     },
 };
 
-const main: Pass = .{
+pub const main: Pass = .{
     .name = "Main",
     .shaderIds = &.{ sc.quantMesh.id, sc.quantFrag.id },
     .typ = Pass.createClassic(.{
@@ -208,12 +208,12 @@ const main: Pass = .{
     }),
     .bufUses = &.{
         BufferUse.init(indirectSB.id, .DrawIndirect, .IndirectRead, null),
-        BufferUse.init(cameraUB.id, .FragShader, .ShaderRead, 0),
-        BufferUse.init(cameraUB.id, .FragShader, .ShaderRead, 1),
+        BufferUse.init(camUB.id, .FragShader, .ShaderRead, 0),
+        BufferUse.init(camUB.id, .FragShader, .ShaderRead, 1),
     },
 };
 
-const debug: Pass = .{
+pub const debug: Pass = .{
     .name = "Debug",
     .shaderIds = &.{ sc.quantMesh.id, sc.quantFrag.id },
     .typ = Pass.createClassic(.{
@@ -236,8 +236,8 @@ const debug: Pass = .{
     }),
     .bufUses = &.{
         BufferUse.init(indirectSB.id, .DrawIndirect, .IndirectRead, null),
-        BufferUse.init(camera2UB.id, .FragShader, .ShaderRead, 0),
-        BufferUse.init(cameraUB.id, .FragShader, .ShaderRead, 1),
+        BufferUse.init(cam2UB.id, .FragShader, .ShaderRead, 0),
+        BufferUse.init(camUB.id, .FragShader, .ShaderRead, 1),
     },
 };
 
@@ -258,8 +258,8 @@ pub const frustum: Pass = .{
         },
     }),
     .bufUses = &.{
-        BufferUse.init(cameraUB.id, .MeshShader, .ShaderRead, 0),
-        BufferUse.init(camera2UB.id, .MeshShader, .ShaderRead, 1),
+        BufferUse.init(camUB.id, .MeshShader, .ShaderRead, 0),
+        BufferUse.init(cam2UB.id, .MeshShader, .ShaderRead, 1),
     },
 };
 
@@ -281,7 +281,7 @@ pub const editorGrid: Pass = .{
         },
     }),
     .bufUses = &.{
-        BufferUse.init(camera2UB.id, .MeshShader, .ShaderRead, 0),
+        BufferUse.init(cam2UB.id, .MeshShader, .ShaderRead, 0),
     },
 };
 

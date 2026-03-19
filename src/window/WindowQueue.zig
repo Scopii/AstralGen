@@ -1,6 +1,6 @@
 const TexId = @import("../render/types/res/TextureMeta.zig").TextureMeta.TexId;
 const FixedList = @import("../.structures/FixedList.zig").FixedList;
-const EntityId = @import("../ecs/EntityData.zig").EntityId;
+const ViewportId = @import("../viewport/ViewportSys.zig").ViewportId;
 const std = @import("std");
 
 pub const WindowQueue = struct {
@@ -20,5 +20,5 @@ pub const WindowQueue = struct {
 };
 
 pub const WindowEvent = union(enum) {
-    addWindow: struct { title: [*c]const u8, w: c_int, h: c_int, renderTexId: TexId, x: c_int, y: c_int, resize: bool, texIds: []const TexId, camEntityId: EntityId },
+    addWindow: struct { title: [*c]const u8, w: c_int, h: c_int, renderTexId: TexId, x: c_int, y: c_int, resize: bool, texIds: []const TexId, viewIds: [4]?ViewportId },
 };
