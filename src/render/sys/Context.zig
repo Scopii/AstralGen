@@ -276,6 +276,7 @@ fn createGPI(alloc: Allocator, gpu: vk.VkPhysicalDevice, family: u32) !vk.VkDevi
     // Mesh/Task Shaders
     fullSup &= checkFeature("Mesh Shaders", sup.meshShaders.meshShader, &need.meshShaders.meshShader);
     fullSup &= checkFeature("Task Shaders", sup.meshShaders.taskShader, &need.meshShaders.taskShader);
+    fullSup &= checkFeature("Mesh Shader Queries", sup.meshShaders.meshShaderQueries, &need.meshShaders.meshShaderQueries);
 
     // Vk11 Features
     fullSup &= checkFeature("Shader Draw Parameters", sup.vk11.shaderDrawParameters, &need.vk11.shaderDrawParameters);
@@ -306,6 +307,7 @@ fn createGPI(alloc: Allocator, gpu: vk.VkPhysicalDevice, family: u32) !vk.VkDevi
     // Device2 Features
     fullSup &= checkFeature("Shader Int 64", sup.devFeatures2.features.shaderInt64, &need.devFeatures2.features.shaderInt64);
     fullSup &= checkFeature("Wide Lines", sup.devFeatures2.features.wideLines, &need.devFeatures2.features.wideLines);
+    fullSup &= checkFeature("Pipeline Statistics Query", sup.devFeatures2.features.pipelineStatisticsQuery, &need.devFeatures2.features.pipelineStatisticsQuery);
 
     if (fullSup == false) {
         std.debug.print("Device does not Support all needed Features! Exiting\n", .{});

@@ -139,7 +139,7 @@ pub const ImGuiMan = struct {
         zgui.deinit();
     }
 
-    fn setContext(self: *ImGuiMan, windowIdx: u32) bool {
+    pub fn setContext(self: *ImGuiMan, windowIdx: u32) bool {
         const ctx = self.contexts[windowIdx] orelse return false;
         ig.igui_set_current_context(ctx);
         return true;
@@ -152,7 +152,7 @@ pub const ImGuiMan = struct {
     }
 
     pub fn newFrame(self: *ImGuiMan, windowIdx: u32, width: u32, height: u32) void {
-        if (!self.uiActive) return; // global toggle
+        if (!self.uiActive) return;
         if (!self.setContext(windowIdx)) return;
         zgui.backend.newFrame(width, height);
     }

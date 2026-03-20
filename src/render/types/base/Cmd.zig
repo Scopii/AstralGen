@@ -21,9 +21,13 @@ pub const Cmd = struct {
     frame: u64 = 0,
     renderState: ?RenderState = null,
 
-    queryPool: ?vk.VkQueryPool = null,
+    timePool: ?vk.VkQueryPool = null,
     queryCounter: u8 = 0,
-    querys: LinkedMap(Query, rc.GPU_QUERYS, u8, rc.GPU_QUERYS * 2, 0) = .{},
+    querys: LinkedMap(Query, rc.GPU_TIME_QUERYS, u8, rc.GPU_TIME_QUERYS * 2, 0) = .{},
+
+    statsPool: ?vk.VkQueryPool = null,
+    statsCounter: u8 = 0,
+    statsQuerys: LinkedMap(Query, rc.GPU_STATS_QUERYS, u8, rc.GPU_STATS_QUERYS * 2, 0) = .{},
 
     pub fn init(cmdPool: vk.VkCommandPool, level: vk.VkCommandBufferLevel, gpi: vk.VkDevice) !Cmd {
         const allocInf = vk.VkCommandBufferAllocateInfo{
@@ -37,12 +41,12 @@ pub const Cmd = struct {
 
         return .{
             .handle = cmd,
-            .queryPool = null,
         };
     }
 
     pub fn deinit(self: *const Cmd, gpi: vk.VkDevice) void {
-        if (self.queryPool) |qPool| vk.vkDestroyQueryPool(gpi, qPool, null);
+        if (self.timePool) |qPool| vk.vkDestroyQueryPool(gpi, qPool, null);
+        if (self.statsPool) |qPool| vk.vkDestroyQueryPool(gpi, qPool, null);
     }
 
     pub fn beginLabel(self: *const Cmd, label: [:0]const u8, color: ?[4]f32) void {
@@ -60,23 +64,23 @@ pub const Cmd = struct {
         if (rc.VALIDATION == true) vkFn.vkCmdEndDebugUtilsLabelEXT.?(self.handle);
     }
 
-    pub fn enableQuerys(self: *Cmd, gpi: vk.VkDevice) !void {
-        if (self.queryPool == null) {
+    pub fn enableTimeQuerys(self: *Cmd, gpi: vk.VkDevice) !void {
+        if (self.timePool == null) {
             const poolInfo = vk.VkQueryPoolCreateInfo{
                 .sType = vk.VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO,
                 .queryType = vk.VK_QUERY_TYPE_TIMESTAMP,
-                .queryCount = rc.GPU_QUERYS * 2,
+                .queryCount = rc.GPU_TIME_QUERYS * 2,
             };
             var tempQueryPool: vk.VkQueryPool = undefined;
             try vhF.check(vk.vkCreateQueryPool(gpi, &poolInfo, null, &tempQueryPool), "Could not init Cmd QueryPool");
-            self.queryPool = tempQueryPool;
+            self.timePool = tempQueryPool;
         }
     }
 
-    pub fn disableQuerys(self: *Cmd, gpi: vk.VkDevice) void {
-        if (self.queryPool) |qPool| {
+    pub fn disableTimeQuerys(self: *Cmd, gpi: vk.VkDevice) void {
+        if (self.timePool) |qPool| {
             vk.vkDestroyQueryPool(gpi, qPool, null);
-            self.queryPool = null;
+            self.timePool = null;
         }
     }
 
@@ -102,14 +106,14 @@ pub const Cmd = struct {
         vk.vkCmdWriteTimestamp2(self.handle, stage, pool, queryIndex);
     }
 
-    pub fn startQuery(self: *Cmd, pipeStage: vhE.PipeStage, queryId: u8, name: []const u8) void {
-        if (self.queryPool) |qPool| {
+    pub fn startTimeQuery(self: *Cmd, pipeStage: vhE.PipeStage, queryId: u8, name: []const u8) void {
+        if (self.timePool) |qPool| {
             if (self.querys.isKeyUsed(queryId) == true) {
                 std.debug.print("Cmd Warning: Query ID {} in use by {s}\n!", .{ queryId, self.querys.getPtrByKey(queryId).name });
                 return;
             }
             const idx = self.queryCounter;
-            if (idx >= rc.GPU_QUERYS) {
+            if (idx >= rc.GPU_TIME_QUERYS) {
                 std.debug.print("GPU Querys full\n", .{});
                 return;
             }
@@ -120,15 +124,15 @@ pub const Cmd = struct {
         }
     }
 
-    pub fn endQuery(self: *Cmd, pipeStage: vhE.PipeStage, queryId: u8) void {
-        if (self.queryPool) |qPool| {
+    pub fn endTimeQuery(self: *Cmd, pipeStage: vhE.PipeStage, queryId: u8) void {
+        if (self.timePool) |qPool| {
             if (self.querys.isKeyUsed(queryId) == false) {
                 std.debug.print("Cmd Error: QueryId {} not registered", .{queryId});
                 return;
             }
 
             const idx = self.queryCounter;
-            if (idx >= rc.GPU_QUERYS) {
+            if (idx >= rc.GPU_TIME_QUERYS) {
                 std.debug.print("GPU Querys full\n", .{});
                 return;
             }
@@ -140,16 +144,16 @@ pub const Cmd = struct {
         }
     }
 
-    pub fn printQueryResults(self: *Cmd, gpi: vk.VkDevice, timestampPeriod: f32) !void {
-        if (self.queryPool) |qPool| {
+    pub fn printTimeResults(self: *Cmd, gpi: vk.VkDevice, timestampPeriod: f32) !void {
+        if (self.timePool) |qPool| {
             const count = self.queryCounter;
-            if (count == 0 or count > rc.GPU_QUERYS) {
+            if (count == 0 or count > rc.GPU_TIME_QUERYS) {
                 std.debug.print("No Querys in Cmd to print\n", .{});
                 return;
             }
 
-            var results: [rc.GPU_QUERYS * 2]u64 = undefined;
-            const flags = vk.VK_QUERY_RESULT_64_BIT | vk.VK_QUERY_RESULT_WAIT_BIT;
+            var results: [rc.GPU_TIME_QUERYS * 2]u64 = undefined;
+            const flags = vk.VK_QUERY_RESULT_64_BIT; // | vk.VK_QUERY_RESULT_WAIT_BIT
             try vhF.check(vk.vkGetQueryPoolResults(gpi, qPool, 0, count, @sizeOf(u64) * 128, &results, @sizeOf(u64), flags), "Failed getting Cmd Queries");
 
             const frameStartIndex = self.querys.getByIndex(0).startIndex;
@@ -163,7 +167,7 @@ pub const Cmd = struct {
 
             const ticks = frameEnd - frameStart;
             const gpuFrameMs = (@as(f64, @floatFromInt(ticks)) * timestampPeriod) / 1_000_000.0;
-            std.debug.print("GPU Frame {} (FlightID {}) ({}/{} Queries)\n", .{ self.frame, self.flightId, self.querys.getLength(), rc.GPU_QUERYS });
+            std.debug.print("GPU Frame {} (FlightID {}) ({}/{} Queries)\n", .{ self.frame, self.flightId, self.querys.getLength(), rc.GPU_TIME_QUERYS });
             std.debug.print("{d:.3} ms ({d:.1} FPS) ({} GPU Ticks):\n", .{ gpuFrameMs, 1000.0 / gpuFrameMs, ticks });
 
             var untrackedMs: f64 = gpuFrameMs;
@@ -178,11 +182,104 @@ pub const Cmd = struct {
         }
     }
 
-    pub fn resetQuerys(self: *Cmd) void {
-        if (self.queryPool) |qPool| {
-            vk.vkCmdResetQueryPool(self.handle, qPool, 0, rc.GPU_QUERYS * 2);
+    pub fn resetTimeQuerys(self: *Cmd) void {
+        if (self.timePool) |qPool| {
+            vk.vkCmdResetQueryPool(self.handle, qPool, 0, rc.GPU_TIME_QUERYS * 2);
             self.queryCounter = 0;
             self.querys.clear();
+        }
+    }
+
+    pub fn enableStatsQuerys(self: *Cmd, gpi: vk.VkDevice) !void {
+        if (self.statsPool != null) return;
+        const poolInfo = vk.VkQueryPoolCreateInfo{
+            .sType = vk.VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO,
+            .queryType = vk.VK_QUERY_TYPE_PIPELINE_STATISTICS,
+            .queryCount = rc.GPU_STATS_QUERYS,
+            .pipelineStatistics = rc.STATS_MASK, // tells driver which counters to collect
+        };
+        var pool: vk.VkQueryPool = undefined;
+        try vhF.check(vk.vkCreateQueryPool(gpi, &poolInfo, null, &pool), "Could not create Stats QueryPool");
+        self.statsPool = pool;
+    }
+
+    pub fn disableStatsQuerys(self: *Cmd, gpi: vk.VkDevice) void {
+        if (self.statsPool) |pool| {
+            vk.vkDestroyQueryPool(gpi, pool, null);
+            self.statsPool = null;
+        }
+    }
+
+    pub fn resetStatsQuerys(self: *Cmd) void {
+        if (self.statsPool) |pool| {
+            vk.vkCmdResetQueryPool(self.handle, pool, 0, rc.GPU_STATS_QUERYS);
+            self.statsCounter = 0;
+            self.statsQuerys.clear();
+        }
+    }
+
+    pub fn beginStatsQuery(self: *Cmd, queryId: u8, name: []const u8) void {
+        if (self.statsPool) |pool| {
+            const idx = self.statsCounter;
+            if (idx >= rc.GPU_STATS_QUERYS) {
+                std.debug.print("Stats slots full\n", .{});
+                return;
+            }
+            vk.vkCmdBeginQuery(self.handle, pool, idx, 0);
+            self.statsQuerys.upsert(queryId, .{ .name = name, .startIndex = idx });
+            self.statsCounter += 1;
+        }
+    }
+
+    pub fn endStatsQuery(self: *Cmd, queryId: u8) void {
+        if (self.statsPool) |pool| {
+            if (!self.statsQuerys.isKeyUsed(queryId)) return;
+            const idx = self.statsQuerys.getPtrByKey(queryId).startIndex;
+            vk.vkCmdEndQuery(self.handle, pool, idx); // note: no stage arg unlike timestamps
+        }
+    }
+
+    pub fn printStatsResults(self: *Cmd, gpi: vk.VkDevice) !void {
+        const pool = self.statsPool orelse return;
+        const count = self.statsCounter;
+        if (count == 0) return;
+
+        const statCount = @popCount(rc.STATS_MASK);
+
+        // results layout: [slot0_stat0, slot0_stat1, ..., slot1_stat0, ...]
+        var results: [rc.GPU_STATS_QUERYS * statCount]u64 = undefined;
+        const stride = @sizeOf(u64) * statCount; // stride per slot
+        const flags = vk.VK_QUERY_RESULT_64_BIT; // | vk.VK_QUERY_RESULT_WAIT_BIT
+        const dataSize = @as(usize, count) * @as(usize, statCount) * @sizeOf(u64);
+        try vhF.check(vk.vkGetQueryPoolResults(gpi, pool, 0, count, dataSize, &results, stride, flags), "Failed getting Stats Query results");
+
+        // Ordered by Vulkan spec bit position — must match STATS_MASK bit order
+        const statLabels = [13]struct { bit: u32, name: []const u8 }{
+            .{ .bit = vk.VK_QUERY_PIPELINE_STATISTIC_INPUT_ASSEMBLY_VERTICES_BIT, .name = "Input Assembly Vertices" },
+            .{ .bit = vk.VK_QUERY_PIPELINE_STATISTIC_INPUT_ASSEMBLY_PRIMITIVES_BIT, .name = "Input Assembly Primitives" },
+            .{ .bit = vk.VK_QUERY_PIPELINE_STATISTIC_VERTEX_SHADER_INVOCATIONS_BIT, .name = "Vertex Invocations" },
+            .{ .bit = vk.VK_QUERY_PIPELINE_STATISTIC_GEOMETRY_SHADER_INVOCATIONS_BIT, .name = "Geometry Invocations" },
+            .{ .bit = vk.VK_QUERY_PIPELINE_STATISTIC_GEOMETRY_SHADER_PRIMITIVES_BIT, .name = "Geometry Primitives" },
+            .{ .bit = vk.VK_QUERY_PIPELINE_STATISTIC_CLIPPING_INVOCATIONS_BIT, .name = "Clipping Invocations" },
+            .{ .bit = vk.VK_QUERY_PIPELINE_STATISTIC_CLIPPING_PRIMITIVES_BIT, .name = "Clipping Primitives" },
+            .{ .bit = vk.VK_QUERY_PIPELINE_STATISTIC_FRAGMENT_SHADER_INVOCATIONS_BIT, .name = "Fragment Invocations" },
+            .{ .bit = vk.VK_QUERY_PIPELINE_STATISTIC_TESSELLATION_CONTROL_SHADER_PATCHES_BIT, .name = "Tesselation Control Patches" },
+            .{ .bit = vk.VK_QUERY_PIPELINE_STATISTIC_TESSELLATION_EVALUATION_SHADER_INVOCATIONS_BIT, .name = "Tesselation Evaluation Invocations" },
+            .{ .bit = vk.VK_QUERY_PIPELINE_STATISTIC_COMPUTE_SHADER_INVOCATIONS_BIT, .name = "Compute Invocations" },
+            .{ .bit = vk.VK_QUERY_PIPELINE_STATISTIC_TASK_SHADER_INVOCATIONS_BIT_EXT, .name = "Task5 Invocations" },
+            .{ .bit = vk.VK_QUERY_PIPELINE_STATISTIC_MESH_SHADER_INVOCATIONS_BIT_EXT, .name = "Mesh Invocations" },
+        };
+
+        std.debug.print("Pipeline Stats ({} passes):\n", .{count});
+        for (self.statsQuerys.getItems()) |query| {
+            std.debug.print(" {s}:\n", .{query.name});
+            var resultIdx: u8 = 0;
+            for (statLabels) |def| {
+                if (rc.STATS_MASK & @as(u32, @bitCast(def.bit)) != 0) {
+                    std.debug.print("   {d}: {s}\n", .{ results[query.startIndex * statCount + resultIdx], def.name });
+                    resultIdx += 1;
+                }
+            }
         }
     }
 

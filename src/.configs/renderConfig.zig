@@ -22,7 +22,19 @@ pub const ROBUST_VALIDATION = false;
 
 // Normal Profiling
 pub const GPU_PROFILING = false;
-pub const GPU_QUERYS = 63;
+pub const GPU_QUERY_INTERVAL = 100;
+
+pub const GPU_TIME_QUERYS = 63;
+
+pub const GPU_STATS_QUERYS: u8 = 32;
+pub const STATS_MASK: vk.VkQueryPipelineStatisticFlagBits =
+    // vk.VK_QUERY_PIPELINE_STATISTIC_CLIPPING_INVOCATIONS_BIT |
+    // vk.VK_QUERY_PIPELINE_STATISTIC_CLIPPING_PRIMITIVES_BIT |
+    vk.VK_QUERY_PIPELINE_STATISTIC_FRAGMENT_SHADER_INVOCATIONS_BIT |
+    vk.VK_QUERY_PIPELINE_STATISTIC_COMPUTE_SHADER_INVOCATIONS_BIT ;
+    // vk.VK_QUERY_PIPELINE_STATISTIC_TASK_SHADER_INVOCATIONS_BIT_EXT |
+    // vk.VK_QUERY_PIPELINE_STATISTIC_MESH_SHADER_INVOCATIONS_BIT_EXT;
+
 pub const GPU_READBACK = false;
 pub const CPU_PROFILING = false;
 pub const SWAPCHAIN_PROFILING = false;
@@ -63,12 +75,14 @@ pub const cam2UB = BufferMeta.create(.{ .id = .{ .val = 5 }, .mem = .Gpu, .typ =
 pub const BUFFERS: []const BufferMeta.BufInf = &.{ objectSB, camUB, cam2UB, indirectSB, readbackSB };
 
 // Textures
+pub const rayTex = TextureMeta.create(.{ .id = .{ .val = 5 }, .mem = .Gpu, .typ = .Color, .width = 1920, .height = 1080, .update = .Rarely });
+
 pub const mainTex = TextureMeta.create(.{ .id = .{ .val = 1 }, .mem = .Gpu, .typ = .Color, .width = 1920, .height = 1080, .update = .Rarely });
 pub const mainDepthTex = TextureMeta.create(.{ .id = .{ .val = 2 }, .mem = .Gpu, .typ = .Depth, .width = 1920, .height = 1080, .update = .Rarely });
 
 pub const debugTex = TextureMeta.create(.{ .id = .{ .val = 3 }, .mem = .Gpu, .typ = .Color, .width = 1920, .height = 1080, .update = .Rarely });
 pub const debugDepthTex = TextureMeta.create(.{ .id = .{ .val = 4 }, .mem = .Gpu, .typ = .Depth, .width = 1920, .height = 1080, .update = .Rarely });
-pub const TEXTURES: []const TextureMeta.TexInf = &.{ mainTex, mainDepthTex, debugTex, debugDepthTex };
+pub const TEXTURES: []const TextureMeta.TexInf = &.{ mainTex, mainDepthTex, debugTex, debugDepthTex, rayTex };
 
 // Passes
 pub const PASSES: []const Pass = &.{
@@ -81,7 +95,7 @@ pub const PASSES: []const Pass = &.{
     // main,
     // debug,
 
-    // compRayMarch,
+    compRayMarch,
 
     editorGrid,
 };
@@ -90,7 +104,7 @@ pub const compRayMarch: Pass = .{
     .name = "CompTest",
     .shaderIds = &.{sc.t1Comp.id},
     .typ = Pass.createCompute(.{
-        .mainTexId = mainTex.id,
+        .mainTexId = rayTex.id,
         .workgroups = .{ .x = 8, .y = 8, .z = 1 },
     }),
     .bufUses = &.{
@@ -99,7 +113,7 @@ pub const compRayMarch: Pass = .{
         BufferUse.init(readbackSB.id, .ComputeShader, .ShaderWrite, 3),
     },
     .texUses = &.{
-        TextureUse.init(mainTex.id, .ComputeShader, .ShaderWrite, .General, 2),
+        TextureUse.init(rayTex.id, .ComputeShader, .ShaderWrite, .General, 2),
     },
 };
 

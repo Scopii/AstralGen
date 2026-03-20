@@ -41,10 +41,11 @@ pub const CmdMan = struct {
         self.alloc.free(self.cmds);
         vk.vkDestroyCommandPool(self.gpi, self.cmdPool, null);
     }
-    
+
     pub fn getCmd(self: *CmdMan, flightId: u8) !*Cmd {
         const cmd = &self.cmds[flightId];
-        try cmd.printQueryResults(self.gpi, self.timestampPeriod);
+        try cmd.printTimeResults(self.gpi, self.timestampPeriod);
+        try cmd.printStatsResults(self.gpi);
         return cmd;
     }
 };

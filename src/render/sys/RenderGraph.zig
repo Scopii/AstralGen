@@ -52,12 +52,15 @@ pub const RenderGraph = struct {
         var cmd = try self.cmdMan.getCmd(flightId);
         try cmd.begin(flightId, frame);
 
-        if (self.useGpuProfiling == true) try cmd.enableQuerys(self.gpi) else cmd.disableQuerys(self.gpi);
-        cmd.resetQuerys();
+        if (self.useGpuProfiling == true and frame % rc.GPU_QUERY_INTERVAL == 0) try cmd.enableTimeQuerys(self.gpi) else cmd.disableTimeQuerys(self.gpi);
+        cmd.resetTimeQuerys();
 
-        cmd.startQuery(.TopOfPipe, 76, "Descriptor Heap");
+        if (self.useGpuProfiling == true and frame % rc.GPU_QUERY_INTERVAL == 0) try cmd.enableStatsQuerys(self.gpi) else cmd.disableStatsQuerys(self.gpi);
+        cmd.resetStatsQuerys();
+
+        cmd.startTimeQuery(.TopOfPipe, 76, "Descriptor Heap");
         cmd.bindDescriptorHeap(resMan.descMan.descHeap.gpuAddress, resMan.descMan.descHeap.size, resMan.descMan.driverReservedSize);
-        cmd.endQuery(.BotOfPipe, 76);
+        cmd.endTimeQuery(.BotOfPipe, 76);
 
         try self.recordTransfers(cmd, resMan);
         try self.recordPasses(cmd, passes, frameData, resMan, shaderMan);
@@ -75,7 +78,7 @@ pub const RenderGraph = struct {
         const fullTransfers = resUpdater.getFullUpdates(cmd.flightId);
 
         if (fullTransfers.len != 0) {
-            cmd.startQuery(.TopOfPipe, 40, "Full Transfers");
+            cmd.startTimeQuery(.TopOfPipe, 40, "Full Transfers");
 
             for (fullTransfers) |transfer| {
                 const buffer = try resMan.get(transfer.dstResId, transfer.dstSlot);
@@ -84,13 +87,13 @@ pub const RenderGraph = struct {
             }
             resUpdater.resetFullUpdates(cmd.flightId);
             self.bakeBarriers(cmd, "Full Transfers");
-            cmd.endQuery(.BotOfPipe, 40);
+            cmd.endTimeQuery(.BotOfPipe, 40);
         }
 
         const partialTransfers = resUpdater.getSegmentUpdates(cmd.flightId);
 
         if (partialTransfers.len != 0) {
-            cmd.startQuery(.TopOfPipe, 41, "Partial Transfers");
+            cmd.startTimeQuery(.TopOfPipe, 41, "Partial Transfers");
 
             for (partialTransfers) |transfer| {
                 const buffer = try resMan.get(transfer.dstResId, transfer.dstSlot);
@@ -99,7 +102,7 @@ pub const RenderGraph = struct {
             }
             resUpdater.resetSegmentUpdates(cmd.flightId);
             self.bakeBarriers(cmd, "Segment Transfers");
-            cmd.endQuery(.BotOfPipe, 41);
+            cmd.endTimeQuery(.BotOfPipe, 41);
         }
     }
 
@@ -164,7 +167,8 @@ pub const RenderGraph = struct {
 
     pub fn recordPasses(self: *RenderGraph, cmd: *Cmd, passes: []Pass, frameData: FrameData, resMan: *ResourceMan, shaderMan: *ShaderManager) !void {
         for (passes, 0..) |pass, i| {
-            cmd.startQuery(.TopOfPipe, @intCast(i), pass.name);
+            cmd.startTimeQuery(.TopOfPipe, @intCast(i), pass.name);
+            cmd.beginStatsQuery(@intCast(i), pass.name);
 
             const shaders = shaderMan.getShaders(pass.shaderIds)[0..pass.shaderIds.len];
             cmd.bindShaders(shaders);
@@ -181,7 +185,8 @@ pub const RenderGraph = struct {
                 },
                 .compute => |comp| try recordCompute(cmd, comp.workgroups, comp.mainTexId, resMan),
             }
-            cmd.endQuery(.BotOfPipe, @intCast(i));
+            cmd.endTimeQuery(.BotOfPipe, @intCast(i));
+            cmd.endStatsQuery(@intCast(i));
         }
     }
 
@@ -229,7 +234,7 @@ pub const RenderGraph = struct {
     }
 
     pub fn recordSwapchainBlits(self: *RenderGraph, cmd: *Cmd, swapchains: []const *Swapchain, resMan: *ResourceMan, windows: []const Window, data: *const EngineData) !void {
-        cmd.startQuery(.TopOfPipe, 54, "Blits Prep");
+        cmd.startTimeQuery(.TopOfPipe, 54, "Blits Prep");
 
         for (swapchains) |swapchain| { // Render Texture and Swapchain Preperations
             for (windows) |window| {
@@ -248,9 +253,9 @@ pub const RenderGraph = struct {
             }
         }
         self.bakeBarriers(cmd, "Blits Prep");
-        cmd.endQuery(.BotOfPipe, 54);
+        cmd.endTimeQuery(.BotOfPipe, 54);
 
-        cmd.startQuery(.TopOfPipe, 55, "Blits Present");
+        cmd.startTimeQuery(.TopOfPipe, 55, "Blits Present");
 
         for (swapchains) |swapchain| { // Blits + Swapchain Presentation Barriers
             for (windows) |window| {
@@ -276,11 +281,11 @@ pub const RenderGraph = struct {
             }
         }
         self.bakeBarriers(cmd, "Blits Present");
-        cmd.endQuery(.BotOfPipe, 55);
+        cmd.endTimeQuery(.BotOfPipe, 55);
     }
 
     pub fn recordImGui(self: *RenderGraph, cmd: *Cmd, swapchains: []const *Swapchain, imguiMan: *ImGuiMan) !void {
-        cmd.startQuery(.TopOfPipe, 60, "ImGui");
+        cmd.startTimeQuery(.TopOfPipe, 60, "ImGui");
 
         for (swapchains) |swapchain| {
             const target = swapchain.getCurTexture();
@@ -293,15 +298,15 @@ pub const RenderGraph = struct {
             try self.checkImageState(target, swapchain.subRange, .{ .stage = .BotOfPipe, .access = .None, .layout = .PresentSrc });
         }
         self.bakeBarriers(cmd, "Imgui");
-        cmd.endQuery(.BotOfPipe, 60);
+        cmd.endTimeQuery(.BotOfPipe, 60);
     }
 
     fn bakeBarriers(self: *RenderGraph, cmd: *const Cmd, name: []const u8) void {
-        const imgBarCount = self.imgBarriers.items.len;
-        const bufBarCount = self.bufBarriers.items.len;
+        const imgBarrierCount = self.imgBarriers.items.len;
+        const bufBarrierCount = self.bufBarriers.items.len;
 
-        if (imgBarCount != 0 or bufBarCount != 0) {
-            if (rc.BARRIER_DEBUG == true) std.debug.print("BakeBarriers: {} Img, {} Buf ({s})\n", .{ imgBarCount, bufBarCount, name });
+        if (imgBarrierCount != 0 or bufBarrierCount != 0) {
+            if (rc.BARRIER_DEBUG == true) std.debug.print("BakeBarriers: {} Img, {} Buf ({s})\n", .{ imgBarrierCount, bufBarrierCount, name });
             cmd.bakeBarriers(self.imgBarriers.items, self.bufBarriers.items);
             self.imgBarriers.clearRetainingCapacity();
             self.bufBarriers.clearRetainingCapacity();

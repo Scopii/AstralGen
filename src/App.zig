@@ -31,6 +31,8 @@ const Viewport = @import("viewport/Viewport.zig").Viewport;
 const RendererQueue = @import("render/RendererQueue.zig").RendererQueue;
 const Renderer = @import("render/Renderer.zig").Renderer;
 
+const UiSys = @import("ui/UiSys.zig").UiSys;
+
 pub const FrameData = struct {
     runTime: f32,
     deltaTime: f32,
@@ -96,7 +98,7 @@ pub const App = struct {
 
         self.data.viewport.viewports.upsert(2, Viewport{ .cameraEntity = mainCamId, .sourceTexId = rc.mainTex.id, .areaX = 0.5, .areaY = 0.0, .areaWidth = 0.5, .areaHeight = 0.5 });
         self.data.viewport.viewports.upsert(1, Viewport{ .cameraEntity = debugCamId, .sourceTexId = rc.debugTex.id, .areaX = 0.0, .areaY = 0.0, .areaWidth = 0.5, .areaHeight = 0.5 });
-        self.data.viewport.viewports.upsert(3, Viewport{ .cameraEntity = mainCamId, .sourceTexId = rc.mainTex.id, .areaX = 0.0, .areaY = 0.0, .areaWidth = 1.0, .areaHeight = 1.0 });
+        self.data.viewport.viewports.upsert(3, Viewport{ .cameraEntity = mainCamId, .sourceTexId = rc.rayTex.id, .areaX = 0.0, .areaY = 0.0, .areaWidth = 1.0, .areaHeight = 1.0 });
 
         for (0..rc.ENTITY_COUNT) |_| _ = self.data.entityData.createRandomRenderEntity(&self.rng);
 
@@ -214,15 +216,29 @@ pub const App = struct {
 
             if (firstFrame) WindowSys.showAllWindows(&self.data.window);
 
-            renderer.draw(frameData, self.data.window.windows.getConstItems(), &self.data) catch |err| {
-                std.log.err("Error in renderer.draw(): {}", .{err});
+            // RENDER:
+            const targets = try renderer.beginDraw();
+
+            // UI per-window/viewport
+            for (targets) |swapchain| {
+                if (self.renderer.imguiMan.uiActive) {
+                    self.renderer.imguiMan.newFrame(swapchain.windowId, swapchain.extent.width, swapchain.extent.height);
+
+                    const window = self.data.window.windows.getByKey(swapchain.windowId);
+                    UiSys.buildWindowUi(&window, &self.data);
+                }
+            }
+
+            // Cmd Recording and Draw
+            renderer.submitDraw(frameData, self.data.window.windows.getConstItems(), &self.data, targets) catch |err| {
+                std.log.err("Error in renderer.submitDraw(): {}", .{err});
                 break;
             };
 
             self.memoryMan.resetArena();
             ShaderSys.freeFreshShaders(&self.data.shader, self.memoryMan.getAllocator()); // SHOULD CHANGE TO USE ARENA
 
-            if (rc.CPU_PROFILING or renderer.renderGraph.useGpuProfiling or rc.SWAPCHAIN_PROFILING) std.debug.print("\n", .{});
+            // if (rc.CPU_PROFILING or renderer.renderGraph.useGpuProfiling or rc.SWAPCHAIN_PROFILING) std.debug.print("\n", .{});
 
             if (firstFrame == true) {
                 WindowSys.showOpacityAllWindows(&self.data.window);
