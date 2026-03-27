@@ -6,52 +6,49 @@ const Texture = @import("../res/Texture.zig").Texture;
 const Buffer = @import("../res/Buffer.zig").Buffer;
 const vhE = @import("../../help/Enums.zig");
 const TexId = TextureMeta.TexId;
+const Pass = @import("Pass.zig").Pass;
 
-pub const TargetAction = enum { clear, load };
+// pub const TargetAction = enum { clear, load };
 
-pub const RenderTarget = struct {
-    texId: TexId,
-    action: TargetAction,
-};
-
-pub const PassExecution = struct {
+pub const PassUsage = struct {
     name: []const u8,
-    shaders: []const ShaderId,
+    pass: Pass,
 
-    // Dependencies for automatic Vulkan barriers
-    readBuffers: []const BufferMeta.BufId,
-    readTextures: []const TextureMeta.TexId,
-    writeTextures: []const TextureMeta.TexId,
-
-    // Render Targets for Graphics Passes
-    colorTargets: []const RenderTarget,
-    depthTarget: ?RenderTarget,
-
-    renderState: RenderState,
-
-    // If true, the graph will call Dispatch. If false, it will call Draw.
-    isCompute: bool,
-    dispatchX: u32,
-    dispatchY: u32,
-    dispatchZ: u32,
-
-    vertexCount: u32,
-
-    // The logical screen coordinates for your Scissor and Viewport
-    viewportX: f32,
-    viewportY: f32,
-    viewportW: f32,
-    viewportH: f32,
-
-    // The raw bytes of your bindless integer IDs and viewport dimensions
-    pushDataBytes: []const u8,
+    pushConstants: extern struct {
+        objectBufferId: u32,
+        cameraBufferId: u32,
+        renderTexId: u32,
+    },
 };
 
-pub const RayMarchData = extern struct {
-    objectBufferId: u32,
-    cameraBufferId: u32,
-    renderImgId: u32,
-    renderWidth: u32,
-    renderHeight: u32,
-    runTime: f32,
+pub const Attachment = struct {
+    typ: enum {Color, Depth, Stencil},
+    stage: vhE.PipeStage = .TopOfPipe,
+    access: vhE.PipeAccess = .None,
+    layout: vhE.ImageLayout = .General,
+};
+
+pub const AttachmentSlot = struct {
+    texId: TextureMeta.TexId,
+};
+
+pub const TextureDefinition = struct {
+    stage: vhE.PipeStage = .TopOfPipe,
+    access: vhE.PipeAccess = .None,
+    layout: vhE.ImageLayout = .General,
+    shaderSlot: ?u32 = null,
+};
+
+pub const TextureSlot = struct {
+    texId: TextureMeta.TexId,
+};
+
+pub const BufferDefinition = struct {
+    stage: vhE.PipeStage = .TopOfPipe,
+    access: vhE.PipeAccess = .None,
+    shaderSlot: ?u32 = null,
+};
+
+pub const BufferSlot = struct {
+    bufId: BufferMeta.BufId,
 };

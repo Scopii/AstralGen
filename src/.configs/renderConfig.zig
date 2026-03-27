@@ -30,8 +30,8 @@ pub const GPU_STATS_QUERYS: u8 = 32;
 pub const STATS_MASK: vk.VkQueryPipelineStatisticFlagBits =
     // vk.VK_QUERY_PIPELINE_STATISTIC_CLIPPING_INVOCATIONS_BIT |
     // vk.VK_QUERY_PIPELINE_STATISTIC_CLIPPING_PRIMITIVES_BIT |
-    vk.VK_QUERY_PIPELINE_STATISTIC_FRAGMENT_SHADER_INVOCATIONS_BIT |
-    vk.VK_QUERY_PIPELINE_STATISTIC_COMPUTE_SHADER_INVOCATIONS_BIT ;
+    vk.VK_QUERY_PIPELINE_STATISTIC_COMPUTE_SHADER_INVOCATIONS_BIT |
+    vk.VK_QUERY_PIPELINE_STATISTIC_FRAGMENT_SHADER_INVOCATIONS_BIT;
     // vk.VK_QUERY_PIPELINE_STATISTIC_TASK_SHADER_INVOCATIONS_BIT_EXT |
     // vk.VK_QUERY_PIPELINE_STATISTIC_MESH_SHADER_INVOCATIONS_BIT_EXT;
 
@@ -69,10 +69,10 @@ pub const TEX_DEPTH_FORMAT = vk.VK_FORMAT_D32_SFLOAT;
 pub const indirectSB = BufferMeta.create(.{ .id = .{ .val = 1 }, .mem = .Gpu, .typ = .Indirect, .len = 1, .elementSize = @sizeOf(vhT.IndirectData), .update = .PerFrame });
 pub const readbackSB = BufferMeta.create(.{ .id = .{ .val = 2 }, .mem = .CpuRead, .typ = .Storage, .len = 1, .elementSize = @sizeOf(vhT.ReadbackData), .update = .PerFrame });
 
-pub const objectSB = BufferMeta.create(.{ .id = .{ .val = 3 }, .mem = .Gpu, .typ = .Storage, .len = ENTITY_COUNT, .elementSize = @sizeOf(GpuObjectData), .update = .Rarely, .resize = .Fit });
+pub const entitySB = BufferMeta.create(.{ .id = .{ .val = 3 }, .mem = .Gpu, .typ = .Storage, .len = ENTITY_COUNT, .elementSize = @sizeOf(GpuObjectData), .update = .Rarely, .resize = .Fit });
 pub const camUB = BufferMeta.create(.{ .id = .{ .val = 4 }, .mem = .Gpu, .typ = .Uniform, .len = 1, .elementSize = @sizeOf(CameraData), .update = .Often, .resize = .Fit });
 pub const cam2UB = BufferMeta.create(.{ .id = .{ .val = 5 }, .mem = .Gpu, .typ = .Uniform, .len = 1, .elementSize = @sizeOf(CameraData), .update = .Often, .resize = .Fit });
-pub const BUFFERS: []const BufferMeta.BufInf = &.{ objectSB, camUB, cam2UB, indirectSB, readbackSB };
+pub const BUFFERS: []const BufferMeta.BufInf = &.{ entitySB, camUB, cam2UB, indirectSB, readbackSB };
 
 // Textures
 pub const rayTex = TextureMeta.create(.{ .id = .{ .val = 5 }, .mem = .Gpu, .typ = .Color, .width = 1920, .height = 1080, .update = .Rarely });
@@ -108,7 +108,7 @@ pub const compRayMarch: Pass = .{
         .workgroups = .{ .x = 8, .y = 8, .z = 1 },
     }),
     .bufUses = &.{
-        BufferUse.init(objectSB.id, .ComputeShader, .ShaderRead, 0),
+        BufferUse.init(entitySB.id, .ComputeShader, .ShaderRead, 0),
         BufferUse.init(camUB.id, .ComputeShader, .ShaderRead, 1),
         BufferUse.init(readbackSB.id, .ComputeShader, .ShaderWrite, 3),
     },
@@ -126,7 +126,7 @@ pub const compCull: Pass = .{
     }),
     .bufUses = &.{
         BufferUse.init(indirectSB.id, .ComputeShader, .ShaderReadWrite, 0),
-        BufferUse.init(objectSB.id, .ComputeShader, .ShaderRead, 1),
+        BufferUse.init(entitySB.id, .ComputeShader, .ShaderRead, 1),
     },
 };
 
@@ -195,7 +195,7 @@ pub const comp: Pass = .{
     }),
     .bufUses = &.{
         BufferUse.init(indirectSB.id, .ComputeShader, .ShaderReadWrite, 0),
-        BufferUse.init(objectSB.id, .ComputeShader, .ShaderRead, 1),
+        BufferUse.init(entitySB.id, .ComputeShader, .ShaderRead, 1),
     },
 };
 

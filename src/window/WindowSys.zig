@@ -15,7 +15,6 @@ const vk = @import("../.modules/vk.zig").c;
 const std = @import("std");
 const SDL_KEY_MAX = @import("../input/InputSys.zig").SDL_KEY_MAX;
 
-
 pub const WindowSys = struct {
     pub fn init(windowState: *WindowData) !void {
         if (sdl.SDL_Init(sdl.SDL_INIT_VIDEO) != true) {
@@ -38,6 +37,13 @@ pub const WindowSys = struct {
     }
 
     pub fn update(windowData: *WindowData, state: *const EngineData, windowQueue: *WindowQueue, rendererQueue: *RendererQueue, memoryMan: *MemoryManager) !void {
+        for (windowData.hiddenWindows.constSlice()) |windowId| {
+            const hiddenWindow = windowData.windows.getPtrByKey(windowId.val);
+            hiddenWindow.show();
+            hiddenWindow.setOpacity(1.0);
+        }
+        windowData.hiddenWindows.clear();
+
         for (windowQueue.get()) |windowEvent| {
             switch (windowEvent) {
                 .addWindow => |inf| try addWindow(windowData, inf.title, inf.w, inf.h, inf.renderTexId, inf.x, inf.y, inf.resize, inf.texIds, inf.viewIds),
@@ -58,17 +64,9 @@ pub const WindowSys = struct {
         cleanupWindows(windowData);
     }
 
-    pub fn showAllWindows(windowData: *WindowData) void {
-        for (windowData.windows.getItems()) |*win| win.show();
-    }
-
-    pub fn showOpacityAllWindows(windowData: *WindowData) void {
-        for (windowData.windows.getItems()) |*win| win.setOpacity(1.0);
-    }
-
     fn addWindow(windowData: *WindowData, title: [*c]const u8, w: c_int, h: c_int, renderTexId: TexId, x: c_int, y: c_int, resize: bool, texIds: []const TexId, viewIds: [4]?ViewportId) !void {
         const props = windowData.windowProps;
-        const flags = sdl.SDL_WINDOW_VULKAN | sdl.SDL_WINDOW_RESIZABLE | sdl.SDL_WINDOW_HIDDEN ; // | sdl.SDL_WINDOW_BORDERLESS
+        const flags = sdl.SDL_WINDOW_VULKAN | sdl.SDL_WINDOW_RESIZABLE | sdl.SDL_WINDOW_HIDDEN; // | sdl.SDL_WINDOW_BORDERLESS
         _ = sdl.SDL_SetNumberProperty(props, sdl.SDL_PROP_WINDOW_CREATE_FLAGS_NUMBER, @intCast(flags));
         _ = sdl.SDL_SetNumberProperty(props, sdl.SDL_PROP_WINDOW_CREATE_X_NUMBER, @intCast(x));
         _ = sdl.SDL_SetNumberProperty(props, sdl.SDL_PROP_WINDOW_CREATE_Y_NUMBER, @intCast(y));
@@ -85,6 +83,7 @@ pub const WindowSys = struct {
         try windowData.changedWindows.append(windowData.windows.getByKey(window.id.val));
         windowData.openWindows += 1;
         windowData.mainWindow = windowData.windows.getPtrByKey(window.id.val);
+        try windowData.hiddenWindows.append(window.id);
         std.debug.print("Window ID {} created to present Render ID {}\n", .{ window.id.val, renderTexId.val });
     }
 
@@ -152,12 +151,6 @@ pub const WindowSys = struct {
         const window = windowData.windows.getByKey(windowId.val);
         window.deinit();
         windowData.windows.remove(windowId.val);
-    }
-
-    fn resetMainWindowOpacity(windowData: *WindowData) void {
-        if (windowData.mainWindow) |window| {
-            if (window.getOpacity() == 0) window.setOpacity(1.0);
-        }
     }
 
     fn toggleMainFullscreen(windowData: *WindowData) void {

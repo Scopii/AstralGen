@@ -167,82 +167,92 @@ pub const App = struct {
 
     pub fn run(self: *App) !void {
         const renderer = &self.renderer;
-        var firstFrame = true;
         var frameData: FrameData = undefined;
 
         TimeSys.init(&self.data.time);
 
+        const US_PER_FRAME: u64 = std.time.us_per_s / 480;
+        var LAST_FRAME: u64 = @intCast(std.time.microTimestamp());
+        var US_WAITED: u64 = 0;
+
         while (true) {
-            // Shader Hotloading
-            if (shaderCon.SHADER_HOTLOAD == true) {
-                try ShaderSys.update(&self.data.shader, &self.shaderQueue, &self.rendererQueue, self.memoryMan);
-            }
+            const CUR_TIME: u64 = @intCast(std.time.microTimestamp());
+            const delta = CUR_TIME - LAST_FRAME;
+            LAST_FRAME = CUR_TIME;
+            US_WAITED += delta;
 
-            if (rc.EARLY_GPU_WAIT == true) try renderer.waitForGpu();
+            if (US_WAITED >= US_PER_FRAME) {
+                US_WAITED -= US_PER_FRAME;
+                std.debug.print("Frame Launched \n", .{});
 
-            // Poll OS Events
-            WindowSys.pollEvents(&self.data.window, &self.inputQueue, &renderer.imguiMan) catch |err| {
-                std.log.err("Error in pollEvents(): {}", .{err});
-                break;
-            };
-
-            // Handle Inputs
-            InputSys.update(&self.data.input, &self.inputQueue);
-            InputSys.convert(&self.data.input, &self.rendererQueue);
-
-            ViewportSys.update(&self.data.viewport, &self.data);
-
-            try WindowSys.update(&self.data.window, &self.data, &self.windowQueue, &self.rendererQueue, self.memoryMan);
-
-            // Close Or Idle
-            if (self.data.input.closeApp or self.data.window.appExit) return;
-            if (self.data.window.openWindows == 0) continue;
-
-            // Update Time
-            TimeSys.update(&self.data.time);
-            const dt = TimeSys.getDeltaTime(&self.data.time, .nano, f64);
-            frameData.runTime = TimeSys.getRuntime(&self.data.time, .seconds, f32);
-            frameData.deltaTime = @floatCast(dt);
-
-            try CameraSys.update(&self.data.entityData, dt, &self.data, &self.rendererQueue, self.memoryMan);
-
-            try RenderPrepSys.extractEntities(&self.data.entityData, &self.rendererQueue, self.memoryMan);
-
-            if (rc.CPU_PROFILING) std.debug.print("Cpu pre-Renderer Delta {d:.3} ms, ({d:.1} Real FPS)\n", .{ dt * 0.000001, 1.0 / (dt * 0.000000001) });
-
-            try self.renderer.update(&self.rendererQueue);
-
-            if (rc.EARLY_GPU_WAIT == false) try renderer.waitForGpu();
-
-            if (firstFrame) WindowSys.showAllWindows(&self.data.window);
-
-            // RENDER:
-            const targets = try renderer.beginDraw();
-
-            // UI per-window/viewport
-            for (targets) |swapchain| {
-                if (self.renderer.imguiMan.uiActive) {
-                    self.renderer.imguiMan.newFrame(swapchain.windowId, swapchain.extent.width, swapchain.extent.height);
-
-                    const window = self.data.window.windows.getByKey(swapchain.windowId);
-                    UiSys.buildWindowUi(&window, &self.data);
+                // Shader Hotloading
+                if (shaderCon.SHADER_HOTLOAD == true) {
+                    try ShaderSys.update(&self.data.shader, &self.shaderQueue, &self.rendererQueue, self.memoryMan);
                 }
-            }
 
-            // Cmd Recording and Draw
-            renderer.submitDraw(frameData, self.data.window.windows.getConstItems(), &self.data, targets) catch |err| {
-                std.log.err("Error in renderer.submitDraw(): {}", .{err});
-                break;
-            };
+                if (rc.EARLY_GPU_WAIT == true) try renderer.waitForGpu();
 
-            self.memoryMan.resetArena();
-            ShaderSys.freeFreshShaders(&self.data.shader, self.memoryMan.getAllocator()); // SHOULD CHANGE TO USE ARENA
+                // Poll OS Events
+                WindowSys.pollEvents(&self.data.window, &self.inputQueue, &renderer.imguiMan) catch |err| {
+                    std.log.err("Error in pollEvents(): {}", .{err});
+                    break;
+                };
 
-            // if (rc.CPU_PROFILING or renderer.renderGraph.useGpuProfiling or rc.SWAPCHAIN_PROFILING) std.debug.print("\n", .{});
+                // Handle Inputs
+                InputSys.update(&self.data.input, &self.inputQueue);
+                InputSys.convert(&self.data.input, &self.rendererQueue);
 
-            if (firstFrame == true) {
-                WindowSys.showOpacityAllWindows(&self.data.window);
-                firstFrame = false;
+                ViewportSys.update(&self.data.viewport, &self.data);
+
+                try WindowSys.update(&self.data.window, &self.data, &self.windowQueue, &self.rendererQueue, self.memoryMan);
+
+                // Close Or Idle
+                if (self.data.input.closeApp or self.data.window.appExit) return;
+                if (self.data.window.openWindows == 0) continue;
+
+                // Update Time
+                TimeSys.update(&self.data.time);
+                const dt = TimeSys.getDeltaTime(&self.data.time, .nano, f64);
+                frameData.runTime = TimeSys.getRuntime(&self.data.time, .seconds, f32);
+                frameData.deltaTime = @floatCast(dt);
+
+                try CameraSys.update(&self.data.entityData, dt, &self.data, &self.rendererQueue, self.memoryMan);
+
+                try RenderPrepSys.extractEntities(&self.data.entityData, &self.rendererQueue, self.memoryMan);
+
+                if (rc.CPU_PROFILING) std.debug.print("Cpu pre-Renderer Delta {d:.3} ms, ({d:.1} Real FPS)\n", .{ dt * 0.000001, 1.0 / (dt * 0.000000001) });
+
+                try self.renderer.update(&self.rendererQueue);
+
+                if (rc.EARLY_GPU_WAIT == false) try renderer.waitForGpu();
+
+                // RENDER:
+                const targets = try renderer.beginDraw();
+
+                // UI per-window/viewport
+                for (targets) |swapchain| {
+                    if (self.renderer.imguiMan.uiActive) {
+                        self.renderer.imguiMan.newFrame(swapchain.windowId, swapchain.extent.width, swapchain.extent.height);
+
+                        const window = self.data.window.windows.getByKey(swapchain.windowId);
+                        UiSys.buildWindowUi(&window, &self.data);
+                    }
+                }
+
+                // Cmd Recording and Draw
+                renderer.submitDraw(frameData, self.data.window.windows.getConstItems(), &self.data, targets) catch |err| {
+                    std.log.err("Error in renderer.submitDraw(): {}", .{err});
+                    break;
+                };
+
+                self.memoryMan.resetArena();
+                ShaderSys.freeFreshShaders(&self.data.shader, self.memoryMan.getAllocator()); // SHOULD CHANGE TO USE ARENA
+
+                // if (rc.CPU_PROFILING or renderer.renderGraph.useGpuProfiling or rc.SWAPCHAIN_PROFILING) std.debug.print("\n", .{});
+
+            } else {
+                const REMAINING_US = US_PER_FRAME - US_WAITED;
+                if (REMAINING_US > 2000) std.Thread.sleep((REMAINING_US - 1000) * 1000);
             }
         }
     }

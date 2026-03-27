@@ -40,7 +40,7 @@ pub const RenderPrepSys = struct {
         const Payload = std.meta.Child(PayloadPtr);
         const updateBufferPtr = try arena.create(Payload);
 
-        updateBufferPtr.* = .{ .bufId = rc.objectSB.id, .data = std.mem.sliceAsBytes(gpuDataArray) };
+        updateBufferPtr.* = .{ .bufId = rc.entitySB.id, .data = std.mem.sliceAsBytes(gpuDataArray) };
 
         rendererQueue.append(.{ .updateBuffer = updateBufferPtr });
     }
