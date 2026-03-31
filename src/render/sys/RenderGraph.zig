@@ -71,7 +71,7 @@ pub const RenderGraph = struct {
         return cmd;
     }
 
-    pub fn recordTransfers(self: *RenderGraph, cmd: *Cmd, resMan: *ResourceMan) !void {
+    fn recordTransfers(self: *RenderGraph, cmd: *Cmd, resMan: *ResourceMan) !void {
         var resUpdater = &resMan.updater;
         const stagingBuf = resUpdater.getStagingBuffer(cmd.flightId);
 
@@ -124,12 +124,12 @@ pub const RenderGraph = struct {
         try self.bufBarriers.append(buffer.createBufferBarrier(neededState));
     }
 
-    pub fn recordPassBarriers(self: *RenderGraph, cmd: *const Cmd, pass: Pass, resMan: *ResourceMan) !void {
-        for (pass.bufUses) |bufUse| {
+    fn recordPassBarriers(self: *RenderGraph, cmd: *const Cmd, pass: Pass, resMan: *ResourceMan) !void {
+        for (pass.getBufUses()) |bufUse| {
             const buffer = try resMan.get(bufUse.bufId, cmd.flightId);
             try self.checkBufferState(buffer, bufUse.getNeededState());
         }
-        for (pass.texUses) |texUse| {
+        for (pass.getTexUses()) |texUse| {
             const texMeta = try resMan.getMeta(texUse.texId);
             const tex = try resMan.get(texUse.texId, cmd.flightId);
             try self.checkImageState(tex, texMeta.subRange, texUse.getNeededState());
@@ -139,12 +139,12 @@ pub const RenderGraph = struct {
             const tex = try resMan.get(colorAtt.texId, cmd.flightId);
             try self.checkImageState(tex, texMeta.subRange, colorAtt.getNeededState());
         }
-        if (pass.getDepthAtt()) |depthAtt| {
+        if (pass.depthAtt) |depthAtt| {
             const texMeta = try resMan.getMeta(depthAtt.texId);
             const tex = try resMan.get(depthAtt.texId, cmd.flightId);
             try self.checkImageState(tex, texMeta.subRange, depthAtt.getNeededState());
         }
-        if (pass.getStencilAtt()) |stencilAtt| {
+        if (pass.stencilAtt) |stencilAtt| {
             const texMeta = try resMan.getMeta(stencilAtt.texId);
             const tex = try resMan.get(stencilAtt.texId, cmd.flightId);
             try self.checkImageState(tex, texMeta.subRange, stencilAtt.getNeededState());
@@ -165,12 +165,12 @@ pub const RenderGraph = struct {
         } else cmd.dispatch(dispatch.x, dispatch.y, dispatch.z);
     }
 
-    pub fn recordPasses(self: *RenderGraph, cmd: *Cmd, passes: []Pass, frameData: FrameData, resMan: *ResourceMan, shaderMan: *ShaderManager) !void {
+    fn recordPasses(self: *RenderGraph, cmd: *Cmd, passes: []Pass, frameData: FrameData, resMan: *ResourceMan, shaderMan: *ShaderManager) !void {
         for (passes, 0..) |pass, i| {
             cmd.startTimeQuery(.TopOfPipe, @intCast(i), pass.name);
             cmd.beginStatsQuery(@intCast(i), pass.name);
 
-            const shaders = shaderMan.getShaders(pass.shaderIds)[0..pass.shaderIds.len];
+            const shaders = shaderMan.getShaders(pass.getShaderIds())[0..pass.shaderCount];
             cmd.bindShaders(shaders);
 
             const pushData = try PushData.init(resMan, pass, frameData, cmd.flightId);
@@ -178,62 +178,63 @@ pub const RenderGraph = struct {
 
             try self.recordPassBarriers(cmd, pass, resMan);
 
-            switch (pass.typ) {
-                .classic => |classic| {
-                    cmd.updateRenderState(classic.renderState);
-                    try recordGraphics(cmd, pushData.width, pushData.height, classic, resMan);
+            switch (pass.execution) {
+                .taskOrMesh, .taskOrMeshIndirect, .graphics => {
+                    cmd.updateRenderState(pass.renderState);
+                    try recordGraphics(cmd, pushData.width, pushData.height, pass, resMan);
                 },
-                .compute => |comp| try recordCompute(cmd, comp.workgroups, comp.mainTexId, resMan),
+                .computeOnImg => |computeOnImg| try recordCompute(cmd, computeOnImg.workgroups, computeOnImg.mainTexId, resMan),
+                .compute => |compute| try recordCompute(cmd, compute.workgroups, null, resMan),
             }
             cmd.endTimeQuery(.BotOfPipe, @intCast(i));
             cmd.endStatsQuery(@intCast(i));
         }
     }
 
-    fn recordGraphics(cmd: *const Cmd, width: u32, height: u32, passData: Pass.ClassicPass, resMan: *ResourceMan) !void {
-        if (passData.colorAtts.len > 8) return error.TooManyAttachments;
+    fn recordGraphics(cmd: *const Cmd, width: u32, height: u32, pass: Pass, resMan: *ResourceMan) !void {
+        if (pass.colorAttCount > 8) return error.TooManyAttachments;
 
-        const depthInf: ?vk.VkRenderingAttachmentInfo = if (passData.depthAtt) |depth| blk: {
+        const depthInf: ?vk.VkRenderingAttachmentInfo = if (pass.depthAtt) |depth| blk: {
             const texMeta = try resMan.getMeta(depth.texId);
             const tex = try resMan.get(depth.texId, cmd.flightId);
             break :blk tex.createAttachment(texMeta.texType, depth.clear);
         } else null;
 
-        const stencilInf: ?vk.VkRenderingAttachmentInfo = if (passData.stencilAtt) |stencil| blk: {
+        const stencilInf: ?vk.VkRenderingAttachmentInfo = if (pass.stencilAtt) |stencil| blk: {
             const texMeta = try resMan.getMeta(stencil.texId);
             const tex = try resMan.get(stencil.texId, cmd.flightId);
             break :blk tex.createAttachment(texMeta.texType, stencil.clear);
         } else null;
 
         var colorInfs: [8]vk.VkRenderingAttachmentInfo = undefined;
-        for (0..passData.colorAtts.len) |i| {
-            const colorAtt = passData.colorAtts[i];
+        for (0..pass.getColorAtts().len) |i| {
+            const colorAtt = pass.colorAtts[i];
             const texMeta = try resMan.getMeta(colorAtt.texId);
             const tex = try resMan.get(colorAtt.texId, cmd.flightId);
             colorInfs[i] = tex.createAttachment(texMeta.texType, colorAtt.clear);
         }
 
         cmd.setViewportAndScissor(0, 0, @floatFromInt(width), @floatFromInt(height));
-        cmd.beginRendering(width, height, colorInfs[0..passData.colorAtts.len], if (depthInf) |*d| d else null, if (stencilInf) |*s| s else null);
+        cmd.beginRendering(width, height, colorInfs[0..pass.colorAttCount], if (depthInf) |*d| d else null, if (stencilInf) |*s| s else null);
 
-        switch (passData.classicTyp) {
-            .taskMesh => |taskMesh| {
-                if (taskMesh.indirectBuf) |indirectBuf| {
-                    const buffer = try resMan.get(indirectBuf.id, cmd.flightId);
-                    cmd.drawMeshTasksIndirect(buffer.handle, indirectBuf.offset, 1, @sizeOf(vhT.IndirectData));
-                } else {
-                    cmd.drawMeshTasks(taskMesh.workgroups.x, taskMesh.workgroups.y, taskMesh.workgroups.z);
-                }
+        switch (pass.execution) {
+            .taskOrMesh => |taskMesh| {
+                cmd.drawMeshTasks(taskMesh.workgroups.x, taskMesh.workgroups.y, taskMesh.workgroups.z);
+            },
+            .taskOrMeshIndirect => |taskOrMeshIndirect| {
+                const buffer = try resMan.get(taskOrMeshIndirect.indirectBuf, cmd.flightId);
+                cmd.drawMeshTasksIndirect(buffer.handle, taskOrMeshIndirect.indirectBufOffset, 1, @sizeOf(vhT.IndirectData));
             },
             .graphics => |graphics| {
                 cmd.setEmptyVertexInput();
-                cmd.draw(graphics.draw.vertices, graphics.draw.instances, 0, 0);
+                cmd.draw(graphics.vertices, graphics.instances, 0, 0);
             },
+            else => return error.ComputePassLandedInGraphicsRecording,
         }
         cmd.endRendering();
     }
 
-    pub fn recordSwapchainBlits(self: *RenderGraph, cmd: *Cmd, swapchains: []const *Swapchain, resMan: *ResourceMan, windows: []const Window, data: *const EngineData) !void {
+    fn recordSwapchainBlits(self: *RenderGraph, cmd: *Cmd, swapchains: []const *Swapchain, resMan: *ResourceMan, windows: []const Window, data: *const EngineData) !void {
         cmd.startTimeQuery(.TopOfPipe, 54, "Blits Prep");
 
         for (swapchains) |swapchain| { // Render Texture and Swapchain Preperations
@@ -284,7 +285,7 @@ pub const RenderGraph = struct {
         cmd.endTimeQuery(.BotOfPipe, 55);
     }
 
-    pub fn recordImGui(self: *RenderGraph, cmd: *Cmd, swapchains: []const *Swapchain, imguiMan: *ImGuiMan) !void {
+    fn recordImGui(self: *RenderGraph, cmd: *Cmd, swapchains: []const *Swapchain, imguiMan: *ImGuiMan) !void {
         cmd.startTimeQuery(.TopOfPipe, 60, "ImGui");
 
         for (swapchains) |swapchain| {

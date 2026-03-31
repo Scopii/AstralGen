@@ -8,6 +8,7 @@ const Pass = @import("../render/types/base/Pass.zig").Pass;
 const vhT = @import("../render/help/Types.zig");
 const vk = @import("../.modules/vk.zig").c;
 const sc = @import("shaderConfig.zig");
+const pDef = @import("passConfig.zig");
 
 const GpuObjectData = @import("../render/help/Types.zig").GpuObjectData;
 
@@ -32,8 +33,8 @@ pub const STATS_MASK: vk.VkQueryPipelineStatisticFlagBits =
     // vk.VK_QUERY_PIPELINE_STATISTIC_CLIPPING_PRIMITIVES_BIT |
     vk.VK_QUERY_PIPELINE_STATISTIC_COMPUTE_SHADER_INVOCATIONS_BIT |
     vk.VK_QUERY_PIPELINE_STATISTIC_FRAGMENT_SHADER_INVOCATIONS_BIT;
-    // vk.VK_QUERY_PIPELINE_STATISTIC_TASK_SHADER_INVOCATIONS_BIT_EXT |
-    // vk.VK_QUERY_PIPELINE_STATISTIC_MESH_SHADER_INVOCATIONS_BIT_EXT;
+// vk.VK_QUERY_PIPELINE_STATISTIC_TASK_SHADER_INVOCATIONS_BIT_EXT |
+// vk.VK_QUERY_PIPELINE_STATISTIC_MESH_SHADER_INVOCATIONS_BIT_EXT;
 
 pub const GPU_READBACK = false;
 pub const CPU_PROFILING = false;
@@ -70,9 +71,9 @@ pub const indirectSB = BufferMeta.create(.{ .id = .{ .val = 1 }, .mem = .Gpu, .t
 pub const readbackSB = BufferMeta.create(.{ .id = .{ .val = 2 }, .mem = .CpuRead, .typ = .Storage, .len = 1, .elementSize = @sizeOf(vhT.ReadbackData), .update = .PerFrame });
 
 pub const entitySB = BufferMeta.create(.{ .id = .{ .val = 3 }, .mem = .Gpu, .typ = .Storage, .len = ENTITY_COUNT, .elementSize = @sizeOf(GpuObjectData), .update = .Rarely, .resize = .Fit });
-pub const camUB = BufferMeta.create(.{ .id = .{ .val = 4 }, .mem = .Gpu, .typ = .Uniform, .len = 1, .elementSize = @sizeOf(CameraData), .update = .Often, .resize = .Fit });
-pub const cam2UB = BufferMeta.create(.{ .id = .{ .val = 5 }, .mem = .Gpu, .typ = .Uniform, .len = 1, .elementSize = @sizeOf(CameraData), .update = .Often, .resize = .Fit });
-pub const BUFFERS: []const BufferMeta.BufInf = &.{ entitySB, camUB, cam2UB, indirectSB, readbackSB };
+pub const mainCamUB = BufferMeta.create(.{ .id = .{ .val = 4 }, .mem = .Gpu, .typ = .Uniform, .len = 1, .elementSize = @sizeOf(CameraData), .update = .Often, .resize = .Fit });
+pub const debugCamUB = BufferMeta.create(.{ .id = .{ .val = 5 }, .mem = .Gpu, .typ = .Uniform, .len = 1, .elementSize = @sizeOf(CameraData), .update = .Often, .resize = .Fit });
+pub const BUFFERS: []const BufferMeta.BufInf = &.{ entitySB, mainCamUB, debugCamUB, indirectSB, readbackSB };
 
 // Textures
 pub const rayTex = TextureMeta.create(.{ .id = .{ .val = 5 }, .mem = .Gpu, .typ = .Color, .width = 1920, .height = 1080, .update = .Rarely });
@@ -86,325 +87,74 @@ pub const TEXTURES: []const TextureMeta.TexInf = &.{ mainTex, mainDepthTex, debu
 
 // Passes
 pub const PASSES: []const Pass = &.{
-    compCull,
-    mainCull,
-    debugCull,
-    frustum,
-
-    // comp,
-    // main,
-    // debug,
-
-    compRayMarch,
-
-    editorGrid,
-};
-
-pub const compRayMarch: Pass = .{
-    .name = "CompTest",
-    .shaderIds = &.{sc.t1Comp.id},
-    .typ = Pass.createCompute(.{
-        .mainTexId = rayTex.id,
-        .workgroups = .{ .x = 8, .y = 8, .z = 1 },
+    pDef.CullComp(.{
+        .name = "Cull-Comp",
+        .indirectBuf = indirectSB.id,
+        .entityBuf = entitySB.id,
     }),
-    .bufUses = &.{
-        BufferUse.init(entitySB.id, .ComputeShader, .ShaderRead, 0),
-        BufferUse.init(camUB.id, .ComputeShader, .ShaderRead, 1),
-        BufferUse.init(readbackSB.id, .ComputeShader, .ShaderWrite, 3),
-    },
-    .texUses = &.{
-        TextureUse.init(rayTex.id, .ComputeShader, .ShaderWrite, .General, 2),
-    },
-};
 
-// Cull Test
-pub const compCull: Pass = .{
-    .name = "Comp",
-    .shaderIds = &.{sc.cullTestComp.id},
-    .typ = Pass.createCompute(.{
-        .workgroups = .{ .x = 1, .y = 1, .z = 1 },
+    pDef.Cull(.{
+        .name = "Cull-Main",
+        .mainTex = mainTex.id,
+        .mainDepthTex = mainDepthTex.id,
+        .indirectBuf = indirectSB.id,
+        .viewCam = mainCamUB.id,
+        .cullCam = mainCamUB.id,
     }),
-    .bufUses = &.{
-        BufferUse.init(indirectSB.id, .ComputeShader, .ShaderReadWrite, 0),
-        BufferUse.init(entitySB.id, .ComputeShader, .ShaderRead, 1),
-    },
-};
 
-pub const mainCull: Pass = .{
-    .name = "Main",
-    .shaderIds = &.{ sc.cullTestMesh.id, sc.cullTestFrag.id },
-    .typ = Pass.createClassic(.{
-        .classicTyp = Pass.ClassicTyp.taskMeshData(.{
-            .workgroups = .{ .x = 1, .y = 1, .z = 1 },
-            .indirectBuf = .{ .id = indirectSB.id, .offset = 0 },
-        }),
-        .mainTexId = mainTex.id,
-        .colorAtts = &.{Attachment.init(mainTex.id, .ColorAtt, .ColorAttReadWrite, true)},
-        .depthAtt = Attachment.init(mainDepthTex.id, .EarlyFragTest, .DepthStencilWrite, true),
-        .renderState = .{
-            .depthTest = vk.VK_TRUE,
-            .depthWrite = vk.VK_TRUE,
-            .depthCompare = vk.VK_COMPARE_OP_LESS,
-            .cullMode = vk.VK_CULL_MODE_NONE,
-            // .polygonMode = vk.VK_PRIMITIVE_TOPOLOGY_LINE_LIST,
-            // .lineWidth = 2.0,
-            // .frontFace = vk.VK_FRONT_FACE_COUNTER_CLOCKWISE,
-        },
+    pDef.Cull(.{
+        .name = "Cull-Debug",
+        .mainTex = debugTex.id,
+        .mainDepthTex = debugDepthTex.id,
+        .indirectBuf = indirectSB.id,
+        .viewCam = debugCamUB.id,
+        .cullCam = mainCamUB.id,
     }),
-    .bufUses = &.{
-        BufferUse.init(indirectSB.id, .DrawIndirect, .IndirectRead, null),
-        BufferUse.init(camUB.id, .FragShader, .ShaderRead, 0),
-        BufferUse.init(camUB.id, .FragShader, .ShaderRead, 1),
-    },
-};
 
-pub const debugCull: Pass = .{
-    .name = "Debug",
-    .shaderIds = &.{ sc.cullTestMesh.id, sc.cullTestFrag.id },
-    .typ = Pass.createClassic(.{
-        .classicTyp = Pass.ClassicTyp.taskMeshData(.{
-            .workgroups = .{ .x = 1, .y = 1, .z = 1 },
-            .indirectBuf = .{ .id = indirectSB.id, .offset = 0 },
-        }),
-        .mainTexId = debugTex.id,
-        .colorAtts = &.{Attachment.init(debugTex.id, .ColorAtt, .ColorAttReadWrite, true)},
-        .depthAtt = Attachment.init(debugDepthTex.id, .EarlyFragTest, .DepthStencilWrite, true),
-        .renderState = .{
-            .depthTest = vk.VK_TRUE,
-            .depthWrite = vk.VK_TRUE,
-            .depthCompare = vk.VK_COMPARE_OP_LESS,
-            .cullMode = vk.VK_CULL_MODE_NONE,
-            // .polygonMode = vk.VK_PRIMITIVE_TOPOLOGY_LINE_LIST,
-            // .lineWidth = 2.0,
-            // .frontFace = vk.VK_FRONT_FACE_COUNTER_CLOCKWISE,
-        },
+    pDef.FrustumView(.{
+        .name = "FrustumView",
+        .debugTex = debugTex.id,
+        .debugDepthTex = debugDepthTex.id,
+        .frustumCamBuf = mainCamUB.id,
+        .viewCamBuf = debugCamUB.id,
     }),
-    .bufUses = &.{
-        BufferUse.init(indirectSB.id, .DrawIndirect, .IndirectRead, null),
-        BufferUse.init(cam2UB.id, .FragShader, .ShaderRead, 0),
-        BufferUse.init(camUB.id, .FragShader, .ShaderRead, 1),
-    },
-};
 
-// Normal Pass
-pub const comp: Pass = .{
-    .name = "Comp",
-    .shaderIds = &.{sc.quantComp.id},
-    .typ = Pass.createCompute(.{
-        .workgroups = .{ .x = 1, .y = 1, .z = 1 },
+    // pDef.QuantComp(.{
+    //     .name = "Quant-Comp",
+    //     .indirectBuf = indirectSB.id,
+    //     .entityBuf = entitySB.id,
+    // }),
+
+    // pDef.Quant(.{
+    //     .name = "Quant-Main",
+    //     .debugTex = mainTex.id,
+    //     .debugDepthTex = mainDepthTex.id,
+    //     .indirectBuf = indirectSB.id,
+    //     .viewCam = mainCamUB.id,
+    //     .cullCam = mainCamUB.id,
+    // }),
+
+    // pDef.Quant(.{
+    //     .name = "Quant-Debug",
+    //     .debugTex = debugTex.id,
+    //     .debugDepthTex = debugDepthTex.id,
+    //     .indirectBuf = indirectSB.id,
+    //     .viewCam = debugCamUB.id,
+    //     .cullCam = mainCamUB.id,
+    // }),
+
+    pDef.CompRayMarch(.{
+        .name = "CompTest",
+        .entityBuf = entitySB.id,
+        .rayTex = rayTex.id,
+        .camBuf = mainCamUB.id,
+        .readbackBuf = readbackSB.id,
     }),
-    .bufUses = &.{
-        BufferUse.init(indirectSB.id, .ComputeShader, .ShaderReadWrite, 0),
-        BufferUse.init(entitySB.id, .ComputeShader, .ShaderRead, 1),
-    },
-};
 
-pub const main: Pass = .{
-    .name = "Main",
-    .shaderIds = &.{ sc.quantMesh.id, sc.quantFrag.id },
-    .typ = Pass.createClassic(.{
-        .classicTyp = Pass.ClassicTyp.taskMeshData(.{
-            .workgroups = .{ .x = 1, .y = 1, .z = 1 },
-            .indirectBuf = .{ .id = indirectSB.id, .offset = 0 },
-        }),
-        .mainTexId = mainTex.id,
-        .colorAtts = &.{Attachment.init(mainTex.id, .ColorAtt, .ColorAttReadWrite, true)},
-        .depthAtt = Attachment.init(mainDepthTex.id, .EarlyFragTest, .DepthStencilWrite, true),
-        .renderState = .{
-            .depthTest = vk.VK_TRUE,
-            .depthWrite = vk.VK_TRUE,
-            .depthCompare = vk.VK_COMPARE_OP_LESS,
-            .cullMode = vk.VK_CULL_MODE_NONE,
-            // .polygonMode = vk.VK_PRIMITIVE_TOPOLOGY_LINE_LIST,
-            // .lineWidth = 2.0,
-            // .frontFace = vk.VK_FRONT_FACE_COUNTER_CLOCKWISE,
-        },
+    pDef.EditorGrid(.{
+        .name = "Editor-Grid",
+        .debugTex = debugTex.id,
+        .debugDepthTex = debugDepthTex.id,
+        .camBuf = debugCamUB.id,
     }),
-    .bufUses = &.{
-        BufferUse.init(indirectSB.id, .DrawIndirect, .IndirectRead, null),
-        BufferUse.init(camUB.id, .FragShader, .ShaderRead, 0),
-        BufferUse.init(camUB.id, .FragShader, .ShaderRead, 1),
-    },
 };
-
-pub const debug: Pass = .{
-    .name = "Debug",
-    .shaderIds = &.{ sc.quantMesh.id, sc.quantFrag.id },
-    .typ = Pass.createClassic(.{
-        .classicTyp = Pass.ClassicTyp.taskMeshData(.{
-            .workgroups = .{ .x = 1, .y = 1, .z = 1 },
-            .indirectBuf = .{ .id = indirectSB.id, .offset = 0 },
-        }),
-        .mainTexId = debugTex.id,
-        .colorAtts = &.{Attachment.init(debugTex.id, .ColorAtt, .ColorAttReadWrite, true)},
-        .depthAtt = Attachment.init(debugDepthTex.id, .EarlyFragTest, .DepthStencilWrite, true),
-        .renderState = .{
-            .depthTest = vk.VK_TRUE,
-            .depthWrite = vk.VK_TRUE,
-            .depthCompare = vk.VK_COMPARE_OP_LESS,
-            .cullMode = vk.VK_CULL_MODE_NONE,
-            // .polygonMode = vk.VK_PRIMITIVE_TOPOLOGY_LINE_LIST,
-            // .lineWidth = 2.0,
-            // .frontFace = vk.VK_FRONT_FACE_COUNTER_CLOCKWISE,
-        },
-    }),
-    .bufUses = &.{
-        BufferUse.init(indirectSB.id, .DrawIndirect, .IndirectRead, null),
-        BufferUse.init(cam2UB.id, .FragShader, .ShaderRead, 0),
-        BufferUse.init(camUB.id, .FragShader, .ShaderRead, 1),
-    },
-};
-
-pub const frustum: Pass = .{
-    .name = "Frustum",
-    .shaderIds = &.{ sc.frustumMesh.id, sc.quantFrag.id },
-    .typ = Pass.createClassic(.{
-        .classicTyp = Pass.ClassicTyp.taskMeshData(.{
-            .workgroups = .{ .x = 1, .y = 1, .z = 1 },
-        }),
-        .mainTexId = debugTex.id,
-        .colorAtts = &.{Attachment.init(debugTex.id, .ColorAtt, .ColorAttReadWrite, false)},
-        .depthAtt = Attachment.init(debugDepthTex.id, .EarlyFragTest, .DepthStencilWrite, false),
-        .renderState = .{
-            .depthTest = vk.VK_FALSE,
-            .depthWrite = vk.VK_FALSE,
-            .lineWidth = 2.0,
-        },
-    }),
-    .bufUses = &.{
-        BufferUse.init(camUB.id, .MeshShader, .ShaderRead, 0),
-        BufferUse.init(cam2UB.id, .MeshShader, .ShaderRead, 1),
-    },
-};
-
-pub const editorGrid: Pass = .{
-    .name = "Editor-Grid",
-    .shaderIds = &.{ sc.editorGridMesh.id, sc.editorGridFrag.id },
-    .typ = Pass.createClassic(.{
-        .classicTyp = Pass.ClassicTyp.taskMeshData(.{
-            .workgroups = .{ .x = 1, .y = 1, .z = 1 },
-        }),
-        .mainTexId = debugTex.id,
-        .colorAtts = &.{Attachment.init(debugTex.id, .ColorAtt, .ColorAttReadWrite, false)},
-        .depthAtt = Attachment.init(debugDepthTex.id, .EarlyFragTest, .DepthStencilWrite, false),
-        .renderState = .{
-            .depthTest = vk.VK_TRUE,
-            .depthWrite = vk.VK_TRUE,
-            .depthCompare = vk.VK_COMPARE_OP_LESS,
-            .cullMode = vk.VK_CULL_MODE_NONE,
-        },
-    }),
-    .bufUses = &.{
-        BufferUse.init(cam2UB.id, .MeshShader, .ShaderRead, 0),
-    },
-};
-
-// pub const compTex = Texture.create(.{ .id = .{ .val = 1 }, .mem = .Gpu, .typ = .Color, .width = 500, .height = 500 });
-// pub const grapTex = Texture.create(.{ .id = .{ .val = 2 }, .mem = .Gpu, .typ = .Color, .width = 300, .height = 300 });
-// pub const meshTex = Texture.create(.{ .id = .{ .val = 3 }, .mem = .Gpu, .typ = .Color, .width = 100, .height = 100 });
-// pub const taskTex = Texture.create(.{ .id = .{ .val = 4 }, .mem = .Gpu, .typ = .Color, .width = 1920, .height = 1920 });
-// pub const testTex = Texture.create(.{ .id = .{ .val = 5 }, .mem = .Gpu, .typ = .Color, .width = 1920, .height = 1920 });
-// pub const depthTex = Texture.create(.{ .id = .{ .val = 11 }, .mem = .Gpu, .typ = .Depth, .width = 1920, .height = 1920 });
-// pub const textures: []const Texture.TexInf = &.{ compTex, grapTex, meshTex, taskTex, testTex, depthTex };
-
-// pub const passes: []const Pass = &.{ compTest, taskTest, gridTest, grapTest, meshTest, indirectCompTest, indirectTaskTest };
-
-// pub const compTest: Pass = .{
-//     .name = "CompTest",
-//     .shaderIds = &.{sc.t1Comp.id},
-//     .typ = Pass.createCompute(.{
-//         .mainTexId = compTex.id,
-//         .workgroups = .{ .x = 8, .y = 8, .z = 1 },
-//     }),
-//     .bufUses = &.{
-//         BufferUse.init(objectSB.id, .ComputeShader, .ShaderRead, 0),
-//         BufferUse.init(cameraUB.id, .ComputeShader, .ShaderRead, 1),
-//         BufferUse.init(readbackSB.id, .ComputeShader, .ShaderWrite, 3),
-//     },
-//     .texUses = &.{
-//         TextureUse.init(compTex.id, .ComputeShader, .ShaderWrite, .General, 2),
-//     },
-// };
-
-// const grapTest: Pass = .{
-//     .name = "GrapTest",
-//     .shaderIds = &.{ sc.t2Frag.id, sc.t2Vert.id },
-//     .typ = Pass.createClassic(.{
-//         .classicTyp = Pass.ClassicTyp.graphicsData(.{}),
-//         .mainTexId = grapTex.id,
-//         .colorAtts = &.{Attachment.init(grapTex.id, .ColorAtt, .ColorAttReadWrite, false)},
-//         .depthAtt = Attachment.init(depthTex.id, .EarlyFragTest, .DepthStencilRead, false),
-//     }),
-//     .bufUses = &.{
-//         BufferUse.init(objectSB.id, .FragShader, .ShaderRead, 0),
-//         BufferUse.init(cameraUB.id, .FragShader, .ShaderRead, 1),
-//     },
-// };
-
-// const meshTest: Pass = .{
-//     .name = "MeshTest",
-//     .shaderIds = &.{ sc.t3Mesh.id, sc.t3Frag.id },
-//     .typ = Pass.createClassic(.{
-//         .classicTyp = Pass.ClassicTyp.taskMeshData(.{ .workgroups = .{ .x = 1, .y = 1, .z = 1 } }),
-//         .mainTexId = meshTex.id,
-//         .colorAtts = &.{Attachment.init(meshTex.id, .ColorAtt, .ColorAttReadWrite, false)},
-//     }),
-//     .bufUses = &.{
-//         BufferUse.init(objectSB.id, .FragShader, .ShaderRead, 0),
-//         BufferUse.init(cameraUB.id, .FragShader, .ShaderRead, 1),
-//     },
-// };
-
-// const taskTest: Pass = .{
-//     .name = "TaskTest",
-//     .shaderIds = &.{ sc.t4Task.id, sc.t4Mesh.id, sc.t4Frag.id },
-//     .typ = Pass.createClassic(.{
-//         .classicTyp = Pass.ClassicTyp.taskMeshData(.{ .workgroups = .{ .x = 1, .y = 1, .z = 1 } }),
-//         .mainTexId = taskTex.id,
-//         .colorAtts = &.{Attachment.init(taskTex.id, .ColorAtt, .ColorAttReadWrite, false)},
-//     }),
-//     .bufUses = &.{
-//         BufferUse.init(objectSB.id, .FragShader, .ShaderRead, 0),
-//         BufferUse.init(cameraUB.id, .FragShader, .ShaderRead, 1),
-//     },
-// };
-
-// const gridTest: Pass = .{
-//     .name = "GridTest",
-//     .shaderIds = &.{ sc.gridTask.id, sc.gridMesh.id, sc.gridFrag.id },
-//     .typ = Pass.createClassic(.{
-//         .classicTyp = Pass.ClassicTyp.taskMeshData(.{ .workgroups = .{ .x = 1, .y = 1, .z = 1 } }),
-//         .mainTexId = taskTex.id,
-//         .colorAtts = &.{Attachment.init(taskTex.id, .ColorAtt, .ColorAttReadWrite, true)},
-//     }),
-//     .bufUses = &.{
-//         BufferUse.init(cameraUB.id, .TaskShader, .ShaderRead, 0),
-//     },
-// };
-
-// pub const indirectCompTest: Pass = .{
-//     .name = "IndirectCompTest",
-//     .shaderIds = &.{sc.indirectComp.id},
-//     .typ = Pass.createCompute(.{
-//         .workgroups = .{ .x = 1, .y = 1, .z = 1 },
-//     }),
-//     .bufUses = &.{
-//         BufferUse.init(indirectSB.id, .ComputeShader, .ShaderReadWrite, 0),
-//     },
-// };
-
-// const indirectTaskTest: Pass = .{
-//     .name = "IndirectTaskTest",
-//     .shaderIds = &.{ sc.indirectTask.id, sc.indirectMesh.id, sc.indirectFrag.id },
-//     .typ = Pass.createClassic(.{
-//         .classicTyp = Pass.ClassicTyp.taskMeshData(.{
-//             .workgroups = .{ .x = 1, .y = 1, .z = 1 },
-//             .indirectBuf = .{ .id = indirectSB.id, .offset = 0 },
-//         }),
-//         .mainTexId = taskTex.id,
-//         .colorAtts = &.{Attachment.init(taskTex.id, .ColorAtt, .ColorAttReadWrite, false)},
-//     }),
-//     .bufUses = &.{
-//         BufferUse.init(indirectSB.id, .DrawIndirect, .IndirectRead, null),
-//     },
-// };

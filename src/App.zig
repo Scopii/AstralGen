@@ -93,8 +93,8 @@ pub const App = struct {
     pub fn setupEntitys(self: *App) !void {
         try ShaderSys.update(&self.data.shader, &self.shaderQueue, &self.rendererQueue, self.memoryMan);
 
-        const mainCamId = self.data.entityData.createCameraEntity(.{ .pos = zm.f32x4(0, 5, -20, 0), .yaw = 170 }, .{ .bufId = rc.camUB.id, .near = 0.1, .far = 100, .fov = 60 });
-        const debugCamId = self.data.entityData.createCameraEntity(.{ .pos = zm.f32x4(0, 20, -45, 0), .yaw = 170 }, .{ .bufId = rc.cam2UB.id, .near = 0.1, .far = 300, .fov = 110 });
+        const mainCamId = self.data.entityData.createCameraEntity(.{ .pos = zm.f32x4(0, 5, -20, 0), .yaw = 170 }, .{ .bufId = rc.mainCamUB.id, .near = 0.1, .far = 100, .fov = 60 });
+        const debugCamId = self.data.entityData.createCameraEntity(.{ .pos = zm.f32x4(0, 20, -45, 0), .yaw = 170 }, .{ .bufId = rc.debugCamUB.id, .near = 0.1, .far = 300, .fov = 110 });
 
         self.data.viewport.viewports.upsert(2, Viewport{ .cameraEntity = mainCamId, .sourceTexId = rc.mainTex.id, .areaX = 0.5, .areaY = 0.0, .areaWidth = 0.5, .areaHeight = 0.5 });
         self.data.viewport.viewports.upsert(1, Viewport{ .cameraEntity = debugCamId, .sourceTexId = rc.debugTex.id, .areaX = 0.0, .areaY = 0.0, .areaWidth = 0.5, .areaHeight = 0.5 });
@@ -183,7 +183,6 @@ pub const App = struct {
 
             if (US_WAITED >= US_PER_FRAME) {
                 US_WAITED -= US_PER_FRAME;
-                std.debug.print("Frame Launched \n", .{});
 
                 // Shader Hotloading
                 if (shaderCon.SHADER_HOTLOAD == true) {

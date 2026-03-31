@@ -14,7 +14,7 @@ pub const PushData = extern struct {
         var pcs = PushData{ .runTime = frameData.runTime, .deltaTime = frameData.deltaTime };
         var mask: [14]bool = .{false} ** 14;
 
-        for (pass.bufUses) |bufUse| {
+        for (pass.getBufUses()) |bufUse| {
             const shaderSlot = bufUse.shaderSlot;
 
             if (shaderSlot) |slot| {
@@ -25,7 +25,7 @@ pub const PushData = extern struct {
             }
         }
 
-        for (pass.texUses) |texUse| {
+        for (pass.getTexUses()) |texUse| {
             const shaderSlot = texUse.shaderSlot;
 
             if (shaderSlot) |slot| {
