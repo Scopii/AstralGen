@@ -162,23 +162,21 @@ pub const WindowSys = struct {
 
     fn toggleMainFullscreen(windowData: *WindowData) !void {
         if (windowData.mainWindow) |window| {
-            // window.setOpacity(0);
+            window.setOpacity(0);
+            // window.hide();
+
             if (window.isFullscreen() == false) {
-                window.setOpacity(0);
-                // window.hide();
                 // window.setBordered(false);
                 window.setFullscreenBorderless(true);
                 std.debug.print("MAIN FULLSCREEN ON\n", .{});
             } else {
-                window.setOpacity(0);
-                // window.hide();
                 window.setFullscreenBorderless(false);
                 // window.setBordered(true);
                 std.debug.print("MAIN FULLSCREEN OFF\n", .{});
             }
-            window.setOpacity(1.0);
-            // window.setOpacity(0);
-            // try windowData.hiddenWindows.append(window.id);
+            // window.setOpacity(1.0);
+            // window.show();
+            try windowData.hiddenWindows.append(window.id);
         }
     }
 

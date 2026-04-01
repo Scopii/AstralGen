@@ -97,25 +97,95 @@ pub const PASSES: []const Pass = &.{
 
     Pass.init(.{ .name = "Blit to Viewport 1", .execution = .{ .viewportBlit = .{ .val = 1 } }, .shaderIds = &.{} }),
 
-    pDef.CullComp(.{
-        .name = "Cull-Comp",
+    // pDef.CullComp(.{
+    //     .name = "Cull-Comp",
+    //     .indirectBuf = indirectSB.id,
+    //     .entityBuf = entitySB.id,
+    // }),
+
+    // pDef.Cull(.{
+    //     .name = "Cull-Main",
+    //     .mainTex = mainTex.id,
+    //     .mainDepthTex = mainDepthTex.id,
+    //     .indirectBuf = indirectSB.id,
+    //     .viewCam = mainCamUB.id,
+    //     .cullCam = mainCamUB.id,
+    // }),
+
+    // pDef.Cull(.{
+    //     .name = "Cull-Debug",
+    //     .mainTex = debugTex.id,
+    //     .mainDepthTex = debugDepthTex.id,
+    //     .indirectBuf = indirectSB.id,
+    //     .viewCam = debugCamUB.id,
+    //     .cullCam = mainCamUB.id,
+    // }),
+
+    // pDef.FrustumView(.{
+    //     .name = "FrustumView",
+    //     .debugTex = debugTex.id,
+    //     .debugDepthTex = debugDepthTex.id,
+    //     .frustumCamBuf = mainCamUB.id,
+    //     .viewCamBuf = debugCamUB.id,
+    // }),
+
+    // pDef.EditorGrid(.{
+    //     .name = "Editor-Grid",
+    //     .debugTex = debugTex.id,
+    //     .debugDepthTex = debugDepthTex.id,
+    //     .camBuf = debugCamUB.id,
+    // }),
+
+    // Pass.init(.{ .name = "Blit to Viewport 2", .execution = .{ .viewportBlit = .{ .val = 2 } }, .shaderIds = &.{} }),
+    // Pass.init(.{ .name = "Blit to Viewport 3", .execution = .{ .viewportBlit = .{ .val = 3 } }, .shaderIds = &.{} }),
+
+    pDef.QuantComp(.{
+        .name = "Quant-Comp",
         .indirectBuf = indirectSB.id,
         .entityBuf = entitySB.id,
     }),
 
-    pDef.Cull(.{
-        .name = "Cull-Main",
-        .mainTex = mainTex.id,
-        .mainDepthTex = mainDepthTex.id,
+    pDef.QuantGrid(.{
+        .name = "Quant-Main",
+        .debugTex = mainTex.id,
+        .debugDepthTex = mainDepthTex.id,
         .indirectBuf = indirectSB.id,
         .viewCam = mainCamUB.id,
         .cullCam = mainCamUB.id,
     }),
 
-    pDef.Cull(.{
-        .name = "Cull-Debug",
-        .mainTex = debugTex.id,
-        .mainDepthTex = debugDepthTex.id,
+    pDef.QuantGrid(.{
+        .name = "Quant-Debug",
+        .debugTex = debugTex.id,
+        .debugDepthTex = debugDepthTex.id,
+        .indirectBuf = indirectSB.id,
+        .viewCam = debugCamUB.id,
+        .cullCam = mainCamUB.id,
+    }),
+
+    pDef.EditorGrid(.{
+        .name = "Editor-Grid",
+        .debugTex = debugTex.id,
+        .debugDepthTex = debugDepthTex.id,
+        .camBuf = debugCamUB.id,
+    }),
+
+    Pass.init(.{ .name = "Blit to Viewport 4", .execution = .{ .viewportBlit = .{ .val = 4 } }, .shaderIds = &.{} }),
+    Pass.init(.{ .name = "Blit to Viewport 5", .execution = .{ .viewportBlit = .{ .val = 5 } }, .shaderIds = &.{} }),
+
+    pDef.QuantPlane(.{
+        .name = "Quant-Main",
+        .debugTex = mainTex.id,
+        .debugDepthTex = mainDepthTex.id,
+        .indirectBuf = indirectSB.id,
+        .viewCam = mainCamUB.id,
+        .cullCam = mainCamUB.id,
+    }),
+
+    pDef.QuantPlane(.{
+        .name = "Quant-Debug",
+        .debugTex = debugTex.id,
+        .debugDepthTex = debugDepthTex.id,
         .indirectBuf = indirectSB.id,
         .viewCam = debugCamUB.id,
         .cullCam = mainCamUB.id,
@@ -129,55 +199,6 @@ pub const PASSES: []const Pass = &.{
         .viewCamBuf = debugCamUB.id,
     }),
 
-    pDef.EditorGrid(.{
-        .name = "Editor-Grid",
-        .debugTex = debugTex.id,
-        .debugDepthTex = debugDepthTex.id,
-        .camBuf = debugCamUB.id,
-    }),
-
     Pass.init(.{ .name = "Blit to Viewport 2", .execution = .{ .viewportBlit = .{ .val = 2 } }, .shaderIds = &.{} }),
     Pass.init(.{ .name = "Blit to Viewport 3", .execution = .{ .viewportBlit = .{ .val = 3 } }, .shaderIds = &.{} }),
-
-    pDef.QuantComp(.{
-        .name = "Quant-Comp",
-        .indirectBuf = indirectSB.id,
-        .entityBuf = entitySB.id,
-    }),
-
-    pDef.Quant(.{
-        .name = "Quant-Main",
-        .debugTex = mainTex.id,
-        .debugDepthTex = mainDepthTex.id,
-        .indirectBuf = indirectSB.id,
-        .viewCam = mainCamUB.id,
-        .cullCam = mainCamUB.id,
-    }),
-
-    pDef.Quant(.{
-        .name = "Quant-Debug",
-        .debugTex = debugTex.id,
-        .debugDepthTex = debugDepthTex.id,
-        .indirectBuf = indirectSB.id,
-        .viewCam = debugCamUB.id,
-        .cullCam = mainCamUB.id,
-    }),
-
-    // pDef.FrustumView(.{
-    //     .name = "FrustumView",
-    //     .debugTex = debugTex.id,
-    //     .debugDepthTex = debugDepthTex.id,
-    //     .frustumCamBuf = mainCamUB.id,
-    //     .viewCamBuf = debugCamUB.id,
-    // }),
-
-    pDef.EditorGrid(.{
-        .name = "Editor-Grid",
-        .debugTex = debugTex.id,
-        .debugDepthTex = debugDepthTex.id,
-        .camBuf = debugCamUB.id,
-    }),
-
-    Pass.init(.{ .name = "Blit to Viewport 4", .execution = .{ .viewportBlit = .{ .val = 4 } }, .shaderIds = &.{} }),
-    Pass.init(.{ .name = "Blit to Viewport 5", .execution = .{ .viewportBlit = .{ .val = 5 } }, .shaderIds = &.{} }),
 };

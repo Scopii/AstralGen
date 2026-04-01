@@ -17,7 +17,8 @@ pub const frustumMesh = ShaderInf.init(23, .meshNoTask, "cullTest/frustum.slang"
 pub const cullTestFrag = ShaderInf.init(24, .frag, "cullTest/frag.slang", "cullTestFrag.spv");
 
 pub const quantComp = ShaderInf.init(25, .comp, "quant/comp.slang", "quantComp.spv");
-pub const quantMesh = ShaderInf.init(26, .meshNoTask, "quant/mesh.slang", "quantMesh.spv");
+pub const quantGrid = ShaderInf.init(26, .meshNoTask, "quant/mesh.slang", "quantMesh.spv");
+pub const quantPlane = ShaderInf.init(30, .meshNoTask, "quant/mesh2.slang", "quantMesh2.spv");
 pub const quantFrag = ShaderInf.init(27, .frag, "quant/frag.slang", "quantFrag.spv");
 
 pub const editorGridMesh = ShaderInf.init(28, .meshNoTask, "editorGrid/mesh.slang", "editorGridMesh.spv");
@@ -32,7 +33,8 @@ pub const COMPILING_SHADERS: []const ShaderInf = &.{
     cullTestFrag,
 
     quantComp,
-    quantMesh,
+    quantGrid,
+    quantPlane,
     quantFrag,
 
     editorGridMesh,

@@ -8,7 +8,7 @@ struct VertexOut {
 [[vk::binding(0, 0)]] ConstantBuffer<CameraData> heapCameraBuffers[];
 [[vk::push_constant]] ConstantBuffer<PushConstants> pc;
 
-static const uint SUBDIVISION_LEVEL = 4; 
+static const uint SUBDIVISION_LEVEL = 9; 
 
 // Helper to project the normalized 0..1 box into your physical camera frustum
 float3 InterpolateFrustum(float3 uvw, float4 c[8]) {

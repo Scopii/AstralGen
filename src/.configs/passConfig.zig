@@ -109,7 +109,7 @@ pub fn QuantComp(
     });
 }
 
-pub fn Quant(
+pub fn QuantGrid(
     def: struct {
         name: []const u8,
         debugTex: TexId,
@@ -129,7 +129,44 @@ pub fn Quant(
                 .mainTexId = def.debugTex,
             },
         },
-        .shaderIds = &.{ sc.quantMesh.id, sc.quantFrag.id },
+        .shaderIds = &.{ sc.quantGrid.id, sc.quantFrag.id },
+        .bufUses = &.{
+            BufferUse.init(def.indirectBuf, .DrawIndirect, .IndirectRead, null),
+            BufferUse.init(def.viewCam, .FragShader, .ShaderRead, 0),
+            BufferUse.init(def.cullCam, .FragShader, .ShaderRead, 1),
+        },
+        .colorAtts = &.{Attachment.init(def.debugTex, .ColorAtt, .ColorAttReadWrite, true)},
+        .depthAtt = Attachment.init(def.debugDepthTex, .EarlyFragTest, .DepthStencilWrite, true),
+        .renderState = .{
+            .depthTest = vk.VK_TRUE,
+            .depthWrite = vk.VK_TRUE,
+            .depthCompare = vk.VK_COMPARE_OP_LESS,
+            .cullMode = vk.VK_CULL_MODE_NONE,
+        },
+    });
+}
+
+pub fn QuantPlane(
+    def: struct {
+        name: []const u8,
+        debugTex: TexId,
+        debugDepthTex: TexId,
+        indirectBuf: BufId,
+        viewCam: BufId, // Maybe swapped
+        cullCam: BufId, // Maybe swapped
+    },
+) Pass {
+    return Pass.init(.{
+        .name = def.name,
+        .execution = .{
+            .taskOrMeshIndirect = .{
+                .workgroups = .{ .x = 1, .y = 1, .z = 1 },
+                .indirectBuf = def.indirectBuf,
+                .indirectBufOffset = 0,
+                .mainTexId = def.debugTex,
+            },
+        },
+        .shaderIds = &.{ sc.quantPlane.id, sc.quantFrag.id },
         .bufUses = &.{
             BufferUse.init(def.indirectBuf, .DrawIndirect, .IndirectRead, null),
             BufferUse.init(def.viewCam, .FragShader, .ShaderRead, 0),

@@ -8,7 +8,7 @@ struct VertexOut {
 [[vk::binding(0, 0)]] ConstantBuffer<CameraData> heapCameraBuffers[];
 [[vk::push_constant]] ConstantBuffer<PushConstants> pc;
 
-static const uint SUBDIVISION_LEVEL = 10; 
+static const uint SUBDIVISION_LEVEL = 9; 
 
 float3 InterpolateFrustum(float3 uvw, float4 corners[8]) {
     float3 nearBottom = lerp(corners[0].xyz, corners[1].xyz, uvw.x);
