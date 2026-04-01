@@ -35,12 +35,11 @@ pub const SwapchainMan = struct {
         }
     }
 
-    pub fn getUpdatedTargets(self: *SwapchainMan, flightId: u8) ![]*Swapchain {
+    pub fn getUpdatedTargets(self: *SwapchainMan, flightId: u8, activeWindows: []const Window) ![]*Swapchain {
         var count: u8 = 0;
 
-        for (0..self.swapchains.getLength()) |i| {
-            const swapchain = self.swapchains.getPtrByIndex(@intCast(i));
-            if (swapchain.inUse == false) continue;
+        for (activeWindows) |*window| {
+            const swapchain = self.swapchains.getPtrByKey(window.id.val);
 
             const start = if (rc.SWAPCHAIN_PROFILING == true) std.time.microTimestamp() else 0;
             const result1 = swapchain.acquireNextImage(self.gpi, flightId);
@@ -56,9 +55,9 @@ pub const SwapchainMan = struct {
                     const result2 = swapchain.acquireNextImage(self.gpi, flightId);
 
                     if (result2 != vk.VK_SUCCESS) {
-                        std.debug.print("Could not Resolve Swapchain Error {} (ID {}) {}", .{ result2, self.swapchains.getKeyByIndex(@intCast(i)), swapchain.* });
+                        std.debug.print("Could not Resolve Swapchain Error {} (ID {}) {}", .{ result2, window.id.val, swapchain.* });
                         continue;
-                    } else std.debug.print("Resolved Error for Swapchain {} (ID {}) {}", .{ result2, self.swapchains.getKeyByIndex(@intCast(i)), swapchain.* });
+                    } else std.debug.print("Resolved Error for Swapchain {} (ID {}) {}", .{ result2, window.id.val, swapchain.* });
                 },
                 else => try vhF.check(result1, "Could not acquire swapchain image with unknown error"),
             }
@@ -69,7 +68,7 @@ pub const SwapchainMan = struct {
 
             if (rc.SWAPCHAIN_PROFILING == true) {
                 const end = std.time.microTimestamp();
-                std.debug.print("Swapchain (ID {}) Acquire {d:.3} ms\n", .{ self.swapchains.getKeyByIndex(@intCast(i)), @as(f64, @floatFromInt(end - start)) / 1_000.0 });
+                std.debug.print("Swapchain (ID {}) Acquire {d:.3} ms\n", .{ window.id.val, @as(f64, @floatFromInt(end - start)) / 1_000.0 });
             }
         }
         return self.targetPtrs[0..count];

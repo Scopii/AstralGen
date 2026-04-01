@@ -8,8 +8,6 @@ const std = @import("std");
 const ig = @cImport(@cInclude("imgui_ctx.h"));
 
 pub const ImGuiMan = struct {
-    uiActive: bool = false,
-
     instance: vk.VkInstance,
     gpu: vk.VkPhysicalDevice,
     gpi: vk.VkDevice,
@@ -102,13 +100,6 @@ pub const ImGuiMan = struct {
         }
     }
 
-    // pub fn removeWindowContext(self: *ImGuiMan, windowIdx: u32) void {
-    //     if (self.contexts[windowIdx]) |ctx| {
-    //         ig.igui_destroy_context(ctx);
-    //         self.contexts[windowIdx] = null;
-    //     }
-    // }
-
     pub fn removeWindowContext(self: *ImGuiMan, windowIdx: u32) void {
         if (self.contexts[windowIdx]) |ctx| {
             ig.igui_set_current_context(ctx);
@@ -134,8 +125,11 @@ pub const ImGuiMan = struct {
                 ig.igui_destroy_context(ctx);
             }
         }
-        ig.igui_set_current_context(bootstrapCtx.?);
-        zgui.backend.deinit();
+
+        if (bootstrapCtx) |ctx| {
+            ig.igui_set_current_context(ctx);
+            zgui.backend.deinit();
+        }
         zgui.deinit();
     }
 
@@ -152,23 +146,11 @@ pub const ImGuiMan = struct {
     }
 
     pub fn newFrame(self: *ImGuiMan, windowIdx: u32, width: u32, height: u32) void {
-        if (!self.uiActive) return;
         if (!self.setContext(windowIdx)) return;
         zgui.backend.newFrame(width, height);
     }
 
-    pub fn toogleUiMode(self: *ImGuiMan) void {
-        if (self.uiActive == true) self.uiActive = false else self.uiActive = true;
-    }
-
-    pub fn drawUi(self: *ImGuiMan, windowIdx: u32) void {
-        if (!self.uiActive) return;
-        if (!self.setContext(windowIdx)) return;
-        zgui.showDemoWindow(null);
-    }
-
     pub fn render(self: *ImGuiMan, windowIdx: u32, cmd: *const Cmd) void {
-        if (!self.uiActive) return;
         if (!self.setContext(windowIdx)) return;
         zgui.render();
         zgui.backend.render(cmd.handle);

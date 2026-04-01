@@ -87,6 +87,16 @@ pub const TEXTURES: []const TextureMeta.TexInf = &.{ mainTex, mainDepthTex, debu
 
 // Passes
 pub const PASSES: []const Pass = &.{
+    pDef.CompRayMarch(.{
+        .name = "CompTest",
+        .entityBuf = entitySB.id,
+        .rayTex = rayTex.id,
+        .camBuf = mainCamUB.id,
+        .readbackBuf = readbackSB.id,
+    }),
+
+    Pass.init(.{ .name = "Blit to Viewport 1", .execution = .{ .viewportBlit = .{ .val = 1 } }, .shaderIds = &.{} }),
+
     pDef.CullComp(.{
         .name = "Cull-Comp",
         .indirectBuf = indirectSB.id,
@@ -119,37 +129,47 @@ pub const PASSES: []const Pass = &.{
         .viewCamBuf = debugCamUB.id,
     }),
 
-    // pDef.QuantComp(.{
-    //     .name = "Quant-Comp",
-    //     .indirectBuf = indirectSB.id,
-    //     .entityBuf = entitySB.id,
-    // }),
+    pDef.EditorGrid(.{
+        .name = "Editor-Grid",
+        .debugTex = debugTex.id,
+        .debugDepthTex = debugDepthTex.id,
+        .camBuf = debugCamUB.id,
+    }),
 
-    // pDef.Quant(.{
-    //     .name = "Quant-Main",
-    //     .debugTex = mainTex.id,
-    //     .debugDepthTex = mainDepthTex.id,
-    //     .indirectBuf = indirectSB.id,
-    //     .viewCam = mainCamUB.id,
-    //     .cullCam = mainCamUB.id,
-    // }),
+    Pass.init(.{ .name = "Blit to Viewport 2", .execution = .{ .viewportBlit = .{ .val = 2 } }, .shaderIds = &.{} }),
+    Pass.init(.{ .name = "Blit to Viewport 3", .execution = .{ .viewportBlit = .{ .val = 3 } }, .shaderIds = &.{} }),
 
-    // pDef.Quant(.{
-    //     .name = "Quant-Debug",
+    pDef.QuantComp(.{
+        .name = "Quant-Comp",
+        .indirectBuf = indirectSB.id,
+        .entityBuf = entitySB.id,
+    }),
+
+    pDef.Quant(.{
+        .name = "Quant-Main",
+        .debugTex = mainTex.id,
+        .debugDepthTex = mainDepthTex.id,
+        .indirectBuf = indirectSB.id,
+        .viewCam = mainCamUB.id,
+        .cullCam = mainCamUB.id,
+    }),
+
+    pDef.Quant(.{
+        .name = "Quant-Debug",
+        .debugTex = debugTex.id,
+        .debugDepthTex = debugDepthTex.id,
+        .indirectBuf = indirectSB.id,
+        .viewCam = debugCamUB.id,
+        .cullCam = mainCamUB.id,
+    }),
+
+    // pDef.FrustumView(.{
+    //     .name = "FrustumView",
     //     .debugTex = debugTex.id,
     //     .debugDepthTex = debugDepthTex.id,
-    //     .indirectBuf = indirectSB.id,
-    //     .viewCam = debugCamUB.id,
-    //     .cullCam = mainCamUB.id,
+    //     .frustumCamBuf = mainCamUB.id,
+    //     .viewCamBuf = debugCamUB.id,
     // }),
-
-    pDef.CompRayMarch(.{
-        .name = "CompTest",
-        .entityBuf = entitySB.id,
-        .rayTex = rayTex.id,
-        .camBuf = mainCamUB.id,
-        .readbackBuf = readbackSB.id,
-    }),
 
     pDef.EditorGrid(.{
         .name = "Editor-Grid",
@@ -157,4 +177,7 @@ pub const PASSES: []const Pass = &.{
         .debugDepthTex = debugDepthTex.id,
         .camBuf = debugCamUB.id,
     }),
+
+    Pass.init(.{ .name = "Blit to Viewport 4", .execution = .{ .viewportBlit = .{ .val = 4 } }, .shaderIds = &.{} }),
+    Pass.init(.{ .name = "Blit to Viewport 5", .execution = .{ .viewportBlit = .{ .val = 5 } }, .shaderIds = &.{} }),
 };

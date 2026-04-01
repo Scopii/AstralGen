@@ -96,9 +96,12 @@ pub const App = struct {
         const mainCamId = self.data.entityData.createCameraEntity(.{ .pos = zm.f32x4(0, 5, -20, 0), .yaw = 170 }, .{ .bufId = rc.mainCamUB.id, .near = 0.1, .far = 100, .fov = 60 });
         const debugCamId = self.data.entityData.createCameraEntity(.{ .pos = zm.f32x4(0, 20, -45, 0), .yaw = 170 }, .{ .bufId = rc.debugCamUB.id, .near = 0.1, .far = 300, .fov = 110 });
 
+        self.data.viewport.viewports.upsert(1, Viewport{ .cameraEntity = mainCamId, .sourceTexId = rc.rayTex.id, .areaX = 0.0, .areaY = 0.0, .areaWidth = 1.0, .areaHeight = 1.0 });
+
         self.data.viewport.viewports.upsert(2, Viewport{ .cameraEntity = mainCamId, .sourceTexId = rc.mainTex.id, .areaX = 0.5, .areaY = 0.0, .areaWidth = 0.5, .areaHeight = 0.5 });
-        self.data.viewport.viewports.upsert(1, Viewport{ .cameraEntity = debugCamId, .sourceTexId = rc.debugTex.id, .areaX = 0.0, .areaY = 0.0, .areaWidth = 0.5, .areaHeight = 0.5 });
-        self.data.viewport.viewports.upsert(3, Viewport{ .cameraEntity = mainCamId, .sourceTexId = rc.rayTex.id, .areaX = 0.0, .areaY = 0.0, .areaWidth = 1.0, .areaHeight = 1.0 });
+        self.data.viewport.viewports.upsert(3, Viewport{ .cameraEntity = debugCamId, .sourceTexId = rc.debugTex.id, .areaX = 0.0, .areaY = 0.0, .areaWidth = 0.5, .areaHeight = 0.5 });
+        self.data.viewport.viewports.upsert(4, Viewport{ .cameraEntity = debugCamId, .sourceTexId = rc.debugTex.id, .areaX = 0.0, .areaY = 0.5, .areaWidth = 0.5, .areaHeight = 0.5 });
+        self.data.viewport.viewports.upsert(5, Viewport{ .cameraEntity = mainCamId, .sourceTexId = rc.mainTex.id, .areaX = 0.5, .areaY = 0.5, .areaWidth = 0.5, .areaHeight = 0.5 });
 
         for (0..rc.ENTITY_COUNT) |_| _ = self.data.entityData.createRandomRenderEntity(&self.rng);
 
@@ -112,7 +115,7 @@ pub const App = struct {
                 .y = 1080 / 2 - 10,
                 .resize = true,
                 .texIds = &[_]TexId{rc.debugDepthTex.id},
-                .viewIds = [4]?ViewportId{ .{ .val = 1 }, .{ .val = 2 }, null, null },
+                .viewIds = [4]?ViewportId{ .{ .val = 3 }, .{ .val = 2 }, .{ .val = 4 }, .{ .val = 5 } },
             },
         });
 
@@ -126,7 +129,7 @@ pub const App = struct {
                 .y = 40,
                 .resize = true,
                 .texIds = &[_]TexId{rc.mainDepthTex.id},
-                .viewIds = [4]?ViewportId{ .{ .val = 3 }, .{ .val = 1 }, null, null },
+                .viewIds = [4]?ViewportId{ .{ .val = 1 }, null, null, null },
             },
         });
     }
@@ -225,21 +228,19 @@ pub const App = struct {
 
                 if (rc.EARLY_GPU_WAIT == false) try renderer.waitForGpu();
 
-                // RENDER:
-                const targets = try renderer.beginDraw();
+                try WindowSys.updateActiveWindows(&self.data.window);
 
+                const activeWindows = self.data.window.activeWindows.constSlice();
                 // UI per-window/viewport
-                for (targets) |swapchain| {
-                    if (self.renderer.imguiMan.uiActive) {
-                        self.renderer.imguiMan.newFrame(swapchain.windowId, swapchain.extent.width, swapchain.extent.height);
-
-                        const window = self.data.window.windows.getByKey(swapchain.windowId);
-                        UiSys.buildWindowUi(&window, &self.data);
+                for (activeWindows) |*window| {
+                    if (self.data.window.uiActive) {
+                        self.renderer.imguiMan.newFrame(window.id.val, window.extent.width, window.extent.height);
+                        UiSys.buildWindowUi(window, &self.data);
                     }
                 }
 
-                // Cmd Recording and Draw
-                renderer.submitDraw(frameData, self.data.window.windows.getConstItems(), &self.data, targets) catch |err| {
+                // RENDER:
+                renderer.draw(frameData, &self.data, activeWindows) catch |err| {
                     std.log.err("Error in renderer.submitDraw(): {}", .{err});
                     break;
                 };

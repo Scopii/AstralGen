@@ -19,6 +19,7 @@ const std = @import("std");
 
 const Window = @import("../../window/Window.zig").Window;
 const EngineData = @import("../../EngineData.zig").EngineData;
+const ViewportId = @import("../../viewport/ViewportSys.zig").ViewportId;
 
 pub const RenderGraph = struct {
     alloc: Allocator,
@@ -48,7 +49,7 @@ pub const RenderGraph = struct {
         if (self.useGpuProfiling == true) self.useGpuProfiling = false else self.useGpuProfiling = true;
     }
 
-    pub fn recordFrame(self: *RenderGraph, passes: []Pass, flightId: u8, frame: u64, frameData: FrameData, targets: []const *Swapchain, resMan: *ResourceMan, shaderMan: *ShaderManager, imguiMan: *ImGuiMan, windows: []const Window, data: *const EngineData) !*Cmd {
+    pub fn recordFrame(self: *RenderGraph, passes: []Pass, flightId: u8, frame: u64, frameData: FrameData, targets: []const *Swapchain, resMan: *ResourceMan, shaderMan: *ShaderManager, imguiMan: *ImGuiMan, data: *const EngineData) !*Cmd {
         var cmd = try self.cmdMan.getCmd(flightId);
         try cmd.begin(flightId, frame);
 
@@ -63,9 +64,9 @@ pub const RenderGraph = struct {
         cmd.endTimeQuery(.BotOfPipe, 76);
 
         try self.recordTransfers(cmd, resMan);
-        try self.recordPasses(cmd, passes, frameData, resMan, shaderMan);
-        try self.recordSwapchainBlits(cmd, targets, resMan, windows, data);
-        try self.recordImGui(cmd, targets, imguiMan);
+        try self.recordPasses(cmd, passes, frameData, resMan, shaderMan, data, targets);
+        try self.recordImGui(cmd, targets, imguiMan, data);
+        try self.recordPresentation(cmd, targets);
 
         try cmd.end();
         return cmd;
@@ -165,33 +166,83 @@ pub const RenderGraph = struct {
         } else cmd.dispatch(dispatch.x, dispatch.y, dispatch.z);
     }
 
-    fn recordPasses(self: *RenderGraph, cmd: *Cmd, passes: []Pass, frameData: FrameData, resMan: *ResourceMan, shaderMan: *ShaderManager) !void {
+    fn recordPasses(self: *RenderGraph, cmd: *Cmd, passes: []Pass, frameData: FrameData, resMan: *ResourceMan, shaderMan: *ShaderManager, data: *const EngineData, targets: []const *Swapchain) !void {
         for (passes, 0..) |pass, i| {
             cmd.startTimeQuery(.TopOfPipe, @intCast(i), pass.name);
             cmd.beginStatsQuery(@intCast(i), pass.name);
 
-            const shaders = shaderMan.getShaders(pass.getShaderIds())[0..pass.shaderCount];
-            cmd.bindShaders(shaders);
-
-            const pushData = try PushData.init(resMan, pass, frameData, cmd.flightId);
-            cmd.setPushData(&pushData, @sizeOf(PushData), 0);
-
-            try self.recordPassBarriers(cmd, pass, resMan);
-
             switch (pass.execution) {
-                .taskOrMesh, .taskOrMeshIndirect, .graphics => {
-                    cmd.updateRenderState(pass.renderState);
-                    try recordGraphics(cmd, pushData.width, pushData.height, pass, resMan);
+                .taskOrMesh, .taskOrMeshIndirect, .graphics, .compute, .computeOnImg => {
+                    const shaders = shaderMan.getShaders(pass.getShaderIds())[0..pass.shaderCount];
+                    cmd.bindShaders(shaders);
+                    const pushData = try PushData.init(resMan, pass, frameData, cmd.flightId);
+                    cmd.setPushData(&pushData, @sizeOf(PushData), 0);
+
+                    try self.recordPassBarriers(cmd, pass, resMan);
+
+                    switch (pass.execution) {
+                        .taskOrMesh, .taskOrMeshIndirect, .graphics => try recordGraphics(cmd, pushData.width, pushData.height, pass, resMan),
+                        .computeOnImg => |computeOnImg| try recordCompute(cmd, computeOnImg.workgroups, computeOnImg.mainTexId, resMan),
+                        .compute => |compute| try recordCompute(cmd, compute.workgroups, null, resMan),
+                        .viewportBlit => return error.ViewportBlitIllegalReach,
+                    }
                 },
-                .computeOnImg => |computeOnImg| try recordCompute(cmd, computeOnImg.workgroups, computeOnImg.mainTexId, resMan),
-                .compute => |compute| try recordCompute(cmd, compute.workgroups, null, resMan),
+                .viewportBlit => |viewId| try self.recordBlit(cmd, pass, resMan, data, targets, viewId),
             }
+
             cmd.endTimeQuery(.BotOfPipe, @intCast(i));
             cmd.endStatsQuery(@intCast(i));
         }
     }
 
-    fn recordGraphics(cmd: *const Cmd, width: u32, height: u32, pass: Pass, resMan: *ResourceMan) !void {
+    pub fn recordBlit(self: *RenderGraph, cmd: *Cmd, pass: Pass, resMan: *ResourceMan, data: *const EngineData, targets: []const *Swapchain, viewId: ViewportId) !void {
+        const viewport = data.viewport.viewports.getByKey(viewId.val);
+        const renderTexMeta = try resMan.getMeta(viewport.sourceTexId);
+        const renderTex = try resMan.get(viewport.sourceTexId, cmd.flightId);
+
+        // 1. BARRIER PREP
+        // Source is always read
+        try self.checkImageState(renderTex, renderTexMeta.subRange, .{ .stage = .Transfer, .access = .TransferRead, .layout = .TransferSrc });
+
+        // Only transition swapchains that ACTUALLY contain this viewport
+        for (targets) |swapchain| {
+            const window = data.window.windows.getByKey(swapchain.windowId);
+
+            var hasViewport = false;
+            for (window.viewIds) |windowViewId| {
+                if (windowViewId != null and windowViewId.?.val == viewId.val) hasViewport = true;
+            }
+
+            if (hasViewport) {
+                try self.checkImageState(&swapchain.textures[swapchain.curIndex], swapchain.subRange, .{ .stage = .Transfer, .access = .TransferWrite, .layout = .TransferDst });
+            }
+        }
+
+        self.bakeBarriers(cmd, pass.name);
+
+        // 2. EXECUTE BLITS
+        for (targets) |swapchain| {
+            const window = data.window.windows.getByKey(swapchain.windowId);
+
+            var hasViewport = false;
+            for (window.viewIds) |windowViewId| {
+                if (windowViewId != null and windowViewId.?.val == viewId.val) hasViewport = true;
+            }
+
+            if (hasViewport) {
+                const extent = swapchain.getExtent2D();
+                const viewArea2D = viewport.calcViewArea(extent.width, extent.height);
+                const viewOffset2D = viewport.calcViewOffset(extent.width, extent.height);
+
+                const viewArea = vk.VkExtent3D{ .width = viewArea2D.width, .height = viewArea2D.height, .depth = 1 };
+                const viewOffset = vk.VkOffset3D{ .x = viewOffset2D.x, .y = viewOffset2D.y, .z = 1 };
+
+                cmd.copyImageToImage(renderTex.img, renderTex.extent, swapchain.getCurTexture().img, viewArea, viewOffset, rc.RENDER_TEX_STRETCH);
+            }
+        }
+    }
+
+    fn recordGraphics(cmd: *Cmd, width: u32, height: u32, pass: Pass, resMan: *ResourceMan) !void {
         if (pass.colorAttCount > 8) return error.TooManyAttachments;
 
         const depthInf: ?vk.VkRenderingAttachmentInfo = if (pass.depthAtt) |depth| blk: {
@@ -214,6 +265,7 @@ pub const RenderGraph = struct {
             colorInfs[i] = tex.createAttachment(texMeta.texType, colorAtt.clear);
         }
 
+        cmd.updateRenderState(pass.renderState);
         cmd.setViewportAndScissor(0, 0, @floatFromInt(width), @floatFromInt(height));
         cmd.beginRendering(width, height, colorInfs[0..pass.colorAttCount], if (depthInf) |*d| d else null, if (stencilInf) |*s| s else null);
 
@@ -234,72 +286,36 @@ pub const RenderGraph = struct {
         cmd.endRendering();
     }
 
-    fn recordSwapchainBlits(self: *RenderGraph, cmd: *Cmd, swapchains: []const *Swapchain, resMan: *ResourceMan, windows: []const Window, data: *const EngineData) !void {
-        cmd.startTimeQuery(.TopOfPipe, 54, "Blits Prep");
+    fn recordImGui(self: *RenderGraph, cmd: *Cmd, swapchains: []const *Swapchain, imguiMan: *ImGuiMan, data: *const EngineData) !void {
+        if (data.window.uiActive) {
+            cmd.startTimeQuery(.TopOfPipe, 60, "ImGui");
 
-        for (swapchains) |swapchain| { // Render Texture and Swapchain Preperations
-            for (windows) |window| {
-                if (window.id.val != swapchain.windowId) continue; // only if swapchain belongs to window
-
-                for (window.viewIds) |viewId| {
-                    if (viewId) |id| {
-                        const viewport = data.viewport.viewports.getByKey(id.val);
-                        const renderTexMeta = try resMan.getMeta(viewport.sourceTexId);
-                        const renderTex = try resMan.get(viewport.sourceTexId, cmd.flightId);
-
-                        try self.checkImageState(renderTex, renderTexMeta.subRange, .{ .stage = .Transfer, .access = .TransferRead, .layout = .TransferSrc });
-                        try self.checkImageState(&swapchain.textures[swapchain.curIndex], swapchain.subRange, .{ .stage = .Transfer, .access = .TransferWrite, .layout = .TransferDst });
-                    }
-                }
+            for (swapchains) |swapchain| {
+                const target = swapchain.getCurTexture();
+                try self.checkImageState(target, swapchain.subRange, .{ .stage = .ColorAtt, .access = .ColorAttWrite, .layout = .Attachment });
             }
-        }
-        self.bakeBarriers(cmd, "Blits Prep");
-        cmd.endTimeQuery(.BotOfPipe, 54);
+            self.bakeBarriers(cmd, "ImGui Prep");
 
-        cmd.startTimeQuery(.TopOfPipe, 55, "Blits Present");
+            for (swapchains) |swapchain| {
+                const target = swapchain.getCurTexture();
+                const colorAtt = target.createAttachment(.Color, false);
 
-        for (swapchains) |swapchain| { // Blits + Swapchain Presentation Barriers
-            for (windows) |window| {
-                if (window.id.val != swapchain.windowId) continue; // only if swapchain belongs to window
-
-                for (window.viewIds) |viewId| {
-                    if (viewId) |id| {
-                        const viewport = data.viewport.viewports.getByKey(id.val);
-                        const renderTex = try resMan.get(viewport.sourceTexId, cmd.flightId);
-                        const extent = swapchain.getExtent2D();
-                        const width: f32 = @as(f32, @floatFromInt(extent.width)) * viewport.areaWidth;
-                        const height: f32 = @as(f32, @floatFromInt(extent.height)) * viewport.areaHeight;
-                        const viewArea = vk.VkExtent3D{ .width = @intFromFloat(width), .height = @intFromFloat(height), .depth = 1 };
-
-                        const areaX: f32 = @as(f32, @floatFromInt(extent.width)) * viewport.areaX;
-                        const areaY: f32 = @as(f32, @floatFromInt(extent.height)) * viewport.areaY;
-                        const viewOffset = vk.VkOffset3D{ .x = @intFromFloat(areaX), .y = @intFromFloat(areaY), .z = 1 };
-
-                        cmd.copyImageToImage(renderTex.img, renderTex.extent, swapchain.getCurTexture().img, viewArea, viewOffset, rc.RENDER_TEX_STRETCH);
-                        try self.checkImageState(swapchain.getCurTexture(), swapchain.subRange, .{ .stage = .ColorAtt, .access = .ColorAttReadWrite, .layout = .Attachment });
-                    }
-                }
+                cmd.beginRendering(swapchain.extent.width, swapchain.extent.height, &[_]vk.VkRenderingAttachmentInfo{colorAtt}, null, null);
+                imguiMan.render(swapchain.windowId, cmd);
+                cmd.endRendering();
             }
+            cmd.endTimeQuery(.BotOfPipe, 60);
         }
-        self.bakeBarriers(cmd, "Blits Present");
-        cmd.endTimeQuery(.BotOfPipe, 55);
     }
 
-    fn recordImGui(self: *RenderGraph, cmd: *Cmd, swapchains: []const *Swapchain, imguiMan: *ImGuiMan) !void {
-        cmd.startTimeQuery(.TopOfPipe, 60, "ImGui");
-
+    fn recordPresentation(self: *RenderGraph, cmd: *Cmd, swapchains: []const *Swapchain) !void {
+        cmd.startTimeQuery(.TopOfPipe, 65, "Presentation");
         for (swapchains) |swapchain| {
             const target = swapchain.getCurTexture();
-            const colorAtt = target.createAttachment(.Color, false);
-
-            cmd.beginRendering(swapchain.extent.width, swapchain.extent.height, &[_]vk.VkRenderingAttachmentInfo{colorAtt}, null, null);
-            imguiMan.render(swapchain.windowId, cmd);
-            cmd.endRendering();
-
             try self.checkImageState(target, swapchain.subRange, .{ .stage = .BotOfPipe, .access = .None, .layout = .PresentSrc });
         }
-        self.bakeBarriers(cmd, "Imgui");
-        cmd.endTimeQuery(.BotOfPipe, 60);
+        self.bakeBarriers(cmd, "Present Transition");
+        cmd.endTimeQuery(.BotOfPipe, 65);
     }
 
     fn bakeBarriers(self: *RenderGraph, cmd: *const Cmd, name: []const u8) void {

@@ -7,6 +7,8 @@ const Buffer = @import("../res/Buffer.zig").Buffer;
 const vhE = @import("../../help/Enums.zig");
 const BufId = BufferMeta.BufId;
 const TexId = TextureMeta.TexId;
+const WindowId = @import("../../../window/Window.zig").Window.WindowId;
+const ViewportId = @import("../../../viewport/ViewportSys.zig").ViewportId;
 
 pub const Pass = struct {
     name: []const u8,
@@ -53,6 +55,7 @@ pub const Pass = struct {
             instances: u32 = 1,
             mainTexId: TexId,
         },
+        viewportBlit: ViewportId,
     };
 
     pub fn init(
@@ -76,16 +79,16 @@ pub const Pass = struct {
             .renderState = inf.renderState,
         };
 
-        pass.shaderIds[0..inf.shaderIds.len].* = inf.shaderIds[0..inf.shaderIds.len].*;
+        @memcpy(pass.shaderIds[0..inf.shaderIds.len], inf.shaderIds);
         pass.shaderCount = @intCast(inf.shaderIds.len);
 
-        pass.bufUses[0..inf.bufUses.len].* = inf.bufUses[0..inf.bufUses.len].*;
+        @memcpy(pass.bufUses[0..inf.bufUses.len], inf.bufUses);
         pass.bufCount = @intCast(inf.bufUses.len);
 
-        pass.texUses[0..inf.texUses.len].* = inf.texUses[0..inf.texUses.len].*;
+        @memcpy(pass.texUses[0..inf.texUses.len], inf.texUses);
         pass.texCount = @intCast(inf.texUses.len);
 
-        pass.colorAtts[0..inf.colorAtts.len].* = inf.colorAtts[0..inf.colorAtts.len].*;
+        @memcpy(pass.colorAtts[0..inf.colorAtts.len], inf.colorAtts);
         pass.colorAttCount = @intCast(inf.colorAtts.len);
 
         return pass;
@@ -114,6 +117,7 @@ pub const Pass = struct {
             .taskOrMeshIndirect => |taskOrMeshIndirect| taskOrMeshIndirect.mainTexId,
             .graphics => |graphics| graphics.mainTexId,
             .compute => null,
+            .viewportBlit => null,
         };
     }
 };

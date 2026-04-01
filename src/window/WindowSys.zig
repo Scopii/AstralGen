@@ -51,7 +51,7 @@ pub const WindowSys = struct {
         }
         windowQueue.clear();
 
-        if (state.input.toggleFullscreen) toggleMainFullscreen(windowData);
+        try if (state.input.toggleFullscreen) toggleMainFullscreen(windowData);
         if (state.input.toggleImgui) toogleUiMode(windowData);
 
         const changedWindows = getChangedWindows(windowData);
@@ -62,6 +62,13 @@ pub const WindowSys = struct {
         }
 
         cleanupWindows(windowData);
+    }
+
+    pub fn updateActiveWindows(windowData: *WindowData) !void {
+        windowData.activeWindows.clear();
+        for (windowData.windows.getConstItems()) |*window| {
+            if (window.state == .active) try windowData.activeWindows.append(window.*);
+        }
     }
 
     fn addWindow(windowData: *WindowData, title: [*c]const u8, w: c_int, h: c_int, renderTexId: TexId, x: c_int, y: c_int, resize: bool, texIds: []const TexId, viewIds: [4]?ViewportId) !void {
@@ -153,20 +160,25 @@ pub const WindowSys = struct {
         windowData.windows.remove(windowId.val);
     }
 
-    fn toggleMainFullscreen(windowData: *WindowData) void {
-        std.debug.print("TOGGLED MAIN FULLSCREEN\n", .{});
-
+    fn toggleMainFullscreen(windowData: *WindowData) !void {
         if (windowData.mainWindow) |window| {
+            // window.setOpacity(0);
             if (window.isFullscreen() == false) {
+                window.setOpacity(0);
+                // window.hide();
                 // window.setBordered(false);
-                window.setOpacity(0);
                 window.setFullscreenBorderless(true);
+                std.debug.print("MAIN FULLSCREEN ON\n", .{});
             } else {
-                // window.setBordered(true);
                 window.setOpacity(0);
+                // window.hide();
                 window.setFullscreenBorderless(false);
+                // window.setBordered(true);
+                std.debug.print("MAIN FULLSCREEN OFF\n", .{});
             }
             window.setOpacity(1.0);
+            // window.setOpacity(0);
+            // try windowData.hiddenWindows.append(window.id);
         }
     }
 

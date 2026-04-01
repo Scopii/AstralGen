@@ -178,7 +178,7 @@ pub const Cmd = struct {
                 untrackedMs -= gpuQueryMs;
                 std.debug.print(" - {d:.3} ms ({d:5.2} %) {s}\n", .{ gpuQueryMs, (gpuQueryMs / gpuFrameMs) * 100, query.name });
             }
-            std.debug.print("Untracked {d:.3} ms ({d:5.2} %)\n", .{ untrackedMs + 0.00001, untrackedMs * 100 + 0.00001 }); // + 0.00001 to avoid negative through precision loss
+            std.debug.print("Untracked {d:.3} ms ({d:5.2} %)\n", .{ untrackedMs + 0.00001, (untrackedMs / gpuFrameMs) * 100 + 0.00001 }); // + 0.00001 to avoid precision loss negative
         }
     }
 

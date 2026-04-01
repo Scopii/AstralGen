@@ -7,6 +7,7 @@ const MAX_WINDOWS = @import("../.configs/renderConfig.zig").MAX_WINDOWS;
 
 pub const WindowData = struct {
     windows: LinkedMap(Window, MAX_WINDOWS, u32, 32 + MAX_WINDOWS, 0) = .{},
+    activeWindows: FixedList(Window, MAX_WINDOWS) = .{},
     hiddenWindows: FixedList(Window.WindowId, MAX_WINDOWS) = .{},
     mainWindow: ?*Window = null,
     changedWindows: FixedList(Window, MAX_WINDOWS) = .{},

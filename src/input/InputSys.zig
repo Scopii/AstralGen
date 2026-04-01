@@ -82,7 +82,6 @@ pub const InputSys = struct {
                         .closeApp => inputData.closeApp = true,
                         .toggleImgui => {
                             inputData.toggleImgui = true;
-                            rendererQueue.append(.toggleUi);
                         },
                         .toggleGpuProfiling => {
                             rendererQueue.append(.toggleGpuProfiling);

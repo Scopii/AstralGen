@@ -24,7 +24,6 @@ pub const RendererQueue = struct {
 
     pub const RendererEvent = union(enum) {
         toggleGpuProfiling,
-        toggleUi,
 
         addTexture: *const struct { texInf: TexInf, data: ?[]const u8 },
         addBuffer: *const struct { bufInf: BufInf, data: ?[]const u8 },

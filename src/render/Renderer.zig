@@ -71,7 +71,6 @@ pub const Renderer = struct {
         for (rendererQueue.get()) |rendererEvent| {
             switch (rendererEvent) {
                 .toggleGpuProfiling => self.renderGraph.toggleGpuProfiling(),
-                .toggleUi => self.imguiMan.toogleUiMode(),
                 .updateWindowState => |window| try self.updateWindowStates(&[_]Window{window.*}),
                 .addPass => |pass| try self.createPasses(&[_]Pass{pass.*}),
                 .addTexture => |inf| try self.addResource(inf.texInf, inf.data),
@@ -128,33 +127,12 @@ pub const Renderer = struct {
         try self.scheduler.waitForGPU();
     }
 
-    // pub fn drawOLD(self: *Renderer, frameData: FrameData, windows: []const Window, data: *const EngineData) !void {
-    //     const flightId = try self.scheduler.beginFrame();
-    //     try self.resMan.update(flightId, self.scheduler.totalFrames);
-    //     const targets = try self.swapMan.getUpdatedTargets(flightId);
-
-    //     for (targets) |swapchain| {
-    //         self.imguiMan.newFrame(@intCast(swapchain.windowId), swapchain.extent.width, swapchain.extent.height);
-    //         self.imguiMan.drawUi(@intCast(swapchain.windowId));
-    //     }
-
-    //     const cmd = try self.renderGraph.recordFrame(self.passes.items, flightId, self.scheduler.totalFrames, frameData, targets, &self.resMan, &self.shaderMan, &self.imguiMan, windows, data);
-
-    //     try self.scheduler.queueSubmit(cmd, targets, self.context.graphicsQ);
-    //     try self.scheduler.queuePresent(targets, self.context.graphicsQ);
-
-    //     self.scheduler.endFrame();
-    // }
-
-    pub fn beginDraw(self: *Renderer) ![]const *Swapchain {
+    pub fn draw(self: *Renderer, frameData: FrameData, data: *const EngineData, activeWindows: []const Window) !void {
         const flightId = try self.scheduler.beginFrame();
         try self.resMan.update(flightId, self.scheduler.totalFrames);
-        return try self.swapMan.getUpdatedTargets(flightId);
-    }
+        const targets = try self.swapMan.getUpdatedTargets(flightId, activeWindows);
 
-    pub fn submitDraw(self: *Renderer, frameData: FrameData, windows:[]const Window, data: *const EngineData, targets:[]const *Swapchain) !void {
-        const flightId = self.scheduler.flightId;
-        const cmd = try self.renderGraph.recordFrame(self.passes.items, flightId, self.scheduler.totalFrames, frameData, targets, &self.resMan, &self.shaderMan, &self.imguiMan, windows, data);
+        const cmd = try self.renderGraph.recordFrame(self.passes.items, flightId, self.scheduler.totalFrames, frameData, targets, &self.resMan, &self.shaderMan, &self.imguiMan, data);
 
         try self.scheduler.queueSubmit(cmd, targets, self.context.graphicsQ);
         try self.scheduler.queuePresent(targets, self.context.graphicsQ);
