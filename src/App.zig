@@ -28,6 +28,8 @@ const ViewportSys = @import("viewport/ViewportSys.zig").ViewportSys;
 const ViewportId = @import("viewport/ViewportSys.zig").ViewportId;
 const Viewport = @import("viewport/Viewport.zig").Viewport;
 
+const FrameBuildSys = @import("frameBuild/FrameBuildSys.zig").FrameBuildSys;
+
 const RendererQueue = @import("render/RendererQueue.zig").RendererQueue;
 const Renderer = @import("render/Renderer.zig").Renderer;
 
@@ -96,12 +98,78 @@ pub const App = struct {
         const mainCamId = self.data.entityData.createCameraEntity(.{ .pos = zm.f32x4(0, 5, -20, 0), .yaw = 170 }, .{ .bufId = rc.mainCamUB.id, .near = 0.1, .far = 100, .fov = 60 });
         const debugCamId = self.data.entityData.createCameraEntity(.{ .pos = zm.f32x4(0, 20, -45, 0), .yaw = 170 }, .{ .bufId = rc.debugCamUB.id, .near = 0.1, .far = 300, .fov = 110 });
 
-        self.data.viewport.viewports.upsert(1, Viewport{ .cameraEntity = mainCamId, .sourceTexId = rc.rayTex.id, .areaX = 0.0, .areaY = 0.0, .areaWidth = 1.0, .areaHeight = 1.0 });
+        self.data.viewport.viewports.upsert(1, Viewport{
+            .name = "Full",
+            .cameraEntity = mainCamId,
+            .sourceTexId = rc.mainTex.id,
+            .areaX = 0.0,
+            .areaY = 0.0,
+            .areaWidth = 1.0,
+            .areaHeight = 1.0,
+            .passMask = .{
+                .CompTest = true,
+            },
+            .blitPass = .CompTest,
+        });
 
-        self.data.viewport.viewports.upsert(2, Viewport{ .cameraEntity = mainCamId, .sourceTexId = rc.mainTex.id, .areaX = 0.5, .areaY = 0.0, .areaWidth = 0.5, .areaHeight = 0.5 });
-        self.data.viewport.viewports.upsert(3, Viewport{ .cameraEntity = debugCamId, .sourceTexId = rc.debugTex.id, .areaX = 0.0, .areaY = 0.0, .areaWidth = 0.5, .areaHeight = 0.5 });
-        self.data.viewport.viewports.upsert(4, Viewport{ .cameraEntity = debugCamId, .sourceTexId = rc.debugTex.id, .areaX = 0.0, .areaY = 0.5, .areaWidth = 0.5, .areaHeight = 0.5 });
-        self.data.viewport.viewports.upsert(5, Viewport{ .cameraEntity = mainCamId, .sourceTexId = rc.mainTex.id, .areaX = 0.5, .areaY = 0.5, .areaWidth = 0.5, .areaHeight = 0.5 });
+        self.data.viewport.viewports.upsert(2, Viewport{
+            .name = "Top Left",
+            .cameraEntity = mainCamId,
+            .sourceTexId = rc.mainTex.id,
+            .areaX = 0.5,
+            .areaY = 0.0,
+            .areaWidth = 0.5,
+            .areaHeight = 0.5,
+            .passMask = .{
+                .QuantComp = true,
+                .QuantGridMain = true,
+            },
+            .blitPass = .QuantGridMain,
+        });
+
+        self.data.viewport.viewports.upsert(3, Viewport{
+            .name = "Top Right",
+            .cameraEntity = debugCamId,
+            .sourceTexId = rc.mainTex.id,
+            .areaX = 0.0,
+            .areaY = 0.0,
+            .areaWidth = 0.5,
+            .areaHeight = 0.5,
+            .passMask = .{
+                .QuantComp = true,
+                .QuantGridDebug = true,
+                .EditorGrid = true,
+            },
+            .blitPass = .EditorGrid,
+        });
+        self.data.viewport.viewports.upsert(4, Viewport{
+            .name = "Bot Left",
+            .cameraEntity = debugCamId,
+            .sourceTexId = rc.mainTex.id,
+            .areaX = 0.0,
+            .areaY = 0.5,
+            .areaWidth = 0.5,
+            .areaHeight = 0.5,
+            .passMask = .{
+                .QuantPlaneDebug = true,
+                .FrustumView = true,
+            },
+            .blitPass = .FrustumView,
+        });
+
+        self.data.viewport.viewports.upsert(5, Viewport{
+            .name = "Bot Right",
+            .cameraEntity = mainCamId,
+            .sourceTexId = rc.mainTex.id,
+            .areaX = 0.5,
+            .areaY = 0.5,
+            .areaWidth = 0.5,
+            .areaHeight = 0.5,
+            .passMask = .{
+                .QuantPlaneMain = true,
+            },
+            .blitPass = .QuantPlaneMain,
+        });
 
         for (0..rc.ENTITY_COUNT) |_| _ = self.data.entityData.createRandomRenderEntity(&self.rng);
 
@@ -110,11 +178,11 @@ pub const App = struct {
                 .title = "Debug",
                 .w = 1920 / 2,
                 .h = 1080 / 2,
-                .renderTexId = rc.debugTex.id,
+                .renderTexId = rc.mainTex.id,
                 .x = 1920 / 2 - 10,
                 .y = 1080 / 2 - 10,
                 .resize = true,
-                .texIds = &[_]TexId{rc.debugDepthTex.id},
+                .texIds = &[_]TexId{rc.mainDepthTex.id},
                 .viewIds = [4]?ViewportId{ .{ .val = 3 }, .{ .val = 2 }, .{ .val = 4 }, .{ .val = 5 } },
             },
         });
@@ -158,14 +226,14 @@ pub const App = struct {
             self.rendererQueue.append(.{ .addTexture = addTextureDataPtr });
         }
 
-        for (rc.PASSES) |*pass| {
-            const AddPassPtr = @FieldType(RendererQueue.RendererEvent, "addPass");
-            const AddPass = std.meta.Child(AddPassPtr);
+        // for (rc.PASSES) |*pass| {
+        //     const AddPassPtr = @FieldType(RendererQueue.RendererEvent, "addPass");
+        //     const AddPass = std.meta.Child(AddPassPtr);
 
-            const addPassDataPtr = try arena.create(AddPass);
-            addPassDataPtr.* = pass.*;
-            self.rendererQueue.append(.{ .addPass = addPassDataPtr });
-        }
+        //     const addPassDataPtr = try arena.create(AddPass);
+        //     addPassDataPtr.* = pass.*;
+        //     self.rendererQueue.append(.{ .addPass = addPassDataPtr });
+        // }
     }
 
     pub fn run(self: *App) !void {
@@ -238,6 +306,8 @@ pub const App = struct {
                         UiSys.buildWindowUi(window, &self.data);
                     }
                 }
+
+                FrameBuildSys.build(&self.data.frameBuild, &self.data);
 
                 // RENDER:
                 renderer.draw(frameData, &self.data, activeWindows) catch |err| {

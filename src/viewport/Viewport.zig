@@ -3,13 +3,20 @@ const EntityId = @import("../ecs/EntityData.zig").EntityId;
 const TexId = @import("../render/types/res/TextureMeta.zig").TextureMeta.TexId;
 const Pass = @import("../render/types/base/Pass.zig").Pass;
 
+const PassStruct = @import("../frameBuild/FrameBuildSys.zig").PassStruct;
+const PassEnum = @import("../frameBuild/FrameBuildSys.zig").PassEnum;
+
 pub const Viewport = struct {
+    name: []const u8,
     sourceTexId: TexId,
     areaX: f32 = 0.0,
     areaY: f32 = 0.0,
     areaWidth: f32 = 1.0,
     areaHeight: f32 = 1.0,
     cameraEntity: ?EntityId,
+
+    passMask: PassStruct = .{},
+    blitPass: PassEnum,
 
     pub fn calcViewArea(self: *const Viewport, swapchainWidth: u32, swapchainHeight: u32) struct { width: u32, height: u32 } {
         return .{

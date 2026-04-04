@@ -128,6 +128,9 @@ pub const Renderer = struct {
     }
 
     pub fn draw(self: *Renderer, frameData: FrameData, data: *const EngineData, activeWindows: []const Window) !void {
+        self.passes.clearRetainingCapacity();
+        try self.passes.appendSlice(data.frameBuild.passList.constSlice());
+
         const flightId = try self.scheduler.beginFrame();
         try self.resMan.update(flightId, self.scheduler.totalFrames);
         const targets = try self.swapMan.getUpdatedTargets(flightId, activeWindows);

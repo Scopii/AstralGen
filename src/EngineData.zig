@@ -5,4 +5,5 @@ pub const EngineData = struct {
     shader: @import("shader/ShaderData.zig").ShaderData = .{},
     window: @import("window/WindowData.zig").WindowData = .{},
     viewport: @import("viewport/ViewportData.zig").ViewportData = .{},
+    frameBuild: @import("frameBuild/FrameBuildData.zig").FrameBuildData = .{},
 };
