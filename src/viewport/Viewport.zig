@@ -6,6 +6,8 @@ const Pass = @import("../render/types/base/Pass.zig").Pass;
 const PassStruct = @import("../frameBuild/FrameBuildSys.zig").PassStruct;
 const PassEnum = @import("../frameBuild/FrameBuildSys.zig").PassEnum;
 
+const WindowId = @import("../window/Window.zig").Window.WindowId;
+
 pub const Viewport = struct {
     name: []const u8,
     sourceTexId: TexId,

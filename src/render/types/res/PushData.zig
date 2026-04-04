@@ -10,7 +10,7 @@ pub const PushData = extern struct {
     height: u32 = 0,
     resourceSlots: [14]u32 = undefined,
 
-    pub fn init(resMan: *ResourceMan, pass: Pass, frameData: FrameData, flightId: u8) !PushData {
+    pub fn init(resMan: *ResourceMan, pass: *const Pass, frameData: FrameData, flightId: u8) !PushData {
         var pcs = PushData{ .runTime = frameData.runTime, .deltaTime = frameData.deltaTime };
         var mask: [14]bool = .{false} ** 14;
 

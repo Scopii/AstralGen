@@ -5,6 +5,7 @@ const pDef = @import("../.configs/passConfig.zig");
 const rc = @import("../.configs/renderConfig.zig");
 const ViewportId = @import("../viewport/ViewportSys.zig").ViewportId;
 const Pass = @import("../render/types/base/Pass.zig").Pass;
+const ViewportBlit = @import("../render/types/base/Pass.zig").ViewportBlit;
 
 pub const PassStruct = packed struct {
     CompTest: bool = false,
@@ -43,6 +44,7 @@ pub const FrameBuildSys = struct {
 
         frameBuild.passList.clear();
 
+        // Fill Pass Mask
         inline for (@typeInfo(PassStruct).@"struct".fields) |field| {
             for (activeViewportIds) |viewportId| {
                 const viewport = data.viewport.viewports.getByKey(viewportId.val);
@@ -56,27 +58,50 @@ pub const FrameBuildSys = struct {
             }
         }
 
+        const activeWindows = data.window.activeWindows.constSlice();
+
+        // Launch Passes and Blits for filled Mask
         inline for (@typeInfo(PassStruct).@"struct".fields) |field| {
             if (@field(passMask, field.name) == true) {
                 const passEnum = @field(PassEnum, field.name);
                 appendPass(frameBuild, passEnum) catch std.debug.print("ERROR: COULD NOT APPEND PASS\n", .{});
-                if (rc.FRAME_BUILD_DEBUG)  std.debug.print("Pass {s} added\n", .{field.name});
+                if (rc.FRAME_BUILD_DEBUG) std.debug.print("Pass {s} added\n", .{field.name});
 
                 for (activeViewportIds) |viewportId| {
                     const viewport = data.viewport.viewports.getByKey(viewportId.val);
 
                     if (viewport.blitPass == passEnum) {
-                        appendBlit(frameBuild, viewportId, viewport.name);
-                        if (rc.FRAME_BUILD_DEBUG)  std.debug.print("blits to Viewport {s}\n", .{viewport.name});
+
+                        for (activeWindows) |*window| {
+                            var isAttached = false;
+                            for (window.viewIds) |windowViewId| {
+                                if (windowViewId != null and windowViewId.?.val == viewportId.val) {
+                                    isAttached = true;
+                                    break;
+                                }
+                            }
+
+                            if (isAttached) {
+                                const viewArea2D = viewport.calcViewArea(window.extent.width, window.extent.height);
+                                const viewOffset2D = viewport.calcViewOffset(window.extent.width, window.extent.height);
+
+                                const blitNode = ViewportBlit{
+                                    .name = viewport.name,
+                                    .srcTexId = viewport.sourceTexId,
+                                    .dstWindowId = window.id,
+                                    .viewWidth = viewArea2D.width,
+                                    .viewHeight = viewArea2D.height,
+                                    .viewOffsetX = viewOffset2D.x,
+                                    .viewOffsetY = viewOffset2D.y,
+                                };
+
+                                frameBuild.passList.append(.{ .viewportBlit = blitNode }) catch std.debug.print("Pass Could not Append\n", .{});
+                            }
+                        }
                     }
                 }
             }
         }
-
-        // std.debug.print("WHOLE PASS SEQUENCE: \n", .{});
-        // for (frameBuild.passList.constSlice()) |pass| {
-        //     std.debug.print("{s} {s}\n", .{ @tagName(pass.execution), pass.name });
-        // }
     }
 
     fn appendBlit(frameBuild: *FrameBuildData, viewportId: ViewportId, viewportName: []const u8) void {
@@ -94,7 +119,7 @@ pub const FrameBuildSys = struct {
                     .camBuf = rc.mainCamUB.id,
                     .readbackBuf = rc.readbackSB.id,
                 });
-                try frameBuild.passList.append(pass);
+                try frameBuild.passList.append(.{ .pass = pass });
             },
             .CullComp => {
                 const pass = pDef.CullComp(.{
@@ -102,7 +127,7 @@ pub const FrameBuildSys = struct {
                     .indirectBuf = rc.indirectSB.id,
                     .entityBuf = rc.entitySB.id,
                 });
-                try frameBuild.passList.append(pass);
+                try frameBuild.passList.append(.{ .pass = pass });
             },
             .CullMain => {
                 const pass = pDef.Cull(.{
@@ -113,7 +138,7 @@ pub const FrameBuildSys = struct {
                     .viewCam = rc.mainCamUB.id,
                     .cullCam = rc.mainCamUB.id,
                 });
-                try frameBuild.passList.append(pass);
+                try frameBuild.passList.append(.{ .pass = pass });
             },
             .CullDebug => {
                 const pass = pDef.Cull(.{
@@ -124,7 +149,7 @@ pub const FrameBuildSys = struct {
                     .viewCam = rc.debugCamUB.id,
                     .cullCam = rc.mainCamUB.id,
                 });
-                try frameBuild.passList.append(pass);
+                try frameBuild.passList.append(.{ .pass = pass });
             },
             .QuantComp => {
                 const pass = pDef.QuantComp(.{
@@ -132,7 +157,7 @@ pub const FrameBuildSys = struct {
                     .indirectBuf = rc.indirectSB.id,
                     .entityBuf = rc.entitySB.id,
                 });
-                try frameBuild.passList.append(pass);
+                try frameBuild.passList.append(.{ .pass = pass });
             },
             .QuantGridMain => {
                 const pass = pDef.QuantGrid(.{
@@ -143,7 +168,7 @@ pub const FrameBuildSys = struct {
                     .viewCam = rc.mainCamUB.id,
                     .cullCam = rc.mainCamUB.id,
                 });
-                try frameBuild.passList.append(pass);
+                try frameBuild.passList.append(.{ .pass = pass });
             },
             .QuantGridDebug => {
                 const pass = pDef.QuantGrid(.{
@@ -154,7 +179,7 @@ pub const FrameBuildSys = struct {
                     .viewCam = rc.debugCamUB.id,
                     .cullCam = rc.mainCamUB.id,
                 });
-                try frameBuild.passList.append(pass);
+                try frameBuild.passList.append(.{ .pass = pass });
             },
             .EditorGrid => {
                 const pass = pDef.EditorGrid(.{
@@ -163,7 +188,7 @@ pub const FrameBuildSys = struct {
                     .depthAtt = rc.mainDepthTex.id,
                     .camBuf = rc.debugCamUB.id,
                 });
-                try frameBuild.passList.append(pass);
+                try frameBuild.passList.append(.{ .pass = pass });
             },
             .QuantPlaneMain => {
                 const pass = pDef.QuantPlane(.{
@@ -174,7 +199,7 @@ pub const FrameBuildSys = struct {
                     .viewCam = rc.mainCamUB.id,
                     .cullCam = rc.mainCamUB.id,
                 });
-                try frameBuild.passList.append(pass);
+                try frameBuild.passList.append(.{ .pass = pass });
             },
             .QuantPlaneDebug => {
                 const pass = pDef.QuantPlane(.{
@@ -185,7 +210,7 @@ pub const FrameBuildSys = struct {
                     .viewCam = rc.debugCamUB.id,
                     .cullCam = rc.mainCamUB.id,
                 });
-                try frameBuild.passList.append(pass);
+                try frameBuild.passList.append(.{ .pass = pass });
             },
             .FrustumView => {
                 const pass = pDef.FrustumView(.{
@@ -195,7 +220,7 @@ pub const FrameBuildSys = struct {
                     .frustumCamBuf = rc.mainCamUB.id,
                     .viewCamBuf = rc.debugCamUB.id,
                 });
-                try frameBuild.passList.append(pass);
+                try frameBuild.passList.append(.{ .pass = pass });
             },
             .ENTRY, .EXIT => {},
         }

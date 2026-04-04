@@ -50,7 +50,6 @@ pub const ShaderMan = struct {
     }
 
     pub fn isPassValid(self: *ShaderMan, pass: Pass) bool {
-        if (pass.execution == .viewportBlit) return true;
         const shaders = self.getShaders(pass.getShaderIds())[0..pass.shaderCount];
 
         const layoutType = checkShaderLayout(shaders) catch |err| {
@@ -62,7 +61,6 @@ pub const ShaderMan = struct {
             .compute, .computeOnImg => if (layoutType == .computePass) return true,
             .taskOrMesh, .taskOrMeshIndirect => if (layoutType == .meshPass or layoutType == .taskMeshPass) return true,
             .graphics => if (layoutType == .graphicsPass) return true,
-            .viewportBlit => return false,
         }
 
         std.debug.print("Error: ShaderLayout {s} does not fit Pass\n", .{@tagName(layoutType)});

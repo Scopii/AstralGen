@@ -10,6 +10,21 @@ const TexId = TextureMeta.TexId;
 const WindowId = @import("../../../window/Window.zig").Window.WindowId;
 const ViewportId = @import("../../../viewport/ViewportSys.zig").ViewportId;
 
+pub const RenderNode = union(enum) {
+    viewportBlit: ViewportBlit,
+    pass: Pass,
+};
+
+pub const ViewportBlit = struct {
+    name: []const u8,
+    srcTexId: TexId,
+    dstWindowId: WindowId,
+    viewWidth: u32,
+    viewHeight: u32,
+    viewOffsetX: i32,
+    viewOffsetY: i32,
+};
+
 pub const Pass = struct {
     name: []const u8,
     execution: PassExecution,
@@ -55,7 +70,6 @@ pub const Pass = struct {
             instances: u32 = 1,
             mainTexId: TexId,
         },
-        viewportBlit: ViewportId,
     };
 
     pub fn init(
@@ -117,7 +131,6 @@ pub const Pass = struct {
             .taskOrMeshIndirect => |taskOrMeshIndirect| taskOrMeshIndirect.mainTexId,
             .graphics => |graphics| graphics.mainTexId,
             .compute => null,
-            .viewportBlit => null,
         };
     }
 };

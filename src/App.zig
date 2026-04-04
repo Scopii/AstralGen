@@ -99,7 +99,7 @@ pub const App = struct {
         const debugCamId = self.data.entityData.createCameraEntity(.{ .pos = zm.f32x4(0, 20, -45, 0), .yaw = 170 }, .{ .bufId = rc.debugCamUB.id, .near = 0.1, .far = 300, .fov = 110 });
 
         self.data.viewport.viewports.upsert(1, Viewport{
-            .name = "Full",
+            .name = "Full Viewport",
             .cameraEntity = mainCamId,
             .sourceTexId = rc.mainTex.id,
             .areaX = 0.0,
@@ -113,7 +113,7 @@ pub const App = struct {
         });
 
         self.data.viewport.viewports.upsert(2, Viewport{
-            .name = "Top Left",
+            .name = "Top Left Viewport",
             .cameraEntity = mainCamId,
             .sourceTexId = rc.mainTex.id,
             .areaX = 0.5,
@@ -128,7 +128,7 @@ pub const App = struct {
         });
 
         self.data.viewport.viewports.upsert(3, Viewport{
-            .name = "Top Right",
+            .name = "Top Right Viewport",
             .cameraEntity = debugCamId,
             .sourceTexId = rc.mainTex.id,
             .areaX = 0.0,
@@ -143,7 +143,7 @@ pub const App = struct {
             .blitPass = .EditorGrid,
         });
         self.data.viewport.viewports.upsert(4, Viewport{
-            .name = "Bot Left",
+            .name = "Bot Left Viewport",
             .cameraEntity = debugCamId,
             .sourceTexId = rc.mainTex.id,
             .areaX = 0.0,
@@ -158,7 +158,7 @@ pub const App = struct {
         });
 
         self.data.viewport.viewports.upsert(5, Viewport{
-            .name = "Bot Right",
+            .name = "Bot Right Viewport",
             .cameraEntity = mainCamId,
             .sourceTexId = rc.mainTex.id,
             .areaX = 0.5,
@@ -175,7 +175,7 @@ pub const App = struct {
 
         self.windowQueue.append(.{
             .addWindow = .{
-                .title = "Debug",
+                .title = "Debug Window",
                 .w = 1920 / 2,
                 .h = 1080 / 2,
                 .renderTexId = rc.mainTex.id,
@@ -189,7 +189,7 @@ pub const App = struct {
 
         self.windowQueue.append(.{
             .addWindow = .{
-                .title = "Main",
+                .title = "Main Window",
                 .w = 1920 / 2,
                 .h = 1080 / 2,
                 .renderTexId = rc.mainTex.id,

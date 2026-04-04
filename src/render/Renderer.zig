@@ -11,6 +11,7 @@ const ShaderMan = @import("sys/ShaderMan.zig").ShaderMan;
 const rc = @import("../.configs/renderConfig.zig");
 const FrameData = @import("../App.zig").FrameData;
 const Scheduler = @import("sys/Scheduler.zig").Scheduler;
+const RenderNode = @import("types/base/Pass.zig").RenderNode;
 const Pass = @import("types/base/Pass.zig").Pass;
 const ImGuiMan = @import("sys/ImGuiMan.zig").ImGuiMan;
 const Context = @import("sys/Context.zig").Context;
@@ -32,7 +33,7 @@ pub const Renderer = struct {
     swapMan: SwapchainMan,
     scheduler: Scheduler,
     imguiMan: ImGuiMan,
-    passes: std.array_list.Managed(Pass),
+    renderNodes: std.array_list.Managed(RenderNode),
 
     pub fn init(memoryMan: *MemoryManager) !Renderer {
         const alloc = memoryMan.getAllocator();
@@ -50,7 +51,7 @@ pub const Renderer = struct {
             .shaderMan = try ShaderMan.init(&context),
             .scheduler = try Scheduler.init(&context, rc.MAX_IN_FLIGHT),
             .swapMan = try SwapchainMan.init(alloc, &context),
-            .passes = std.array_list.Managed(Pass).init(alloc),
+            .renderNodes = std.array_list.Managed(RenderNode).init(alloc),
             .imguiMan = imguiMan,
         };
     }
@@ -64,7 +65,7 @@ pub const Renderer = struct {
         self.resMan.deinit();
         self.renderGraph.deinit();
         self.context.deinit();
-        self.passes.deinit();
+        self.renderNodes.deinit();
     }
 
     pub fn update(self: *Renderer, rendererQueue: *RendererQueue) !void {
@@ -128,14 +129,14 @@ pub const Renderer = struct {
     }
 
     pub fn draw(self: *Renderer, frameData: FrameData, data: *const EngineData, activeWindows: []const Window) !void {
-        self.passes.clearRetainingCapacity();
-        try self.passes.appendSlice(data.frameBuild.passList.constSlice());
+        self.renderNodes.clearRetainingCapacity();
+        try self.renderNodes.appendSlice(data.frameBuild.passList.constSlice());
 
         const flightId = try self.scheduler.beginFrame();
         try self.resMan.update(flightId, self.scheduler.totalFrames);
         const targets = try self.swapMan.getUpdatedTargets(flightId, activeWindows);
 
-        const cmd = try self.renderGraph.recordFrame(self.passes.items, flightId, self.scheduler.totalFrames, frameData, targets, &self.resMan, &self.shaderMan, &self.imguiMan, data);
+        const cmd = try self.renderGraph.recordFrame(self.renderNodes.items, flightId, self.scheduler.totalFrames, frameData, targets, &self.resMan, &self.shaderMan, &self.imguiMan, data);
 
         try self.scheduler.queueSubmit(cmd, targets, self.context.graphicsQ);
         try self.scheduler.queuePresent(targets, self.context.graphicsQ);
@@ -149,7 +150,7 @@ pub const Renderer = struct {
                 std.debug.print("Error: Pass ShaderLayout does not match Pass Type -> not appended\n", .{});
                 return error.PassNotValid;
             }
-            try self.passes.append(pass);
+            try self.renderNodes.append(.{ .pass = pass });
         }
     }
 
