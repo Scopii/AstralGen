@@ -38,17 +38,19 @@ pub const PassEnum = enum {
 
 pub const FrameBuildSys = struct {
     pub fn build(frameBuild: *FrameBuildData, data: *const EngineData) void {
-        const viewports = data.viewport.viewports.getConstItems(); // Could contain inactive
+        const activeViewportIds = data.viewport.activeViewportIds.constSlice();
         var passMask: PassStruct = .{};
 
         frameBuild.passList.clear();
 
         inline for (@typeInfo(PassStruct).@"struct".fields) |field| {
-            for (viewports) |viewport| {
+            for (activeViewportIds) |viewportId| {
+                const viewport = data.viewport.viewports.getByKey(viewportId.val);
                 const viewMaskValue = @field(viewport.passMask, field.name);
+
                 if (viewMaskValue == true) {
                     @field(passMask, field.name) = true;
-                    // std.debug.print("Viewport ({s}) demanded {s}\n", .{ viewport.name, field.name });
+                    if (rc.FRAME_BUILD_DEBUG) std.debug.print("Viewport ({s}) demanded {s}\n", .{ viewport.name, field.name });
                     break;
                 }
             }
@@ -58,13 +60,14 @@ pub const FrameBuildSys = struct {
             if (@field(passMask, field.name) == true) {
                 const passEnum = @field(PassEnum, field.name);
                 appendPass(frameBuild, passEnum) catch std.debug.print("ERROR: COULD NOT APPEND PASS\n", .{});
-                // std.debug.print("Pass {s} added\n", .{field.name});
+                if (rc.FRAME_BUILD_DEBUG)  std.debug.print("Pass {s} added\n", .{field.name});
 
-                for (viewports, 0..) |viewport, i| {
+                for (activeViewportIds) |viewportId| {
+                    const viewport = data.viewport.viewports.getByKey(viewportId.val);
+
                     if (viewport.blitPass == passEnum) {
-                        const viewportId: u8 = @intCast(data.viewport.viewports.getKeyByIndex(@intCast(i)));
                         appendBlit(frameBuild, viewportId, viewport.name);
-                        // std.debug.print("blits to Viewport {s}\n", .{viewport.name});
+                        if (rc.FRAME_BUILD_DEBUG)  std.debug.print("blits to Viewport {s}\n", .{viewport.name});
                     }
                 }
             }
@@ -76,8 +79,8 @@ pub const FrameBuildSys = struct {
         // }
     }
 
-    fn appendBlit(frameBuild: *FrameBuildData, viewportId: u8, viewportName: []const u8) void {
-        const blitPass = Pass.init(.{ .name = viewportName, .execution = .{ .viewportBlit = .{ .val = @intCast(viewportId) } }, .shaderIds = &.{} });
+    fn appendBlit(frameBuild: *FrameBuildData, viewportId: ViewportId, viewportName: []const u8) void {
+        const blitPass = Pass.init(.{ .name = viewportName, .execution = .{ .viewportBlit = viewportId }, .shaderIds = &.{} });
         frameBuild.passList.append(blitPass) catch std.debug.print("Pass Could not Append\n", .{});
     }
 

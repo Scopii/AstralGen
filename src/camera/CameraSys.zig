@@ -26,7 +26,7 @@ pub const CameraSys = struct {
         // PROCESS STATE (Movement)
         var activeCamId: ?u32 = null;
 
-        if (data.viewport.activeViewportId) |viewId| {
+        if (data.viewport.selectedViewportId) |viewId| {
             if (data.viewport.viewports.isKeyUsed(viewId.val)) {
                 const viewport = data.viewport.viewports.getByKey(viewId.val);
                 if (viewport.cameraEntity) |entityId| activeCamId = entityId.val;

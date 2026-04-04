@@ -44,6 +44,7 @@ pub const SWAPCHAIN_PROFILING = false;
 pub const BARRIER_DEBUG = false;
 pub const RESOURCE_DEBUG = true;
 pub const DESCRIPTOR_DEBUG = true;
+pub const FRAME_BUILD_DEBUG = false;
 
 // Rendering, Swapchains and Windows
 pub const EARLY_GPU_WAIT = true; // (Reflex Mode)
