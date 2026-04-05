@@ -242,7 +242,7 @@ pub const App = struct {
 
         TimeSys.init(&self.data.time);
 
-        const US_PER_FRAME: u64 = std.time.us_per_s / 480;
+        const US_PER_FRAME: u64 = std.time.us_per_s / 15000;
         var LAST_FRAME: u64 = @intCast(std.time.microTimestamp());
         var US_WAITED: u64 = 0;
 

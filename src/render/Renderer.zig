@@ -3,25 +3,23 @@ const LoadedShader = @import("../shader/LoadedShader.zig").LoadedShader;
 const TextureMeta = @import("types/res/TextureMeta.zig").TextureMeta;
 const BufferMeta = @import("types/res/BufferMeta.zig").BufferMeta;
 const SwapchainMan = @import("sys/SwapchainMan.zig").SwapchainMan;
-const Swapchain = @import("types/base/Swapchain.zig").Swapchain;
 const ResourceMan = @import("sys/ResourceMan.zig").ResourceMan;
-const Window = @import("../window/Window.zig").Window;
 const RenderGraph = @import("sys/RenderGraph.zig").RenderGraph;
-const ShaderMan = @import("sys/ShaderMan.zig").ShaderMan;
-const rc = @import("../.configs/renderConfig.zig");
-const FrameData = @import("../App.zig").FrameData;
-const Scheduler = @import("sys/Scheduler.zig").Scheduler;
 const RenderNode = @import("types/base/Pass.zig").RenderNode;
-const Pass = @import("types/base/Pass.zig").Pass;
+const ShaderMan = @import("sys/ShaderMan.zig").ShaderMan;
+const Scheduler = @import("sys/Scheduler.zig").Scheduler;
 const ImGuiMan = @import("sys/ImGuiMan.zig").ImGuiMan;
 const Context = @import("sys/Context.zig").Context;
+const rc = @import("../.configs/renderConfig.zig");
+const FrameData = @import("../App.zig").FrameData;
+const Pass = @import("types/base/Pass.zig").Pass;
 const vk = @import("../.modules/vk.zig").c;
 const Allocator = std.mem.Allocator;
 const std = @import("std");
 
-const EngineData = @import("../EngineData.zig").EngineData;
-
 const RendererQueue = @import("RendererQueue.zig").RendererQueue;
+const EngineData = @import("../EngineData.zig").EngineData;
+const Window = @import("../window/Window.zig").Window;
 
 pub const Renderer = struct {
     alloc: Allocator,
@@ -134,10 +132,11 @@ pub const Renderer = struct {
 
         const flightId = try self.scheduler.beginFrame();
         try self.resMan.update(flightId, self.scheduler.totalFrames);
-        const targets = try self.swapMan.getUpdatedTargets(flightId, activeWindows);
+        try self.swapMan.updateTargets(flightId, activeWindows);
 
-        const cmd = try self.renderGraph.recordFrame(self.renderNodes.items, flightId, self.scheduler.totalFrames, frameData, targets, &self.resMan, &self.shaderMan, &self.imguiMan, data);
+        const cmd = try self.renderGraph.recordFrame(self.renderNodes.items, flightId, self.scheduler.totalFrames, frameData, &self.swapMan, &self.resMan, &self.shaderMan, &self.imguiMan, data);
 
+        const targets = self.swapMan.getTargets();
         try self.scheduler.queueSubmit(cmd, targets, self.context.graphicsQ);
         try self.scheduler.queuePresent(targets, self.context.graphicsQ);
 

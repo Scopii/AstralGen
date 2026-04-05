@@ -1,6 +1,7 @@
 const TexId = @import("../types/res/TextureMeta.zig").TextureMeta.TexId;
 const LinkedMap = @import("../../.structures/LinkedMap.zig").LinkedMap;
 const Swapchain = @import("../types/base/Swapchain.zig").Swapchain;
+const SlotMap = @import("../../.structures/SlotMap.zig").SlotMap;
 const Window = @import("../../window/Window.zig").Window;
 const rc = @import("../../.configs/renderConfig.zig");
 const Context = @import("Context.zig").Context;
@@ -17,7 +18,7 @@ pub const SwapchainMan = struct {
     queueHandle: vk.VkQueue,
     instance: vk.VkInstance,
     swapchains: LinkedMap(Swapchain, rc.MAX_WINDOWS, u32, 32 + rc.MAX_WINDOWS, 0) = .{},
-    targetPtrs: [rc.MAX_WINDOWS]*Swapchain = undefined,
+    targets: SlotMap(*Swapchain, rc.MAX_WINDOWS, u32, 32 + rc.MAX_WINDOWS, 0) = .{},
 
     pub fn init(alloc: Allocator, context: *const Context) !SwapchainMan {
         return .{
@@ -35,8 +36,8 @@ pub const SwapchainMan = struct {
         }
     }
 
-    pub fn getUpdatedTargets(self: *SwapchainMan, flightId: u8, activeWindows: []const Window) ![]*Swapchain {
-        var count: u8 = 0;
+    pub fn updateTargets(self: *SwapchainMan, flightId: u8, activeWindows: []const Window) !void {
+        self.targets.clear();
 
         for (activeWindows) |*window| {
             const swapchain = self.swapchains.getPtrByKey(window.id.val);
@@ -63,15 +64,21 @@ pub const SwapchainMan = struct {
             }
 
             swapchain.getCurTexture().state = .{ .layout = .Undefined, .stage = .ColorAtt, .access = .None }; // Transfer -> TopOfPipe or ColorAttachmentOutput?
-            self.targetPtrs[count] = swapchain;
-            count += 1;
+            self.targets.upsert(window.id.val, swapchain);
 
             if (rc.SWAPCHAIN_PROFILING == true) {
                 const end = std.time.microTimestamp();
                 std.debug.print("Swapchain (ID {}) Acquire {d:.3} ms\n", .{ window.id.val, @as(f64, @floatFromInt(end - start)) / 1_000.0 });
             }
         }
-        return self.targetPtrs[0..count];
+    }
+
+    pub fn getTargets(self: *SwapchainMan) []const *Swapchain {
+        return self.targets.getConstItems();
+    }
+
+    pub fn getTarget(self: *SwapchainMan, windowId: Window.WindowId) ?*Swapchain {
+        if (self.targets.isKeyUsed(windowId.val) == true) return self.targets.getByKey(windowId.val) else return null;
     }
 
     pub fn changeState(self: *SwapchainMan, windowId: Window.WindowId, inUse: bool) void {

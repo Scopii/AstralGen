@@ -1,15 +1,16 @@
 const TexId = @import("../types/res/TextureMeta.zig").TextureMeta.TexId;
+const ViewportBlit = @import("../types/base/Pass.zig").ViewportBlit;
 const Swapchain = @import("../types/base/Swapchain.zig").Swapchain;
+const RenderNode = @import("../types/base/Pass.zig").RenderNode;
 const PushData = @import("../types/res/PushData.zig").PushData;
+const SwapchainMan = @import("SwapchainMan.zig").SwapchainMan;
 const Texture = @import("../types/res/Texture.zig").Texture;
 const ResourceMan = @import("ResourceMan.zig").ResourceMan;
 const Buffer = @import("../types/res/Buffer.zig").Buffer;
 const ShaderManager = @import("ShaderMan.zig").ShaderMan;
 const rc = @import("../../.configs/renderConfig.zig");
 const FrameData = @import("../../App.zig").FrameData;
-const RenderNode = @import("../types/base/Pass.zig").RenderNode;
 const Pass = @import("../types/base/Pass.zig").Pass;
-const ViewportBlit = @import("../types/base/Pass.zig").ViewportBlit;
 const ImGuiMan = @import("ImGuiMan.zig").ImGuiMan;
 const Cmd = @import("../types/base/Cmd.zig").Cmd;
 const CmdManager = @import("CmdMan.zig").CmdMan;
@@ -19,9 +20,7 @@ const vhT = @import("../help/Types.zig");
 const Allocator = std.mem.Allocator;
 const std = @import("std");
 
-const Window = @import("../../window/Window.zig").Window;
 const EngineData = @import("../../EngineData.zig").EngineData;
-const ViewportId = @import("../../viewport/ViewportSys.zig").ViewportId;
 
 pub const RenderGraph = struct {
     alloc: Allocator,
@@ -51,7 +50,7 @@ pub const RenderGraph = struct {
         if (self.useGpuProfiling == true) self.useGpuProfiling = false else self.useGpuProfiling = true;
     }
 
-    pub fn recordFrame(self: *RenderGraph, renderNodes: []RenderNode, flightId: u8, frame: u64, frameData: FrameData, targets: []const *Swapchain, resMan: *ResourceMan, shaderMan: *ShaderManager, imguiMan: *ImGuiMan, data: *const EngineData) !*Cmd {
+    pub fn recordFrame(self: *RenderGraph, renderNodes: []RenderNode, flightId: u8, frame: u64, frameData: FrameData, swapMan: *SwapchainMan, resMan: *ResourceMan, shaderMan: *ShaderManager, imguiMan: *ImGuiMan, data: *const EngineData) !*Cmd {
         var cmd = try self.cmdMan.getCmd(flightId);
         try cmd.begin(flightId, frame);
 
@@ -66,7 +65,8 @@ pub const RenderGraph = struct {
         cmd.endTimeQuery(.BotOfPipe, 76);
 
         try self.recordTransfers(cmd, resMan);
-        try self.recordNodes(cmd, renderNodes, frameData, resMan, shaderMan, targets);
+        try self.recordNodes(cmd, renderNodes, frameData, resMan, shaderMan, swapMan);
+        const targets = swapMan.getTargets();
         try self.recordImGui(cmd, targets, imguiMan, data);
         try self.recordPresentation(cmd, targets);
 
@@ -168,14 +168,14 @@ pub const RenderGraph = struct {
         } else cmd.dispatch(dispatch.x, dispatch.y, dispatch.z);
     }
 
-    fn recordNodes(self: *RenderGraph, cmd: *Cmd, renderNodes: []RenderNode, frameData: FrameData, resMan: *ResourceMan, shaderMan: *ShaderManager, targets: []const *Swapchain) !void {
+    fn recordNodes(self: *RenderGraph, cmd: *Cmd, renderNodes: []RenderNode, frameData: FrameData, resMan: *ResourceMan, shaderMan: *ShaderManager, swapMan: *SwapchainMan) !void {
         for (renderNodes, 0..) |renderNode, i| {
             switch (renderNode) {
                 .pass => |pass| {
                     try self.recordPass(cmd, &pass, @intCast(i), frameData, resMan, shaderMan);
                 },
                 .viewportBlit => |blit| {
-                    try self.recordBlit(cmd, blit, @intCast(i), resMan, targets);
+                    try self.recordBlit(cmd, blit, @intCast(i), resMan, swapMan);
                 },
             }
         }
@@ -205,25 +205,18 @@ pub const RenderGraph = struct {
         cmd.endStatsQuery(queryIndex);
     }
 
-    fn recordBlit(self: *RenderGraph, cmd: *Cmd, blit: ViewportBlit, queryIndex: u8, resMan: *ResourceMan, targets: []const *Swapchain) !void {
+    fn recordBlit(self: *RenderGraph, cmd: *Cmd, blit: ViewportBlit, queryIndex: u8, resMan: *ResourceMan, swapMan: *SwapchainMan) !void {
         cmd.startTimeQuery(.TopOfPipe, queryIndex, blit.name);
 
         const renderTexMeta = try resMan.getMeta(blit.srcTexId);
         const renderTex = try resMan.get(blit.srcTexId, cmd.flightId);
-
-        // This block is kind dumb:
-        var targetSwapchain: ?*Swapchain = null;
-        for (targets) |swapchain| {
-            if (swapchain.windowId == blit.dstWindowId.val) targetSwapchain = swapchain;
-        }
+        const targetSwapchain = swapMan.getTarget(blit.dstWindowId);
         const swapchain = targetSwapchain orelse return;
-        // End of dumb block
 
         try self.checkImageState(renderTex, renderTexMeta.subRange, .{ .stage = .Transfer, .access = .TransferRead, .layout = .TransferSrc });
         try self.checkImageState(&swapchain.textures[swapchain.curIndex], swapchain.subRange, .{ .stage = .Transfer, .access = .TransferWrite, .layout = .TransferDst });
         self.bakeBarriers(cmd, blit.name);
 
-        // 3. Execute the raw math you already calculated
         const viewArea = vk.VkExtent3D{ .width = blit.viewWidth, .height = blit.viewHeight, .depth = 1 };
         const viewOffset = vk.VkOffset3D{ .x = blit.viewOffsetX, .y = blit.viewOffsetY, .z = 1 };
         cmd.copyImageToImage(renderTex.img, renderTex.extent, swapchain.getCurTexture().img, viewArea, viewOffset, rc.RENDER_TEX_STRETCH);
@@ -275,17 +268,17 @@ pub const RenderGraph = struct {
         cmd.endRendering();
     }
 
-    fn recordImGui(self: *RenderGraph, cmd: *Cmd, swapchains: []const *Swapchain, imguiMan: *ImGuiMan, data: *const EngineData) !void {
+    fn recordImGui(self: *RenderGraph, cmd: *Cmd, targets: []const *Swapchain, imguiMan: *ImGuiMan, data: *const EngineData) !void {
         if (data.window.uiActive) {
             cmd.startTimeQuery(.TopOfPipe, 60, "ImGui");
 
-            for (swapchains) |swapchain| {
+            for (targets) |swapchain| {
                 const target = swapchain.getCurTexture();
                 try self.checkImageState(target, swapchain.subRange, .{ .stage = .ColorAtt, .access = .ColorAttWrite, .layout = .Attachment });
             }
             self.bakeBarriers(cmd, "ImGui Prep");
 
-            for (swapchains) |swapchain| {
+            for (targets) |swapchain| {
                 const target = swapchain.getCurTexture();
                 const colorAtt = target.createAttachment(.Color, false);
 
@@ -297,9 +290,9 @@ pub const RenderGraph = struct {
         }
     }
 
-    fn recordPresentation(self: *RenderGraph, cmd: *Cmd, swapchains: []const *Swapchain) !void {
+    fn recordPresentation(self: *RenderGraph, cmd: *Cmd, targets: []const *Swapchain) !void {
         cmd.startTimeQuery(.TopOfPipe, 65, "Presentation");
-        for (swapchains) |swapchain| {
+        for (targets) |swapchain| {
             const target = swapchain.getCurTexture();
             try self.checkImageState(target, swapchain.subRange, .{ .stage = .BotOfPipe, .access = .None, .layout = .PresentSrc });
         }
