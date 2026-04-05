@@ -60,9 +60,9 @@ pub const RenderGraph = struct {
         if (self.useGpuProfiling == true and frame % rc.GPU_QUERY_INTERVAL == 0) try cmd.enableStatsQuerys(self.gpi) else cmd.disableStatsQuerys(self.gpi);
         cmd.resetStatsQuerys();
 
-        cmd.startTimeQuery(.TopOfPipe, 76, "Descriptor Heap");
+        const timeId = cmd.startTimer(.TopOfPipe, "Descriptor Heap");
         cmd.bindDescriptorHeap(resMan.descMan.descHeap.gpuAddress, resMan.descMan.descHeap.size, resMan.descMan.driverReservedSize);
-        cmd.endTimeQuery(.BotOfPipe, 76);
+        cmd.endTimer(.BotOfPipe, timeId);
 
         try self.recordTransfers(cmd, resMan);
         try self.recordNodes(cmd, renderNodes, frameData, resMan, shaderMan, swapMan);
@@ -81,7 +81,7 @@ pub const RenderGraph = struct {
         const fullTransfers = resUpdater.getFullUpdates(cmd.flightId);
 
         if (fullTransfers.len != 0) {
-            cmd.startTimeQuery(.TopOfPipe, 40, "Full Transfers");
+            const timeId = cmd.startTimer(.TopOfPipe, "Full Transfers");
 
             for (fullTransfers) |transfer| {
                 const buffer = try resMan.get(transfer.dstResId, transfer.dstSlot);
@@ -90,13 +90,14 @@ pub const RenderGraph = struct {
             }
             resUpdater.resetFullUpdates(cmd.flightId);
             self.bakeBarriers(cmd, "Full Transfers");
-            cmd.endTimeQuery(.BotOfPipe, 40);
+
+            cmd.endTimer(.BotOfPipe, timeId);
         }
 
         const partialTransfers = resUpdater.getSegmentUpdates(cmd.flightId);
 
         if (partialTransfers.len != 0) {
-            cmd.startTimeQuery(.TopOfPipe, 41, "Partial Transfers");
+            const timeId = cmd.startTimer(.TopOfPipe, "Partial Transfers");
 
             for (partialTransfers) |transfer| {
                 const buffer = try resMan.get(transfer.dstResId, transfer.dstSlot);
@@ -105,7 +106,7 @@ pub const RenderGraph = struct {
             }
             resUpdater.resetSegmentUpdates(cmd.flightId);
             self.bakeBarriers(cmd, "Segment Transfers");
-            cmd.endTimeQuery(.BotOfPipe, 41);
+            cmd.endTimer(.BotOfPipe, timeId);
         }
     }
 
@@ -169,21 +170,21 @@ pub const RenderGraph = struct {
     }
 
     fn recordNodes(self: *RenderGraph, cmd: *Cmd, renderNodes: []RenderNode, frameData: FrameData, resMan: *ResourceMan, shaderMan: *ShaderManager, swapMan: *SwapchainMan) !void {
-        for (renderNodes, 0..) |renderNode, i| {
+        for (renderNodes) |renderNode| {
             switch (renderNode) {
                 .pass => |pass| {
-                    try self.recordPass(cmd, &pass, @intCast(i), frameData, resMan, shaderMan);
+                    try self.recordPass(cmd, &pass, frameData, resMan, shaderMan);
                 },
                 .viewportBlit => |blit| {
-                    try self.recordBlit(cmd, blit, @intCast(i), resMan, swapMan);
+                    try self.recordBlit(cmd, blit, resMan, swapMan);
                 },
             }
         }
     }
 
-    fn recordPass(self: *RenderGraph, cmd: *Cmd, pass: *const Pass, queryIndex: u8, frameData: FrameData, resMan: *ResourceMan, shaderMan: *ShaderManager) !void {
-        cmd.startTimeQuery(.TopOfPipe, queryIndex, pass.name);
-        cmd.beginStatsQuery(queryIndex, pass.name);
+    fn recordPass(self: *RenderGraph, cmd: *Cmd, pass: *const Pass, frameData: FrameData, resMan: *ResourceMan, shaderMan: *ShaderManager) !void {
+        const timeId = cmd.startTimer(.TopOfPipe, pass.name);
+        cmd.startStatistics(pass.name);
 
         switch (pass.execution) {
             .taskOrMesh, .taskOrMeshIndirect, .graphics, .compute, .computeOnImg => {
@@ -201,12 +202,12 @@ pub const RenderGraph = struct {
                 }
             },
         }
-        cmd.endTimeQuery(.BotOfPipe, queryIndex);
-        cmd.endStatsQuery(queryIndex);
+        cmd.endTimer(.BotOfPipe, timeId);
+        cmd.endStatistics();
     }
 
-    fn recordBlit(self: *RenderGraph, cmd: *Cmd, blit: ViewportBlit, queryIndex: u8, resMan: *ResourceMan, swapMan: *SwapchainMan) !void {
-        cmd.startTimeQuery(.TopOfPipe, queryIndex, blit.name);
+    fn recordBlit(self: *RenderGraph, cmd: *Cmd, blit: ViewportBlit, resMan: *ResourceMan, swapMan: *SwapchainMan) !void {
+        const timeId = cmd.startTimer(.TopOfPipe, blit.name);
 
         const renderTexMeta = try resMan.getMeta(blit.srcTexId);
         const renderTex = try resMan.get(blit.srcTexId, cmd.flightId);
@@ -221,7 +222,7 @@ pub const RenderGraph = struct {
         const viewOffset = vk.VkOffset3D{ .x = blit.viewOffsetX, .y = blit.viewOffsetY, .z = 1 };
         cmd.copyImageToImage(renderTex.img, renderTex.extent, swapchain.getCurTexture().img, viewArea, viewOffset, rc.RENDER_TEX_STRETCH);
 
-        cmd.endTimeQuery(.BotOfPipe, queryIndex);
+        cmd.endTimer(.BotOfPipe, timeId);
     }
 
     fn recordGraphics(cmd: *Cmd, width: u32, height: u32, pass: *const Pass, resMan: *ResourceMan) !void {
@@ -270,7 +271,7 @@ pub const RenderGraph = struct {
 
     fn recordImGui(self: *RenderGraph, cmd: *Cmd, targets: []const *Swapchain, imguiMan: *ImGuiMan, data: *const EngineData) !void {
         if (data.window.uiActive) {
-            cmd.startTimeQuery(.TopOfPipe, 60, "ImGui");
+            const timeId = cmd.startTimer(.TopOfPipe, "ImGui");
 
             for (targets) |swapchain| {
                 const target = swapchain.getCurTexture();
@@ -286,18 +287,18 @@ pub const RenderGraph = struct {
                 imguiMan.render(swapchain.windowId, cmd);
                 cmd.endRendering();
             }
-            cmd.endTimeQuery(.BotOfPipe, 60);
+            cmd.endTimer(.BotOfPipe, timeId);
         }
     }
 
     fn recordPresentation(self: *RenderGraph, cmd: *Cmd, targets: []const *Swapchain) !void {
-        cmd.startTimeQuery(.TopOfPipe, 65, "Presentation");
+        const timeId = cmd.startTimer(.TopOfPipe, "Presentation");
         for (targets) |swapchain| {
             const target = swapchain.getCurTexture();
             try self.checkImageState(target, swapchain.subRange, .{ .stage = .BotOfPipe, .access = .None, .layout = .PresentSrc });
         }
         self.bakeBarriers(cmd, "Present Transition");
-        cmd.endTimeQuery(.BotOfPipe, 65);
+        cmd.endTimer(.BotOfPipe, timeId);
     }
 
     fn bakeBarriers(self: *RenderGraph, cmd: *const Cmd, name: []const u8) void {
