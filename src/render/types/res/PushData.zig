@@ -1,6 +1,8 @@
 const ResourceMan = @import("../../sys/ResourceMan.zig").ResourceMan;
 const FrameData = @import("../../../App.zig").FrameData;
-const Pass = @import("../../types/base/Pass.zig").Pass;
+const BufferUse = @import("../base/Pass.zig").BufferUse;
+const TextureUse = @import("../base/Pass.zig").TextureUse;
+const TexId = @import("TextureMeta.zig").TextureMeta.TexId;
 const std = @import("std");
 
 pub const PushData = extern struct {
@@ -10,11 +12,11 @@ pub const PushData = extern struct {
     height: u32 = 0,
     resourceSlots: [14]u32 = undefined,
 
-    pub fn init(resMan: *ResourceMan, pass: *const Pass, frameData: FrameData, flightId: u8) !PushData {
+    pub fn init(resMan: *ResourceMan, bufUses: []const BufferUse, texUses: []const TextureUse, mainTexId: ?TexId, frameData: FrameData, flightId: u8) !PushData {
         var pcs = PushData{ .runTime = frameData.runTime, .deltaTime = frameData.deltaTime };
         var mask: [14]bool = .{false} ** 14;
 
-        for (pass.getBufUses()) |bufUse| {
+        for (bufUses) |bufUse| {
             const shaderSlot = bufUse.shaderSlot;
 
             if (shaderSlot) |slot| {
@@ -25,7 +27,7 @@ pub const PushData = extern struct {
             }
         }
 
-        for (pass.getTexUses()) |texUse| {
+        for (texUses) |texUse| {
             const shaderSlot = texUse.shaderSlot;
 
             if (shaderSlot) |slot| {
@@ -36,7 +38,6 @@ pub const PushData = extern struct {
             }
         }
 
-        const mainTexId = pass.getMainTexId();
         if (mainTexId) |texId| {
             const mainTex = try resMan.get(texId, flightId);
             pcs.width = mainTex.extent.width;

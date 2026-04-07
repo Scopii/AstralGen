@@ -1,5 +1,3 @@
-const std = @import("std");
-
 pub const TimeData = struct {
     // Set and used
     startup: i128 = 0,

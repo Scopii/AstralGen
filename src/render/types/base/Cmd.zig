@@ -30,6 +30,8 @@ pub const Cmd = struct {
     statQueries: FixedList(QueryPair, rc.GPU_STATS_QUERYS) = .{},
     activeStatQuery: ?QueryPair = null,
 
+    stateChanges: u32 = 0,
+
     pub fn init(cmdPool: vk.VkCommandPool, level: vk.VkCommandBufferLevel, gpi: vk.VkDevice) !Cmd {
         const allocInf = vk.VkCommandBufferAllocateInfo{
             .sType = vk.VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
@@ -94,6 +96,7 @@ pub const Cmd = struct {
         self.flightId = flightId;
         self.frame = frame;
         self.renderState = null;
+        self.stateChanges = 0;
 
         try vhF.check(vk.vkResetCommandBuffer(self.handle, 0), "could not reset Cmd");
         try vhF.check(vk.vkBeginCommandBuffer(self.handle, &beginInf), "could not Begin Cmd");
@@ -302,6 +305,7 @@ pub const Cmd = struct {
                 }
             }
         }
+        std.debug.print("Graphics State Changes: {}\n", .{self.stateChanges});
     }
 
     pub fn bakeBarriers(self: *const Cmd, imgBarriers: []const vk.VkImageMemoryBarrier2, bufBarriers: []const vk.VkBufferMemoryBarrier2) void {
@@ -475,53 +479,116 @@ pub const Cmd = struct {
 
     pub fn updateRenderState(self: *Cmd, new: RenderState) void {
         const cmd = self.handle;
+        var stateChanges: u32 = 0;
 
-        var old: RenderState = undefined;
+        var cur: RenderState = undefined;
         var force = false;
-
-        if (self.renderState) |renderState| old = renderState else force = true;
+        if (self.renderState) |renderState| cur = renderState else force = true;
 
         // Rasterization & Geometry
-        if (force or old.polygonMode != new.polygonMode) vkFn.vkCmdSetPolygonModeEXT.?(cmd, new.polygonMode);
-        if (force or old.cullMode != new.cullMode) vk.vkCmdSetCullMode(cmd, new.cullMode);
-        if (force or old.frontFace != new.frontFace) vk.vkCmdSetFrontFace(cmd, new.frontFace);
-        if (force or old.topology != new.topology) vk.vkCmdSetPrimitiveTopology(cmd, new.topology);
+        if (force or cur.polygonMode != new.polygonMode) {
+            vkFn.vkCmdSetPolygonModeEXT.?(cmd, new.polygonMode);
+            stateChanges += 1;
+        }
+        if (force or cur.cullMode != new.cullMode) {
+            vk.vkCmdSetCullMode(cmd, new.cullMode);
+            stateChanges += 1;
+        }
+        if (force or cur.frontFace != new.frontFace) {
+            vk.vkCmdSetFrontFace(cmd, new.frontFace);
+            stateChanges += 1;
+        }
+        if (force or cur.topology != new.topology) {
+            vk.vkCmdSetPrimitiveTopology(cmd, new.topology);
+            stateChanges += 1;
+        }
 
-        if (force or old.primitiveRestart != new.primitiveRestart) vk.vkCmdSetPrimitiveRestartEnable(cmd, new.primitiveRestart);
-        if (force or old.rasterDiscard != new.rasterDiscard) vk.vkCmdSetRasterizerDiscardEnable(cmd, new.rasterDiscard);
-        if (force or old.rasterSamples != new.rasterSamples) vkFn.vkCmdSetRasterizationSamplesEXT.?(cmd, new.rasterSamples);
+        if (force or cur.primitiveRestart != new.primitiveRestart) {
+            vk.vkCmdSetPrimitiveRestartEnable(cmd, new.primitiveRestart);
+            stateChanges += 1;
+        }
+        if (force or cur.rasterDiscard != new.rasterDiscard) {
+            vk.vkCmdSetRasterizerDiscardEnable(cmd, new.rasterDiscard);
+            stateChanges += 1;
+        }
+        if (force or cur.rasterSamples != new.rasterSamples) {
+            vkFn.vkCmdSetRasterizationSamplesEXT.?(cmd, new.rasterSamples);
+            stateChanges += 1;
+        }
 
         const sampleMask: u32 = new.sample.sampleMask;
-        if (force or !std.meta.eql(old.sample, new.sample)) vkFn.vkCmdSetSampleMaskEXT.?(cmd, new.sample.sampling, &sampleMask);
+        if (force or !std.meta.eql(cur.sample, new.sample)) {
+            vkFn.vkCmdSetSampleMaskEXT.?(cmd, new.sample.sampling, &sampleMask);
+            stateChanges += 1;
+        }
 
         // Depth & Stencil
-        if (force or old.depthBoundsTest != new.depthBoundsTest) vk.vkCmdSetDepthBoundsTestEnable(cmd, new.depthBoundsTest);
-        if (force or old.depthBias != new.depthBias) vk.vkCmdSetDepthBiasEnable(cmd, new.depthBias);
-        if (force or old.depthClamp != new.depthClamp) vkFn.vkCmdSetDepthClampEnableEXT.?(cmd, new.depthClamp);
+        if (force or cur.depthBoundsTest != new.depthBoundsTest) {
+            vk.vkCmdSetDepthBoundsTestEnable(cmd, new.depthBoundsTest);
+            stateChanges += 1;
+        }
+        if (force or cur.depthBias != new.depthBias) {
+            vk.vkCmdSetDepthBiasEnable(cmd, new.depthBias);
+            stateChanges += 1;
+        }
+        if (force or cur.depthClamp != new.depthClamp) {
+            vkFn.vkCmdSetDepthClampEnableEXT.?(cmd, new.depthClamp);
+            stateChanges += 1;
+        }
 
-        if (force or old.depthTest != new.depthTest) vk.vkCmdSetDepthTestEnable(cmd, new.depthTest);
-        if (force or old.depthWrite != new.depthWrite) vk.vkCmdSetDepthWriteEnable(cmd, new.depthWrite);
-        if (force or old.depthCompare != new.depthCompare) vk.vkCmdSetDepthCompareOp(cmd, new.depthCompare);
-        if (force or !std.meta.eql(old.depthValues, new.depthValues)) vk.vkCmdSetDepthBias(cmd, new.depthValues.constant, new.depthValues.clamp, new.depthValues.slope);
+        if (force or cur.depthTest != new.depthTest) {
+            vk.vkCmdSetDepthTestEnable(cmd, new.depthTest);
+            stateChanges += 1;
+        }
+        if (force or cur.depthWrite != new.depthWrite) {
+            vk.vkCmdSetDepthWriteEnable(cmd, new.depthWrite);
+            stateChanges += 1;
+        }
+        if (force or cur.depthCompare != new.depthCompare) {
+            vk.vkCmdSetDepthCompareOp(cmd, new.depthCompare);
+            stateChanges += 1;
+        }
+        if (force or !std.meta.eql(cur.depthValues, new.depthValues)) {
+            vk.vkCmdSetDepthBias(cmd, new.depthValues.constant, new.depthValues.clamp, new.depthValues.slope);
+            stateChanges += 1;
+        }
 
-        if (force or old.stencilTest != new.stencilTest) vk.vkCmdSetStencilTestEnable(cmd, new.stencilTest);
-        if (force or !std.meta.eql(old.stencilOp, new.stencilOp)) vk.vkCmdSetStencilOp(cmd, new.stencilOp[0], new.stencilOp[1], new.stencilOp[2], new.stencilOp[3], new.stencilOp[4]);
-        if (force or !std.meta.eql(old.stencilCompare, new.stencilCompare)) vk.vkCmdSetStencilCompareMask(cmd, new.stencilCompare.faceMask, new.stencilCompare.mask);
-        if (force or !std.meta.eql(old.stencilWrite, new.stencilWrite)) vk.vkCmdSetStencilWriteMask(cmd, new.stencilWrite.faceMask, new.stencilWrite.mask);
-        if (force or !std.meta.eql(old.stencilReference, new.stencilReference)) vk.vkCmdSetStencilReference(cmd, new.stencilReference.faceMask, new.stencilReference.mask);
+        if (force or cur.stencilTest != new.stencilTest) {
+            vk.vkCmdSetStencilTestEnable(cmd, new.stencilTest);
+            stateChanges += 1;
+        }
+        if (force or !std.meta.eql(cur.stencilOp, new.stencilOp)) {
+            vk.vkCmdSetStencilOp(cmd, new.stencilOp[0], new.stencilOp[1], new.stencilOp[2], new.stencilOp[3], new.stencilOp[4]);
+            stateChanges += 1;
+        }
+        if (force or !std.meta.eql(cur.stencilCompare, new.stencilCompare)) {
+            vk.vkCmdSetStencilCompareMask(cmd, new.stencilCompare.faceMask, new.stencilCompare.mask);
+            stateChanges += 1;
+        }
+        if (force or !std.meta.eql(cur.stencilWrite, new.stencilWrite)) {
+            vk.vkCmdSetStencilWriteMask(cmd, new.stencilWrite.faceMask, new.stencilWrite.mask);
+            stateChanges += 1;
+        }
+        if (force or !std.meta.eql(cur.stencilReference, new.stencilReference)) {
+            vk.vkCmdSetStencilReference(cmd, new.stencilReference.faceMask, new.stencilReference.mask);
+            stateChanges += 1;
+        }
 
         // Color & Blending
         const blendEnable = new.colorBlend;
         const colorBlendAttachments = [_]vk.VkBool32{blendEnable} ** 8;
-        if (force or old.colorBlend != new.colorBlend) vkFn.vkCmdSetColorBlendEnableEXT.?(cmd, 0, 8, &colorBlendAttachments);
+        if (force or cur.colorBlend != new.colorBlend) {
+            vkFn.vkCmdSetColorBlendEnableEXT.?(cmd, 0, 8, &colorBlendAttachments);
+            stateChanges += 1;
+        }
 
         const oldBlendEquation = vk.VkColorBlendEquationEXT{
-            .srcColorBlendFactor = old.colorBlendEquation.srcColor,
-            .dstColorBlendFactor = old.colorBlendEquation.dstColor,
-            .colorBlendOp = old.colorBlendEquation.colorOperation,
-            .srcAlphaBlendFactor = old.colorBlendEquation.srcAlpha,
-            .dstAlphaBlendFactor = old.colorBlendEquation.dstAlpha,
-            .alphaBlendOp = old.colorBlendEquation.alphaOperation,
+            .srcColorBlendFactor = cur.colorBlendEquation.srcColor,
+            .dstColorBlendFactor = cur.colorBlendEquation.dstColor,
+            .colorBlendOp = cur.colorBlendEquation.colorOperation,
+            .srcAlphaBlendFactor = cur.colorBlendEquation.srcAlpha,
+            .dstAlphaBlendFactor = cur.colorBlendEquation.dstAlpha,
+            .alphaBlendOp = cur.colorBlendEquation.alphaOperation,
         };
 
         const blendEquation = vk.VkColorBlendEquationEXT{
@@ -533,29 +600,60 @@ pub const Cmd = struct {
             .alphaBlendOp = new.colorBlendEquation.alphaOperation,
         };
         const equations = [_]vk.VkColorBlendEquationEXT{blendEquation} ** 8;
-        if (force or !std.meta.eql(oldBlendEquation, blendEquation)) vkFn.vkCmdSetColorBlendEquationEXT.?(cmd, 0, 8, &equations);
+        if (force or !std.meta.eql(oldBlendEquation, blendEquation)) {
+            vkFn.vkCmdSetColorBlendEquationEXT.?(cmd, 0, 8, &equations);
+            stateChanges += 1;
+        }
 
-        const oldBlendConsts = [_]f32{ old.blendConstants.red, old.blendConstants.green, old.blendConstants.blue, old.blendConstants.alpha };
+        const oldBlendConsts = [_]f32{ cur.blendConstants.red, cur.blendConstants.green, cur.blendConstants.blue, cur.blendConstants.alpha };
         const blendConsts = [_]f32{ new.blendConstants.red, new.blendConstants.green, new.blendConstants.blue, new.blendConstants.alpha };
-        if (force or !std.meta.eql(oldBlendConsts, blendConsts)) vk.vkCmdSetBlendConstants(cmd, &blendConsts);
+        if (force or !std.meta.eql(oldBlendConsts, blendConsts)) {
+            vk.vkCmdSetBlendConstants(cmd, &blendConsts);
+            stateChanges += 1;
+        }
 
         const colWriteMasks = [_]vk.VkColorComponentFlags{new.colorWriteMask} ** 8;
-        if (force or old.colorWriteMask != new.colorWriteMask) vkFn.vkCmdSetColorWriteMaskEXT.?(cmd, 0, 8, &colWriteMasks);
+        if (force or cur.colorWriteMask != new.colorWriteMask) {
+            vkFn.vkCmdSetColorWriteMaskEXT.?(cmd, 0, 8, &colWriteMasks);
+            stateChanges += 1;
+        }
 
-        if (force or old.alphaToOne != new.alphaToOne) vkFn.vkCmdSetAlphaToOneEnableEXT.?(cmd, new.alphaToOne);
-        if (force or old.alphaToCoverage != new.alphaToCoverage) vkFn.vkCmdSetAlphaToCoverageEnableEXT.?(cmd, new.alphaToCoverage);
+        if (force or cur.alphaToOne != new.alphaToOne) {
+            vkFn.vkCmdSetAlphaToOneEnableEXT.?(cmd, new.alphaToOne);
+            stateChanges += 1;
+        }
+        if (force or cur.alphaToCoverage != new.alphaToCoverage) {
+            vkFn.vkCmdSetAlphaToCoverageEnableEXT.?(cmd, new.alphaToCoverage);
+            stateChanges += 1;
+        }
 
-        if (force or old.logicOp != new.logicOp) vkFn.vkCmdSetLogicOpEnableEXT.?(cmd, new.logicOp);
-        if (force or old.logicOpType != new.logicOpType) vkFn.vkCmdSetLogicOpEXT.?(cmd, new.logicOpType);
+        if (force or cur.logicOp != new.logicOp) {
+            vkFn.vkCmdSetLogicOpEnableEXT.?(cmd, new.logicOp);
+            stateChanges += 1;
+        }
+        if (force or cur.logicOpType != new.logicOpType) {
+            vkFn.vkCmdSetLogicOpEXT.?(cmd, new.logicOpType);
+            stateChanges += 1;
+        }
 
         // Advanced / Debug
-        if (force or old.lineWidth != new.lineWidth) vk.vkCmdSetLineWidth(cmd, new.lineWidth);
-        if (force or old.conservativeRasterMode != new.conservativeRasterMode) vkFn.vkCmdSetConservativeRasterizationModeEXT.?(cmd, new.conservativeRasterMode);
+        if (force or cur.lineWidth != new.lineWidth) {
+            vk.vkCmdSetLineWidth(cmd, new.lineWidth);
+            stateChanges += 1;
+        }
+        if (force or cur.conservativeRasterMode != new.conservativeRasterMode) {
+            vkFn.vkCmdSetConservativeRasterizationModeEXT.?(cmd, new.conservativeRasterMode);
+            stateChanges += 1;
+        }
 
         const combinerOps = [_]vk.VkFragmentShadingRateCombinerOpKHR{ new.fragShadingRate.operation, new.fragShadingRate.operation };
         const extent = vk.VkExtent2D{ .width = new.fragShadingRate.width, .height = new.fragShadingRate.height };
-        if (force or !std.meta.eql(old.fragShadingRate, new.fragShadingRate)) vkFn.vkCmdSetFragmentShadingRateKHR.?(cmd, &extent, &combinerOps);
+        if (force or !std.meta.eql(cur.fragShadingRate, new.fragShadingRate)) {
+            vkFn.vkCmdSetFragmentShadingRateKHR.?(cmd, &extent, &combinerOps);
+            stateChanges += 1;
+        }
 
+        self.stateChanges += stateChanges;
         self.renderState = new;
     }
 

@@ -1,8 +1,6 @@
 const TextureMeta = @import("../types/res/TextureMeta.zig").TextureMeta;
 const FixedList = @import("../../.structures/FixedList.zig").FixedList;
-const LinkedMap = @import("../../.structures/LinkedMap.zig").LinkedMap;
-const BufferMeta = @import("../types/res/BufferMeta.zig").BufferMeta;
-const PushData = @import("../types/res/PushData.zig").PushData;
+const SlotMap = @import("../../.structures/SlotMap.zig").SlotMap;
 const Texture = @import("../types/res/Texture.zig").Texture;
 const Buffer = @import("../types/res/Buffer.zig").Buffer;
 const rc = @import("../../.configs/renderConfig.zig");
@@ -10,9 +8,7 @@ const Context = @import("Context.zig").Context;
 const vk = @import("../../.modules/vk.zig").c;
 const vhF = @import("../help/Functions.zig");
 const vkFn = @import("../../.modules/vk.zig");
-const vhT = @import("../help/Types.zig");
 const vhE = @import("../help/Enums.zig");
-const Allocator = std.mem.Allocator;
 const Vma = @import("Vma.zig").Vma;
 const std = @import("std");
 
@@ -32,11 +28,11 @@ pub const DescriptorMan = struct {
     hostRanges: [rc.RESOURCE_MAX]vk.VkHostAddressRangeEXT = undefined,
 
     // Buffer Updates
-    bufUpdates: LinkedMap(DescUpdate, rc.BUF_MAX * rc.MAX_IN_FLIGHT, u32, rc.BUF_MAX * rc.MAX_IN_FLIGHT, 0) = .{},
+    bufUpdates: SlotMap(DescUpdate, rc.BUF_MAX * rc.MAX_IN_FLIGHT, u32, rc.BUF_MAX * rc.MAX_IN_FLIGHT, 0) = .{},
     devRanges: [rc.BUF_MAX]vk.VkDeviceAddressRangeEXT = undefined,
 
     // Image Updates
-    texUpdates: LinkedMap(DescUpdate, rc.TEX_MAX * rc.MAX_IN_FLIGHT, u32, rc.TEX_MAX * rc.MAX_IN_FLIGHT, 0) = .{},
+    texUpdates: SlotMap(DescUpdate, rc.TEX_MAX * rc.MAX_IN_FLIGHT, u32, rc.TEX_MAX * rc.MAX_IN_FLIGHT, 0) = .{},
     imgViews: [rc.TEX_MAX]vk.VkImageViewCreateInfo = undefined,
     imgDescs: [rc.TEX_MAX]vk.VkImageDescriptorInfoEXT = undefined,
 

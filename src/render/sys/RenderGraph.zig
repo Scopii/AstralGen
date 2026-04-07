@@ -1,9 +1,13 @@
 const TexId = @import("../types/res/TextureMeta.zig").TextureMeta.TexId;
 const ViewportBlit = @import("../types/base/Pass.zig").ViewportBlit;
 const Swapchain = @import("../types/base/Swapchain.zig").Swapchain;
+const Attachment = @import("../types/base/Pass.zig").Attachment;
+const TextureUse = @import("../types/base/Pass.zig").TextureUse;
 const RenderNode = @import("../types/base/Pass.zig").RenderNode;
 const PushData = @import("../types/res/PushData.zig").PushData;
+const BufferUse = @import("../types/base/Pass.zig").BufferUse;
 const SwapchainMan = @import("SwapchainMan.zig").SwapchainMan;
+const Dispatch = @import("../types/base/Pass.zig").Dispatch;
 const Texture = @import("../types/res/Texture.zig").Texture;
 const ResourceMan = @import("ResourceMan.zig").ResourceMan;
 const Buffer = @import("../types/res/Buffer.zig").Buffer;
@@ -128,35 +132,45 @@ pub const RenderGraph = struct {
         try self.bufBarriers.append(buffer.createBufferBarrier(neededState));
     }
 
-    fn recordPassBarriers(self: *RenderGraph, cmd: *const Cmd, pass: *const Pass, resMan: *ResourceMan) !void {
-        for (pass.getBufUses()) |bufUse| {
+    fn recordPassBarriers(
+        self: *RenderGraph,
+        cmd: *const Cmd,
+        name: []const u8,
+        bufUses: []const BufferUse,
+        texUses: []const TextureUse,
+        colorAtts: []const Attachment,
+        depthAtt: ?Attachment,
+        stencilAtt: ?Attachment,
+        resMan: *ResourceMan,
+    ) !void {
+        for (bufUses) |bufUse| {
             const buffer = try resMan.get(bufUse.bufId, cmd.flightId);
             try self.checkBufferState(buffer, bufUse.getNeededState());
         }
-        for (pass.getTexUses()) |texUse| {
+        for (texUses) |texUse| {
             const texMeta = try resMan.getMeta(texUse.texId);
             const tex = try resMan.get(texUse.texId, cmd.flightId);
             try self.checkImageState(tex, texMeta.subRange, texUse.getNeededState());
         }
-        for (pass.getColorAtts()) |colorAtt| {
-            const texMeta = try resMan.getMeta(colorAtt.texId);
-            const tex = try resMan.get(colorAtt.texId, cmd.flightId);
-            try self.checkImageState(tex, texMeta.subRange, colorAtt.getNeededState());
+        for (colorAtts) |attachment| {
+            const texMeta = try resMan.getMeta(attachment.texId);
+            const tex = try resMan.get(attachment.texId, cmd.flightId);
+            try self.checkImageState(tex, texMeta.subRange, attachment.getNeededState());
         }
-        if (pass.depthAtt) |depthAtt| {
-            const texMeta = try resMan.getMeta(depthAtt.texId);
-            const tex = try resMan.get(depthAtt.texId, cmd.flightId);
-            try self.checkImageState(tex, texMeta.subRange, depthAtt.getNeededState());
+        if (depthAtt) |attachment| {
+            const texMeta = try resMan.getMeta(attachment.texId);
+            const tex = try resMan.get(attachment.texId, cmd.flightId);
+            try self.checkImageState(tex, texMeta.subRange, attachment.getNeededState());
         }
-        if (pass.stencilAtt) |stencilAtt| {
-            const texMeta = try resMan.getMeta(stencilAtt.texId);
-            const tex = try resMan.get(stencilAtt.texId, cmd.flightId);
-            try self.checkImageState(tex, texMeta.subRange, stencilAtt.getNeededState());
+        if (stencilAtt) |attachment| {
+            const texMeta = try resMan.getMeta(attachment.texId);
+            const tex = try resMan.get(attachment.texId, cmd.flightId);
+            try self.checkImageState(tex, texMeta.subRange, attachment.getNeededState());
         }
-        self.bakeBarriers(cmd, pass.name);
+        self.bakeBarriers(cmd, name);
     }
 
-    fn recordCompute(cmd: *const Cmd, dispatch: Pass.Dispatch, renderTexId: ?TexId, resMan: *ResourceMan) !void {
+    fn recordCompute(cmd: *const Cmd, dispatch: Dispatch, renderTexId: ?TexId, resMan: *ResourceMan) !void {
         if (renderTexId) |texId| {
             const tex = try resMan.get(texId, cmd.flightId);
             const extent = tex.extent;
@@ -186,21 +200,17 @@ pub const RenderGraph = struct {
         const timeId = cmd.startTimer(.TopOfPipe, pass.name);
         cmd.startStatistics(pass.name);
 
+        const shaders = shaderMan.getShaders(pass.getShaderIds())[0..pass.shaderCount];
+        cmd.bindShaders(shaders);
+        const pushData = try PushData.init(resMan, pass.getBufUses(), pass.getTexUses(), pass.getMainTexId(), frameData, cmd.flightId);
+        cmd.setPushData(&pushData, @sizeOf(PushData), 0);
+
+        try self.recordPassBarriers(cmd, pass.name, pass.getBufUses(), pass.getTexUses(), pass.getColorAtts(), pass.depthAtt, pass.stencilAtt, resMan);
+
         switch (pass.execution) {
-            .taskOrMesh, .taskOrMeshIndirect, .graphics, .compute, .computeOnImg => {
-                const shaders = shaderMan.getShaders(pass.getShaderIds())[0..pass.shaderCount];
-                cmd.bindShaders(shaders);
-                const pushData = try PushData.init(resMan, pass, frameData, cmd.flightId);
-                cmd.setPushData(&pushData, @sizeOf(PushData), 0);
-
-                try self.recordPassBarriers(cmd, pass, resMan);
-
-                switch (pass.execution) {
-                    .taskOrMesh, .taskOrMeshIndirect, .graphics => try recordGraphics(cmd, pushData.width, pushData.height, pass, resMan),
-                    .computeOnImg => |computeOnImg| try recordCompute(cmd, computeOnImg.workgroups, computeOnImg.mainTexId, resMan),
-                    .compute => |compute| try recordCompute(cmd, compute.workgroups, null, resMan),
-                }
-            },
+            .taskOrMesh, .taskOrMeshIndirect, .graphics => try recordGraphics(cmd, pushData.width, pushData.height, pass, resMan),
+            .computeOnImg => |computeOnImg| try recordCompute(cmd, computeOnImg.workgroups, computeOnImg.mainTexId, resMan),
+            .compute => |compute| try recordCompute(cmd, compute.workgroups, null, resMan),
         }
         cmd.endTimer(.BotOfPipe, timeId);
         cmd.endStatistics();
@@ -264,7 +274,7 @@ pub const RenderGraph = struct {
                 cmd.setEmptyVertexInput();
                 cmd.draw(graphics.vertices, graphics.instances, 0, 0);
             },
-            else => return error.ComputePassLandedInGraphicsRecording,
+            .compute, .computeOnImg => std.debug.print("ERROR: Compute or ComputeOnImg Pass ({s}) landed in Graphics Recording\n", .{pass.name}),
         }
         cmd.endRendering();
     }

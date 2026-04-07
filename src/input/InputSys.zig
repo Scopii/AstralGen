@@ -1,7 +1,5 @@
 const RendererQueue = @import("../render/RendererQueue.zig").RendererQueue;
 const WindowQueue = @import("../window/WindowQueue.zig").WindowQueue;
-const FixedList = @import("../.structures/FixedList.zig").FixedList;
-const LinkedMap = @import("../.structures/LinkedMap.zig").LinkedMap;
 const InputQueue = @import("../input/InputQueue.zig").InputQueue;
 const AppEvent = @import("../.configs/appConfig.zig").AppEvent;
 const InputData = @import("../input/InputData.zig").InputData;

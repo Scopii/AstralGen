@@ -1,11 +1,11 @@
-const FixedList = @import("../.structures/FixedList.zig").FixedList;
-const std = @import("std");
 const BufId = @import("../render/types/res/BufferMeta.zig").BufferMeta.BufId;
 const TexInf = @import("../render/types/res/TextureMeta.zig").TextureMeta.TexInf;
 const BufInf = @import("../render/types/res/BufferMeta.zig").BufferMeta.BufInf;
-const Pass = @import("../render/types/base/Pass.zig").Pass;
-const Window = @import("../window/Window.zig").Window;
 const LoadedShader = @import("../shader/LoadedShader.zig").LoadedShader;
+const RenderNode = @import("../render/types/base/Pass.zig").RenderNode;
+const FixedList = @import("../.structures/FixedList.zig").FixedList;
+const Window = @import("../window/Window.zig").Window;
+const std = @import("std");
 
 pub const RendererQueue = struct {
     rendererEvents: FixedList(RendererEvent, 127) = .{},
@@ -30,7 +30,7 @@ pub const RendererQueue = struct {
         updateBuffer: *const struct { bufId: BufId, data: []const u8 },
         updateBufferSegment: *const struct { bufId: BufId, data: []const u8, elementOffset: u32 },
         updateWindowState: *const Window,
-        addPass: *const Pass,
+        addRenderNode: *const RenderNode,
 
         addShader: *const LoadedShader,
     };

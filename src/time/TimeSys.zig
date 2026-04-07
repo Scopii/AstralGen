@@ -1,5 +1,5 @@
-const std = @import("std");
 const TimeData = @import("../time/TimeData.zig").TimeData;
+const std = @import("std");
 
 pub const TimeUnit = enum { seconds, milli, micro, nano };
 
@@ -45,11 +45,11 @@ pub const TimeSys = struct {
     pub fn printTimeInfo(timeState: *TimeData) void {
         std.debug.print("Startup as Float {d:.4}\n", .{getStartup(timeState, .seconds, f32)});
         std.debug.print("Startup as Int {}\n", .{getStartup(timeState, .seconds, u32)});
-        std.debug.print("LastTime as Float {d:.4}\n", .{timeState, getLastTime(.seconds, f32)});
+        std.debug.print("LastTime as Float {d:.4}\n", .{ timeState, getLastTime(.seconds, f32) });
         std.debug.print("LastTime as Int {}\n", .{getLastTime(timeState, .seconds, u32)});
         std.debug.print("Runtime as Float {d:.4}\n", .{getRuntime(.seconds, f32)});
         std.debug.print("Runtime as Int {}\n", .{getStartup(timeState, .seconds, u32)});
-        std.debug.print("DeltaTime as Float {d:.4}\n", .{timeState, getDeltaTime(.seconds, f32)});
-        std.debug.print("DeltaTime as Int {}\n", .{timeState, getDeltaTime(.seconds, u32)});
+        std.debug.print("DeltaTime as Float {d:.4}\n", .{ timeState, getDeltaTime(.seconds, f32) });
+        std.debug.print("DeltaTime as Int {}\n", .{ timeState, getDeltaTime(.seconds, u32) });
     }
 };

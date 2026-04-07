@@ -1,6 +1,6 @@
 const TexId = @import("../render/types/res/TextureMeta.zig").TextureMeta.TexId;
-const FixedList = @import("../.structures/FixedList.zig").FixedList;
 const ViewportId = @import("../viewport/ViewportSys.zig").ViewportId;
+const FixedList = @import("../.structures/FixedList.zig").FixedList;
 const std = @import("std");
 
 pub const WindowQueue = struct {

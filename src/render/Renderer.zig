@@ -71,7 +71,7 @@ pub const Renderer = struct {
             switch (rendererEvent) {
                 .toggleGpuProfiling => self.renderGraph.toggleGpuProfiling(),
                 .updateWindowState => |window| try self.updateWindowStates(&[_]Window{window.*}),
-                .addPass => |pass| try self.createPasses(&[_]Pass{pass.*}),
+                .addRenderNode => |node| try self.renderNodes.append(node.*),
                 .addTexture => |inf| try self.addResource(inf.texInf, inf.data),
                 .addBuffer => |inf| try self.addResource(inf.bufInf, inf.data),
                 .updateBuffer => |inf| try self.updateBuffer(inf.bufId, inf.data),
@@ -141,16 +141,6 @@ pub const Renderer = struct {
         try self.scheduler.queuePresent(targets, self.context.graphicsQ);
 
         self.scheduler.endFrame();
-    }
-
-    fn createPasses(self: *Renderer, passes: []const Pass) !void {
-        for (passes) |pass| {
-            if (self.shaderMan.isPassValid(pass) == false) {
-                std.debug.print("Error: Pass ShaderLayout does not match Pass Type -> not appended\n", .{});
-                return error.PassNotValid;
-            }
-            try self.renderNodes.append(.{ .pass = pass });
-        }
     }
 
     pub fn addShaders(self: *Renderer, loadedShaders: []const LoadedShader) !void {

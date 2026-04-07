@@ -1,12 +1,7 @@
-const ViewportId = @import("ViewportSys.zig").ViewportId;
-const EntityId = @import("../ecs/EntityData.zig").EntityId;
 const TexId = @import("../render/types/res/TextureMeta.zig").TextureMeta.TexId;
-const Pass = @import("../render/types/base/Pass.zig").Pass;
-
 const PassStruct = @import("../frameBuild/FrameBuildSys.zig").PassStruct;
 const PassEnum = @import("../frameBuild/FrameBuildSys.zig").PassEnum;
-
-const WindowId = @import("../window/Window.zig").Window.WindowId;
+const EntityId = @import("../ecs/EntityData.zig").EntityId;
 
 pub const Viewport = struct {
     name: []const u8,

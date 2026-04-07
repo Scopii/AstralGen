@@ -1,7 +1,7 @@
 const RendererQueue = @import("../render/RendererQueue.zig").RendererQueue;
 const MemoryManager = @import("../core/MemoryManager.zig").MemoryManager;
-const EntityData = @import("../ecs/EntityData.zig").EntityData;
 const GpuObjectData = @import("../render/help/Types.zig").GpuObjectData;
+const EntityData = @import("../ecs/EntityData.zig").EntityData;
 const rc = @import("../.configs/renderConfig.zig");
 const std = @import("std");
 

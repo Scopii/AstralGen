@@ -71,7 +71,6 @@ pub const FrameBuildSys = struct {
                     const viewport = data.viewport.viewports.getByKey(viewportId.val);
 
                     if (viewport.blitPass == passEnum) {
-
                         for (activeWindows) |*window| {
                             var isAttached = false;
                             for (window.viewIds) |windowViewId| {
@@ -102,11 +101,6 @@ pub const FrameBuildSys = struct {
                 }
             }
         }
-    }
-
-    fn appendBlit(frameBuild: *FrameBuildData, viewportId: ViewportId, viewportName: []const u8) void {
-        const blitPass = Pass.init(.{ .name = viewportName, .execution = .{ .viewportBlit = viewportId }, .shaderIds = &.{} });
-        frameBuild.passList.append(blitPass) catch std.debug.print("Pass Could not Append\n", .{});
     }
 
     fn appendPass(frameBuild: *FrameBuildData, passEnum: PassEnum) !void {

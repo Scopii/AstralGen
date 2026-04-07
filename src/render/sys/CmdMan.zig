@@ -1,5 +1,3 @@
-const LinkedMap = @import("../../.structures/LinkedMap.zig").LinkedMap;
-const rc = @import("../../.configs/renderConfig.zig");
 const Cmd = @import("../types/base/Cmd.zig").Cmd;
 const Context = @import("Context.zig").Context;
 const vk = @import("../../.modules/vk.zig").c;

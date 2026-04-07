@@ -1,6 +1,5 @@
-const Window = @import("../window/Window.zig").Window;
 const EngineData = @import("../EngineData.zig").EngineData;
-const sdl = @import("../.modules/sdl.zig").c;
+const Window = @import("../window/Window.zig").Window;
 const zgui = @import("zgui");
 const std = @import("std");
 

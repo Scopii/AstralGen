@@ -32,8 +32,6 @@ pub const ResourceMan = struct {
     queues: [QUEUE_COUNT]ResourceQueue,
     bufMetas: LinkedMap(BufferMeta, rc.BUF_MAX, u32, rc.BUF_MAX, 0) = .{},
     texMetas: LinkedMap(TextureMeta, rc.TEX_MAX, u32, rc.TEX_MAX, 0) = .{},
-    // bufUpdateSlots: LinkedMap(u8, rc.RESOURCE_MAX, u32, rc.RESOURCE_MAX, 0) = .{},
-    // texUpdateSlots: LinkedMap(u8, rc.RESOURCE_MAX, u32, rc.RESOURCE_MAX, 0) = .{},
 
     pub fn init(alloc: Allocator, context: *const Context) !ResourceMan {
         const vma = try Vma.init(context.instance, context.gpi, context.gpu);

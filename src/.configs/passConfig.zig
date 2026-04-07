@@ -1,14 +1,14 @@
+const TextureMeta = @import("../render/types/res/TextureMeta.zig").TextureMeta;
+const BufferMeta = @import("../render/types/res/BufferMeta.zig").BufferMeta;
 const Attachment = @import("../render/types/base/Pass.zig").Attachment;
 const TextureUse = @import("../render/types/base/Pass.zig").TextureUse;
 const BufferUse = @import("../render/types/base/Pass.zig").BufferUse;
-const TextureMeta = @import("../render/types/res/TextureMeta.zig").TextureMeta;
-const BufferMeta = @import("../render/types/res/BufferMeta.zig").BufferMeta;
 const CameraData = @import("../camera/CameraSys.zig").CamData;
+const ShaderId = @import("../shader/ShaderSys.zig").ShaderId;
 const Pass = @import("../render/types/base/Pass.zig").Pass;
 const vhT = @import("../render/help/Types.zig");
 const vk = @import("../.modules/vk.zig").c;
 const sc = @import("shaderConfig.zig");
-const ShaderId = @import("../shader/ShaderSys.zig").ShaderId;
 const BufId = BufferMeta.BufId;
 const TexId = TextureMeta.TexId;
 
@@ -21,17 +21,17 @@ pub fn CompRayMarch(
         readbackBuf: BufId,
     },
 ) Pass {
-    return Pass.init(.{
+    return Pass.ComputeOnImg(.{
         .name = def.name,
-        .execution = .{ .computeOnImg = .{ .workgroups = .{ .x = 8, .y = 8, .z = 1 }, .mainTexId = def.outputTex } },
-        .shaderIds = &.{sc.t1Comp.id},
+        .execution = .{ .workgroups = .{ .x = 8, .y = 8, .z = 1 }, .mainTexId = def.outputTex },
+        .compute = sc.t1Comp,
         .bufUses = &.{
-            BufferUse.init(def.entityBuf, .ComputeShader, .ShaderRead, 0),
-            BufferUse.init(def.camBuf, .ComputeShader, .ShaderRead, 1),
-            BufferUse.init(def.readbackBuf, .ComputeShader, .ShaderWrite, 3),
+            BufferUse.init(def.entityBuf, .Compute, .ShaderRead, 0),
+            BufferUse.init(def.camBuf, .Compute, .ShaderRead, 1),
+            BufferUse.init(def.readbackBuf, .Compute, .ShaderWrite, 3),
         },
         .texUses = &.{
-            TextureUse.init(def.outputTex, .ComputeShader, .ShaderWrite, .General, 2),
+            TextureUse.init(def.outputTex, .Compute, .ShaderWrite, .General, 2),
         },
     });
 }
@@ -44,12 +44,13 @@ pub fn EditorGrid(
         camBuf: BufId,
     },
 ) Pass {
-    return Pass.init(.{
+    return Pass.Mesh(.{
         .name = def.name,
-        .execution = .{ .taskOrMesh = .{ .workgroups = .{ .x = 1, .y = 1, .z = 1 }, .mainTexId = def.colorAtt } },
-        .shaderIds = &.{ sc.editorGridMesh.id, sc.editorGridFrag.id },
+        .execution = .{ .workgroups = .{ .x = 1, .y = 1, .z = 1 }, .mainTexId = def.colorAtt },
+        .mesh = sc.editorGridMesh,
+        .fragment = sc.editorGridFrag,
         .bufUses = &.{
-            BufferUse.init(def.camBuf, .MeshShader, .ShaderRead, 0),
+            BufferUse.init(def.camBuf, .Mesh, .ShaderRead, 0),
         },
         .colorAtts = &.{Attachment.init(def.colorAtt, .ColorAtt, .ColorAttReadWrite, false)},
         .depthAtt = Attachment.init(def.depthAtt, .EarlyFragTest, .DepthStencilWrite, false),
@@ -71,13 +72,14 @@ pub fn FrustumView(
         viewCamBuf: BufId, // Maybe swapped
     },
 ) Pass {
-    return Pass.init(.{
+    return Pass.Mesh(.{
         .name = def.name,
-        .execution = .{ .taskOrMesh = .{ .workgroups = .{ .x = 1, .y = 1, .z = 1 }, .mainTexId = def.colorAtt } },
-        .shaderIds = &.{ sc.frustumMesh.id, sc.quantFrag.id },
+        .execution = .{ .workgroups = .{ .x = 1, .y = 1, .z = 1 }, .mainTexId = def.colorAtt },
+        .mesh = sc.frustumMesh,
+        .fragment = sc.quantFrag,
         .bufUses = &.{
-            BufferUse.init(def.frustumCamBuf, .MeshShader, .ShaderRead, 0),
-            BufferUse.init(def.viewCamBuf, .MeshShader, .ShaderRead, 1),
+            BufferUse.init(def.frustumCamBuf, .Mesh, .ShaderRead, 0),
+            BufferUse.init(def.viewCamBuf, .Mesh, .ShaderRead, 1),
         },
         .colorAtts = &.{Attachment.init(def.colorAtt, .ColorAtt, .ColorAttReadWrite, false)},
         .depthAtt = Attachment.init(def.depthAtt, .EarlyFragTest, .DepthStencilWrite, false),
@@ -96,13 +98,13 @@ pub fn QuantComp(
         entityBuf: BufId,
     },
 ) Pass {
-    return Pass.init(.{
+    return Pass.Compute(.{
         .name = def.name,
-        .execution = .{ .compute = .{ .workgroups = .{ .x = 1, .y = 1, .z = 1 } } },
-        .shaderIds = &.{sc.quantComp.id},
+        .execution = .{ .workgroups = .{ .x = 1, .y = 1, .z = 1 } },
+        .compute = sc.quantComp,
         .bufUses = &.{
-            BufferUse.init(def.indirectBuf, .ComputeShader, .ShaderReadWrite, 0),
-            BufferUse.init(def.entityBuf, .ComputeShader, .ShaderRead, 1),
+            BufferUse.init(def.indirectBuf, .Compute, .ShaderReadWrite, 0),
+            BufferUse.init(def.entityBuf, .Compute, .ShaderRead, 1),
         },
     });
 }
@@ -117,21 +119,20 @@ pub fn QuantGrid(
         cullCam: BufId, // Maybe swapped
     },
 ) Pass {
-    return Pass.init(.{
+    return Pass.MeshIndirect(.{
         .name = def.name,
         .execution = .{
-            .taskOrMeshIndirect = .{
-                .workgroups = .{ .x = 1, .y = 1, .z = 1 },
-                .indirectBuf = def.indirectBuf,
-                .indirectBufOffset = 0,
-                .mainTexId = def.colorAtt,
-            },
+            .workgroups = .{ .x = 1, .y = 1, .z = 1 },
+            .indirectBuf = def.indirectBuf,
+            .indirectBufOffset = 0,
+            .mainTexId = def.colorAtt,
         },
-        .shaderIds = &.{ sc.quantGrid.id, sc.quantFrag.id },
+        .mesh = sc.quantGrid,
+        .fragment = sc.quantFrag,
         .bufUses = &.{
             BufferUse.init(def.indirectBuf, .DrawIndirect, .IndirectRead, null),
-            BufferUse.init(def.viewCam, .FragShader, .ShaderRead, 0),
-            BufferUse.init(def.cullCam, .FragShader, .ShaderRead, 1),
+            BufferUse.init(def.viewCam, .Fragment, .ShaderRead, 0),
+            BufferUse.init(def.cullCam, .Fragment, .ShaderRead, 1),
         },
         .colorAtts = &.{Attachment.init(def.colorAtt, .ColorAtt, .ColorAttReadWrite, true)},
         .depthAtt = Attachment.init(def.depthAtt, .EarlyFragTest, .DepthStencilWrite, true),
@@ -154,21 +155,20 @@ pub fn QuantPlane(
         cullCam: BufId, // Maybe swapped
     },
 ) Pass {
-    return Pass.init(.{
+    return Pass.MeshIndirect(.{
         .name = def.name,
         .execution = .{
-            .taskOrMeshIndirect = .{
-                .workgroups = .{ .x = 1, .y = 1, .z = 1 },
-                .indirectBuf = def.indirectBuf,
-                .indirectBufOffset = 0,
-                .mainTexId = def.colorAtt,
-            },
+            .workgroups = .{ .x = 1, .y = 1, .z = 1 },
+            .indirectBuf = def.indirectBuf,
+            .indirectBufOffset = 0,
+            .mainTexId = def.colorAtt,
         },
-        .shaderIds = &.{ sc.quantPlane.id, sc.quantFrag.id },
+        .mesh = sc.quantPlane,
+        .fragment = sc.quantFrag,
         .bufUses = &.{
             BufferUse.init(def.indirectBuf, .DrawIndirect, .IndirectRead, null),
-            BufferUse.init(def.viewCam, .FragShader, .ShaderRead, 0),
-            BufferUse.init(def.cullCam, .FragShader, .ShaderRead, 1),
+            BufferUse.init(def.viewCam, .Fragment, .ShaderRead, 0),
+            BufferUse.init(def.cullCam, .Fragment, .ShaderRead, 1),
         },
         .colorAtts = &.{Attachment.init(def.colorAtt, .ColorAtt, .ColorAttReadWrite, true)},
         .depthAtt = Attachment.init(def.depthAtt, .EarlyFragTest, .DepthStencilWrite, true),
@@ -188,13 +188,13 @@ pub fn CullComp(
         entityBuf: BufId,
     },
 ) Pass {
-    return Pass.init(.{
+    return Pass.Compute(.{
         .name = def.name,
-        .execution = .{ .compute = .{ .workgroups = .{ .x = 1, .y = 1, .z = 1 } } },
-        .shaderIds = &.{sc.cullTestComp.id},
+        .execution =  .{ .workgroups = .{ .x = 1, .y = 1, .z = 1 } },
+        .compute = sc.cullTestComp,
         .bufUses = &.{
-            BufferUse.init(def.indirectBuf, .ComputeShader, .ShaderReadWrite, 0),
-            BufferUse.init(def.entityBuf, .ComputeShader, .ShaderRead, 1),
+            BufferUse.init(def.indirectBuf, .Compute, .ShaderReadWrite, 0),
+            BufferUse.init(def.entityBuf, .Compute, .ShaderRead, 1),
         },
     });
 }
@@ -209,21 +209,20 @@ pub fn Cull(
         cullCam: BufId, // Maybe swapped
     },
 ) Pass {
-    return Pass.init(.{
+    return Pass.MeshIndirect(.{
         .name = def.name,
         .execution = .{
-            .taskOrMeshIndirect = .{
-                .workgroups = .{ .x = 1, .y = 1, .z = 1 },
-                .indirectBuf = def.indirectBuf,
-                .indirectBufOffset = 0,
-                .mainTexId = def.colorAtt,
-            },
+            .workgroups = .{ .x = 1, .y = 1, .z = 1 },
+            .indirectBuf = def.indirectBuf,
+            .indirectBufOffset = 0,
+            .mainTexId = def.colorAtt,
         },
-        .shaderIds = &.{ sc.cullTestMesh.id, sc.cullTestFrag.id },
+        .mesh = sc.cullTestMesh,
+        .fragment = sc.cullTestFrag,
         .bufUses = &.{
             BufferUse.init(def.indirectBuf, .DrawIndirect, .IndirectRead, null),
-            BufferUse.init(def.viewCam, .FragShader, .ShaderRead, 0),
-            BufferUse.init(def.cullCam, .FragShader, .ShaderRead, 1),
+            BufferUse.init(def.viewCam, .Fragment, .ShaderRead, 0),
+            BufferUse.init(def.cullCam, .Fragment, .ShaderRead, 1),
         },
         .colorAtts = &.{Attachment.init(def.colorAtt, .ColorAtt, .ColorAttReadWrite, true)},
         .depthAtt = Attachment.init(def.depthAtt, .EarlyFragTest, .DepthStencilWrite, true),

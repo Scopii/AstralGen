@@ -1,6 +1,6 @@
 const FixedList = @import("../.structures/FixedList.zig").FixedList;
-const std = @import("std");
 const LoadedShader = @import("LoadedShader.zig").LoadedShader;
+const std = @import("std");
 
 pub const ShaderQueue = struct {
     shaderEvents: FixedList(ShaderEvent, 127) = .{},
