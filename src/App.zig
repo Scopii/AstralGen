@@ -225,15 +225,6 @@ pub const App = struct {
             addTextureDataPtr.* = .{ .texInf = texInf, .data = null };
             self.rendererQueue.append(.{ .addTexture = addTextureDataPtr });
         }
-
-        // for (rc.PASSES) |*pass| {
-        //     const AddPassPtr = @FieldType(RendererQueue.RendererEvent, "addPass");
-        //     const AddPass = std.meta.Child(AddPassPtr);
-
-        //     const addPassDataPtr = try arena.create(AddPass);
-        //     addPassDataPtr.* = pass.*;
-        //     self.rendererQueue.append(.{ .addPass = addPassDataPtr });
-        // }
     }
 
     pub fn run(self: *App) !void {

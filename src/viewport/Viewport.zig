@@ -15,17 +15,19 @@ pub const Viewport = struct {
     passMask: PassStruct = .{},
     blitPass: PassEnum,
 
-    pub fn calcViewArea(self: *const Viewport, swapchainWidth: u32, swapchainHeight: u32) struct { width: u32, height: u32 } {
-        return .{
-            .width = @intFromFloat(@as(f32, @floatFromInt(swapchainWidth)) * self.areaWidth),
-            .height = @intFromFloat(@as(f32, @floatFromInt(swapchainHeight)) * self.areaHeight),
-        };
+    pub fn calcViewWidth(self: *const Viewport, swapchainWidth: u32) u32 {
+        return @intFromFloat(@as(f32, @floatFromInt(swapchainWidth)) * self.areaWidth);
     }
 
-    pub fn calcViewOffset(self: *const Viewport, swapchainWidth: u32, swapchainHeight: u32) struct { x: i32, y: i32 } {
-        return .{
-            .x = @intFromFloat(@as(f32, @floatFromInt(swapchainWidth)) * self.areaX),
-            .y = @intFromFloat(@as(f32, @floatFromInt(swapchainHeight)) * self.areaY),
-        };
+    pub fn calcViewHeight(self: *const Viewport, swapchainHeight: u32) u32 {
+        return @intFromFloat(@as(f32, @floatFromInt(swapchainHeight)) * self.areaHeight);
+    }
+
+    pub fn calcViewX(self: *const Viewport, swapchainWidth: u32) i32 {
+        return @intFromFloat(@as(f32, @floatFromInt(swapchainWidth)) * self.areaX);
+    }
+
+    pub fn calcViewY(self: *const Viewport, swapchainHeight: u32) i32 {
+        return @intFromFloat(@as(f32, @floatFromInt(swapchainHeight)) * self.areaY);
     }
 };

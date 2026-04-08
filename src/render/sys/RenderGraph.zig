@@ -186,8 +186,8 @@ pub const RenderGraph = struct {
     fn recordNodes(self: *RenderGraph, cmd: *Cmd, renderNodes: []RenderNode, frameData: FrameData, resMan: *ResourceMan, shaderMan: *ShaderManager, swapMan: *SwapchainMan) !void {
         for (renderNodes) |renderNode| {
             switch (renderNode) {
-                .pass => |pass| {
-                    try self.recordPass(cmd, &pass, frameData, resMan, shaderMan);
+                .passNode => |passNode| {
+                    try self.recordPass(cmd, &passNode.pass, frameData, resMan, shaderMan);
                 },
                 .viewportBlit => |blit| {
                     try self.recordBlit(cmd, blit, resMan, swapMan);

@@ -43,7 +43,7 @@ pub const GraphicsExec = struct {
 
 pub const RenderNode = union(enum) {
     viewportBlit: ViewportBlit,
-    pass: Pass,
+    passNode: struct { pass: Pass, width: u32, height: u32 },
 };
 
 pub const ViewportBlit = struct {

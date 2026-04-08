@@ -1,11 +1,13 @@
+const ViewportBlit = @import("../render/types/base/Pass.zig").ViewportBlit;
+const ViewportId = @import("../viewport/ViewportSys.zig").ViewportId;
 const FrameBuildData = @import("FrameBuildData.zig").FrameBuildData;
+const WindowId = @import("../window/Window.zig").Window.WindowId;
+const Viewport = @import("../viewport/Viewport.zig").Viewport;
 const EngineData = @import("../EngineData.zig").EngineData;
-const std = @import("std");
+const Pass = @import("../render/types/base/Pass.zig").Pass;
 const pDef = @import("../.configs/passConfig.zig");
 const rc = @import("../.configs/renderConfig.zig");
-const ViewportId = @import("../viewport/ViewportSys.zig").ViewportId;
-const Pass = @import("../render/types/base/Pass.zig").Pass;
-const ViewportBlit = @import("../render/types/base/Pass.zig").ViewportBlit;
+const std = @import("std");
 
 pub const PassStruct = packed struct {
     CompTest: bool = false,
@@ -22,7 +24,7 @@ pub const PassStruct = packed struct {
 };
 
 pub const PassEnum = enum {
-    ENTRY,
+    ENTRY, // Not an actual Pass
     CompTest,
     CullComp,
     CullMain,
@@ -34,7 +36,7 @@ pub const PassEnum = enum {
     QuantPlaneMain,
     QuantPlaneDebug,
     FrustumView,
-    EXIT,
+    EXIT, // Not an actual Pass
 };
 
 pub const FrameBuildSys = struct {
@@ -64,9 +66,47 @@ pub const FrameBuildSys = struct {
         inline for (@typeInfo(PassStruct).@"struct".fields) |field| {
             if (@field(passMask, field.name) == true) {
                 const passEnum = @field(PassEnum, field.name);
-                appendPass(frameBuild, passEnum) catch std.debug.print("ERROR: COULD NOT APPEND PASS\n", .{});
-                if (rc.FRAME_BUILD_DEBUG) std.debug.print("Pass {s} added\n", .{field.name});
 
+                var passWidth: u32 = 0;
+                var passHeight: u32 = 0;
+
+                // Check Maximum View of Pass
+                for (activeViewportIds) |viewportId| {
+                    const viewport = data.viewport.viewports.getByKey(viewportId.val);
+
+                    const isPassDemanded = @field(viewport.passMask, field.name);
+
+                    if (isPassDemanded) {
+                        for (activeWindows) |*window| {
+                            var isAttached = false;
+                            for (window.viewIds) |windowViewId| {
+                                if (windowViewId != null and windowViewId.?.val == viewportId.val) {
+                                    isAttached = true;
+                                    break;
+                                }
+                            }
+
+                            if (isAttached) {
+                                const viewWidth = viewport.calcViewWidth(window.extent.width);
+                                const viewHeight = viewport.calcViewHeight(window.extent.height);
+
+                                if (viewWidth > passWidth) {
+                                    passWidth = viewWidth;
+                                    // if (rc.FRAME_BUILD_DEBUG) std.debug.print("{s} set Pass Width to {}\n", .{ viewport.name, viewWidth });
+                                }
+                                if (viewHeight > passHeight) {
+                                    passHeight = viewHeight;
+                                    // if (rc.FRAME_BUILD_DEBUG) std.debug.print("{s} set Pass Height to {}\n", .{ viewport.name, viewHeight });
+                                }
+                            }
+                        }
+                    }
+                }
+
+                appendPass(frameBuild, passEnum, passWidth, passHeight) catch std.debug.print("ERROR: COULD NOT APPEND PASS\n", .{});
+                if (rc.FRAME_BUILD_DEBUG) std.debug.print("Pass {s} added (width {} height {})\n", .{ field.name, passWidth, passHeight });
+
+                // Check for Blits
                 for (activeViewportIds) |viewportId| {
                     const viewport = data.viewport.viewports.getByKey(viewportId.val);
 
@@ -81,20 +121,7 @@ pub const FrameBuildSys = struct {
                             }
 
                             if (isAttached) {
-                                const viewArea2D = viewport.calcViewArea(window.extent.width, window.extent.height);
-                                const viewOffset2D = viewport.calcViewOffset(window.extent.width, window.extent.height);
-
-                                const blitNode = ViewportBlit{
-                                    .name = viewport.name,
-                                    .srcTexId = viewport.sourceTexId,
-                                    .dstWindowId = window.id,
-                                    .viewWidth = viewArea2D.width,
-                                    .viewHeight = viewArea2D.height,
-                                    .viewOffsetX = viewOffset2D.x,
-                                    .viewOffsetY = viewOffset2D.y,
-                                };
-
-                                frameBuild.passList.append(.{ .viewportBlit = blitNode }) catch std.debug.print("Pass Could not Append\n", .{});
+                                appendBlit(frameBuild, &viewport, window.id, window.extent.width, window.extent.height);
                             }
                         }
                     }
@@ -103,17 +130,30 @@ pub const FrameBuildSys = struct {
         }
     }
 
-    fn appendPass(frameBuild: *FrameBuildData, passEnum: PassEnum) !void {
+    fn appendBlit(frameBuild: *FrameBuildData, viewport: *const Viewport, windowId: WindowId, windowWidth: u32, windowHeight: u32) void {
+        const blitNode = ViewportBlit{
+            .name = viewport.name,
+            .srcTexId = viewport.sourceTexId,
+            .dstWindowId = windowId,
+            .viewWidth = viewport.calcViewWidth(windowWidth),
+            .viewHeight = viewport.calcViewHeight(windowHeight),
+            .viewOffsetX = viewport.calcViewX(windowWidth),
+            .viewOffsetY = viewport.calcViewY(windowHeight),
+        };
+        frameBuild.passList.append(.{ .viewportBlit = blitNode }) catch std.debug.print("Pass Could not Append Blit\n", .{});
+    }
+
+    fn appendPass(frameBuild: *FrameBuildData, passEnum: PassEnum, passWidth: u32, passHeight: u32) !void {
         switch (passEnum) {
             .CompTest => {
                 const pass = pDef.CompRayMarch(.{
-                    .name = "CompTest",
+                    .name = "Compute-Ray-March",
                     .entityBuf = rc.entitySB.id,
                     .outputTex = rc.mainTex.id,
                     .camBuf = rc.mainCamUB.id,
                     .readbackBuf = rc.readbackSB.id,
                 });
-                try frameBuild.passList.append(.{ .pass = pass });
+                try frameBuild.passList.append(.{ .passNode = .{ .pass = pass, .width = passWidth, .height = passHeight } });
             },
             .CullComp => {
                 const pass = pDef.CullComp(.{
@@ -121,7 +161,7 @@ pub const FrameBuildSys = struct {
                     .indirectBuf = rc.indirectSB.id,
                     .entityBuf = rc.entitySB.id,
                 });
-                try frameBuild.passList.append(.{ .pass = pass });
+                try frameBuild.passList.append(.{ .passNode = .{ .pass = pass, .width = passWidth, .height = passHeight } });
             },
             .CullMain => {
                 const pass = pDef.Cull(.{
@@ -132,7 +172,7 @@ pub const FrameBuildSys = struct {
                     .viewCam = rc.mainCamUB.id,
                     .cullCam = rc.mainCamUB.id,
                 });
-                try frameBuild.passList.append(.{ .pass = pass });
+                try frameBuild.passList.append(.{ .passNode = .{ .pass = pass, .width = passWidth, .height = passHeight } });
             },
             .CullDebug => {
                 const pass = pDef.Cull(.{
@@ -143,7 +183,7 @@ pub const FrameBuildSys = struct {
                     .viewCam = rc.debugCamUB.id,
                     .cullCam = rc.mainCamUB.id,
                 });
-                try frameBuild.passList.append(.{ .pass = pass });
+                try frameBuild.passList.append(.{ .passNode = .{ .pass = pass, .width = passWidth, .height = passHeight } });
             },
             .QuantComp => {
                 const pass = pDef.QuantComp(.{
@@ -151,7 +191,7 @@ pub const FrameBuildSys = struct {
                     .indirectBuf = rc.indirectSB.id,
                     .entityBuf = rc.entitySB.id,
                 });
-                try frameBuild.passList.append(.{ .pass = pass });
+                try frameBuild.passList.append(.{ .passNode = .{ .pass = pass, .width = passWidth, .height = passHeight } });
             },
             .QuantGridMain => {
                 const pass = pDef.QuantGrid(.{
@@ -162,7 +202,7 @@ pub const FrameBuildSys = struct {
                     .viewCam = rc.mainCamUB.id,
                     .cullCam = rc.mainCamUB.id,
                 });
-                try frameBuild.passList.append(.{ .pass = pass });
+                try frameBuild.passList.append(.{ .passNode = .{ .pass = pass, .width = passWidth, .height = passHeight } });
             },
             .QuantGridDebug => {
                 const pass = pDef.QuantGrid(.{
@@ -173,7 +213,7 @@ pub const FrameBuildSys = struct {
                     .viewCam = rc.debugCamUB.id,
                     .cullCam = rc.mainCamUB.id,
                 });
-                try frameBuild.passList.append(.{ .pass = pass });
+                try frameBuild.passList.append(.{ .passNode = .{ .pass = pass, .width = passWidth, .height = passHeight } });
             },
             .EditorGrid => {
                 const pass = pDef.EditorGrid(.{
@@ -182,7 +222,7 @@ pub const FrameBuildSys = struct {
                     .depthAtt = rc.mainDepthTex.id,
                     .camBuf = rc.debugCamUB.id,
                 });
-                try frameBuild.passList.append(.{ .pass = pass });
+                try frameBuild.passList.append(.{ .passNode = .{ .pass = pass, .width = passWidth, .height = passHeight } });
             },
             .QuantPlaneMain => {
                 const pass = pDef.QuantPlane(.{
@@ -193,7 +233,7 @@ pub const FrameBuildSys = struct {
                     .viewCam = rc.mainCamUB.id,
                     .cullCam = rc.mainCamUB.id,
                 });
-                try frameBuild.passList.append(.{ .pass = pass });
+                try frameBuild.passList.append(.{ .passNode = .{ .pass = pass, .width = passWidth, .height = passHeight } });
             },
             .QuantPlaneDebug => {
                 const pass = pDef.QuantPlane(.{
@@ -204,7 +244,7 @@ pub const FrameBuildSys = struct {
                     .viewCam = rc.debugCamUB.id,
                     .cullCam = rc.mainCamUB.id,
                 });
-                try frameBuild.passList.append(.{ .pass = pass });
+                try frameBuild.passList.append(.{ .passNode = .{ .pass = pass, .width = passWidth, .height = passHeight } });
             },
             .FrustumView => {
                 const pass = pDef.FrustumView(.{
@@ -214,7 +254,7 @@ pub const FrameBuildSys = struct {
                     .frustumCamBuf = rc.mainCamUB.id,
                     .viewCamBuf = rc.debugCamUB.id,
                 });
-                try frameBuild.passList.append(.{ .pass = pass });
+                try frameBuild.passList.append(.{ .passNode = .{ .pass = pass, .width = passWidth, .height = passHeight } });
             },
             .ENTRY, .EXIT => {},
         }
