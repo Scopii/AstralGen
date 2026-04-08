@@ -84,12 +84,13 @@ void main(uint3 id: SV_DispatchThreadID) {
 
     float2 uv = (float2(id.xy) / float2(renderWidth, renderHeight)) * 2.0 - 1.0;
 
-    float3 camForward = normalize(cam.camDir.xyz);
+    float3 camForward = normalize(cam.camDirAndAspectRatio.xyz);
     float3 camRight = normalize(cross(camForward, float3(0, 1, 0)));
     float3 camUp = normalize(cross(camRight, camForward));
 
     float focalLength = 1.0 / tan(radians(cam.camPosAndFov.w * 0.5));
     float aspectRatio = float(renderWidth) / float(renderHeight);
+    // float aspectRatio = cam.camDirAndAspectRatio.w;
     float3 rayDirection = normalize(uv.x * camRight * aspectRatio - uv.y * camUp + focalLength * camForward);
     
     // Raymarching

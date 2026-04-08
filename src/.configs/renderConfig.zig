@@ -54,7 +54,7 @@ pub const DISPLAY_MODE = vk.VK_PRESENT_MODE_IMMEDIATE_KHR; //vk.VK_PRESENT_MODE_
 pub const MAX_WINDOWS: u8 = 8;
 pub const LINKED_TEX_MAX = 3;
 pub const RENDER_TEX_AUTO_RESIZE = true;
-pub const RENDER_TEX_STRETCH = true; // Ignored on AUTO_RESIZE
+pub const RENDER_TEX_STRETCH = true; // Maybe ignored on AUTO_RESIZE
 
 // Resource Information
 pub const BUF_MAX = 63;

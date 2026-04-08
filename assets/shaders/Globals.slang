@@ -17,7 +17,7 @@ public struct Object {
 public struct CameraData {
     public float4x4 viewProj;
     public float4 camPosAndFov;
-    public float4 camDir;
+    public float4 camDirAndAspectRatio;
     public float4 frustumCorners[8];
     public float4 frustumPlanes[6]; // left,right,bottom,top,near,far
 };

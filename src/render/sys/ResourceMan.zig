@@ -288,12 +288,16 @@ pub const ResourceMan = struct {
 
     pub fn resizeTextureResource(self: *ResourceMan, texId: TexId, newWidth: u32, newHeight: u32, curFrame: u64, flightId: u8) !void {
         const meta = try self.getMeta(texId);
+        var oldWidth: u32 = 0;
+        var oldHeight: u32 = 0;
         var needsRemove = false;
 
         for (0..meta.update.getCount()) |i| { // Check all alive sub-resources
             if (self.registry.check(texId, meta.update, @intCast(i), meta.updateSlot)) |tex| {
                 if (tex.extent.width != newWidth or tex.extent.height != newHeight) {
                     needsRemove = true;
+                    oldWidth = tex.extent.width;
+                    oldHeight = tex.extent.height;
                     break;
                 }
             }
@@ -303,6 +307,7 @@ pub const ResourceMan = struct {
             const newInf = TexInf{ .id = texId, .mem = meta.mem, .typ = meta.texType, .width = newWidth, .height = newHeight, .depth = 1, .update = meta.update, .resize = meta.resize };
             try self.removeResource(texId, curFrame); // kills alive + aborts tickets
             try self.addResource(newInf, curFrame, flightId, null); // re-queues all
+            std.debug.print("Texture (ID {}) resized ({}x{} to {}x{})\n", .{ texId.val, oldWidth, oldHeight, newWidth, newHeight });
             return;
         }
 
@@ -310,6 +315,7 @@ pub const ResourceMan = struct {
             if (self.queues[i].checkCreation(texId)) |texInf| {
                 texInf.width = newWidth;
                 texInf.height = newHeight;
+                std.debug.print("Texture (ID {}) Queue {} resized before creation to {}x{}\n", .{ texId.val, i, newWidth, newHeight });
             }
         }
     }

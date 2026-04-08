@@ -15,7 +15,7 @@ const TWO_PI = 2 * M_PI;
 pub const CamData = struct {
     viewProj: [4][4]f32,
     camPosAndFov: [4]f32,
-    camDir: [4]f32,
+    camDirAndAspectRatio: [4]f32,
     frustumCorners: [8][4]f32,
     frustumPlanes: [6][4]f32,
 };
@@ -182,7 +182,7 @@ pub const CameraSys = struct {
         return .{
             .viewProj = viewProj,
             .camPosAndFov = .{ transform.pos[0], transform.pos[1], transform.pos[2], cam.fov },
-            .camDir = .{ forward[0], forward[1], forward[2], 0 },
+            .camDirAndAspectRatio = .{ forward[0], forward[1], forward[2], cam.aspectRatio },
             .frustumCorners = corners,
             .frustumPlanes = cornersToPlanes(corners),
         };
