@@ -1,6 +1,6 @@
+const AttachmentUse = @import("../render/types/pass/AttachmentUse.zig").AttachmentUse;
 const TexId = @import("../render/types/res/TextureMeta.zig").TextureMeta.TexId;
 const BufId = @import("../render/types/res/BufferMeta.zig").BufferMeta.BufId;
-const AttachmentUse = @import("../render/types/pass/Attachment.zig").AttachmentUse;
 const TextureUse = @import("../render/types/pass/TextureUse.zig").TextureUse;
 const BufferUse = @import("../render/types/pass/BufferUse.zig").BufferUse;
 const PassDef = @import("../render/types/pass/PassDef.zig").PassDef;

@@ -1,6 +1,6 @@
+const AttachmentUse = @import("../types/pass/AttachmentUse.zig").AttachmentUse;
 const TexId = @import("../types/res/TextureMeta.zig").TextureMeta.TexId;
 const ViewportBlit = @import("../types/pass/PassDef.zig").ViewportBlit;
-const Attachment = @import("../types/pass/Attachment.zig").Attachment;
 const TextureUse = @import("../types/pass/TextureUse.zig").TextureUse;
 const Swapchain = @import("../types/base/Swapchain.zig").Swapchain;
 const RenderNode = @import("../types/pass/PassDef.zig").RenderNode;
@@ -139,9 +139,9 @@ pub const RenderGraph = struct {
         name: []const u8,
         bufUses: []const BufferUse,
         texUses: []const TextureUse,
-        colorAtts: []const Attachment,
-        depthAtt: ?Attachment,
-        stencilAtt: ?Attachment,
+        colorAtts: []const AttachmentUse,
+        depthAtt: ?AttachmentUse,
+        stencilAtt: ?AttachmentUse,
         resMan: *ResourceMan,
     ) !void {
         for (bufUses) |bufUse| {
