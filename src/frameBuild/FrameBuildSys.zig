@@ -1,10 +1,9 @@
-const ViewportBlit = @import("../render/types/base/Pass.zig").ViewportBlit;
-const ViewportId = @import("../viewport/ViewportSys.zig").ViewportId;
+const ViewportBlit = @import("../render/types/pass/PassDef.zig").ViewportBlit;
+const PassDef = @import("../render/types/pass/PassDef.zig").PassDef;
 const FrameBuildData = @import("FrameBuildData.zig").FrameBuildData;
 const WindowId = @import("../window/Window.zig").Window.WindowId;
 const Viewport = @import("../viewport/Viewport.zig").Viewport;
 const EngineData = @import("../EngineData.zig").EngineData;
-const Pass = @import("../render/types/base/Pass.zig").Pass;
 const pDef = @import("../.configs/passConfig.zig");
 const rc = @import("../.configs/renderConfig.zig");
 const std = @import("std");
@@ -70,7 +69,7 @@ pub const FrameBuildSys = struct {
                 var passWidth: u32 = 0;
                 var passHeight: u32 = 0;
 
-                // Check Maximum View of Pass
+                // Check Maximum View of PassDef
                 for (activeViewportIds) |viewportId| {
                     const viewport = data.viewport.viewports.getByKey(viewportId.val);
 
@@ -92,11 +91,11 @@ pub const FrameBuildSys = struct {
 
                                 if (viewWidth > passWidth) {
                                     passWidth = viewWidth;
-                                    // if (rc.FRAME_BUILD_DEBUG) std.debug.print("{s} set Pass Width to {}\n", .{ viewport.name, viewWidth });
+                                    // if (rc.FRAME_BUILD_DEBUG) std.debug.print("{s} set PassDef Width to {}\n", .{ viewport.name, viewWidth });
                                 }
                                 if (viewHeight > passHeight) {
                                     passHeight = viewHeight;
-                                    // if (rc.FRAME_BUILD_DEBUG) std.debug.print("{s} set Pass Height to {}\n", .{ viewport.name, viewHeight });
+                                    // if (rc.FRAME_BUILD_DEBUG) std.debug.print("{s} set PassDef Height to {}\n", .{ viewport.name, viewHeight });
                                 }
                             }
                         }
@@ -140,7 +139,7 @@ pub const FrameBuildSys = struct {
             .viewOffsetX = viewport.calcViewX(windowWidth),
             .viewOffsetY = viewport.calcViewY(windowHeight),
         };
-        frameBuild.passList.append(.{ .viewportBlit = blitNode }) catch std.debug.print("Pass Could not Append Blit\n", .{});
+        frameBuild.passList.append(.{ .viewportBlit = blitNode }) catch std.debug.print("PassDef Could not Append Blit\n", .{});
     }
 
     fn appendPass(frameBuild: *FrameBuildData, passEnum: PassEnum, passWidth: u32, passHeight: u32) !void {

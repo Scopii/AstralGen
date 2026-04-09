@@ -1,7 +1,7 @@
 const ResourceMan = @import("../../sys/ResourceMan.zig").ResourceMan;
 const FrameData = @import("../../../App.zig").FrameData;
-const BufferUse = @import("../base/Pass.zig").BufferUse;
-const TextureUse = @import("../base/Pass.zig").TextureUse;
+const BufferUse = @import("../pass/BufferUse.zig").BufferUse;
+const TextureUse = @import("../pass/TextureUse.zig").TextureUse;
 const TexId = @import("TextureMeta.zig").TextureMeta.TexId;
 const std = @import("std");
 

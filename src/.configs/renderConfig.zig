@@ -1,14 +1,8 @@
-const Attachment = @import("../render/types/base/Pass.zig").Attachment;
-const TextureUse = @import("../render/types/base/Pass.zig").TextureUse;
-const BufferUse = @import("../render/types/base/Pass.zig").BufferUse;
 const TextureMeta = @import("../render/types/res/TextureMeta.zig").TextureMeta;
 const BufferMeta = @import("../render/types/res/BufferMeta.zig").BufferMeta;
 const CameraData = @import("../camera/CameraSys.zig").CamData;
-const Pass = @import("../render/types/base/Pass.zig").Pass;
 const vhT = @import("../render/help/Types.zig");
 const vk = @import("../.modules/vk.zig").c;
-const sc = @import("shaderConfig.zig");
-const pDef = @import("passConfig.zig");
 
 const GpuObjectData = @import("../render/help/Types.zig").GpuObjectData;
 

@@ -1,16 +1,11 @@
-const TextureMeta = @import("../render/types/res/TextureMeta.zig").TextureMeta;
-const BufferMeta = @import("../render/types/res/BufferMeta.zig").BufferMeta;
-const Attachment = @import("../render/types/base/Pass.zig").Attachment;
-const TextureUse = @import("../render/types/base/Pass.zig").TextureUse;
-const BufferUse = @import("../render/types/base/Pass.zig").BufferUse;
-const CameraData = @import("../camera/CameraSys.zig").CamData;
-const ShaderId = @import("../shader/ShaderSys.zig").ShaderId;
-const Pass = @import("../render/types/base/Pass.zig").Pass;
-const vhT = @import("../render/help/Types.zig");
+const TexId = @import("../render/types/res/TextureMeta.zig").TextureMeta.TexId;
+const BufId = @import("../render/types/res/BufferMeta.zig").BufferMeta.BufId;
+const Attachment = @import("../render/types/pass/Attachment.zig").Attachment;
+const TextureUse = @import("../render/types/pass/TextureUse.zig").TextureUse;
+const BufferUse = @import("../render/types/pass/BufferUse.zig").BufferUse;
+const PassDef = @import("../render/types/pass/PassDef.zig").PassDef;
 const vk = @import("../.modules/vk.zig").c;
 const sc = @import("shaderConfig.zig");
-const BufId = BufferMeta.BufId;
-const TexId = TextureMeta.TexId;
 
 pub fn CompRayMarch(
     def: struct {
@@ -20,8 +15,8 @@ pub fn CompRayMarch(
         camBuf: BufId,
         readbackBuf: BufId,
     },
-) Pass {
-    return Pass.ComputeOnImg(.{
+) PassDef {
+    return PassDef.ComputeOnImg(.{
         .name = def.name,
         .execution = .{ .workgroups = .{ .x = 8, .y = 8, .z = 1 }, .mainTexId = def.outputTex },
         .compute = sc.t1Comp,
@@ -43,8 +38,8 @@ pub fn EditorGrid(
         depthAtt: TexId,
         camBuf: BufId,
     },
-) Pass {
-    return Pass.Mesh(.{
+) PassDef {
+    return PassDef.Mesh(.{
         .name = def.name,
         .execution = .{ .workgroups = .{ .x = 1, .y = 1, .z = 1 }, .mainTexId = def.colorAtt },
         .mesh = sc.editorGridMesh,
@@ -71,8 +66,8 @@ pub fn FrustumView(
         frustumCamBuf: BufId, // Maybe swapped
         viewCamBuf: BufId, // Maybe swapped
     },
-) Pass {
-    return Pass.Mesh(.{
+) PassDef {
+    return PassDef.Mesh(.{
         .name = def.name,
         .execution = .{ .workgroups = .{ .x = 1, .y = 1, .z = 1 }, .mainTexId = def.colorAtt },
         .mesh = sc.frustumMesh,
@@ -97,8 +92,8 @@ pub fn QuantComp(
         indirectBuf: BufId,
         entityBuf: BufId,
     },
-) Pass {
-    return Pass.Compute(.{
+) PassDef {
+    return PassDef.Compute(.{
         .name = def.name,
         .execution = .{ .workgroups = .{ .x = 1, .y = 1, .z = 1 } },
         .compute = sc.quantComp,
@@ -118,8 +113,8 @@ pub fn QuantGrid(
         viewCam: BufId, // Maybe swapped
         cullCam: BufId, // Maybe swapped
     },
-) Pass {
-    return Pass.MeshIndirect(.{
+) PassDef {
+    return PassDef.MeshIndirect(.{
         .name = def.name,
         .execution = .{
             .workgroups = .{ .x = 1, .y = 1, .z = 1 },
@@ -154,8 +149,8 @@ pub fn QuantPlane(
         viewCam: BufId, // Maybe swapped
         cullCam: BufId, // Maybe swapped
     },
-) Pass {
-    return Pass.MeshIndirect(.{
+) PassDef {
+    return PassDef.MeshIndirect(.{
         .name = def.name,
         .execution = .{
             .workgroups = .{ .x = 1, .y = 1, .z = 1 },
@@ -187,10 +182,10 @@ pub fn CullComp(
         indirectBuf: BufId,
         entityBuf: BufId,
     },
-) Pass {
-    return Pass.Compute(.{
+) PassDef {
+    return PassDef.Compute(.{
         .name = def.name,
-        .execution =  .{ .workgroups = .{ .x = 1, .y = 1, .z = 1 } },
+        .execution = .{ .workgroups = .{ .x = 1, .y = 1, .z = 1 } },
         .compute = sc.cullTestComp,
         .bufUses = &.{
             BufferUse.init(def.indirectBuf, .Compute, .ShaderReadWrite, 0),
@@ -208,8 +203,8 @@ pub fn Cull(
         viewCam: BufId, // Maybe swapped
         cullCam: BufId, // Maybe swapped
     },
-) Pass {
-    return Pass.MeshIndirect(.{
+) PassDef {
+    return PassDef.MeshIndirect(.{
         .name = def.name,
         .execution = .{
             .workgroups = .{ .x = 1, .y = 1, .z = 1 },

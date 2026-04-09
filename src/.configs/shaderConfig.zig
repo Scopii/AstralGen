@@ -1,4 +1,3 @@
-const vkE = @import("../render/help/Enums.zig");
 const ShaderInf = @import("../shader/ShaderInf.zig").ShaderInf;
 
 // Shader Compilation

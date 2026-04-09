@@ -30,8 +30,8 @@ pub const ResourceMan = struct {
     updater: ResourceUpdater,
     registry: ResourceRegistry,
     queues: [QUEUE_COUNT]ResourceQueue,
-    bufMetas: LinkedMap(BufferMeta, rc.BUF_MAX, u32, rc.BUF_MAX, 0) = .{},
-    texMetas: LinkedMap(TextureMeta, rc.TEX_MAX, u32, rc.TEX_MAX, 0) = .{},
+
+    texturePool: LinkedMap(TexId, 32, u32, 32, 0) = .{},
 
     pub fn init(alloc: Allocator, context: *const Context) !ResourceMan {
         const vma = try Vma.init(context.instance, context.gpi, context.gpu);
@@ -57,6 +57,24 @@ pub const ResourceMan = struct {
         self.registry.deinit(&self.vma);
         self.descMan.deinit(&self.vma);
         self.vma.deinit();
+    }
+
+    pub const VirtualTexture = @import("../types/res/VirtualTexture.zig").VirtualTexture;
+
+    pub fn assignTexture(self: *ResourceMan, virtualTex: VirtualTexture, curFrame: u64, flightId: u8) void {
+        const texInf = TexInf{
+            .id = virtualTex.id, // Should be assigned?
+            .mem = virtualTex.mem,
+            .typ = virtualTex.texType,
+            .width = virtualTex.width,
+            .height = virtualTex.height,
+            .depth = virtualTex.depth,
+            .update = virtualTex.update,
+            .resize = virtualTex.resize,
+        };
+        self.addResource(texInf, curFrame, flightId, null);
+        // self.texturePool.upsert(virtualTex.id, item: TexId)
+        std.debug.print("Virtual Texture assigned ({s} ID {})", .{virtualTex.name, virtualTex.id.val});
     }
 
     fn destroyResources(self: *ResourceMan, queue: *ResourceQueue, comptime T: type) u64 {
@@ -123,17 +141,16 @@ pub const ResourceMan = struct {
     }
 
     // Meta
-    pub fn addMeta(self: *ResourceMan, id: anytype, meta: anytype) void {
-        self.metaMapOf(rH.ResOfId(@TypeOf(id))).upsert(id.val, meta);
+    fn addMeta(self: *ResourceMan, id: anytype, meta: anytype) void {
+        self.registry.addMeta(id, meta);
     }
 
     pub fn getMeta(self: *ResourceMan, id: anytype) !*rH.MetaOfId(@TypeOf(id)) {
-        const map = self.metaMapOf(rH.ResOfId(@TypeOf(id)));
-        return if (map.isKeyUsed(id.val)) map.getPtrByKey(id.val) else error.GetMetaIdNotUsed;
+        return try self.registry.getMeta(id);
     }
 
-    pub fn removeMeta(self: *ResourceMan, id: anytype) void {
-        self.metaMapOf(rH.ResOfId(@TypeOf(id))).remove(id.val);
+    fn removeMeta(self: *ResourceMan, id: anytype) void {
+        self.registry.removeMeta(id);
     }
 
     // Getters
@@ -333,17 +350,5 @@ pub const ResourceMan = struct {
     fn printReadbackBuffer(self: *ResourceMan, bufId: BufferMeta.BufId, comptime T: type, flightId: u8) !void {
         const readbackPtr = try self.getBufferDataPtr(bufId, T, flightId);
         std.debug.print("Readback: {}\n", .{readbackPtr.*});
-    }
-
-    fn metaMapOf(self: *ResourceMan, comptime T: type) switch (T) {
-        Buffer => *@TypeOf(self.bufMetas),
-        Texture => *@TypeOf(self.texMetas),
-        else => @compileError("mapOf: unsupported type"),
-    } {
-        return switch (T) {
-            Buffer => &self.bufMetas,
-            Texture => &self.texMetas,
-            else => unreachable,
-        };
     }
 };

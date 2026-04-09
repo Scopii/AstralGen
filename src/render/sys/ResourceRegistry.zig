@@ -1,4 +1,6 @@
+const TextureMeta = @import("../types/res/TextureMeta.zig").TextureMeta;
 const LinkedMap = @import("../../.structures/LinkedMap.zig").LinkedMap;
+const BufferMeta = @import("../types/res/BufferMeta.zig").BufferMeta;
 const Texture = @import("../types/res/Texture.zig").Texture;
 const Buffer = @import("../types/res/Buffer.zig").Buffer;
 const rc = @import("../../.configs/renderConfig.zig");
@@ -29,6 +31,8 @@ pub const ResourceBucket = struct {
 };
 
 pub const ResourceRegistry = struct {
+    bufMetas: LinkedMap(BufferMeta, rc.BUF_MAX, u32, rc.BUF_MAX, 0) = .{},
+    texMetas: LinkedMap(TextureMeta, rc.TEX_MAX, u32, rc.TEX_MAX, 0) = .{},
     staticHolder: ResourceBucket = .{},
     dynHolders: [rc.MAX_IN_FLIGHT]ResourceBucket,
 
@@ -44,6 +48,20 @@ pub const ResourceRegistry = struct {
             self.dynHolders[i].deinit(vma);
         }
         self.staticHolder.deinit(vma);
+    }
+
+    // Meta
+    pub fn addMeta(self: *ResourceRegistry, id: anytype, meta: anytype) void {
+        self.metaMapOf(rH.ResOfId(@TypeOf(id))).upsert(id.val, meta);
+    }
+
+    pub fn getMeta(self: *ResourceRegistry, id: anytype) !*rH.MetaOfId(@TypeOf(id)) {
+        const map = self.metaMapOf(rH.ResOfId(@TypeOf(id)));
+        return if (map.isKeyUsed(id.val)) map.getPtrByKey(id.val) else error.GetMetaIdNotUsed;
+    }
+
+    pub fn removeMeta(self: *ResourceRegistry, id: anytype) void {
+        self.metaMapOf(rH.ResOfId(@TypeOf(id))).remove(id.val);
     }
 
     // Resources
@@ -84,6 +102,18 @@ pub const ResourceRegistry = struct {
             .Rarely => &self.staticHolder,
             .Often => &self.dynHolders[updateSlot],
             .PerFrame => &self.dynHolders[flightId],
+        };
+    }
+
+    fn metaMapOf(self: *ResourceRegistry, comptime T: type) switch (T) {
+        Buffer => *@TypeOf(self.bufMetas),
+        Texture => *@TypeOf(self.texMetas),
+        else => @compileError("mapOf: unsupported type"),
+    } {
+        return switch (T) {
+            Buffer => &self.bufMetas,
+            Texture => &self.texMetas,
+            else => unreachable,
         };
     }
 };

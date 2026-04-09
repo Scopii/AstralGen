@@ -4,7 +4,6 @@ const ShaderId = @import("../../shader/ShaderSys.zig").ShaderId;
 const shaderCon = @import("../../.configs/shaderConfig.zig");
 const ResourceMan = @import("ResourceMan.zig").ResourceMan;
 const Shader = @import("../types/base/Shader.zig").Shader;
-const Pass = @import("../types/base/Pass.zig").Pass;
 const Context = @import("Context.zig").Context;
 const vk = @import("../../.modules/vk.zig").c;
 const std = @import("std");

@@ -1,20 +1,21 @@
 const TexId = @import("../types/res/TextureMeta.zig").TextureMeta.TexId;
-const ViewportBlit = @import("../types/base/Pass.zig").ViewportBlit;
+const ViewportBlit = @import("../types/pass/PassDef.zig").ViewportBlit;
+const Attachment = @import("../types/pass/Attachment.zig").Attachment;
+const TextureUse = @import("../types/pass/TextureUse.zig").TextureUse;
 const Swapchain = @import("../types/base/Swapchain.zig").Swapchain;
-const Attachment = @import("../types/base/Pass.zig").Attachment;
-const TextureUse = @import("../types/base/Pass.zig").TextureUse;
-const RenderNode = @import("../types/base/Pass.zig").RenderNode;
+const RenderNode = @import("../types/pass/PassDef.zig").RenderNode;
+const BufferUse = @import("../types/pass/BufferUse.zig").BufferUse;
 const PushData = @import("../types/res/PushData.zig").PushData;
-const BufferUse = @import("../types/base/Pass.zig").BufferUse;
+const Dispatch = @import("../types/pass/PassDef.zig").Dispatch;
 const SwapchainMan = @import("SwapchainMan.zig").SwapchainMan;
-const Dispatch = @import("../types/base/Pass.zig").Dispatch;
+const PassDef = @import("../types/pass/PassDef.zig").PassDef;
 const Texture = @import("../types/res/Texture.zig").Texture;
 const ResourceMan = @import("ResourceMan.zig").ResourceMan;
 const Buffer = @import("../types/res/Buffer.zig").Buffer;
 const ShaderManager = @import("ShaderMan.zig").ShaderMan;
 const rc = @import("../../.configs/renderConfig.zig");
 const FrameData = @import("../../App.zig").FrameData;
-const Pass = @import("../types/base/Pass.zig").Pass;
+
 const ImGuiMan = @import("ImGuiMan.zig").ImGuiMan;
 const Cmd = @import("../types/base/Cmd.zig").Cmd;
 const CmdManager = @import("CmdMan.zig").CmdMan;
@@ -196,7 +197,7 @@ pub const RenderGraph = struct {
         }
     }
 
-    fn recordPass(self: *RenderGraph, cmd: *Cmd, pass: *const Pass, frameData: FrameData, resMan: *ResourceMan, shaderMan: *ShaderManager) !void {
+    fn recordPass(self: *RenderGraph, cmd: *Cmd, pass: *const PassDef, frameData: FrameData, resMan: *ResourceMan, shaderMan: *ShaderManager) !void {
         const timeId = cmd.startTimer(.TopOfPipe, pass.name);
         cmd.startStatistics(pass.name);
 
@@ -235,7 +236,7 @@ pub const RenderGraph = struct {
         cmd.endTimer(.BotOfPipe, timeId);
     }
 
-    fn recordGraphics(cmd: *Cmd, width: u32, height: u32, pass: *const Pass, resMan: *ResourceMan) !void {
+    fn recordGraphics(cmd: *Cmd, width: u32, height: u32, pass: *const PassDef, resMan: *ResourceMan) !void {
         if (pass.colorAttCount > 8) return error.TooManyAttachments;
 
         const depthInf: ?vk.VkRenderingAttachmentInfo = if (pass.depthAtt) |depth| blk: {
