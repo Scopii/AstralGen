@@ -11,7 +11,7 @@ const TexId = TextureMeta.TexId;
 const WindowId = @import("../../../window/Window.zig").Window.WindowId;
 const ViewportId = @import("../../../viewport/ViewportSys.zig").ViewportId;
 const std = @import("std");
-const Attachment = @import("Attachment.zig").Attachment;
+const AttachmentUse = @import("Attachment.zig").AttachmentUse;
 const BufferUse = @import("BufferUse.zig").BufferUse;
 const TextureUse = @import("TextureUse.zig").TextureUse;
 const FixedList = @import("../../../.structures/FixedList.zig").FixedList;
@@ -69,9 +69,9 @@ pub const PassDef = struct {
     texUses: FixedList(TextureUse, 14) = .{},
 
     renderState: RenderState = .{},
-    colorAtts: FixedList(Attachment, 8) = .{},
-    depthAtt: ?Attachment = null,
-    stencilAtt: ?Attachment = null,
+    colorAtts: FixedList(AttachmentUse, 8) = .{},
+    depthAtt: ?AttachmentUse = null,
+    stencilAtt: ?AttachmentUse = null,
 
     pub const PassExecution = union(enum) {
         compute: ComputeExec,
@@ -89,9 +89,9 @@ pub const PassDef = struct {
             fragment: ShaderInf,
             bufUses: []const BufferUse = &.{},
             texUses: []const TextureUse = &.{},
-            colorAtts: []const Attachment = &.{},
-            depthAtt: ?Attachment = null,
-            stencilAtt: ?Attachment = null,
+            colorAtts: []const AttachmentUse = &.{},
+            depthAtt: ?AttachmentUse = null,
+            stencilAtt: ?AttachmentUse = null,
             renderState: RenderState = .{},
         },
     ) PassDef {
@@ -177,9 +177,9 @@ pub const PassDef = struct {
             fragment: ShaderInf,
             bufUses: []const BufferUse = &.{},
             texUses: []const TextureUse = &.{},
-            colorAtts: []const Attachment = &.{},
-            depthAtt: ?Attachment = null,
-            stencilAtt: ?Attachment = null,
+            colorAtts: []const AttachmentUse = &.{},
+            depthAtt: ?AttachmentUse = null,
+            stencilAtt: ?AttachmentUse = null,
             renderState: RenderState = .{},
         },
     ) PassDef {
@@ -217,9 +217,9 @@ pub const PassDef = struct {
             fragment: ShaderInf,
             bufUses: []const BufferUse = &.{},
             texUses: []const TextureUse = &.{},
-            colorAtts: []const Attachment = &.{},
-            depthAtt: ?Attachment = null,
-            stencilAtt: ?Attachment = null,
+            colorAtts: []const AttachmentUse = &.{},
+            depthAtt: ?AttachmentUse = null,
+            stencilAtt: ?AttachmentUse = null,
             renderState: RenderState = .{},
         },
     ) PassDef {
@@ -256,9 +256,9 @@ pub const PassDef = struct {
             fragment: ShaderInf,
             bufUses: []const BufferUse = &.{},
             texUses: []const TextureUse = &.{},
-            colorAtts: []const Attachment = &.{},
-            depthAtt: ?Attachment = null,
-            stencilAtt: ?Attachment = null,
+            colorAtts: []const AttachmentUse = &.{},
+            depthAtt: ?AttachmentUse = null,
+            stencilAtt: ?AttachmentUse = null,
             renderState: RenderState = .{},
         },
     ) PassDef {
@@ -293,9 +293,9 @@ pub const PassDef = struct {
             fragment: ShaderInf,
             bufUses: []const BufferUse = &.{},
             texUses: []const TextureUse = &.{},
-            colorAtts: []const Attachment = &.{},
-            depthAtt: ?Attachment = null,
-            stencilAtt: ?Attachment = null,
+            colorAtts: []const AttachmentUse = &.{},
+            depthAtt: ?AttachmentUse = null,
+            stencilAtt: ?AttachmentUse = null,
             renderState: RenderState = .{},
         },
     ) PassDef {
@@ -334,7 +334,7 @@ pub const PassDef = struct {
         return self.texUses.constSlice();
     }
 
-    pub fn getColorAtts(self: *const PassDef) []const Attachment {
+    pub fn getColorAtts(self: *const PassDef) []const AttachmentUse {
         return self.colorAtts.constSlice();
     }
 
