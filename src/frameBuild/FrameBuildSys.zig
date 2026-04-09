@@ -8,22 +8,9 @@ const pDef = @import("../.configs/passConfig.zig");
 const rc = @import("../.configs/renderConfig.zig");
 const std = @import("std");
 
-pub const PassStruct = packed struct {
-    CompTest: bool = false,
-    CullComp: bool = false,
-    CullMain: bool = false,
-    CullDebug: bool = false,
-    QuantComp: bool = false,
-    QuantGridMain: bool = false,
-    QuantGridDebug: bool = false,
-    EditorGrid: bool = false,
-    QuantPlaneMain: bool = false,
-    QuantPlaneDebug: bool = false,
-    FrustumView: bool = false,
-};
+const FixedList = @import("../.structures/FixedList.zig").FixedList;
 
 pub const PassEnum = enum {
-    ENTRY, // Not an actual Pass
     CompTest,
     CullComp,
     CullMain,
@@ -35,101 +22,98 @@ pub const PassEnum = enum {
     QuantPlaneMain,
     QuantPlaneDebug,
     FrustumView,
-    EXIT, // Not an actual Pass
 };
 
 pub const FrameBuildSys = struct {
     pub fn build(frameBuild: *FrameBuildData, data: *const EngineData) void {
         const activeViewportIds = data.viewport.activeViewportIds.constSlice();
-        var passMask: PassStruct = .{};
+
+        const passEnumFields = @typeInfo(PassEnum).@"enum".fields;
+        var passMask: [passEnumFields.len]bool = .{false} ** passEnumFields.len;
 
         frameBuild.passList.clear();
 
-        // Fill Pass Mask
-        inline for (@typeInfo(PassStruct).@"struct".fields) |field| {
-            for (activeViewportIds) |viewportId| {
-                const viewport = data.viewport.viewports.getByKey(viewportId.val);
-                const viewMaskValue = @field(viewport.passMask, field.name);
+        // Check every Viewports Pass Order and set passMask
+        for (activeViewportIds) |viewportId| {
+            const viewport = data.viewport.viewports.getByKey(viewportId.val);
+            var lastViewPassEnum: ?PassEnum = null;
 
-                if (viewMaskValue == true) {
-                    @field(passMask, field.name) = true;
-                    if (rc.FRAME_BUILD_DEBUG) std.debug.print("Viewport ({s}) demanded {s}\n", .{ viewport.name, field.name });
-                    break;
+            for (0..viewport.passSlice.len) |i| {
+                const viewPassEnum = viewport.passSlice[i];
+                const passIndex = @intFromEnum(viewPassEnum);
+
+                if (lastViewPassEnum) |lastEnum| {
+                    if (passIndex <= @intFromEnum(lastEnum)) {
+                        std.debug.print("ERROR: Passes in Viewport Slice Out of Order! {} seen after {}\n", .{ viewPassEnum, lastEnum });
+                        std.debug.assert(false);
+                    }
                 }
+
+                passMask[passIndex] = true;
+                lastViewPassEnum = viewPassEnum;
+                if (rc.FRAME_BUILD_DEBUG) std.debug.print("Viewport ({s}) demanded {s}\n", .{ viewport.name, @typeInfo(PassEnum).@"enum".fields[passIndex].name });
             }
         }
 
         const activeWindows = data.window.activeWindows.constSlice();
+        var tempBlits: FixedList(ViewportBlit, rc.MAX_WINDOWS * 4) = .{};
 
-        // Launch Passes and Blits for filled Mask
-        inline for (@typeInfo(PassStruct).@"struct".fields) |field| {
-            if (@field(passMask, field.name) == true) {
-                const passEnum = @field(PassEnum, field.name);
-
+        for (0..passEnumFields.len) |passIndex| {
+            if (passMask[passIndex] == true) {
+                const passMaskEnum: PassEnum = @enumFromInt(passIndex);
                 var passWidth: u32 = 0;
                 var passHeight: u32 = 0;
 
-                // Check Maximum View of PassDef
-                for (activeViewportIds) |viewportId| {
-                    const viewport = data.viewport.viewports.getByKey(viewportId.val);
+                // Check Active Windows:
+                for (activeWindows) |*window| {
+                    // Check all Window Viewports:
+                    for (window.viewIds) |windowViewId| {
+                        if (windowViewId) |viewId| {
+                            const viewport = data.viewport.viewports.getByKey(viewId.val);
 
-                    const isPassDemanded = @field(viewport.passMask, field.name);
-
-                    if (isPassDemanded) {
-                        for (activeWindows) |*window| {
-                            var isAttached = false;
-                            for (window.viewIds) |windowViewId| {
-                                if (windowViewId != null and windowViewId.?.val == viewportId.val) {
-                                    isAttached = true;
-                                    break;
+                            var usesPass = false;
+                            for (viewport.passSlice) |viewPassEnum| {
+                                if (viewPassEnum == passMaskEnum) {
+                                    usesPass = true;
+                                    break; // Found it, stop searching this slice
                                 }
                             }
 
-                            if (isAttached) {
+                            // Check if Viewport:
+                            if (usesPass) {
+                                if (passMaskEnum == viewport.blitPass) {
+                                    const blit = createBlit(&viewport, window.id, window.extent.width, window.extent.height);
+                                    tempBlits.append(blit) catch std.debug.print("PassDef Could not Append Blit\n", .{});
+                                }
+                                // Check for bigger Viewport Area:
                                 const viewWidth = viewport.calcViewWidth(window.extent.width);
-                                const viewHeight = viewport.calcViewHeight(window.extent.height);
-
                                 if (viewWidth > passWidth) {
                                     passWidth = viewWidth;
                                     // if (rc.FRAME_BUILD_DEBUG) std.debug.print("{s} set PassDef Width to {}\n", .{ viewport.name, viewWidth });
                                 }
+                                const viewHeight = viewport.calcViewHeight(window.extent.height);
                                 if (viewHeight > passHeight) {
                                     passHeight = viewHeight;
                                     // if (rc.FRAME_BUILD_DEBUG) std.debug.print("{s} set PassDef Height to {}\n", .{ viewport.name, viewHeight });
                                 }
+                                break;
                             }
                         }
                     }
                 }
 
-                appendPass(frameBuild, passEnum, passWidth, passHeight) catch std.debug.print("ERROR: COULD NOT APPEND PASS\n", .{});
-                if (rc.FRAME_BUILD_DEBUG) std.debug.print("Pass {s} added (width {} height {})\n", .{ field.name, passWidth, passHeight });
+                appendPass(frameBuild, passMaskEnum, passWidth, passHeight) catch std.debug.print("ERROR: COULD NOT APPEND PASS\n", .{});
+                if (rc.FRAME_BUILD_DEBUG) std.debug.print("Pass {s} added (width {} height {})\n", .{ @enumFromInt(passIndex), passWidth, passHeight });
 
-                // Check for Blits
-                for (activeViewportIds) |viewportId| {
-                    const viewport = data.viewport.viewports.getByKey(viewportId.val);
-
-                    if (viewport.blitPass == passEnum) {
-                        for (activeWindows) |*window| {
-                            var isAttached = false;
-                            for (window.viewIds) |windowViewId| {
-                                if (windowViewId != null and windowViewId.?.val == viewportId.val) {
-                                    isAttached = true;
-                                    break;
-                                }
-                            }
-
-                            if (isAttached) {
-                                appendBlit(frameBuild, &viewport, window.id, window.extent.width, window.extent.height);
-                            }
-                        }
-                    }
+                for (tempBlits.constSlice()) |blit| {
+                    frameBuild.passList.append(.{ .viewportBlit = blit }) catch std.debug.print("PassDef Could not Append Blit\n", .{});
                 }
+                tempBlits.clear();
             }
         }
     }
 
-    fn appendBlit(frameBuild: *FrameBuildData, viewport: *const Viewport, windowId: WindowId, windowWidth: u32, windowHeight: u32) void {
+    fn createBlit(viewport: *const Viewport, windowId: WindowId, windowWidth: u32, windowHeight: u32) ViewportBlit {
         const blitNode = ViewportBlit{
             .name = viewport.name,
             .srcTexId = viewport.sourceTexId,
@@ -139,7 +123,7 @@ pub const FrameBuildSys = struct {
             .viewOffsetX = viewport.calcViewX(windowWidth),
             .viewOffsetY = viewport.calcViewY(windowHeight),
         };
-        frameBuild.passList.append(.{ .viewportBlit = blitNode }) catch std.debug.print("PassDef Could not Append Blit\n", .{});
+        return blitNode;
     }
 
     fn appendPass(frameBuild: *FrameBuildData, passEnum: PassEnum, passWidth: u32, passHeight: u32) !void {
@@ -255,7 +239,6 @@ pub const FrameBuildSys = struct {
                 });
                 try frameBuild.passList.append(.{ .passNode = .{ .pass = pass, .width = passWidth, .height = passHeight } });
             },
-            .ENTRY, .EXIT => {},
         }
     }
 };

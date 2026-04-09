@@ -65,7 +65,7 @@ pub const RenderGraph = struct {
         if (self.useGpuProfiling == true and frame % rc.GPU_QUERY_INTERVAL == 0) try cmd.enableStatsQuerys(self.gpi) else cmd.disableStatsQuerys(self.gpi);
         cmd.resetStatsQuerys();
 
-        const timeId = cmd.startTimer(.TopOfPipe, "Descriptor Heap");
+        const timeId = cmd.startTimer(.TopOfPipe, "Descriptor Heap", .Other);
         cmd.bindDescriptorHeap(resMan.descMan.descHeap.gpuAddress, resMan.descMan.descHeap.size, resMan.descMan.driverReservedSize);
         cmd.endTimer(.BotOfPipe, timeId);
 
@@ -86,7 +86,7 @@ pub const RenderGraph = struct {
         const fullTransfers = resUpdater.getFullUpdates(cmd.flightId);
 
         if (fullTransfers.len != 0) {
-            const timeId = cmd.startTimer(.TopOfPipe, "Full Transfers");
+            const timeId = cmd.startTimer(.TopOfPipe, "Full Transfers", .Other);
 
             for (fullTransfers) |transfer| {
                 const buffer = try resMan.get(transfer.dstResId, transfer.dstSlot);
@@ -102,7 +102,7 @@ pub const RenderGraph = struct {
         const partialTransfers = resUpdater.getSegmentUpdates(cmd.flightId);
 
         if (partialTransfers.len != 0) {
-            const timeId = cmd.startTimer(.TopOfPipe, "Partial Transfers");
+            const timeId = cmd.startTimer(.TopOfPipe, "Partial Transfers", .Other);
 
             for (partialTransfers) |transfer| {
                 const buffer = try resMan.get(transfer.dstResId, transfer.dstSlot);
@@ -198,7 +198,7 @@ pub const RenderGraph = struct {
     }
 
     fn recordPass(self: *RenderGraph, cmd: *Cmd, pass: *const PassDef, frameData: FrameData, resMan: *ResourceMan, shaderMan: *ShaderManager) !void {
-        const timeId = cmd.startTimer(.TopOfPipe, pass.name);
+        const timeId = cmd.startTimer(.TopOfPipe, pass.name, .Pass);
         cmd.startStatistics(pass.name);
 
         const shaders = shaderMan.getShaders(pass.getShaderIds());
@@ -219,7 +219,7 @@ pub const RenderGraph = struct {
     }
 
     fn recordBlit(self: *RenderGraph, cmd: *Cmd, blit: ViewportBlit, resMan: *ResourceMan, swapMan: *SwapchainMan) !void {
-        const timeId = cmd.startTimer(.TopOfPipe, blit.name);
+        const timeId = cmd.startTimer(.TopOfPipe, blit.name, .Blit);
 
         const renderTexMeta = try resMan.getMeta(blit.srcTexId);
         const renderTex = try resMan.get(blit.srcTexId, cmd.flightId);
@@ -232,7 +232,7 @@ pub const RenderGraph = struct {
 
         const viewArea = vk.VkExtent3D{ .width = blit.viewWidth, .height = blit.viewHeight, .depth = 1 };
         const viewOffset = vk.VkOffset3D{ .x = blit.viewOffsetX, .y = blit.viewOffsetY, .z = 1 };
-        cmd.copyImageToImage(renderTex.img, renderTex.extent, swapchain.getCurTexture().img, viewArea, viewOffset, rc.RENDER_TEX_STRETCH);
+        cmd.blit(renderTex.img, renderTex.extent, swapchain.getCurTexture().img, viewArea, viewOffset, rc.RENDER_TEX_STRETCH);
 
         cmd.endTimer(.BotOfPipe, timeId);
     }
@@ -280,7 +280,7 @@ pub const RenderGraph = struct {
 
     fn recordImGui(self: *RenderGraph, cmd: *Cmd, targets: []const *Swapchain, imguiMan: *ImGuiMan, data: *const EngineData) !void {
         if (data.window.uiActive) {
-            const timeId = cmd.startTimer(.TopOfPipe, "ImGui");
+            const timeId = cmd.startTimer(.TopOfPipe, "ImGui", .Other);
 
             for (targets) |swapchain| {
                 const target = swapchain.getCurTexture();
@@ -301,7 +301,7 @@ pub const RenderGraph = struct {
     }
 
     fn recordPresentation(self: *RenderGraph, cmd: *Cmd, targets: []const *Swapchain) !void {
-        const timeId = cmd.startTimer(.TopOfPipe, "Presentation");
+        const timeId = cmd.startTimer(.TopOfPipe, "Presentation", .Other);
         for (targets) |swapchain| {
             const target = swapchain.getCurTexture();
             try self.checkImageState(target, swapchain.subRange, .{ .stage = .BotOfPipe, .access = .None, .layout = .PresentSrc });

@@ -106,8 +106,8 @@ pub const App = struct {
             .areaY = 0.0,
             .areaWidth = 1.0,
             .areaHeight = 1.0,
-            .passMask = .{
-                .CompTest = true,
+            .passSlice = &.{
+                .CompTest,
             },
             .blitPass = .CompTest,
         });
@@ -120,9 +120,9 @@ pub const App = struct {
             .areaY = 0.0,
             .areaWidth = 0.5,
             .areaHeight = 0.5,
-            .passMask = .{
-                .QuantComp = true,
-                .QuantGridMain = true,
+            .passSlice = &.{
+                .QuantComp,
+                .QuantGridMain,
             },
             .blitPass = .QuantGridMain,
         });
@@ -135,10 +135,10 @@ pub const App = struct {
             .areaY = 0.0,
             .areaWidth = 0.5,
             .areaHeight = 0.5,
-            .passMask = .{
-                .QuantComp = true,
-                .QuantGridDebug = true,
-                .EditorGrid = true,
+            .passSlice = &.{
+                .QuantComp,
+                .QuantGridDebug,
+                .EditorGrid,
             },
             .blitPass = .EditorGrid,
         });
@@ -150,9 +150,9 @@ pub const App = struct {
             .areaY = 0.5,
             .areaWidth = 0.5,
             .areaHeight = 0.5,
-            .passMask = .{
-                .QuantPlaneDebug = true,
-                .FrustumView = true,
+            .passSlice = &.{
+                .QuantPlaneDebug,
+                .FrustumView,
             },
             .blitPass = .FrustumView,
         });
@@ -165,8 +165,8 @@ pub const App = struct {
             .areaY = 0.5,
             .areaWidth = 0.5,
             .areaHeight = 0.5,
-            .passMask = .{
-                .QuantPlaneMain = true,
+            .passSlice = &.{
+                .QuantPlaneMain,
             },
             .blitPass = .QuantPlaneMain,
         });
@@ -279,7 +279,10 @@ pub const App = struct {
 
                 try CameraSys.update(&self.data.entityData, dt, &self.data, &self.rendererQueue, self.memoryMan);
 
+                const start = std.time.microTimestamp();
                 try RenderPrepSys.extractEntities(&self.data.entityData, &self.rendererQueue, self.memoryMan);
+                const end = std.time.microTimestamp();
+                std.debug.print("Record {d:.3} ms\n", .{@as(f64, @floatFromInt(end - start)) / 1_000.0});
 
                 if (rc.CPU_PROFILING) std.debug.print("Cpu pre-Renderer Delta {d:.3} ms, ({d:.1} Real FPS)\n", .{ dt * 0.000001, 1.0 / (dt * 0.000000001) });
 

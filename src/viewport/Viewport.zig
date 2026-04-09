@@ -1,5 +1,4 @@
 const TexId = @import("../render/types/res/TextureMeta.zig").TextureMeta.TexId;
-const PassStruct = @import("../frameBuild/FrameBuildSys.zig").PassStruct;
 const PassEnum = @import("../frameBuild/FrameBuildSys.zig").PassEnum;
 const EntityId = @import("../ecs/EntityData.zig").EntityId;
 
@@ -12,7 +11,7 @@ pub const Viewport = struct {
     areaHeight: f32 = 1.0,
     cameraEntity: ?EntityId,
 
-    passMask: PassStruct = .{},
+    passSlice: []const PassEnum,
     blitPass: PassEnum,
 
     pub fn calcViewWidth(self: *const Viewport, swapchainWidth: u32) u32 {

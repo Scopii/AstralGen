@@ -12,6 +12,7 @@ const std = @import("std");
 
 pub const QueryPair = struct {
     name: []const u8,
+    typ: enum { Pass, Blit, Other },
     startIndex: u8 = 0,
     endIndex: u8 = 0,
 };
@@ -97,7 +98,7 @@ pub const Cmd = struct {
         self.frame = frame;
         self.renderState = null;
         self.stateChanges = 0;
-
+        
         try vhF.check(vk.vkResetCommandBuffer(self.handle, 0), "could not reset Cmd");
         try vhF.check(vk.vkBeginCommandBuffer(self.handle, &beginInf), "could not Begin Cmd");
     }
@@ -110,7 +111,7 @@ pub const Cmd = struct {
         vk.vkCmdWriteTimestamp2(self.handle, stage, pool, queryIndex);
     }
 
-    pub fn startTimer(self: *Cmd, pipeStage: vhE.PipeStage, name: []const u8) ?u8 {
+    pub fn startTimer(self: *Cmd, pipeStage: vhE.PipeStage, name: []const u8, typ: @FieldType(QueryPair, "typ")) ?u8 {
         if (self.timeQueryPool) |qPool| {
             const queryPairs: u8 = @intCast(self.timeQueries.getLength());
             if (queryPairs >= rc.GPU_TIME_QUERYS) {
@@ -125,7 +126,7 @@ pub const Cmd = struct {
             }
 
             self.writeTimestamp(qPool, @intFromEnum(pipeStage), index);
-            self.timeQueries.upsert(queryPairs, .{ .name = name, .startIndex = index });
+            self.timeQueries.upsert(queryPairs, .{ .name = name, .typ = typ, .startIndex = index });
             self.timeQueryCounter += 1;
             return queryPairs;
         }
@@ -186,7 +187,7 @@ pub const Cmd = struct {
                 const diff = results[query.endIndex] - results[query.startIndex];
                 const gpuQueryMs = (@as(f64, @floatFromInt(diff)) * timestampPeriod) / 1_000_000.0;
                 untrackedMs -= gpuQueryMs;
-                std.debug.print(" - {d:.3} ms ({d:5.2} %) {s}\n", .{ gpuQueryMs, (gpuQueryMs / gpuFrameMs) * 100, query.name });
+                std.debug.print(" - {d:.3} ms ({d:5.2} %) {}: {s}\n", .{ gpuQueryMs, (gpuQueryMs / gpuFrameMs) * 100, query.typ, query.name });
             }
             std.debug.print("Untracked {d:.3} ms ({d:5.2} %)\n", .{ untrackedMs + 0.00001, (untrackedMs / gpuFrameMs) * 100 + 0.00001 }); // + 0.00001 to avoid precision loss negative
         }
@@ -239,7 +240,7 @@ pub const Cmd = struct {
                     return;
                 }
                 vk.vkCmdBeginQuery(self.handle, pool, index, 0);
-                self.activeStatQuery = .{ .name = name, .startIndex = index };
+                self.activeStatQuery = .{ .name = name, .typ = .Other, .startIndex = index };
             }
         }
     }
@@ -369,7 +370,7 @@ pub const Cmd = struct {
         vkFn.vkCmdBindResourceHeapEXT.?(self.handle, &bindInf);
     }
 
-    pub fn copyImageToImage(self: *const Cmd, srcImg: vk.VkImage, srcExtent: vk.VkExtent3D, dstImg: vk.VkImage, dstExtent: vk.VkExtent3D, dstOffset: vk.VkOffset3D, stretch: bool) void {
+    pub fn blit(self: *const Cmd, srcImg: vk.VkImage, srcExtent: vk.VkExtent3D, dstImg: vk.VkImage, dstExtent: vk.VkExtent3D, dstOffset: vk.VkOffset3D, stretch: bool) void {
         const blitOffsets = calculateBlitOffsets(srcExtent, dstExtent, dstOffset, stretch);
 
         const blitRegion = vk.VkImageBlit2{
