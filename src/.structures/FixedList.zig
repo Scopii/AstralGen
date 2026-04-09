@@ -11,6 +11,18 @@ pub fn FixedList(comptime T: type, comptime capacity: usize) type {
             return .{ .len = 0 };
         }
 
+        pub fn appendSlice(self: *Self, items: []const T) !void {
+            if (self.len + items.len > capacity) return error.ListFull;
+            @memcpy(self.buffer[self.len .. items.len + self.len], items);
+            self.len += items.len;
+        }
+
+        pub fn appendSliceAssumeCapacity(self: *Self, items: []const T) void {
+            std.debug.assert(self.len + items.len <= capacity);
+            @memcpy(self.buffer[self.len .. self.len + items.len], items);
+            self.len += items.len;
+        }
+
         pub fn append(self: *Self, item: T) !void {
             if (self.len >= capacity) return error.ListFull;
             self.buffer[self.len] = item;
@@ -41,6 +53,14 @@ pub fn FixedList(comptime T: type, comptime capacity: usize) type {
 
         pub fn clear(self: *Self) void {
             self.len = 0;
+        }
+
+        pub fn swapRemoveIndex(self: *Self, index: u32) T {
+            std.debug.assert(index < self.len);
+            const removed = self.buffer[index];
+            self.len -= 1;
+            if (index != self.len) self.buffer[index] = self.buffer[self.len];
+            return removed;
         }
 
         pub fn pop(self: *Self) ?T {

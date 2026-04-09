@@ -14,6 +14,7 @@ const std = @import("std");
 const Attachment = @import("Attachment.zig").Attachment;
 const BufferUse = @import("BufferUse.zig").BufferUse;
 const TextureUse = @import("TextureUse.zig").TextureUse;
+const FixedList = @import("../../../.structures/FixedList.zig").FixedList;
 
 pub const Dispatch = struct { x: u32, y: u32, z: u32 };
 
@@ -63,19 +64,12 @@ pub const PassDef = struct {
     name: []const u8,
     execution: PassExecution,
 
-    shaderCount: u8 = 0,
-    shaderIds: [3]ShaderId = undefined,
-
-    bufCount: u8 = 0,
-    bufUses: [14]BufferUse = undefined,
-
-    texCount: u8 = 0,
-    texUses: [14]TextureUse = undefined,
+    shaderIds: FixedList(ShaderId, 3) = .{},
+    bufUses: FixedList(BufferUse, 14) = .{},
+    texUses: FixedList(TextureUse, 14) = .{},
 
     renderState: RenderState = .{},
-
-    colorAttCount: u8 = 0,
-    colorAtts: [8]Attachment = undefined,
+    colorAtts: FixedList(Attachment, 8) = .{},
     depthAtt: ?Attachment = null,
     stencilAtt: ?Attachment = null,
 
@@ -114,18 +108,12 @@ pub const PassDef = struct {
             .renderState = inf.renderState,
         };
 
-        pass.shaderIds[0] = inf.vertex.id;
-        pass.shaderIds[1] = inf.fragment.id;
-        pass.shaderCount = 2;
+        pass.shaderIds.append(inf.vertex.id);
+        pass.shaderIds.append(inf.fragment.id);
 
-        @memcpy(pass.bufUses[0..inf.bufUses.len], inf.bufUses);
-        pass.bufCount = @intCast(inf.bufUses.len);
-
-        @memcpy(pass.texUses[0..inf.texUses.len], inf.texUses);
-        pass.texCount = @intCast(inf.texUses.len);
-
-        @memcpy(pass.colorAtts[0..inf.colorAtts.len], inf.colorAtts);
-        pass.colorAttCount = @intCast(inf.colorAtts.len);
+        pass.bufUses.appendSliceAssumeCapacity(inf.bufUses);
+        pass.texUses.appendSliceAssumeCapacity(inf.texUses);
+        pass.colorAtts.appendSliceAssumeCapacity(inf.colorAtts);
 
         return pass;
     }
@@ -147,14 +135,10 @@ pub const PassDef = struct {
             .execution = .{ .compute = inf.execution },
         };
 
-        pass.shaderIds[0] = inf.compute.id;
-        pass.shaderCount = 1;
+        pass.shaderIds.appendAssumeCapacity(inf.compute.id);
 
-        @memcpy(pass.bufUses[0..inf.bufUses.len], inf.bufUses);
-        pass.bufCount = @intCast(inf.bufUses.len);
-
-        @memcpy(pass.texUses[0..inf.texUses.len], inf.texUses);
-        pass.texCount = @intCast(inf.texUses.len);
+        pass.bufUses.appendSliceAssumeCapacity(inf.bufUses);
+        pass.texUses.appendSliceAssumeCapacity(inf.texUses);
 
         return pass;
     }
@@ -176,14 +160,10 @@ pub const PassDef = struct {
             .execution = .{ .computeOnImg = inf.execution },
         };
 
-        pass.shaderIds[0] = inf.compute.id;
-        pass.shaderCount = 1;
+        pass.shaderIds.appendAssumeCapacity(inf.compute.id);
 
-        @memcpy(pass.bufUses[0..inf.bufUses.len], inf.bufUses);
-        pass.bufCount = @intCast(inf.bufUses.len);
-
-        @memcpy(pass.texUses[0..inf.texUses.len], inf.texUses);
-        pass.texCount = @intCast(inf.texUses.len);
+        pass.bufUses.appendSliceAssumeCapacity(inf.bufUses);
+        pass.texUses.appendSliceAssumeCapacity(inf.texUses);
 
         return pass;
     }
@@ -217,19 +197,13 @@ pub const PassDef = struct {
             .renderState = inf.renderState,
         };
 
-        pass.shaderIds[0] = inf.task.id;
-        pass.shaderIds[1] = inf.mesh.id;
-        pass.shaderIds[2] = inf.fragment.id;
-        pass.shaderCount = 3;
+        pass.shaderIds.appendAssumeCapacity(inf.task.id);
+        pass.shaderIds.appendAssumeCapacity(inf.mesh.id);
+        pass.shaderIds.appendAssumeCapacity(inf.fragment.id);
 
-        @memcpy(pass.bufUses[0..inf.bufUses.len], inf.bufUses);
-        pass.bufCount = @intCast(inf.bufUses.len);
-
-        @memcpy(pass.texUses[0..inf.texUses.len], inf.texUses);
-        pass.texCount = @intCast(inf.texUses.len);
-
-        @memcpy(pass.colorAtts[0..inf.colorAtts.len], inf.colorAtts);
-        pass.colorAttCount = @intCast(inf.colorAtts.len);
+        pass.bufUses.appendSliceAssumeCapacity(inf.bufUses);
+        pass.texUses.appendSliceAssumeCapacity(inf.texUses);
+        pass.colorAtts.appendSliceAssumeCapacity(inf.colorAtts);
 
         return pass;
     }
@@ -263,19 +237,13 @@ pub const PassDef = struct {
             .renderState = inf.renderState,
         };
 
-        pass.shaderIds[0] = inf.task.id;
-        pass.shaderIds[1] = inf.mesh.id;
-        pass.shaderIds[2] = inf.fragment.id;
-        pass.shaderCount = 3;
+        pass.shaderIds.appendAssumeCapacity(inf.task.id);
+        pass.shaderIds.appendAssumeCapacity(inf.mesh.id);
+        pass.shaderIds.appendAssumeCapacity(inf.fragment.id);
 
-        @memcpy(pass.bufUses[0..inf.bufUses.len], inf.bufUses);
-        pass.bufCount = @intCast(inf.bufUses.len);
-
-        @memcpy(pass.texUses[0..inf.texUses.len], inf.texUses);
-        pass.texCount = @intCast(inf.texUses.len);
-
-        @memcpy(pass.colorAtts[0..inf.colorAtts.len], inf.colorAtts);
-        pass.colorAttCount = @intCast(inf.colorAtts.len);
+        pass.bufUses.appendSliceAssumeCapacity(inf.bufUses);
+        pass.texUses.appendSliceAssumeCapacity(inf.texUses);
+        pass.colorAtts.appendSliceAssumeCapacity(inf.colorAtts);
 
         return pass;
     }
@@ -307,18 +275,12 @@ pub const PassDef = struct {
             .renderState = inf.renderState,
         };
 
-        pass.shaderIds[0] = inf.mesh.id;
-        pass.shaderIds[1] = inf.fragment.id;
-        pass.shaderCount = 2;
+        pass.shaderIds.appendAssumeCapacity(inf.mesh.id);
+        pass.shaderIds.appendAssumeCapacity(inf.fragment.id);
 
-        @memcpy(pass.bufUses[0..inf.bufUses.len], inf.bufUses);
-        pass.bufCount = @intCast(inf.bufUses.len);
-
-        @memcpy(pass.texUses[0..inf.texUses.len], inf.texUses);
-        pass.texCount = @intCast(inf.texUses.len);
-
-        @memcpy(pass.colorAtts[0..inf.colorAtts.len], inf.colorAtts);
-        pass.colorAttCount = @intCast(inf.colorAtts.len);
+        pass.bufUses.appendSliceAssumeCapacity(inf.bufUses);
+        pass.texUses.appendSliceAssumeCapacity(inf.texUses);
+        pass.colorAtts.appendSliceAssumeCapacity(inf.colorAtts);
 
         return pass;
     }
@@ -350,36 +312,30 @@ pub const PassDef = struct {
             .renderState = inf.renderState,
         };
 
-        pass.shaderIds[0] = inf.mesh.id;
-        pass.shaderIds[1] = inf.fragment.id;
-        pass.shaderCount = 2;
+        pass.shaderIds.appendAssumeCapacity(inf.mesh.id);
+        pass.shaderIds.appendAssumeCapacity(inf.fragment.id);
 
-        @memcpy(pass.bufUses[0..inf.bufUses.len], inf.bufUses);
-        pass.bufCount = @intCast(inf.bufUses.len);
-
-        @memcpy(pass.texUses[0..inf.texUses.len], inf.texUses);
-        pass.texCount = @intCast(inf.texUses.len);
-
-        @memcpy(pass.colorAtts[0..inf.colorAtts.len], inf.colorAtts);
-        pass.colorAttCount = @intCast(inf.colorAtts.len);
+        pass.bufUses.appendSliceAssumeCapacity(inf.bufUses);
+        pass.texUses.appendSliceAssumeCapacity(inf.texUses);
+        pass.colorAtts.appendSliceAssumeCapacity(inf.colorAtts);
 
         return pass;
     }
 
     pub fn getShaderIds(self: *const PassDef) []const ShaderId {
-        return self.shaderIds[0..self.shaderCount];
+        return self.shaderIds.constSlice();
     }
 
     pub fn getBufUses(self: *const PassDef) []const BufferUse {
-        return self.bufUses[0..self.bufCount];
+        return self.bufUses.constSlice();
     }
 
     pub fn getTexUses(self: *const PassDef) []const TextureUse {
-        return self.texUses[0..self.texCount];
+        return self.texUses.constSlice();
     }
 
     pub fn getColorAtts(self: *const PassDef) []const Attachment {
-        return self.colorAtts[0..self.colorAttCount];
+        return self.colorAtts.constSlice();
     }
 
     pub fn getMainTexId(self: *const PassDef) ?TexId {

@@ -201,8 +201,9 @@ pub const RenderGraph = struct {
         const timeId = cmd.startTimer(.TopOfPipe, pass.name);
         cmd.startStatistics(pass.name);
 
-        const shaders = shaderMan.getShaders(pass.getShaderIds())[0..pass.shaderCount];
-        cmd.bindShaders(shaders);
+        const shaders = shaderMan.getShaders(pass.getShaderIds());
+        const shaderSlice = shaders[0..pass.getShaderIds().len];
+        cmd.bindShaders(shaderSlice);
         const pushData = try PushData.init(resMan, pass.getBufUses(), pass.getTexUses(), pass.getMainTexId(), frameData, cmd.flightId);
         cmd.setPushData(&pushData, @sizeOf(PushData), 0);
 
@@ -237,8 +238,6 @@ pub const RenderGraph = struct {
     }
 
     fn recordGraphics(cmd: *Cmd, width: u32, height: u32, pass: *const PassDef, resMan: *ResourceMan) !void {
-        if (pass.colorAttCount > 8) return error.TooManyAttachments;
-
         const depthInf: ?vk.VkRenderingAttachmentInfo = if (pass.depthAtt) |depth| blk: {
             const texMeta = try resMan.getMeta(depth.texId);
             const tex = try resMan.get(depth.texId, cmd.flightId);
@@ -252,8 +251,7 @@ pub const RenderGraph = struct {
         } else null;
 
         var colorInfs: [8]vk.VkRenderingAttachmentInfo = undefined;
-        for (0..pass.getColorAtts().len) |i| {
-            const colorAtt = pass.colorAtts[i];
+        for (pass.getColorAtts(), 0..) |colorAtt, i| {
             const texMeta = try resMan.getMeta(colorAtt.texId);
             const tex = try resMan.get(colorAtt.texId, cmd.flightId);
             colorInfs[i] = tex.createAttachment(texMeta.texType, colorAtt.clear);
@@ -261,7 +259,7 @@ pub const RenderGraph = struct {
 
         cmd.updateRenderState(pass.renderState);
         cmd.setViewportAndScissor(0, 0, @floatFromInt(width), @floatFromInt(height));
-        cmd.beginRendering(width, height, colorInfs[0..pass.colorAttCount], if (depthInf) |*d| d else null, if (stencilInf) |*s| s else null);
+        cmd.beginRendering(width, height, colorInfs[0..pass.getColorAtts().len], if (depthInf) |*d| d else null, if (stencilInf) |*s| s else null);
 
         switch (pass.execution) {
             .taskOrMesh => |taskMesh| {
