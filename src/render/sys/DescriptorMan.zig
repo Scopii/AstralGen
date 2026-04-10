@@ -1,6 +1,6 @@
 const TextureMeta = @import("../types/res/TextureMeta.zig").TextureMeta;
 const FixedList = @import("../../.structures/FixedList.zig").FixedList;
-const SlotMap = @import("../../.structures/SlotMap.zig").SlotMap;
+const SimpleMap = @import("../../.structures/SimpleMap.zig").SimpleMap;
 const Texture = @import("../types/res/Texture.zig").Texture;
 const Buffer = @import("../types/res/Buffer.zig").Buffer;
 const rc = @import("../../.configs/renderConfig.zig");
@@ -28,11 +28,11 @@ pub const DescriptorMan = struct {
     hostRanges: [rc.RESOURCE_MAX]vk.VkHostAddressRangeEXT = undefined,
 
     // Buffer Updates
-    bufUpdates: SlotMap(DescUpdate, rc.BUF_MAX * rc.MAX_IN_FLIGHT, u32, rc.BUF_MAX * rc.MAX_IN_FLIGHT, 0) = .{},
+    bufUpdates: SimpleMap(DescUpdate, rc.BUF_MAX * rc.MAX_IN_FLIGHT, u32, rc.BUF_MAX * rc.MAX_IN_FLIGHT, 0) = .{},
     devRanges: [rc.BUF_MAX]vk.VkDeviceAddressRangeEXT = undefined,
 
     // Image Updates
-    texUpdates: SlotMap(DescUpdate, rc.TEX_MAX * rc.MAX_IN_FLIGHT, u32, rc.TEX_MAX * rc.MAX_IN_FLIGHT, 0) = .{},
+    texUpdates: SimpleMap(DescUpdate, rc.TEX_MAX * rc.MAX_IN_FLIGHT, u32, rc.TEX_MAX * rc.MAX_IN_FLIGHT, 0) = .{},
     imgViews: [rc.TEX_MAX]vk.VkImageViewCreateInfo = undefined,
     imgDescs: [rc.TEX_MAX]vk.VkImageDescriptorInfoEXT = undefined,
 
@@ -79,7 +79,7 @@ pub const DescriptorMan = struct {
 
     fn getOrCreateUpdate(self: *DescriptorMan, descIndex: u31, comptime T: type) DescUpdate {
         const updates = if (T == Buffer) &self.bufUpdates else &self.texUpdates;
-        
+
         if (updates.isKeyUsed(descIndex)) return updates.getByKey(descIndex);
 
         const texLen = self.texUpdates.getLength();

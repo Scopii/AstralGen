@@ -1,7 +1,7 @@
 const TexId = @import("../types/res/TextureMeta.zig").TextureMeta.TexId;
 const LinkedMap = @import("../../.structures/LinkedMap.zig").LinkedMap;
+const SimpleMap = @import("../../.structures/SimpleMap.zig").SimpleMap;
 const Swapchain = @import("../types/base/Swapchain.zig").Swapchain;
-const SlotMap = @import("../../.structures/SlotMap.zig").SlotMap;
 const Window = @import("../../window/Window.zig").Window;
 const rc = @import("../../.configs/renderConfig.zig");
 const Context = @import("Context.zig").Context;
@@ -18,7 +18,7 @@ pub const SwapchainMan = struct {
     queueHandle: vk.VkQueue,
     instance: vk.VkInstance,
     swapchains: LinkedMap(Swapchain, rc.MAX_WINDOWS, u32, 32 + rc.MAX_WINDOWS, 0) = .{},
-    targets: SlotMap(*Swapchain, rc.MAX_WINDOWS, u32, 32 + rc.MAX_WINDOWS, 0) = .{},
+    targets: SimpleMap(*Swapchain, rc.MAX_WINDOWS, u32, 32 + rc.MAX_WINDOWS, 0) = .{},
 
     pub fn init(alloc: Allocator, context: *const Context) !SwapchainMan {
         return .{

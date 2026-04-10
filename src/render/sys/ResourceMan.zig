@@ -5,6 +5,7 @@ const LinkedMap = @import("../../.structures/LinkedMap.zig").LinkedMap;
 const BufferMeta = @import("../types/res/BufferMeta.zig").BufferMeta;
 const ResourceQueue = @import("ResourceQueue.zig").ResourceQueue;
 const DescriptorMan = @import("DescriptorMan.zig").DescriptorMan;
+const KeyPool = @import("../../.structures/KeyPool.zig").KeyPool;
 const Texture = @import("../types/res/Texture.zig").Texture;
 const Buffer = @import("../types/res/Buffer.zig").Buffer;
 const rc = @import("../../.configs/renderConfig.zig");
@@ -31,7 +32,8 @@ pub const ResourceMan = struct {
     registry: ResourceRegistry,
     queues: [QUEUE_COUNT]ResourceQueue,
 
-    texturePool: LinkedMap(TexId, 32, u32, 32, 0) = .{},
+    texturePool: LinkedMap(TexId, 32, u31, 32, 0) = .{},
+    teyKeyPool: KeyPool(100, u31) = .{},
 
     pub fn init(alloc: Allocator, context: *const Context) !ResourceMan {
         const vma = try Vma.init(context.instance, context.gpi, context.gpu);
@@ -57,6 +59,9 @@ pub const ResourceMan = struct {
         self.registry.deinit(&self.vma);
         self.descMan.deinit(&self.vma);
         self.vma.deinit();
+
+        const key = self.teyKeyPool.reserveKey();
+        self.teyKeyPool.freeKey(key);
     }
 
     pub const VirtualTexture = @import("../types/res/VirtualTexture.zig").VirtualTexture;
@@ -74,7 +79,7 @@ pub const ResourceMan = struct {
         };
         self.addResource(texInf, curFrame, flightId, null);
         // self.texturePool.upsert(virtualTex.id, item: TexId)
-        std.debug.print("Virtual Texture assigned ({s} ID {})", .{virtualTex.name, virtualTex.id.val});
+        std.debug.print("Virtual Texture assigned ({s} ID {})", .{ virtualTex.name, virtualTex.id.val });
     }
 
     fn destroyResources(self: *ResourceMan, queue: *ResourceQueue, comptime T: type) u64 {

@@ -1,5 +1,5 @@
 const std = @import("std");
-const SlotMap = @import("SlotMap.zig").SlotMap;
+const SimpleMap = @import("SimpleMap.zig").SimpleMap;
 
 fn FindSmallestIntType(number: usize) type {
     return std.math.IntFittingRange(0, number);
@@ -18,7 +18,7 @@ pub fn LinkedMap(comptime itemType: type, comptime capacity: u32, comptime keyTy
     return struct {
         const Self = @This();
 
-        slotMap: SlotMap(itemType, capacity, keyType, keyMax, keyMin) = .{},
+        slotMap: SimpleMap(itemType, capacity, keyType, keyMax, keyMin) = .{},
         links: [capacity]smallKeyType = .{sentinel} ** capacity,
 
         pub fn upsert(self: *Self, key: keyType, item: itemType) void {

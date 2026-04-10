@@ -1,5 +1,5 @@
-const SlotMap = @import("../../../.structures/SlotMap.zig").SlotMap;
 const FixedList = @import("../../../.structures/FixedList.zig").FixedList;
+const SimpleMap = @import("../../../.structures/SimpleMap.zig").SimpleMap;
 const Transfer = @import("../../sys/ResourceUpdater.zig").Transfer;
 const RenderState = @import("../pass/RenderState.zig").RenderState;
 const rc = @import("../../../.configs/renderConfig.zig");
@@ -25,7 +25,7 @@ pub const Cmd = struct {
 
     timeQueryPool: ?vk.VkQueryPool = null,
     timeQueryCounter: u8 = 0,
-    timeQueries: SlotMap(QueryPair, rc.GPU_TIME_QUERYS, u8, rc.GPU_TIME_QUERYS, 0) = .{},
+    timeQueries: SimpleMap(QueryPair, rc.GPU_TIME_QUERYS, u8, rc.GPU_TIME_QUERYS, 0) = .{},
 
     statQueryPool: ?vk.VkQueryPool = null,
     statQueries: FixedList(QueryPair, rc.GPU_STATS_QUERYS) = .{},
@@ -98,7 +98,7 @@ pub const Cmd = struct {
         self.frame = frame;
         self.renderState = null;
         self.stateChanges = 0;
-        
+
         try vhF.check(vk.vkResetCommandBuffer(self.handle, 0), "could not reset Cmd");
         try vhF.check(vk.vkBeginCommandBuffer(self.handle, &beginInf), "could not Begin Cmd");
     }

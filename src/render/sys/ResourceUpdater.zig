@@ -1,5 +1,5 @@
+const SimpleMap = @import("../../.structures/SimpleMap.zig").SimpleMap;
 const BufferMeta = @import("../types/res/BufferMeta.zig").BufferMeta;
-const SlotMap = @import("../../.structures/SlotMap.zig").SlotMap;
 const Buffer = @import("../types/res/Buffer.zig").Buffer;
 const rc = @import("../../.configs/renderConfig.zig");
 const vk = @import("../../.modules/vk.zig").c;
@@ -19,12 +19,12 @@ pub const ResourceUpdater = struct {
     alloc: Allocator,
     stagingBuffers: [rc.MAX_IN_FLIGHT]Buffer,
     stagingOffsets: [rc.MAX_IN_FLIGHT]u64 = .{0} ** rc.MAX_IN_FLIGHT,
-    fullUpdateLists: [rc.MAX_IN_FLIGHT]SlotMap(Transfer, rc.BUF_MAX, u32, rc.BUF_MAX, 0), // Could be slot map?
+    fullUpdateLists: [rc.MAX_IN_FLIGHT]SimpleMap(Transfer, rc.BUF_MAX, u32, rc.BUF_MAX, 0), // Could be slot map?
     segmentUpdatesLists: [rc.MAX_IN_FLIGHT]std.ArrayList(Transfer),
 
     pub fn init(alloc: Allocator, vma: *const Vma) !ResourceUpdater {
         var stagingBuffers: [rc.MAX_IN_FLIGHT]Buffer = undefined;
-        var fullUpdateLists: [rc.MAX_IN_FLIGHT]SlotMap(Transfer, rc.BUF_MAX, u32, rc.BUF_MAX, 0) = undefined;
+        var fullUpdateLists: [rc.MAX_IN_FLIGHT]SimpleMap(Transfer, rc.BUF_MAX, u32, rc.BUF_MAX, 0) = undefined;
         var segmentUpdatesLists: [rc.MAX_IN_FLIGHT]std.ArrayList(Transfer) = undefined;
 
         for (0..rc.MAX_IN_FLIGHT) |i| {
