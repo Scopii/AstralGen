@@ -136,9 +136,8 @@ pub const Renderer = struct {
 
         const cmd = try self.renderGraph.recordFrame(self.renderNodes.items, flightId, self.scheduler.totalFrames, frameData, &self.swapMan, &self.resMan, &self.shaderMan, &self.imguiMan, data);
 
-        const targets = self.swapMan.getTargets();
-        try self.scheduler.queueSubmit(cmd, targets, self.context.graphicsQ);
-        try self.scheduler.queuePresent(targets, self.context.graphicsQ);
+        try self.scheduler.queueSubmit(cmd, &self.swapMan, self.context.graphicsQ);
+        try self.scheduler.queuePresent(&self.swapMan, self.context.graphicsQ);
 
         self.scheduler.endFrame();
     }

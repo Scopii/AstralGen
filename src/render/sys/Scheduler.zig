@@ -1,4 +1,5 @@
 const Swapchain = @import("../types/base/Swapchain.zig").Swapchain;
+const SwapchainMan = @import("SwapchainMan.zig").SwapchainMan;
 const Queue = @import("../types/base/Queue.zig").Queue;
 const rc = @import("../../.configs/renderConfig.zig");
 const Cmd = @import("../types/base/Cmd.zig").Cmd;
@@ -44,30 +45,36 @@ pub const Scheduler = struct {
         self.totalFrames += 1;
     }
 
-    pub fn queueSubmit(self: *Scheduler, cmd: *const Cmd, targets: []const *Swapchain, queue: Queue) !void {
+    pub fn queueSubmit(self: *Scheduler, cmd: *const Cmd, swapMan: *SwapchainMan, queue: Queue) !void {
         var waitInfos: [rc.MAX_WINDOWS]vk.VkSemaphoreSubmitInfo = undefined;
         var signalInfos: [rc.MAX_WINDOWS + 1]vk.VkSemaphoreSubmitInfo = undefined;
-        signalInfos[targets.len] = createSemaphoreSubmitInfo(self.cpuSyncTimeline, .AllCmds, self.totalFrames + 1);
 
-        for (targets, 0..) |swapchain, i| {
+        const targetIndices = swapMan.getTargetsIndices();
+        signalInfos[targetIndices.len] = createSemaphoreSubmitInfo(self.cpuSyncTimeline, .AllCmds, self.totalFrames + 1);
+
+        for (targetIndices, 0..) |index, i| {
+            const swapchain = swapMan.getTargetByIndex(index);
             waitInfos[i] = createSemaphoreSubmitInfo(swapchain.acquireSems[self.flightId], .ColorAtt, 0);
             signalInfos[i] = createSemaphoreSubmitInfo(swapchain.renderSems[swapchain.curIndex], .BotOfPipe, 0);
         }
         const cmdSlice = &[_]vk.VkCommandBufferSubmitInfo{cmd.createSubmitInfo()};
-        try queue.submit(waitInfos[0..targets.len], cmdSlice, signalInfos[0 .. targets.len + 1]);
+        try queue.submit(waitInfos[0..targetIndices.len], cmdSlice, signalInfos[0 .. targetIndices.len + 1]);
     }
 
-    pub fn queuePresent(_: *Scheduler, targets: []const *const Swapchain, queue: Queue) !void {
+    pub fn queuePresent(_: *Scheduler, swapMan: *SwapchainMan, queue: Queue) !void {
         var handles: [rc.MAX_WINDOWS]vk.VkSwapchainKHR = undefined;
         var imgIndices: [rc.MAX_WINDOWS]u32 = undefined;
         var waitSems: [rc.MAX_WINDOWS]vk.VkSemaphore = undefined;
 
-        for (targets, 0..) |swapchain, i| {
+        const targetIndices = swapMan.getTargetsIndices();
+
+        for (targetIndices, 0..) |index, i| {
+            const swapchain = swapMan.getTargetByIndex(index);
             handles[i] = swapchain.handle;
             imgIndices[i] = swapchain.curIndex;
             waitSems[i] = swapchain.renderSems[swapchain.curIndex];
         }
-        try queue.present(handles[0..targets.len], imgIndices[0..targets.len], waitSems[0..targets.len]);
+        try queue.present(handles[0..targetIndices.len], imgIndices[0..targetIndices.len], waitSems[0..targetIndices.len]);
     }
 
     pub fn waitForGPU(self: *Scheduler) !void {

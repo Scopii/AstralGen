@@ -71,9 +71,8 @@ pub const RenderGraph = struct {
 
         try self.recordTransfers(cmd, resMan);
         try self.recordNodes(cmd, renderNodes, frameData, resMan, shaderMan, swapMan);
-        const targets = swapMan.getTargets();
-        try self.recordImGui(cmd, targets, imguiMan, data);
-        try self.recordPresentation(cmd, targets);
+        try self.recordImGui(cmd, swapMan, imguiMan, data);
+        try self.recordPresentation(cmd, swapMan);
 
         try cmd.end();
         return cmd;
@@ -223,8 +222,9 @@ pub const RenderGraph = struct {
 
         const renderTexMeta = try resMan.getMeta(blit.srcTexId);
         const renderTex = try resMan.get(blit.srcTexId, cmd.flightId);
-        const targetSwapchain = swapMan.getTarget(blit.dstWindowId);
-        const swapchain = targetSwapchain orelse return;
+
+        const targetIndex = swapMan.getTargetIndex(blit.dstWindowId) orelse return;
+        const swapchain = swapMan.getTargetByIndex(targetIndex);
 
         try self.checkImageState(renderTex, renderTexMeta.subRange, .{ .stage = .Transfer, .access = .TransferRead, .layout = .TransferSrc });
         try self.checkImageState(&swapchain.textures[swapchain.curIndex], swapchain.subRange, .{ .stage = .Transfer, .access = .TransferWrite, .layout = .TransferDst });
@@ -278,17 +278,21 @@ pub const RenderGraph = struct {
         cmd.endRendering();
     }
 
-    fn recordImGui(self: *RenderGraph, cmd: *Cmd, targets: []const *Swapchain, imguiMan: *ImGuiMan, data: *const EngineData) !void {
+    fn recordImGui(self: *RenderGraph, cmd: *Cmd, swapMan: *SwapchainMan, imguiMan: *ImGuiMan, data: *const EngineData) !void {
         if (data.window.uiActive) {
             const timeId = cmd.startTimer(.TopOfPipe, "ImGui", .Other);
 
-            for (targets) |swapchain| {
+            const targetIndices = swapMan.getTargetsIndices();
+
+            for (targetIndices) |index| {
+                const swapchain = swapMan.getTargetByIndex(index);
                 const target = swapchain.getCurTexture();
                 try self.checkImageState(target, swapchain.subRange, .{ .stage = .ColorAtt, .access = .ColorAttWrite, .layout = .Attachment });
             }
             self.bakeBarriers(cmd, "ImGui Prep");
 
-            for (targets) |swapchain| {
+            for (targetIndices) |index| {
+                const swapchain = swapMan.getTargetByIndex(index);
                 const target = swapchain.getCurTexture();
                 const colorAtt = target.createAttachment(.Color, false);
 
@@ -300,9 +304,12 @@ pub const RenderGraph = struct {
         }
     }
 
-    fn recordPresentation(self: *RenderGraph, cmd: *Cmd, targets: []const *Swapchain) !void {
+    fn recordPresentation(self: *RenderGraph, cmd: *Cmd, swapMan: *SwapchainMan) !void {
         const timeId = cmd.startTimer(.TopOfPipe, "Presentation", .Other);
-        for (targets) |swapchain| {
+
+        const targetIndices = swapMan.getTargetsIndices();
+        for (targetIndices) |index| {
+            const swapchain = swapMan.getTargetByIndex(index);
             const target = swapchain.getCurTexture();
             try self.checkImageState(target, swapchain.subRange, .{ .stage = .BotOfPipe, .access = .None, .layout = .PresentSrc });
         }
