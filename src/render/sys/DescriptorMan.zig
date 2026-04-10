@@ -1,6 +1,7 @@
 const TextureMeta = @import("../types/res/TextureMeta.zig").TextureMeta;
 const FixedList = @import("../../.structures/FixedList.zig").FixedList;
 const SimpleMap = @import("../../.structures/SimpleMap.zig").SimpleMap;
+const KeyPool = @import("../../.structures/KeyPool.zig").KeyPool;
 const Texture = @import("../types/res/Texture.zig").Texture;
 const Buffer = @import("../types/res/Buffer.zig").Buffer;
 const rc = @import("../../.configs/renderConfig.zig");
@@ -36,8 +37,7 @@ pub const DescriptorMan = struct {
     imgViews: [rc.TEX_MAX]vk.VkImageViewCreateInfo = undefined,
     imgDescs: [rc.TEX_MAX]vk.VkImageDescriptorInfoEXT = undefined,
 
-    freedDescIndices: FixedList(u31, rc.RESOURCE_MAX) = .{},
-    descCount: u31 = 0,
+    descPool: KeyPool(u31, rc.RESOURCE_MAX) = .{},
 
     pub fn init(vma: *const Vma, gpu: vk.VkPhysicalDevice) !DescriptorMan {
         const heapProps = getDescriptorHeapProperties(gpu);
@@ -62,19 +62,11 @@ pub const DescriptorMan = struct {
     }
 
     pub fn getFreeDescriptorIndex(self: *DescriptorMan) !u31 {
-        if (self.freedDescIndices.len > 0) {
-            const descIndex = self.freedDescIndices.pop();
-            if (descIndex) |index| return index else return error.CouldNotPopDescriptorIndex;
-        }
-        if (self.descCount >= self.freedDescIndices.buffer.len) return error.DescriptorHeapFull;
-
-        const descIndex = self.descCount;
-        self.descCount += 1;
-        return descIndex;
+        return if (self.descPool.isFull() == false) self.descPool.reserveKey() else error.DescPoolFullyUsed;
     }
 
-    pub fn freeDescriptorIndex(self: *DescriptorMan, index: u31) void {
-        self.freedDescIndices.append(index) catch |err| std.debug.print("freeDescriptorIndex failed {}\n", .{err});
+    pub fn freeDescriptorIndex(self: *DescriptorMan, key: u31) void {
+        self.descPool.freeKey(key);
     }
 
     fn getOrCreateUpdate(self: *DescriptorMan, descIndex: u31, comptime T: type) DescUpdate {

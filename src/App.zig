@@ -299,10 +299,10 @@ pub const App = struct {
                     }
                 }
 
-                const start = std.time.microTimestamp();
+                // const start = std.time.microTimestamp();
                 FrameBuildSys.build(&self.data.frameBuild, &self.data);
-                const end = std.time.microTimestamp();
-                std.debug.print("Frame Build {d:.3} ms\n", .{@as(f64, @floatFromInt(end - start)) / 1_000.0});
+                // const end = std.time.microTimestamp();
+                // std.debug.print("Frame Build {d:.3} ms\n", .{@as(f64, @floatFromInt(end - start)) / 1_000.0});
 
                 // RENDER:
                 renderer.draw(frameData, &self.data, activeWindows) catch |err| {

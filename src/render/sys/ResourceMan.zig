@@ -33,7 +33,7 @@ pub const ResourceMan = struct {
     queues: [QUEUE_COUNT]ResourceQueue,
 
     texturePool: LinkedMap(TexId, 32, u31, 32, 0) = .{},
-    teyKeyPool: KeyPool(100, u31) = .{},
+    teyKeyPool: KeyPool(u31, 100) = .{},
 
     pub fn init(alloc: Allocator, context: *const Context) !ResourceMan {
         const vma = try Vma.init(context.instance, context.gpi, context.gpu);
