@@ -26,7 +26,7 @@ pub const PassEnum = enum {
 
 pub const FrameBuildSys = struct {
     pub fn build(frameBuild: *FrameBuildData, data: *const EngineData) void {
-        const activeViewportIds = data.viewport.activeViewportIds.constSlice();
+        const activeViewportIds = data.viewport.activeViewportIds.getConstItems();
 
         const passEnumFields = @typeInfo(PassEnum).@"enum".fields;
         var passMask: [passEnumFields.len]bool = .{false} ** passEnumFields.len;

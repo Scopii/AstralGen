@@ -6,6 +6,6 @@ const Viewport = @import("Viewport.zig").Viewport;
 
 pub const ViewportData = struct {
     viewports: LinkedMap(Viewport, rc.MAX_WINDOWS * 4, u32, rc.MAX_WINDOWS * 4, 0) = .{},
-    activeViewportIds: FixedList(ViewportId, rc.MAX_WINDOWS * 4) = .{},
+    activeViewportIds: LinkedMap(ViewportId, rc.MAX_WINDOWS * 4, u32, rc.MAX_WINDOWS * 4, 0) = .{},
     selectedViewportId: ?ViewportId = null,
 };

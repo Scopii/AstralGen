@@ -12,7 +12,11 @@ pub const ViewportSys = struct {
 
         for (data.window.activeWindows.constSlice()) |window| {
             for (window.viewIds) |viewId| {
-                if (viewId) |id| viewportData.activeViewportIds.append(id) catch std.debug.print("ERROR: Could not append ViewId in ViewportSys.update()", .{});
+                if (viewId) |id| {
+                    if (viewportData.activeViewportIds.isKeyUsed(id.val) == false) {
+                        viewportData.activeViewportIds.insert(id.val, id);
+                    }
+                }
             }
         }
     }
