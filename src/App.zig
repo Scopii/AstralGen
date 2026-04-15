@@ -313,7 +313,7 @@ pub const App = struct {
                 };
 
                 const end = std.time.microTimestamp();
-                std.debug.print("Frame Build {d:.3} ms\n", .{@as(f64, @floatFromInt(end - start)) / 1_000.0});
+                std.debug.print("Draw {d:.3} ms\n", .{@as(f64, @floatFromInt(end - start)) / 1_000.0});
 
                 self.memoryMan.resetArena();
                 ShaderSys.freeFreshShaders(&self.data.shader, self.memoryMan.getAllocator()); // SHOULD CHANGE TO USE ARENA

@@ -469,6 +469,10 @@ pub const Cmd = struct {
         vk.vkCmdDispatch(self.handle, groupCountX, groupCountY, groupCountZ);
     }
 
+    pub fn dispatchIndirect(self: *const Cmd, buffer: vk.VkBuffer, offset: u64) void {
+        vk.vkCmdDispatchIndirect(self.handle, buffer, offset);
+    }
+
     pub fn fillBuffer(self: *const Cmd, buffer: vk.VkBuffer, offset: u64, size: u64, data: u32) void {
         vk.vkCmdFillBuffer(self.handle, buffer, offset, size, data);
     }

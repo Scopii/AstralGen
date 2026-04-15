@@ -22,6 +22,11 @@ pub const ComputeExec = struct {
     workgroups: Dispatch,
 };
 
+pub const ComputeIndirectExec = struct {
+    indirectBuf: BufId,
+    indirectBufOffset: u64 = 0,
+};
+
 pub const ComputeOnImgExec = struct {
     workgroups: Dispatch,
     mainTexId: TexId,
@@ -75,6 +80,7 @@ pub const PassDef = struct {
 
     pub const PassExecution = union(enum) {
         compute: ComputeExec,
+        computeIndirect: ComputeIndirectExec,
         computeOnImg: ComputeOnImgExec,
         taskOrMesh: TaskOrMeshExec,
         taskOrMeshIndirect: TaskOrMeshIndirectExec,
@@ -122,6 +128,31 @@ pub const PassDef = struct {
         inf: struct {
             name: []const u8,
             execution: ComputeExec,
+            compute: ShaderInf,
+            bufUses: []const BufferUse = &.{},
+            texUses: []const TextureUse = &.{},
+        },
+    ) PassDef {
+        std.debug.assert(inf.bufUses.len + inf.texUses.len <= 14);
+        std.debug.assert(inf.compute.typ == .comp);
+
+        var pass = PassDef{
+            .name = inf.name,
+            .execution = .{ .compute = inf.execution },
+        };
+
+        pass.shaderIds.appendAssumeCapacity(inf.compute.id);
+
+        pass.bufUses.appendSliceAssumeCapacity(inf.bufUses);
+        pass.texUses.appendSliceAssumeCapacity(inf.texUses);
+
+        return pass;
+    }
+
+    pub fn ComputeIndirect(
+        inf: struct {
+            name: []const u8,
+            execution: ComputeIndirectExec,
             compute: ShaderInf,
             bufUses: []const BufferUse = &.{},
             texUses: []const TextureUse = &.{},
@@ -345,6 +376,7 @@ pub const PassDef = struct {
             .graphics => |graphics| graphics.mainTexId,
             .computeOnImg => |computeOnImg| computeOnImg.mainTexId,
             .compute => null,
+            .computeIndirect => null,
         };
     }
 };

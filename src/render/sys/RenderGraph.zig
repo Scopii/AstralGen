@@ -1,3 +1,4 @@
+const ComputeIndirectExec = @import("../types/pass/PassDef.zig").ComputeIndirectExec;
 const AttachmentUse = @import("../types/pass/AttachmentUse.zig").AttachmentUse;
 const TexId = @import("../types/res/TextureMeta.zig").TextureMeta.TexId;
 const ViewportBlit = @import("../types/pass/PassDef.zig").ViewportBlit;
@@ -183,6 +184,11 @@ pub const RenderGraph = struct {
         } else cmd.dispatch(dispatch.x, dispatch.y, dispatch.z);
     }
 
+    fn recordComputeIndirect(cmd: *const Cmd, compIndirectExec: ComputeIndirectExec, resMan: *ResourceMan) !void {
+        const buffer = try resMan.get(compIndirectExec.indirectBuf, cmd.flightId);
+        cmd.dispatchIndirect(buffer.handle, compIndirectExec.indirectBufOffset);
+    }
+
     fn recordNodes(self: *RenderGraph, cmd: *Cmd, renderNodes: []RenderNode, frameData: FrameData, resMan: *ResourceMan, shaderMan: *ShaderManager, swapMan: *SwapchainMan) !void {
         for (renderNodes) |renderNode| {
             switch (renderNode) {
@@ -212,6 +218,7 @@ pub const RenderGraph = struct {
             .taskOrMesh, .taskOrMeshIndirect, .graphics => try recordGraphics(cmd, pushData.width, pushData.height, pass, resMan),
             .computeOnImg => |computeOnImg| try recordCompute(cmd, computeOnImg.workgroups, computeOnImg.mainTexId, resMan),
             .compute => |compute| try recordCompute(cmd, compute.workgroups, null, resMan),
+            .computeIndirect => |computeIndirect| try recordComputeIndirect(cmd, computeIndirect, resMan),
         }
         cmd.endTimer(.BotOfPipe, timeId);
         cmd.endStatistics();
@@ -273,7 +280,7 @@ pub const RenderGraph = struct {
                 cmd.setEmptyVertexInput();
                 cmd.draw(graphics.vertices, graphics.instances, 0, 0);
             },
-            .compute, .computeOnImg => std.debug.print("ERROR: Compute or ComputeOnImg Pass ({s}) landed in Graphics Recording\n", .{pass.name}),
+            .compute, .computeOnImg, .computeIndirect => std.debug.print("ERROR: Compute or ComputeOnImg Pass ({s}) landed in Graphics Recording\n", .{pass.name}),
         }
         cmd.endRendering();
     }
