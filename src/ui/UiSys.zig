@@ -5,6 +5,7 @@ const std = @import("std");
 
 pub const UiSys = struct {
     pub fn buildWindowUi(window: *const Window, data: *const EngineData) void {
+        
         const winW = @as(f32, @floatFromInt(window.extent.width));
         const winH = @as(f32, @floatFromInt(window.extent.height));
 

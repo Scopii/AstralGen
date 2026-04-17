@@ -304,16 +304,14 @@ pub const App = struct {
                 // const end = std.time.microTimestamp();
                 // std.debug.print("Frame Build {d:.3} ms\n", .{@as(f64, @floatFromInt(end - start)) / 1_000.0});
 
-                const start = std.time.microTimestamp();
-
+                // const start = std.time.microTimestamp();
                 // RENDER:
                 renderer.draw(frameData, &self.data, activeWindows) catch |err| {
                     std.log.err("Error in renderer.submitDraw(): {}", .{err});
                     break;
                 };
-
-                const end = std.time.microTimestamp();
-                std.debug.print("Draw {d:.3} ms\n", .{@as(f64, @floatFromInt(end - start)) / 1_000.0});
+                // const end = std.time.microTimestamp();
+                // std.debug.print("Draw {d:.3} ms\n", .{@as(f64, @floatFromInt(end - start)) / 1_000.0});
 
                 self.memoryMan.resetArena();
                 ShaderSys.freeFreshShaders(&self.data.shader, self.memoryMan.getAllocator()); // SHOULD CHANGE TO USE ARENA

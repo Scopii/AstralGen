@@ -150,7 +150,7 @@ pub const ImGuiMan = struct {
         zgui.backend.newFrame(width, height);
     }
 
-    pub fn render(self: *ImGuiMan, windowIdx: u32, cmd: *const Cmd) void {
+    pub fn recordContext(self: *ImGuiMan, windowIdx: u32, cmd: *const Cmd) void {
         if (!self.setContext(windowIdx)) return;
         zgui.render();
         zgui.backend.render(cmd.handle);

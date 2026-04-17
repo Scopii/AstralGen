@@ -3,10 +3,15 @@ const rc = @import("../../.configs/renderConfig.zig");
 const sdl = @import("../../.modules/sdl.zig").c;
 const vhF = @import("../help/Functions.zig");
 const vk = @import("../../.modules/vk.zig").c;
-const vkFn = @import("../../.modules/vk.zig");
+const vkFn = @import("../../.modules/vk.zig").vkFn;
 const vhE = @import("../help/Enums.zig");
 const Allocator = std.mem.Allocator;
 const std = @import("std");
+
+pub const VulkanLoad = struct {
+    functionPtr: *anyopaque,
+    name: [*:0]const u8,
+};
 
 pub const Context = struct {
     alloc: Allocator,
@@ -14,19 +19,21 @@ pub const Context = struct {
     gpu: vk.VkPhysicalDevice,
     gpi: vk.VkDevice,
     graphicsQ: Queue,
+    meshTaskSupp: bool,
 
     pub fn init(alloc: Allocator) !Context {
         const instance = try createInstance(alloc);
         const gpu = try pickGPU(alloc, instance);
         const familiy = try findGpuFamily(alloc, gpu, vk.VK_QUEUE_GRAPHICS_BIT | vk.VK_QUEUE_COMPUTE_BIT);
-        const gpi = try createGPI(alloc, gpu, familiy);
+        const gpiInf = try createGPI(alloc, gpu, familiy);
 
         return .{
             .alloc = alloc,
             .instance = instance,
             .gpu = gpu,
-            .gpi = gpi,
-            .graphicsQ = Queue.init(gpi, familiy, 0),
+            .gpi = gpiInf.gpi,
+            .graphicsQ = Queue.init(gpiInf.gpi, familiy, 0),
+            .meshTaskSupp = gpiInf.meshSupport,
         };
     }
 
@@ -217,7 +224,7 @@ fn findGpuFamily(alloc: Allocator, gpu: vk.VkPhysicalDevice, queueFlags: vk.VkQu
     return error.NoSuitableQueueFamily;
 }
 
-fn createGPI(alloc: Allocator, gpu: vk.VkPhysicalDevice, family: u32) !vk.VkDevice {
+fn createGPI(alloc: Allocator, gpu: vk.VkPhysicalDevice, family: u32) !struct { gpi: vk.VkDevice, meshSupport: bool } {
     var priority: f32 = 1.0;
     var queueInfos = std.array_list.Managed(vk.VkDeviceQueueCreateInfo).init(alloc);
     defer queueInfos.deinit();
@@ -231,117 +238,93 @@ fn createGPI(alloc: Allocator, gpu: vk.VkPhysicalDevice, family: u32) !vk.VkDevi
         },
     );
 
-    var sup = std.mem.zeroes(DeviceFeatures); // Supported Features
-    sup.init(gpu);
-    var need = std.mem.zeroes(DeviceFeatures); // Needed Features
-    need.init(null);
+    var enabledExts = try std.array_list.Managed([*c]const u8).initCapacity(alloc, 32);
+    defer enabledExts.deinit();
+    var enabledStructs = try std.array_list.Managed(*vk.VkBaseOutStructure).initCapacity(alloc, 32);
+    defer enabledStructs.deinit();
+    var functionLoads = try std.array_list.Managed(VulkanLoad).initCapacity(alloc, 64);
+    defer functionLoads.deinit();
 
-    var fullSup = true;
+    var dev2 = try checkDeviceFeatures2(gpu);
+    if (dev2) |*str| try enabledStructs.append(@ptrCast(str));
 
-    if (rc.ROBUST_VALIDATION == true) {
-        fullSup &= checkFeature("Robust Buffer Access 2", sup.robustness2.robustBufferAccess2, &need.robustness2.robustBufferAccess2);
-        fullSup &= checkFeature("Robust Image Access 2", sup.robustness2.robustImageAccess2, &need.robustness2.robustImageAccess2);
+    var robust2 = try checkRobustness2(&enabledExts, gpu);
+    if (robust2) |*str| if (rc.ROBUST_VALIDATION == true) try enabledStructs.append(@ptrCast(str));
+
+    var untypedPtr = try checkShaderUntypedPtr(&enabledExts, gpu);
+    if (untypedPtr) |*str| try enabledStructs.append(@ptrCast(str));
+
+    var descHeaps = try checkDescriptorHeaps(&enabledExts, gpu, &functionLoads);
+    if (descHeaps) |*str| try enabledStructs.append(@ptrCast(str));
+
+    var dynamicState3 = try checkDynamicState3(&enabledExts, gpu, &functionLoads);
+    if (dynamicState3) |*str| try enabledStructs.append(@ptrCast(str));
+
+    var dynamicState2 = try checkDynamicState2(&enabledExts, gpu, &functionLoads);
+    if (dynamicState2) |*str| try enabledStructs.append(@ptrCast(str));
+
+    var shadingRate = try checkFragmentShadingRate(&enabledExts, gpu, &functionLoads);
+    if (shadingRate) |*str| try enabledStructs.append(@ptrCast(str));
+
+    var shaderObj = try checkShaderObjects(&enabledExts, gpu, &functionLoads);
+    if (shaderObj) |*str| try enabledStructs.append(@ptrCast(str));
+
+    var meshShader = try checkMeshShaders(&enabledExts, gpu, &functionLoads);
+    if (meshShader) |*str| try enabledStructs.append(@ptrCast(str));
+
+    var vk11 = try checkVulkan11Features(gpu);
+    if (vk11) |*str| try enabledStructs.append(@ptrCast(str));
+
+    var vk12 = try checkVulkan12Features(gpu);
+    if (vk12) |*str| try enabledStructs.append(@ptrCast(str));
+
+    var vk13 = try checkVulkan13Features(gpu);
+    if (vk13) |*str| try enabledStructs.append(@ptrCast(str));
+
+    var maint5 = try checkMaintenance5Features(&enabledExts, gpu);
+    if (maint5) |*str| try enabledStructs.append(@ptrCast(str));
+
+    if (meshShader == null) {
+        std.debug.print("Device does not Support Mesh/Task Shader Features!\n", .{});
     }
 
-    // Untyped Ptr
-    fullSup &= checkFeature("Descriptor Untyped Ptr", sup.descUntyped.shaderUntypedPointers, &need.descUntyped.shaderUntypedPointers);
-
-    // Descriptor Heaps
-    fullSup &= checkFeature("Descriptor Heaps", sup.descHeaps.descriptorHeap, &need.descHeaps.descriptorHeap);
-
-    // Dynamic State 3
-    fullSup &= checkFeature("Polygon Mode", sup.dynState3.extendedDynamicState3PolygonMode, &need.dynState3.extendedDynamicState3PolygonMode);
-    fullSup &= checkFeature("Raster Samples", sup.dynState3.extendedDynamicState3RasterizationSamples, &need.dynState3.extendedDynamicState3RasterizationSamples);
-    fullSup &= checkFeature("Sample Mask", sup.dynState3.extendedDynamicState3SampleMask, &need.dynState3.extendedDynamicState3SampleMask);
-    fullSup &= checkFeature("Depth Clamp", sup.dynState3.extendedDynamicState3DepthClampEnable, &need.dynState3.extendedDynamicState3DepthClampEnable);
-    fullSup &= checkFeature("Color Blend", sup.dynState3.extendedDynamicState3ColorBlendEnable, &need.dynState3.extendedDynamicState3ColorBlendEnable);
-    fullSup &= checkFeature("Color Blend Equation", sup.dynState3.extendedDynamicState3ColorBlendEquation, &need.dynState3.extendedDynamicState3ColorBlendEquation);
-    fullSup &= checkFeature("Color Write Mask", sup.dynState3.extendedDynamicState3ColorWriteMask, &need.dynState3.extendedDynamicState3ColorWriteMask);
-    fullSup &= checkFeature("Alpha to Coverage", sup.dynState3.extendedDynamicState3AlphaToCoverageEnable, &need.dynState3.extendedDynamicState3AlphaToCoverageEnable);
-    fullSup &= checkFeature("Alpha to One", sup.dynState3.extendedDynamicState3AlphaToOneEnable, &need.dynState3.extendedDynamicState3AlphaToOneEnable);
-
-    // Dynamic State 2
-    fullSup &= checkFeature("Extended State 2", sup.dynState2.extendedDynamicState2, &need.dynState2.extendedDynamicState2);
-    fullSup &= checkFeature("Extended State 2 Logic Op", sup.dynState2.extendedDynamicState2LogicOp, &need.dynState2.extendedDynamicState2LogicOp);
-    fullSup &= checkFeature("Extended State 2 Patch Control", sup.dynState2.extendedDynamicState2PatchControlPoints, &need.dynState2.extendedDynamicState2PatchControlPoints);
-
-    // Vairable Shading Rate
-    fullSup &= checkFeature("Pipeline Fragment Shading Rate", sup.shadingRate.pipelineFragmentShadingRate, &need.shadingRate.pipelineFragmentShadingRate);
-    fullSup &= checkFeature("Primitive Fragment Shading Rate", sup.shadingRate.primitiveFragmentShadingRate, &need.shadingRate.primitiveFragmentShadingRate);
-    fullSup &= checkFeature("Attachment Fragment Shading Rate", sup.shadingRate.attachmentFragmentShadingRate, &need.shadingRate.attachmentFragmentShadingRate);
-
-    // Shader Objects
-    fullSup &= checkFeature("Shader Objects", sup.shaderObj.shaderObject, &need.shaderObj.shaderObject);
-
-    // Mesh/Task Shaders
-    fullSup &= checkFeature("Mesh Shaders", sup.meshShaders.meshShader, &need.meshShaders.meshShader);
-    fullSup &= checkFeature("Task Shaders", sup.meshShaders.taskShader, &need.meshShaders.taskShader);
-    fullSup &= checkFeature("Mesh Shader Queries", sup.meshShaders.meshShaderQueries, &need.meshShaders.meshShaderQueries);
-
-    // Vk11 Features
-    fullSup &= checkFeature("Shader Draw Parameters", sup.vk11.shaderDrawParameters, &need.vk11.shaderDrawParameters);
-    fullSup &= checkFeature("Storage Buffer 16Bit Access", sup.vk11.storageBuffer16BitAccess, &need.vk11.storageBuffer16BitAccess);
-    fullSup &= checkFeature("Uniform/Storage Buffer 16Bit Access", sup.vk11.uniformAndStorageBuffer16BitAccess, &need.vk11.uniformAndStorageBuffer16BitAccess);
-
-    // Vk12 Features
-    fullSup &= checkFeature("Buffer Device Address", sup.vk12.bufferDeviceAddress, &need.vk12.bufferDeviceAddress);
-    fullSup &= checkFeature("Descriptor Indexing", sup.vk12.descriptorIndexing, &need.vk12.descriptorIndexing);
-    fullSup &= checkFeature("Desc-Bind StorageImg Update After Bind", sup.vk12.descriptorBindingStorageImageUpdateAfterBind, &need.vk12.descriptorBindingStorageImageUpdateAfterBind);
-    fullSup &= checkFeature("Desc-Bind SampledImg Update After Bind", sup.vk12.descriptorBindingSampledImageUpdateAfterBind, &need.vk12.descriptorBindingSampledImageUpdateAfterBind);
-    fullSup &= checkFeature("Descriptor Binding Partially Bound", sup.vk12.descriptorBindingPartiallyBound, &need.vk12.descriptorBindingPartiallyBound);
-    fullSup &= checkFeature("Timeline Semaphores", sup.vk12.timelineSemaphore, &need.vk12.timelineSemaphore);
-    fullSup &= checkFeature("Tunetime Descriptor Array", sup.vk12.runtimeDescriptorArray, &need.vk12.runtimeDescriptorArray);
-    fullSup &= checkFeature("Shader StorageImg Array-NonUniform-Indexing", sup.vk12.shaderStorageImageArrayNonUniformIndexing, &need.vk12.shaderStorageImageArrayNonUniformIndexing);
-    fullSup &= checkFeature("Shader SampledImg Array-NonUniform-Indexing", sup.vk12.shaderSampledImageArrayNonUniformIndexing, &need.vk12.shaderSampledImageArrayNonUniformIndexing);
-    fullSup &= checkFeature("Shader Float 16", sup.vk12.shaderFloat16, &need.vk12.shaderFloat16);
-    fullSup &= checkFeature("Shader Buffer Int64 Atomics", sup.vk12.shaderBufferInt64Atomics, &need.vk12.shaderBufferInt64Atomics);
-
-    // Vk13 Features
-    fullSup &= checkFeature("Dynamic Rendering", sup.vk13.dynamicRendering, &need.vk13.dynamicRendering);
-    fullSup &= checkFeature("Synchronization 2", sup.vk13.synchronization2, &need.vk13.synchronization2);
-    fullSup &= checkFeature("Maintenance 4", sup.vk13.maintenance4, &need.vk13.maintenance4);
-
-    // Vk14 Features
-    fullSup &= checkFeature("Maintenance 5", sup.maint5.maintenance5, &need.maint5.maintenance5);
-
-    // Device2 Features
-    fullSup &= checkFeature("Shader Int 64", sup.devFeatures2.features.shaderInt64, &need.devFeatures2.features.shaderInt64);
-    fullSup &= checkFeature("Wide Lines", sup.devFeatures2.features.wideLines, &need.devFeatures2.features.wideLines);
-    fullSup &= checkFeature("Pipeline Statistics Query", sup.devFeatures2.features.pipelineStatisticsQuery, &need.devFeatures2.features.pipelineStatisticsQuery);
-
-    if (fullSup == false) {
+    if (dev2 == null or
+        robust2 == null or
+        untypedPtr == null or
+        descHeaps == null or
+        dynamicState3 == null or
+        dynamicState2 == null or
+        shadingRate == null or
+        shaderObj == null or
+        meshShader == null or
+        vk11 == null or
+        vk12 == null or
+        vk13 == null or
+        maint5 == null)
+    {
         std.debug.print("Device does not Support all needed Features! Exiting\n", .{});
         return error.MissingRequiredFeature;
     }
 
-    const gpuExtensions = [_][*c]const u8{
-        "VK_KHR_swapchain",
-        "VK_EXT_mesh_shader",
-        "VK_EXT_shader_object",
-        "VK_EXT_extended_dynamic_state",
-        "VK_EXT_extended_dynamic_state2",
-        "VK_EXT_extended_dynamic_state3",
-        "VK_EXT_conservative_rasterization",
-        "VK_KHR_fragment_shading_rate",
-        "VK_KHR_shader_non_semantic_info",
-        "VK_EXT_descriptor_heap",
-        "VK_KHR_shader_untyped_pointers",
-        "VK_KHR_maintenance5",
-        "VK_EXT_vertex_input_dynamic_state",
-        "VK_EXT_descriptor_buffer", // Needed for GPU-AV for some reason
-        "VK_EXT_robustness2",
-    };
+    for (0..enabledStructs.items.len - 1) |i| {
+        enabledStructs.items[i].pNext = enabledStructs.items[i + 1];
+    }
 
-    const usedGpuExtensions = if (rc.ROBUST_VALIDATION == true) gpuExtensions.len else gpuExtensions.len - 1;
+    try enabledExts.append("VK_KHR_swapchain");
+    try enabledExts.append("VK_EXT_extended_dynamic_state");
+    try enabledExts.append("VK_EXT_conservative_rasterization");
+    try enabledExts.append("VK_KHR_shader_non_semantic_info");
+    try enabledExts.append("VK_EXT_vertex_input_dynamic_state");
+    try enabledExts.append("VK_EXT_descriptor_buffer"); // Needed for GPU-AV for some reason
 
     const createInf = vk.VkDeviceCreateInfo{
         .sType = vk.VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
-        .pNext = &need.devFeatures2,
+        .pNext = if (enabledStructs.items.len > 0) enabledStructs.items[0] else null,
         .pQueueCreateInfos = queueInfos.items.ptr,
         .queueCreateInfoCount = @intCast(queueInfos.items.len),
         .pEnabledFeatures = null,
-        .enabledExtensionCount = usedGpuExtensions,
-        .ppEnabledExtensionNames = &gpuExtensions,
+        .enabledExtensionCount = @intCast(enabledExts.items.len),
+        .ppEnabledExtensionNames = enabledExts.items.ptr,
         .enabledLayerCount = 0,
         .ppEnabledLayerNames = null,
     };
@@ -349,43 +332,15 @@ fn createGPI(alloc: Allocator, gpu: vk.VkPhysicalDevice, family: u32) !vk.VkDevi
     var gpi: vk.VkDevice = undefined;
     try vhF.check(vk.vkCreateDevice(gpu, &createInf, null, &gpi), "Unable to create Vulkan device!");
 
-    // Draw Commands (Mesh & Indirect)
-    try loadVkProc(gpi, &vkFn.vkCmdDrawMeshTasksEXT, "vkCmdDrawMeshTasksEXT");
-    try loadVkProc(gpi, &vkFn.vkCmdDrawMeshTasksIndirectEXT, "vkCmdDrawMeshTasksIndirectEXT");
-
-    // Shader Objects
-    try loadVkProc(gpi, &vkFn.vkCreateShadersEXT, "vkCreateShadersEXT");
-    try loadVkProc(gpi, &vkFn.vkDestroyShaderEXT, "vkDestroyShaderEXT");
-    try loadVkProc(gpi, &vkFn.vkCmdBindShadersEXT, "vkCmdBindShadersEXT");
-
-    // Descriptor Heaps
-    try loadVkProc(gpi, &vkFn.vkWriteResourceDescriptorsEXT, "vkWriteResourceDescriptorsEXT");
-    try loadVkProc(gpi, &vkFn.vkWriteSamplerDescriptorsEXT, "vkWriteSamplerDescriptorsEXT");
-    try loadVkProc(gpi, &vkFn.vkCmdBindResourceHeapEXT, "vkCmdBindResourceHeapEXT");
-    try loadVkProc(gpi, &vkFn.vkCmdBindSamplerHeapEXT, "vkCmdBindSamplerHeapEXT");
-    try loadVkProc(gpi, &vkFn.vkCmdPushDataEXT, "vkCmdPushDataEXT");
-
-    // Extended Dynamic State 3
-    try loadVkProc(gpi, &vkFn.vkCmdSetPolygonModeEXT, "vkCmdSetPolygonModeEXT");
-    try loadVkProc(gpi, &vkFn.vkCmdSetRasterizationSamplesEXT, "vkCmdSetRasterizationSamplesEXT");
-    try loadVkProc(gpi, &vkFn.vkCmdSetSampleMaskEXT, "vkCmdSetSampleMaskEXT");
-    try loadVkProc(gpi, &vkFn.vkCmdSetDepthClampEnableEXT, "vkCmdSetDepthClampEnableEXT");
-    try loadVkProc(gpi, &vkFn.vkCmdSetColorBlendEnableEXT, "vkCmdSetColorBlendEnableEXT");
-    try loadVkProc(gpi, &vkFn.vkCmdSetColorBlendEquationEXT, "vkCmdSetColorBlendEquationEXT");
-    try loadVkProc(gpi, &vkFn.vkCmdSetColorWriteMaskEXT, "vkCmdSetColorWriteMaskEXT");
-    try loadVkProc(gpi, &vkFn.vkCmdSetAlphaToOneEnableEXT, "vkCmdSetAlphaToOneEnableEXT");
-    try loadVkProc(gpi, &vkFn.vkCmdSetAlphaToCoverageEnableEXT, "vkCmdSetAlphaToCoverageEnableEXT");
-
-    // Extended Dynamic State 2
-    try loadVkProc(gpi, &vkFn.vkCmdSetVertexInputEXT, "vkCmdSetVertexInputEXT");
-    try loadVkProc(gpi, &vkFn.vkCmdSetLogicOpEnableEXT, "vkCmdSetLogicOpEnableEXT");
-    try loadVkProc(gpi, &vkFn.vkCmdSetLogicOpEXT, "vkCmdSetLogicOpEXT");
-
-    // Conservative Rasterization
-    try loadVkProc(gpi, &vkFn.vkCmdSetConservativeRasterizationModeEXT, "vkCmdSetConservativeRasterizationModeEXT");
-
-    // Fragment Shading Rate
-    try loadVkProc(gpi, &vkFn.vkCmdSetFragmentShadingRateKHR, "vkCmdSetFragmentShadingRateKHR");
+    for (functionLoads.items) |fnLoad| {
+        const proc = vk.vkGetDeviceProcAddr(gpi, fnLoad.name);
+        if (proc == null) {
+            std.log.err("{s} Could not be loaded\n", .{fnLoad.name});
+            return error.CouldntLoadFunctionPointer;
+        }
+        const target: *vk.PFN_vkVoidFunction = @ptrCast(@alignCast(fnLoad.functionPtr));
+        target.* = proc;
+    }
 
     // Debug
     if (rc.VALIDATION == true) {
@@ -394,7 +349,10 @@ fn createGPI(alloc: Allocator, gpu: vk.VkPhysicalDevice, family: u32) !vk.VkDevi
         try loadVkProc(gpi, &vkFn.vkCmdEndDebugUtilsLabelEXT, "vkCmdEndDebugUtilsLabelEXT");
     }
 
-    return gpi;
+    return .{
+        .gpi = gpi,
+        .meshSupport = if (meshShader != null) true else false,
+    };
 }
 
 fn checkFeature(name: []const u8, deviceBool: vk.VkBool32, featureBoolPtr: *vk.VkBool32) bool {
@@ -407,70 +365,310 @@ fn checkFeature(name: []const u8, deviceBool: vk.VkBool32, featureBoolPtr: *vk.V
 }
 
 // Handle can be instance or device
-pub fn loadVkProc(handle: anytype, comptime functionPtr: anytype, comptime name: []const u8) !void {
-    const proc = vk.vkGetDeviceProcAddr(handle, name.ptr);
-    functionPtr.* = if (proc) |p| @ptrCast(p) else null;
-    if (functionPtr.* == null) {
+pub fn loadVkProc(handle: vk.VkDevice, ptr: anytype, comptime name: [*:0]const u8) !void {
+    const proc = vk.vkGetDeviceProcAddr(handle, name);
+    if (proc == null) {
         std.log.err("{s} Could not be loaded\n", .{name});
         return error.CouldntLoadFunctionPointer;
     }
+    ptr.* = @ptrCast(proc);
 }
 
-const DeviceFeatures = struct {
-    robustness2: vk.VkPhysicalDeviceRobustness2FeaturesEXT,
-    descUntyped: vk.VkPhysicalDeviceShaderUntypedPointersFeaturesKHR,
-    descHeaps: vk.VkPhysicalDeviceDescriptorHeapFeaturesEXT,
-    dynState3: vk.VkPhysicalDeviceExtendedDynamicState3FeaturesEXT,
-    dynState2: vk.VkPhysicalDeviceExtendedDynamicState2FeaturesEXT,
-    shadingRate: vk.VkPhysicalDeviceFragmentShadingRateFeaturesKHR,
-    shaderObj: vk.VkPhysicalDeviceShaderObjectFeaturesEXT,
-    meshShaders: vk.VkPhysicalDeviceMeshShaderFeaturesEXT,
-    vk11: vk.VkPhysicalDeviceVulkan11Features,
-    vk12: vk.VkPhysicalDeviceVulkan12Features,
-    vk13: vk.VkPhysicalDeviceVulkan13Features,
-    maint5: vk.VkPhysicalDeviceMaintenance5FeaturesKHR,
-    devFeatures2: vk.VkPhysicalDeviceFeatures2,
+fn GetFnType(comptime function: anytype) type {
+    const Ret = @typeInfo(@TypeOf(function)).@"fn".return_type.?;
+    const NoError = @typeInfo(Ret).error_union.payload;
+    return @typeInfo(NoError).optional.child;
+}
 
-    pub fn init(self: *DeviceFeatures, gpu: ?vk.VkPhysicalDevice) void {
-        self.robustness2.sType = vk.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ROBUSTNESS_2_FEATURES_EXT;
-        self.robustness2.pNext = null;
+fn fillFeatureStruct(featureStructPtr: *anyopaque, gpu: vk.VkPhysicalDevice) void {
+    var devFeatures2 = vk.VkPhysicalDeviceFeatures2{ .sType = vk.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2 };
+    devFeatures2.pNext = featureStructPtr;
+    vk.vkGetPhysicalDeviceFeatures2(gpu, &devFeatures2);
+}
 
-        self.descUntyped.sType = vk.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_UNTYPED_POINTERS_FEATURES_KHR;
-        self.descUntyped.pNext = &self.robustness2;
+fn checkRobustness2(enabledExts: *std.array_list.Managed([*c]const u8), gpu: vk.VkPhysicalDevice) !?vk.VkPhysicalDeviceRobustness2FeaturesEXT {
+    var sup = GetFnType(checkRobustness2){ .sType = vk.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ROBUSTNESS_2_FEATURES_EXT };
+    var need = @TypeOf(sup){ .sType = sup.sType };
+    fillFeatureStruct(&sup, gpu);
 
-        self.descHeaps.sType = vk.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_HEAP_FEATURES_EXT;
-        self.descHeaps.pNext = &self.descUntyped;
+    var fullSup = true;
+    fullSup &= checkFeature("Robust Buffer Access 2", sup.robustBufferAccess2, &need.robustBufferAccess2);
+    fullSup &= checkFeature("Robust Image Access 2", sup.robustImageAccess2, &need.robustImageAccess2);
 
-        self.dynState3.sType = vk.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_3_FEATURES_EXT;
-        self.dynState3.pNext = &self.descHeaps;
-
-        self.dynState2.sType = vk.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_2_FEATURES_EXT;
-        self.dynState2.pNext = &self.dynState3;
-
-        self.shadingRate.sType = vk.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_SHADING_RATE_FEATURES_KHR;
-        self.shadingRate.pNext = &self.dynState2;
-
-        self.shaderObj.sType = vk.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_OBJECT_FEATURES_EXT;
-        self.shaderObj.pNext = &self.shadingRate;
-
-        self.meshShaders.sType = vk.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_EXT;
-        self.meshShaders.pNext = &self.shaderObj;
-
-        self.vk11.sType = vk.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES;
-        self.vk11.pNext = &self.meshShaders;
-
-        self.vk12.sType = vk.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
-        self.vk12.pNext = &self.vk11;
-
-        self.vk13.sType = vk.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
-        self.vk13.pNext = &self.vk12;
-
-        self.maint5.sType = vk.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_5_FEATURES_KHR;
-        self.maint5.pNext = &self.vk13;
-
-        self.devFeatures2.sType = vk.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
-        self.devFeatures2.pNext = &self.maint5;
-
-        if (gpu) |validGpu| vk.vkGetPhysicalDeviceFeatures2(validGpu, &self.devFeatures2);
+    if (fullSup) {
+        try enabledExts.append("VK_EXT_robustness2");
+        return need;
     }
-};
+    return null;
+}
+
+fn checkShaderUntypedPtr(enabledExts: *std.array_list.Managed([*c]const u8), gpu: vk.VkPhysicalDevice) !?vk.VkPhysicalDeviceShaderUntypedPointersFeaturesKHR {
+    var sup = GetFnType(checkShaderUntypedPtr){ .sType = vk.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_UNTYPED_POINTERS_FEATURES_KHR };
+    var need = @TypeOf(sup){ .sType = sup.sType };
+    fillFeatureStruct(&sup, gpu);
+
+    var fullSup = true;
+    fullSup &= checkFeature("Descriptor Untyped Ptr", sup.shaderUntypedPointers, &need.shaderUntypedPointers);
+
+    if (fullSup) {
+        try enabledExts.append("VK_KHR_shader_untyped_pointers");
+        return need;
+    }
+    return null;
+}
+
+fn checkDescriptorHeaps(
+    enabledExts: *std.array_list.Managed([*c]const u8),
+    gpu: vk.VkPhysicalDevice,
+    fnLoads: *std.array_list.Managed(VulkanLoad),
+) !?vk.VkPhysicalDeviceDescriptorHeapFeaturesEXT {
+    var sup = GetFnType(checkDescriptorHeaps){ .sType = vk.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_HEAP_FEATURES_EXT };
+    var need = @TypeOf(sup){ .sType = sup.sType };
+    fillFeatureStruct(&sup, gpu);
+
+    var fullSup = true;
+    fullSup &= checkFeature("Descriptor Heaps", sup.descriptorHeap, &need.descriptorHeap);
+
+    if (fullSup) {
+        try enabledExts.append("VK_EXT_descriptor_heap");
+        try fnLoads.append(.{ .functionPtr = @ptrCast(&vkFn.vkWriteResourceDescriptorsEXT), .name = "vkWriteResourceDescriptorsEXT" });
+        try fnLoads.append(.{ .functionPtr = @ptrCast(&vkFn.vkWriteSamplerDescriptorsEXT), .name = "vkWriteSamplerDescriptorsEXT" });
+        try fnLoads.append(.{ .functionPtr = @ptrCast(&vkFn.vkCmdBindResourceHeapEXT), .name = "vkCmdBindResourceHeapEXT" });
+        try fnLoads.append(.{ .functionPtr = @ptrCast(&vkFn.vkCmdBindSamplerHeapEXT), .name = "vkCmdBindSamplerHeapEXT" });
+        try fnLoads.append(.{ .functionPtr = @ptrCast(&vkFn.vkCmdPushDataEXT), .name = "vkCmdPushDataEXT" });
+        return need;
+    }
+    return null;
+}
+
+fn checkDynamicState3(
+    enabledExts: *std.array_list.Managed([*c]const u8),
+    gpu: vk.VkPhysicalDevice,
+    fnLoads: *std.array_list.Managed(VulkanLoad),
+) !?vk.VkPhysicalDeviceExtendedDynamicState3FeaturesEXT {
+    var sup = GetFnType(checkDynamicState3){ .sType = vk.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_3_FEATURES_EXT };
+    var need = @TypeOf(sup){ .sType = sup.sType };
+
+    fillFeatureStruct(&sup, gpu);
+    var fullSup = true;
+
+    fullSup &= checkFeature("Polygon Mode", sup.extendedDynamicState3PolygonMode, &need.extendedDynamicState3PolygonMode);
+    fullSup &= checkFeature("Raster Samples", sup.extendedDynamicState3RasterizationSamples, &need.extendedDynamicState3RasterizationSamples);
+    fullSup &= checkFeature("Sample Mask", sup.extendedDynamicState3SampleMask, &need.extendedDynamicState3SampleMask);
+    fullSup &= checkFeature("Depth Clamp", sup.extendedDynamicState3DepthClampEnable, &need.extendedDynamicState3DepthClampEnable);
+    fullSup &= checkFeature("Color Blend", sup.extendedDynamicState3ColorBlendEnable, &need.extendedDynamicState3ColorBlendEnable);
+    fullSup &= checkFeature("Color Blend Equation", sup.extendedDynamicState3ColorBlendEquation, &need.extendedDynamicState3ColorBlendEquation);
+    fullSup &= checkFeature("Color Write Mask", sup.extendedDynamicState3ColorWriteMask, &need.extendedDynamicState3ColorWriteMask);
+    fullSup &= checkFeature("Alpha to Coverage", sup.extendedDynamicState3AlphaToCoverageEnable, &need.extendedDynamicState3AlphaToCoverageEnable);
+    fullSup &= checkFeature("Alpha to One", sup.extendedDynamicState3AlphaToOneEnable, &need.extendedDynamicState3AlphaToOneEnable);
+    fullSup &= checkFeature("Conservative Raster", sup.extendedDynamicState3ConservativeRasterizationMode, &need.extendedDynamicState3ConservativeRasterizationMode);
+
+    if (fullSup) {
+        try enabledExts.append("VK_EXT_extended_dynamic_state3");
+        try fnLoads.append(.{ .functionPtr = @ptrCast(&vkFn.vkCmdSetPolygonModeEXT), .name = "vkCmdSetPolygonModeEXT" });
+        try fnLoads.append(.{ .functionPtr = @ptrCast(&vkFn.vkCmdSetRasterizationSamplesEXT), .name = "vkCmdSetRasterizationSamplesEXT" });
+        try fnLoads.append(.{ .functionPtr = @ptrCast(&vkFn.vkCmdSetSampleMaskEXT), .name = "vkCmdSetSampleMaskEXT" });
+        try fnLoads.append(.{ .functionPtr = @ptrCast(&vkFn.vkCmdSetDepthClampEnableEXT), .name = "vkCmdSetDepthClampEnableEXT" });
+        try fnLoads.append(.{ .functionPtr = @ptrCast(&vkFn.vkCmdSetColorBlendEnableEXT), .name = "vkCmdSetColorBlendEnableEXT" });
+        try fnLoads.append(.{ .functionPtr = @ptrCast(&vkFn.vkCmdSetColorBlendEquationEXT), .name = "vkCmdSetColorBlendEquationEXT" });
+        try fnLoads.append(.{ .functionPtr = @ptrCast(&vkFn.vkCmdSetColorWriteMaskEXT), .name = "vkCmdSetColorWriteMaskEXT" });
+        try fnLoads.append(.{ .functionPtr = @ptrCast(&vkFn.vkCmdSetAlphaToOneEnableEXT), .name = "vkCmdSetAlphaToOneEnableEXT" });
+        try fnLoads.append(.{ .functionPtr = @ptrCast(&vkFn.vkCmdSetAlphaToCoverageEnableEXT), .name = "vkCmdSetAlphaToCoverageEnableEXT" });
+        try fnLoads.append(.{ .functionPtr = @ptrCast(&vkFn.vkCmdSetConservativeRasterizationModeEXT), .name = "vkCmdSetConservativeRasterizationModeEXT" });
+        return need;
+    }
+    return null;
+}
+
+fn checkDynamicState2(
+    enabledExts: *std.array_list.Managed([*c]const u8),
+    gpu: vk.VkPhysicalDevice,
+    fnLoads: *std.array_list.Managed(VulkanLoad),
+) !?vk.VkPhysicalDeviceExtendedDynamicState2FeaturesEXT {
+    var sup = GetFnType(checkDynamicState2){ .sType = vk.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_2_FEATURES_EXT };
+    var need = @TypeOf(sup){ .sType = sup.sType };
+    fillFeatureStruct(&sup, gpu);
+
+    var fullSup = true;
+    fullSup &= checkFeature("Extended State 2", sup.extendedDynamicState2, &need.extendedDynamicState2);
+    fullSup &= checkFeature("Extended State 2 Logic Op", sup.extendedDynamicState2LogicOp, &need.extendedDynamicState2LogicOp);
+    fullSup &= checkFeature("Extended State 2 Patch Control", sup.extendedDynamicState2PatchControlPoints, &need.extendedDynamicState2PatchControlPoints);
+
+    if (fullSup) {
+        try enabledExts.append("VK_EXT_extended_dynamic_state2");
+        try fnLoads.append(.{ .functionPtr = @ptrCast(&vkFn.vkCmdSetVertexInputEXT), .name = "vkCmdSetVertexInputEXT" });
+        try fnLoads.append(.{ .functionPtr = @ptrCast(&vkFn.vkCmdSetLogicOpEnableEXT), .name = "vkCmdSetLogicOpEnableEXT" });
+        try fnLoads.append(.{ .functionPtr = @ptrCast(&vkFn.vkCmdSetLogicOpEXT), .name = "vkCmdSetLogicOpEXT" });
+        return need;
+    }
+    return null;
+}
+
+fn checkFragmentShadingRate(
+    enabledExts: *std.array_list.Managed([*c]const u8),
+    gpu: vk.VkPhysicalDevice,
+    fnLoads: *std.array_list.Managed(VulkanLoad),
+) !?vk.VkPhysicalDeviceFragmentShadingRateFeaturesKHR {
+    var sup = GetFnType(checkFragmentShadingRate){ .sType = vk.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_SHADING_RATE_FEATURES_KHR };
+    var need = @TypeOf(sup){ .sType = sup.sType };
+    fillFeatureStruct(&sup, gpu);
+
+    var fullSup = true;
+    fullSup &= checkFeature("Pipeline Fragment Shading Rate", sup.pipelineFragmentShadingRate, &need.pipelineFragmentShadingRate);
+    fullSup &= checkFeature("Primitive Fragment Shading Rate", sup.primitiveFragmentShadingRate, &need.primitiveFragmentShadingRate);
+    fullSup &= checkFeature("Attachment Fragment Shading Rate", sup.attachmentFragmentShadingRate, &need.attachmentFragmentShadingRate);
+
+    if (fullSup) {
+        try enabledExts.append("VK_KHR_fragment_shading_rate");
+        try fnLoads.append(.{ .functionPtr = @ptrCast(&vkFn.vkCmdSetFragmentShadingRateKHR), .name = "vkCmdSetFragmentShadingRateKHR" });
+        return need;
+    }
+    return null;
+}
+
+fn checkShaderObjects(
+    enabledExts: *std.array_list.Managed([*c]const u8),
+    gpu: vk.VkPhysicalDevice,
+    fnLoads: *std.array_list.Managed(VulkanLoad),
+) !?vk.VkPhysicalDeviceShaderObjectFeaturesEXT {
+    var sup = GetFnType(checkShaderObjects){ .sType = vk.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_OBJECT_FEATURES_EXT };
+    var need = @TypeOf(sup){ .sType = sup.sType };
+    fillFeatureStruct(&sup, gpu);
+
+    var fullSup = true;
+    fullSup &= checkFeature("Shader Objects", sup.shaderObject, &need.shaderObject);
+
+    if (fullSup) {
+        try enabledExts.append("VK_EXT_shader_object");
+        try fnLoads.append(.{ .functionPtr = @ptrCast(&vkFn.vkCreateShadersEXT), .name = "vkCreateShadersEXT" });
+        try fnLoads.append(.{ .functionPtr = @ptrCast(&vkFn.vkDestroyShaderEXT), .name = "vkDestroyShaderEXT" });
+        try fnLoads.append(.{ .functionPtr = @ptrCast(&vkFn.vkCmdBindShadersEXT), .name = "vkCmdBindShadersEXT" });
+        return need;
+    }
+    return null;
+}
+
+fn checkMeshShaders(
+    enabledExts: *std.array_list.Managed([*c]const u8),
+    gpu: vk.VkPhysicalDevice,
+    fnLoads: *std.array_list.Managed(VulkanLoad),
+) !?vk.VkPhysicalDeviceMeshShaderFeaturesEXT {
+    var sup = GetFnType(checkMeshShaders){ .sType = vk.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_EXT };
+    var need = @TypeOf(sup){ .sType = sup.sType };
+    fillFeatureStruct(&sup, gpu);
+
+    var fullSup = true;
+    fullSup &= checkFeature("Mesh Shaders", sup.meshShader, &need.meshShader);
+    fullSup &= checkFeature("Task Shaders", sup.taskShader, &need.taskShader);
+    fullSup &= checkFeature("Mesh Shader Queries", sup.meshShaderQueries, &need.meshShaderQueries);
+
+    if (fullSup) {
+        try enabledExts.append("VK_EXT_mesh_shader");
+        try fnLoads.append(.{ .functionPtr = @ptrCast(&vkFn.vkCmdDrawMeshTasksEXT), .name = "vkCmdDrawMeshTasksEXT" });
+        try fnLoads.append(.{ .functionPtr = @ptrCast(&vkFn.vkCmdDrawMeshTasksIndirectEXT), .name = "vkCmdDrawMeshTasksIndirectEXT" });
+        return need;
+    }
+    return null;
+}
+
+fn checkVulkan11Features(gpu: vk.VkPhysicalDevice) !?vk.VkPhysicalDeviceVulkan11Features {
+    var sup = GetFnType(checkVulkan11Features){ .sType = vk.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES };
+    var need = @TypeOf(sup){ .sType = sup.sType };
+    fillFeatureStruct(&sup, gpu);
+
+    var fullSup = true;
+    fullSup &= checkFeature("Shader Draw Parameters", sup.shaderDrawParameters, &need.shaderDrawParameters);
+    fullSup &= checkFeature("Storage Buffer 16Bit Access", sup.storageBuffer16BitAccess, &need.storageBuffer16BitAccess);
+    fullSup &= checkFeature("Uniform/Storage Buffer 16Bit Access", sup.uniformAndStorageBuffer16BitAccess, &need.uniformAndStorageBuffer16BitAccess);
+
+    if (fullSup) {
+        return need;
+    }
+    return null;
+}
+
+fn checkVulkan12Features(gpu: vk.VkPhysicalDevice) !?vk.VkPhysicalDeviceVulkan12Features {
+    var sup = GetFnType(checkVulkan12Features){ .sType = vk.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES };
+    var need = @TypeOf(sup){ .sType = sup.sType };
+    fillFeatureStruct(&sup, gpu);
+
+    var fullSup = true;
+    fullSup &= checkFeature("Buffer Device Address", sup.bufferDeviceAddress, &need.bufferDeviceAddress);
+    fullSup &= checkFeature("Descriptor Indexing", sup.descriptorIndexing, &need.descriptorIndexing);
+    fullSup &= checkFeature("Desc-Bind StorageImg Update After Bind", sup.descriptorBindingStorageImageUpdateAfterBind, &need.descriptorBindingStorageImageUpdateAfterBind);
+    fullSup &= checkFeature("Desc-Bind SampledImg Update After Bind", sup.descriptorBindingSampledImageUpdateAfterBind, &need.descriptorBindingSampledImageUpdateAfterBind);
+    fullSup &= checkFeature("Descriptor Binding Partially Bound", sup.descriptorBindingPartiallyBound, &need.descriptorBindingPartiallyBound);
+    fullSup &= checkFeature("Timeline Semaphores", sup.timelineSemaphore, &need.timelineSemaphore);
+    fullSup &= checkFeature("Tunetime Descriptor Array", sup.runtimeDescriptorArray, &need.runtimeDescriptorArray);
+    fullSup &= checkFeature("Shader StorageImg Array-NonUniform-Indexing", sup.shaderStorageImageArrayNonUniformIndexing, &need.shaderStorageImageArrayNonUniformIndexing);
+    fullSup &= checkFeature("Shader SampledImg Array-NonUniform-Indexing", sup.shaderSampledImageArrayNonUniformIndexing, &need.shaderSampledImageArrayNonUniformIndexing);
+    fullSup &= checkFeature("Shader Float 16", sup.shaderFloat16, &need.shaderFloat16);
+    fullSup &= checkFeature("Shader Buffer Int64 Atomics", sup.shaderBufferInt64Atomics, &need.shaderBufferInt64Atomics);
+
+    if (fullSup) {
+        return need;
+    }
+    return null;
+}
+
+fn checkVulkan13Features(gpu: vk.VkPhysicalDevice) !?vk.VkPhysicalDeviceVulkan13Features {
+    var sup = GetFnType(checkVulkan13Features){ .sType = vk.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES };
+    var need = @TypeOf(sup){ .sType = sup.sType };
+    fillFeatureStruct(&sup, gpu);
+
+    var fullSup = true;
+    fullSup &= checkFeature("Dynamic Rendering", sup.dynamicRendering, &need.dynamicRendering);
+    fullSup &= checkFeature("Synchronization 2", sup.synchronization2, &need.synchronization2);
+    fullSup &= checkFeature("Maintenance 4", sup.maintenance4, &need.maintenance4);
+
+    if (fullSup) {
+        return need;
+    }
+    return null;
+}
+
+fn checkMaintenance5Features(enabledExts: *std.array_list.Managed([*c]const u8), gpu: vk.VkPhysicalDevice) !?vk.VkPhysicalDeviceMaintenance5FeaturesKHR {
+    var sup = GetFnType(checkMaintenance5Features){ .sType = vk.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_5_FEATURES_KHR };
+    var need = @TypeOf(sup){ .sType = sup.sType };
+    fillFeatureStruct(&sup, gpu);
+
+    var fullSup = true;
+    fullSup &= checkFeature("Maintenance 5", sup.maintenance5, &need.maintenance5);
+
+    if (fullSup) {
+        try enabledExts.append("VK_KHR_maintenance5");
+        return need;
+    }
+    return null;
+}
+
+fn checkDeviceFeatures2(gpu: vk.VkPhysicalDevice) !?vk.VkPhysicalDeviceFeatures2 {
+    var sup = GetFnType(checkDeviceFeatures2){ .sType = vk.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2 };
+    var need = @TypeOf(sup){ .sType = sup.sType };
+    fillFeatureStruct(&sup, gpu);
+
+    var fullSup = true;
+    fullSup &= checkFeature("Shader Int 64", sup.features.shaderInt64, &need.features.shaderInt64);
+    fullSup &= checkFeature("Wide Lines", sup.features.wideLines, &need.features.wideLines);
+    fullSup &= checkFeature("Pipeline Statistics Query", sup.features.pipelineStatisticsQuery, &need.features.pipelineStatisticsQuery);
+
+    if (fullSup) {
+        return need;
+    }
+    return null;
+}
+
+// fn checkTEMPLATE(enabledExts: *std.array_list.Managed([*c]const u8), gpu: vk.VkPhysicalDevice) !?void {
+//     var sup = getFnType(checkTEMPLATE){ .sType = void };
+//     var need = @TypeOf(sup){ .sType = sup.sType };
+//     fillFeatureStruct(&sup, gpu);
+
+//     const fullSup = true;
+//     fullSup &= checkFeature("", &sup, &need);
+
+//     if (fullSup) {
+//         try enabledExts.append("");
+//         return need;
+//     }
+//     return null;
+// }

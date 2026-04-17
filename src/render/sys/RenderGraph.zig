@@ -35,6 +35,7 @@ pub const RenderGraph = struct {
     imgBarriers: std.array_list.Managed(vk.VkImageMemoryBarrier2),
     bufBarriers: std.array_list.Managed(vk.VkBufferMemoryBarrier2),
     useGpuProfiling: bool = rc.GPU_PROFILING,
+    lastPassTyp: ?PassDef.PassExecution = null,
 
     pub fn init(alloc: Allocator, context: *const Context) !RenderGraph {
         return .{
@@ -56,7 +57,19 @@ pub const RenderGraph = struct {
         if (self.useGpuProfiling == true) self.useGpuProfiling = false else self.useGpuProfiling = true;
     }
 
-    pub fn recordFrame(self: *RenderGraph, renderNodes: []RenderNode, flightId: u8, frame: u64, frameData: FrameData, swapMan: *SwapchainMan, resMan: *ResourceMan, shaderMan: *ShaderManager, imguiMan: *ImGuiMan, data: *const EngineData) !*Cmd {
+    pub fn recordFrame(
+        self: *RenderGraph,
+        renderNodes: []RenderNode,
+        flightId: u8,
+        frame: u64,
+        frameData: FrameData,
+        swapMan: *SwapchainMan,
+        resMan: *ResourceMan,
+        shaderMan: *ShaderManager,
+        imguiMan: *ImGuiMan,
+        data: *const EngineData,
+        meshTaskSupport: bool,
+    ) !*Cmd {
         var cmd = try self.cmdMan.getCmd(flightId);
         try cmd.begin(flightId, frame);
 
@@ -71,7 +84,7 @@ pub const RenderGraph = struct {
         cmd.endTimer(.BotOfPipe, timeId);
 
         try self.recordTransfers(cmd, resMan);
-        try self.recordNodes(cmd, renderNodes, frameData, resMan, shaderMan, swapMan);
+        try self.recordNodes(cmd, renderNodes, frameData, resMan, shaderMan, swapMan, meshTaskSupport);
         try self.recordImGui(cmd, swapMan, imguiMan, data);
         try self.recordPresentation(cmd, swapMan);
 
@@ -189,14 +202,36 @@ pub const RenderGraph = struct {
         cmd.dispatchIndirect(buffer.handle, compIndirectExec.indirectBufOffset);
     }
 
-    fn recordNodes(self: *RenderGraph, cmd: *Cmd, renderNodes: []RenderNode, frameData: FrameData, resMan: *ResourceMan, shaderMan: *ShaderManager, swapMan: *SwapchainMan) !void {
+    fn recordNodes(
+        self: *RenderGraph,
+        cmd: *Cmd,
+        renderNodes: []RenderNode,
+        frameData: FrameData,
+        resMan: *ResourceMan,
+        shaderMan: *ShaderManager,
+        swapMan: *SwapchainMan,
+        meshTaskSupport: bool,
+    ) !void {
         for (renderNodes) |renderNode| {
             switch (renderNode) {
                 .passNode => |passNode| {
+                    const specialPass: bool = switch (passNode.pass.execution) {
+                        .taskOrMesh, .taskOrMeshIndirect => true,
+                        .computeOnImg, .compute, .computeIndirect, .graphics => false,
+                    };
+                    if (specialPass == true and meshTaskSupport == false) {
+                        std.debug.print("PassTyp {s} is not supported -> skipped \n", .{@tagName(passNode.pass.execution)});
+                        self.lastPassTyp = null;
+                        continue;
+                    }
+
                     try self.recordPass(cmd, &passNode.pass, frameData, resMan, shaderMan);
+                    self.lastPassTyp = passNode.pass.execution;
                 },
                 .viewportBlit => |blit| {
-                    try self.recordBlit(cmd, blit, resMan, swapMan);
+                    if (self.lastPassTyp != null) {
+                        try self.recordBlit(cmd, blit, resMan, swapMan);
+                    } else std.debug.print("Blit for unsupported Pass Skipped!\n", .{});
                 },
             }
         }
@@ -304,7 +339,7 @@ pub const RenderGraph = struct {
                 const colorAtt = target.createAttachment(.Color, false);
 
                 cmd.beginRendering(swapchain.extent.width, swapchain.extent.height, &[_]vk.VkRenderingAttachmentInfo{colorAtt}, null, null);
-                imguiMan.render(swapchain.windowId, cmd);
+                imguiMan.recordContext(swapchain.windowId, cmd);
                 cmd.endRendering();
             }
             cmd.endTimer(.BotOfPipe, timeId);

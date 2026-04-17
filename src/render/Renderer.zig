@@ -134,7 +134,18 @@ pub const Renderer = struct {
         try self.resMan.update(flightId, self.scheduler.totalFrames);
         try self.swapMan.updateTargets(flightId, activeWindows);
 
-        const cmd = try self.renderGraph.recordFrame(self.renderNodes.items, flightId, self.scheduler.totalFrames, frameData, &self.swapMan, &self.resMan, &self.shaderMan, &self.imguiMan, data);
+        const cmd = try self.renderGraph.recordFrame(
+            self.renderNodes.items,
+            flightId,
+            self.scheduler.totalFrames,
+            frameData,
+            &self.swapMan,
+            &self.resMan,
+            &self.shaderMan,
+            &self.imguiMan,
+            data,
+            self.context.meshTaskSupp
+        );
 
         try self.scheduler.queueSubmit(cmd, &self.swapMan, self.context.graphicsQ);
         try self.scheduler.queuePresent(&self.swapMan, self.context.graphicsQ);
@@ -144,6 +155,14 @@ pub const Renderer = struct {
 
     pub fn addShaders(self: *Renderer, loadedShaders: []const LoadedShader) !void {
         for (loadedShaders) |loadedShader| {
+            const shaderTyp = loadedShader.shaderInf.typ;
+            const isSpecial = if (shaderTyp == .meshNoTask or shaderTyp == .meshWithTask or shaderTyp == .task) true else false;
+
+            if (self.context.meshTaskSupp == false and isSpecial == true) {
+                std.debug.print("Mesh/Task Shaders not Supported by Device! Shaders ignored!\n", .{});
+                continue;
+            }
+
             if (self.shaderMan.isShaderIdUsed(loadedShader.shaderInf.id.val) == true) {
                 _ = vk.vkDeviceWaitIdle(self.context.gpi);
                 break;
