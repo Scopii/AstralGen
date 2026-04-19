@@ -27,6 +27,7 @@ pub const TextureType = enum {
     Color,
     Depth,
     Stencil,
+    Swapchain,
 };
 
 pub const MemUsage = enum {

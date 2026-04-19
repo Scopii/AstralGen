@@ -99,7 +99,8 @@ pub const DescriptorMan = struct {
         if (texture.descIndex == null) texture.descIndex = try self.getFreeDescriptorIndex();
         const descUpdate = self.getOrCreateUpdate(texture.descIndex.?, Texture);
 
-        self.imgViews[descUpdate.specificIndex] = vhF.getViewCreateInfo(texture.img, texMeta.viewType, texMeta.format, texMeta.subRange);
+        const subRange = vhF.createSubresourceRange(vhF.getImageAspectFlags(texMeta.texType), 0, 1, 0, 1);
+        self.imgViews[descUpdate.specificIndex] = vhF.getViewCreateInfo(texture.img, texMeta.viewType, texMeta.format, subRange);
 
         self.imgDescs[descUpdate.specificIndex] = vk.VkImageDescriptorInfoEXT{
             .sType = vk.VK_STRUCTURE_TYPE_IMAGE_DESCRIPTOR_INFO_EXT,

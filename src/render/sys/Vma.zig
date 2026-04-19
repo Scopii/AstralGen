@@ -131,7 +131,6 @@ pub const Vma = struct {
             .resize = texInf.resize,
             .viewType = vk.VK_IMAGE_VIEW_TYPE_2D,
             .format = vhF.getImageFormat(texInf.typ),
-            .subRange = vhF.createSubresourceRange(vhF.getImageAspectFlags(texInf.typ), 0, 1, 0, 1),
         };
     }
 
@@ -143,7 +142,7 @@ pub const Vma = struct {
         const subRange = vhF.createSubresourceRange(aspectFlags, 0, 1, 0, 1);
         const extent = vk.VkExtent3D{ .width = texInf.width, .height = texInf.height, .depth = texInf.depth };
 
-        return try self.allocTexture(memUsage, texUse, format, extent, subRange, vk.VK_IMAGE_VIEW_TYPE_2D);
+        return try self.allocTexture(memUsage, texUse, format, extent, subRange, vk.VK_IMAGE_VIEW_TYPE_2D, texInf.typ);
     }
 
     fn allocTexture(
@@ -154,6 +153,7 @@ pub const Vma = struct {
         extent: vk.VkExtent3D,
         subRange: vk.VkImageSubresourceRange,
         viewType: vk.VkImageViewType,
+        texType: vhE.TextureType,
     ) !Texture {
         var img: vk.VkImage = undefined;
         var allocation: vk.VmaAllocation = undefined;
@@ -166,6 +166,7 @@ pub const Vma = struct {
         try vhF.check(vk.vkCreateImageView(self.gpi, &viewInf, null, &view), "Could not create Render Image View");
 
         return .{
+            .texType = texType,
             .allocation = allocation,
             .img = img,
             .view = view,

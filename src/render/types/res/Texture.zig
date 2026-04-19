@@ -1,13 +1,15 @@
 const vk = @import("../../../.modules/vk.zig").c;
 const vhE = @import("../../help/Enums.zig");
+const vhF = @import("../../help/Functions.zig");
 
 pub const Texture = struct {
-    img: vk.VkImage, 
-    view: vk.VkImageView, 
-    allocation: vk.VmaAllocation, 
-    state: TextureState = .{}, 
-    extent: vk.VkExtent3D, 
-    descIndex: ?u31 = null, 
+    texType: vhE.TextureType,
+    img: vk.VkImage,
+    view: vk.VkImageView,
+    allocation: vk.VmaAllocation,
+    state: TextureState = .{},
+    extent: vk.VkExtent3D,
+    descIndex: ?u31 = null,
 
     pub const TextureState = struct {
         stage: vhE.PipeStage = .TopOfPipe,
@@ -17,7 +19,7 @@ pub const Texture = struct {
 
     pub fn createAttachment(self: *const Texture, texType: vhE.TextureType, clear: bool) vk.VkRenderingAttachmentInfo {
         const clearValue: vk.VkClearValue = switch (texType) {
-            .Color => .{ .color = .{ .float32 = .{ 0.0, 0.0, 0.1, 1.0 } } },
+            .Color, .Swapchain => .{ .color = .{ .float32 = .{ 0.0, 0.0, 0.1, 1.0 } } },
             .Depth, .Stencil => .{ .depthStencil = .{ .depth = 1.0, .stencil = 0 } },
         };
 
@@ -31,7 +33,9 @@ pub const Texture = struct {
         };
     }
 
-    pub fn createImageBarrier(self: *Texture, newState: TextureState, subRange: vk.VkImageSubresourceRange) vk.VkImageMemoryBarrier2 {
+    pub fn createImageBarrier(self: *Texture, newState: TextureState) vk.VkImageMemoryBarrier2 {
+        const subRange = vhF.createSubresourceRange(vhF.getImageAspectFlags(self.texType), 0, 1, 0, 1);
+
         const barrier = vk.VkImageMemoryBarrier2{
             .sType = vk.VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
             .srcStageMask = @intFromEnum(self.state.stage),

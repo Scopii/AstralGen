@@ -10,7 +10,6 @@ pub const TextureMeta = struct {
     updateSlot: u8 = rc.MAX_IN_FLIGHT - 1,
     viewType: vk.VkImageViewType,
     format: vk.VkFormat,
-    subRange: vk.VkImageSubresourceRange,
 
     pub const TexId = packed struct { val: u32 };
 

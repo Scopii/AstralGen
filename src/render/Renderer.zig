@@ -144,7 +144,7 @@ pub const Renderer = struct {
             &self.shaderMan,
             &self.imguiMan,
             data,
-            self.context.meshTaskSupp
+            self.context.meshTaskSupp,
         );
 
         try self.scheduler.queueSubmit(cmd, &self.swapMan, self.context.graphicsQ);

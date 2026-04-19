@@ -16,7 +16,6 @@ pub const Swapchain = struct {
     acquireSems: []vk.VkSemaphore, // indexed by max-in-flight.
     renderSems: []vk.VkSemaphore, // indexed by swapchain images
     textures: []Texture, // indexed by swapchain images
-    subRange: vk.VkImageSubresourceRange,
     extent: vk.VkExtent2D,
     inUse: bool = true,
     windowId: u32,
@@ -86,6 +85,7 @@ pub const Swapchain = struct {
             try vhF.check(vk.vkCreateImageView(gpi, &viewInf, null, &view), "Failed to create image view");
 
             baseTextures[i] = Texture{
+                .texType = .Swapchain,
                 .img = images[i],
                 .view = view,
                 .allocation = undefined, // MANAGED BY OS!
@@ -110,7 +110,6 @@ pub const Swapchain = struct {
             .acquireSems = imgRdySems,
             .renderSems = renderDoneSems,
             .renderTexId = renderTexId,
-            .subRange = subRange,
             .windowId = windowId,
             .linkedTexIds = linkedTexIds,
         };

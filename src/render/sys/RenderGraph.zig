@@ -128,10 +128,10 @@ pub const RenderGraph = struct {
         }
     }
 
-    fn checkImageState(self: *RenderGraph, tex: *Texture, subRange: vk.VkImageSubresourceRange, neededState: Texture.TextureState) !void {
+    fn checkImageState(self: *RenderGraph, tex: *Texture, neededState: Texture.TextureState) !void {
         const state = tex.state;
         if (state.stage == neededState.stage and state.access == neededState.access and state.layout == neededState.layout) return;
-        try self.imgBarriers.append(tex.createImageBarrier(neededState, subRange));
+        try self.imgBarriers.append(tex.createImageBarrier(neededState));
     }
 
     fn checkBufferState(self: *RenderGraph, buffer: *Buffer, neededState: Buffer.BufferState) !void {
@@ -162,24 +162,20 @@ pub const RenderGraph = struct {
             try self.checkBufferState(buffer, bufUse.getNeededState());
         }
         for (texUses) |texUse| {
-            const texMeta = try resMan.getMeta(texUse.texId);
             const tex = try resMan.get(texUse.texId, cmd.flightId);
-            try self.checkImageState(tex, texMeta.subRange, texUse.getNeededState());
+            try self.checkImageState(tex, texUse.getNeededState());
         }
         for (colorAtts) |attachment| {
-            const texMeta = try resMan.getMeta(attachment.texId);
             const tex = try resMan.get(attachment.texId, cmd.flightId);
-            try self.checkImageState(tex, texMeta.subRange, attachment.getNeededState());
+            try self.checkImageState(tex,  attachment.getNeededState());
         }
         if (depthAtt) |attachment| {
-            const texMeta = try resMan.getMeta(attachment.texId);
             const tex = try resMan.get(attachment.texId, cmd.flightId);
-            try self.checkImageState(tex, texMeta.subRange, attachment.getNeededState());
+            try self.checkImageState(tex,  attachment.getNeededState());
         }
         if (stencilAtt) |attachment| {
-            const texMeta = try resMan.getMeta(attachment.texId);
             const tex = try resMan.get(attachment.texId, cmd.flightId);
-            try self.checkImageState(tex, texMeta.subRange, attachment.getNeededState());
+            try self.checkImageState(tex, attachment.getNeededState());
         }
         self.bakeBarriers(cmd, name);
     }
@@ -262,14 +258,13 @@ pub const RenderGraph = struct {
     fn recordBlit(self: *RenderGraph, cmd: *Cmd, blit: ViewportBlit, resMan: *ResourceMan, swapMan: *SwapchainMan) !void {
         const timeId = cmd.startTimer(.TopOfPipe, blit.name, .Blit);
 
-        const renderTexMeta = try resMan.getMeta(blit.srcTexId);
         const renderTex = try resMan.get(blit.srcTexId, cmd.flightId);
 
         const targetIndex = swapMan.getTargetIndex(blit.dstWindowId) orelse return;
         const swapchain = swapMan.getTargetByIndex(targetIndex);
 
-        try self.checkImageState(renderTex, renderTexMeta.subRange, .{ .stage = .Transfer, .access = .TransferRead, .layout = .TransferSrc });
-        try self.checkImageState(&swapchain.textures[swapchain.curIndex], swapchain.subRange, .{ .stage = .Transfer, .access = .TransferWrite, .layout = .TransferDst });
+        try self.checkImageState(renderTex, .{ .stage = .Transfer, .access = .TransferRead, .layout = .TransferSrc });
+        try self.checkImageState(&swapchain.textures[swapchain.curIndex], .{ .stage = .Transfer, .access = .TransferWrite, .layout = .TransferDst });
         self.bakeBarriers(cmd, blit.name);
 
         const viewArea = vk.VkExtent3D{ .width = blit.viewWidth, .height = blit.viewHeight, .depth = 1 };
@@ -329,7 +324,7 @@ pub const RenderGraph = struct {
             for (targetIndices) |index| {
                 const swapchain = swapMan.getTargetByIndex(index);
                 const target = swapchain.getCurTexture();
-                try self.checkImageState(target, swapchain.subRange, .{ .stage = .ColorAtt, .access = .ColorAttWrite, .layout = .Attachment });
+                try self.checkImageState(target, .{ .stage = .ColorAtt, .access = .ColorAttWrite, .layout = .Attachment });
             }
             self.bakeBarriers(cmd, "ImGui Prep");
 
@@ -353,7 +348,7 @@ pub const RenderGraph = struct {
         for (targetIndices) |index| {
             const swapchain = swapMan.getTargetByIndex(index);
             const target = swapchain.getCurTexture();
-            try self.checkImageState(target, swapchain.subRange, .{ .stage = .BotOfPipe, .access = .None, .layout = .PresentSrc });
+            try self.checkImageState(target, .{ .stage = .BotOfPipe, .access = .None, .layout = .PresentSrc });
         }
         self.bakeBarriers(cmd, "Present Transition");
         cmd.endTimer(.BotOfPipe, timeId);
