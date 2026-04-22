@@ -135,6 +135,7 @@ pub const FrameBuildSys = struct {
                     .outputTex = rc.mainTex.id,
                     .camBuf = rc.mainCamUB.id,
                     .readbackBuf = rc.readbackSB.id,
+                    .debugTex = rc.debugTex.id,
                 });
                 try frameBuild.passList.append(.{ .passNode = .{ .pass = pass, .width = passWidth, .height = passHeight } });
             },

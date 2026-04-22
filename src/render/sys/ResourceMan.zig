@@ -187,7 +187,7 @@ pub const ResourceMan = struct {
         if (data != null) {
             switch (ResType) {
                 Buffer => try self.updateBufferResource(inf.id, curFrame, flightId, data),
-                Texture => return error.TriedAddingTextureWithData,
+                Texture => try self.updateTextureResource(inf.id, curFrame, flightId, data),
                 else => unreachable,
             }
         }
@@ -209,20 +209,72 @@ pub const ResourceMan = struct {
         if (rc.RESOURCE_DEBUG == true) std.debug.print("{s} Removed! (ID {}) (Frame {})\n", .{ rH.typeName(ResType), id.val, curFrame });
     }
 
+    pub fn updateTextureResource(self: *ResourceMan, texId: TexId, curFrame: u64, flightId: u8, data: anytype) !void {
+        const texMeta = try self.getMeta(texId);
+        const bytes = try rH.convertToByteSlice(data);
+
+        switch (texMeta.update) {
+            .Rarely => {},
+            .PerFrame, .Often => {
+                if (texMeta.update == .Often and texMeta.lastUpdateFrame != curFrame) {
+                    texMeta.lastUpdateFrame = curFrame;
+                    texMeta.updateSlot = (texMeta.updateSlot + 1) % texMeta.update.getCount();
+                }
+            },
+        }
+
+        if (self.registry.check(texId, texMeta.update, flightId, texMeta.updateSlot)) |oldTex| { // Validated because resize not included
+            try self.updater.stageTextureUpdate(texId, bytes, oldTex.extent.width, oldTex.extent.height, flightId);
+            return;
+        }
+
+        for (0..QUEUE_COUNT) |i| {
+            if (self.queues[i].checkCreation(texId)) |texInf| {
+                try self.updater.stageTextureUpdate(texId, bytes, texInf.width, texInf.height, flightId);
+                break; 
+            }
+        }
+    }
+
+    pub fn updateDynamicTexture(self: *ResourceMan, texId: TexId, texMeta: *TextureMeta, bytes: []const u8, curFrame: u64, flightId: u8) !void {
+        if (texMeta.update == .Often and texMeta.lastUpdateFrame != curFrame) {
+            texMeta.lastUpdateFrame = curFrame;
+            texMeta.updateSlot = (texMeta.updateSlot + 1) % texMeta.update.getCount();
+        }
+
+        if (self.registry.check(texId, texMeta.update, flightId, texMeta.updateSlot)) |oldTex| {
+            try self.updater.stageTextureUpdate(texId, bytes, oldTex.extent.width, oldTex.extent.height, flightId);
+            return;
+        }
+
+        for (0..QUEUE_COUNT) |i| {
+            if (self.queues[i].checkCreation(texId)) |texInf| {
+                try self.updater.stageTextureUpdate(texId, bytes, texInf.width, texInf.height, flightId);
+                break;
+            }
+        }
+    }
+
     pub fn updateBufferResource(self: *ResourceMan, bufId: BufId, curFrame: u64, flightId: u8, data: anytype) !void {
         const bufMeta = try self.getMeta(bufId);
         const bytes = try rH.convertToByteSlice(data);
         const newCount: u32 = @intCast(bytes.len / bufMeta.elementSize);
 
+        try self.resizeBufferResource(bufId, bufMeta, bytes, newCount, curFrame, flightId);
+
         switch (bufMeta.update) {
-            .Rarely => try self.updateStaticBuffer(bufId, bufMeta, bytes, newCount, curFrame, flightId),
-            .PerFrame, .Often => try self.updateDynamicBuffer(bufId, bufMeta, bytes, newCount, curFrame, flightId),
+            .Rarely => {},
+            .PerFrame, .Often => {
+                if (bufMeta.update == .Often and bufMeta.lastUpdateFrame != curFrame) {
+                    bufMeta.lastUpdateFrame = curFrame;
+                    bufMeta.updateSlot = (bufMeta.updateSlot + 1) % bufMeta.update.getCount();
+                }
+            },
         }
+        try self.updater.stageBufferUpdate(bufId, bytes, flightId);
     }
 
-    fn updateDynamicBuffer(self: *ResourceMan, bufId: BufId, meta: *BufferMeta, bytes: []const u8, newCount: u32, curFrame: u64, flightId: u8) !void {
-        if (meta.update == .Often) meta.updateSlot = (meta.updateSlot + 1) % meta.update.getCount();
-
+    fn resizeBufferResource(self: *ResourceMan, bufId: BufId, meta: *BufferMeta, bytes: []const u8, newCount: u32, curFrame: u64, flightId: u8) !void {
         if (self.registry.check(bufId, meta.update, flightId, meta.updateSlot)) |buf| {
             const needsRealloc = try rH.checkResize(meta.resize, bytes.len, buf.size);
 
@@ -244,35 +296,6 @@ pub const ResourceMan = struct {
                 if (try rH.checkResize(meta.resize, newByteSize, ticketByteSize)) bufInf.len = newCount;
             }
         }
-        try self.updater.stageBufferUpdate(bufId, bytes, meta.updateSlot, flightId);
-    }
-
-    fn updateStaticBuffer(self: *ResourceMan, bufId: BufId, meta: *BufferMeta, bytes: []const u8, newCount: u32, curFrame: u64, flightId: u8) !void {
-        if (self.registry.check(bufId, .Rarely, 0, 0)) |oldBuf| { // 0,0 — flightId irrelevant for .Rarely
-            const needsRealloc = try rH.checkResize(meta.resize, bytes.len, oldBuf.size);
-
-            if (!needsRealloc) {
-                // All three resize modes agree: fits in place
-                if (oldBuf.curCount != newCount) {
-                    try self.descMan.queueBufferDescriptor(oldBuf.gpuAddress, bytes.len, meta.typ, oldBuf);
-                    oldBuf.curCount = newCount;
-                }
-                try self.updater.stageBufferUpdate(bufId, bytes, 0, flightId);
-                return;
-            }
-        }
-        // Realloc path — buffer missing OR too small/wrong size
-        if (self.registry.remove(bufId, .Rarely, 0)) |oldBuf| {
-            try self.queues[(curFrame + rc.MAX_IN_FLIGHT) % QUEUE_COUNT].addDeletion(oldBuf);
-        }
-        for (0..QUEUE_COUNT) |i| self.queues[i].invalidateCreation(bufId);
-
-        const newInf = BufInf{ .id = bufId, .mem = meta.mem, .elementSize = meta.elementSize, .len = newCount, .typ = meta.typ, .update = meta.update, .resize = meta.resize };
-        var newBuf = try self.vma.allocDefinedBuffer(&newInf);
-        newBuf.curCount = newCount;
-        const newBufPtr = self.registry.add(bufId, newBuf, .Rarely, 0); // 0 — .Rarely always slot 0
-        try self.descMan.queueBufferDescriptor(newBuf.gpuAddress, bytes.len, meta.typ, newBufPtr);
-        try self.updater.stageBufferUpdate(bufId, bytes, 0, flightId);
     }
 
     pub fn updateBufferResourceSegment(self: *ResourceMan, bufId: BufId, flightId: u8, data: anytype, element: u32) !void {
@@ -298,14 +321,14 @@ pub const ResourceMan = struct {
         const bufSize = self.getBufferSize(bufId, .Rarely, 0, 0);
         if (bufSize == 0) return;
         if (offset + bytes.len > bufSize) return error.SegmentWriteOutOfBounds;
-        try self.updater.stageBufferSegmentUpdate(bufId, bytes, 0, flightId, offset);
+        try self.updater.stageBufferSegmentUpdate(bufId, bytes, flightId, offset);
     }
 
     fn updateDynamicBufferSegment(self: *ResourceMan, bufId: BufId, meta: *BufferMeta, bytes: []const u8, flightId: u8, offset: u64) !void {
         const bufSize = self.getBufferSize(bufId, meta.update, flightId, meta.updateSlot);
         if (bufSize == 0) return;
         if (offset + bytes.len > bufSize) return error.SegmentWriteOutOfBounds;
-        try self.updater.stageBufferSegmentUpdate(bufId, bytes, meta.updateSlot, flightId, offset);
+        try self.updater.stageBufferSegmentUpdate(bufId, bytes, flightId, offset);
     }
 
     pub fn resizeTextureResource(self: *ResourceMan, texId: TexId, newWidth: u32, newHeight: u32, curFrame: u64, flightId: u8) !void {
@@ -341,8 +364,6 @@ pub const ResourceMan = struct {
             }
         }
     }
-
-    // pub fn updateTextureResource(_: *ResourceMan2, _: TexId) void {} // Not needed yet
 
     fn getBufferDataPtr(self: *ResourceMan, bufId: BufferMeta.BufId, comptime T: type, flightId: u8) !*T {
         const buf = try self.get(bufId, flightId);

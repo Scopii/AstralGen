@@ -222,7 +222,27 @@ pub const App = struct {
             const AddTex = std.meta.Child(AddTexPtr);
 
             const addTextureDataPtr = try arena.create(AddTex);
-            addTextureDataPtr.* = .{ .texInf = texInf, .data = null };
+
+            var dataSlice: ?[]const u8 = null;
+
+            // --- PROCEDURAL TEXTURE GENERATION ---
+            if (texInf.id.val == rc.debugTex.id.val) {
+                // 256x256 pixels, 4 channels (RGBA) of 16-bit floats
+                const pixels = try arena.alloc([4]f16, 256 * 256);
+                for (0..256) |y| {
+                    for (0..256) |x| {
+                        const isWhite = ((x / 32) + (y / 32)) % 2 == 0;
+                        const val: f16 = if (isWhite) 1.0 else 0.2; // 1.0 (white) or 0.2 (dark)
+
+                        // RGBA -> Blue checkerboard
+                        pixels[y * 256 + x] = .{ val, val, 1.0, 1.0 };
+                    }
+                }
+                dataSlice = std.mem.sliceAsBytes(pixels);
+            }
+            // -------------------------------------
+
+            addTextureDataPtr.* = .{ .texInf = texInf, .data = dataSlice };
             self.rendererQueue.append(.{ .addTexture = addTextureDataPtr });
         }
     }
@@ -279,7 +299,6 @@ pub const App = struct {
 
                 try CameraSys.update(&self.data.entityData, dt, &self.data, &self.rendererQueue, self.memoryMan);
 
-                
                 try RenderPrepSys.extractEntities(&self.data.entityData, &self.rendererQueue, self.memoryMan);
 
                 if (rc.CPU_PROFILING) std.debug.print("Cpu pre-Renderer Delta {d:.3} ms, ({d:.1} Real FPS)\n", .{ dt * 0.000001, 1.0 / (dt * 0.000000001) });

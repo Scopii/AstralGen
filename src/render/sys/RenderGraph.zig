@@ -15,9 +15,12 @@ const ResourceMan = @import("ResourceMan.zig").ResourceMan;
 const Buffer = @import("../types/res/Buffer.zig").Buffer;
 const ShaderManager = @import("ShaderMan.zig").ShaderMan;
 const rc = @import("../../.configs/renderConfig.zig");
+const sc = @import("../../.configs/shaderConfig.zig");
 const FrameData = @import("../../App.zig").FrameData;
 
+const ShaderId = @import("../../shader/ShaderSys.zig").ShaderId;
 const ImGuiMan = @import("ImGuiMan.zig").ImGuiMan;
+
 const Cmd = @import("../types/base/Cmd.zig").Cmd;
 const CmdManager = @import("CmdMan.zig").CmdMan;
 const Context = @import("Context.zig").Context;
@@ -102,13 +105,16 @@ pub const RenderGraph = struct {
             const timeId = cmd.startTimer(.TopOfPipe, "Full Transfers", .Other);
 
             for (fullTransfers) |transfer| {
-                const buffer = try resMan.get(transfer.dstResId, transfer.dstSlot);
+                const buffer = try resMan.get(transfer.dstResId, cmd.flightId);
                 try self.checkBufferState(buffer, .{ .stage = .Transfer, .access = .TransferWrite });
+            }
+
+            self.bakeBarriers(cmd, "Full Transfers Prep");
+
+            for (fullTransfers) |transfer| {
+                const buffer = try resMan.get(transfer.dstResId, cmd.flightId);
                 cmd.copyBuffer(stagingBuf, transfer, buffer.handle);
             }
-            resUpdater.resetFullUpdates(cmd.flightId);
-            self.bakeBarriers(cmd, "Full Transfers");
-
             cmd.endTimer(.BotOfPipe, timeId);
         }
 
@@ -118,14 +124,38 @@ pub const RenderGraph = struct {
             const timeId = cmd.startTimer(.TopOfPipe, "Partial Transfers", .Other);
 
             for (partialTransfers) |transfer| {
-                const buffer = try resMan.get(transfer.dstResId, transfer.dstSlot);
+                const buffer = try resMan.get(transfer.dstResId, cmd.flightId);
                 try self.checkBufferState(buffer, .{ .stage = .Transfer, .access = .TransferWrite });
+            }
+
+            self.bakeBarriers(cmd, "Segment Transfers Prep");
+
+            for (partialTransfers) |transfer| {
+                const buffer = try resMan.get(transfer.dstResId, cmd.flightId);
                 cmd.copyBuffer(stagingBuf, transfer, buffer.handle);
             }
-            resUpdater.resetSegmentUpdates(cmd.flightId);
-            self.bakeBarriers(cmd, "Segment Transfers");
             cmd.endTimer(.BotOfPipe, timeId);
         }
+
+        // textures
+        const texTransfers = resUpdater.getTexUpdates(cmd.flightId);
+        if (texTransfers.len != 0) {
+            const timeId = cmd.startTimer(.TopOfPipe, "Texture Transfers", .Other);
+
+            for (texTransfers) |transfer| {
+                const tex = try resMan.get(transfer.dstTexId, cmd.flightId);
+                try self.checkImageState(tex, .{ .stage = .Transfer, .access = .TransferWrite, .layout = .TransferDst });
+            }
+            self.bakeBarriers(cmd, "Tex Transfer Prep");
+
+            for (texTransfers) |transfer| {
+                const tex = try resMan.get(transfer.dstTexId, cmd.flightId);
+                cmd.copyBufferToImage(stagingBuf, tex.img, vk.VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, transfer.width, transfer.height, transfer.srcOffset);
+            }
+            cmd.endTimer(.BotOfPipe, timeId);
+        }
+
+        resUpdater.resetUpdates(cmd.flightId);
     }
 
     fn checkImageState(self: *RenderGraph, tex: *Texture, neededState: Texture.TextureState) !void {
@@ -167,11 +197,11 @@ pub const RenderGraph = struct {
         }
         for (colorAtts) |attachment| {
             const tex = try resMan.get(attachment.texId, cmd.flightId);
-            try self.checkImageState(tex,  attachment.getNeededState());
+            try self.checkImageState(tex, attachment.getNeededState());
         }
         if (depthAtt) |attachment| {
             const tex = try resMan.get(attachment.texId, cmd.flightId);
-            try self.checkImageState(tex,  attachment.getNeededState());
+            try self.checkImageState(tex, attachment.getNeededState());
         }
         if (stencilAtt) |attachment| {
             const tex = try resMan.get(attachment.texId, cmd.flightId);

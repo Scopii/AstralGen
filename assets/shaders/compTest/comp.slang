@@ -77,6 +77,8 @@ void main(uint3 id: SV_DispatchThreadID) {
     StructuredBuffer<Object> objectBuffer = heapObjectBuffers[pc.resources[0]];
     ConstantBuffer<CameraData> cam = heapCameraBuffers[pc.resources[1]];
 
+    Texture2D<float4> debugTex = heapSampledImages[pc.resources[4]];
+
     // Bounds check (because group size is 8x8)
     uint renderWidth = pc.width;
     uint renderHeight = pc.height;
@@ -121,11 +123,21 @@ void main(uint3 id: SV_DispatchThreadID) {
         float lighting = max(dot(normal, lightDir), 0.1);
 
         Object hitObj = objectBuffer[hitIndex];
-
-        // Unpack color
         float3 surfaceColor = hitObj.colorAndSdf.xyz;
 
+        // ----- READ THE TEXTURE -----
+        // Convert UV (-1 to 1) -> (0 to 1) -> (0 to 255 pixels)
+        float2 texCoord01 = uv * 0.5 + 0.5;
+        uint2 texCoord = uint2(texCoord01 * 256.0) % 256;
+
+        // Use .Load(int3(x, y, mip_level))
+        float4 dbgColor = debugTex.Load(int3(texCoord, 0));
+        // ----------------------------
+
         float4 finalColor = lerp(float4(surfaceColor * lighting, 1.0), float4(0.0, 0.0, 0.0, 1.0), march / MAX_DIST);
-        renderImg[id.xy] = finalColor;
-    } else renderImg[id.xy] = float4(0.1, 0.0, 0.15, 1.0);
+
+        renderImg[id.xy] = finalColor * dbgColor;
+    } else {
+        renderImg[id.xy] = float4(0.1, 0.0, 0.15, 1.0);
+    }
 }

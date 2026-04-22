@@ -1,6 +1,7 @@
 const rc = @import("../../../.configs/renderConfig.zig");
 const vk = @import("../../../.modules/vk.zig").c;
 const vhE = @import("../../help/Enums.zig");
+const std = @import("std");
 
 pub const TextureMeta = struct {
     texType: vhE.TextureType,
@@ -8,6 +9,7 @@ pub const TextureMeta = struct {
     resize: vhE.ResizeType,
     mem: vhE.MemUsage,
     updateSlot: u8 = rc.MAX_IN_FLIGHT - 1,
+    lastUpdateFrame: u64 = std.math.maxInt(u64),
     viewType: vk.VkImageViewType,
     format: vk.VkFormat,
 

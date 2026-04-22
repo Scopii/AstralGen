@@ -26,6 +26,7 @@ pub fn checkResize(resize: vhE.ResizeType, newSize: u64, oldSize: u64) !bool {
 pub fn convertToByteSlice(data: anytype) ![]const u8 {
     const DataType = @TypeOf(data);
     return switch (@typeInfo(DataType)) {
+        .optional => if (data) |d| convertToByteSlice(d) else error.ExpectedPointer,
         .pointer => |ptr| switch (ptr.size) {
             .one => std.mem.asBytes(data),
             .slice => std.mem.sliceAsBytes(data),

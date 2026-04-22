@@ -14,6 +14,7 @@ pub fn CompRayMarch(
         entityBuf: BufId,
         camBuf: BufId,
         readbackBuf: BufId,
+        debugTex: TexId,
     },
 ) PassDef {
     return PassDef.ComputeOnImg(.{
@@ -27,6 +28,7 @@ pub fn CompRayMarch(
         },
         .texUses = &.{
             TextureUse.init(def.outputTex, .Compute, .ShaderWrite, .General, 2),
+            TextureUse.init(def.debugTex, .Compute, .ShaderRead, .ReadOnly, 4), 
         },
     });
 }

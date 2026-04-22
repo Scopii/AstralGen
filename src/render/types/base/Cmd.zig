@@ -1,6 +1,6 @@
 const FixedList = @import("../../../.structures/FixedList.zig").FixedList;
 const SimpleMap = @import("../../../.structures/SimpleMap.zig").SimpleMap;
-const Transfer = @import("../../sys/ResourceUpdater.zig").Transfer;
+const BufTransfer = @import("../../sys/ResourceUpdater.zig").BufTransfer;
 const RenderState = @import("../pass/RenderState.zig").RenderState;
 const rc = @import("../../../.configs/renderConfig.zig");
 const vk = @import("../../../.modules/vk.zig").c;
@@ -227,6 +227,27 @@ pub const Cmd = struct {
             self.statQueries.clear();
             self.activeStatQuery = null;
         }
+    }
+
+    pub fn copyBufferToImage(self: *const Cmd, srcBuffer: vk.VkBuffer, dstImage: vk.VkImage, layout: vk.VkImageLayout, width: u32, height: u32, offset: u64) void {
+        const region = vk.VkBufferImageCopy2{
+            .sType = vk.VK_STRUCTURE_TYPE_BUFFER_IMAGE_COPY_2,
+            .bufferOffset = offset,
+            .bufferRowLength = 0,
+            .bufferImageHeight = 0,
+            .imageSubresource = .{ .aspectMask = vk.VK_IMAGE_ASPECT_COLOR_BIT, .mipLevel = 0, .baseArrayLayer = 0, .layerCount = 1 },
+            .imageOffset = .{ .x = 0, .y = 0, .z = 0 },
+            .imageExtent = .{ .width = width, .height = height, .depth = 1 },
+        };
+        const copyInf = vk.VkCopyBufferToImageInfo2{
+            .sType = vk.VK_STRUCTURE_TYPE_COPY_BUFFER_TO_IMAGE_INFO_2,
+            .srcBuffer = srcBuffer,
+            .dstImage = dstImage,
+            .dstImageLayout = layout,
+            .regionCount = 1,
+            .pRegions = &region,
+        };
+        vk.vkCmdCopyBufferToImage2(self.handle, &copyInf);
     }
 
     pub fn startStatistics(self: *Cmd, name: []const u8) void {
@@ -477,7 +498,7 @@ pub const Cmd = struct {
         vk.vkCmdFillBuffer(self.handle, buffer, offset, size, data);
     }
 
-    pub fn copyBuffer(self: *const Cmd, srcBuffer: vk.VkBuffer, transfer: Transfer, dstBuffer: vk.VkBuffer) void {
+    pub fn copyBuffer(self: *const Cmd, srcBuffer: vk.VkBuffer, transfer: BufTransfer, dstBuffer: vk.VkBuffer) void {
         const copy = vk.VkBufferCopy{ .srcOffset = transfer.srcOffset, .dstOffset = transfer.dstOffset, .size = transfer.size };
         vk.vkCmdCopyBuffer(self.handle, srcBuffer, dstBuffer, 1, &copy);
     }
