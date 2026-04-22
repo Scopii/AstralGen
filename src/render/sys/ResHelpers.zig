@@ -9,17 +9,26 @@ const Texture = @import("../types/res/Texture.zig").Texture;
 const Buffer = @import("../types/res/Buffer.zig").Buffer;
 const rc = @import("../../.configs/renderConfig.zig");
 const Context = @import("Context.zig").Context;
+const vk = @import("../../.modules/vk.zig").c;
 const vhT = @import("../help/Types.zig");
 const vhE = @import("../help/Enums.zig");
 const Allocator = std.mem.Allocator;
 const Vma = @import("Vma.zig").Vma;
 const std = @import("std");
 
-pub fn checkResize(resize: vhE.ResizeType, newSize: u64, oldSize: u64) !bool {
+pub fn checkBufferResize(resize: vhE.ResizeType, newSize: u64, oldSize: u64) !bool {
     return switch (resize) {
         .Block => if (newSize > oldSize) error.BufferBaseTooSmallForUpdate else false,
         .Grow => newSize > oldSize,
         .Fit => newSize != oldSize,
+    };
+}
+
+pub fn checkTextureResize(resize: vhE.ResizeType, old: vk.VkExtent3D, new: vk.VkExtent3D) !bool {
+    return switch (resize) {
+        .Block => if (old.width != new.width or old.height != new.height or old.depth != new.depth ) return error.TextureResizeNotAllowedOnBlock else false,
+        .Grow => old.width < new.width or old.height < new.height or old.depth < new.depth,
+        .Fit => old.width != new.width or old.height != new.height or old.depth != new.depth,
     };
 }
 

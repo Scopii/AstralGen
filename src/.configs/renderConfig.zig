@@ -71,8 +71,8 @@ pub const debugCamUB = BufferMeta.create(.{ .id = .{ .val = 5 }, .mem = .Gpu, .t
 pub const BUFFERS: []const BufferMeta.BufInf = &.{ entitySB, mainCamUB, debugCamUB, indirectSB, readbackSB };
 
 // Textures
-pub const mainTex = TextureMeta.create(.{ .id = .{ .val = 1 }, .mem = .Gpu, .typ = .Color, .width = 1920, .height = 1080, .update = .Rarely });
-pub const mainDepthTex = TextureMeta.create(.{ .id = .{ .val = 2 }, .mem = .Gpu, .typ = .Depth, .width = 1920, .height = 1080, .update = .Rarely });
+pub const mainTex = TextureMeta.create(.{ .id = .{ .val = 1 }, .mem = .Gpu, .typ = .Color, .width = 1920, .height = 1080, .update = .Rarely, .resize = .Fit });
+pub const mainDepthTex = TextureMeta.create(.{ .id = .{ .val = 2 }, .mem = .Gpu, .typ = .Depth, .width = 1920, .height = 1080, .update = .Rarely, .resize = .Fit });
 
 pub const debugTex = TextureMeta.create(.{ .id = .{ .val = 3 }, .mem = .Gpu, .typ = .Color, .width = 256, .height = 256, .update = .Often });
 

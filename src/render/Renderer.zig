@@ -119,7 +119,7 @@ pub const Renderer = struct {
 
     fn updateRenderTexture(self: *Renderer, texId: TextureMeta.TexId) !void {
         const newExtent = self.swapMan.getMaxExtent(texId);
-        try self.resMan.resizeTextureResource(texId, newExtent.width, newExtent.height, self.scheduler.totalFrames, self.scheduler.flightId);
+        try self.resMan.resizeTextureResource(texId, newExtent.width, newExtent.height, 1, self.scheduler.totalFrames, self.scheduler.flightId);
     }
 
     pub fn waitForGpu(self: *Renderer) !void {
@@ -177,6 +177,10 @@ pub const Renderer = struct {
 
     pub fn updateBuffer(self: *Renderer, bufId: BufferMeta.BufId, data: anytype) !void {
         try self.resMan.updateBufferResource(bufId, self.scheduler.totalFrames, self.scheduler.flightId, data);
+    }
+
+    pub fn updateTexture(self: *Renderer, texId: TextureMeta.TexId, data: anytype, newExtent: ?vk.VkExtent3D) void {
+        try self.resMan.updateTextureResource(texId, self.scheduler.totalFrames, self.scheduler.flightId, data, newExtent);
     }
 
     pub fn updateBufferSegment(self: *Renderer, bufId: BufferMeta.BufId, data: anytype, element: u32) !void {

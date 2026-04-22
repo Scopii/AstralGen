@@ -9,6 +9,7 @@ const KeyPool = @import("../../.structures/KeyPool.zig").KeyPool;
 const Texture = @import("../types/res/Texture.zig").Texture;
 const Buffer = @import("../types/res/Buffer.zig").Buffer;
 const rc = @import("../../.configs/renderConfig.zig");
+const vk = @import("../../.modules/vk.zig").c;
 const Context = @import("Context.zig").Context;
 const vhT = @import("../help/Types.zig");
 const vhE = @import("../help/Enums.zig");
@@ -96,14 +97,14 @@ pub const ResourceMan = struct {
         return deletions.len;
     }
 
-    fn createResources(self: *ResourceMan, queue: *ResourceQueue, comptime T: type, flightId: u8) !u64 {
-        const creations = queue.getCreations(T);
+    fn createResources(self: *ResourceMan, queue: *ResourceQueue, comptime ResType: type, flightId: u8) !u64 {
+        const creations = queue.getCreations(ResType);
 
         for (creations) |*inf| {
-            var resPtr: *T = undefined;
-            var res: T = undefined;
+            var resPtr: *ResType = undefined;
+            var res: ResType = undefined;
 
-            switch (T) {
+            switch (ResType) {
                 Buffer => {
                     res = try self.vma.allocDefinedBuffer(inf);
                     res.curCount = inf.len;
@@ -120,11 +121,11 @@ pub const ResourceMan = struct {
             }
 
             if (rc.RESOURCE_DEBUG == true) {
-                std.debug.print("{s} (ID {}) Created! ", .{ rH.typeName(T), inf.id.val });
+                std.debug.print("{s} (ID {}) Created! ", .{ rH.typeName(ResType), inf.id.val });
                 self.vma.printMemoryInfo(resPtr.allocation);
             }
         }
-        queue.clearCreations(T);
+        queue.clearCreations(ResType);
         return creations.len;
     }
 
@@ -187,7 +188,7 @@ pub const ResourceMan = struct {
         if (data != null) {
             switch (ResType) {
                 Buffer => try self.updateBufferResource(inf.id, curFrame, flightId, data),
-                Texture => try self.updateTextureResource(inf.id, curFrame, flightId, data),
+                Texture => try self.updateTextureResource(inf.id, curFrame, flightId, data, null),
                 else => unreachable,
             }
         }
@@ -209,9 +210,11 @@ pub const ResourceMan = struct {
         if (rc.RESOURCE_DEBUG == true) std.debug.print("{s} Removed! (ID {}) (Frame {})\n", .{ rH.typeName(ResType), id.val, curFrame });
     }
 
-    pub fn updateTextureResource(self: *ResourceMan, texId: TexId, curFrame: u64, flightId: u8, data: anytype) !void {
+    pub fn updateTextureResource(self: *ResourceMan, texId: TexId, curFrame: u64, flightId: u8, data: anytype, newExtent: ?vk.VkExtent3D) !void {
         const texMeta = try self.getMeta(texId);
         const bytes = try rH.convertToByteSlice(data);
+
+        if (newExtent) |extent| try self.resizeTextureResource(texId, extent.width, extent.height, extent.depth, curFrame, flightId);
 
         switch (texMeta.update) {
             .Rarely => {},
@@ -224,25 +227,6 @@ pub const ResourceMan = struct {
         }
 
         if (self.registry.check(texId, texMeta.update, flightId, texMeta.updateSlot)) |oldTex| { // Validated because resize not included
-            try self.updater.stageTextureUpdate(texId, bytes, oldTex.extent.width, oldTex.extent.height, flightId);
-            return;
-        }
-
-        for (0..QUEUE_COUNT) |i| {
-            if (self.queues[i].checkCreation(texId)) |texInf| {
-                try self.updater.stageTextureUpdate(texId, bytes, texInf.width, texInf.height, flightId);
-                break; 
-            }
-        }
-    }
-
-    pub fn updateDynamicTexture(self: *ResourceMan, texId: TexId, texMeta: *TextureMeta, bytes: []const u8, curFrame: u64, flightId: u8) !void {
-        if (texMeta.update == .Often and texMeta.lastUpdateFrame != curFrame) {
-            texMeta.lastUpdateFrame = curFrame;
-            texMeta.updateSlot = (texMeta.updateSlot + 1) % texMeta.update.getCount();
-        }
-
-        if (self.registry.check(texId, texMeta.update, flightId, texMeta.updateSlot)) |oldTex| {
             try self.updater.stageTextureUpdate(texId, bytes, oldTex.extent.width, oldTex.extent.height, flightId);
             return;
         }
@@ -276,7 +260,7 @@ pub const ResourceMan = struct {
 
     fn resizeBufferResource(self: *ResourceMan, bufId: BufId, meta: *BufferMeta, bytes: []const u8, newCount: u32, curFrame: u64, flightId: u8) !void {
         if (self.registry.check(bufId, meta.update, flightId, meta.updateSlot)) |buf| {
-            const needsRealloc = try rH.checkResize(meta.resize, bytes.len, buf.size);
+            const needsRealloc = try rH.checkBufferResize(meta.resize, bytes.len, buf.size);
 
             if (needsRealloc) {
                 const newInf = BufInf{ .id = bufId, .mem = meta.mem, .elementSize = meta.elementSize, .len = newCount, .typ = meta.typ, .update = meta.update, .resize = meta.resize };
@@ -293,7 +277,7 @@ pub const ResourceMan = struct {
             if (self.queues[i].checkCreation(bufId)) |bufInf| {
                 const newByteSize = newCount * meta.elementSize;
                 const ticketByteSize = bufInf.len * meta.elementSize;
-                if (try rH.checkResize(meta.resize, newByteSize, ticketByteSize)) bufInf.len = newCount;
+                if (try rH.checkBufferResize(meta.resize, newByteSize, ticketByteSize)) bufInf.len = newCount;
             }
         }
     }
@@ -303,10 +287,9 @@ pub const ResourceMan = struct {
         const bytes = try rH.convertToByteSlice(data);
         const elementOffset: u64 = @as(u64, bufMeta.elementSize) * element;
 
-        switch (bufMeta.update) {
-            .Rarely => try self.updateStaticBufferSegment(bufId, bytes, flightId, elementOffset),
-            .PerFrame, .Often => try self.updateDynamicBufferSegment(bufId, bufMeta, bytes, flightId, elementOffset),
-        }
+        const bufSize = self.getBufferSize(bufId, bufMeta.update, flightId, bufMeta.updateSlot);
+        if (elementOffset + bytes.len > bufSize) return error.SegmentWriteOutOfBounds;
+        try self.updater.stageBufferSegmentUpdate(bufId, bytes, flightId, elementOffset);
     }
 
     fn getBufferSize(self: *ResourceMan, bufId: BufId, updateTyp: vhE.UpdateType, flightId: u8, updateSlot: u8) u64 {
@@ -317,42 +300,30 @@ pub const ResourceMan = struct {
         return 0;
     }
 
-    fn updateStaticBufferSegment(self: *ResourceMan, bufId: BufId, bytes: []const u8, flightId: u8, offset: u64) !void {
-        const bufSize = self.getBufferSize(bufId, .Rarely, 0, 0);
-        if (bufSize == 0) return;
-        if (offset + bytes.len > bufSize) return error.SegmentWriteOutOfBounds;
-        try self.updater.stageBufferSegmentUpdate(bufId, bytes, flightId, offset);
-    }
-
-    fn updateDynamicBufferSegment(self: *ResourceMan, bufId: BufId, meta: *BufferMeta, bytes: []const u8, flightId: u8, offset: u64) !void {
-        const bufSize = self.getBufferSize(bufId, meta.update, flightId, meta.updateSlot);
-        if (bufSize == 0) return;
-        if (offset + bytes.len > bufSize) return error.SegmentWriteOutOfBounds;
-        try self.updater.stageBufferSegmentUpdate(bufId, bytes, flightId, offset);
-    }
-
-    pub fn resizeTextureResource(self: *ResourceMan, texId: TexId, newWidth: u32, newHeight: u32, curFrame: u64, flightId: u8) !void {
+    pub fn resizeTextureResource(self: *ResourceMan, texId: TexId, newWidth: u32, newHeight: u32, newDepth: u32, curFrame: u64, flightId: u8) !void {
         const meta = try self.getMeta(texId);
         var oldWidth: u32 = 0;
         var oldHeight: u32 = 0;
+        var oldDepth: u32 = 0;
         var needsRemove = false;
 
         for (0..meta.update.getCount()) |i| { // Check all alive sub-resources
             if (self.registry.check(texId, meta.update, @intCast(i), meta.updateSlot)) |tex| {
-                if (tex.extent.width != newWidth or tex.extent.height != newHeight) {
+                if (try rH.checkTextureResize(meta.resize, tex.extent, .{ .width = newWidth, .height = newHeight, .depth = newDepth })) {
                     needsRemove = true;
                     oldWidth = tex.extent.width;
                     oldHeight = tex.extent.height;
+                    oldDepth = tex.extent.depth;
                     break;
                 }
             }
         }
 
         if (needsRemove) {
-            const newInf = TexInf{ .id = texId, .mem = meta.mem, .typ = meta.texType, .width = newWidth, .height = newHeight, .depth = 1, .update = meta.update, .resize = meta.resize };
+            const newInf = TexInf{ .id = texId, .mem = meta.mem, .typ = meta.texType, .width = newWidth, .height = newHeight, .depth = newDepth, .update = meta.update, .resize = meta.resize };
             try self.removeResource(texId, curFrame); // kills alive + aborts tickets
             try self.addResource(newInf, curFrame, flightId, null); // re-queues all
-            std.debug.print("Texture (ID {}) resized ({}x{} to {}x{})\n", .{ texId.val, oldWidth, oldHeight, newWidth, newHeight });
+            std.debug.print("Texture (ID {}) resized ({}x{} to {}x{})\n", .{ texId.val, oldWidth, oldHeight, newWidth, newHeight }); // Depth missing
             return;
         }
 
@@ -360,7 +331,8 @@ pub const ResourceMan = struct {
             if (self.queues[i].checkCreation(texId)) |texInf| {
                 texInf.width = newWidth;
                 texInf.height = newHeight;
-                std.debug.print("Texture (ID {}) Queue {} resized before creation to {}x{}\n", .{ texId.val, i, newWidth, newHeight });
+                texInf.depth = newDepth;
+                std.debug.print("Texture (ID {}) Queue {} resized before creation to {}x{}\n", .{ texId.val, i, newWidth, newHeight }); // Depth missing
             }
         }
     }
