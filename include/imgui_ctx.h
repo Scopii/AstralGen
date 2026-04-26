@@ -12,7 +12,6 @@ extern "C"
     void igui_set_current_context(ImGuiContext *ctx);
     ImGuiContext *igui_get_current_context(void);
     ImFontAtlas *igui_get_font_atlas(void);
-    void igui_copy_backend_to_context(ImGuiContext* dst);
 
 #ifdef __cplusplus
 }

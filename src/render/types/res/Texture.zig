@@ -19,7 +19,7 @@ pub const Texture = struct {
 
     pub fn createAttachment(self: *const Texture, texType: vhE.TextureType, clear: bool) vk.VkRenderingAttachmentInfo {
         const clearValue: vk.VkClearValue = switch (texType) {
-            .Color, .Swapchain => .{ .color = .{ .float32 = .{ 0.0, 0.0, 0.1, 1.0 } } },
+            .Color, .Swapchain, .SampledColor => .{ .color = .{ .float32 = .{ 0.0, 0.0, 0.1, 1.0 } } },
             .Depth, .Stencil => .{ .depthStencil = .{ .depth = 1.0, .stencil = 0 } },
         };
 

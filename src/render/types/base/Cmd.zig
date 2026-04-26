@@ -2,6 +2,7 @@ const FixedList = @import("../../../.structures/FixedList.zig").FixedList;
 const SimpleMap = @import("../../../.structures/SimpleMap.zig").SimpleMap;
 const BufTransfer = @import("../../sys/ResourceUpdater.zig").BufTransfer;
 const RenderState = @import("../pass/RenderState.zig").RenderState;
+const PassDef = @import("../../types/pass/PassDef.zig").PassDef;
 const rc = @import("../../../.configs/renderConfig.zig");
 const vk = @import("../../../.modules/vk.zig").c;
 const vkFn = @import("../../../.modules/vk.zig").vkFn;
@@ -357,10 +358,6 @@ pub const Cmd = struct {
         vkFn.vkCmdPushDataEXT.?(self.handle, &pushDataInf);
     }
 
-    pub fn setEmptyVertexInput(self: *const Cmd) void {
-        vkFn.vkCmdSetVertexInputEXT.?(self.handle, 0, null, 0, null);
-    }
-
     pub fn draw(self: *const Cmd, vertexCount: u32, instanceCount: u32, firstVertex: u32, firstInstance: u32) void {
         vk.vkCmdDraw(self.handle, vertexCount, instanceCount, firstVertex, firstInstance);
     }
@@ -414,7 +411,35 @@ pub const Cmd = struct {
         vk.vkCmdBlitImage2(self.handle, &blitInf);
     }
 
-    pub fn setViewportAndScissor(self: *const Cmd, x: f32, y: f32, width: f32, height: f32) void {
+    pub fn setVertexInput(self: *const Cmd, bindings: ?[]const vk.VkVertexInputBindingDescription2EXT, attributes: ?[]const vk.VkVertexInputAttributeDescription2EXT) void {
+        const bindingCount = if (bindings) |binds| binds.len else 0;
+        const bindingPtr = if (bindings) |binds| binds.ptr else null;
+        const attributeCount = if (attributes) |atts| atts.len else 0;
+        const attributePtr = if (attributes) |atts| atts.ptr else null;
+        vkFn.vkCmdSetVertexInputEXT.?(self.handle, @intCast(bindingCount), bindingPtr, @intCast(attributeCount), attributePtr);
+    }
+
+    pub fn bindVertexBuffers(self: *const Cmd, firstBinding: u32, buffers: []const vk.VkBuffer, offsets: []const vk.VkDeviceSize) void {
+        vk.vkCmdBindVertexBuffers(self.handle, firstBinding, @intCast(buffers.len), buffers.ptr, offsets.ptr);
+    }
+
+    pub fn bindIndexBuffer(self: *const Cmd, buffer: vk.VkBuffer, offset: u64, indexType: vk.VkIndexType) void {
+        vk.vkCmdBindIndexBuffer(self.handle, buffer, offset, indexType);
+    }
+
+    pub fn drawIndexed(self: *const Cmd, indexCount: u32, instanceCount: u32, firstIndex: u32, vertexOffset: i32, firstInstance: u32) void {
+        vk.vkCmdDrawIndexed(self.handle, indexCount, instanceCount, firstIndex, vertexOffset, firstInstance);
+    }
+
+    pub fn setScissor(self: *const Cmd, x: f32, y: f32, width: f32, height: f32) void {
+        const scissor = vk.VkRect2D{
+            .offset = .{ .x = @intFromFloat(x), .y = @intFromFloat(y) },
+            .extent = .{ .width = @intFromFloat(width), .height = @intFromFloat(height) },
+        };
+        vk.vkCmdSetScissorWithCount(self.handle, 1, &scissor);
+    }
+
+    pub fn setViewport(self: *const Cmd, x: f32, y: f32, width: f32, height: f32) void {
         const viewport = vk.VkViewport{
             .x = x,
             .y = y,
@@ -424,12 +449,6 @@ pub const Cmd = struct {
             .maxDepth = 1.0,
         };
         vk.vkCmdSetViewportWithCount(self.handle, 1, &viewport);
-
-        const scissor = vk.VkRect2D{
-            .offset = .{ .x = @intFromFloat(x), .y = @intFromFloat(y) },
-            .extent = .{ .width = @intFromFloat(width), .height = @intFromFloat(height) },
-        };
-        vk.vkCmdSetScissorWithCount(self.handle, 1, &scissor);
     }
 
     pub fn beginRendering(

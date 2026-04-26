@@ -1,20 +1,17 @@
-const ShaderId = @import("../../../shader/ShaderSys.zig").ShaderId;
-const ShaderInf = @import("../../../shader/ShaderInf.zig").ShaderInf;
-const RenderState = @import("../pass/RenderState.zig").RenderState;
-const TextureMeta = @import("../res/TextureMeta.zig").TextureMeta;
-const BufferMeta = @import("../res/BufferMeta.zig").BufferMeta;
-const Texture = @import("../res/Texture.zig").Texture;
-const Buffer = @import("../res/Buffer.zig").Buffer;
-const vhE = @import("../../help/Enums.zig");
-const BufId = BufferMeta.BufId;
-const TexId = TextureMeta.TexId;
-const WindowId = @import("../../../window/Window.zig").Window.WindowId;
-const ViewportId = @import("../../../viewport/ViewportSys.zig").ViewportId;
-const std = @import("std");
-const AttachmentUse = @import("AttachmentUse.zig").AttachmentUse;
-const BufferUse = @import("BufferUse.zig").BufferUse;
-const TextureUse = @import("TextureUse.zig").TextureUse;
 const FixedList = @import("../../../.structures/FixedList.zig").FixedList;
+const VertexBufferUse = @import("VertexBufferUse.zig").VertexBufferUse;
+const VertexAttribute = @import("VertexAttribute.zig").VertexAttribute;
+const WindowId = @import("../../../window/Window.zig").Window.WindowId;
+const ShaderInf = @import("../../../shader/ShaderInf.zig").ShaderInf;
+const IndexBufferUse = @import("IndexBufferUse.zig").IndexBufferUse;
+const ShaderId = @import("../../../shader/ShaderSys.zig").ShaderId;
+const RenderState = @import("../pass/RenderState.zig").RenderState;
+const TexId = @import("../res/TextureMeta.zig").TextureMeta.TexId;
+const AttachmentUse = @import("AttachmentUse.zig").AttachmentUse;
+const BufId = @import("../res/BufferMeta.zig").BufferMeta.BufId;
+const TextureUse = @import("TextureUse.zig").TextureUse;
+const BufferUse = @import("BufferUse.zig").BufferUse;
+const std = @import("std");
 
 pub const Dispatch = struct { x: u32, y: u32, z: u32 };
 
@@ -45,14 +42,35 @@ pub const TaskOrMeshIndirectExec = struct {
 };
 
 pub const GraphicsExec = struct {
-    vertices: u32 = 3,
-    instances: u32 = 1,
+    vertices: u32,
+    instances: u32,
+    indexCount: u32,
     mainTexId: TexId,
 };
 
 pub const RenderNode = union(enum) {
     viewportBlit: ViewportBlit,
     passNode: struct { pass: PassDef, width: u32, height: u32 },
+    uiNode: UiNode,
+};
+
+pub const UiDrawCmd = struct {
+    clipRect: [4]f32,
+    texId: TexId,
+    vtxOffset: i32,
+    idxOffset: u32,
+    elemCount: u32,
+};
+
+pub const UiDrawList = struct {
+    cmds: []const UiDrawCmd,
+};
+
+pub const UiNode = struct {
+    windowId: WindowId,
+    displayPos: [2]f32,
+    displaySize: [2]f32,
+    cmdLists: []const UiDrawList,
 };
 
 pub const ViewportBlit = struct {
@@ -69,14 +87,21 @@ pub const PassDef = struct {
     name: []const u8,
     execution: PassExecution,
 
+    // All passes
     shaderIds: FixedList(ShaderId, 3) = .{},
     bufUses: FixedList(BufferUse, 14) = .{},
     texUses: FixedList(TextureUse, 14) = .{},
 
+    // All Graphics Passes
     renderState: RenderState = .{},
     colorAtts: FixedList(AttachmentUse, 8) = .{},
     depthAtt: ?AttachmentUse = null,
     stencilAtt: ?AttachmentUse = null,
+
+    // Vertex Passes Only
+    vertexBuffers: FixedList(VertexBufferUse, 4) = .{},
+    indexBuffer: ?IndexBufferUse = null,
+    vertexAttributes: FixedList(VertexAttribute, 16) = .{},
 
     pub const PassExecution = union(enum) {
         compute: ComputeExec,
@@ -90,7 +115,7 @@ pub const PassDef = struct {
     pub fn Graphics(
         inf: struct {
             name: []const u8,
-            execution: PassExecution,
+            execution: GraphicsExec,
             vertex: ShaderInf,
             fragment: ShaderInf,
             bufUses: []const BufferUse = &.{},
@@ -99,6 +124,9 @@ pub const PassDef = struct {
             depthAtt: ?AttachmentUse = null,
             stencilAtt: ?AttachmentUse = null,
             renderState: RenderState = .{},
+            vertexBuffers: []const VertexBufferUse = &.{},
+            indexBuffer: ?IndexBufferUse = null,
+            vertexAttributes: []const VertexAttribute = &.{},
         },
     ) PassDef {
         std.debug.assert(inf.bufUses.len + inf.texUses.len <= 14);
@@ -108,18 +136,22 @@ pub const PassDef = struct {
 
         var pass = PassDef{
             .name = inf.name,
-            .execution = inf.execution,
+            .execution = .{ .graphics = inf.execution },
             .depthAtt = inf.depthAtt,
             .stencilAtt = inf.stencilAtt,
             .renderState = inf.renderState,
         };
 
-        pass.shaderIds.append(inf.vertex.id);
-        pass.shaderIds.append(inf.fragment.id);
+        pass.shaderIds.appendAssumeCapacity(inf.vertex.id);
+        pass.shaderIds.appendAssumeCapacity(inf.fragment.id);
 
         pass.bufUses.appendSliceAssumeCapacity(inf.bufUses);
         pass.texUses.appendSliceAssumeCapacity(inf.texUses);
         pass.colorAtts.appendSliceAssumeCapacity(inf.colorAtts);
+
+        pass.vertexBuffers.appendSliceAssumeCapacity(inf.vertexBuffers);
+        pass.vertexAttributes.appendSliceAssumeCapacity(inf.vertexAttributes);
+        pass.indexBuffer = inf.indexBuffer;
 
         return pass;
     }

@@ -3,15 +3,16 @@ const RendererQueue = @import("../render/RendererQueue.zig").RendererQueue;
 const MemoryManager = @import("../core/MemoryManager.zig").MemoryManager;
 const ViewportId = @import("../viewport/ViewportSys.zig").ViewportId;
 const InputQueue = @import("../input/InputQueue.zig").InputQueue;
-const ImGuiMan = @import("../render/sys/ImGuiMan.zig").ImGuiMan;
 const EngineData = @import("../EngineData.zig").EngineData;
 const WindowQueue = @import("WindowQueue.zig").WindowQueue;
 const KeyEvent = @import("../input/InputSys.zig").KeyEvent;
 const InputSys = @import("../input/InputSys.zig").InputSys;
 const WindowData = @import("WindowData.zig").WindowData;
 const Window = @import("../window/Window.zig").Window;
+const ig = @cImport(@cInclude("imgui_ctx.h"));
 const sdl = @import("../.modules/sdl.zig").c;
 const vk = @import("../.modules/vk.zig").c;
+const zgui = @import("zgui");
 const std = @import("std");
 const SDL_KEY_MAX = @import("../input/InputSys.zig").SDL_KEY_MAX;
 
@@ -123,24 +124,39 @@ pub const WindowSys = struct {
         std.debug.print("WindowSys: UI Toggle {}\n", .{windowData.uiActive});
     }
 
-    pub fn pollEvents(windowData: *WindowData, inputQueue: *InputQueue, imguiMan: ?*ImGuiMan) !void {
+    pub fn pollEvents(data: *const EngineData, windowData: *WindowData, inputQueue: *InputQueue) !void {
         var event: sdl.SDL_Event = undefined;
 
         if (windowData.openWindows == 0) {
             if (sdl.SDL_WaitEvent(&event)) { // On pause wait for an event and process
                 try processEvent(windowData, inputQueue, &event);
-                if (windowData.uiActive == true) if (imguiMan) |im| im.processEvent(getEventWindowId(&event), &event);
+                if (windowData.uiActive == true) processGuiEvent(getEventWindowId(&event), &event, data);
             }
             while (sdl.SDL_PollEvent(&event)) { // drain remaining events
                 try processEvent(windowData, inputQueue, &event);
-                if (windowData.uiActive == true) if (imguiMan) |im| im.processEvent(getEventWindowId(&event), &event);
+                if (windowData.uiActive == true) processGuiEvent(getEventWindowId(&event), &event, data);
             }
         } else {
             while (sdl.SDL_PollEvent(&event)) { // When active process all events in queue
                 try processEvent(windowData, inputQueue, &event);
-                if (windowData.uiActive == true) if (imguiMan) |im| im.processEvent(getEventWindowId(&event), &event);
+                if (windowData.uiActive == true) processGuiEvent(getEventWindowId(&event), &event, data);
             }
         }
+    }
+
+    fn processGuiEvent(windowId: u32, event: *const sdl.SDL_Event, data: *const EngineData) void {
+        if (!data.ui.initialized or !data.ui.contexts.isKeyUsed(windowId)) return;
+
+        var targetId = windowId;
+        if (windowId == 0) { // Global Events pushed to main Window ?
+            if (data.window.mainWindow) |mainWindow| {
+                targetId = mainWindow.id.val;
+            } else return;
+        }
+
+        const ctx = data.ui.contexts.getByKey(windowId);
+        ig.igui_set_current_context(@ptrCast(ctx));
+        _ = zgui.backend.processEvent(event);
     }
 
     fn getEventWindowId(event: *sdl.SDL_Event) u32 {
@@ -150,6 +166,15 @@ pub const WindowSys = struct {
             sdl.SDL_EVENT_MOUSE_WHEEL => event.wheel.windowID,
             sdl.SDL_EVENT_KEY_DOWN, sdl.SDL_EVENT_KEY_UP => event.key.windowID,
             sdl.SDL_EVENT_TEXT_INPUT => event.text.windowID,
+
+            sdl.SDL_EVENT_WINDOW_FOCUS_LOST,
+            sdl.SDL_EVENT_WINDOW_FOCUS_GAINED,
+            sdl.SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED,
+            sdl.SDL_EVENT_WINDOW_CLOSE_REQUESTED,
+            sdl.SDL_EVENT_WINDOW_MINIMIZED,
+            sdl.SDL_EVENT_WINDOW_RESTORED,
+            sdl.SDL_EVENT_WINDOW_RESIZED,
+            => event.window.windowID,
             else => 0,
         };
     }
@@ -220,7 +245,7 @@ pub const WindowSys = struct {
                 window.setState(.needActive);
             },
             sdl.SDL_EVENT_WINDOW_RESIZED => {
-                window.extent = window.getExtent();
+                window.extent = window.getPixelExtent();
                 window.setState(.needUpdate);
             },
             else => {

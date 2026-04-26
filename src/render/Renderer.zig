@@ -3,16 +3,15 @@ const LoadedShader = @import("../shader/LoadedShader.zig").LoadedShader;
 const TextureMeta = @import("types/res/TextureMeta.zig").TextureMeta;
 const BufferMeta = @import("types/res/BufferMeta.zig").BufferMeta;
 const SwapchainMan = @import("sys/SwapchainMan.zig").SwapchainMan;
+const RenderNode = @import("types/pass/PassDef.zig").RenderNode;
 const ResourceMan = @import("sys/ResourceMan.zig").ResourceMan;
 const RenderGraph = @import("sys/RenderGraph.zig").RenderGraph;
-const RenderNode = @import("types/pass/PassDef.zig").RenderNode;
+const PassDef = @import("types/pass/PassDef.zig").PassDef;
 const ShaderMan = @import("sys/ShaderMan.zig").ShaderMan;
 const Scheduler = @import("sys/Scheduler.zig").Scheduler;
-const ImGuiMan = @import("sys/ImGuiMan.zig").ImGuiMan;
 const Context = @import("sys/Context.zig").Context;
 const rc = @import("../.configs/renderConfig.zig");
 const FrameData = @import("../App.zig").FrameData;
-const PassDef = @import("types/pass/PassDef.zig").PassDef;
 const vk = @import("../.modules/vk.zig").c;
 const Allocator = std.mem.Allocator;
 const std = @import("std");
@@ -30,15 +29,12 @@ pub const Renderer = struct {
     shaderMan: ShaderMan,
     swapMan: SwapchainMan,
     scheduler: Scheduler,
-    imguiMan: ImGuiMan,
     renderNodes: std.array_list.Managed(RenderNode),
 
     pub fn init(memoryMan: *MemoryManager) !Renderer {
         const alloc = memoryMan.getAllocator();
         const context = try Context.init(alloc);
         const resMan = try ResourceMan.init(alloc, &context);
-
-        const imguiMan = ImGuiMan.init(&context);
 
         return .{
             .alloc = alloc,
@@ -50,13 +46,11 @@ pub const Renderer = struct {
             .scheduler = try Scheduler.init(&context, rc.MAX_IN_FLIGHT),
             .swapMan = try SwapchainMan.init(alloc, &context),
             .renderNodes = std.array_list.Managed(RenderNode).init(alloc),
-            .imguiMan = imguiMan,
         };
     }
 
     pub fn deinit(self: *Renderer) void {
         _ = vk.vkDeviceWaitIdle(self.context.gpi);
-        self.imguiMan.deinit();
         self.scheduler.deinit();
         self.swapMan.deinit();
         self.shaderMan.deinit();
@@ -76,6 +70,7 @@ pub const Renderer = struct {
                 .addBuffer => |inf| try self.addResource(inf.bufInf, inf.data),
                 .updateBuffer => |inf| try self.updateBuffer(inf.bufId, inf.data),
                 .updateBufferSegment => |inf| try self.updateBufferSegment(inf.bufId, inf.data, inf.elementOffset),
+                .updateTexture => |inf| try self.updateTexture(inf.texId, inf.data, inf.newExtent),
                 .addShader => |loadedShader| try self.addShaders(&[_]LoadedShader{loadedShader.*}),
             }
         }
@@ -92,15 +87,9 @@ pub const Renderer = struct {
 
         for (tempWindows) |window| {
             switch (window.state) {
-                .needCreation => {
-                    try self.swapMan.createSwapchain(window, self.renderGraph.cmdMan.cmdPool);
-                    try self.imguiMan.addWindowContext(window.id.val, window.handle);
-                },
+                .needCreation => try self.swapMan.createSwapchain(window, self.renderGraph.cmdMan.cmdPool),
                 .needUpdate => try self.swapMan.recreateSwapchain(window.id, window.extent, self.renderGraph.cmdMan.cmdPool),
-                .needDelete => {
-                    self.imguiMan.removeWindowContext(window.id.val);
-                    self.swapMan.removeSwapchains(window.id);
-                },
+                .needDelete => self.swapMan.removeSwapchains(window.id),
                 .needActive, .needInactive => self.swapMan.changeState(window.id, if (window.state == .needActive) true else false),
                 else => std.debug.print("Warning: Window State {s} cant be handled in Renderer\n", .{@tagName(window.state)}),
             }
@@ -142,8 +131,6 @@ pub const Renderer = struct {
             &self.swapMan,
             &self.resMan,
             &self.shaderMan,
-            &self.imguiMan,
-            data,
             self.context.meshTaskSupp,
         );
 
@@ -179,7 +166,7 @@ pub const Renderer = struct {
         try self.resMan.updateBufferResource(bufId, self.scheduler.totalFrames, self.scheduler.flightId, data);
     }
 
-    pub fn updateTexture(self: *Renderer, texId: TextureMeta.TexId, data: anytype, newExtent: ?vk.VkExtent3D) void {
+    pub fn updateTexture(self: *Renderer, texId: TextureMeta.TexId, data: anytype, newExtent: ?vk.VkExtent3D) !void {
         try self.resMan.updateTextureResource(texId, self.scheduler.totalFrames, self.scheduler.flightId, data, newExtent);
     }
 

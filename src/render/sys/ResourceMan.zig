@@ -65,35 +65,35 @@ pub const ResourceMan = struct {
         self.teyKeyPool.freeKey(key);
     }
 
-    pub const VirtualTexture = @import("../types/res/VirtualTexture.zig").VirtualTexture;
+    // pub const VirtualTexture = @import("../types/res/VirtualTexture.zig").VirtualTexture;
 
-    pub fn assignTexture(self: *ResourceMan, virtualTex: VirtualTexture, curFrame: u64, flightId: u8) void {
-        const texInf = TexInf{
-            .id = virtualTex.id, // Should be assigned?
-            .mem = virtualTex.mem,
-            .typ = virtualTex.texType,
-            .width = virtualTex.width,
-            .height = virtualTex.height,
-            .depth = virtualTex.depth,
-            .update = virtualTex.update,
-            .resize = virtualTex.resize,
-        };
-        self.addResource(texInf, curFrame, flightId, null);
-        // self.texturePool.upsert(virtualTex.id, item: TexId)
-        std.debug.print("Virtual Texture assigned ({s} ID {})", .{ virtualTex.name, virtualTex.id.val });
-    }
+    // pub fn assignTexture(self: *ResourceMan, virtualTex: VirtualTexture, curFrame: u64, flightId: u8) void {
+    //     const texInf = TexInf{
+    //         .id = virtualTex.id, // Should be assigned?
+    //         .mem = virtualTex.mem,
+    //         .typ = virtualTex.texType,
+    //         .width = virtualTex.width,
+    //         .height = virtualTex.height,
+    //         .depth = virtualTex.depth,
+    //         .update = virtualTex.update,
+    //         .resize = virtualTex.resize,
+    //     };
+    //     self.addResource(texInf, curFrame, flightId, null);
+    //     // self.texturePool.upsert(virtualTex.id, item: TexId)
+    //     std.debug.print("Virtual Texture assigned ({s} ID {})", .{ virtualTex.name, virtualTex.id.val });
+    // }
 
-    fn destroyResources(self: *ResourceMan, queue: *ResourceQueue, comptime T: type) u64 {
-        const deletions = queue.getDeletions(T);
+    fn destroyResources(self: *ResourceMan, queue: *ResourceQueue, comptime ResType: type) u64 {
+        const deletions = queue.getDeletions(ResType);
         for (deletions) |*zombie| {
-            switch (T) {
+            switch (ResType) {
                 Buffer => self.vma.freeBuffer(zombie),
                 Texture => self.vma.freeTexture(zombie),
                 else => @compileError("destroyResources: unsupported type"),
             }
             if (zombie.descIndex) |descIndex| self.descMan.freeDescriptorIndex(descIndex);
         }
-        queue.clearDeletions(T);
+        queue.clearDeletions(ResType);
         return deletions.len;
     }
 

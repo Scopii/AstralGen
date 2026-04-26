@@ -34,7 +34,7 @@ pub fn build(b: *std.Build) void {
     const zgui_dep = b.dependency("zgui", .{
         .target = target,
         .optimize = optimize,
-        .backend = .sdl3_vulkan,
+        .backend = .sdl3,
         // .vulkan_include = b.path("include").getPath(b),
     });
     exe.root_module.addImport("zgui", zgui_dep.module("root"));

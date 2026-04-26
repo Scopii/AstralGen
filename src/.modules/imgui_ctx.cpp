@@ -28,18 +28,4 @@ extern "C"
     {
         return ImGui::GetIO().Fonts;
     }
-
-    void igui_copy_backend_to_context(ImGuiContext *dst)
-    {
-        ImGuiContext *src = ImGui::GetCurrentContext();
-        ImGuiIO &srcIO = ImGui::GetIO();
-        ImGui::SetCurrentContext(dst);
-        ImGuiIO &dstIO = ImGui::GetIO();
-        dstIO.BackendPlatformUserData = srcIO.BackendPlatformUserData; // SDL backend
-        dstIO.BackendRendererUserData = srcIO.BackendRendererUserData; // Vulkan backend
-        dstIO.BackendPlatformName = srcIO.BackendPlatformName;
-        dstIO.BackendRendererName = srcIO.BackendRendererName;
-        dstIO.BackendFlags = srcIO.BackendFlags;
-        ImGui::SetCurrentContext(src); // restore
-    }
 }

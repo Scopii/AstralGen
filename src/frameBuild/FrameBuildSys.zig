@@ -111,6 +111,10 @@ pub const FrameBuildSys = struct {
                 tempBlits.clear();
             }
         }
+
+        for (data.ui.activeNodes) |uiNode| {
+            frameBuild.passList.append(.{ .uiNode = uiNode }) catch std.debug.print("Failed to append UiNode\n", .{});
+        }
     }
 
     fn createBlit(viewport: *const Viewport, windowId: WindowId, windowWidth: u32, windowHeight: u32) ViewportBlit {

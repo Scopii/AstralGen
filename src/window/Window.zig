@@ -16,7 +16,7 @@ pub const Window = struct {
     id: WindowId,
     resizeTex: bool,
     relativeMouse: bool = false,
-    viewIds: [4]?ViewportId = .{null} ** 4, 
+    viewIds: [4]?ViewportId = .{null} ** 4,
 
     pub const WindowId = packed struct { val: u32 };
 
@@ -32,7 +32,7 @@ pub const Window = struct {
         var actualTexIds: [rc.LINKED_TEX_MAX]?TexId = .{null} ** rc.LINKED_TEX_MAX;
         for (0..linkedTexIds.len) |i| actualTexIds[i] = linkedTexIds[i];
 
-        return Window{
+        var window = Window{
             .handle = winHandle,
             .renderTexId = renderTexId,
             .extent = extent,
@@ -41,6 +41,9 @@ pub const Window = struct {
             .linkedTexIds = actualTexIds,
             .viewIds = viewIds,
         };
+
+        window.extent = window.getPixelExtent();
+        return window;
     }
 
     pub fn deinit(self: *const Window) void {
@@ -102,6 +105,12 @@ pub const Window = struct {
     pub fn isFullscreen(self: *const Window) bool {
         const flags = sdl.SDL_GetWindowFlags(self.handle);
         return (flags & sdl.SDL_WINDOW_FULLSCREEN) != 0;
+    }
+
+    pub fn getPixelExtent(self: *const Window) vk.VkExtent2D {
+        var newExtent: vk.VkExtent2D = undefined;
+        _ = sdl.SDL_GetWindowSizeInPixels(self.handle, @ptrCast(&newExtent.width), @ptrCast(&newExtent.height));
+        return newExtent;
     }
 
     pub fn getExtent(self: *const Window) vk.VkExtent2D {

@@ -25,6 +25,9 @@ pub const editorGridFrag = ShaderInf.init(29, .frag, "editorGrid/frag.slang", "e
 
 pub const t1Comp = ShaderInf.init(0, .comp, "compTest/comp.slang", "t1Comp.spv");
 
+pub const imguiVert = ShaderInf.init(1, .vert, "Imgui/vertex.slang", "imguiVertex.spv");
+pub const imguiFrag = ShaderInf.init(2, .frag, "Imgui/frag.slang", "imguiFrag.spv");
+
 pub const COMPILING_SHADERS: []const ShaderInf = &.{
     cullTestComp,
     cullTestMesh,
@@ -40,6 +43,9 @@ pub const COMPILING_SHADERS: []const ShaderInf = &.{
     editorGridFrag,
 
     t1Comp,
+
+    imguiVert,
+    imguiFrag,
 };
 
 // pub const t1Comp = ShaderInf.init(0, .comp, "compTest/comp.slang", "t1Comp.spv");

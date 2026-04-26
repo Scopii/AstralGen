@@ -87,6 +87,7 @@ pub const App = struct {
     }
 
     pub fn deinit(self: *App) void {
+        UiSys.deinit(&self.data);
         self.renderer.deinit();
         ShaderSys.deinit(&self.data.shader, self.memoryMan.getAllocator());
         WindowSys.deinit(&self.data.window);
@@ -245,6 +246,8 @@ pub const App = struct {
             addTextureDataPtr.* = .{ .texInf = texInf, .data = dataSlice };
             self.rendererQueue.append(.{ .addTexture = addTextureDataPtr });
         }
+
+        try UiSys.init(&self.data, self.memoryMan);
     }
 
     pub fn run(self: *App) !void {
@@ -266,15 +269,12 @@ pub const App = struct {
             if (US_WAITED >= US_PER_FRAME) {
                 US_WAITED -= US_PER_FRAME;
 
-                // Shader Hotloading
-                if (shaderCon.SHADER_HOTLOAD == true) {
-                    try ShaderSys.update(&self.data.shader, &self.shaderQueue, &self.rendererQueue, self.memoryMan);
-                }
+                if (shaderCon.SHADER_HOTLOAD == true) try ShaderSys.update(&self.data.shader, &self.shaderQueue, &self.rendererQueue, self.memoryMan);
 
                 if (rc.EARLY_GPU_WAIT == true) try renderer.waitForGpu();
 
                 // Poll OS Events
-                WindowSys.pollEvents(&self.data.window, &self.inputQueue, &renderer.imguiMan) catch |err| {
+                WindowSys.pollEvents(&self.data, &self.data.window, &self.inputQueue) catch |err| {
                     std.log.err("Error in pollEvents(): {}", .{err});
                     break;
                 };
@@ -301,42 +301,35 @@ pub const App = struct {
 
                 try RenderPrepSys.extractEntities(&self.data.entityData, &self.rendererQueue, self.memoryMan);
 
+                try WindowSys.updateActiveWindows(&self.data.window);
+
+                const activeWindows = self.data.window.activeWindows.constSlice();
+
+                self.data.ui.activeNodes = &.{};
+
+                if (self.data.window.uiActive) {
+                    try UiSys.processTextures(&self.data, &self.rendererQueue, self.memoryMan);
+                    for (activeWindows) |*window| UiSys.buildWindowUi(window, &self.data);
+                    try UiSys.extractDrawData(&self.data, &self.rendererQueue, self.memoryMan);
+                }
+
                 if (rc.CPU_PROFILING) std.debug.print("Cpu pre-Renderer Delta {d:.3} ms, ({d:.1} Real FPS)\n", .{ dt * 0.000001, 1.0 / (dt * 0.000000001) });
 
                 try self.renderer.update(&self.rendererQueue);
 
+                FrameBuildSys.build(&self.data.frameBuild, &self.data);
+
                 if (rc.EARLY_GPU_WAIT == false) try renderer.waitForGpu();
 
-                try WindowSys.updateActiveWindows(&self.data.window);
-
-                const activeWindows = self.data.window.activeWindows.constSlice();
-                // UI per-window/viewport
-                for (activeWindows) |*window| {
-                    if (self.data.window.uiActive) {
-                        self.renderer.imguiMan.newFrame(window.id.val, window.extent.width, window.extent.height);
-                        UiSys.buildWindowUi(window, &self.data);
-                    }
-                }
-
-                // const start = std.time.microTimestamp();
-                FrameBuildSys.build(&self.data.frameBuild, &self.data);
-                // const end = std.time.microTimestamp();
-                // std.debug.print("Frame Build {d:.3} ms\n", .{@as(f64, @floatFromInt(end - start)) / 1_000.0});
-
-                // const start = std.time.microTimestamp();
-                // RENDER:
                 renderer.draw(frameData, &self.data, activeWindows) catch |err| {
                     std.log.err("Error in renderer.submitDraw(): {}", .{err});
                     break;
                 };
-                // const end = std.time.microTimestamp();
-                // std.debug.print("Draw {d:.3} ms\n", .{@as(f64, @floatFromInt(end - start)) / 1_000.0});
 
                 self.memoryMan.resetArena();
                 ShaderSys.freeFreshShaders(&self.data.shader, self.memoryMan.getAllocator()); // SHOULD CHANGE TO USE ARENA
 
                 // if (rc.CPU_PROFILING or renderer.renderGraph.useGpuProfiling or rc.SWAPCHAIN_PROFILING) std.debug.print("\n", .{});
-
             } else {
                 const REMAINING_US = US_PER_FRAME - US_WAITED;
                 if (REMAINING_US > 2000) std.Thread.sleep((REMAINING_US - 1000) * 1000);

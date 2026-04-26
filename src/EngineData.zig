@@ -1,4 +1,5 @@
 pub const EngineData = struct {
+    ui: @import("ui/UiData.zig").UiData = .{},
     time: @import("time/TimeData.zig").TimeData = .{},
     input: @import("input/InputData.zig").InputData = .{},
     entityData: @import("ecs/EntityData.zig").EntityData = .{},

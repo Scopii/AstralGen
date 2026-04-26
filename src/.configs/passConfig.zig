@@ -7,6 +7,40 @@ const PassDef = @import("../render/types/pass/PassDef.zig").PassDef;
 const vk = @import("../.modules/vk.zig").c;
 const sc = @import("shaderConfig.zig");
 
+pub fn ImGuiPass(def: struct {
+    name: []const u8,
+    colorAtt: TexId,
+    vertexBuf: BufId,
+    indexBuf: BufId,
+}) PassDef {
+    return PassDef.Graphics(.{
+        .name = def.name,
+        .execution = .{ .vertices = 0, .instances = 1, .indexCount = 0, .mainTexId = def.colorAtt },
+        .vertex = sc.imguiVert,
+        .fragment = sc.imguiFrag,
+        .colorAtts = &.{AttachmentUse.init(def.colorAtt, .ColorAtt, .ColorAttReadWrite, false)},
+        .renderState = .{
+            .cullMode = vk.VK_CULL_MODE_NONE,
+            .depthTest = vk.VK_FALSE,
+            .depthWrite = vk.VK_FALSE,
+            .colorBlend = vk.VK_TRUE,
+            .colorBlendEquation = .{
+                .srcColor = vk.VK_BLEND_FACTOR_SRC_ALPHA,
+                .dstColor = vk.VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+                .srcAlpha = vk.VK_BLEND_FACTOR_ONE,
+                .dstAlpha = vk.VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+            },
+        },
+        .vertexBuffers = &.{.{ .bufId = def.vertexBuf, .binding = 0, .stride = 20 }},
+        .indexBuffer = .{ .bufId = def.indexBuf, .indexType = vk.VK_INDEX_TYPE_UINT16 },
+        .vertexAttributes = &.{
+            .{ .location = 0, .binding = 0, .format = vk.VK_FORMAT_R32G32_SFLOAT, .offset = 0 },
+            .{ .location = 1, .binding = 0, .format = vk.VK_FORMAT_R32G32_SFLOAT, .offset = 8 },
+            .{ .location = 2, .binding = 0, .format = vk.VK_FORMAT_R8G8B8A8_UNORM, .offset = 16 },
+        },
+    });
+}
+
 pub fn CompRayMarch(
     def: struct {
         name: []const u8,
@@ -28,7 +62,7 @@ pub fn CompRayMarch(
         },
         .texUses = &.{
             TextureUse.init(def.outputTex, .Compute, .ShaderWrite, .General, 2),
-            TextureUse.init(def.debugTex, .Compute, .ShaderRead, .ReadOnly, 4), 
+            TextureUse.init(def.debugTex, .Compute, .ShaderRead, .ReadOnly, 4),
         },
     });
 }

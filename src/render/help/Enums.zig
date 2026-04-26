@@ -28,6 +28,7 @@ pub const TextureType = enum {
     Depth,
     Stencil,
     Swapchain,
+    SampledColor,
 };
 
 pub const MemUsage = enum {
@@ -62,6 +63,7 @@ pub const PipeStage = enum(vk.VkPipelineStageFlagBits2) { //( SHOULD BE CORRECT 
     Compute = vk.VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
     DrawIndirect = vk.VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT,
     Vertex = vk.VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT,
+    VertexInput = vk.VK_PIPELINE_STAGE_2_VERTEX_INPUT_BIT,
     Task = vk.VK_PIPELINE_STAGE_2_TASK_SHADER_BIT_EXT,
     Mesh = vk.VK_PIPELINE_STAGE_2_MESH_SHADER_BIT_EXT,
     Fragment = vk.VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
@@ -81,7 +83,11 @@ pub const PipeAccess = enum(vk.VkAccessFlagBits2) {
     ShaderWrite = vk.VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
     ShaderReadWrite = vk.VK_ACCESS_2_SHADER_STORAGE_READ_BIT | vk.VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
 
+    IndexRead = vk.VK_ACCESS_2_INDEX_READ_BIT,
+
     IndirectRead = vk.VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT,
+
+    VertexAttributeRead = vk.VK_ACCESS_2_VERTEX_ATTRIBUTE_READ_BIT,
 
     ColorAttWrite = vk.VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
     ColorAttRead = vk.VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT,

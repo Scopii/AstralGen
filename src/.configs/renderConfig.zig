@@ -68,12 +68,16 @@ pub const readbackSB = BufferMeta.create(.{ .id = .{ .val = 2 }, .mem = .CpuRead
 pub const entitySB = BufferMeta.create(.{ .id = .{ .val = 3 }, .mem = .Gpu, .typ = .Storage, .len = ENTITY_COUNT, .elementSize = @sizeOf(GpuObjectData), .update = .Rarely, .resize = .Fit });
 pub const mainCamUB = BufferMeta.create(.{ .id = .{ .val = 4 }, .mem = .Gpu, .typ = .Uniform, .len = 1, .elementSize = @sizeOf(CameraData), .update = .Often, .resize = .Fit });
 pub const debugCamUB = BufferMeta.create(.{ .id = .{ .val = 5 }, .mem = .Gpu, .typ = .Uniform, .len = 1, .elementSize = @sizeOf(CameraData), .update = .Often, .resize = .Fit });
-pub const BUFFERS: []const BufferMeta.BufInf = &.{ entitySB, mainCamUB, debugCamUB, indirectSB, readbackSB };
+
+pub const imguiVertexSB = BufferMeta.create(.{ .id = .{ .val = 6 }, .mem = .Gpu, .typ = .Vertex, .len = 1024 * 1024, .elementSize = 1, .update = .PerFrame, .resize = .Grow });
+pub const imguiIndexSB = BufferMeta.create(.{ .id = .{ .val = 7 }, .mem = .Gpu, .typ = .Index, .len = 1024 * 1024, .elementSize = 1, .update = .PerFrame, .resize = .Grow });
+
+pub const BUFFERS: []const BufferMeta.BufInf = &.{ entitySB, mainCamUB, debugCamUB, indirectSB, readbackSB, imguiVertexSB, imguiIndexSB };
 
 // Textures
 pub const mainTex = TextureMeta.create(.{ .id = .{ .val = 1 }, .mem = .Gpu, .typ = .Color, .width = 1920, .height = 1080, .update = .Rarely, .resize = .Fit });
 pub const mainDepthTex = TextureMeta.create(.{ .id = .{ .val = 2 }, .mem = .Gpu, .typ = .Depth, .width = 1920, .height = 1080, .update = .Rarely, .resize = .Fit });
-
 pub const debugTex = TextureMeta.create(.{ .id = .{ .val = 3 }, .mem = .Gpu, .typ = .Color, .width = 256, .height = 256, .update = .Often });
+pub const imguiFontTex = TextureMeta.create(.{ .id = .{ .val = 4 }, .mem = .Gpu, .typ = .SampledColor, .width = 1, .height = 1, .update = .Rarely, .resize = .Fit });
 
-pub const TEXTURES: []const TextureMeta.TexInf = &.{ mainTex, mainDepthTex, debugTex };
+pub const TEXTURES: []const TextureMeta.TexInf = &.{ mainTex, mainDepthTex, debugTex, imguiFontTex };

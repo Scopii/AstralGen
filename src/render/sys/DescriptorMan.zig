@@ -110,7 +110,10 @@ pub const DescriptorMan = struct {
 
         self.descInfos[descUpdate.mainIndex] = vk.VkResourceDescriptorInfoEXT{
             .sType = vk.VK_STRUCTURE_TYPE_RESOURCE_DESCRIPTOR_INFO_EXT,
-            .type = if (texMeta.texType == .Color) vk.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE else vk.VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+            .type = switch (texMeta.texType) {
+                .Color => vk.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+                .SampledColor, .Depth, .Stencil, .Swapchain => vk.VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+            },
             .data = .{ .pImage = &self.imgDescs[descUpdate.specificIndex] },
         };
     }
