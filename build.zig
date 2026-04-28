@@ -65,6 +65,9 @@ pub fn build(b: *std.Build) void {
     c_module.addIncludePath(vk_dep.path("include"));
     exe.addLibraryPath(b.path("libs/vulkan"));
 
+    const sdl3_dep = b.dependency("sdl3", .{});
+    exe.addIncludePath(sdl3_dep.path("include"));
+    c_module.addIncludePath(sdl3_dep.path("include"));
     exe.addLibraryPath(b.path("libs/SDL3"));
     exe.linkSystemLibrary("SDL3");
 

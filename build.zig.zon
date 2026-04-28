@@ -47,6 +47,10 @@
             .url = "https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator/archive/refs/tags/v3.3.0.tar.gz",
             .hash = "N-V-__8AAIutPgABk6NlXZhlJ5P8qVECvakZIKoO94h7xUOw",
         },
+        .sdl3 = .{
+            .url = "https://github.com/libsdl-org/SDL/releases/download/release-3.4.4/SDL3-3.4.4.tar.gz",
+            .hash = "N-V-__8AAFBd8gLU8L-pRGmSU4fr2bXYLPy4vz7A7hznx_Wq",
+        },
     },
 
     .paths = .{
