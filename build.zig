@@ -53,6 +53,12 @@ pub fn build(b: *std.Build) void {
         c_module.addIncludePath(path);
     }
 
+    const vma_dep = b.dependency("vma", .{});
+    exe.addIncludePath(vma_dep.path("include"));
+    c_module.addIncludePath(vma_dep.path("include"));
+    c_module.addCMacro("VMA_STATIC_VULKAN_FUNCTIONS", "0");
+    c_module.addCMacro("VMA_DYNAMIC_VULKAN_FUNCTIONS", "1");
+
     exe.addCSourceFile(.{
         .file = b.path("src/.modules/vmaLink.cpp"),
         .flags = &.{"-std=c++17"}, //"-O3", "-g0"
