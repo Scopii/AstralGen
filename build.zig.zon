@@ -39,6 +39,14 @@
             .hash = "zgui-0.6.0-dev--L6sZBwNbgDQ972BBK7975zsIGG1ODTS33kcTMQfh3km",
         },
         // .zgui =.{ .path = "../../zgui" },
+        .vulkan_headers = .{
+            .url = "https://github.com/KhronosGroup/Vulkan-Headers/archive/refs/tags/v1.4.349.tar.gz",
+            .hash = "N-V-__8AAC1ZbAIG2kVq3iPpAWaOlDTQ3MOyOyQQR0o_-9ez",
+        },
+        .vma = .{
+            .url = "https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator/archive/refs/tags/v3.3.0.tar.gz",
+            .hash = "N-V-__8AAIutPgABk6NlXZhlJ5P8qVECvakZIKoO94h7xUOw",
+        },
     },
 
     .paths = .{

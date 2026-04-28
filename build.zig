@@ -60,10 +60,14 @@ pub fn build(b: *std.Build) void {
 
     // 5. Link Libraries
 
+    const vk_dep = b.dependency("vulkan_headers", .{});
+    exe.addIncludePath(vk_dep.path("include"));
+    c_module.addIncludePath(vk_dep.path("include"));
+    exe.addLibraryPath(b.path("libs/vulkan"));
+
     exe.addLibraryPath(b.path("libs/SDL3"));
     exe.linkSystemLibrary("SDL3");
 
-    exe.addLibraryPath(b.path("libs/vulkan"));
     // Link Vulkan library
     if (target.result.os.tag == .windows) {
         exe.addObjectFile(b.path("AstralGen.res")); // Windows Exe Metadata
