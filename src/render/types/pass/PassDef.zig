@@ -54,19 +54,19 @@ pub const RenderNode = union(enum) {
     uiNode: UiNode,
 };
 
-pub const UiDraw = struct {
-    clipRect: [4]f32,
-    texId: TexId,
-    vtxOffset: i32,
-    idxOffset: u32,
-    elemCount: u32,
-};
-
 pub const UiNode = struct {
     windowId: WindowId,
     displayPos: [2]f32,
     displaySize: [2]f32,
-    cmdLists: []const UiDraw,
+    drawList: []const UiDraw,
+
+    pub const UiDraw = struct {
+        clipRect: [4]f32,
+        texId: TexId,
+        vtxOffset: i32,
+        idxOffset: u32,
+        elemCount: u32,
+    };
 };
 
 pub const ViewportBlit = struct {

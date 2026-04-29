@@ -289,8 +289,8 @@ pub const RenderGraph = struct {
             const buf = try resMan.get(ibUse.bufId, cmd.flightId);
             try self.checkBufferState(buf, .{ .stage = .VertexInput, .access = .IndexRead });
         }
-        for (uiNode.cmdLists) |cmdList| {
-            if (resMan.get(cmdList.texId, cmd.flightId)) |tex| {
+        for (uiNode.drawList) |drawList| {
+            if (resMan.get(drawList.texId, cmd.flightId)) |tex| {
                 try self.checkImageState(tex, .{ .stage = .Fragment, .access = .ShaderRead, .layout = .General });
             } else |_| {}
         }
@@ -324,18 +324,18 @@ pub const RenderGraph = struct {
         var lastTexId: u32 = 0;
         var lastTexDesc: u32 = 0;
 
-        for (uiNode.cmdLists) |cmdList| {
-            const x0 = @max(0.0, @min(cmdList.clipRect[0] - uiNode.displayPos[0], sw));
-            const y0 = @max(0.0, @min(cmdList.clipRect[1] - uiNode.displayPos[1], sh));
-            const x1 = @max(x0, @min(cmdList.clipRect[2] - uiNode.displayPos[0], sw));
-            const y1 = @max(y0, @min(cmdList.clipRect[3] - uiNode.displayPos[1], sh));
+        for (uiNode.drawList) |draw| {
+            const x0 = @max(0.0, @min(draw.clipRect[0] - uiNode.displayPos[0], sw));
+            const y0 = @max(0.0, @min(draw.clipRect[1] - uiNode.displayPos[1], sh));
+            const x1 = @max(x0, @min(draw.clipRect[2] - uiNode.displayPos[0], sw));
+            const y1 = @max(y0, @min(draw.clipRect[3] - uiNode.displayPos[1], sh));
             if (x1 - x0 <= 0 or y1 - y0 <= 0) continue;
 
             cmd.setScissor(x0, y0, x1 - x0, y1 - y0);
 
-            const texDesc = if (cmdList.texId.val == lastTexId) lastTexDesc else blk: {
-                const desc = try resMan.getDescriptor(cmdList.texId, cmd.flightId);
-                lastTexId = cmdList.texId.val;
+            const texDesc = if (draw.texId.val == lastTexId) lastTexDesc else blk: {
+                const desc = try resMan.getDescriptor(draw.texId, cmd.flightId);
+                lastTexId = draw.texId.val;
                 lastTexDesc = desc;
                 break :blk desc;
             };
@@ -346,7 +346,7 @@ pub const RenderGraph = struct {
                 .texDesc = texDesc,
             };
             cmd.setPushData(&pushConstants, @sizeOf(@TypeOf(pushConstants)), 0);
-            cmd.drawIndexed(cmdList.elemCount, 1, cmdList.idxOffset, cmdList.vtxOffset, 0);
+            cmd.drawIndexed(draw.elemCount, 1, draw.idxOffset, draw.vtxOffset, 0);
         }
 
         cmd.endRendering();

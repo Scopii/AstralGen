@@ -206,7 +206,7 @@ pub const UiSys = struct {
             const drawData = zgui.getDrawData();
             if (drawData.total_vtx_count == 0) continue;
 
-            var cmdListsArray = std.array_list.Managed(PassDef.UiDraw).init(arena);
+            var cmdListsArray = std.array_list.Managed(PassDef.UiNode.UiDraw).init(arena);
 
             for (drawData.cmd_lists.items[0..@intCast(drawData.cmd_lists_count)]) |cmdList| {
                 const vtxData = cmdList.getVertexBuffer();
@@ -240,7 +240,7 @@ pub const UiSys = struct {
                 .windowId = window.id,
                 .displayPos = drawData.display_pos,
                 .displaySize = drawData.display_size,
-                .cmdLists = try cmdListsArray.toOwnedSlice(),
+                .drawList = try cmdListsArray.toOwnedSlice(),
             });
         }
         data.ui.activeNodes = try uiNodes.toOwnedSlice();
