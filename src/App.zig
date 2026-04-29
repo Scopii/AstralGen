@@ -2,7 +2,7 @@ const TexId = @import("render/types/res/TextureMeta.zig").TextureMeta.TexId;
 const MemoryManager = @import("core/MemoryManager.zig").MemoryManager;
 const RNGenerator = @import("core/RNGenerator.zig").RNGenerator;
 const EngineData = @import("EngineData.zig").EngineData;
-const shaderCon = @import(".configs/shaderConfig.zig");
+const sc = @import(".configs/shaderConfig.zig");
 const rc = @import(".configs/renderConfig.zig");
 const zm = @import("zmath");
 const std = @import("std");
@@ -69,7 +69,7 @@ pub const App = struct {
         };
         errdefer ShaderSys.deinit(&data.shader, memoryMan.getAllocator());
 
-        try ShaderSys.loadShaders(&data.shader, memoryMan.getAllocator(), shaderCon.COMPILING_SHADERS);
+        try ShaderSys.loadShaders(&data.shader, memoryMan.getAllocator(), sc.COMPILING_SHADERS);
 
         var renderer = Renderer.init(memoryMan) catch |err| {
             WindowSys.showErrorBox("Astral App Error", "Renderer could not launch");
@@ -87,7 +87,7 @@ pub const App = struct {
     }
 
     pub fn deinit(self: *App) void {
-        UiSys.deinit(&self.data);
+        UiSys.deinit(&self.data.ui);
         self.renderer.deinit();
         ShaderSys.deinit(&self.data.shader, self.memoryMan.getAllocator());
         WindowSys.deinit(&self.data.window);
@@ -247,7 +247,7 @@ pub const App = struct {
             self.rendererQueue.append(.{ .addTexture = addTextureDataPtr });
         }
 
-        try UiSys.init(&self.data, self.memoryMan);
+        try UiSys.init(&self.data.ui, self.memoryMan);
     }
 
     pub fn run(self: *App) !void {
@@ -269,7 +269,7 @@ pub const App = struct {
             if (US_WAITED >= US_PER_FRAME) {
                 US_WAITED -= US_PER_FRAME;
 
-                if (shaderCon.SHADER_HOTLOAD == true) try ShaderSys.update(&self.data.shader, &self.shaderQueue, &self.rendererQueue, self.memoryMan);
+                if (sc.SHADER_HOTLOAD == true) try ShaderSys.update(&self.data.shader, &self.shaderQueue, &self.rendererQueue, self.memoryMan);
 
                 if (rc.EARLY_GPU_WAIT == true) try renderer.waitForGpu();
 
@@ -303,15 +303,7 @@ pub const App = struct {
 
                 try WindowSys.updateActiveWindows(&self.data.window);
 
-                const activeWindows = self.data.window.activeWindows.constSlice();
-
-                self.data.ui.activeNodes = &.{};
-
-                if (self.data.window.uiActive) {
-                    try UiSys.processTextures(&self.data, &self.rendererQueue, self.memoryMan);
-                    for (activeWindows) |*window| UiSys.buildWindowUi(window, &self.data);
-                    try UiSys.extractDrawData(&self.data, &self.rendererQueue, self.memoryMan);
-                }
+                try UiSys.update(&self.data.ui, &self.data, &self.rendererQueue, self.memoryMan);
 
                 if (rc.CPU_PROFILING) std.debug.print("Cpu pre-Renderer Delta {d:.3} ms, ({d:.1} Real FPS)\n", .{ dt * 0.000001, 1.0 / (dt * 0.000000001) });
 
@@ -321,7 +313,7 @@ pub const App = struct {
 
                 if (rc.EARLY_GPU_WAIT == false) try renderer.waitForGpu();
 
-                renderer.draw(frameData, &self.data, activeWindows) catch |err| {
+                renderer.draw(frameData, &self.data, self.data.window.activeWindows.constSlice()) catch |err| {
                     std.log.err("Error in renderer.submitDraw(): {}", .{err});
                     break;
                 };

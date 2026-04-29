@@ -5,13 +5,14 @@ const EngineData = @import("../EngineData.zig").EngineData;
 const Window = @import("../window/Window.zig").Window;
 const rc = @import("../.configs/renderConfig.zig");
 const ig = @cImport(@cInclude("imgui_ctx.h"));
+const UiData = @import("UiData.zig").UiData;
 const zgui = @import("zgui");
 const std = @import("std");
 
 pub const UiSys = struct {
-    pub fn init(data: *EngineData, memoryMan: *MemoryManager) !void {
+    pub fn init(ui: *UiData, memoryMan: *MemoryManager) !void {
         zgui.init(memoryMan.getAllocator());
-        data.ui.baseContext = ig.igui_get_current_context();
+        ui.baseContext = ig.igui_get_current_context();
         zgui.io.setBackendFlags(.{ .renderer_has_textures = true, .renderer_has_vtx_offset = true });
 
         // Force Atlas with Dummy Frame:
@@ -19,15 +20,25 @@ pub const UiSys = struct {
         // zgui.io.setDeltaTime(1.0 / 60.0);
         zgui.newFrame();
         zgui.render();
-        data.ui.fontAtlas = ig.igui_get_font_atlas();
-        data.ui.initialized = true;
+        ui.fontAtlas = ig.igui_get_font_atlas();
+        ui.initialized = true;
     }
 
-    pub fn processTextures(data: *EngineData, rendererQueue: *RendererQueue, memoryMan: *MemoryManager) !void {
-        if (!data.ui.initialized) return;
-        if (data.ui.contexts.getLength() == 0) return; // at least one window context to access shared atlas
+    pub fn update(ui: *UiData, data: *const EngineData, rendererQueue: *RendererQueue, memoryMan: *MemoryManager) !void {
+        ui.activeNodes = &.{};
 
-        ig.igui_set_current_context(@ptrCast(data.ui.contexts.getFirst()));
+        if (data.window.uiActive) {
+            try processTextures(ui, rendererQueue, memoryMan);
+            for (data.window.activeWindows.constSlice()) |*window| buildWindowUi(window, ui, data.time.deltaTime);
+            try extractDrawData(ui, data, rendererQueue, memoryMan);
+        }
+    }
+
+    fn processTextures(ui: *UiData, rendererQueue: *RendererQueue, memoryMan: *MemoryManager) !void {
+        if (!ui.initialized) return;
+        if (ui.contexts.getLength() == 0) return; // at least one window context to access shared atlas
+
+        ig.igui_set_current_context(@ptrCast(ui.contexts.getFirst()));
         const texData = zgui.io.getFontsTexRef().tex_data orelse return;
 
         switch (texData.status) {
@@ -69,33 +80,33 @@ pub const UiSys = struct {
         }
     }
 
-    pub fn buildWindowUi(window: *const Window, data: *EngineData) void {
-        if (!data.ui.initialized) return;
+    fn buildWindowUi(window: *const Window, ui: *UiData, deltaTime: i128) void {
+        if (!ui.initialized) return;
 
-        if (!data.ui.contexts.isKeyUsed(window.id.val)) {
+        if (!ui.contexts.isKeyUsed(window.id.val)) {
             // New Context
-            const context = ig.igui_create_context(@ptrCast(data.ui.fontAtlas));
-            data.ui.contexts.upsert(window.id.val, @ptrCast(context));
+            const context = ig.igui_create_context(@ptrCast(ui.fontAtlas));
+            ui.contexts.upsert(window.id.val, @ptrCast(context));
             ig.igui_set_current_context(@ptrCast(context));
             zgui.backend.initVulkan(window.handle);
             zgui.io.setBackendFlags(.{ .renderer_has_textures = true, .renderer_has_vtx_offset = true });
         } else {
             // Change Context
-            ig.igui_set_current_context(@ptrCast(data.ui.contexts.getByKey(window.id.val)));
+            ig.igui_set_current_context(@ptrCast(ui.contexts.getByKey(window.id.val)));
         }
 
         zgui.io.setDisplaySize(@floatFromInt(window.extent.width), @floatFromInt(window.extent.height));
-        zgui.io.setDeltaTime(@as(f32, @floatFromInt(data.time.deltaTime)) * 1e-9);
+        zgui.io.setDeltaTime(@as(f32, @floatFromInt(deltaTime)) * 1e-9);
 
         zgui.newFrame();
 
         // drawBorderUi(window, data);
-        drawSimpleWindowUi(window, data);
+        drawSimpleWindowUi(window);
 
         zgui.render();
     }
 
-    pub fn drawSimpleWindowUi(window: *const Window, _: *EngineData) void {
+    fn drawSimpleWindowUi(window: *const Window) void {
         var buf: [32]u8 = undefined;
         const panelName = std.fmt.bufPrintZ(&buf, "Window (ID {d})", .{window.id.val}) catch "";
         if (zgui.begin(panelName, .{ .flags = .{ .no_background = true } })) {
@@ -107,7 +118,7 @@ pub const UiSys = struct {
         zgui.end();
     }
 
-    pub fn drawBorderUi(window: *const Window, data: *EngineData) void {
+    fn drawBorderUi(window: *const Window, data: *EngineData) void {
         const width = @as(f32, @floatFromInt(window.extent.width));
         const height = @as(f32, @floatFromInt(window.extent.height));
 
@@ -175,7 +186,7 @@ pub const UiSys = struct {
         zgui.popStyleVar(.{ .count = 1 });
     }
 
-    pub fn extractDrawData(data: *EngineData, rendererQueue: *RendererQueue, memoryMan: *MemoryManager) !void {
+    fn extractDrawData(ui: *UiData, data: *const EngineData, rendererQueue: *RendererQueue, memoryMan: *MemoryManager) !void {
         const arena = memoryMan.getGlobalArena();
         var uiNodes = std.array_list.Managed(PassDef.UiNode).init(arena);
 
@@ -183,8 +194,8 @@ pub const UiSys = struct {
         var totalIdxBytes: u32 = 0;
 
         for (data.window.activeWindows.constSlice()) |window| {
-            if (!data.ui.contexts.isKeyUsed(window.id.val)) continue;
-            ig.igui_set_current_context(@ptrCast(data.ui.contexts.getByKey(window.id.val)));
+            if (!ui.contexts.isKeyUsed(window.id.val)) continue;
+            ig.igui_set_current_context(@ptrCast(ui.contexts.getByKey(window.id.val)));
 
             const drawData = zgui.getDrawData();
             totalVtxBytes += @intCast(drawData.total_vtx_count * @sizeOf(zgui.DrawVert));
@@ -200,8 +211,8 @@ pub const UiSys = struct {
         var globalIdxOffset: u32 = 0;
 
         for (data.window.activeWindows.constSlice()) |window| {
-            if (!data.ui.contexts.isKeyUsed(window.id.val)) continue;
-            ig.igui_set_current_context(@ptrCast(data.ui.contexts.getByKey(window.id.val)));
+            if (!ui.contexts.isKeyUsed(window.id.val)) continue;
+            ig.igui_set_current_context(@ptrCast(ui.contexts.getByKey(window.id.val)));
 
             const drawData = zgui.getDrawData();
             if (drawData.total_vtx_count == 0) continue;
@@ -243,7 +254,7 @@ pub const UiSys = struct {
                 .drawList = try cmdListsArray.toOwnedSlice(),
             });
         }
-        data.ui.activeNodes = try uiNodes.toOwnedSlice();
+        ui.activeNodes = try uiNodes.toOwnedSlice();
 
         const PayloadVtx = @FieldType(RendererQueue.RendererEvent, "updateBuffer");
         const updateVtxPtr = try arena.create(std.meta.Child(PayloadVtx));
@@ -256,17 +267,17 @@ pub const UiSys = struct {
         rendererQueue.append(.{ .updateBuffer = updateIdxPtr });
     }
 
-    pub fn deinit(data: *EngineData) void {
-        if (!data.ui.initialized) return;
+    pub fn deinit(ui: *UiData) void {
+        if (!ui.initialized) return;
 
-        for (data.ui.contexts.getItems()) |ctx| {
+        for (ui.contexts.getItems()) |ctx| {
             ig.igui_set_current_context(@ptrCast(ctx));
             zgui.backend.deinit();
             ig.igui_destroy_context(@ptrCast(ctx));
         }
-        data.ui.contexts.clear();
-        ig.igui_set_current_context(@ptrCast(data.ui.baseContext));
+        ui.contexts.clear();
+        ig.igui_set_current_context(@ptrCast(ui.baseContext));
         zgui.deinit();
-        data.ui.initialized = false;
+        ui.initialized = false;
     }
 };

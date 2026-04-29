@@ -289,7 +289,7 @@ pub const RenderGraph = struct {
             const buf = try resMan.get(ibUse.bufId, cmd.flightId);
             try self.checkBufferState(buf, .{ .stage = .VertexInput, .access = .IndexRead });
         }
-        for (uiNode.drawList) |drawList| {
+        for (uiNode.drawList) |drawList| { // Suboptimal but needed for custom Textures later
             if (resMan.get(drawList.texId, cmd.flightId)) |tex| {
                 try self.checkImageState(tex, .{ .stage = .Fragment, .access = .ShaderRead, .layout = .General });
             } else |_| {}
