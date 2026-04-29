@@ -206,7 +206,7 @@ pub const UiSys = struct {
             const drawData = zgui.getDrawData();
             if (drawData.total_vtx_count == 0) continue;
 
-            var cmdListsArray = std.array_list.Managed(PassDef.UiDrawList).init(arena);
+            var cmdListsArray = std.array_list.Managed(PassDef.UiDraw).init(arena);
 
             for (drawData.cmd_lists.items[0..@intCast(drawData.cmd_lists_count)]) |cmdList| {
                 const vtxData = cmdList.getVertexBuffer();
@@ -215,15 +215,13 @@ pub const UiSys = struct {
                 @memcpy(vtxBuffer[vtxCursor .. vtxCursor + vtxData.len * @sizeOf(zgui.DrawVert)], std.mem.sliceAsBytes(vtxData));
                 @memcpy(idxBuffer[idxCursor .. idxCursor + idxData.len * @sizeOf(zgui.DrawIdx)], std.mem.sliceAsBytes(idxData));
 
-                var uiCmds = std.array_list.Managed(PassDef.UiDrawCmd).init(arena);
-
                 for (cmdList.getCmdBuffer()) |pcmd| {
                     if (pcmd.user_callback != null) continue;
 
                     var texIdVal: u32 = @intCast(@intFromEnum(pcmd.texture_ref.tex_id));
                     if (texIdVal == 0) texIdVal = rc.imguiFontTex.id.val;
 
-                    try uiCmds.append(.{
+                    try cmdListsArray.append(.{
                         .clipRect = pcmd.clip_rect,
                         .texId = .{ .val = texIdVal },
                         .vtxOffset = globalVtxOffset + @as(i32, @intCast(pcmd.vtx_offset)),
@@ -231,7 +229,6 @@ pub const UiSys = struct {
                         .elemCount = pcmd.elem_count,
                     });
                 }
-                try cmdListsArray.append(.{ .cmds = try uiCmds.toOwnedSlice() });
 
                 vtxCursor += @intCast(vtxData.len * @sizeOf(zgui.DrawVert));
                 idxCursor += @intCast(idxData.len * @sizeOf(zgui.DrawIdx));

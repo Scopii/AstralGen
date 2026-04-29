@@ -290,11 +290,9 @@ pub const RenderGraph = struct {
             try self.checkBufferState(buf, .{ .stage = .VertexInput, .access = .IndexRead });
         }
         for (uiNode.cmdLists) |cmdList| {
-            for (cmdList.cmds) |drawCmd| {
-                if (resMan.get(drawCmd.texId, cmd.flightId)) |tex| {
-                    try self.checkImageState(tex, .{ .stage = .Fragment, .access = .ShaderRead, .layout = .General });
-                } else |_| {}
-            }
+            if (resMan.get(cmdList.texId, cmd.flightId)) |tex| {
+                try self.checkImageState(tex, .{ .stage = .Fragment, .access = .ShaderRead, .layout = .General });
+            } else |_| {}
         }
         self.bakeBarriers(cmd, "UI Prep");
 
@@ -323,24 +321,32 @@ pub const RenderGraph = struct {
         const sw = @as(f32, @floatFromInt(swapchain.extent.width));
         const sh = @as(f32, @floatFromInt(swapchain.extent.height));
 
+        var lastTexId: u32 = 0;
+        var lastTexDesc: u32 = 0;
+
         for (uiNode.cmdLists) |cmdList| {
-            for (cmdList.cmds) |drawCmd| {
-                const x0 = @max(0.0, @min(drawCmd.clipRect[0] - uiNode.displayPos[0], sw));
-                const y0 = @max(0.0, @min(drawCmd.clipRect[1] - uiNode.displayPos[1], sh));
-                const x1 = @max(x0, @min(drawCmd.clipRect[2] - uiNode.displayPos[0], sw));
-                const y1 = @max(y0, @min(drawCmd.clipRect[3] - uiNode.displayPos[1], sh));
-                if (x1 - x0 <= 0 or y1 - y0 <= 0) continue;
+            const x0 = @max(0.0, @min(cmdList.clipRect[0] - uiNode.displayPos[0], sw));
+            const y0 = @max(0.0, @min(cmdList.clipRect[1] - uiNode.displayPos[1], sh));
+            const x1 = @max(x0, @min(cmdList.clipRect[2] - uiNode.displayPos[0], sw));
+            const y1 = @max(y0, @min(cmdList.clipRect[3] - uiNode.displayPos[1], sh));
+            if (x1 - x0 <= 0 or y1 - y0 <= 0) continue;
 
-                cmd.setScissor(x0, y0, x1 - x0, y1 - y0);
+            cmd.setScissor(x0, y0, x1 - x0, y1 - y0);
 
-                const pushConstants = ImGuiPushConstants{
-                    .scale = .{ scaleX, scaleY },
-                    .translate = .{ translateX, translateY },
-                    .texDesc = try resMan.getDescriptor(drawCmd.texId, cmd.flightId),
-                };
-                cmd.setPushData(&pushConstants, @sizeOf(@TypeOf(pushConstants)), 0);
-                cmd.drawIndexed(drawCmd.elemCount, 1, drawCmd.idxOffset, drawCmd.vtxOffset, 0);
-            }
+            const texDesc = if (cmdList.texId.val == lastTexId) lastTexDesc else blk: {
+                const desc = try resMan.getDescriptor(cmdList.texId, cmd.flightId);
+                lastTexId = cmdList.texId.val;
+                lastTexDesc = desc;
+                break :blk desc;
+            };
+
+            const pushConstants = ImGuiPushConstants{
+                .scale = .{ scaleX, scaleY },
+                .translate = .{ translateX, translateY },
+                .texDesc = texDesc,
+            };
+            cmd.setPushData(&pushConstants, @sizeOf(@TypeOf(pushConstants)), 0);
+            cmd.drawIndexed(cmdList.elemCount, 1, cmdList.idxOffset, cmdList.vtxOffset, 0);
         }
 
         cmd.endRendering();
