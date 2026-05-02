@@ -83,6 +83,10 @@ pub const PipeAccess = enum(vk.VkAccessFlagBits2) {
     ShaderWrite = vk.VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
     ShaderReadWrite = vk.VK_ACCESS_2_SHADER_STORAGE_READ_BIT | vk.VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
 
+    UniformRead = vk.VK_ACCESS_2_UNIFORM_READ_BIT,
+
+    SampledRead = vk.VK_ACCESS_2_SHADER_SAMPLED_READ_BIT,
+
     IndexRead = vk.VK_ACCESS_2_INDEX_READ_BIT,
 
     IndirectRead = vk.VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT,

@@ -331,7 +331,7 @@ pub const Cmd = struct {
         std.debug.print("Graphics State Changes: {}\n", .{self.stateChanges});
     }
 
-    pub fn bakeBarriers(self: *const Cmd, imgBarriers: []const vk.VkImageMemoryBarrier2, bufBarriers: []const vk.VkBufferMemoryBarrier2) void {
+    pub fn bakeBarriers(self: *const Cmd, imgBarriers: []const vk.VkImageMemoryBarrier2, bufBarriers: []const vk.VkBufferMemoryBarrier2, memBarriers: []const vk.VkMemoryBarrier2) void {
         const depInf = vk.VkDependencyInfo{
             //.dependencyFlags =
             .sType = vk.VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
@@ -339,8 +339,8 @@ pub const Cmd = struct {
             .pImageMemoryBarriers = imgBarriers.ptr,
             .bufferMemoryBarrierCount = @intCast(bufBarriers.len),
             .pBufferMemoryBarriers = bufBarriers.ptr,
-            //.memoryBarrierCount =
-            //.pMemoryBarriers =
+            .memoryBarrierCount = @intCast(memBarriers.len),
+            .pMemoryBarriers = memBarriers.ptr,
         };
         vk.vkCmdPipelineBarrier2(self.handle, &depInf);
     }

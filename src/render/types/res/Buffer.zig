@@ -33,4 +33,16 @@ pub const Buffer = struct {
         self.state = newState;
         return barrier;
     }
+
+    pub fn createBufferMemoryBarrier(self: *Buffer, newState: BufferState) vk.VkMemoryBarrier2 {
+        const barrier = vk.VkMemoryBarrier2{
+            .sType = vk.VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
+            .srcStageMask = @intFromEnum(self.state.stage),
+            .srcAccessMask = @intFromEnum(self.state.access),
+            .dstStageMask = @intFromEnum(newState.stage),
+            .dstAccessMask = @intFromEnum(newState.access),
+        };
+        self.state = newState;
+        return barrier;
+    }
 };

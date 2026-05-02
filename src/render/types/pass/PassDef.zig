@@ -397,6 +397,10 @@ pub const PassDef = struct {
         return self.colorAtts.constSlice();
     }
 
+    pub fn getVertexBufUse(self: *const PassDef) []const VertexBufferUse {
+        return self.vertexBuffers.constSlice();
+    }
+
     pub fn getMainTexId(self: *const PassDef) ?TexId {
         return switch (self.execution) {
             .taskOrMesh => |taskOrMesh| taskOrMesh.mainTexId,

@@ -20,16 +20,14 @@ const rc = @import("../../.configs/renderConfig.zig");
 const sc = @import("../../.configs/shaderConfig.zig");
 const FrameData = @import("../../App.zig").FrameData;
 const pc = @import("../../.configs/passConfig.zig");
-
 const Cmd = @import("../types/base/Cmd.zig").Cmd;
 const CmdManager = @import("CmdMan.zig").CmdMan;
 const Context = @import("Context.zig").Context;
 const vk = @import("../../.modules/vk.zig").c;
 const vhT = @import("../help/Types.zig");
+const vhE = @import("../help/Enums.zig");
 const Allocator = std.mem.Allocator;
 const std = @import("std");
-
-const EngineData = @import("../../EngineData.zig").EngineData;
 
 pub const RenderGraph = struct {
     alloc: Allocator,
@@ -37,6 +35,7 @@ pub const RenderGraph = struct {
     cmdMan: CmdManager,
     imgBarriers: std.array_list.Managed(vk.VkImageMemoryBarrier2),
     bufBarriers: std.array_list.Managed(vk.VkBufferMemoryBarrier2),
+    memBarriers: std.array_list.Managed(vk.VkMemoryBarrier2),
     useGpuProfiling: bool = rc.GPU_PROFILING,
     lastPassTyp: ?PassDef.PassExecution = null,
 
@@ -47,12 +46,14 @@ pub const RenderGraph = struct {
             .cmdMan = try CmdManager.init(alloc, context, rc.MAX_IN_FLIGHT),
             .imgBarriers = try std.array_list.Managed(vk.VkImageMemoryBarrier2).initCapacity(alloc, 30),
             .bufBarriers = try std.array_list.Managed(vk.VkBufferMemoryBarrier2).initCapacity(alloc, 30),
+            .memBarriers = try std.array_list.Managed(vk.VkMemoryBarrier2).initCapacity(alloc, 30),
         };
     }
 
     pub fn deinit(self: *RenderGraph) void {
         self.imgBarriers.deinit();
         self.bufBarriers.deinit();
+        self.memBarriers.deinit();
         self.cmdMan.deinit();
     }
 
@@ -156,26 +157,18 @@ pub const RenderGraph = struct {
     fn checkImageState(self: *RenderGraph, tex: *Texture, neededState: Texture.TextureState) !void {
         const state = tex.state;
         if (state.stage == neededState.stage and state.access == neededState.access and state.layout == neededState.layout) return;
+        if (state.layout == neededState.layout and isReadOnly(state.access) and isReadOnly(neededState.access)) return; // same layout, both reads
         try self.imgBarriers.append(tex.createImageBarrier(neededState));
     }
 
     fn checkBufferState(self: *RenderGraph, buffer: *Buffer, neededState: Buffer.BufferState) !void {
         const state = buffer.state;
         if (state.stage == neededState.stage and state.access == neededState.access) return;
+        if (isReadOnly(state.access) and isReadOnly(neededState.access)) return;
 
-        const curReadOnly = state.access == .ShaderRead or
-            state.access == .IndirectRead or
-            state.access == .VertexAttributeRead or
-            state.access == .IndexRead;
-
-        const newReadOnly = neededState.access == .ShaderRead or
-            neededState.access == .IndirectRead or
-            neededState.access == .VertexAttributeRead or
-            neededState.access == .IndexRead;
-
-        if (curReadOnly and newReadOnly) return;
-
-        try self.bufBarriers.append(buffer.createBufferBarrier(neededState));
+        if (rc.USE_MEM_BARRIERS_ON_BUFFERS) {
+            try self.memBarriers.append(buffer.createBufferMemoryBarrier(neededState));
+        } else try self.bufBarriers.append(buffer.createBufferBarrier(neededState));
     }
 
     fn recordPassBarriers(self: *RenderGraph, cmd: *const Cmd, pass: *const PassDef, resMan: *ResourceMan) !void {
@@ -199,7 +192,7 @@ pub const RenderGraph = struct {
             const tex = try resMan.get(attachment.texId, cmd.flightId);
             try self.checkImageState(tex, attachment.getNeededState());
         }
-        for (pass.vertexBuffers.constSlice()) |vbUse| {
+        for (pass.getVertexBufUse()) |vbUse| {
             const buf = try resMan.get(vbUse.bufId, cmd.flightId);
             try self.checkBufferState(buf, .{ .stage = .VertexInput, .access = .VertexAttributeRead });
         }
@@ -291,7 +284,7 @@ pub const RenderGraph = struct {
         }
         for (uiNode.drawList) |drawList| { // Suboptimal but needed for custom Textures later
             if (resMan.get(drawList.texId, cmd.flightId)) |tex| {
-                try self.checkImageState(tex, .{ .stage = .Fragment, .access = .ShaderRead, .layout = .General });
+                try self.checkImageState(tex, .{ .stage = .Fragment, .access = .SampledRead, .layout = .General });
             } else |_| {}
         }
         self.bakeBarriers(cmd, "UI Prep");
@@ -459,12 +452,14 @@ pub const RenderGraph = struct {
     fn bakeBarriers(self: *RenderGraph, cmd: *const Cmd, name: []const u8) void {
         const imgBarrierCount = self.imgBarriers.items.len;
         const bufBarrierCount = self.bufBarriers.items.len;
+        const memBarrierCount = self.memBarriers.items.len;
 
-        if (imgBarrierCount != 0 or bufBarrierCount != 0) {
-            if (rc.BARRIER_DEBUG == true) std.debug.print("BakeBarriers: {} Img, {} Buf ({s})\n", .{ imgBarrierCount, bufBarrierCount, name });
-            cmd.bakeBarriers(self.imgBarriers.items, self.bufBarriers.items);
+        if (imgBarrierCount != 0 or bufBarrierCount != 0 or memBarrierCount != 0) {
+            if (rc.BARRIER_DEBUG == true) std.debug.print("BakeBarriers: {} Img, {} Buf , {} Mem ({s})\n", .{ imgBarrierCount, bufBarrierCount, name });
+            cmd.bakeBarriers(self.imgBarriers.items, self.bufBarriers.items, self.memBarriers.items);
             self.imgBarriers.clearRetainingCapacity();
             self.bufBarriers.clearRetainingCapacity();
+            self.memBarriers.clearRetainingCapacity();
         } else if (rc.BARRIER_DEBUG == true) std.debug.print("BakeBarriers: Skipped ({s})\n", .{name});
     }
 
@@ -502,5 +497,22 @@ pub const RenderGraph = struct {
             bufHandles[i] = (try resMan.get(vbUse.bufId, flightId)).handle;
         }
         cmd.bindVertexBuffers(0, bufHandles[0..pass.vertexBuffers.len], bufOffsets[0..pass.vertexBuffers.len]);
+    }
+
+    fn isReadOnly(access: vhE.PipeAccess) bool {
+        return switch (access) {
+            .ShaderRead,
+            .IndexRead,
+            .IndirectRead,
+            .VertexAttributeRead,
+            .ColorAttRead,
+            .DepthStencilRead,
+            .TransferRead,
+            .MemoryRead,
+            .UniformRead,
+            .SampledRead,
+            => true,
+            else => false,
+        };
     }
 };

@@ -90,7 +90,7 @@ pub const DescriptorMan = struct {
         self.devRanges[descUpdate.specificIndex] = vk.VkDeviceAddressRangeEXT{ .address = gpuAddress, .size = size };
         self.descInfos[descUpdate.mainIndex] = vk.VkResourceDescriptorInfoEXT{
             .sType = vk.VK_STRUCTURE_TYPE_RESOURCE_DESCRIPTOR_INFO_EXT,
-            .type = if (bufTyp == .Uniform) vk.VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER else vk.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+            .type = if (bufTyp == .Uniform) vk.VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER else vk.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, // This is correct!
             .data = .{ .pAddressRange = &self.devRanges[descUpdate.specificIndex] },
         };
     }

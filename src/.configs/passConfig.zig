@@ -57,7 +57,7 @@ pub fn CompRayMarch(
         .compute = sc.t1Comp,
         .bufUses = &.{
             BufferUse.init(def.entityBuf, .Compute, .ShaderRead, 0),
-            BufferUse.init(def.camBuf, .Compute, .ShaderRead, 1),
+            BufferUse.init(def.camBuf, .Compute, .UniformRead, 1),
             BufferUse.init(def.readbackBuf, .Compute, .ShaderWrite, 3),
         },
         .texUses = &.{
@@ -81,7 +81,7 @@ pub fn EditorGrid(
         .mesh = sc.editorGridMesh,
         .fragment = sc.editorGridFrag,
         .bufUses = &.{
-            BufferUse.init(def.camBuf, .Mesh, .ShaderRead, 0),
+            BufferUse.init(def.camBuf, .Mesh, .UniformRead, 0),
         },
         .colorAtts = &.{AttachmentUse.init(def.colorAtt, .ColorAtt, .ColorAttReadWrite, false)},
         .depthAtt = AttachmentUse.init(def.depthAtt, .EarlyFragTest, .DepthStencilWrite, false),
@@ -109,8 +109,8 @@ pub fn FrustumView(
         .mesh = sc.frustumMesh,
         .fragment = sc.quantFrag,
         .bufUses = &.{
-            BufferUse.init(def.frustumCamBuf, .Mesh, .ShaderRead, 0),
-            BufferUse.init(def.viewCamBuf, .Mesh, .ShaderRead, 1),
+            BufferUse.init(def.frustumCamBuf, .Mesh, .UniformRead, 0),
+            BufferUse.init(def.viewCamBuf, .Mesh, .UniformRead, 1),
         },
         .colorAtts = &.{AttachmentUse.init(def.colorAtt, .ColorAtt, .ColorAttReadWrite, false)},
         .depthAtt = AttachmentUse.init(def.depthAtt, .EarlyFragTest, .DepthStencilWrite, false),
@@ -162,8 +162,8 @@ pub fn QuantGrid(
         .fragment = sc.quantFrag,
         .bufUses = &.{
             BufferUse.init(def.indirectBuf, .DrawIndirect, .IndirectRead, null),
-            BufferUse.init(def.viewCam, .Fragment, .ShaderRead, 0),
-            BufferUse.init(def.cullCam, .Fragment, .ShaderRead, 1),
+            BufferUse.init(def.viewCam, .Fragment, .UniformRead, 0),
+            BufferUse.init(def.cullCam, .Fragment, .UniformRead, 1),
         },
         .colorAtts = &.{AttachmentUse.init(def.colorAtt, .ColorAtt, .ColorAttReadWrite, true)},
         .depthAtt = AttachmentUse.init(def.depthAtt, .EarlyFragTest, .DepthStencilWrite, true),
@@ -198,8 +198,8 @@ pub fn QuantPlane(
         .fragment = sc.quantFrag,
         .bufUses = &.{
             BufferUse.init(def.indirectBuf, .DrawIndirect, .IndirectRead, null),
-            BufferUse.init(def.viewCam, .Fragment, .ShaderRead, 0),
-            BufferUse.init(def.cullCam, .Fragment, .ShaderRead, 1),
+            BufferUse.init(def.viewCam, .Fragment, .UniformRead, 0),
+            BufferUse.init(def.cullCam, .Fragment, .UniformRead, 1),
         },
         .colorAtts = &.{AttachmentUse.init(def.colorAtt, .ColorAtt, .ColorAttReadWrite, true)},
         .depthAtt = AttachmentUse.init(def.depthAtt, .EarlyFragTest, .DepthStencilWrite, true),
@@ -252,8 +252,8 @@ pub fn Cull(
         .fragment = sc.cullTestFrag,
         .bufUses = &.{
             BufferUse.init(def.indirectBuf, .DrawIndirect, .IndirectRead, null),
-            BufferUse.init(def.viewCam, .Fragment, .ShaderRead, 0),
-            BufferUse.init(def.cullCam, .Fragment, .ShaderRead, 1),
+            BufferUse.init(def.viewCam, .Fragment, .UniformRead, 0),
+            BufferUse.init(def.cullCam, .Fragment, .UniformRead, 1),
         },
         .colorAtts = &.{AttachmentUse.init(def.colorAtt, .ColorAtt, .ColorAttReadWrite, true)},
         .depthAtt = AttachmentUse.init(def.depthAtt, .EarlyFragTest, .DepthStencilWrite, true),
