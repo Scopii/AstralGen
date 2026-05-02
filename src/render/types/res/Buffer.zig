@@ -34,7 +34,7 @@ pub const Buffer = struct {
         return barrier;
     }
 
-    pub fn createBufferMemoryBarrier(self: *Buffer, newState: BufferState) vk.VkMemoryBarrier2 {
+    pub fn createMemoryBarrier(self: *Buffer, newState: BufferState) vk.VkMemoryBarrier2 {
         const barrier = vk.VkMemoryBarrier2{
             .sType = vk.VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
             .srcStageMask = @intFromEnum(self.state.stage),

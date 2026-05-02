@@ -50,6 +50,7 @@ pub const LINKED_TEX_MAX = 3;
 pub const RENDER_TEX_AUTO_RESIZE = true;
 pub const RENDER_TEX_STRETCH = true; // Maybe ignored on AUTO_RESIZE
 pub const USE_MEM_BARRIERS_ON_BUFFERS = true;
+pub const USE_MEM_BARRIER_ON_IMAGES = true;
 
 // Resource Information
 pub const BUF_MAX = 63;

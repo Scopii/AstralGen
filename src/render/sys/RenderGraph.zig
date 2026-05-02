@@ -35,7 +35,10 @@ pub const RenderGraph = struct {
     cmdMan: CmdManager,
     imgBarriers: std.array_list.Managed(vk.VkImageMemoryBarrier2),
     bufBarriers: std.array_list.Managed(vk.VkBufferMemoryBarrier2),
-    memBarriers: std.array_list.Managed(vk.VkMemoryBarrier2),
+    memSrcStage: vk.VkPipelineStageFlags2 = 0,
+    memSrcAccess: vk.VkAccessFlags2 = 0,
+    memDstStage: vk.VkPipelineStageFlags2 = 0,
+    memDstAccess: vk.VkAccessFlags2 = 0,
     useGpuProfiling: bool = rc.GPU_PROFILING,
     lastPassTyp: ?PassDef.PassExecution = null,
 
@@ -46,14 +49,12 @@ pub const RenderGraph = struct {
             .cmdMan = try CmdManager.init(alloc, context, rc.MAX_IN_FLIGHT),
             .imgBarriers = try std.array_list.Managed(vk.VkImageMemoryBarrier2).initCapacity(alloc, 30),
             .bufBarriers = try std.array_list.Managed(vk.VkBufferMemoryBarrier2).initCapacity(alloc, 30),
-            .memBarriers = try std.array_list.Managed(vk.VkMemoryBarrier2).initCapacity(alloc, 30),
         };
     }
 
     pub fn deinit(self: *RenderGraph) void {
         self.imgBarriers.deinit();
         self.bufBarriers.deinit();
-        self.memBarriers.deinit();
         self.cmdMan.deinit();
     }
 
@@ -158,7 +159,18 @@ pub const RenderGraph = struct {
         const state = tex.state;
         if (state.stage == neededState.stage and state.access == neededState.access and state.layout == neededState.layout) return;
         if (state.layout == neededState.layout and isReadOnly(state.access) and isReadOnly(neededState.access)) return; // same layout, both reads
-        try self.imgBarriers.append(tex.createImageBarrier(neededState));
+
+        const layoutTransition = if (state.layout != neededState.layout) true else false;
+
+        if (rc.USE_MEM_BARRIER_ON_IMAGES == true and layoutTransition == false) {
+            const memBarrier = tex.createMemoryBarrier(neededState);
+            self.memSrcAccess |= memBarrier.srcAccessMask;
+            self.memSrcStage |= memBarrier.srcStageMask;
+            self.memDstAccess |= memBarrier.dstAccessMask;
+            self.memDstStage |= memBarrier.dstStageMask;
+        } else {
+            try self.imgBarriers.append(tex.createImageBarrier(neededState));
+        }
     }
 
     fn checkBufferState(self: *RenderGraph, buffer: *Buffer, neededState: Buffer.BufferState) !void {
@@ -167,8 +179,14 @@ pub const RenderGraph = struct {
         if (isReadOnly(state.access) and isReadOnly(neededState.access)) return;
 
         if (rc.USE_MEM_BARRIERS_ON_BUFFERS) {
-            try self.memBarriers.append(buffer.createBufferMemoryBarrier(neededState));
-        } else try self.bufBarriers.append(buffer.createBufferBarrier(neededState));
+            const memBarrier = buffer.createMemoryBarrier(neededState);
+            self.memSrcAccess |= memBarrier.srcAccessMask;
+            self.memSrcStage |= memBarrier.srcStageMask;
+            self.memDstAccess |= memBarrier.dstAccessMask;
+            self.memDstStage |= memBarrier.dstStageMask;
+        } else {
+            try self.bufBarriers.append(buffer.createBufferBarrier(neededState));
+        }
     }
 
     fn recordPassBarriers(self: *RenderGraph, cmd: *const Cmd, pass: *const PassDef, resMan: *ResourceMan) !void {
@@ -452,15 +470,31 @@ pub const RenderGraph = struct {
     fn bakeBarriers(self: *RenderGraph, cmd: *const Cmd, name: []const u8) void {
         const imgBarrierCount = self.imgBarriers.items.len;
         const bufBarrierCount = self.bufBarriers.items.len;
-        const memBarrierCount = self.memBarriers.items.len;
+        const hasMemBarrier = self.memSrcStage != 0;
 
-        if (imgBarrierCount != 0 or bufBarrierCount != 0 or memBarrierCount != 0) {
-            if (rc.BARRIER_DEBUG == true) std.debug.print("BakeBarriers: {} Img, {} Buf, {} Mem ({s})\n", .{ imgBarrierCount, bufBarrierCount, memBarrierCount, name });
-            cmd.bakeBarriers(self.imgBarriers.items, self.bufBarriers.items, self.memBarriers.items);
+        if (imgBarrierCount != 0 or bufBarrierCount != 0 or hasMemBarrier) {
+            if (rc.BARRIER_DEBUG) std.debug.print("BakeBarriers: {} Img, {} Buf ({s})\n", .{ imgBarrierCount, bufBarrierCount, name });
+
+            if (hasMemBarrier) {
+                const memBarrier = vk.VkMemoryBarrier2{
+                    .sType = vk.VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
+                    .srcStageMask = self.memSrcStage,
+                    .srcAccessMask = self.memSrcAccess,
+                    .dstStageMask = self.memDstStage,
+                    .dstAccessMask = self.memDstAccess,
+                };
+                cmd.bakeBarriers(self.imgBarriers.items, self.bufBarriers.items, &.{memBarrier});
+            } else {
+                cmd.bakeBarriers(self.imgBarriers.items, self.bufBarriers.items, &.{});
+            }
+
             self.imgBarriers.clearRetainingCapacity();
             self.bufBarriers.clearRetainingCapacity();
-            self.memBarriers.clearRetainingCapacity();
-        } else if (rc.BARRIER_DEBUG == true) std.debug.print("BakeBarriers: Skipped ({s})\n", .{name});
+            self.memSrcStage = 0;
+            self.memSrcAccess = 0;
+            self.memDstStage = 0;
+            self.memDstAccess = 0;
+        } else if (rc.BARRIER_DEBUG) std.debug.print("BakeBarriers: Skipped ({s})\n", .{name});
     }
 
     fn bindVertexInputFromPass(cmd: *Cmd, pass: *const PassDef, resMan: *ResourceMan, flightId: u8) !void {
