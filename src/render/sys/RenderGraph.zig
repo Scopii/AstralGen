@@ -484,16 +484,16 @@ pub const RenderGraph = struct {
                     .dstAccessMask = self.memDstAccess,
                 };
                 cmd.bakeBarriers(self.imgBarriers.items, self.bufBarriers.items, &.{memBarrier});
+                self.memSrcStage = 0;
+                self.memSrcAccess = 0;
+                self.memDstStage = 0;
+                self.memDstAccess = 0;
             } else {
                 cmd.bakeBarriers(self.imgBarriers.items, self.bufBarriers.items, &.{});
             }
 
             self.imgBarriers.clearRetainingCapacity();
             self.bufBarriers.clearRetainingCapacity();
-            self.memSrcStage = 0;
-            self.memSrcAccess = 0;
-            self.memDstStage = 0;
-            self.memDstAccess = 0;
         } else if (rc.BARRIER_DEBUG) std.debug.print("BakeBarriers: Skipped ({s})\n", .{name});
     }
 
