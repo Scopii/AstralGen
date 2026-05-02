@@ -455,7 +455,7 @@ pub const RenderGraph = struct {
         const memBarrierCount = self.memBarriers.items.len;
 
         if (imgBarrierCount != 0 or bufBarrierCount != 0 or memBarrierCount != 0) {
-            if (rc.BARRIER_DEBUG == true) std.debug.print("BakeBarriers: {} Img, {} Buf , {} Mem ({s})\n", .{ imgBarrierCount, bufBarrierCount, name });
+            if (rc.BARRIER_DEBUG == true) std.debug.print("BakeBarriers: {} Img, {} Buf, {} Mem ({s})\n", .{ imgBarrierCount, bufBarrierCount, memBarrierCount, name });
             cmd.bakeBarriers(self.imgBarriers.items, self.bufBarriers.items, self.memBarriers.items);
             self.imgBarriers.clearRetainingCapacity();
             self.bufBarriers.clearRetainingCapacity();
