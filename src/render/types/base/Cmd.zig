@@ -517,6 +517,12 @@ pub const Cmd = struct {
         vk.vkCmdFillBuffer(self.handle, buffer, offset, size, data);
     }
 
+    pub fn clearColorImage(self: *const Cmd, img: vk.VkImage) void {
+        const clearColor = vk.VkClearColorValue{ .float32 = .{ 0.0, 0.0, 0.0, 1.0 } };
+        const subRange = vhF.createSubresourceRange(vk.VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1);
+        vk.vkCmdClearColorImage(self.handle, img, vk.VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clearColor, 1, &subRange);
+    }
+
     pub fn copyBuffer(self: *const Cmd, srcBuffer: vk.VkBuffer, transfer: BufTransfer, dstBuffer: vk.VkBuffer) void {
         const copy = vk.VkBufferCopy{ .srcOffset = transfer.srcOffset, .dstOffset = transfer.dstOffset, .size = transfer.size };
         vk.vkCmdCopyBuffer(self.handle, srcBuffer, dstBuffer, 1, &copy);

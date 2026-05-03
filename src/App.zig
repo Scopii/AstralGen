@@ -30,6 +30,7 @@ const Viewport = @import("viewport/Viewport.zig").Viewport;
 
 const FrameBuildSys = @import("frameBuild/FrameBuildSys.zig").FrameBuildSys;
 
+const RendererOutQueue = @import("render/RendererOutQueue.zig").RendererOutQueue;
 const RendererQueue = @import("render/RendererQueue.zig").RendererQueue;
 const Renderer = @import("render/Renderer.zig").Renderer;
 
@@ -46,10 +47,11 @@ pub const App = struct {
 
     data: EngineData,
 
-    inputQueue: @import("input/InputQueue.zig").InputQueue = .{},
-    shaderQueue: @import("shader/ShaderQueue.zig").ShaderQueue = .{},
-    windowQueue: @import("window/WindowQueue.zig").WindowQueue = .{},
-    rendererQueue: @import("render/RendererQueue.zig").RendererQueue = .{},
+    inputQueue: InputQueue = .{},
+    shaderQueue: ShaderQueue = .{},
+    windowQueue: WindowQueue = .{},
+    rendererQueue: RendererQueue = .{},
+    rendererOutQueue: RendererOutQueue = .{},
 
     renderer: Renderer,
 
@@ -313,10 +315,12 @@ pub const App = struct {
 
                 if (rc.EARLY_GPU_WAIT == false) try renderer.waitForGpu();
 
-                renderer.draw(frameData, &self.data, self.data.window.activeWindows.constSlice()) catch |err| {
+                renderer.draw(frameData, &self.data, self.data.window.activeWindows.constSlice(), &self.rendererOutQueue) catch |err| {
                     std.log.err("Error in renderer.submitDraw(): {}", .{err});
                     break;
                 };
+
+                WindowSys.showPresentedWindows(&self.data.window, &self.rendererOutQueue);
 
                 self.memoryMan.resetArena();
                 ShaderSys.freeFreshShaders(&self.data.shader, self.memoryMan.getAllocator()); // SHOULD CHANGE TO USE ARENA

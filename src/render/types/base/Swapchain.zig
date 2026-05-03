@@ -1,3 +1,4 @@
+const WindowId = @import("../../../window/Window.zig").Window.WindowId;
 const TexId = @import("../res/TextureMeta.zig").TextureMeta.TexId;
 const rc = @import("../../../.configs/renderConfig.zig");
 const Texture = @import("../res/Texture.zig").Texture;
@@ -18,7 +19,7 @@ pub const Swapchain = struct {
     textures: []Texture, // indexed by swapchain images
     extent: vk.VkExtent2D,
     inUse: bool = true,
-    windowId: u32,
+    windowId: WindowId,
 
     pub fn init(
         alloc: Allocator,
@@ -29,7 +30,7 @@ pub const Swapchain = struct {
         renderTexId: TexId,
         linkedTexIds: [rc.LINKED_TEX_MAX]?TexId,
         oldHandle: ?vk.VkSwapchainKHR,
-        windowId: u32,
+        windowId: WindowId,
     ) !Swapchain {
         const mode = rc.DISPLAY_MODE; //try pickPresentMode();
         const caps = try getSurfaceCaps(gpu, surface);

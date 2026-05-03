@@ -16,6 +16,7 @@ const vk = @import("../.modules/vk.zig").c;
 const Allocator = std.mem.Allocator;
 const std = @import("std");
 
+const RendererOutQueue = @import("RendererOutQueue.zig").RendererOutQueue;
 const RendererQueue = @import("RendererQueue.zig").RendererQueue;
 const EngineData = @import("../EngineData.zig").EngineData;
 const Window = @import("../window/Window.zig").Window;
@@ -115,7 +116,7 @@ pub const Renderer = struct {
         try self.scheduler.waitForGPU();
     }
 
-    pub fn draw(self: *Renderer, frameData: FrameData, data: *const EngineData, activeWindows: []const Window) !void {
+    pub fn draw(self: *Renderer, frameData: FrameData, data: *const EngineData, activeWindows: []const Window, rendererOutQueue: *RendererOutQueue) !void {
         self.renderNodes.clearRetainingCapacity();
         try self.renderNodes.appendSlice(data.frameBuild.passList.constSlice());
 
@@ -136,6 +137,8 @@ pub const Renderer = struct {
 
         try self.scheduler.queueSubmit(cmd, &self.swapMan, self.context.graphicsQ);
         try self.scheduler.queuePresent(&self.swapMan, self.context.graphicsQ);
+
+        self.swapMan.incrementHiddenSwapchains(rendererOutQueue);
 
         self.scheduler.endFrame();
     }

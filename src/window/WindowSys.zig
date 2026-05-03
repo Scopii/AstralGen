@@ -1,3 +1,4 @@
+const RendererOutQueue = @import("../render/RendererOutQueue.zig").RendererOutQueue;
 const TexId = @import("../render/types/res/TextureMeta.zig").TextureMeta.TexId;
 const RendererQueue = @import("../render/RendererQueue.zig").RendererQueue;
 const MemoryManager = @import("../core/MemoryManager.zig").MemoryManager;
@@ -37,14 +38,21 @@ pub const WindowSys = struct {
         sdl.SDL_Quit();
     }
 
-    pub fn update(windowData: *WindowData, state: *const EngineData, windowQueue: *WindowQueue, rendererQueue: *RendererQueue, memoryMan: *MemoryManager) !void {
-        for (windowData.hiddenWindows.constSlice()) |windowId| {
-            const hiddenWindow = windowData.windows.getPtrByKey(windowId.val);
-            hiddenWindow.show();
-            hiddenWindow.setOpacity(1.0);
+    pub fn showPresentedWindows(windowData: *WindowData, rendererOutQueue: *RendererOutQueue) void {
+        for (rendererOutQueue.get()) |event| {
+            switch (event) {
+                .framePresentedForWindow => |windowId| {
+                    const hiddenWindow = windowData.windows.getPtrByKey(windowId.val);
+                    hiddenWindow.show();
+                    hiddenWindow.setOpacity(1.0);
+                    hiddenWindow.restore();
+                },
+            }
         }
-        windowData.hiddenWindows.clear();
+        rendererOutQueue.clear();
+    }
 
+    pub fn update(windowData: *WindowData, state: *const EngineData, windowQueue: *WindowQueue, rendererQueue: *RendererQueue, memoryMan: *MemoryManager) !void {
         for (windowQueue.get()) |windowEvent| {
             switch (windowEvent) {
                 .addWindow => |inf| try addWindow(windowData, inf.title, inf.w, inf.h, inf.renderTexId, inf.x, inf.y, inf.resize, inf.texIds, inf.viewIds),
@@ -62,7 +70,7 @@ pub const WindowSys = struct {
             rendererQueue.append(.{ .updateWindowState = updatedWindowPtr });
         }
 
-        cleanupWindows(windowData);
+        cleanupChangesWindows(windowData);
     }
 
     pub fn updateActiveWindows(windowData: *WindowData) !void {
@@ -74,7 +82,7 @@ pub const WindowSys = struct {
 
     fn addWindow(windowData: *WindowData, title: [*c]const u8, w: c_int, h: c_int, renderTexId: TexId, x: c_int, y: c_int, resize: bool, texIds: []const TexId, viewIds: [4]?ViewportId) !void {
         const props = windowData.windowProps;
-        const flags = sdl.SDL_WINDOW_VULKAN | sdl.SDL_WINDOW_RESIZABLE | sdl.SDL_WINDOW_HIDDEN; // | sdl.SDL_WINDOW_BORDERLESS
+        const flags = sdl.SDL_WINDOW_VULKAN | sdl.SDL_WINDOW_RESIZABLE | sdl.SDL_WINDOW_HIDDEN | sdl.SDL_WINDOW_TRANSPARENT; // | sdl.SDL_WINDOW_BORDERLESS
         _ = sdl.SDL_SetNumberProperty(props, sdl.SDL_PROP_WINDOW_CREATE_FLAGS_NUMBER, @intCast(flags));
         _ = sdl.SDL_SetNumberProperty(props, sdl.SDL_PROP_WINDOW_CREATE_X_NUMBER, @intCast(x));
         _ = sdl.SDL_SetNumberProperty(props, sdl.SDL_PROP_WINDOW_CREATE_Y_NUMBER, @intCast(y));
@@ -82,8 +90,8 @@ pub const WindowSys = struct {
         _ = sdl.SDL_SetNumberProperty(props, sdl.SDL_PROP_WINDOW_CREATE_HEIGHT_NUMBER, @intCast(h));
         _ = sdl.SDL_SetStringProperty(props, sdl.SDL_PROP_WINDOW_CREATE_TITLE_STRING, title);
 
-        var window = try Window.init(props, renderTexId, vk.VkExtent2D{ .width = @intCast(w), .height = @intCast(h) }, resize, texIds, viewIds);
-        window.setOpacity(0.0);
+        const window = try Window.init(props, renderTexId, vk.VkExtent2D{ .width = @intCast(w), .height = @intCast(h) }, resize, texIds, viewIds);
+        window.minimize();
 
         // window.setRelativeMouseMode(false);
 
@@ -91,7 +99,6 @@ pub const WindowSys = struct {
         try windowData.changedWindows.append(windowData.windows.getByKey(window.id.val));
         windowData.openWindows += 1;
         windowData.mainWindow = windowData.windows.getPtrByKey(window.id.val);
-        try windowData.hiddenWindows.append(window.id);
         std.debug.print("Window ID {} created to present Render ID {}\n", .{ window.id.val, renderTexId.val });
     }
 
@@ -103,7 +110,7 @@ pub const WindowSys = struct {
         return windowData.changedWindows.slice();
     }
 
-    fn cleanupWindows(windowData: *WindowData) void {
+    fn cleanupChangesWindows(windowData: *WindowData) void {
         for (windowData.changedWindows.slice()) |tempWindow| {
             const actualWindow = windowData.windows.getPtrByKey(tempWindow.id.val);
 
@@ -199,9 +206,6 @@ pub const WindowSys = struct {
                 // window.setBordered(true);
                 std.debug.print("MAIN FULLSCREEN OFF\n", .{});
             }
-            // window.setOpacity(1.0);
-            // window.show();
-            try windowData.hiddenWindows.append(window.id);
         }
     }
 

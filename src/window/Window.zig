@@ -70,6 +70,18 @@ pub const Window = struct {
         _ = sdl.SDL_SetWindowOpacity(self.handle, val);
     }
 
+    pub fn minimize(self: *const Window) void {
+        _ = sdl.SDL_MinimizeWindow(self.handle);
+    }
+
+    pub fn maximize(self: *const Window) void {
+        _ = sdl.SDL_MaximizeWindow(self.handle);
+    }
+
+    pub fn restore(self: *const Window) void {
+        _ = sdl.SDL_RestoreWindow(self.handle);
+    }
+
     pub fn getOpacity(self: *const Window) u32 {
         return sdl.SDL_GetWindowOpacity(self.handle);
     }

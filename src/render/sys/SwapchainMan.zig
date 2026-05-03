@@ -1,3 +1,4 @@
+const RendererOutQueue = @import("../RendererOutQueue.zig").RendererOutQueue;
 const TexId = @import("../types/res/TextureMeta.zig").TextureMeta.TexId;
 const LinkedMap = @import("../../.structures/LinkedMap.zig").LinkedMap;
 const SimpleMap = @import("../../.structures/SimpleMap.zig").SimpleMap;
@@ -12,8 +13,6 @@ const vhF = @import("../help/Functions.zig");
 const Allocator = std.mem.Allocator;
 const std = @import("std");
 
-const SOAMap = @import("../../.structures/SOAMap.zig").SOAMap;
-
 pub const SwapchainMan = struct {
     alloc: Allocator,
     gpi: vk.VkDevice,
@@ -22,6 +21,7 @@ pub const SwapchainMan = struct {
     instance: vk.VkInstance,
     swapchains: LinkedMap(Swapchain, rc.MAX_WINDOWS, u32, 32 + rc.MAX_WINDOWS, 0) = .{},
     targetIndices: SimpleMap(u32, rc.MAX_WINDOWS, u32, 32 + rc.MAX_WINDOWS, 0) = .{},
+    hiddenSwapchains: LinkedMap(u8, rc.MAX_WINDOWS, u32, 32 + rc.MAX_WINDOWS, 0) = .{},
 
     pub fn init(alloc: Allocator, context: *const Context) !SwapchainMan {
         return .{
@@ -115,8 +115,8 @@ pub const SwapchainMan = struct {
 
     pub fn createSwapchain(self: *SwapchainMan, window: Window, _: vk.VkCommandPool) !void {
         const surface = try createSurface(window.handle, self.instance);
-        const swapchain = try Swapchain.init(self.alloc, self.gpi, surface, window.extent, self.gpu, window.renderTexId, window.linkedTexIds, null, window.id.val);
-        //try clearSwapchainImages(self.gpi, self.queueHandle, cmdPool, &swapchain);
+        const swapchain = try Swapchain.init(self.alloc, self.gpi, surface, window.extent, self.gpu, window.renderTexId, window.linkedTexIds, null, window.id);
+        self.hiddenSwapchains.upsert(window.id.val, rc.MAX_IN_FLIGHT);
         self.swapchains.upsert(window.id.val, swapchain);
         std.debug.print("Swapchain added to Window {}\n", .{window.id.val});
     }
@@ -124,8 +124,26 @@ pub const SwapchainMan = struct {
     pub fn recreateSwapchain(self: *SwapchainMan, windowId: Window.WindowId, newExtent: vk.VkExtent2D, _: vk.VkCommandPool) !void {
         const swapchainPtr = self.swapchains.getPtrByKey(windowId.val);
         try swapchainPtr.recreate(self.alloc, self.gpi, self.gpu, self.instance, newExtent);
-        //try clearSwapchainImages(self.gpi, self.queueHandle, cmdPool, swapchainPtr);
+        self.hiddenSwapchains.upsert(windowId.val, rc.MAX_IN_FLIGHT);
         std.debug.print("Swapchain recreated\n", .{});
+    }
+
+    pub fn incrementHiddenSwapchains(self: *SwapchainMan, rendererOutQueue: *RendererOutQueue) void {
+        const len = self.hiddenSwapchains.getLength(); // capture before
+        var i: u32 = len;
+
+        while (i > 0) {
+            i -= 1;
+            const framesLeft = self.hiddenSwapchains.getPtrByIndex(i);
+            
+            if (framesLeft.* == 0) {
+                const windowId = self.hiddenSwapchains.getKeyByIndex(i);
+                rendererOutQueue.append(.{ .framePresentedForWindow = .{ .val = windowId } });
+                self.hiddenSwapchains.removeIndex(i);
+            } else {
+                framesLeft.* -= 1;
+            }
+        }
     }
 
     pub fn removeSwapchains(self: *SwapchainMan, windowId: Window.WindowId) void {
@@ -146,47 +164,4 @@ fn createSurface(window: *sdl.SDL_Window, instance: vk.VkInstance) !vk.VkSurface
         return error.VkSurface;
     }
     return surface;
-}
-
-fn clearSwapchainImages(device: vk.VkDevice, graphicsQueue: vk.VkQueue, cmdPool: vk.VkCommandPool, swapchain: *const Swapchain) !void {
-    // Allocate One-Shot Command Buffer
-    const allocInf = vk.VkCommandBufferAllocateInfo{
-        .sType = vk.VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-        .level = vk.VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-        .commandPool = cmdPool,
-        .commandBufferCount = 1,
-    };
-    var cmd: vk.VkCommandBuffer = undefined;
-    try vhF.check(vk.vkAllocateCommandBuffers(device, &allocInf, &cmd), "Failed alloc clear cmd");
-
-    const beginInf = vk.VkCommandBufferBeginInfo{
-        .sType = vk.VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-        .flags = vk.VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
-    };
-    try vhF.check(vk.vkBeginCommandBuffer(cmd, &beginInf), "Failed begin clear cmd");
-
-    const clearColor = vk.VkClearColorValue{ .float32 = .{ 0.0, 0.0, 0.0, 1.0 } };
-    const subRange = vhF.createSubresourceRange(vk.VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1);
-
-    // Record Barriers and Clears
-    for (swapchain.textures) |*tex| {
-        const toTransfer = tex.createImageBarrier(.{ .stage = .TopOfPipe, .access = .None, .layout = .Undefined }, swapchain.subRange);
-        const dep1 = vk.VkDependencyInfo{ .sType = vk.VK_STRUCTURE_TYPE_DEPENDENCY_INFO, .imageMemoryBarrierCount = 1, .pImageMemoryBarriers = &toTransfer };
-        vk.vkCmdPipelineBarrier2(cmd, &dep1);
-
-        vk.vkCmdClearColorImage(cmd, tex.img, vk.VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clearColor, 1, &subRange);
-
-        const toBlit = tex.createImageBarrier(.{ .stage = .Clear, .access = .None, .layout = undefined }, swapchain.subRange);
-        const dep2 = vk.VkDependencyInfo{ .sType = vk.VK_STRUCTURE_TYPE_DEPENDENCY_INFO, .imageMemoryBarrierCount = 1, .pImageMemoryBarriers = &toBlit };
-        vk.vkCmdPipelineBarrier2(cmd, &dep2);
-    }
-
-    try vhF.check(vk.vkEndCommandBuffer(cmd), "Failed end clear cmd");
-
-    // Submit and Wait
-    const submitInfo = vk.VkSubmitInfo{ .sType = vk.VK_STRUCTURE_TYPE_SUBMIT_INFO, .commandBufferCount = 1, .pCommandBuffers = &cmd };
-    try vhF.check(vk.vkQueueSubmit(graphicsQueue, 1, &submitInfo, null), "Failed submit clear");
-    try vhF.check(vk.vkQueueWaitIdle(graphicsQueue), "Queue wait idle failed");
-
-    vk.vkFreeCommandBuffers(device, cmdPool, 1, &cmd);
 }
