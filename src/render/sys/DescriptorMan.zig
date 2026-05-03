@@ -5,10 +5,10 @@ const KeyPool = @import("../../.structures/KeyPool.zig").KeyPool;
 const Texture = @import("../types/res/Texture.zig").Texture;
 const Buffer = @import("../types/res/Buffer.zig").Buffer;
 const rc = @import("../../.configs/renderConfig.zig");
+const vkFn = @import("../../.modules/vk.zig").vkFn;
 const Context = @import("Context.zig").Context;
 const vk = @import("../../.modules/vk.zig").c;
 const vhF = @import("../help/Functions.zig");
-const vkFn = @import("../../.modules/vk.zig").vkFn;
 const vhE = @import("../help/Enums.zig");
 const Vma = @import("Vma.zig").Vma;
 const std = @import("std");
@@ -18,6 +18,9 @@ pub const DescUpdate = struct {
     specificIndex: u32, // slot in devRanges or imgDescs and imgViews
 };
 
+const DESC_MAX = rc.BUF_MAX + (rc.TEX_MAX * 2);
+const DESC_POOL_MAX = DESC_MAX * @as(u32, rc.MAX_IN_FLIGHT);
+
 pub const DescriptorMan = struct {
     descHeap: Buffer,
     descStride: u64,
@@ -25,19 +28,19 @@ pub const DescriptorMan = struct {
     driverReservedSize: u64,
 
     // Descriptor Updates
-    descInfos: [rc.RESOURCE_MAX]vk.VkResourceDescriptorInfoEXT = undefined,
-    hostRanges: [rc.RESOURCE_MAX]vk.VkHostAddressRangeEXT = undefined,
+    descInfos: [DESC_POOL_MAX]vk.VkResourceDescriptorInfoEXT = undefined,
+    hostRanges: [DESC_POOL_MAX]vk.VkHostAddressRangeEXT = undefined,
 
     // Buffer Updates
-    bufUpdates: SimpleMap(DescUpdate, rc.BUF_MAX * rc.MAX_IN_FLIGHT, u32, rc.BUF_MAX * rc.MAX_IN_FLIGHT, 0) = .{},
-    devRanges: [rc.BUF_MAX]vk.VkDeviceAddressRangeEXT = undefined,
+    bufUpdates: SimpleMap(DescUpdate, rc.BUF_MAX * rc.MAX_IN_FLIGHT, u32, DESC_POOL_MAX, 0) = .{},
+    devRanges: [rc.BUF_MAX * @as(u32, rc.MAX_IN_FLIGHT)]vk.VkDeviceAddressRangeEXT = undefined,
 
     // Image Updates
-    texUpdates: SimpleMap(DescUpdate, rc.TEX_MAX * rc.MAX_IN_FLIGHT, u32, rc.TEX_MAX * rc.MAX_IN_FLIGHT, 0) = .{},
-    imgViews: [rc.TEX_MAX]vk.VkImageViewCreateInfo = undefined,
-    imgDescs: [rc.TEX_MAX]vk.VkImageDescriptorInfoEXT = undefined,
+    texUpdates: SimpleMap(DescUpdate, rc.TEX_MAX * 2 * rc.MAX_IN_FLIGHT, u32, DESC_POOL_MAX, 0) = .{},
+    imgViews: [rc.TEX_MAX * 2 * @as(u32, rc.MAX_IN_FLIGHT)]vk.VkImageViewCreateInfo = undefined,
+    imgDescs: [rc.TEX_MAX * 2 * @as(u32, rc.MAX_IN_FLIGHT)]vk.VkImageDescriptorInfoEXT = undefined,
 
-    descPool: KeyPool(u31, rc.RESOURCE_MAX) = .{},
+    descPool: KeyPool(u31, DESC_POOL_MAX) = .{},
 
     pub fn init(vma: *const Vma, gpu: vk.VkPhysicalDevice) !DescriptorMan {
         const heapProps = getDescriptorHeapProperties(gpu);
@@ -47,7 +50,7 @@ pub const DescriptorMan = struct {
         const startOffset = (driverReservedSize + (alignment - 1)) & ~(alignment - 1);
 
         const descStride = @max(heapProps.bufferDescriptorSize, heapProps.imageDescriptorSize);
-        const heapSize = rc.MAX_IN_FLIGHT * descStride * (rc.RESOURCE_MAX);
+        const heapSize = rc.MAX_IN_FLIGHT * descStride * DESC_MAX;
 
         return .{
             .descHeap = try vma.allocDescriptorHeap(startOffset + heapSize),
@@ -96,11 +99,38 @@ pub const DescriptorMan = struct {
     }
 
     pub fn queueTextureDescriptor(self: *DescriptorMan, texMeta: *const TextureMeta, texture: *Texture) !void {
-        if (texture.descIndex == null) texture.descIndex = try self.getFreeDescriptorIndex();
-        const descUpdate = self.getOrCreateUpdate(texture.descIndex.?, Texture);
+        const subRange = vhF.createSubresourceRange(texMeta.typ.getImageAspectFlags(), 0, 1, 0, 1);
 
-        const subRange = vhF.createSubresourceRange(vhF.getImageAspectFlags(texMeta.texType), 0, 1, 0, 1);
-        self.imgViews[descUpdate.specificIndex] = vhF.getViewCreateInfo(texture.img, texMeta.viewType, texMeta.format, subRange);
+        switch (texMeta.descriptors) {
+            .StorageOnly => {
+                try self.queueTextureDescriptorTyp(texMeta, texture, subRange, vk.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+            },
+            .SampledOnly => {
+                try self.queueTextureDescriptorTyp(texMeta, texture, subRange, vk.VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE);
+            },
+            .StorageSampled => {
+                try self.queueTextureDescriptorTyp(texMeta, texture, subRange, vk.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+                try self.queueTextureDescriptorTyp(texMeta, texture, subRange, vk.VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE);
+            },
+        }
+    }
+
+    pub fn queueTextureDescriptorTyp(self: *DescriptorMan, texMeta: *const TextureMeta, texture: *Texture, subRange: vk.VkImageSubresourceRange, descTyp: vk.VkDescriptorType) !void {
+        var descUpdate: DescUpdate = undefined;
+
+        switch (descTyp) {
+            vk.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE => {
+                if (texture.descIndex == null) texture.descIndex = try self.getFreeDescriptorIndex();
+                descUpdate = self.getOrCreateUpdate(texture.descIndex.?, Texture);
+            },
+            vk.VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE => {
+                if (texture.sampledDescIndex == null) texture.sampledDescIndex = try self.getFreeDescriptorIndex();
+                descUpdate = self.getOrCreateUpdate(texture.sampledDescIndex.?, Texture);
+            },
+            else => return error.DescTypeInvalid,
+        }
+
+        self.imgViews[descUpdate.specificIndex] = vhF.getViewCreateInfo(texture.img, texMeta.viewType, texMeta.typ.getFormat(), subRange);
 
         self.imgDescs[descUpdate.specificIndex] = vk.VkImageDescriptorInfoEXT{
             .sType = vk.VK_STRUCTURE_TYPE_IMAGE_DESCRIPTOR_INFO_EXT,
@@ -110,10 +140,7 @@ pub const DescriptorMan = struct {
 
         self.descInfos[descUpdate.mainIndex] = vk.VkResourceDescriptorInfoEXT{
             .sType = vk.VK_STRUCTURE_TYPE_RESOURCE_DESCRIPTOR_INFO_EXT,
-            .type = switch (texMeta.texType) {
-                .Color => vk.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-                .SampledColor, .Depth, .Stencil, .Swapchain => vk.VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-            },
+            .type = descTyp,
             .data = .{ .pImage = &self.imgDescs[descUpdate.specificIndex] },
         };
     }

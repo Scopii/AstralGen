@@ -345,7 +345,7 @@ pub const RenderGraph = struct {
             cmd.setScissor(x0, y0, x1 - x0, y1 - y0);
 
             const texDesc = if (draw.texId.val == lastTexId) lastTexDesc else blk: {
-                const desc = try resMan.getDescriptor(draw.texId, cmd.flightId);
+                const desc = try resMan.getTextureDescriptor(draw.texId, cmd.flightId, .Sampled);
                 lastTexId = draw.texId.val;
                 lastTexDesc = desc;
                 break :blk desc;
@@ -409,20 +409,20 @@ pub const RenderGraph = struct {
         const depthInf: ?vk.VkRenderingAttachmentInfo = if (pass.depthAtt) |depth| blk: {
             const texMeta = try resMan.getMeta(depth.texId);
             const tex = try resMan.get(depth.texId, cmd.flightId);
-            break :blk tex.createAttachment(texMeta.texType, depth.clear);
+            break :blk tex.createAttachment(texMeta.typ, depth.clear);
         } else null;
 
         const stencilInf: ?vk.VkRenderingAttachmentInfo = if (pass.stencilAtt) |stencil| blk: {
             const texMeta = try resMan.getMeta(stencil.texId);
             const tex = try resMan.get(stencil.texId, cmd.flightId);
-            break :blk tex.createAttachment(texMeta.texType, stencil.clear);
+            break :blk tex.createAttachment(texMeta.typ, stencil.clear);
         } else null;
 
         var colorInfs: [8]vk.VkRenderingAttachmentInfo = undefined;
         for (pass.getColorAtts(), 0..) |colorAtt, i| {
             const texMeta = try resMan.getMeta(colorAtt.texId);
             const tex = try resMan.get(colorAtt.texId, cmd.flightId);
-            colorInfs[i] = tex.createAttachment(texMeta.texType, colorAtt.clear);
+            colorInfs[i] = tex.createAttachment(texMeta.typ, colorAtt.clear);
         }
 
         cmd.updateRenderState(pass.renderState);

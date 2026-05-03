@@ -61,8 +61,8 @@ pub fn CompRayMarch(
             BufferUse.init(def.readbackBuf, .Compute, .ShaderWrite, 3),
         },
         .texUses = &.{
-            TextureUse.init(def.outputTex, .Compute, .ShaderWrite, .General, 2),
-            TextureUse.init(def.debugTex, .Compute, .ShaderRead, .ReadOnly, 4),
+            TextureUse.init(def.outputTex, .Compute, .ShaderWrite, .General, 2, .Storage),
+            TextureUse.init(def.debugTex, .Compute, .ShaderRead, .General, 4, .Storage),
         },
     });
 }

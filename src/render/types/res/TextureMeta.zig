@@ -4,21 +4,24 @@ const vhE = @import("../../help/Enums.zig");
 const std = @import("std");
 
 pub const TextureMeta = struct {
-    texType: vhE.TextureType,
+    typ: vhE.TexTyp,
+    texUse: vhE.TexUsage,
+    descriptors: vhE.TexDescriptorUsage,
     update: vhE.UpdateType,
     resize: vhE.ResizeType,
     mem: vhE.MemUsage,
     updateSlot: u8 = rc.MAX_IN_FLIGHT - 1,
     lastUpdateFrame: u64 = std.math.maxInt(u64),
     viewType: vk.VkImageViewType,
-    format: vk.VkFormat,
 
     pub const TexId = packed struct { val: u32 };
 
     pub const TexInf = struct {
         id: TexId,
         mem: vhE.MemUsage,
-        typ: vhE.TextureType,
+        typ: vhE.TexTyp,
+        texUse: vhE.TexUsage,
+        descriptors: vhE.TexDescriptorUsage,
         width: u32,
         height: u32,
         depth: u32 = 1,

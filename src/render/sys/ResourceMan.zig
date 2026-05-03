@@ -65,33 +65,21 @@ pub const ResourceMan = struct {
         self.teyKeyPool.freeKey(key);
     }
 
-    // pub const VirtualTexture = @import("../types/res/VirtualTexture.zig").VirtualTexture;
-
-    // pub fn assignTexture(self: *ResourceMan, virtualTex: VirtualTexture, curFrame: u64, flightId: u8) void {
-    //     const texInf = TexInf{
-    //         .id = virtualTex.id, // Should be assigned?
-    //         .mem = virtualTex.mem,
-    //         .typ = virtualTex.texType,
-    //         .width = virtualTex.width,
-    //         .height = virtualTex.height,
-    //         .depth = virtualTex.depth,
-    //         .update = virtualTex.update,
-    //         .resize = virtualTex.resize,
-    //     };
-    //     self.addResource(texInf, curFrame, flightId, null);
-    //     // self.texturePool.upsert(virtualTex.id, item: TexId)
-    //     std.debug.print("Virtual Texture assigned ({s} ID {})", .{ virtualTex.name, virtualTex.id.val });
-    // }
-
     fn destroyResources(self: *ResourceMan, queue: *ResourceQueue, comptime ResType: type) u64 {
         const deletions = queue.getDeletions(ResType);
         for (deletions) |*zombie| {
             switch (ResType) {
-                Buffer => self.vma.freeBuffer(zombie),
-                Texture => self.vma.freeTexture(zombie),
+                Buffer => {
+                    self.vma.freeBuffer(zombie);
+                    if (zombie.descIndex) |descIndex| self.descMan.freeDescriptorIndex(descIndex);
+                },
+                Texture => {
+                    self.vma.freeTexture(zombie);
+                    if (zombie.descIndex) |descIndex| self.descMan.freeDescriptorIndex(descIndex);
+                    if (zombie.sampledDescIndex) |sampledDescIndex| self.descMan.freeDescriptorIndex(sampledDescIndex);
+                },
                 else => @compileError("destroyResources: unsupported type"),
             }
-            if (zombie.descIndex) |descIndex| self.descMan.freeDescriptorIndex(descIndex);
         }
         queue.clearDeletions(ResType);
         return deletions.len;
@@ -160,10 +148,20 @@ pub const ResourceMan = struct {
     }
 
     // Getters
-    pub fn getDescriptor(self: *ResourceMan, id: anytype, flightId: u8) !u32 {
+    pub fn getBufferDescriptor(self: *ResourceMan, id: BufId, flightId: u8) !u32 {
         const meta = try self.getMeta(id);
         const res = try self.registry.get(id, meta.update, flightId, meta.updateSlot);
         return res.descIndex orelse error.ResIdHasNoDescriptor;
+    }
+
+    pub fn getTextureDescriptor(self: *ResourceMan, id: TexId, flightId: u8, texDescriptor: vhE.TexDescriptor) !u32 {
+        const meta = try self.getMeta(id);
+        const res = try self.registry.get(id, meta.update, flightId, meta.updateSlot);
+
+        switch (texDescriptor) {
+            .Storage => return res.descIndex orelse error.ResIdHasNoDescriptor,
+            .Sampled => return res.sampledDescIndex orelse error.ResIdHasNoDescriptor,
+        }
     }
 
     pub fn get(self: *ResourceMan, id: anytype, flightId: u8) !*rH.ResOfId(@TypeOf(id)) {
@@ -320,7 +318,18 @@ pub const ResourceMan = struct {
         }
 
         if (needsRemove) {
-            const newInf = TexInf{ .id = texId, .mem = meta.mem, .typ = meta.texType, .width = newWidth, .height = newHeight, .depth = newDepth, .update = meta.update, .resize = meta.resize };
+            const newInf = TexInf{
+                .id = texId,
+                .mem = meta.mem,
+                .typ = meta.typ,
+                .texUse = meta.texUse,
+                .descriptors = meta.descriptors,
+                .width = newWidth,
+                .height = newHeight,
+                .depth = newDepth,
+                .update = meta.update,
+                .resize = meta.resize,
+            };
             try self.removeResource(texId, curFrame); // kills alive + aborts tickets
             try self.addResource(newInf, curFrame, flightId, null); // re-queues all
             std.debug.print("Texture (ID {}) resized ({}x{} to {}x{})\n", .{ texId.val, oldWidth, oldHeight, newWidth, newHeight }); // Depth missing

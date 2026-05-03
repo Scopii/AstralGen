@@ -23,12 +23,61 @@ pub const ResizeType = enum {
     Fit, // Resizes on every update
 };
 
-pub const TextureType = enum {
-    Color,
-    Depth,
-    Stencil,
+pub const TexTyp = enum {
+    Color16,
+    Color8,
     Swapchain,
-    SampledColor,
+    Depth32,
+    Stencil8,
+
+    pub fn getFormat(self: TexTyp) vk.VkFormat {
+        return switch (self) {
+            .Color16 => vk.VK_FORMAT_R16G16B16A16_SFLOAT,
+            .Color8 => vk.VK_FORMAT_R8G8B8A8_UNORM,
+            .Swapchain => vk.VK_FORMAT_R8G8B8A8_UNORM,
+            .Depth32 => vk.VK_FORMAT_D32_SFLOAT,
+            .Stencil8 => vk.VK_FORMAT_S8_UINT,
+        };
+    }
+
+    pub fn getImageAspectFlags(self: TexTyp) vk.VkImageAspectFlags {
+        return switch (self) {
+            .Color16, .Color8, .Swapchain => vk.VK_IMAGE_ASPECT_COLOR_BIT,
+            .Depth32 => vk.VK_IMAGE_ASPECT_DEPTH_BIT,
+            .Stencil8 => vk.VK_IMAGE_ASPECT_STENCIL_BIT,
+        };
+    }
+};
+
+pub const TexDescriptor = enum {
+    Storage,
+    Sampled,
+};
+
+pub const TexDescriptorUsage = enum {
+    StorageOnly,
+    SampledOnly,
+    StorageSampled,
+};
+
+pub const TexUsage = packed struct {
+    colorAtt: bool = false, // VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT
+    depthAtt: bool = false, // VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT
+    storage: bool = false, // VK_IMAGE_USAGE_STORAGE_BIT
+    sampled: bool = false, // VK_IMAGE_USAGE_SAMPLED_BIT
+    transferSrc: bool = true, // Always?
+    transferDst: bool = true, // Always?
+
+    pub fn getImageUse(self: *const TexUsage) vk.VkImageUsageFlags {
+        var flags: vk.VkImageUsageFlags = 0;
+        if (self.colorAtt) flags |= vk.VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+        if (self.depthAtt) flags |= vk.VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+        if (self.storage) flags |= vk.VK_IMAGE_USAGE_STORAGE_BIT;
+        if (self.sampled) flags |= vk.VK_IMAGE_USAGE_SAMPLED_BIT;
+        if (self.transferSrc) flags |= vk.VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+        if (self.transferDst) flags |= vk.VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+        return flags;
+    }
 };
 
 pub const MemUsage = enum {

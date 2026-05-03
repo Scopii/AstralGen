@@ -60,9 +60,6 @@ pub const TEX_MAX = STORAGE_TEX_MAX + SAMPLED_TEX_MAX;
 pub const RESOURCE_MAX = TEX_MAX + BUF_MAX;
 pub const STAGING_BUF_SIZE = 32 * 1024 * 1024; // Bytes
 
-pub const TEX_COLOR_FORMAT = vk.VK_FORMAT_R16G16B16A16_SFLOAT;
-pub const TEX_DEPTH_FORMAT = vk.VK_FORMAT_D32_SFLOAT;
-
 // Buffers
 pub const indirectSB = BufferMeta.create(.{ .id = .{ .val = 1 }, .mem = .Gpu, .typ = .Indirect, .len = 1, .elementSize = @sizeOf(vhT.IndirectData), .update = .PerFrame });
 pub const readbackSB = BufferMeta.create(.{ .id = .{ .val = 2 }, .mem = .CpuRead, .typ = .Storage, .len = 1, .elementSize = @sizeOf(vhT.ReadbackData), .update = .PerFrame });
@@ -77,9 +74,51 @@ pub const imguiIndexSB = BufferMeta.create(.{ .id = .{ .val = 7 }, .mem = .Gpu, 
 pub const BUFFERS: []const BufferMeta.BufInf = &.{ entitySB, mainCamUB, debugCamUB, indirectSB, readbackSB, imguiVertexSB, imguiIndexSB };
 
 // Textures
-pub const mainTex = TextureMeta.create(.{ .id = .{ .val = 1 }, .mem = .Gpu, .typ = .Color, .width = 1920, .height = 1080, .update = .Rarely, .resize = .Fit });
-pub const mainDepthTex = TextureMeta.create(.{ .id = .{ .val = 2 }, .mem = .Gpu, .typ = .Depth, .width = 1920, .height = 1080, .update = .Rarely, .resize = .Fit });
-pub const debugTex = TextureMeta.create(.{ .id = .{ .val = 3 }, .mem = .Gpu, .typ = .Color, .width = 256, .height = 256, .update = .Often });
-pub const imguiFontTex = TextureMeta.create(.{ .id = .{ .val = 4 }, .mem = .Gpu, .typ = .SampledColor, .width = 1, .height = 1, .update = .Rarely, .resize = .Fit });
+pub const mainTex = TextureMeta.create(.{
+    .id = .{ .val = 1 },
+    .mem = .Gpu,
+    .descriptors = .StorageOnly,
+    .texUse = .{ .storage = true, .colorAtt = true },
+    .typ = .Color16,
+    .width = 1920,
+    .height = 1080,
+    .update = .Rarely,
+    .resize = .Fit,
+});
+
+pub const mainDepthTex = TextureMeta.create(.{
+    .id = .{ .val = 2 },
+    .mem = .Gpu,
+    .texUse = .{ .depthAtt = true, .sampled = true, .transferSrc = false },
+    .descriptors = .SampledOnly,
+    .typ = .Depth32,
+    .width = 1920,
+    .height = 1080,
+    .update = .Rarely,
+    .resize = .Fit,
+});
+
+pub const debugTex = TextureMeta.create(.{
+    .id = .{ .val = 3 },
+    .mem = .Gpu,
+    .texUse = .{ .storage = true, .colorAtt = true },
+    .descriptors = .StorageOnly,
+    .typ = .Color16,
+    .width = 256,
+    .height = 256,
+    .update = .Often,
+});
+
+pub const imguiFontTex = TextureMeta.create(.{
+    .id = .{ .val = 4 },
+    .mem = .Gpu,
+    .texUse = .{ .colorAtt = true, .sampled = true },
+    .typ = .Color8,
+    .descriptors = .SampledOnly,
+    .width = 1,
+    .height = 1,
+    .update = .Rarely,
+    .resize = .Fit,
+});
 
 pub const TEXTURES: []const TextureMeta.TexInf = &.{ mainTex, mainDepthTex, debugTex, imguiFontTex };

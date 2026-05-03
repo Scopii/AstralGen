@@ -86,7 +86,7 @@ pub const Swapchain = struct {
             try vhF.check(vk.vkCreateImageView(gpi, &viewInf, null, &view), "Failed to create image view");
 
             baseTextures[i] = Texture{
-                .texType = .Swapchain,
+                .typ = .Swapchain,
                 .img = images[i],
                 .view = view,
                 .allocation = undefined, // MANAGED BY OS!

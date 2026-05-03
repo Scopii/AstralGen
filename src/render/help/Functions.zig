@@ -34,36 +34,6 @@ pub fn getBufferAllocationFlags(memUse: vhE.MemUsage, bufTyp: vhE.BufferType) vk
     return allocFlags;
 }
 
-pub fn getImageFormat(texTyp: vhE.TextureType) vk.VkFormat {
-    return switch (texTyp) {
-        .Color, => rc.TEX_COLOR_FORMAT,
-        .SampledColor => vk.VK_FORMAT_R8G8B8A8_UNORM,
-        .Depth => rc.TEX_DEPTH_FORMAT,
-        .Stencil => vk.VK_FORMAT_S8_UINT,
-        .Swapchain => vk.VK_FORMAT_B8G8R8A8_UNORM,
-    };
-}
-
-pub fn getImageAspectFlags(texTyp: vhE.TextureType) vk.VkImageAspectFlags {
-    return switch (texTyp) {
-        .Color, .SampledColor => vk.VK_IMAGE_ASPECT_COLOR_BIT,
-        .Depth => vk.VK_IMAGE_ASPECT_DEPTH_BIT,
-        .Stencil => vk.VK_IMAGE_ASPECT_STENCIL_BIT,
-        .Swapchain => vk.VK_IMAGE_ASPECT_COLOR_BIT,
-    };
-}
-
-pub fn getImageUse(texTyp: vhE.TextureType) vk.VkImageUsageFlags {
-    var texUse: vk.VkImageUsageFlags = vk.VK_IMAGE_USAGE_TRANSFER_SRC_BIT | vk.VK_IMAGE_USAGE_TRANSFER_DST_BIT | vk.VK_IMAGE_USAGE_SAMPLED_BIT;
-    switch (texTyp) {
-        .Color => texUse |= vk.VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | vk.VK_IMAGE_USAGE_STORAGE_BIT,
-        .Depth, .Stencil => texUse |= vk.VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
-        .Swapchain => return vk.VK_IMAGE_USAGE_TRANSFER_DST_BIT | vk.VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
-        .SampledColor => return vk.VK_IMAGE_USAGE_SAMPLED_BIT | vk.VK_IMAGE_USAGE_TRANSFER_DST_BIT,
-    }
-    return texUse;
-}
-
 pub fn getShaderBit(stageEnum: vhE.ShaderStage) vk.VkShaderStageFlagBits {
     return switch (stageEnum) {
         .comp => vk.VK_SHADER_STAGE_COMPUTE_BIT,
