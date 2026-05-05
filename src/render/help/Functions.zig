@@ -16,12 +16,15 @@ pub fn getBufferUsageFlags(bufTyp: vhE.BufferType) vk.VkBufferUsageFlags {
     var bufUsageFlags: vk.VkBufferUsageFlags = switch (bufTyp) {
         .Storage => vk.VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
         .Uniform => vk.VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-        .Index => vk.VK_BUFFER_USAGE_INDEX_BUFFER_BIT | vk.VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
-        .Vertex => vk.VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | vk.VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+        .IndexStorage => vk.VK_BUFFER_USAGE_INDEX_BUFFER_BIT | vk.VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+        .Index => vk.VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+        .VertexStorage => vk.VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | vk.VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+        .Vertex => vk.VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
         .Staging => vk.VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
         .Indirect => vk.VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | vk.VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
     };
-    if (bufTyp != .Staging) bufUsageFlags |= vk.VK_BUFFER_USAGE_TRANSFER_DST_BIT | vk.VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+    if (bufTyp != .Staging) bufUsageFlags |= vk.VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    if (bufTyp != .Index or bufTyp != .Vertex) bufUsageFlags |= vk.VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
     return bufUsageFlags;
 }
 

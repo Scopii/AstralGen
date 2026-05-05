@@ -87,6 +87,11 @@ pub const DescriptorMan = struct {
     }
 
     pub fn queueBufferDescriptor(self: *DescriptorMan, gpuAddress: u64, size: u64, bufTyp: vhE.BufferType, buffer: *Buffer) !void {
+        switch (bufTyp) {
+            .Index, .Vertex => return, // Have no descriptor!
+            .Storage, .IndexStorage, .VertexStorage, .Indirect, .Staging, .Uniform => {},
+        }
+
         if (buffer.descIndex == null) buffer.descIndex = try self.getFreeDescriptorIndex();
         const descUpdate = self.getOrCreateUpdate(buffer.descIndex.?, Buffer);
 

@@ -239,11 +239,11 @@ pub const WindowSys = struct {
                 window.hide();
                 window.setState(.needDelete);
             },
-            sdl.SDL_EVENT_WINDOW_MINIMIZED => {
+            sdl.SDL_EVENT_WINDOW_MINIMIZED, sdl.SDL_EVENT_WINDOW_OCCLUDED => {
                 windowData.openWindows -= 1;
                 window.setState(.needInactive);
             },
-            sdl.SDL_EVENT_WINDOW_RESTORED => {
+            sdl.SDL_EVENT_WINDOW_RESTORED, sdl.SDL_EVENT_WINDOW_EXPOSED => {
                 if (window.getState() == .active) return;
                 windowData.openWindows += 1;
                 window.setState(.needActive);

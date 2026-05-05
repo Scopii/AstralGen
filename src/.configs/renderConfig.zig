@@ -68,8 +68,8 @@ pub const entitySB = BufferMeta.create(.{ .id = .{ .val = 3 }, .mem = .Gpu, .typ
 pub const mainCamUB = BufferMeta.create(.{ .id = .{ .val = 4 }, .mem = .Gpu, .typ = .Uniform, .len = 1, .elementSize = @sizeOf(CameraData), .update = .Often, .resize = .Fit });
 pub const debugCamUB = BufferMeta.create(.{ .id = .{ .val = 5 }, .mem = .Gpu, .typ = .Uniform, .len = 1, .elementSize = @sizeOf(CameraData), .update = .Often, .resize = .Fit });
 
-pub const imguiVertexSB = BufferMeta.create(.{ .id = .{ .val = 6 }, .mem = .Gpu, .typ = .Vertex, .len = 1024 * 1024, .elementSize = 1, .update = .PerFrame, .resize = .Grow });
-pub const imguiIndexSB = BufferMeta.create(.{ .id = .{ .val = 7 }, .mem = .Gpu, .typ = .Index, .len = 1024 * 1024, .elementSize = 1, .update = .PerFrame, .resize = .Grow });
+pub const imguiVertexSB = BufferMeta.create(.{ .id = .{ .val = 6 }, .mem = .Gpu, .typ = .Vertex, .len = 1024 * 1024, .elementSize = 1, .update = .Often, .resize = .Grow });
+pub const imguiIndexSB = BufferMeta.create(.{ .id = .{ .val = 7 }, .mem = .Gpu, .typ = .Index, .len = 1024 * 1024, .elementSize = 1, .update = .Often, .resize = .Grow });
 
 pub const BUFFERS: []const BufferMeta.BufInf = &.{ entitySB, mainCamUB, debugCamUB, indirectSB, readbackSB, imguiVertexSB, imguiIndexSB };
 
@@ -106,7 +106,8 @@ pub const debugTex = TextureMeta.create(.{
     .typ = .Color16,
     .width = 256,
     .height = 256,
-    .update = .Often,
+    .update = .Rarely,
+    .resize = .Fit,
 });
 
 pub const imguiFontTex = TextureMeta.create(.{

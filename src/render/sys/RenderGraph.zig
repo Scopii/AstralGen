@@ -40,7 +40,7 @@ pub const RenderGraph = struct {
     memDstStage: vk.VkPipelineStageFlags2 = 0,
     memDstAccess: vk.VkAccessFlags2 = 0,
     useGpuProfiling: bool = rc.GPU_PROFILING,
-    lastPassTyp: ?PassDef.PassExecution = null,
+    lastPassTyp: ?PassDef.PassExecution = null, 
 
     pub fn init(alloc: Allocator, context: *const Context) !RenderGraph {
         return .{
@@ -323,8 +323,6 @@ pub const RenderGraph = struct {
             cmd.bindIndexBuffer(idxBuf.handle, 0, ibUse.indexType);
         }
 
-        const ImGuiPushConstants = extern struct { scale: [2]f32, translate: [2]f32, texDesc: u32 };
-
         const scaleX = 2.0 / uiNode.displaySize[0];
         const scaleY = 2.0 / uiNode.displaySize[1];
         const translateX = -1.0 - uiNode.displayPos[0] * scaleX;
@@ -351,7 +349,7 @@ pub const RenderGraph = struct {
                 break :blk desc;
             };
 
-            const pushConstants = ImGuiPushConstants{
+            const pushConstants = vhT.ImGuiPushConstants{
                 .scale = .{ scaleX, scaleY },
                 .translate = .{ translateX, translateY },
                 .texDesc = texDesc,

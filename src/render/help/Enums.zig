@@ -89,7 +89,9 @@ pub const MemUsage = enum {
 pub const BufferType = enum {
     Storage,
     Uniform,
+    IndexStorage,
     Index,
+    VertexStorage,
     Vertex,
     Staging,
     Indirect,
@@ -128,6 +130,10 @@ pub const PipeStage = enum(vk.VkPipelineStageFlagBits2) { //( SHOULD BE CORRECT 
 
 pub const PipeAccess = enum(vk.VkAccessFlagBits2) {
     None = 0,
+
+    ResourceHeapRead = vk.VK_ACCESS_2_RESOURCE_HEAP_READ_BIT_EXT,
+    SamplerHeapRead = vk.VK_ACCESS_2_SAMPLER_HEAP_READ_BIT_EXT,
+
     ShaderRead = vk.VK_ACCESS_2_SHADER_STORAGE_READ_BIT,
     ShaderWrite = vk.VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
     ShaderReadWrite = vk.VK_ACCESS_2_SHADER_STORAGE_READ_BIT | vk.VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,

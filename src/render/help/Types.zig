@@ -1,4 +1,3 @@
-
 pub const ReadbackData = packed struct {
     runtime: f32,
     deltaTime: f32,
@@ -13,12 +12,18 @@ pub const IndirectData = packed struct {
 };
 
 pub const SpecData = packed struct {
-    threadX: u32, 
-    threadY: u32, 
-    threadZ: u32, 
+    threadX: u32,
+    threadY: u32,
+    threadZ: u32,
 };
 
 pub const GpuObjectData = extern struct {
-    posAndSize: [4]f32,  // x, y, z, size
+    posAndSize: [4]f32, // x, y, z, size
     colorAndSdf: [4]f32, // r, g, b, sdfId
+};
+
+pub const ImGuiPushConstants = extern struct {
+    scale: [2]f32,
+    translate: [2]f32,
+    texDesc: u32,
 };
