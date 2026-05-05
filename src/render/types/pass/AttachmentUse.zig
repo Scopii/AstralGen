@@ -10,8 +10,8 @@ pub const AttachmentUse = struct {
     layout: vhE.ImageLayout,
     clear: bool,
 
-    pub fn init(id: TexId, stage: vhE.PipeStage, access: vhE.PipeAccess, clear: bool) AttachmentUse {
-        return .{ .texId = id, .stage = stage, .access = access, .layout = .Attachment, .clear = clear };
+    pub fn init(id: TexId, stage: vhE.PipeStage, access: vhE.PipeAccess, layout: vhE.ImageLayout, clear: bool) AttachmentUse {
+        return .{ .texId = id, .stage = stage, .access = access, .layout = layout, .clear = clear };
     }
 
     pub fn getNeededState(self: *const AttachmentUse) Texture.TextureState {
