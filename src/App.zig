@@ -101,8 +101,36 @@ pub const App = struct {
         const mainCamId = self.data.entityData.createCameraEntity(.{ .pos = zm.f32x4(0, 5, -20, 0), .yaw = 170 }, .{ .bufId = rc.mainCamUB.id, .near = 0.1, .far = 100, .fov = 60 });
         const debugCamId = self.data.entityData.createCameraEntity(.{ .pos = zm.f32x4(0, 20, -45, 0), .yaw = 170 }, .{ .bufId = rc.debugCamUB.id, .near = 0.1, .far = 300, .fov = 110 });
 
+        self.data.viewport.viewports.upsert(10, Viewport{
+            .name = "DeptView",
+            .cameraEntity = mainCamId,
+            .sourceTexId = rc.depthViewTex.id,
+            .areaX = 0,
+            .areaY = 0,
+            .areaWidth = 1,
+            .areaHeight = 1,
+            .passSlice = &.{
+                .DepthView,
+            },
+            .blitPass = .DepthView,
+        });
+
+        self.windowQueue.append(.{
+            .addWindow = .{
+                .title = "Depth Window",
+                .w = 16 * 55,
+                .h = 9 * 55,
+                .renderTexId = rc.depthViewTex.id,
+                .x = (1920 / 2) / 1 - 10,
+                .y = 40,
+                .resize = true,
+                .texIds = &[_]TexId{},
+                .viewIds = [4]?ViewportId{ .{ .val = 10 }, null, null, null },
+            },
+        });
+
         self.data.viewport.viewports.upsert(1, Viewport{
-            .name = "Full Viewport",
+            .name = "CompTest",
             .cameraEntity = mainCamId,
             .sourceTexId = rc.mainTex.id,
             .areaX = 0.0,
@@ -115,8 +143,22 @@ pub const App = struct {
             .blitPass = .CompTest,
         });
 
+        self.windowQueue.append(.{
+            .addWindow = .{
+                .title = "Main Window",
+                .w = 16 * 55,
+                .h = 9 * 55,
+                .renderTexId = rc.mainTex.id,
+                .x = 60,
+                .y = 1080 / 2 - 260,
+                .resize = true,
+                .texIds = &[_]TexId{rc.mainDepthTex.id},
+                .viewIds = [4]?ViewportId{ .{ .val = 1 }, null, null, null },
+            },
+        });
+
         self.data.viewport.viewports.upsert(2, Viewport{
-            .name = "Top Left Viewport",
+            .name = "QuantGridMain",
             .cameraEntity = mainCamId,
             .sourceTexId = rc.mainTex.id,
             .areaX = 0.5,
@@ -131,7 +173,7 @@ pub const App = struct {
         });
 
         self.data.viewport.viewports.upsert(3, Viewport{
-            .name = "Top Right Viewport",
+            .name = "QuantGridDebug",
             .cameraEntity = debugCamId,
             .sourceTexId = rc.mainTex.id,
             .areaX = 0.0,
@@ -146,7 +188,7 @@ pub const App = struct {
             .blitPass = .EditorGrid,
         });
         self.data.viewport.viewports.upsert(4, Viewport{
-            .name = "Bot Left Viewport",
+            .name = "QuantPlaneDebug",
             .cameraEntity = debugCamId,
             .sourceTexId = rc.mainTex.id,
             .areaX = 0.0,
@@ -161,7 +203,7 @@ pub const App = struct {
         });
 
         self.data.viewport.viewports.upsert(5, Viewport{
-            .name = "Bot Right Viewport",
+            .name = "QuantPlaneMain",
             .cameraEntity = mainCamId,
             .sourceTexId = rc.mainTex.id,
             .areaX = 0.5,
@@ -179,28 +221,14 @@ pub const App = struct {
         self.windowQueue.append(.{
             .addWindow = .{
                 .title = "Debug Window",
-                .w = 1920 / 2,
-                .h = 1080 / 2,
+                .w = 16 * 55,
+                .h = 9 * 55,
                 .renderTexId = rc.mainTex.id,
                 .x = 1920 / 2 - 10,
-                .y = 1080 / 2 - 10,
+                .y = 1080 / 2 + 40,
                 .resize = true,
                 .texIds = &[_]TexId{rc.mainDepthTex.id},
                 .viewIds = [4]?ViewportId{ .{ .val = 3 }, .{ .val = 2 }, .{ .val = 4 }, .{ .val = 5 } },
-            },
-        });
-
-        self.windowQueue.append(.{
-            .addWindow = .{
-                .title = "Main Window",
-                .w = 1920 / 2,
-                .h = 1080 / 2,
-                .renderTexId = rc.mainTex.id,
-                .x = 10,
-                .y = 40,
-                .resize = true,
-                .texIds = &[_]TexId{rc.mainDepthTex.id},
-                .viewIds = [4]?ViewportId{ .{ .val = 1 }, null, null, null },
             },
         });
     }

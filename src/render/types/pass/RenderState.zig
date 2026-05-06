@@ -19,7 +19,7 @@ pub const RenderState = struct {
     depthClamp: u32 = vk.VK_FALSE,
     depthTest: u32 = vk.VK_FALSE,
     depthWrite: u32 = vk.VK_FALSE,
-    depthCompare: u32 = vk.VK_COMPARE_OP_LESS,
+    depthCompare: u32 = vk.VK_COMPARE_OP_GREATER, // vk.VK_COMPARE_OP_LESS, for normal Z
     depthValues: struct { constant: f32 = 0.0, clamp: f32 = 0.0, slope: f32 = 0.0 } = .{},
 
     stencilTest: u32 = vk.VK_FALSE,

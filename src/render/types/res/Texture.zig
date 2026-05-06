@@ -21,7 +21,7 @@ pub const Texture = struct {
     pub fn createAttachment(self: *const Texture, format: vhE.TexTyp, clear: bool) vk.VkRenderingAttachmentInfo {
         const clearValue: vk.VkClearValue = switch (format) {
             .Color16, .Color8, .Swapchain => .{ .color = .{ .float32 = .{ 0.0, 0.0, 0.1, 1.0 } } },
-            .Depth32, .Stencil8 => .{ .depthStencil = .{ .depth = 1.0, .stencil = 0 } },
+            .Depth32, .Stencil8 => .{ .depthStencil = .{ .depth = 0.0, .stencil = 0 } }, // 0.0 depth for reverse Z, 1.0 for normal
         };
 
         return vk.VkRenderingAttachmentInfo{

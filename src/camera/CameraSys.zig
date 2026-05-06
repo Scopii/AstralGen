@@ -18,6 +18,7 @@ pub const CamData = struct {
     camDirAndAspectRatio: [4]f32,
     frustumCorners: [8][4]f32,
     frustumPlanes: [6][4]f32,
+    nearAndFar: [2]f32,
 };
 
 pub const CameraSys = struct {
@@ -150,8 +151,19 @@ pub const CameraSys = struct {
         // Matrices
         const target = transform.pos + forward;
         const view = zm.lookAtRh(transform.pos, target, transform.up);
-        var proj = zm.perspectiveFovRh(cam.fov * (std.math.pi / 180.0), cam.aspectRatio, cam.near, cam.far);
+
+        // For normal Z
+        // var proj = zm.perspectiveFovRh(cam.fov * (std.math.pi / 180.0), cam.aspectRatio, cam.near, cam.far);
+        // proj[1][1] *= -1.0;
+
+        // For reverse Z
+        var proj = zm.perspectiveFovRhGl(cam.fov * (std.math.pi / 180.0), cam.aspectRatio, cam.near, cam.far);
         proj[1][1] *= -1.0;
+        proj[2][2] = 0.0; // reverse Z
+        proj[2][3] = -1.0;
+        proj[3][2] = cam.near; // near maps to 1.0
+        proj[3][3] = 0.0;
+
         const viewProj = zm.mul(view, proj);
 
         // Frustum Corners
@@ -185,6 +197,7 @@ pub const CameraSys = struct {
             .camDirAndAspectRatio = .{ forward[0], forward[1], forward[2], cam.aspectRatio },
             .frustumCorners = corners,
             .frustumPlanes = cornersToPlanes(corners),
+            .nearAndFar = .{ cam.near, cam.far },
         };
     }
 

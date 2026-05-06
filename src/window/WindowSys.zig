@@ -80,7 +80,7 @@ pub const WindowSys = struct {
         }
     }
 
-    fn addWindow(windowData: *WindowData, title: [*c]const u8, w: c_int, h: c_int, renderTexId: TexId, x: c_int, y: c_int, resize: bool, texIds: []const TexId, viewIds: [4]?ViewportId) !void {
+    fn addWindow(windowData: *WindowData, title: [:0]const u8, w: c_int, h: c_int, renderTexId: TexId, x: c_int, y: c_int, resize: bool, texIds: []const TexId, viewIds: [4]?ViewportId) !void {
         const props = windowData.windowProps;
         const flags = sdl.SDL_WINDOW_VULKAN | sdl.SDL_WINDOW_RESIZABLE | sdl.SDL_WINDOW_HIDDEN | sdl.SDL_WINDOW_TRANSPARENT; // | sdl.SDL_WINDOW_BORDERLESS
         _ = sdl.SDL_SetNumberProperty(props, sdl.SDL_PROP_WINDOW_CREATE_FLAGS_NUMBER, @intCast(flags));
@@ -88,9 +88,9 @@ pub const WindowSys = struct {
         _ = sdl.SDL_SetNumberProperty(props, sdl.SDL_PROP_WINDOW_CREATE_Y_NUMBER, @intCast(y));
         _ = sdl.SDL_SetNumberProperty(props, sdl.SDL_PROP_WINDOW_CREATE_WIDTH_NUMBER, @intCast(w));
         _ = sdl.SDL_SetNumberProperty(props, sdl.SDL_PROP_WINDOW_CREATE_HEIGHT_NUMBER, @intCast(h));
-        _ = sdl.SDL_SetStringProperty(props, sdl.SDL_PROP_WINDOW_CREATE_TITLE_STRING, title);
+        _ = sdl.SDL_SetStringProperty(props, sdl.SDL_PROP_WINDOW_CREATE_TITLE_STRING, title.ptr);
 
-        const window = try Window.init(props, renderTexId, vk.VkExtent2D{ .width = @intCast(w), .height = @intCast(h) }, resize, texIds, viewIds);
+        const window = try Window.init(props, renderTexId, vk.VkExtent2D{ .width = @intCast(w), .height = @intCast(h) }, resize, texIds, viewIds, title[0..title.len]);
         window.minimize();
 
         // window.setRelativeMouseMode(false);

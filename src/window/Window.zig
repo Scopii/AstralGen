@@ -8,6 +8,7 @@ const ViewportId = @import("../viewport/ViewportSys.zig").ViewportId;
 
 pub const Window = struct {
     pub const WindowState = enum { active, inactive, needCreation, needUpdate, needDelete, needInactive, needActive };
+    name: []const u8,
     handle: *sdl.SDL_Window,
     state: WindowState = .needCreation,
     renderTexId: TexId,
@@ -20,7 +21,15 @@ pub const Window = struct {
 
     pub const WindowId = packed struct { val: u32 };
 
-    pub fn init(windowProps: sdl.SDL_PropertiesID, renderTexId: TexId, extent: vk.VkExtent2D, resizeTex: bool, linkedTexIds: []const TexId, viewIds: [4]?ViewportId) !Window {
+    pub fn init(
+        windowProps: sdl.SDL_PropertiesID,
+        renderTexId: TexId,
+        extent: vk.VkExtent2D,
+        resizeTex: bool,
+        linkedTexIds: []const TexId,
+        viewIds: [4]?ViewportId,
+        name: []const u8,
+    ) !Window {
         if (linkedTexIds.len > rc.LINKED_TEX_MAX) return error.WindowLinkedTexturesOverflow;
 
         const winHandle = sdl.SDL_CreateWindowWithProperties(windowProps) orelse {
@@ -33,6 +42,7 @@ pub const Window = struct {
         for (0..linkedTexIds.len) |i| actualTexIds[i] = linkedTexIds[i];
 
         var window = Window{
+            .name = name,
             .handle = winHandle,
             .renderTexId = renderTexId,
             .extent = extent,

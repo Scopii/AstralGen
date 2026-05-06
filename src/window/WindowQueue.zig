@@ -20,5 +20,5 @@ pub const WindowQueue = struct {
 };
 
 pub const WindowEvent = union(enum) {
-    addWindow: struct { title: [*c]const u8, w: c_int, h: c_int, renderTexId: TexId, x: c_int, y: c_int, resize: bool, texIds: []const TexId, viewIds: [4]?ViewportId },
+    addWindow: struct { title: [:0]const u8, w: c_int, h: c_int, renderTexId: TexId, x: c_int, y: c_int, resize: bool, texIds: []const TexId, viewIds: [4]?ViewportId },
 };

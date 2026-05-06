@@ -59,6 +59,9 @@ pub const SAMPLED_TEX_MAX = 31;
 pub const TEX_MAX = STORAGE_TEX_MAX + SAMPLED_TEX_MAX;
 pub const RESOURCE_MAX = TEX_MAX + BUF_MAX;
 pub const STAGING_BUF_SIZE = 32 * 1024 * 1024; // Bytes
+pub const SAMPLER_LINEAR_CLAMP_INDEX: u31 = 0;
+pub const SAMPLER_NEAREST_CLAMP_INDEX: u31 = 1;
+pub const SAMPLER_MAX: u32 = 2;
 
 // Buffers
 pub const indirectSB = BufferMeta.create(.{ .id = .{ .val = 1 }, .mem = .Gpu, .typ = .Indirect, .len = 1, .elementSize = @sizeOf(vhT.IndirectData), .update = .PerFrame });
@@ -77,8 +80,8 @@ pub const BUFFERS: []const BufferMeta.BufInf = &.{ entitySB, mainCamUB, debugCam
 pub const mainTex = TextureMeta.create(.{
     .id = .{ .val = 1 },
     .mem = .Gpu,
-    .descriptors = .StorageOnly,
-    .texUse = .{ .storage = true, .colorAtt = true },
+    .descriptors = .StorageSampled,
+    .texUse = .{ .storage = true, .colorAtt = true, .sampled = true },
     .typ = .Color16,
     .width = 1920,
     .height = 1080,
@@ -122,4 +125,16 @@ pub const imguiFontTex = TextureMeta.create(.{
     .resize = .Fit,
 });
 
-pub const TEXTURES: []const TextureMeta.TexInf = &.{ mainTex, mainDepthTex, debugTex, imguiFontTex };
+pub const depthViewTex = TextureMeta.create(.{
+    .id = .{ .val = 5 },
+    .mem = .Gpu,
+    .texUse = .{ .storage = true, .colorAtt = true, .sampled = true },
+    .descriptors = .StorageSampled,
+    .typ = .Color16,
+    .width = 1920,
+    .height = 1080,
+    .update = .Rarely,
+    .resize = .Fit,
+});
+
+pub const TEXTURES: []const TextureMeta.TexInf = &.{ mainTex, mainDepthTex, debugTex, imguiFontTex, depthViewTex };

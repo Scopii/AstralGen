@@ -19,7 +19,8 @@ pub const DescUpdate = struct {
 };
 
 const DESC_MAX = rc.BUF_MAX + (rc.TEX_MAX * 2);
-const DESC_POOL_MAX = DESC_MAX * @as(u32, rc.MAX_IN_FLIGHT);
+const MAX_IN_FLIGHT = @as(u32, rc.MAX_IN_FLIGHT);
+const DESC_POOL_MAX = DESC_MAX * MAX_IN_FLIGHT;
 
 pub const DescriptorMan = struct {
     descHeap: Buffer,
@@ -27,41 +28,103 @@ pub const DescriptorMan = struct {
     startOffset: u64,
     driverReservedSize: u64,
 
+    samplerHeap: Buffer,
+    samplerStride: u64,
+    samplerStartOffset: u64,
+    samplerReservedSize: u64,
+
     // Descriptor Updates
     descInfos: [DESC_POOL_MAX]vk.VkResourceDescriptorInfoEXT = undefined,
     hostRanges: [DESC_POOL_MAX]vk.VkHostAddressRangeEXT = undefined,
 
     // Buffer Updates
     bufUpdates: SimpleMap(DescUpdate, rc.BUF_MAX * rc.MAX_IN_FLIGHT, u32, DESC_POOL_MAX, 0) = .{},
-    devRanges: [rc.BUF_MAX * @as(u32, rc.MAX_IN_FLIGHT)]vk.VkDeviceAddressRangeEXT = undefined,
+    devRanges: [rc.BUF_MAX * MAX_IN_FLIGHT]vk.VkDeviceAddressRangeEXT = undefined,
 
     // Image Updates
-    texUpdates: SimpleMap(DescUpdate, rc.TEX_MAX * 2 * rc.MAX_IN_FLIGHT, u32, DESC_POOL_MAX, 0) = .{},
-    imgViews: [rc.TEX_MAX * 2 * @as(u32, rc.MAX_IN_FLIGHT)]vk.VkImageViewCreateInfo = undefined,
-    imgDescs: [rc.TEX_MAX * 2 * @as(u32, rc.MAX_IN_FLIGHT)]vk.VkImageDescriptorInfoEXT = undefined,
+    texUpdates: SimpleMap(DescUpdate, rc.TEX_MAX * 2 * MAX_IN_FLIGHT, u32, DESC_POOL_MAX, 0) = .{},
+    imgViews: [rc.TEX_MAX * 2 * MAX_IN_FLIGHT]vk.VkImageViewCreateInfo = undefined,
+    imgDescs: [rc.TEX_MAX * 2 * MAX_IN_FLIGHT]vk.VkImageDescriptorInfoEXT = undefined,
 
     descPool: KeyPool(u31, DESC_POOL_MAX) = .{},
 
     pub fn init(vma: *const Vma, gpu: vk.VkPhysicalDevice) !DescriptorMan {
         const heapProps = getDescriptorHeapProperties(gpu);
+
+        // Resource Heap
         const driverReservedSize = heapProps.minResourceHeapReservedRange;
+        const resourceAlignment = heapProps.resourceHeapAlignment;
+        const startOffset = (driverReservedSize + (resourceAlignment - 1)) & ~(resourceAlignment - 1);
 
-        const alignment = heapProps.resourceHeapAlignment;
-        const startOffset = (driverReservedSize + (alignment - 1)) & ~(alignment - 1);
+        // Align each descriptor size then take Image and Buffer Max
+        const bufStride = (heapProps.bufferDescriptorSize + heapProps.bufferDescriptorAlignment - 1) & ~(heapProps.bufferDescriptorAlignment - 1);
+        const imgStride = (heapProps.imageDescriptorSize + heapProps.imageDescriptorAlignment - 1) & ~(heapProps.imageDescriptorAlignment - 1);
 
-        const descStride = @max(heapProps.bufferDescriptorSize, heapProps.imageDescriptorSize);
-        const heapSize = rc.MAX_IN_FLIGHT * descStride * DESC_MAX;
+        const descStride = @max(bufStride, imgStride);
+        const heapSize = startOffset + (rc.MAX_IN_FLIGHT * descStride * DESC_MAX);
+
+        // Sampler Heap
+        const samplerReservedSize = heapProps.minSamplerHeapReservedRange;
+        const samplerAlignment = heapProps.samplerHeapAlignment;
+        const samplerStartOffset = (samplerReservedSize + (samplerAlignment - 1)) & ~(samplerAlignment - 1);
+
+        // Align sampler stride
+        const samplerStride = (heapProps.samplerDescriptorSize + heapProps.samplerDescriptorAlignment - 1) & ~(heapProps.samplerDescriptorAlignment - 1);
+        const samplerHeapSize = samplerStartOffset + (samplerStride * rc.SAMPLER_MAX);
+
+        const samplerHeap = try vma.allocDescriptorHeap(samplerHeapSize);
+        try writePredefinedSamplers(samplerStartOffset, samplerStride, samplerHeap.mappedPtr, vma.gpi);
 
         return .{
-            .descHeap = try vma.allocDescriptorHeap(startOffset + heapSize),
+            .descHeap = try vma.allocDescriptorHeap(heapSize),
             .driverReservedSize = driverReservedSize,
             .descStride = descStride,
             .startOffset = startOffset,
+
+            .samplerHeap = samplerHeap,
+            .samplerReservedSize = samplerReservedSize,
+            .samplerStride = samplerStride,
+            .samplerStartOffset = samplerStartOffset,
         };
     }
-
     pub fn deinit(self: *DescriptorMan, vma: *const Vma) void {
         vma.freeBufferRaw(self.descHeap.handle, self.descHeap.allocation);
+        vma.freeBufferRaw(self.samplerHeap.handle, self.samplerHeap.allocation);
+    }
+
+    fn getSamplerHostRange(samplerStartOffset: u64, samplerStride: u64, samplerHeapPtr: ?*anyopaque, samplerIndex: u31) vk.VkHostAddressRangeEXT {
+        const finalOffset = samplerStartOffset + @as(u64, samplerIndex) * samplerStride;
+        const mappedData = @as([*]u8, @ptrCast(samplerHeapPtr));
+        return .{ .address = mappedData + finalOffset, .size = samplerStride };
+    }
+
+    fn writePredefinedSamplers(samplerStartOffset: u64, samplerStride: u64, samplerHeapPtr: ?*anyopaque, gpi: vk.VkDevice) !void {
+        const linearClamp = vk.VkSamplerCreateInfo{
+            .sType = vk.VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+            .magFilter = vk.VK_FILTER_LINEAR,
+            .minFilter = vk.VK_FILTER_LINEAR,
+            .mipmapMode = vk.VK_SAMPLER_MIPMAP_MODE_LINEAR,
+            .addressModeU = vk.VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+            .addressModeV = vk.VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+            .addressModeW = vk.VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+            .maxLod = vk.VK_LOD_CLAMP_NONE,
+        };
+        const nearestClamp = vk.VkSamplerCreateInfo{
+            .sType = vk.VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+            .magFilter = vk.VK_FILTER_NEAREST,
+            .minFilter = vk.VK_FILTER_NEAREST,
+            .mipmapMode = vk.VK_SAMPLER_MIPMAP_MODE_NEAREST,
+            .addressModeU = vk.VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+            .addressModeV = vk.VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+            .addressModeW = vk.VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+            .maxLod = vk.VK_LOD_CLAMP_NONE,
+        };
+        const samplers = [_]vk.VkSamplerCreateInfo{ linearClamp, nearestClamp };
+        var ranges = [_]vk.VkHostAddressRangeEXT{
+            getSamplerHostRange(samplerStartOffset, samplerStride, samplerHeapPtr, rc.SAMPLER_LINEAR_CLAMP_INDEX),
+            getSamplerHostRange(samplerStartOffset, samplerStride, samplerHeapPtr, rc.SAMPLER_NEAREST_CLAMP_INDEX),
+        };
+        try vhF.check(vkFn.vkWriteSamplerDescriptorsEXT.?(gpi, 2, &samplers, &ranges), "Failed to write predefined sampler descriptors");
     }
 
     pub fn getFreeDescriptorIndex(self: *DescriptorMan) !u31 {

@@ -1,5 +1,6 @@
 const ComputeIndirectExec = @import("../types/pass/PassDef.zig").ComputeIndirectExec;
 const AttachmentUse = @import("../types/pass/AttachmentUse.zig").AttachmentUse;
+const CompositeNode = @import("../types/pass/PassDef.zig").CompositeNode;
 const TexId = @import("../types/res/TextureMeta.zig").TextureMeta.TexId;
 const ViewportBlit = @import("../types/pass/PassDef.zig").ViewportBlit;
 const TextureUse = @import("../types/pass/TextureUse.zig").TextureUse;
@@ -40,7 +41,7 @@ pub const RenderGraph = struct {
     memDstStage: vk.VkPipelineStageFlags2 = 0,
     memDstAccess: vk.VkAccessFlags2 = 0,
     useGpuProfiling: bool = rc.GPU_PROFILING,
-    lastPassTyp: ?PassDef.PassExecution = null, 
+    lastPassTyp: ?PassDef.PassExecution = null,
 
     pub fn init(alloc: Allocator, context: *const Context) !RenderGraph {
         return .{
@@ -82,8 +83,9 @@ pub const RenderGraph = struct {
         if (self.useGpuProfiling == true and frame % rc.GPU_QUERY_INTERVAL == 0) try cmd.enableStatsQuerys(self.gpi) else cmd.disableStatsQuerys(self.gpi);
         cmd.resetStatsQuerys();
 
-        const timeId = cmd.startTimer(.TopOfPipe, "Descriptor Heap", .Other);
+        const timeId = cmd.startTimer(.TopOfPipe, "Descriptor Heap Bind", .Other);
         cmd.bindDescriptorHeap(resMan.descMan.descHeap.gpuAddress, resMan.descMan.descHeap.size, resMan.descMan.driverReservedSize);
+        cmd.bindSamplerHeap(resMan.descMan.samplerHeap.gpuAddress, resMan.descMan.samplerHeap.size, resMan.descMan.samplerReservedSize);
         cmd.endTimer(.BotOfPipe, timeId);
 
         try self.recordTransfers(cmd, resMan);
@@ -271,16 +273,88 @@ pub const RenderGraph = struct {
                     } else std.debug.print("Blit for unsupported Pass Skipped!\n", .{});
                 },
                 .uiNode => |uiNode| try self.recordUiNode(cmd, uiNode, resMan, shaderMan, swapMan),
+                .compositeNode => |composite| try self.recordCompositeNode(cmd, composite, resMan, shaderMan, swapMan),
             }
         }
     }
 
+    fn recordCompositeNode(self: *RenderGraph, cmd: *Cmd, composite: CompositeNode, resMan: *ResourceMan, shaderMan: *ShaderManager, swapMan: *SwapchainMan) !void {
+        const timeId = cmd.startTimer(.TopOfPipe, composite.name, .Composite);
+
+        const targetIndex = swapMan.getTargetIndex(composite.windowId) orelse return;
+        const swapchain = swapMan.getTargetByIndex(targetIndex);
+        const targetTex = swapchain.getCurTexture();
+
+        const isFirstUse = targetTex.state.layout == .Undefined;
+
+        const srcTex = try resMan.get(composite.srcTexId, cmd.flightId);
+        const srcDesc = try resMan.getTextureDescriptor(composite.srcTexId, cmd.flightId, .Sampled);
+
+        // Barriers: src → SampledRead, swapchain → ColorAttWrite
+        try self.checkImageState(srcTex, .{ .stage = .Fragment, .access = .SampledRead, .layout = .General });
+        try self.checkImageState(targetTex, .{ .stage = .ColorAtt, .access = .ColorAttReadWrite, .layout = .Attachment });
+        self.bakeBarriers(cmd, "Composite Prep");
+
+        // Viewport/scissor restricted to the target region
+        cmd.setViewport(
+            @floatFromInt(composite.viewOffsetX),
+            @floatFromInt(composite.viewOffsetY),
+            @floatFromInt(composite.viewWidth),
+            @floatFromInt(composite.viewHeight),
+        );
+        cmd.setScissor(
+            @floatFromInt(composite.viewOffsetX),
+            @floatFromInt(composite.viewOffsetY),
+            @floatFromInt(composite.viewWidth),
+            @floatFromInt(composite.viewHeight),
+        );
+
+        // Color attachment = swapchain current image
+        const colorAtt = targetTex.createAttachment(.Swapchain, isFirstUse);
+        cmd.beginRendering(swapchain.extent.width, swapchain.extent.height, &[_]vk.VkRenderingAttachmentInfo{colorAtt}, null, null);
+
+        const shaderIds = [_]ShaderId{ sc.compositeVert.id, sc.compositeFrag.id };
+        const shaders = shaderMan.getShaders(&shaderIds);
+        cmd.bindShaders(shaders[0..2]);
+
+        // Push data
+        const pushData = vhT.CompositePushData{
+            .srcDesc = srcDesc,
+            .samplerIndex = rc.SAMPLER_LINEAR_CLAMP_INDEX,
+            .stretch = if (composite.stretch) 1 else 0,
+            .opacity = composite.opacity,
+            .dstWidth = composite.viewWidth,
+            .dstHeight = composite.viewHeight,
+        };
+        cmd.setPushData(&pushData, @sizeOf(@TypeOf(pushData)), 0);
+
+        cmd.updateRenderState(.{
+            .colorBlend = vk.VK_TRUE,
+            .colorBlendEquation = .{
+                .srcColor = vk.VK_BLEND_FACTOR_SRC_ALPHA,
+                .dstColor = vk.VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+                .srcAlpha = vk.VK_BLEND_FACTOR_ONE,
+                .dstAlpha = vk.VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+            },
+            .depthTest = vk.VK_FALSE,
+            .depthWrite = vk.VK_FALSE,
+            .cullMode = vk.VK_CULL_MODE_NONE,
+        });
+
+        cmd.setVertexInput(null, null);
+        cmd.draw(3, 1, 0, 0);
+        cmd.endRendering();
+        cmd.endTimer(.BotOfPipe, timeId);
+    }
+
     fn recordUiNode(self: *RenderGraph, cmd: *Cmd, uiNode: UiNode, resMan: *ResourceMan, shaderMan: *ShaderManager, swapMan: *SwapchainMan) !void {
-        const timeId = cmd.startTimer(.TopOfPipe, "ImGui Native UI", .Other);
+        const timeId = cmd.startTimer(.TopOfPipe, uiNode.name, .Ui);
 
         const targetIndex = swapMan.getTargetIndex(uiNode.windowId) orelse return;
         const swapchain = swapMan.getTargetByIndex(targetIndex);
         const targetTex = swapchain.getCurTexture();
+
+        const isFirstUse = targetTex.state.layout == .Undefined;
 
         const pass = pc.ImGuiPass(.{
             .name = "ImGui",
@@ -291,7 +365,7 @@ pub const RenderGraph = struct {
 
         try self.checkImageState(targetTex, .{ .stage = .ColorAtt, .access = .ColorAttWrite, .layout = .Attachment });
 
-        // All other barriers driven by the PassDef — vertex buffers, index buffer, textures
+        // All other barriers driven by the PassDef: vertex buffers, index buffer, textures
         for (pass.vertexBuffers.constSlice()) |vbUse| {
             const buf = try resMan.get(vbUse.bufId, cmd.flightId);
             try self.checkBufferState(buf, .{ .stage = .VertexInput, .access = .VertexAttributeRead });
@@ -307,8 +381,8 @@ pub const RenderGraph = struct {
         }
         self.bakeBarriers(cmd, "UI Prep");
 
-        // Setup driven by PassDef — same as recordGraphics for a vertex pass
-        const colorAtt = targetTex.createAttachment(.Swapchain, false);
+        // Setup driven by PassDef same as recordGraphics for a vertex pass
+        const colorAtt = targetTex.createAttachment(.Swapchain, isFirstUse);
         cmd.beginRendering(swapchain.extent.width, swapchain.extent.height, &[_]vk.VkRenderingAttachmentInfo{colorAtt}, null, null);
 
         const shaders = shaderMan.getShaders(pass.getShaderIds());

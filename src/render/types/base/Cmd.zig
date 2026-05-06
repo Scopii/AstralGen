@@ -13,7 +13,7 @@ const std = @import("std");
 
 pub const QueryPair = struct {
     name: []const u8,
-    typ: enum { Pass, Blit, Other },
+    typ: enum { Pass, Blit, Other, Composite, Ui },
     startIndex: u8 = 0,
     endIndex: u8 = 0,
 };
@@ -386,6 +386,16 @@ pub const Cmd = struct {
             .reservedRangeSize = reservedSize,
         };
         vkFn.vkCmdBindResourceHeapEXT.?(self.handle, &bindInf);
+    }
+
+    pub fn bindSamplerHeap(self: *const Cmd, heapAddress: u64, heapSize: u64, reservedSize: u64) void {
+        const bindInf = vk.VkBindHeapInfoEXT{
+            .sType = vk.VK_STRUCTURE_TYPE_BIND_HEAP_INFO_EXT,
+            .heapRange = .{ .address = heapAddress, .size = heapSize },
+            .reservedRangeOffset = 0,
+            .reservedRangeSize = reservedSize,
+        };
+        vkFn.vkCmdBindSamplerHeapEXT.?(self.handle, &bindInf);
     }
 
     pub fn blit(self: *const Cmd, srcImg: vk.VkImage, srcExtent: vk.VkExtent3D, dstImg: vk.VkImage, dstExtent: vk.VkExtent3D, dstOffset: vk.VkOffset3D, stretch: bool) void {

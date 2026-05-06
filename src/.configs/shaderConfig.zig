@@ -3,7 +3,7 @@ const ShaderInf = @import("../shader/ShaderInf.zig").ShaderInf;
 // Shader Compilation
 pub const SHADER_HOTLOAD = true;
 pub const SHADER_STARTUP_COMPILATION = true;
-pub const SHADER_MAX = 31;
+pub const SHADER_MAX = 64;
 // Paths
 pub const ROOT_PATH: []const u8 = "../..";
 pub const SHADER_PATH: []const u8 = "assets/shaders";
@@ -28,6 +28,10 @@ pub const t1Comp = ShaderInf.init(0, .comp, "compTest/comp.slang", "t1Comp.spv")
 pub const imguiVert = ShaderInf.init(1, .vert, "Imgui/vertex.slang", "imguiVertex.spv");
 pub const imguiFrag = ShaderInf.init(2, .frag, "Imgui/frag.slang", "imguiFrag.spv");
 
+pub const depthViewComp = ShaderInf.init(31, .comp, "depthView/reverseZcomp.slang", "depthViewComp.spv");
+pub const compositeVert = ShaderInf.init(32, .vert, "composite/vert.slang", "compositeVert.spv");
+pub const compositeFrag = ShaderInf.init(33, .frag, "composite/frag.slang", "compositeFrag.spv");
+
 pub const COMPILING_SHADERS: []const ShaderInf = &.{
     cullTestComp,
     cullTestMesh,
@@ -46,6 +50,10 @@ pub const COMPILING_SHADERS: []const ShaderInf = &.{
 
     imguiVert,
     imguiFrag,
+
+    depthViewComp,
+    compositeVert,
+    compositeFrag,
 };
 
 // pub const t1Comp = ShaderInf.init(0, .comp, "compTest/comp.slang", "t1Comp.spv");

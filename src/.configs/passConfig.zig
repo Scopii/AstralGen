@@ -7,6 +7,26 @@ const PassDef = @import("../render/types/pass/PassDef.zig").PassDef;
 const vk = @import("../.modules/vk.zig").c;
 const sc = @import("shaderConfig.zig");
 
+pub fn DepthView(def: struct {
+    name: []const u8,
+    outputTex: TexId,
+    depthTex: TexId,
+    camBuf: BufId,
+}) PassDef {
+    return PassDef.ComputeOnImg(.{
+        .name = def.name,
+        .execution = .{ .workgroups = .{ .x = 8, .y = 8, .z = 1 }, .mainTexId = def.outputTex },
+        .compute = sc.depthViewComp,
+        .bufUses = &.{
+            BufferUse.init(def.camBuf, .Compute, .UniformRead, 3),
+        },
+        .texUses = &.{
+            TextureUse.init(def.outputTex, .Compute, .ShaderWrite, .General, 0, .Storage),
+            TextureUse.init(def.depthTex, .Compute, .ShaderRead, .ReadOnly, 1, .Sampled),
+        },
+    });
+}
+
 pub fn ImGuiPass(def: struct {
     name: []const u8,
     colorAtt: TexId,
@@ -88,7 +108,7 @@ pub fn EditorGrid(
         .renderState = .{
             .depthTest = vk.VK_TRUE,
             .depthWrite = vk.VK_TRUE,
-            .depthCompare = vk.VK_COMPARE_OP_LESS,
+            .depthCompare = vk.VK_COMPARE_OP_GREATER,
             .cullMode = vk.VK_CULL_MODE_NONE,
         },
     });
@@ -170,7 +190,7 @@ pub fn QuantGrid(
         .renderState = .{
             .depthTest = vk.VK_TRUE,
             .depthWrite = vk.VK_TRUE,
-            .depthCompare = vk.VK_COMPARE_OP_LESS,
+            .depthCompare = vk.VK_COMPARE_OP_GREATER,
             .cullMode = vk.VK_CULL_MODE_NONE,
         },
     });
@@ -206,7 +226,7 @@ pub fn QuantPlane(
         .renderState = .{
             .depthTest = vk.VK_TRUE,
             .depthWrite = vk.VK_TRUE,
-            .depthCompare = vk.VK_COMPARE_OP_LESS,
+            .depthCompare = vk.VK_COMPARE_OP_GREATER,
             .cullMode = vk.VK_CULL_MODE_NONE,
         },
     });
@@ -260,7 +280,7 @@ pub fn Cull(
         .renderState = .{
             .depthTest = vk.VK_TRUE,
             .depthWrite = vk.VK_TRUE,
-            .depthCompare = vk.VK_COMPARE_OP_LESS,
+            .depthCompare = vk.VK_COMPARE_OP_GREATER,
             .cullMode = vk.VK_CULL_MODE_NONE,
         },
     });

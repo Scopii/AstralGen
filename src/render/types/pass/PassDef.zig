@@ -52,9 +52,23 @@ pub const RenderNode = union(enum) {
     viewportBlit: ViewportBlit,
     passNode: struct { pass: PassDef, width: u32, height: u32 },
     uiNode: UiNode,
+    compositeNode: CompositeNode,
+};
+
+pub const CompositeNode = struct {
+    name: []const u8,
+    windowId: WindowId,
+    srcTexId: TexId,
+    viewWidth: u32,
+    viewHeight: u32,
+    viewOffsetX: i32,
+    viewOffsetY: i32,
+    opacity: f32,
+    stretch: bool,
 };
 
 pub const UiNode = struct {
+    name: []const u8,
     windowId: WindowId,
     displayPos: [2]f32,
     displaySize: [2]f32,

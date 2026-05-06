@@ -1,4 +1,6 @@
+const CompositeNode = @import("../render/types/pass/PassDef.zig").CompositeNode;
 const ViewportBlit = @import("../render/types/pass/PassDef.zig").ViewportBlit;
+const RenderNode = @import("../render/types/pass/PassDef.zig").RenderNode;
 const PassDef = @import("../render/types/pass/PassDef.zig").PassDef;
 const FrameBuildData = @import("FrameBuildData.zig").FrameBuildData;
 const WindowId = @import("../window/Window.zig").Window.WindowId;
@@ -14,6 +16,7 @@ pub const PassEnum = enum {
     CompTest,
     CullComp,
     CullMain,
+    DepthView,
     CullDebug,
     QuantComp,
     QuantGridMain,
@@ -56,7 +59,7 @@ pub const FrameBuildSys = struct {
         }
 
         const activeWindows = data.window.activeWindows.constSlice();
-        var tempBlits: FixedList(ViewportBlit, rc.MAX_WINDOWS * 4) = .{};
+        var tempBlitsAndComposits: FixedList(RenderNode, rc.MAX_WINDOWS * 4) = .{};
 
         for (0..passEnumFields.len) |passIndex| {
             if (passMask[passIndex] == true) {
@@ -82,8 +85,11 @@ pub const FrameBuildSys = struct {
                             // Check if Viewport:
                             if (usesPass) {
                                 if (passMaskEnum == viewport.blitPass) {
-                                    const blit = createBlit(&viewport, window.id, window.extent.width, window.extent.height);
-                                    tempBlits.append(blit) catch std.debug.print("PassDef Could not Append Blit\n", .{});
+                                    // const blit = createBlit(&viewport, window.id, window.extent.width, window.extent.height);
+                                    // tempBlitsAndComposits.append(.{ .viewportBlit = blit }) catch std.debug.print("PassDef Could not Append Blit\n", .{});
+
+                                    const composite = createComposite(&viewport, window.id, window.extent.width, window.extent.height);
+                                    tempBlitsAndComposits.append(.{ .compositeNode = composite }) catch std.debug.print("PassDef Could not Append Composite\n", .{});
                                 }
                                 // Check for bigger Viewport Area:
                                 const viewWidth = viewport.calcViewWidth(window.extent.width);
@@ -105,10 +111,10 @@ pub const FrameBuildSys = struct {
                 appendPass(frameBuild, passMaskEnum, passWidth, passHeight) catch std.debug.print("ERROR: COULD NOT APPEND PASS\n", .{});
                 if (rc.FRAME_BUILD_DEBUG) std.debug.print("Pass {s} added (width {} height {})\n", .{ @enumFromInt(passIndex), passWidth, passHeight });
 
-                for (tempBlits.constSlice()) |blit| {
-                    frameBuild.passList.append(.{ .viewportBlit = blit }) catch std.debug.print("PassDef Could not Append Blit\n", .{});
+                for (tempBlitsAndComposits.constSlice()) |renderNode| {
+                    frameBuild.passList.append(renderNode) catch std.debug.print("PassDef Could not Append Blit\n", .{});
                 }
-                tempBlits.clear();
+                tempBlitsAndComposits.clear();
             }
         }
 
@@ -118,7 +124,7 @@ pub const FrameBuildSys = struct {
     }
 
     fn createBlit(viewport: *const Viewport, windowId: WindowId, windowWidth: u32, windowHeight: u32) ViewportBlit {
-        const blitNode = ViewportBlit{
+        return ViewportBlit{
             .name = viewport.name,
             .srcTexId = viewport.sourceTexId,
             .dstWindowId = windowId,
@@ -127,7 +133,20 @@ pub const FrameBuildSys = struct {
             .viewOffsetX = viewport.calcViewX(windowWidth),
             .viewOffsetY = viewport.calcViewY(windowHeight),
         };
-        return blitNode;
+    }
+
+    fn createComposite(viewport: *const Viewport, windowId: WindowId, windowWidth: u32, windowHeight: u32) CompositeNode {
+        return CompositeNode{
+            .name = viewport.name,
+            .windowId = windowId,
+            .srcTexId = viewport.sourceTexId,
+            .viewWidth = viewport.calcViewWidth(windowWidth),
+            .viewHeight = viewport.calcViewHeight(windowHeight),
+            .viewOffsetX = viewport.calcViewX(windowWidth),
+            .viewOffsetY = viewport.calcViewY(windowHeight),
+            .opacity = 1.0,
+            .stretch = rc.RENDER_TEX_STRETCH,
+        };
     }
 
     fn appendPass(frameBuild: *FrameBuildData, passEnum: PassEnum, passWidth: u32, passHeight: u32) !void {
@@ -241,6 +260,15 @@ pub const FrameBuildSys = struct {
                     .depthAtt = rc.mainDepthTex.id,
                     .frustumCamBuf = rc.mainCamUB.id,
                     .viewCamBuf = rc.debugCamUB.id,
+                });
+                try frameBuild.passList.append(.{ .passNode = .{ .pass = pass, .width = passWidth, .height = passHeight } });
+            },
+            .DepthView => {
+                const pass = pDef.DepthView(.{
+                    .name = "Depth-View",
+                    .outputTex = rc.depthViewTex.id,
+                    .depthTex = rc.mainDepthTex.id,
+                    .camBuf = rc.mainCamUB.id,
                 });
                 try frameBuild.passList.append(.{ .passNode = .{ .pass = pass, .width = passWidth, .height = passHeight } });
             },

@@ -39,20 +39,17 @@ pub const Shader = struct {
             .pData = &specData,
         };
 
-        const heapMapping = vk.VkDescriptorSetAndBindingMappingEXT{
+        const resourceMapping = vk.VkDescriptorSetAndBindingMappingEXT{
             .sType = vk.VK_STRUCTURE_TYPE_DESCRIPTOR_SET_AND_BINDING_MAPPING_EXT,
-            .descriptorSet = 0,
+            .descriptorSet = 0, // all resources
             .firstBinding = 0,
             .bindingCount = 1,
-
             .resourceMask = vk.VK_SPIRV_RESOURCE_TYPE_SAMPLED_IMAGE_BIT_EXT |
                 vk.VK_SPIRV_RESOURCE_TYPE_READ_WRITE_IMAGE_BIT_EXT |
                 vk.VK_SPIRV_RESOURCE_TYPE_UNIFORM_BUFFER_BIT_EXT |
                 vk.VK_SPIRV_RESOURCE_TYPE_READ_WRITE_STORAGE_BUFFER_BIT_EXT |
                 vk.VK_SPIRV_RESOURCE_TYPE_READ_ONLY_STORAGE_BUFFER_BIT_EXT,
-
             .source = vk.VK_DESCRIPTOR_MAPPING_SOURCE_HEAP_WITH_CONSTANT_OFFSET_EXT,
-
             .sourceData = .{
                 .constantOffset = .{
                     .heapOffset = @intCast(resMan.descMan.startOffset),
@@ -63,11 +60,30 @@ pub const Shader = struct {
                 },
             },
         };
-        const mappings = [_]vk.VkDescriptorSetAndBindingMappingEXT{heapMapping};
+
+        const samplerMapping = vk.VkDescriptorSetAndBindingMappingEXT{
+            .sType = vk.VK_STRUCTURE_TYPE_DESCRIPTOR_SET_AND_BINDING_MAPPING_EXT,
+            .descriptorSet = 1, // samplers
+            .firstBinding = 0,
+            .bindingCount = 1,
+            .resourceMask = vk.VK_SPIRV_RESOURCE_TYPE_SAMPLER_BIT_EXT,
+            .source = vk.VK_DESCRIPTOR_MAPPING_SOURCE_HEAP_WITH_CONSTANT_OFFSET_EXT,
+            .sourceData = .{
+                .constantOffset = .{
+                    .heapOffset = @intCast(resMan.descMan.samplerStartOffset),
+                    .heapArrayStride = @intCast(resMan.descMan.samplerStride),
+                    .pEmbeddedSampler = null,
+                    .samplerHeapOffset = 0,
+                    .samplerHeapArrayStride = 0,
+                },
+            },
+        };
+
+        const mappings = [_]vk.VkDescriptorSetAndBindingMappingEXT{ resourceMapping, samplerMapping };
 
         const mappingInf = vk.VkShaderDescriptorSetAndBindingMappingInfoEXT{
             .sType = vk.VK_STRUCTURE_TYPE_SHADER_DESCRIPTOR_SET_AND_BINDING_MAPPING_INFO_EXT,
-            .mappingCount = mappings.len,
+            .mappingCount = 2,
             .pMappings = &mappings,
         };
 

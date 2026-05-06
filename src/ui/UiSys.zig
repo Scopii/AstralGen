@@ -29,7 +29,7 @@ pub const UiSys = struct {
 
         if (data.window.uiActive) {
             try processTextures(ui, rendererQueue, memoryMan);
-            for (data.window.activeWindows.constSlice()) |*window| buildWindowUi(window, ui, data.time.deltaTime);
+            for (data.window.activeWindows.constSlice()) |*window| buildWindowUi(window, ui, data, data.time.deltaTime);
             try extractDrawData(ui, data, rendererQueue, memoryMan);
         }
     }
@@ -80,7 +80,7 @@ pub const UiSys = struct {
         }
     }
 
-    fn buildWindowUi(window: *const Window, ui: *UiData, deltaTime: i128) void {
+    fn buildWindowUi(window: *const Window, ui: *UiData, data: *const EngineData, deltaTime: i128) void {
         if (!ui.initialized) return;
 
         if (!ui.contexts.isKeyUsed(window.id.val)) {
@@ -100,8 +100,8 @@ pub const UiSys = struct {
 
         zgui.newFrame();
 
-        // drawBorderUi(window, data);
-        drawSimpleWindowUi(window);
+        drawBorderUi(window, data);
+        // drawSimpleWindowUi(window);
 
         zgui.render();
     }
@@ -118,7 +118,7 @@ pub const UiSys = struct {
         zgui.end();
     }
 
-    fn drawBorderUi(window: *const Window, data: *EngineData) void {
+    fn drawBorderUi(window: *const Window, data: *const EngineData) void {
         const width = @as(f32, @floatFromInt(window.extent.width));
         const height = @as(f32, @floatFromInt(window.extent.height));
 
@@ -162,16 +162,17 @@ pub const UiSys = struct {
             }
         }
 
-        // border outline around viewport
+        // Viewports:
         for (window.viewIds) |viewIdOpt| {
             if (viewIdOpt) |viewId| {
                 if (data.viewport.viewports.isKeyUsed(viewId.val) == false) continue;
 
                 const viewport = data.viewport.viewports.getByKey(viewId.val);
-                const viewX = width * viewport.areaX;
-                const viewY = height * viewport.areaY;
-                const viewWidth = width * viewport.areaWidth;
-                const viewHeight = height * viewport.areaHeight;
+                // Viewport Border
+                const viewX = @as(f32, @floatFromInt(viewport.calcViewX(@intFromFloat(width))));
+                const viewY = @as(f32, @floatFromInt(viewport.calcViewY(@intFromFloat(height))));
+                const viewWidth = @as(f32, @floatFromInt(viewport.calcViewWidth(@intFromFloat(width))));
+                const viewHeight = @as(f32, @floatFromInt(viewport.calcViewHeight(@intFromFloat(height))));
 
                 drawList.addRect(.{
                     .pmin = .{ viewX, viewY },
@@ -179,6 +180,12 @@ pub const UiSys = struct {
                     .col = zgui.colorConvertFloat4ToU32(.{ 0.3, 0.3, 0.3, 1.0 }),
                     .thickness = 1.0,
                 });
+                // Viewport Name
+                drawList.addTextUnformatted(
+                    .{ viewX + 10, viewY + viewHeight - 20 },
+                    zgui.colorConvertFloat4ToU32(.{ 0.3, 0.3, 0.3, 1.0 }),
+                    viewport.name,
+                );
             }
         }
         zgui.end();
@@ -248,6 +255,7 @@ pub const UiSys = struct {
             }
 
             try uiNodes.append(.{
+                .name = window.name,
                 .windowId = window.id,
                 .displayPos = drawData.display_pos,
                 .displaySize = drawData.display_size,

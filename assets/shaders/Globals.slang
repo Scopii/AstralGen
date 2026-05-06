@@ -20,6 +20,7 @@ public struct CameraData {
     public float4 camDirAndAspectRatio;
     public float4 frustumCorners[8];
     public float4 frustumPlanes[6]; // left,right,bottom,top,near,far
+    public float2 nearAndFar;
 };
 
 public struct PushConstants {
@@ -28,6 +29,15 @@ public struct PushConstants {
     public uint width;
     public uint height;
     public uint resources[14];
+};
+
+public struct CompositePushConstants {
+    public uint srcDesc;    
+    public uint samplerIndex; 
+    public uint stretch;      
+    public float opacity;
+    public uint dstWidth;
+    public uint dstHeight;
 };
 
 public struct IndirectCommand {
