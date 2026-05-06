@@ -104,7 +104,6 @@ pub const App = struct {
         self.data.viewport.viewports.upsert(10, Viewport{
             .name = "DeptView",
             .cameraEntity = mainCamId,
-            .sourceTexId = rc.depthViewTex.id,
             .areaX = 0,
             .areaY = 0,
             .areaWidth = 1,
@@ -112,7 +111,7 @@ pub const App = struct {
             .passSlice = &.{
                 .DepthView,
             },
-            .blitPass = .DepthView,
+            // .blitPass = .DepthView,
         });
 
         self.windowQueue.append(.{
@@ -132,7 +131,6 @@ pub const App = struct {
         self.data.viewport.viewports.upsert(1, Viewport{
             .name = "CompTest",
             .cameraEntity = mainCamId,
-            .sourceTexId = rc.mainTex.id,
             .areaX = 0.0,
             .areaY = 0.0,
             .areaWidth = 1.0,
@@ -140,7 +138,7 @@ pub const App = struct {
             .passSlice = &.{
                 .CompTest,
             },
-            .blitPass = .CompTest,
+            // .blitPass = .CompTest,
         });
 
         self.windowQueue.append(.{
@@ -160,7 +158,6 @@ pub const App = struct {
         self.data.viewport.viewports.upsert(2, Viewport{
             .name = "QuantGridMain",
             .cameraEntity = mainCamId,
-            .sourceTexId = rc.mainTex.id,
             .areaX = 0.5,
             .areaY = 0.0,
             .areaWidth = 0.5,
@@ -169,13 +166,12 @@ pub const App = struct {
                 .QuantComp,
                 .QuantGridMain,
             },
-            .blitPass = .QuantGridMain,
+            // .blitPass = .QuantGridMain,
         });
 
         self.data.viewport.viewports.upsert(3, Viewport{
             .name = "QuantGridDebug",
             .cameraEntity = debugCamId,
-            .sourceTexId = rc.mainTex.id,
             .areaX = 0.0,
             .areaY = 0.0,
             .areaWidth = 0.5,
@@ -185,12 +181,11 @@ pub const App = struct {
                 .QuantGridDebug,
                 .EditorGrid,
             },
-            .blitPass = .EditorGrid,
+            // .blitPass = .EditorGrid,
         });
         self.data.viewport.viewports.upsert(4, Viewport{
             .name = "QuantPlaneDebug",
             .cameraEntity = debugCamId,
-            .sourceTexId = rc.mainTex.id,
             .areaX = 0.0,
             .areaY = 0.5,
             .areaWidth = 0.5,
@@ -199,13 +194,12 @@ pub const App = struct {
                 .QuantPlaneDebug,
                 .FrustumView,
             },
-            .blitPass = .FrustumView,
+            // .blitPass = .FrustumView,
         });
 
         self.data.viewport.viewports.upsert(5, Viewport{
             .name = "QuantPlaneMain",
             .cameraEntity = mainCamId,
-            .sourceTexId = rc.mainTex.id,
             .areaX = 0.5,
             .areaY = 0.5,
             .areaWidth = 0.5,
@@ -213,7 +207,7 @@ pub const App = struct {
             .passSlice = &.{
                 .QuantPlaneMain,
             },
-            .blitPass = .QuantPlaneMain,
+            // .blitPass = .QuantPlaneMain,
         });
 
         for (0..rc.ENTITY_COUNT) |_| _ = self.data.entityData.createRandomRenderEntity(&self.rng);

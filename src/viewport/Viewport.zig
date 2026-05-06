@@ -4,15 +4,15 @@ const EntityId = @import("../ecs/EntityData.zig").EntityId;
 
 pub const Viewport = struct {
     name: []const u8,
-    sourceTexId: TexId,
     areaX: f32 = 0.0,
     areaY: f32 = 0.0,
     areaWidth: f32 = 1.0,
     areaHeight: f32 = 1.0,
     cameraEntity: ?EntityId,
+    opacity: f32 = 1.0,
 
     passSlice: []const PassEnum,
-    blitPass: PassEnum,
+    blitPass: ?PassEnum = null,
 
     pub fn calcViewWidth(self: *const Viewport, swapchainWidth: u32) u32 {
         return @intFromFloat(@as(f32, @floatFromInt(swapchainWidth)) * self.areaWidth);

@@ -15,6 +15,7 @@ pub fn DepthView(def: struct {
 }) PassDef {
     return PassDef.ComputeOnImg(.{
         .name = def.name,
+        .outputTexId = def.outputTex,
         .execution = .{ .workgroups = .{ .x = 8, .y = 8, .z = 1 }, .mainTexId = def.outputTex },
         .compute = sc.depthViewComp,
         .bufUses = &.{
@@ -35,6 +36,7 @@ pub fn ImGuiPass(def: struct {
 }) PassDef {
     return PassDef.Graphics(.{
         .name = def.name,
+        .outputTexId = null,
         .execution = .{ .vertices = 0, .instances = 1, .indexCount = 0, .mainTexId = def.colorAtt },
         .vertex = sc.imguiVert,
         .fragment = sc.imguiFrag,
@@ -73,6 +75,7 @@ pub fn CompRayMarch(
 ) PassDef {
     return PassDef.ComputeOnImg(.{
         .name = def.name,
+        .outputTexId = def.outputTex,
         .execution = .{ .workgroups = .{ .x = 8, .y = 8, .z = 1 }, .mainTexId = def.outputTex },
         .compute = sc.t1Comp,
         .bufUses = &.{
@@ -97,6 +100,7 @@ pub fn EditorGrid(
 ) PassDef {
     return PassDef.Mesh(.{
         .name = def.name,
+        .outputTexId = def.colorAtt,
         .execution = .{ .workgroups = .{ .x = 1, .y = 1, .z = 1 }, .mainTexId = def.colorAtt },
         .mesh = sc.editorGridMesh,
         .fragment = sc.editorGridFrag,
@@ -125,6 +129,7 @@ pub fn FrustumView(
 ) PassDef {
     return PassDef.Mesh(.{
         .name = def.name,
+        .outputTexId = def.colorAtt,
         .execution = .{ .workgroups = .{ .x = 1, .y = 1, .z = 1 }, .mainTexId = def.colorAtt },
         .mesh = sc.frustumMesh,
         .fragment = sc.quantFrag,
@@ -151,6 +156,7 @@ pub fn QuantComp(
 ) PassDef {
     return PassDef.Compute(.{
         .name = def.name,
+        .outputTexId = null,
         .execution = .{ .workgroups = .{ .x = 1, .y = 1, .z = 1 } },
         .compute = sc.quantComp,
         .bufUses = &.{
@@ -172,6 +178,7 @@ pub fn QuantGrid(
 ) PassDef {
     return PassDef.MeshIndirect(.{
         .name = def.name,
+        .outputTexId = def.colorAtt,
         .execution = .{
             .workgroups = .{ .x = 1, .y = 1, .z = 1 },
             .indirectBuf = def.indirectBuf,
@@ -208,6 +215,7 @@ pub fn QuantPlane(
 ) PassDef {
     return PassDef.MeshIndirect(.{
         .name = def.name,
+        .outputTexId = def.colorAtt,
         .execution = .{
             .workgroups = .{ .x = 1, .y = 1, .z = 1 },
             .indirectBuf = def.indirectBuf,
@@ -241,6 +249,7 @@ pub fn CullComp(
 ) PassDef {
     return PassDef.Compute(.{
         .name = def.name,
+        .outputTexId = null,
         .execution = .{ .workgroups = .{ .x = 1, .y = 1, .z = 1 } },
         .compute = sc.cullTestComp,
         .bufUses = &.{
@@ -262,6 +271,7 @@ pub fn Cull(
 ) PassDef {
     return PassDef.MeshIndirect(.{
         .name = def.name,
+        .outputTexId = def.colorAtt,
         .execution = .{
             .workgroups = .{ .x = 1, .y = 1, .z = 1 },
             .indirectBuf = def.indirectBuf,

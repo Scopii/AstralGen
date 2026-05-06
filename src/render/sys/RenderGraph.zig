@@ -80,8 +80,8 @@ pub const RenderGraph = struct {
         if (self.useGpuProfiling == true and frame % rc.GPU_QUERY_INTERVAL == 0) try cmd.enableTimeQuerys(self.gpi) else cmd.disableTimeQuerys(self.gpi);
         cmd.resetTimeQuerys();
 
-        if (self.useGpuProfiling == true and frame % rc.GPU_QUERY_INTERVAL == 0) try cmd.enableStatsQuerys(self.gpi) else cmd.disableStatsQuerys(self.gpi);
-        cmd.resetStatsQuerys();
+        // if (self.useGpuProfiling == true and frame % rc.GPU_QUERY_INTERVAL == 0) try cmd.enableStatsQuerys(self.gpi) else cmd.disableStatsQuerys(self.gpi);
+        // cmd.resetStatsQuerys();
 
         const timeId = cmd.startTimer(.TopOfPipe, "Descriptor Heap Bind", .Other);
         cmd.bindDescriptorHeap(resMan.descMan.descHeap.gpuAddress, resMan.descMan.descHeap.size, resMan.descMan.driverReservedSize);
@@ -287,8 +287,13 @@ pub const RenderGraph = struct {
 
         const isFirstUse = targetTex.state.layout == .Undefined;
 
-        const srcTex = try resMan.get(composite.srcTexId, cmd.flightId);
-        const srcDesc = try resMan.getTextureDescriptor(composite.srcTexId, cmd.flightId, .Sampled);
+        var srcTex: *Texture = undefined;
+        var srcDesc: u32 = undefined;
+
+        if (composite.srcTexId) |texId| {
+            srcTex = try resMan.get(texId, cmd.flightId);
+            srcDesc = try resMan.getTextureDescriptor(texId, cmd.flightId, .Sampled);
+        } else return error.CompositeHasNoSrcTexId;
 
         // Barriers: src → SampledRead, swapchain → ColorAttWrite
         try self.checkImageState(srcTex, .{ .stage = .Fragment, .access = .SampledRead, .layout = .General });
@@ -461,7 +466,11 @@ pub const RenderGraph = struct {
     fn recordBlit(self: *RenderGraph, cmd: *Cmd, blit: ViewportBlit, resMan: *ResourceMan, swapMan: *SwapchainMan) !void {
         const timeId = cmd.startTimer(.TopOfPipe, blit.name, .Blit);
 
-        const renderTex = try resMan.get(blit.srcTexId, cmd.flightId);
+        var renderTex: *Texture = undefined;
+
+        if (blit.srcTexId) |texId| {
+            renderTex = try resMan.get(texId, cmd.flightId);
+        } else return error.BlitHasNoSrcTexId;
 
         const targetIndex = swapMan.getTargetIndex(blit.dstWindowId) orelse return;
         const swapchain = swapMan.getTargetByIndex(targetIndex);

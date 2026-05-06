@@ -58,7 +58,7 @@ pub const RenderNode = union(enum) {
 pub const CompositeNode = struct {
     name: []const u8,
     windowId: WindowId,
-    srcTexId: TexId,
+    srcTexId: ?TexId = null,
     viewWidth: u32,
     viewHeight: u32,
     viewOffsetX: i32,
@@ -85,7 +85,7 @@ pub const UiNode = struct {
 
 pub const ViewportBlit = struct {
     name: []const u8,
-    srcTexId: TexId,
+    srcTexId: ?TexId = null,
     dstWindowId: WindowId,
     viewWidth: u32,
     viewHeight: u32,
@@ -96,6 +96,7 @@ pub const ViewportBlit = struct {
 pub const PassDef = struct {
     name: []const u8,
     execution: PassExecution,
+    outputTexId: ?TexId,
 
     // All passes
     shaderIds: FixedList(ShaderId, 3) = .{},
@@ -125,6 +126,7 @@ pub const PassDef = struct {
     pub fn Graphics(
         inf: struct {
             name: []const u8,
+            outputTexId: ?TexId,
             execution: GraphicsExec,
             vertex: ShaderInf,
             fragment: ShaderInf,
@@ -146,6 +148,7 @@ pub const PassDef = struct {
 
         var pass = PassDef{
             .name = inf.name,
+            .outputTexId = inf.outputTexId,
             .execution = .{ .graphics = inf.execution },
             .depthAtt = inf.depthAtt,
             .stencilAtt = inf.stencilAtt,
@@ -169,6 +172,7 @@ pub const PassDef = struct {
     pub fn Compute(
         inf: struct {
             name: []const u8,
+            outputTexId: ?TexId,
             execution: ComputeExec,
             compute: ShaderInf,
             bufUses: []const BufferUse = &.{},
@@ -180,6 +184,7 @@ pub const PassDef = struct {
 
         var pass = PassDef{
             .name = inf.name,
+            .outputTexId = inf.outputTexId,
             .execution = .{ .compute = inf.execution },
         };
 
@@ -194,6 +199,7 @@ pub const PassDef = struct {
     pub fn ComputeIndirect(
         inf: struct {
             name: []const u8,
+            outputTexId: ?TexId,
             execution: ComputeIndirectExec,
             compute: ShaderInf,
             bufUses: []const BufferUse = &.{},
@@ -205,6 +211,7 @@ pub const PassDef = struct {
 
         var pass = PassDef{
             .name = inf.name,
+            .outputTexId = inf.outputTexId,
             .execution = .{ .compute = inf.execution },
         };
 
@@ -219,6 +226,7 @@ pub const PassDef = struct {
     pub fn ComputeOnImg(
         inf: struct {
             name: []const u8,
+            outputTexId: ?TexId,
             execution: ComputeOnImgExec,
             compute: ShaderInf,
             bufUses: []const BufferUse = &.{},
@@ -230,6 +238,7 @@ pub const PassDef = struct {
 
         var pass = PassDef{
             .name = inf.name,
+            .outputTexId = inf.outputTexId,
             .execution = .{ .computeOnImg = inf.execution },
         };
 
@@ -244,6 +253,7 @@ pub const PassDef = struct {
     pub fn TaskMesh(
         inf: struct {
             name: []const u8,
+            outputTexId: ?TexId,
             execution: TaskOrMeshExec,
             task: ShaderInf,
             mesh: ShaderInf,
@@ -264,6 +274,7 @@ pub const PassDef = struct {
 
         var pass = PassDef{
             .name = inf.name,
+            .outputTexId = inf.outputTexId,
             .execution = inf.execution,
             .depthAtt = inf.depthAtt,
             .stencilAtt = inf.stencilAtt,
@@ -284,6 +295,7 @@ pub const PassDef = struct {
     pub fn TaskMeshIndirect(
         inf: struct {
             name: []const u8,
+            outputTexId: ?TexId,
             execution: TaskOrMeshIndirectExec,
             task: ShaderInf,
             mesh: ShaderInf,
@@ -304,6 +316,7 @@ pub const PassDef = struct {
 
         var pass = PassDef{
             .name = inf.name,
+            .outputTexId = inf.outputTexId,
             .execution = inf.execution,
             .depthAtt = inf.depthAtt,
             .stencilAtt = inf.stencilAtt,
@@ -324,6 +337,7 @@ pub const PassDef = struct {
     pub fn Mesh(
         inf: struct {
             name: []const u8,
+            outputTexId: ?TexId,
             execution: TaskOrMeshExec,
             mesh: ShaderInf,
             fragment: ShaderInf,
@@ -342,6 +356,7 @@ pub const PassDef = struct {
 
         var pass = PassDef{
             .name = inf.name,
+            .outputTexId = inf.outputTexId,
             .execution = .{ .taskOrMesh = inf.execution },
             .depthAtt = inf.depthAtt,
             .stencilAtt = inf.stencilAtt,
@@ -361,6 +376,7 @@ pub const PassDef = struct {
     pub fn MeshIndirect(
         inf: struct {
             name: []const u8,
+            outputTexId: ?TexId,
             execution: TaskOrMeshIndirectExec,
             mesh: ShaderInf,
             fragment: ShaderInf,
@@ -379,6 +395,7 @@ pub const PassDef = struct {
 
         var pass = PassDef{
             .name = inf.name,
+            .outputTexId = inf.outputTexId,
             .execution = .{ .taskOrMeshIndirect = inf.execution },
             .depthAtt = inf.depthAtt,
             .stencilAtt = inf.stencilAtt,
