@@ -40,7 +40,8 @@ pub const RenderGraph = struct {
     memSrcAccess: vk.VkAccessFlags2 = 0,
     memDstStage: vk.VkPipelineStageFlags2 = 0,
     memDstAccess: vk.VkAccessFlags2 = 0,
-    useGpuProfiling: bool = rc.GPU_PROFILING,
+    useGpuTimers: bool = false,
+    useGpuStats: bool = false,
     lastPassTyp: ?PassDef.PassExecution = null,
 
     pub fn init(alloc: Allocator, context: *const Context) !RenderGraph {
@@ -60,7 +61,12 @@ pub const RenderGraph = struct {
     }
 
     pub fn toggleGpuProfiling(self: *RenderGraph) void {
-        if (self.useGpuProfiling == true) self.useGpuProfiling = false else self.useGpuProfiling = true;
+        if (rc.GPU_TIMERS == true) {
+            if (self.useGpuTimers == true) self.useGpuTimers = false else self.useGpuTimers = true;
+        }
+        if (rc.GPU_STATS == true) {
+            if (self.useGpuStats == true) self.useGpuStats = false else self.useGpuStats = true;
+        }
     }
 
     pub fn recordFrame(
@@ -77,11 +83,11 @@ pub const RenderGraph = struct {
         var cmd = try self.cmdMan.getCmd(flightId);
         try cmd.begin(flightId, frame);
 
-        if (self.useGpuProfiling == true and frame % rc.GPU_QUERY_INTERVAL == 0) try cmd.enableTimeQuerys(self.gpi) else cmd.disableTimeQuerys(self.gpi);
+        if (self.useGpuTimers == true and frame % rc.GPU_QUERY_INTERVAL == 0) try cmd.enableTimeQuerys(self.gpi) else cmd.disableTimeQuerys(self.gpi);
         cmd.resetTimeQuerys();
 
-        // if (self.useGpuProfiling == true and frame % rc.GPU_QUERY_INTERVAL == 0) try cmd.enableStatsQuerys(self.gpi) else cmd.disableStatsQuerys(self.gpi);
-        // cmd.resetStatsQuerys();
+        if (self.useGpuStats == true and frame % rc.GPU_QUERY_INTERVAL == 0) try cmd.enableStatsQuerys(self.gpi) else cmd.disableStatsQuerys(self.gpi);
+        cmd.resetStatsQuerys();
 
         const timeId = cmd.startTimer(.TopOfPipe, "Descriptor Heap Bind", .Other);
         cmd.bindDescriptorHeap(resMan.descMan.descHeap.gpuAddress, resMan.descMan.descHeap.size, resMan.descMan.driverReservedSize);

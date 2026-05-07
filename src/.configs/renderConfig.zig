@@ -16,11 +16,11 @@ pub const BEST_PRACTICES = false;
 pub const ROBUST_VALIDATION = false;
 
 // Normal Profiling
-pub const GPU_PROFILING = false;
+pub const GPU_TIMERS = true;
+pub const GPU_STATS = false;
+
 pub const GPU_QUERY_INTERVAL = 100;
-
 pub const GPU_TIME_QUERYS = 63;
-
 pub const GPU_STATS_QUERYS: u8 = 32;
 pub const STATS_MASK: vk.VkQueryPipelineStatisticFlagBits =
     // vk.VK_QUERY_PIPELINE_STATISTIC_CLIPPING_INVOCATIONS_BIT |
