@@ -18,11 +18,17 @@ FragOut main(VertexOut pin) {
     ConstantBuffer<CameraData> cam = heapCameraBuffers[pc.resources[0]];
 
     float3 rayOrigin = cam.camPosAndFov.xyz;
-    // The hardware interpolates worldRayTgt perfectly for every pixel!
     float3 rayDir = normalize(pin.worldRayTgt - rayOrigin);
 
     // Intersect with Floor (Y = 0 plane)
-    if (rayDir.y >= -0.0001) discard; // Looking up at the sky
+    float4 BG_COLOR = float4(0.00, 0.00, 0.1, 1.0); // dark blue-grey
+
+    if (rayDir.y >= -0.0001) {
+        FragOut o;
+        o.color = BG_COLOR;
+        o.depth = 1.0; // reverse-Z far plane
+        return o;
+    }
 
     float t = -rayOrigin.y / rayDir.y;
     float3 hitPos = rayOrigin + rayDir * t;
@@ -50,13 +56,13 @@ FragOut main(VertexOut pin) {
     // float alphaLerp = lerp(0, lineWeight, alpha);
     float alphaLerp = lerp(0, alpha, 1.0 - (dist / 150.0));
 
-    if (alphaLerp < 0.01) discard;
+    // if (alphaLerp < 0.01) discard;
 
-    // Calculate actual depth for the Z-buffer
+    // Calculate actual depth for Z-buffer
     float4 clipPos = mul(cam.viewProj, float4(hitPos, 1.0));
 
-    FragOut out;
-    out.color = float4(color, alphaLerp);
-    out.depth = clipPos.z / clipPos.w;
-    return out;
+    FragOut output;
+    output.color = lerp(BG_COLOR, float4(color, 1.0), alphaLerp);
+    output.depth = clipPos.z / clipPos.w;
+    return output;
 }

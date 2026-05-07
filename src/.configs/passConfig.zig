@@ -107,8 +107,8 @@ pub fn EditorGrid(
         .bufUses = &.{
             BufferUse.init(def.camBuf, .Mesh, .UniformRead, 0),
         },
-        .colorAtts = &.{AttachmentUse.init(def.colorAtt, .ColorAtt, .ColorAttReadWrite, .Attachment, false)},
-        .depthAtt = AttachmentUse.init(def.depthAtt, .EarlyAndLateFragTest, .DepthStencilReadWrite, .Attachment, false),
+        .colorAtts = &.{AttachmentUse.init(def.colorAtt, .ColorAtt, .ColorAttReadWrite, .Attachment, true)},
+        .depthAtt = AttachmentUse.init(def.depthAtt, .EarlyAndLateFragTest, .DepthStencilReadWrite, .Attachment, true),
         .renderState = .{
             .depthTest = vk.VK_TRUE,
             .depthWrite = vk.VK_TRUE,
@@ -137,7 +137,7 @@ pub fn FrustumView(
             BufferUse.init(def.frustumCamBuf, .Mesh, .UniformRead, 0),
             BufferUse.init(def.viewCamBuf, .Mesh, .UniformRead, 1),
         },
-        .colorAtts = &.{AttachmentUse.init(def.colorAtt, .ColorAtt, .ColorAttReadWrite, .Attachment, false)},
+        .colorAtts = &.{AttachmentUse.init(def.colorAtt, .ColorAtt, .ColorAttReadWrite, .Attachment, true)},
         .depthAtt = AttachmentUse.init(def.depthAtt, .EarlyAndLateFragTest, .DepthStencilReadWrite, .Attachment, false),
         .renderState = .{
             .depthTest = vk.VK_FALSE, // Depth Currently not in Use
@@ -198,8 +198,7 @@ pub fn QuantGrid(
             .depthTest = vk.VK_TRUE,
             .depthWrite = vk.VK_TRUE,
             .depthCompare = vk.VK_COMPARE_OP_GREATER,
-            .cullMode = vk.VK_CULL_MODE_NONE,
-        },
+            .cullMode = vk.VK_CULL_MODE_NONE,        },
     });
 }
 
@@ -298,7 +297,6 @@ pub fn Cull(
 
 // OLD PASSES
 
-// pub const compTex = Texture.create(.{ .id = .{ .val = 1 }, .mem = .Gpu, .typ = .Color, .width = 500, .height = 500 });
 // pub const grapTex = Texture.create(.{ .id = .{ .val = 2 }, .mem = .Gpu, .typ = .Color, .width = 300, .height = 300 });
 // pub const meshTex = Texture.create(.{ .id = .{ .val = 3 }, .mem = .Gpu, .typ = .Color, .width = 100, .height = 100 });
 // pub const taskTex = Texture.create(.{ .id = .{ .val = 4 }, .mem = .Gpu, .typ = .Color, .width = 1920, .height = 1920 });
@@ -306,24 +304,8 @@ pub fn Cull(
 // pub const depthTex = Texture.create(.{ .id = .{ .val = 11 }, .mem = .Gpu, .typ = .Depth, .width = 1920, .height = 1920 });
 // pub const textures: []const Texture.TexInf = &.{ compTex, grapTex, meshTex, taskTex, testTex, depthTex };
 
-// pub const passes: []const Pass = &.{ compTest, taskTest, gridTest, grapTest, meshTest, indirectCompTest, indirectTaskTest };
+// pub const passes: []const Pass = &.{  taskTest, gridTest, grapTest, meshTest, indirectCompTest, indirectTaskTest };
 
-// pub const compTest: Pass = .{
-//     .name = "CompTest",
-//     .shaderIds = &.{sc.t1Comp.id},
-//     .typ = Pass.createCompute(.{
-//         .mainTexId = compTex.id,
-//         .workgroups = .{ .x = 8, .y = 8, .z = 1 },
-//     }),
-//     .bufUses = &.{
-//         BufferUse.init(objectSB.id, .ComputeShader, .ShaderRead, 0),
-//         BufferUse.init(cameraUB.id, .ComputeShader, .ShaderRead, 1),
-//         BufferUse.init(readbackSB.id, .ComputeShader, .ShaderWrite, 3),
-//     },
-//     .texUses = &.{
-//         TextureUse.init(compTex.id, .ComputeShader, .ShaderWrite, .General, 2),
-//     },
-// };
 
 // const grapTest: Pass = .{
 //     .name = "GrapTest",

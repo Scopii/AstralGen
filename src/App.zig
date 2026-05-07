@@ -108,7 +108,7 @@ pub const App = struct {
             .areaY = 0,
             .areaWidth = 1,
             .areaHeight = 1,
-            .passSlice = &.{
+            .passes = &.{
                 .DepthView,
             },
             // .blitPass = .DepthView,
@@ -135,7 +135,7 @@ pub const App = struct {
             .areaY = 0.0,
             .areaWidth = 1.0,
             .areaHeight = 1.0,
-            .passSlice = &.{
+            .passes = &.{
                 .CompTest,
             },
             // .blitPass = .CompTest,
@@ -156,13 +156,13 @@ pub const App = struct {
         });
 
         self.data.viewport.viewports.upsert(2, Viewport{
-            .name = "QuantGridMain",
+            .name = "Top Right",
             .cameraEntity = mainCamId,
             .areaX = 0.5,
             .areaY = 0.0,
             .areaWidth = 0.5,
             .areaHeight = 0.5,
-            .passSlice = &.{
+            .passes = &.{
                 .QuantComp,
                 .QuantGridMain,
             },
@@ -170,27 +170,28 @@ pub const App = struct {
         });
 
         self.data.viewport.viewports.upsert(3, Viewport{
-            .name = "QuantGridDebug",
+            .name = "Top Left",
             .cameraEntity = debugCamId,
             .areaX = 0.0,
             .areaY = 0.0,
             .areaWidth = 0.5,
             .areaHeight = 0.5,
-            .passSlice = &.{
+            .passes = &.{
+                .EditorGrid,
                 .QuantComp,
                 .QuantGridDebug,
-                .EditorGrid,
             },
             // .blitPass = .EditorGrid,
         });
         self.data.viewport.viewports.upsert(4, Viewport{
-            .name = "QuantPlaneDebug",
+            .name = "Bot Left",
             .cameraEntity = debugCamId,
             .areaX = 0.0,
             .areaY = 0.5,
             .areaWidth = 0.5,
             .areaHeight = 0.5,
-            .passSlice = &.{
+            .passes = &.{
+                .EditorGrid,
                 .QuantPlaneDebug,
                 .FrustumView,
             },
@@ -198,13 +199,13 @@ pub const App = struct {
         });
 
         self.data.viewport.viewports.upsert(5, Viewport{
-            .name = "QuantPlaneMain",
+            .name = "Bot Right",
             .cameraEntity = mainCamId,
             .areaX = 0.5,
             .areaY = 0.5,
             .areaWidth = 0.5,
             .areaHeight = 0.5,
-            .passSlice = &.{
+            .passes = &.{
                 .QuantPlaneMain,
             },
             // .blitPass = .QuantPlaneMain,

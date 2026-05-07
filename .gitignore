@@ -5,3 +5,4 @@ zig.conf.json
 .cache
 *.res
 imgui.ini
+zig-pkg

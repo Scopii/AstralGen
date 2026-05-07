@@ -11,7 +11,7 @@ pub const Viewport = struct {
     cameraEntity: ?EntityId,
     opacity: f32 = 1.0,
 
-    passSlice: []const PassEnum,
+    passes: []const PassEnum,
     blitPass: ?PassEnum = null,
 
     pub fn calcViewWidth(self: *const Viewport, swapchainWidth: u32) u32 {
