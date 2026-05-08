@@ -1,6 +1,7 @@
+const ClearColor = @import("../pass/AttachmentUse.zig").AttachmentUse.ClearColor;
 const vk = @import("../../../.modules/vk.zig").c;
-const vhE = @import("../../help/Enums.zig");
 const vhF = @import("../../help/Functions.zig");
+const vhE = @import("../../help/Enums.zig");
 
 pub const Texture = struct {
     typ: vhE.TexTyp,
@@ -18,17 +19,27 @@ pub const Texture = struct {
         layout: vhE.ImageLayout = .Undefined,
     };
 
-    pub fn createAttachment(self: *const Texture, format: vhE.TexTyp, clear: bool) vk.VkRenderingAttachmentInfo {
-        const clearValue: vk.VkClearValue = switch (format) {
-            .Color16, .Color8, .Swapchain => .{ .color = .{ .float32 = .{ 0.0, 0.0, 0.0, 0.0 } } }, // Maybe add Clear Color?
-            .Depth32, .Stencil8 => .{ .depthStencil = .{ .depth = 0.0, .stencil = 0 } }, // 0.0 depth for reverse Z, 1.0 for normal
-        };
+    pub fn createAttachment(self: *const Texture, format: vhE.TexTyp, clear: ?ClearColor) !vk.VkRenderingAttachmentInfo {
+        var clearValue: vk.VkClearValue = undefined;
+
+        if (clear) |clearColor| {
+            switch (clearColor) {
+                .color => |color| switch (format) {
+                    .Color16, .Color8, .Swapchain => clearValue = vk.VkClearValue{ .color = .{ .float32 = color } },
+                    else => return error.ColorFormatHasDepthColor,
+                },
+                .depthStencil => |depthStencil| switch (format) {
+                    .Depth32, .Stencil8 => clearValue = vk.VkClearValue{ .depthStencil = depthStencil },
+                    else => return error.DepthFormatHasDepthColor,
+                },
+            }
+        }
 
         return vk.VkRenderingAttachmentInfo{
             .sType = vk.VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
             .imageView = self.view,
             .imageLayout = vk.VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
-            .loadOp = if (clear) vk.VK_ATTACHMENT_LOAD_OP_CLEAR else vk.VK_ATTACHMENT_LOAD_OP_LOAD,
+            .loadOp = if (clear != null) vk.VK_ATTACHMENT_LOAD_OP_CLEAR else vk.VK_ATTACHMENT_LOAD_OP_LOAD,
             .storeOp = vk.VK_ATTACHMENT_STORE_OP_STORE,
             .clearValue = clearValue,
         };

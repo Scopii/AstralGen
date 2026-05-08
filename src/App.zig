@@ -150,7 +150,7 @@ pub const App = struct {
                 .x = 60,
                 .y = 1080 / 2 - 260,
                 .resize = true,
-                .texIds = &[_]TexId{rc.mainDepthTex.id},
+                .texIds = &[_]TexId{ rc.debugGridDepthTex.id, rc.debugPlaneDepthTex.id, rc.mainDepthTex.id },
                 .viewIds = [4]?ViewportId{ .{ .val = 1 }, null, null, null },
             },
         });
@@ -177,9 +177,9 @@ pub const App = struct {
             .areaWidth = 0.5,
             .areaHeight = 0.5,
             .passes = &.{
-                .EditorGrid,
                 .QuantComp,
                 .QuantGridDebug,
+                .EditorGridGridDebug,
             },
             // .blitPass = .EditorGrid,
         });
@@ -191,9 +191,10 @@ pub const App = struct {
             .areaWidth = 0.5,
             .areaHeight = 0.5,
             .passes = &.{
-                .EditorGrid,
+                .QuantComp,
                 .QuantPlaneDebug,
                 .FrustumView,
+                .EditorGridPlaneDebug,
             },
             // .blitPass = .FrustumView,
         });
@@ -222,7 +223,7 @@ pub const App = struct {
                 .x = 1920 / 2 - 10,
                 .y = 1080 / 2 + 40,
                 .resize = true,
-                .texIds = &[_]TexId{rc.mainDepthTex.id},
+                .texIds = &[_]TexId{ rc.debugGridDepthTex.id, rc.debugPlaneDepthTex.id, rc.mainDepthTex.id },
                 .viewIds = [4]?ViewportId{ .{ .val = 3 }, .{ .val = 2 }, .{ .val = 4 }, .{ .val = 5 } },
             },
         });
@@ -252,7 +253,7 @@ pub const App = struct {
             var dataSlice: ?[]const u8 = null;
 
             // --- PROCEDURAL TEXTURE GENERATION ---
-            if (texInf.id.val == rc.debugTex.id.val) {
+            if (texInf.id.val == rc.testTilesTex.id.val) {
                 // 256x256 pixels, 4 channels (RGBA) of 16-bit floats
                 const pixels = try arena.alloc([4]f16, 256 * 256);
                 for (0..256) |y| {

@@ -51,6 +51,7 @@ pub const RENDER_TEX_AUTO_RESIZE = true;
 pub const RENDER_TEX_STRETCH = true; // Maybe ignored on AUTO_RESIZE
 pub const USE_MEM_BARRIERS_ON_BUFFERS = true;
 pub const USE_MEM_BARRIER_ON_IMAGES = true;
+pub const INITIAL_SWAPCHAIN_COLOR: [4]f32 = .{ 0.0, 0.0, 0.1, 1.0 };
 
 // Resource Information
 pub const BUF_MAX = 63;
@@ -95,14 +96,38 @@ pub const mainDepthTex = TextureMeta.create(.{
     .texUse = .{ .depthAtt = true, .sampled = true, .transferSrc = false },
     .descriptors = .SampledOnly,
     .typ = .Depth32,
-    .width = 1920,
-    .height = 1080,
+    .width = 16,
+    .height = 9,
     .update = .Rarely,
     .resize = .Fit,
 });
 
-pub const debugTex = TextureMeta.create(.{
+pub const debugGridDepthTex = TextureMeta.create(.{
     .id = .{ .val = 3 },
+    .mem = .Gpu,
+    .texUse = .{ .depthAtt = true, .sampled = true, .transferSrc = false },
+    .descriptors = .SampledOnly,
+    .typ = .Depth32,
+    .width = 16,
+    .height = 9,
+    .update = .Rarely,
+    .resize = .Fit,
+});
+
+pub const debugPlaneDepthTex = TextureMeta.create(.{
+    .id = .{ .val = 4 },
+    .mem = .Gpu,
+    .texUse = .{ .depthAtt = true, .sampled = true, .transferSrc = false },
+    .descriptors = .SampledOnly,
+    .typ = .Depth32,
+    .width = 16,
+    .height = 9,
+    .update = .Rarely,
+    .resize = .Fit,
+});
+
+pub const testTilesTex = TextureMeta.create(.{
+    .id = .{ .val = 5 },
     .mem = .Gpu,
     .texUse = .{ .storage = true, .colorAtt = true },
     .descriptors = .StorageOnly,
@@ -114,7 +139,7 @@ pub const debugTex = TextureMeta.create(.{
 });
 
 pub const imguiFontTex = TextureMeta.create(.{
-    .id = .{ .val = 4 },
+    .id = .{ .val = 6 },
     .mem = .Gpu,
     .texUse = .{ .colorAtt = true, .sampled = true },
     .typ = .Color8,
@@ -126,15 +151,23 @@ pub const imguiFontTex = TextureMeta.create(.{
 });
 
 pub const depthViewTex = TextureMeta.create(.{
-    .id = .{ .val = 5 },
+    .id = .{ .val = 7 },
     .mem = .Gpu,
     .texUse = .{ .storage = true, .colorAtt = true, .sampled = true },
     .descriptors = .StorageSampled,
     .typ = .Color16,
-    .width = 1920,
-    .height = 1080,
+    .width = 16,
+    .height = 9,
     .update = .Rarely,
     .resize = .Fit,
 });
 
-pub const TEXTURES: []const TextureMeta.TexInf = &.{ mainTex, mainDepthTex, debugTex, imguiFontTex, depthViewTex };
+pub const TEXTURES: []const TextureMeta.TexInf = &.{
+    mainTex,
+    mainDepthTex,
+    debugGridDepthTex,
+    debugPlaneDepthTex,
+    testTilesTex,
+    imguiFontTex,
+    depthViewTex,
+};

@@ -180,6 +180,18 @@ pub const UiSys = struct {
                     .col = zgui.colorConvertFloat4ToU32(.{ 0.3, 0.3, 0.3, 1.0 }),
                     .thickness = 1.0,
                 });
+
+                for (viewport.passes, 0..) |pass, i| {
+                    const passHeight = 100 + (i * 20);
+                    const castedHeight: f32 = @floatFromInt(passHeight);
+
+                    drawList.addTextUnformatted(
+                        .{ viewX + 10, viewY + castedHeight },
+                        zgui.colorConvertFloat4ToU32(.{ 0.3, 0.3, 0.3, 1.0 }),
+                        @tagName(pass),
+                    );
+                }
+
                 // Viewport Name
                 drawList.addTextUnformatted(
                     .{ viewX + 10, viewY + viewHeight - 20 },

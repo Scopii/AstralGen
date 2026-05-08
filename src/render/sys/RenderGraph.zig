@@ -321,7 +321,7 @@ pub const RenderGraph = struct {
         );
 
         // Color attachment = swapchain current image
-        const colorAtt = targetTex.createAttachment(.Swapchain, isFirstUse);
+        const colorAtt = try targetTex.createAttachment(.Swapchain, if (isFirstUse) .{ .color = rc.INITIAL_SWAPCHAIN_COLOR } else null);
         cmd.beginRendering(swapchain.extent.width, swapchain.extent.height, &[_]vk.VkRenderingAttachmentInfo{colorAtt}, null, null);
 
         const shaderIds = [_]ShaderId{ sc.compositeVert.id, sc.compositeFrag.id };
@@ -393,7 +393,7 @@ pub const RenderGraph = struct {
         self.bakeBarriers(cmd, "UI Prep");
 
         // Setup driven by PassDef same as recordGraphics for a vertex pass
-        const colorAtt = targetTex.createAttachment(.Swapchain, isFirstUse);
+        const colorAtt = try targetTex.createAttachment(.Swapchain, if (isFirstUse) .{ .color = rc.INITIAL_SWAPCHAIN_COLOR } else null);
         cmd.beginRendering(swapchain.extent.width, swapchain.extent.height, &[_]vk.VkRenderingAttachmentInfo{colorAtt}, null, null);
 
         const shaders = shaderMan.getShaders(pass.getShaderIds());
@@ -496,20 +496,20 @@ pub const RenderGraph = struct {
         const depthInf: ?vk.VkRenderingAttachmentInfo = if (pass.depthAtt) |depth| blk: {
             const texMeta = try resMan.getMeta(depth.texId);
             const tex = try resMan.get(depth.texId, cmd.flightId);
-            break :blk tex.createAttachment(texMeta.typ, depth.clear);
+            break :blk try tex.createAttachment(texMeta.typ, depth.clear);
         } else null;
 
         const stencilInf: ?vk.VkRenderingAttachmentInfo = if (pass.stencilAtt) |stencil| blk: {
             const texMeta = try resMan.getMeta(stencil.texId);
             const tex = try resMan.get(stencil.texId, cmd.flightId);
-            break :blk tex.createAttachment(texMeta.typ, stencil.clear);
+            break :blk try tex.createAttachment(texMeta.typ, stencil.clear);
         } else null;
 
         var colorInfs: [8]vk.VkRenderingAttachmentInfo = undefined;
         for (pass.getColorAtts(), 0..) |colorAtt, i| {
             const texMeta = try resMan.getMeta(colorAtt.texId);
             const tex = try resMan.get(colorAtt.texId, cmd.flightId);
-            colorInfs[i] = tex.createAttachment(texMeta.typ, colorAtt.clear);
+            colorInfs[i] = try tex.createAttachment(texMeta.typ, colorAtt.clear);
         }
 
         cmd.updateRenderState(pass.renderState);

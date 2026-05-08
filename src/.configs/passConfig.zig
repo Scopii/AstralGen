@@ -40,7 +40,7 @@ pub fn ImGuiPass(def: struct {
         .execution = .{ .vertices = 0, .instances = 1, .indexCount = 0, .mainTexId = def.colorAtt },
         .vertex = sc.imguiVert,
         .fragment = sc.imguiFrag,
-        .colorAtts = &.{AttachmentUse.init(def.colorAtt, .ColorAtt, .ColorAttReadWrite, .Attachment, false)},
+        .colorAtts = &.{AttachmentUse.init(def.colorAtt, .ColorAtt, .ColorAttReadWrite, .Attachment, .{ .color = .{ 0.0, 0.0, 0.0, 0.0 } })},
         .renderState = .{
             .cullMode = vk.VK_CULL_MODE_NONE,
             .depthTest = vk.VK_FALSE,
@@ -107,9 +107,10 @@ pub fn EditorGrid(
         .bufUses = &.{
             BufferUse.init(def.camBuf, .Mesh, .UniformRead, 0),
         },
-        .colorAtts = &.{AttachmentUse.init(def.colorAtt, .ColorAtt, .ColorAttReadWrite, .Attachment, true)},
-        .depthAtt = AttachmentUse.init(def.depthAtt, .EarlyAndLateFragTest, .DepthStencilReadWrite, .Attachment, true),
+        .colorAtts = &.{AttachmentUse.init(def.colorAtt, .ColorAtt, .ColorAttReadWrite, .Attachment, .{.color = .{ 0.0, 0.0, 0.0, 0.0 }})},
+        .depthAtt = AttachmentUse.init(def.depthAtt, .EarlyAndLateFragTest, .DepthStencilReadWrite, .Attachment, null),
         .renderState = .{
+            .colorBlend = vk.VK_FALSE,
             .depthTest = vk.VK_TRUE,
             .depthWrite = vk.VK_TRUE,
             .depthCompare = vk.VK_COMPARE_OP_GREATER,
@@ -137,8 +138,8 @@ pub fn FrustumView(
             BufferUse.init(def.frustumCamBuf, .Mesh, .UniformRead, 0),
             BufferUse.init(def.viewCamBuf, .Mesh, .UniformRead, 1),
         },
-        .colorAtts = &.{AttachmentUse.init(def.colorAtt, .ColorAtt, .ColorAttReadWrite, .Attachment, true)},
-        .depthAtt = AttachmentUse.init(def.depthAtt, .EarlyAndLateFragTest, .DepthStencilReadWrite, .Attachment, false),
+        .colorAtts = &.{AttachmentUse.init(def.colorAtt, .ColorAtt, .ColorAttReadWrite, .Attachment, .{.color = .{ 0.0, 0.0, 0.0, 0.0 }})},
+        .depthAtt = AttachmentUse.init(def.depthAtt, .EarlyAndLateFragTest, .DepthStencilReadWrite, .Attachment, null),
         .renderState = .{
             .depthTest = vk.VK_FALSE, // Depth Currently not in Use
             .depthWrite = vk.VK_FALSE, // Depth Currently not in Use
@@ -192,13 +193,14 @@ pub fn QuantGrid(
             BufferUse.init(def.viewCam, .Fragment, .UniformRead, 0),
             BufferUse.init(def.cullCam, .Fragment, .UniformRead, 1),
         },
-        .colorAtts = &.{AttachmentUse.init(def.colorAtt, .ColorAtt, .ColorAttReadWrite, .Attachment, true)},
-        .depthAtt = AttachmentUse.init(def.depthAtt, .EarlyAndLateFragTest, .DepthStencilReadWrite, .Attachment, true),
+        .colorAtts = &.{AttachmentUse.init(def.colorAtt, .ColorAtt, .ColorAttReadWrite, .Attachment, .{.color = .{ 0.0, 0.0, 0.0, 0.0 }})},
+        .depthAtt = AttachmentUse.init(def.depthAtt, .EarlyAndLateFragTest, .DepthStencilReadWrite, .Attachment, .{.depthStencil = .{ .depth = 0.0, .stencil = 0 }}),
         .renderState = .{
             .depthTest = vk.VK_TRUE,
             .depthWrite = vk.VK_TRUE,
             .depthCompare = vk.VK_COMPARE_OP_GREATER,
-            .cullMode = vk.VK_CULL_MODE_NONE,        },
+            .cullMode = vk.VK_CULL_MODE_NONE,
+        },
     });
 }
 
@@ -228,8 +230,8 @@ pub fn QuantPlane(
             BufferUse.init(def.viewCam, .Fragment, .UniformRead, 0),
             BufferUse.init(def.cullCam, .Fragment, .UniformRead, 1),
         },
-        .colorAtts = &.{AttachmentUse.init(def.colorAtt, .ColorAtt, .ColorAttReadWrite, .Attachment, true)},
-        .depthAtt = AttachmentUse.init(def.depthAtt, .EarlyAndLateFragTest, .DepthStencilReadWrite, .Attachment, true),
+        .colorAtts = &.{AttachmentUse.init(def.colorAtt, .ColorAtt, .ColorAttReadWrite, .Attachment, .{.color = .{ 0.0, 0.0, 0.0, 0.0 }})},
+        .depthAtt = AttachmentUse.init(def.depthAtt, .EarlyAndLateFragTest, .DepthStencilReadWrite, .Attachment, .{.depthStencil = .{ .depth = 0.0, .stencil = 0 }}),
         .renderState = .{
             .depthTest = vk.VK_TRUE,
             .depthWrite = vk.VK_TRUE,
@@ -284,8 +286,8 @@ pub fn Cull(
             BufferUse.init(def.viewCam, .Fragment, .UniformRead, 0),
             BufferUse.init(def.cullCam, .Fragment, .UniformRead, 1),
         },
-        .colorAtts = &.{AttachmentUse.init(def.colorAtt, .ColorAtt, .ColorAttReadWrite, .Attachment, true)},
-        .depthAtt = AttachmentUse.init(def.depthAtt, .EarlyAndLateFragTest, .DepthStencilReadWrite, .Attachment, true),
+        .colorAtts = &.{AttachmentUse.init(def.colorAtt, .ColorAtt, .ColorAttReadWrite, .Attachment, .{.color = .{ 0.0, 0.0, 0.0, 0.0 }})},
+        .depthAtt = AttachmentUse.init(def.depthAtt, .EarlyAndLateFragTest, .DepthStencilReadWrite, .Attachment, .{.depthStencil = .{ .depth = 0.0, .stencil = 0 }}),
         .renderState = .{
             .depthTest = vk.VK_TRUE,
             .depthWrite = vk.VK_TRUE,
@@ -305,7 +307,6 @@ pub fn Cull(
 // pub const textures: []const Texture.TexInf = &.{ compTex, grapTex, meshTex, taskTex, testTex, depthTex };
 
 // pub const passes: []const Pass = &.{  taskTest, gridTest, grapTest, meshTest, indirectCompTest, indirectTaskTest };
-
 
 // const grapTest: Pass = .{
 //     .name = "GrapTest",

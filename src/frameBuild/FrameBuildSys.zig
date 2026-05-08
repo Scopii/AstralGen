@@ -14,8 +14,6 @@ const std = @import("std");
 const FixedList = @import("../.structures/FixedList.zig").FixedList;
 
 pub const PassEnum = enum {
-    EditorGrid,
-
     CullComp,
     CullMain,
     CullDebug,
@@ -31,6 +29,9 @@ pub const PassEnum = enum {
     DepthView,
 
     CompTest,
+
+    EditorGridGridDebug,
+    EditorGridPlaneDebug,
 };
 
 pub const FrameBuildSys = struct {
@@ -178,7 +179,7 @@ pub const FrameBuildSys = struct {
                     .outputTex = rc.mainTex.id,
                     .camBuf = rc.mainCamUB.id,
                     .readbackBuf = rc.readbackSB.id,
-                    .debugTex = rc.debugTex.id,
+                    .debugTex = rc.testTilesTex.id,
                 });
             },
             .CullComp => {
@@ -202,7 +203,7 @@ pub const FrameBuildSys = struct {
                 return pDef.Cull(.{
                     .name = "Cull-Debug",
                     .colorAtt = rc.mainTex.id,
-                    .depthAtt = rc.mainDepthTex.id,
+                    .depthAtt = rc.debugGridDepthTex.id,
                     .indirectBuf = rc.indirectSB.id,
                     .viewCam = rc.debugCamUB.id,
                     .cullCam = rc.mainCamUB.id,
@@ -229,17 +230,25 @@ pub const FrameBuildSys = struct {
                 return pDef.QuantGrid(.{
                     .name = "QuantGrid-Debug",
                     .colorAtt = rc.mainTex.id,
-                    .depthAtt = rc.mainDepthTex.id,
+                    .depthAtt = rc.debugGridDepthTex.id,
                     .indirectBuf = rc.indirectSB.id,
                     .viewCam = rc.debugCamUB.id,
                     .cullCam = rc.mainCamUB.id,
                 });
             },
-            .EditorGrid => {
+            .EditorGridGridDebug => {
                 return pDef.EditorGrid(.{
                     .name = "Editor-Grid",
                     .colorAtt = rc.mainTex.id,
-                    .depthAtt = rc.mainDepthTex.id,
+                    .depthAtt = rc.debugGridDepthTex.id,
+                    .camBuf = rc.debugCamUB.id,
+                });
+            },
+            .EditorGridPlaneDebug => {
+                return pDef.EditorGrid(.{
+                    .name = "Editor-Grid",
+                    .colorAtt = rc.mainTex.id,
+                    .depthAtt = rc.debugPlaneDepthTex.id,
                     .camBuf = rc.debugCamUB.id,
                 });
             },
@@ -257,7 +266,7 @@ pub const FrameBuildSys = struct {
                 return pDef.QuantPlane(.{
                     .name = "QuantPlane-Debug",
                     .colorAtt = rc.mainTex.id,
-                    .depthAtt = rc.mainDepthTex.id,
+                    .depthAtt = rc.debugPlaneDepthTex.id,
                     .indirectBuf = rc.indirectSB.id,
                     .viewCam = rc.debugCamUB.id,
                     .cullCam = rc.mainCamUB.id,
@@ -267,7 +276,7 @@ pub const FrameBuildSys = struct {
                 return pDef.FrustumView(.{
                     .name = "FrustumView",
                     .colorAtt = rc.mainTex.id,
-                    .depthAtt = rc.mainDepthTex.id,
+                    .depthAtt = rc.debugPlaneDepthTex.id,
                     .frustumCamBuf = rc.mainCamUB.id,
                     .viewCamBuf = rc.debugCamUB.id,
                 });
@@ -276,7 +285,7 @@ pub const FrameBuildSys = struct {
                 return pDef.DepthView(.{
                     .name = "Depth-View",
                     .outputTex = rc.depthViewTex.id,
-                    .depthTex = rc.mainDepthTex.id,
+                    .depthTex = rc.debugGridDepthTex.id,
                     .camBuf = rc.mainCamUB.id,
                 });
             },
