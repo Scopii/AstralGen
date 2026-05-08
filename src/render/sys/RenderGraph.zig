@@ -293,32 +293,18 @@ pub const RenderGraph = struct {
 
         const isFirstUse = targetTex.state.layout == .Undefined;
 
-        var srcTex: *Texture = undefined;
-        var srcDesc: u32 = undefined;
+        const texId = composite.srcTexId orelse return error.BlitHasNoSrcTexId;
+        const srcTex = try resMan.get(texId, cmd.flightId);
+        const srcDesc = try resMan.getTextureDescriptor(texId, cmd.flightId, .Sampled);
 
-        if (composite.srcTexId) |texId| {
-            srcTex = try resMan.get(texId, cmd.flightId);
-            srcDesc = try resMan.getTextureDescriptor(texId, cmd.flightId, .Sampled);
-        } else return error.CompositeHasNoSrcTexId;
-
-        // Barriers: src → SampledRead, swapchain → ColorAttWrite
+        // Barriers: src to SampledRead, swapchain to ColorAttWrite
         try self.checkImageState(srcTex, .{ .stage = .Fragment, .access = .SampledRead, .layout = .General });
         try self.checkImageState(targetTex, .{ .stage = .ColorAtt, .access = .ColorAttReadWrite, .layout = .Attachment });
         self.bakeBarriers(cmd, "Composite Prep");
 
         // Viewport/scissor restricted to the target region
-        cmd.setViewport(
-            @floatFromInt(composite.viewOffsetX),
-            @floatFromInt(composite.viewOffsetY),
-            @floatFromInt(composite.viewWidth),
-            @floatFromInt(composite.viewHeight),
-        );
-        cmd.setScissor(
-            @floatFromInt(composite.viewOffsetX),
-            @floatFromInt(composite.viewOffsetY),
-            @floatFromInt(composite.viewWidth),
-            @floatFromInt(composite.viewHeight),
-        );
+        cmd.setViewport(@floatFromInt(composite.viewOffsetX), @floatFromInt(composite.viewOffsetY), @floatFromInt(composite.viewWidth), @floatFromInt(composite.viewHeight));
+        cmd.setScissor(@floatFromInt(composite.viewOffsetX), @floatFromInt(composite.viewOffsetY), @floatFromInt(composite.viewWidth), @floatFromInt(composite.viewHeight));
 
         // Color attachment = swapchain current image
         const colorAtt = try targetTex.createAttachment(.Swapchain, if (isFirstUse) .{ .color = rc.INITIAL_SWAPCHAIN_COLOR } else null);
@@ -369,7 +355,7 @@ pub const RenderGraph = struct {
 
         const pass = pc.ImGuiPass(.{
             .name = "ImGui",
-            .colorAtt = swapchain.renderTexId, // Target!
+            .colorAtt = swapchain.renderTexId,
             .vertexBuf = rc.imguiVertexSB.id,
             .indexBuf = rc.imguiIndexSB.id,
         });
@@ -472,11 +458,8 @@ pub const RenderGraph = struct {
     fn recordBlit(self: *RenderGraph, cmd: *Cmd, blit: ViewportBlit, resMan: *ResourceMan, swapMan: *SwapchainMan) !void {
         const timeId = cmd.startTimer(.TopOfPipe, blit.name, .Blit);
 
-        var renderTex: *Texture = undefined;
-
-        if (blit.srcTexId) |texId| {
-            renderTex = try resMan.get(texId, cmd.flightId);
-        } else return error.BlitHasNoSrcTexId;
+        const texId = blit.srcTexId orelse return error.BlitHasNoSrcTexId;
+        const renderTex = try resMan.get(texId, cmd.flightId);
 
         const targetIndex = swapMan.getTargetIndex(blit.dstWindowId) orelse return;
         const swapchain = swapMan.getTargetByIndex(targetIndex);

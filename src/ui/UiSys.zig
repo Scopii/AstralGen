@@ -187,7 +187,7 @@ pub const UiSys = struct {
 
                     drawList.addTextUnformatted(
                         .{ viewX + 10, viewY + castedHeight },
-                        zgui.colorConvertFloat4ToU32(.{ 0.3, 0.3, 0.3, 1.0 }),
+                        zgui.colorConvertFloat4ToU32(.{ 0.8, 0.8, 0.8, 1.0 }),
                         @tagName(pass),
                     );
                 }
@@ -195,7 +195,7 @@ pub const UiSys = struct {
                 // Viewport Name
                 drawList.addTextUnformatted(
                     .{ viewX + 10, viewY + viewHeight - 20 },
-                    zgui.colorConvertFloat4ToU32(.{ 0.3, 0.3, 0.3, 1.0 }),
+                    zgui.colorConvertFloat4ToU32(.{ 0.8, 0.8, 0.8, 1.0 }),
                     viewport.name,
                 );
             }
