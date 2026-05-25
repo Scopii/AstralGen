@@ -7,6 +7,7 @@ const rc = @import("../../.configs/renderConfig.zig");
 const vhE = @import("../help/Enums.zig");
 const rH = @import("ResHelpers.zig");
 const Vma = @import("Vma.zig").Vma;
+const std = @import("std");
 
 pub const ResourceBucket = struct {
     buffers: LinkedMap(Buffer, rc.BUF_MAX, u32, rc.BUF_MAX, 0) = .{},
@@ -57,7 +58,10 @@ pub const ResourceRegistry = struct {
 
     pub fn getMeta(self: *ResourceRegistry, id: anytype) !*rH.MetaOfId(@TypeOf(id)) {
         const map = self.metaMapOf(rH.ResOfId(@TypeOf(id)));
-        return if (map.isKeyUsed(id.val)) map.getPtrByKey(id.val) else error.GetMetaIdNotUsed;
+        if (map.isKeyUsed(id.val)) return map.getPtrByKey(id.val) else {
+            std.debug.print("ERROR: ResourceMan: id {} (Type {}) not found\n", .{ id, @TypeOf(id) });
+            return error.GetMetaIdNotUsed;
+        }
     }
 
     pub fn removeMeta(self: *ResourceRegistry, id: anytype) void {
@@ -73,7 +77,10 @@ pub const ResourceRegistry = struct {
 
     pub fn get(self: *ResourceRegistry, id: anytype, updateTyp: vhE.UpdateType, flightId: u8, updateSlot: u8) !*rH.ResOfId(@TypeOf(id)) {
         const map = self.getResHolder(updateTyp, flightId, updateSlot).mapOf(rH.ResOfId(@TypeOf(id)));
-        return if (map.isKeyUsed(id.val)) map.getPtrByKey(id.val) else error.GetIdNotUsed;
+        if (map.isKeyUsed(id.val)) return map.getPtrByKey(id.val) else {
+            std.debug.print("ERROR: ResourceMan: id {} (Type {}) not found\n", .{ id, @TypeOf(id) });
+            return error.GetIdNotUsed;
+        }
     }
 
     pub fn remove(self: *ResourceRegistry, id: anytype, updateTyp: vhE.UpdateType, flightId: u8) ?rH.ResOfId(@TypeOf(id)) {

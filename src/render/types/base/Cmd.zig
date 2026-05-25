@@ -527,10 +527,16 @@ pub const Cmd = struct {
         vk.vkCmdFillBuffer(self.handle, buffer, offset, size, data);
     }
 
-    pub fn clearColorImage(self: *const Cmd, img: vk.VkImage) void {
-        const clearColor = vk.VkClearColorValue{ .float32 = .{ 0.0, 0.0, 0.0, 1.0 } };
+    pub fn clearColorImage(self: *const Cmd, img: vk.VkImage, red: f32, green: f32, blue: f32, alpha: f32) void {
+        const clearColor = vk.VkClearColorValue{ .float32 = .{ red, green, blue, alpha } };
         const subRange = vhF.createSubresourceRange(vk.VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1);
         vk.vkCmdClearColorImage(self.handle, img, vk.VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clearColor, 1, &subRange);
+    }
+
+    pub fn clearDepthImage(self: *const Cmd, img: vk.VkImage, depth: f32, stencil: u32) void {
+        const clearValues = vk.VkClearDepthStencilValue{.depth = depth, .stencil = stencil};
+        const subRange = vhF.createSubresourceRange(vk.VK_IMAGE_ASPECT_DEPTH_BIT, 0, 1, 0, 1);
+        vk.vkCmdClearDepthStencilImage(self.handle, img, vk.VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clearValues, 1, &subRange);
     }
 
     pub fn copyBuffer(self: *const Cmd, srcBuffer: vk.VkBuffer, transfer: BufTransfer, dstBuffer: vk.VkBuffer) void {

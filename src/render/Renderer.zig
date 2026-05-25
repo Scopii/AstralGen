@@ -6,7 +6,6 @@ const SwapchainMan = @import("sys/SwapchainMan.zig").SwapchainMan;
 const RenderNode = @import("types/pass/PassDef.zig").RenderNode;
 const ResourceMan = @import("sys/ResourceMan.zig").ResourceMan;
 const RenderGraph = @import("sys/RenderGraph.zig").RenderGraph;
-const PassDef = @import("types/pass/PassDef.zig").PassDef;
 const ShaderMan = @import("sys/ShaderMan.zig").ShaderMan;
 const Scheduler = @import("sys/Scheduler.zig").Scheduler;
 const Context = @import("sys/Context.zig").Context;
@@ -16,9 +15,11 @@ const vk = @import("../.modules/vk.zig").c;
 const Allocator = std.mem.Allocator;
 const std = @import("std");
 
+const TextureAssignments = @import("../frameBuild/6_resourceAssigner/ResourceAssignerData.zig").ResourceAssignerData.TextureAssignments;
+const BufferAssignments = @import("../frameBuild/6_resourceAssigner/ResourceAssignerData.zig").ResourceAssignerData.BufferAssignments;
 const RendererOutQueue = @import("RendererOutQueue.zig").RendererOutQueue;
+const TextureEnum = @import("../frameBuild/enums.zig").TextureEnum;
 const RendererQueue = @import("RendererQueue.zig").RendererQueue;
-const EngineData = @import("../EngineData.zig").EngineData;
 const Window = @import("../window/Window.zig").Window;
 
 pub const Renderer = struct {
@@ -61,11 +62,12 @@ pub const Renderer = struct {
         self.renderNodes.deinit();
     }
 
-    pub fn update(self: *Renderer, rendererQueue: *RendererQueue) !void {
+    pub fn update(self: *Renderer, rendererQueue: *RendererQueue, texAssigns: *const TextureAssignments) !void {
         for (rendererQueue.get()) |rendererEvent| {
+            // std.debug.print("Renderer Queue Event: {s}\n", .{@tagName(rendererEvent)});
             switch (rendererEvent) {
                 .toggleGpuProfiling => self.renderGraph.toggleGpuProfiling(),
-                .updateWindowState => |window| try self.updateWindowStates(&[_]Window{window.*}),
+                .updateWindowState => {},
                 .addRenderNode => |node| try self.renderNodes.append(node.*),
                 .addTexture => |inf| try self.addResource(inf.texInf, inf.data),
                 .addBuffer => |inf| try self.addResource(inf.bufInf, inf.data),
@@ -73,12 +75,22 @@ pub const Renderer = struct {
                 .updateBufferSegment => |inf| try self.updateBufferSegment(inf.bufId, inf.data, inf.elementOffset),
                 .updateTexture => |inf| try self.updateTexture(inf.texId, inf.data, inf.newExtent),
                 .addShader => |loadedShader| try self.addShaders(&[_]LoadedShader{loadedShader.*}),
+                .removeTexture => |texId| try self.removeResource(texId),
+                .removeBuffer => |bufId| try self.removeResource(bufId),
+            }
+        }
+        // Has to happen after so that new assignments and resource changes are applied correctly
+        for (rendererQueue.get()) |rendererEvent| {
+            // std.debug.print("Renderer Queue Event: {s}\n", .{@tagName(rendererEvent)});
+            switch (rendererEvent) {
+                .updateWindowState => |window| try self.updateWindowStates(&[_]Window{window.*}, texAssigns),
+                else => {},
             }
         }
         rendererQueue.clear();
     }
 
-    fn updateWindowStates(self: *Renderer, tempWindows: []const Window) !void {
+    fn updateWindowStates(self: *Renderer, tempWindows: []const Window, texAssigns: *const TextureAssignments) !void {
         for (tempWindows) |tempWindow| {
             if (tempWindow.state == .needDelete or tempWindow.state == .needUpdate) {
                 _ = vk.vkDeviceWaitIdle(self.context.gpi);
@@ -96,19 +108,18 @@ pub const Renderer = struct {
             }
 
             if (window.resizeTex == true and rc.RENDER_TEX_AUTO_RESIZE and window.state != .needDelete) {
-                try self.updateRenderTexture(window.renderTexId);
-
-                for (0..window.linkedTexIds.len) |i| {
-                    if (window.linkedTexIds[i] == null) break;
-                    const texId = window.linkedTexIds[i].?;
-                    try self.updateRenderTexture(texId);
+                for (0..window.linkedTexEnums.len) |i| {
+                    if (window.linkedTexEnums[i] == null) break;
+                    const texEnum = window.linkedTexEnums[i].?;
+                    try self.updateRenderTexture(texEnum, texAssigns);
                 }
             }
         }
     }
 
-    fn updateRenderTexture(self: *Renderer, texId: TextureMeta.TexId) !void {
-        const newExtent = self.swapMan.getMaxExtent(texId);
+    fn updateRenderTexture(self: *Renderer, texEnum: TextureEnum, texAssigns: *const TextureAssignments) !void {
+        const newExtent = self.swapMan.getMaxExtent(texEnum);
+        const texId = if (texAssigns.isKeyUsed(@intFromEnum(texEnum)) == true) texAssigns.getByKey(@intFromEnum(texEnum)) else return error.TextureNotAssigned;
         try self.resMan.resizeTextureResource(texId, newExtent.width, newExtent.height, 1, self.scheduler.totalFrames, self.scheduler.flightId);
     }
 
@@ -116,9 +127,17 @@ pub const Renderer = struct {
         try self.scheduler.waitForGPU();
     }
 
-    pub fn draw(self: *Renderer, frameData: FrameData, data: *const EngineData, activeWindows: []const Window, rendererOutQueue: *RendererOutQueue) !void {
+    pub fn draw(
+        self: *Renderer,
+        frameData: FrameData,
+        renderNodes: []const RenderNode,
+        bufAssigns: *const BufferAssignments,
+        texAssigns: *const TextureAssignments,
+        activeWindows: []const Window,
+        rendererOutQueue: *RendererOutQueue,
+    ) !void {
         self.renderNodes.clearRetainingCapacity();
-        try self.renderNodes.appendSlice(data.frameBuild.passList.constSlice());
+        try self.renderNodes.appendSlice(renderNodes);
 
         const flightId = try self.scheduler.beginFrame();
         try self.resMan.update(flightId, self.scheduler.totalFrames);
@@ -133,6 +152,8 @@ pub const Renderer = struct {
             &self.resMan,
             &self.shaderMan,
             self.context.meshTaskSupp,
+            bufAssigns,
+            texAssigns,
         );
 
         try self.scheduler.queueSubmit(cmd, &self.swapMan, self.context.graphicsQ);
@@ -167,6 +188,10 @@ pub const Renderer = struct {
 
     pub fn updateBuffer(self: *Renderer, bufId: BufferMeta.BufId, data: anytype) !void {
         try self.resMan.updateBufferResource(bufId, self.scheduler.totalFrames, self.scheduler.flightId, data);
+    }
+
+    pub fn removeResource(self: *Renderer, resId: anytype) !void {
+        try self.resMan.removeResource(resId, self.scheduler.totalFrames);
     }
 
     pub fn updateTexture(self: *Renderer, texId: TextureMeta.TexId, data: anytype, newExtent: ?vk.VkExtent3D) !void {

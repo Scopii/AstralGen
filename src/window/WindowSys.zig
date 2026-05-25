@@ -1,8 +1,8 @@
 const RendererOutQueue = @import("../render/RendererOutQueue.zig").RendererOutQueue;
-const TexId = @import("../render/types/res/TextureMeta.zig").TextureMeta.TexId;
 const RendererQueue = @import("../render/RendererQueue.zig").RendererQueue;
 const MemoryManager = @import("../core/MemoryManager.zig").MemoryManager;
 const ViewportId = @import("../viewport/ViewportSys.zig").ViewportId;
+const TextureEnum = @import("../frameBuild/enums.zig").TextureEnum;
 const InputQueue = @import("../input/InputQueue.zig").InputQueue;
 const EngineData = @import("../EngineData.zig").EngineData;
 const WindowQueue = @import("WindowQueue.zig").WindowQueue;
@@ -55,7 +55,7 @@ pub const WindowSys = struct {
     pub fn update(windowData: *WindowData, state: *const EngineData, windowQueue: *WindowQueue, rendererQueue: *RendererQueue, memoryMan: *MemoryManager) !void {
         for (windowQueue.get()) |windowEvent| {
             switch (windowEvent) {
-                .addWindow => |inf| try addWindow(windowData, inf.title, inf.w, inf.h, inf.renderTexId, inf.x, inf.y, inf.resize, inf.texIds, inf.viewIds),
+                .addWindow => |inf| try addWindow(windowData, inf.title, inf.w, inf.h, inf.x, inf.y, inf.resize, inf.texEnums, inf.viewIds),
             }
         }
         windowQueue.clear();
@@ -80,7 +80,7 @@ pub const WindowSys = struct {
         }
     }
 
-    fn addWindow(windowData: *WindowData, title: [:0]const u8, w: c_int, h: c_int, renderTexId: TexId, x: c_int, y: c_int, resize: bool, texIds: []const TexId, viewIds: [4]?ViewportId) !void {
+    fn addWindow(windowData: *WindowData, title: [:0]const u8, w: c_int, h: c_int, x: c_int, y: c_int, resize: bool, texEnums: []const TextureEnum, viewIds: [4]?ViewportId) !void {
         const props = windowData.windowProps;
         const flags = sdl.SDL_WINDOW_VULKAN | sdl.SDL_WINDOW_RESIZABLE | sdl.SDL_WINDOW_HIDDEN | sdl.SDL_WINDOW_TRANSPARENT; // | sdl.SDL_WINDOW_BORDERLESS
         _ = sdl.SDL_SetNumberProperty(props, sdl.SDL_PROP_WINDOW_CREATE_FLAGS_NUMBER, @intCast(flags));
@@ -90,7 +90,7 @@ pub const WindowSys = struct {
         _ = sdl.SDL_SetNumberProperty(props, sdl.SDL_PROP_WINDOW_CREATE_HEIGHT_NUMBER, @intCast(h));
         _ = sdl.SDL_SetStringProperty(props, sdl.SDL_PROP_WINDOW_CREATE_TITLE_STRING, title.ptr);
 
-        const window = try Window.init(props, renderTexId, vk.VkExtent2D{ .width = @intCast(w), .height = @intCast(h) }, resize, texIds, viewIds, title[0..title.len]);
+        const window = try Window.init(props, vk.VkExtent2D{ .width = @intCast(w), .height = @intCast(h) }, resize, texEnums, viewIds, title[0..title.len]);
         window.minimize();
 
         // window.setRelativeMouseMode(false);
@@ -99,7 +99,7 @@ pub const WindowSys = struct {
         try windowData.changedWindows.append(windowData.windows.getByKey(window.id.val));
         windowData.openWindows += 1;
         windowData.mainWindow = windowData.windows.getPtrByKey(window.id.val);
-        std.debug.print("Window ID {} created to present Render ID {}\n", .{ window.id.val, renderTexId.val });
+        std.debug.print("Window ID {} created\n", .{window.id.val});
     }
 
     pub fn showErrorBox(title: [:0]const u8, message: [:0]const u8) void {

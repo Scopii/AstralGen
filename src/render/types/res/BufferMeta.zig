@@ -12,7 +12,17 @@ pub const BufferMeta = struct {
     lastUpdateFrame: u64 = std.math.maxInt(u64),
     elementSize: u32,
 
-    pub const BufId = packed struct { val: u32 };
+    pub const BufId = packed struct { val: u16 };
+
+    pub const BufDesc = struct {
+        share: enum { persistent, transient },
+        mem: vhE.MemUsage,
+        elementSize: u32,
+        len: u32,
+        typ: vhE.BufferType,
+        update: vhE.UpdateType,
+        resize: vhE.ResizeType = .Block,
+    };
 
     pub const BufInf = struct {
         id: BufId,

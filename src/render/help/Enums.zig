@@ -165,6 +165,25 @@ pub const PipeAccess = enum(vk.VkAccessFlagBits2) {
     MemoryWrite = vk.VK_ACCESS_2_MEMORY_WRITE_BIT,
     MemoryReadWrite = vk.VK_ACCESS_2_MEMORY_READ_BIT | vk.VK_ACCESS_2_MEMORY_WRITE_BIT,
     //more exist
+
+    pub fn isReadOnly(self: PipeAccess) bool {
+        return switch (self) {
+            .ShaderRead,
+            .IndexRead,
+            .IndirectRead,
+            .VertexAttributeRead,
+            .ColorAttRead,
+            .DepthStencilRead,
+            .TransferRead,
+            .MemoryRead,
+            .UniformRead,
+            .SampledRead,
+            .ResourceHeapRead,
+            .SamplerHeapRead,
+            => true,
+            else => false,
+        };
+    }
 };
 
 pub const ShaderStage = enum {

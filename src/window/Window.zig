@@ -1,18 +1,16 @@
-const TexId = @import("../render/types/res/TextureMeta.zig").TextureMeta.TexId;
+const ViewportId = @import("../viewport/ViewportSys.zig").ViewportId;
+const TextureEnum = @import("../frameBuild/enums.zig").TextureEnum;
 const rc = @import("../.configs/renderConfig.zig");
 const sdl = @import("../.modules/sdl.zig").c;
 const vk = @import("../.modules/vk.zig").c;
 const std = @import("std");
-
-const ViewportId = @import("../viewport/ViewportSys.zig").ViewportId;
 
 pub const Window = struct {
     pub const WindowState = enum { active, inactive, needCreation, needUpdate, needDelete, needInactive, needActive };
     name: []const u8,
     handle: *sdl.SDL_Window,
     state: WindowState = .needCreation,
-    renderTexId: TexId,
-    linkedTexIds: [rc.LINKED_TEX_MAX]?TexId,
+    linkedTexEnums: [rc.LINKED_TEX_MAX]?TextureEnum,
     extent: vk.VkExtent2D,
     id: WindowId,
     resizeTex: bool,
@@ -23,14 +21,13 @@ pub const Window = struct {
 
     pub fn init(
         windowProps: sdl.SDL_PropertiesID,
-        renderTexId: TexId,
         extent: vk.VkExtent2D,
         resizeTex: bool,
-        linkedTexIds: []const TexId,
+        linkedTexEnums: []const TextureEnum,
         viewIds: [4]?ViewportId,
         name: []const u8,
     ) !Window {
-        if (linkedTexIds.len > rc.LINKED_TEX_MAX) return error.WindowLinkedTexturesOverflow;
+        if (linkedTexEnums.len > rc.LINKED_TEX_MAX) return error.WindowLinkedTexturesOverflow;
 
         const winHandle = sdl.SDL_CreateWindowWithProperties(windowProps) orelse {
             std.log.err("SDL_CreateWindowWithProperties failed: {s}\n", .{sdl.SDL_GetError()});
@@ -38,17 +35,16 @@ pub const Window = struct {
         };
         const windowId = sdl.SDL_GetWindowID(winHandle);
 
-        var actualTexIds: [rc.LINKED_TEX_MAX]?TexId = .{null} ** rc.LINKED_TEX_MAX;
-        for (0..linkedTexIds.len) |i| actualTexIds[i] = linkedTexIds[i];
+        var actualTexEnums: [rc.LINKED_TEX_MAX]?TextureEnum = .{null} ** rc.LINKED_TEX_MAX;
+        for (0..linkedTexEnums.len) |i| actualTexEnums[i] = linkedTexEnums[i];
 
         var window = Window{
             .name = name,
             .handle = winHandle,
-            .renderTexId = renderTexId,
             .extent = extent,
             .id = .{ .val = windowId },
             .resizeTex = resizeTex,
-            .linkedTexIds = actualTexIds,
+            .linkedTexEnums = actualTexEnums,
             .viewIds = viewIds,
         };
 

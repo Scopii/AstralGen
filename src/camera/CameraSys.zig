@@ -1,12 +1,11 @@
-const std = @import("std");
-const zm = @import("zmath");
-const ac = @import("../.configs/appConfig.zig");
-
-const EntityData = @import("../ecs/EntityData.zig").EntityData;
-const comp = @import("../ecs/Components.zig");
-const EngineData = @import("../EngineData.zig").EngineData;
-const RendererQueue = @import("../render/RendererQueue.zig").RendererQueue;
+const FrameGraphQueue = @import("../frameBuild/FrameGraphQueue.zig").FrameGraphQueue;
 const MemoryManager = @import("../core/MemoryManager.zig").MemoryManager;
+const EntityData = @import("../ecs/EntityData.zig").EntityData;
+const EngineData = @import("../EngineData.zig").EngineData;
+const ac = @import("../.configs/appConfig.zig");
+const comp = @import("../ecs/Components.zig");
+const zm = @import("zmath");
+const std = @import("std");
 
 const M_PI = 3.14159;
 const TWO_PI = 2 * M_PI;
@@ -22,7 +21,7 @@ pub const CamData = struct {
 };
 
 pub const CameraSys = struct {
-    pub fn update(ecs: *EntityData, dt: f64, data: *const EngineData, rendererQueue: *RendererQueue, memoryMan: *MemoryManager) !void {
+    pub fn update(ecs: *EntityData, dt: f64, data: *const EngineData, frameGraphQueue: *FrameGraphQueue, memoryMan: *MemoryManager) !void {
 
         // PROCESS STATE (Movement)
         var activeCamId: ?u32 = null;
@@ -118,13 +117,13 @@ pub const CameraSys = struct {
                 const camDataPtr = try arena.create(CamData);
                 camDataPtr.* = camData;
 
-                const PayloadPtr = @FieldType(RendererQueue.RendererEvent, "updateBuffer");
+                const PayloadPtr = @FieldType(FrameGraphQueue.FrameGraphEvent, "updateBuffer");
                 const Payload = std.meta.Child(PayloadPtr);
 
                 const updateBufferPtr = try arena.create(Payload);
-                updateBufferPtr.* = .{ .bufId = camComp.bufId, .data = std.mem.asBytes(camDataPtr) };
+                updateBufferPtr.* = .{ .bufEnum = camComp.bufEnum, .data = std.mem.asBytes(camDataPtr) };
 
-                rendererQueue.append(.{ .updateBuffer = updateBufferPtr });
+                frameGraphQueue.append(.{ .updateBuffer = updateBufferPtr });
 
                 // Reset dirty flag
                 transform.isDirty = false;

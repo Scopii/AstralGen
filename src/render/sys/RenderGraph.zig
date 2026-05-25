@@ -1,12 +1,9 @@
-const ComputeIndirectExec = @import("../types/pass/PassDef.zig").ComputeIndirectExec;
-const AttachmentUse = @import("../types/pass/AttachmentUse.zig").AttachmentUse;
 const CompositeNode = @import("../types/pass/PassDef.zig").CompositeNode;
 const TexId = @import("../types/res/TextureMeta.zig").TextureMeta.TexId;
 const ViewportBlit = @import("../types/pass/PassDef.zig").ViewportBlit;
-const TextureUse = @import("../types/pass/TextureUse.zig").TextureUse;
+const BufId = @import("../types/res/BufferMeta.zig").BufferMeta.BufId;
 const Swapchain = @import("../types/base/Swapchain.zig").Swapchain;
 const RenderNode = @import("../types/pass/PassDef.zig").RenderNode;
-const BufferUse = @import("../types/pass/BufferUse.zig").BufferUse;
 const ShaderId = @import("../../shader/ShaderSys.zig").ShaderId;
 const PushData = @import("../types/res/PushData.zig").PushData;
 const Dispatch = @import("../types/pass/PassDef.zig").Dispatch;
@@ -26,9 +23,13 @@ const CmdManager = @import("CmdMan.zig").CmdMan;
 const Context = @import("Context.zig").Context;
 const vk = @import("../../.modules/vk.zig").c;
 const vhT = @import("../help/Types.zig");
-const vhE = @import("../help/Enums.zig");
 const Allocator = std.mem.Allocator;
 const std = @import("std");
+
+const TextureAssignments = @import("../../frameBuild/6_resourceAssigner/ResourceAssignerData.zig").ResourceAssignerData.TextureAssignments;
+const BufferAssignments = @import("../../frameBuild/6_resourceAssigner/ResourceAssignerData.zig").ResourceAssignerData.BufferAssignments;
+const TextureEnum = @import("../../frameBuild/enums.zig").TextureEnum;
+const BufferEnum = @import("../../frameBuild/enums.zig").BufferEnum;
 
 pub const RenderGraph = struct {
     alloc: Allocator,
@@ -36,6 +37,8 @@ pub const RenderGraph = struct {
     cmdMan: CmdManager,
     imgBarriers: std.array_list.Managed(vk.VkImageMemoryBarrier2),
     bufBarriers: std.array_list.Managed(vk.VkBufferMemoryBarrier2),
+    imgClears: std.array_list.Managed(TexId),
+    bufClears: std.array_list.Managed(BufId),
     memSrcStage: vk.VkPipelineStageFlags2 = 0,
     memSrcAccess: vk.VkAccessFlags2 = 0,
     memDstStage: vk.VkPipelineStageFlags2 = 0,
@@ -51,12 +54,16 @@ pub const RenderGraph = struct {
             .cmdMan = try CmdManager.init(alloc, context, rc.MAX_IN_FLIGHT),
             .imgBarriers = try std.array_list.Managed(vk.VkImageMemoryBarrier2).initCapacity(alloc, 30),
             .bufBarriers = try std.array_list.Managed(vk.VkBufferMemoryBarrier2).initCapacity(alloc, 30),
+            .imgClears = try std.array_list.Managed(TexId).initCapacity(alloc, 30),
+            .bufClears = try std.array_list.Managed(BufId).initCapacity(alloc, 30),
         };
     }
 
     pub fn deinit(self: *RenderGraph) void {
         self.imgBarriers.deinit();
         self.bufBarriers.deinit();
+        self.imgClears.deinit();
+        self.bufClears.deinit();
         self.cmdMan.deinit();
     }
 
@@ -79,6 +86,8 @@ pub const RenderGraph = struct {
         resMan: *ResourceMan,
         shaderMan: *ShaderManager,
         meshTaskSupport: bool,
+        bufAssigns: *const BufferAssignments,
+        texAssigns: *const TextureAssignments,
     ) !*Cmd {
         var cmd = try self.cmdMan.getCmd(flightId);
         try cmd.begin(flightId, frame);
@@ -95,7 +104,7 @@ pub const RenderGraph = struct {
         cmd.endTimer(.BotOfPipe, timeId);
 
         try self.recordTransfers(cmd, resMan);
-        try self.recordNodes(cmd, renderNodes, frameData, resMan, shaderMan, swapMan, meshTaskSupport);
+        try self.recordNodes(cmd, renderNodes, frameData, resMan, shaderMan, swapMan, meshTaskSupport, bufAssigns, texAssigns);
         try self.recordPresentation(cmd, swapMan);
 
         try cmd.end();
@@ -166,7 +175,7 @@ pub const RenderGraph = struct {
     fn checkImageState(self: *RenderGraph, tex: *Texture, neededState: Texture.TextureState) !void {
         const state = tex.state;
         if (state.stage == neededState.stage and state.access == neededState.access and state.layout == neededState.layout) return;
-        if (state.layout == neededState.layout and isReadOnly(state.access) and isReadOnly(neededState.access)) return; // same layout, both reads
+        if (state.layout == neededState.layout and state.access.isReadOnly() and neededState.access.isReadOnly()) return; // same layout, both reads
 
         const layoutTransition = if (state.layout != neededState.layout) true else false;
 
@@ -184,7 +193,7 @@ pub const RenderGraph = struct {
     fn checkBufferState(self: *RenderGraph, buffer: *Buffer, neededState: Buffer.BufferState) !void {
         const state = buffer.state;
         if (state.stage == neededState.stage and state.access == neededState.access) return;
-        if (isReadOnly(state.access) and isReadOnly(neededState.access)) return;
+        if (state.access.isReadOnly() and neededState.access.isReadOnly()) return;
 
         if (rc.USE_MEM_BARRIERS_ON_BUFFERS) {
             const memBarrier = buffer.createMemoryBarrier(neededState);
@@ -197,36 +206,50 @@ pub const RenderGraph = struct {
         }
     }
 
-    fn recordPassBarriers(self: *RenderGraph, cmd: *const Cmd, pass: *const PassDef, resMan: *ResourceMan) !void {
+    fn recordPassBarriers(
+        self: *RenderGraph,
+        cmd: *const Cmd,
+        pass: *const PassDef,
+        resMan: *ResourceMan,
+        bufAssigns: *const BufferAssignments,
+        texAssigns: *const TextureAssignments,
+    ) !void {
         for (pass.getBufUses()) |bufUse| {
-            const buffer = try resMan.get(bufUse.bufId, cmd.flightId);
+            const bufId = try resolveBuffer(bufUse.bufLink.in, bufAssigns);
+            const buffer = try resMan.get(bufId, cmd.flightId);
             try self.checkBufferState(buffer, bufUse.getNeededState());
         }
         for (pass.getTexUses()) |texUse| {
-            const tex = try resMan.get(texUse.texId, cmd.flightId);
+            const texId = try resolveTexture(texUse.texLink.in, texAssigns);
+            const tex = try resMan.get(texId, cmd.flightId);
             try self.checkImageState(tex, texUse.getNeededState());
         }
         for (pass.getColorAtts()) |attachment| {
-            const tex = try resMan.get(attachment.texId, cmd.flightId);
+            const texId = try resolveTexture(attachment.texLink.in, texAssigns);
+            const tex = try resMan.get(texId, cmd.flightId);
             try self.checkImageState(tex, attachment.getNeededState());
         }
         if (pass.depthAtt) |attachment| {
-            const tex = try resMan.get(attachment.texId, cmd.flightId);
+            const texId = try resolveTexture(attachment.texLink.in, texAssigns);
+            const tex = try resMan.get(texId, cmd.flightId);
             try self.checkImageState(tex, attachment.getNeededState());
         }
         if (pass.stencilAtt) |attachment| {
-            const tex = try resMan.get(attachment.texId, cmd.flightId);
+            const texId = try resolveTexture(attachment.texLink.in, texAssigns);
+            const tex = try resMan.get(texId, cmd.flightId);
             try self.checkImageState(tex, attachment.getNeededState());
         }
         for (pass.getVertexBufUse()) |vbUse| {
-            const buf = try resMan.get(vbUse.bufId, cmd.flightId);
+            const bufId = try resolveBuffer(vbUse.bufInput, bufAssigns);
+            const buf = try resMan.get(bufId, cmd.flightId);
             try self.checkBufferState(buf, .{ .stage = .VertexInput, .access = .VertexAttributeRead });
         }
         if (pass.indexBuffer) |ibUse| {
-            const buf = try resMan.get(ibUse.bufId, cmd.flightId);
+            const bufId = try resolveBuffer(ibUse.bufInput, bufAssigns);
+            const buf = try resMan.get(bufId, cmd.flightId);
             try self.checkBufferState(buf, .{ .stage = .VertexInput, .access = .IndexRead });
         }
-        self.bakeBarriers(cmd, pass.name);
+        self.bakeBarriers(cmd, @tagName(pass.name));
     }
 
     fn recordCompute(cmd: *const Cmd, dispatch: Dispatch, renderTexId: ?TexId, resMan: *ResourceMan) !void {
@@ -242,9 +265,9 @@ pub const RenderGraph = struct {
         } else cmd.dispatch(dispatch.x, dispatch.y, dispatch.z);
     }
 
-    fn recordComputeIndirect(cmd: *const Cmd, compIndirectExec: ComputeIndirectExec, resMan: *ResourceMan) !void {
-        const buffer = try resMan.get(compIndirectExec.indirectBuf, cmd.flightId);
-        cmd.dispatchIndirect(buffer.handle, compIndirectExec.indirectBufOffset);
+    fn recordComputeIndirect(cmd: *const Cmd, indirectBufId: BufId, indirectBufOffset: u64, resMan: *ResourceMan) !void {
+        const buffer = try resMan.get(indirectBufId, cmd.flightId);
+        cmd.dispatchIndirect(buffer.handle, indirectBufOffset);
     }
 
     fn recordNodes(
@@ -256,6 +279,8 @@ pub const RenderGraph = struct {
         shaderMan: *ShaderManager,
         swapMan: *SwapchainMan,
         meshTaskSupport: bool,
+        bufAssigns: *const BufferAssignments,
+        texAssigns: *const TextureAssignments,
     ) !void {
         for (renderNodes) |renderNode| {
             switch (renderNode) {
@@ -270,21 +295,63 @@ pub const RenderGraph = struct {
                         continue;
                     }
 
-                    try self.recordPass(cmd, &passNode.pass, frameData, resMan, shaderMan);
+                    try self.recordPass(cmd, &passNode.pass, frameData, resMan, shaderMan, bufAssigns, texAssigns);
                     self.lastPassTyp = passNode.pass.execution;
                 },
                 .viewportBlit => |blit| {
                     if (self.lastPassTyp != null) {
-                        try self.recordBlit(cmd, blit, resMan, swapMan);
+                        try self.recordBlit(cmd, blit, resMan, swapMan, texAssigns);
                     } else std.debug.print("Blit for unsupported Pass Skipped!\n", .{});
                 },
-                .uiNode => |uiNode| try self.recordUiNode(cmd, uiNode, resMan, shaderMan, swapMan),
-                .compositeNode => |composite| try self.recordCompositeNode(cmd, composite, resMan, shaderMan, swapMan),
+                .uiNode => |uiNode| try self.recordUiNode(cmd, uiNode, resMan, shaderMan, swapMan, bufAssigns, texAssigns),
+                .compositeNode => |composite| try self.recordCompositeNode(cmd, composite, resMan, shaderMan, swapMan, texAssigns),
+                .clearBuffer => |clearBuf| try self.recordBufferClear(cmd, clearBuf, resMan),
+                .clearTexture => |clearTex| try self.recordTextureClear(cmd, clearTex, resMan),
+                .barrierBakeClears => try self.bakeAndExecuteClears(cmd, resMan),
             }
         }
     }
 
-    fn recordCompositeNode(self: *RenderGraph, cmd: *Cmd, composite: CompositeNode, resMan: *ResourceMan, shaderMan: *ShaderManager, swapMan: *SwapchainMan) !void {
+    fn recordBufferClear(self: *RenderGraph, cmd: *Cmd, bufId: BufId, resMan: *ResourceMan) !void {
+        const buffer: *Buffer = try resMan.get(bufId, cmd.flightId);
+        try self.checkBufferState(buffer, .{ .stage = .Transfer, .access = .TransferWrite });
+        try self.bufClears.append(bufId);
+    }
+
+    fn recordTextureClear(self: *RenderGraph, cmd: *Cmd, texId: TexId, resMan: *ResourceMan) !void {
+        const texture: *Texture = try resMan.get(texId, cmd.flightId);
+        try self.checkImageState(texture, .{ .stage = .Transfer, .access = .TransferWrite, .layout = .TransferDst });
+        try self.imgClears.append(texId);
+    }
+
+    fn bakeAndExecuteClears(self: *RenderGraph, cmd: *Cmd, resMan: *ResourceMan) !void {
+        self.bakeBarriers(cmd, "Clear Barrier");
+
+        for (self.imgClears.items) |texId| {
+            const texture: *Texture = try resMan.get(texId, cmd.flightId);
+            switch (texture.typ) {
+                .Color16, .Color8, .Swapchain => cmd.clearColorImage(texture.img, 0.0, 0.0, 0.0, 0.0), // Maybe alpha should be 1 ??
+                .Depth32, .Stencil8 => cmd.clearDepthImage(texture.img, 0.0, 0.0),
+            }
+        }
+        self.imgClears.clearRetainingCapacity();
+
+        for (self.bufClears.items) |bufId| {
+            const buffer: *Buffer = try resMan.get(bufId, cmd.flightId);
+            cmd.fillBuffer(buffer.handle, 0, vk.VK_WHOLE_SIZE, 0);
+        }
+        self.bufClears.clearRetainingCapacity();
+    }
+
+    fn recordCompositeNode(
+        self: *RenderGraph,
+        cmd: *Cmd,
+        composite: CompositeNode,
+        resMan: *ResourceMan,
+        shaderMan: *ShaderManager,
+        swapMan: *SwapchainMan,
+        texAssigns: *const TextureAssignments,
+    ) !void {
         const timeId = cmd.startTimer(.TopOfPipe, composite.name, .Composite);
 
         const targetIndex = swapMan.getTargetIndex(composite.windowId) orelse return;
@@ -293,7 +360,8 @@ pub const RenderGraph = struct {
 
         const isFirstUse = targetTex.state.layout == .Undefined;
 
-        const texId = composite.srcTexId orelse return error.BlitHasNoSrcTexId;
+        const texEnum = composite.srcTexEnum orelse return error.CompositeHasNoSrcTexId;
+        const texId = try resolveTexture(texEnum, texAssigns);
         const srcTex = try resMan.get(texId, cmd.flightId);
         const srcDesc = try resMan.getTextureDescriptor(texId, cmd.flightId, .Sampled);
 
@@ -344,35 +412,50 @@ pub const RenderGraph = struct {
         cmd.endTimer(.BotOfPipe, timeId);
     }
 
-    fn recordUiNode(self: *RenderGraph, cmd: *Cmd, uiNode: UiNode, resMan: *ResourceMan, shaderMan: *ShaderManager, swapMan: *SwapchainMan) !void {
+    fn recordUiNode(
+        self: *RenderGraph,
+        cmd: *Cmd,
+        uiNode: UiNode,
+        resMan: *ResourceMan,
+        shaderMan: *ShaderManager,
+        swapMan: *SwapchainMan,
+        bufAssigns: *const BufferAssignments,
+        texAssigns: *const TextureAssignments,
+    ) !void {
         const timeId = cmd.startTimer(.TopOfPipe, uiNode.name, .Ui);
 
-        const targetIndex = swapMan.getTargetIndex(uiNode.windowId) orelse return;
+        const targetIndex = swapMan.getTargetIndex(uiNode.windowId) orelse {
+            std.debug.print("RecordUI: no swapchain target for window {}\n", .{uiNode.windowId.val});
+            return;
+        };
         const swapchain = swapMan.getTargetByIndex(targetIndex);
         const targetTex = swapchain.getCurTexture();
 
         const isFirstUse = targetTex.state.layout == .Undefined;
 
         const pass = pc.ImGuiPass(.{
-            .name = "ImGui",
-            .colorAtt = swapchain.renderTexId,
-            .vertexBuf = rc.imguiVertexSB.id,
-            .indexBuf = rc.imguiIndexSB.id,
+            .name = .Imgui,
+            .colorAtt = .{ .in = .Swapchain }, // IS THIS NEEDED?
+            .vertexBuf = .ImguiVB,
+            .indexBuf = .ImguiIB,
         });
 
-        try self.checkImageState(targetTex, .{ .stage = .ColorAtt, .access = .ColorAttWrite, .layout = .Attachment });
+        try self.checkImageState(targetTex, .{ .stage = .ColorAtt, .access = .ColorAttReadWrite, .layout = .Attachment });
 
         // All other barriers driven by the PassDef: vertex buffers, index buffer, textures
         for (pass.vertexBuffers.constSlice()) |vbUse| {
-            const buf = try resMan.get(vbUse.bufId, cmd.flightId);
+            const bufId = try resolveBuffer(vbUse.bufInput, bufAssigns);
+            const buf = try resMan.get(bufId, cmd.flightId);
             try self.checkBufferState(buf, .{ .stage = .VertexInput, .access = .VertexAttributeRead });
         }
         if (pass.indexBuffer) |ibUse| {
-            const buf = try resMan.get(ibUse.bufId, cmd.flightId);
+            const bufId = try resolveBuffer(ibUse.bufInput, bufAssigns);
+            const buf = try resMan.get(bufId, cmd.flightId);
             try self.checkBufferState(buf, .{ .stage = .VertexInput, .access = .IndexRead });
         }
-        for (uiNode.drawList) |drawList| { // Suboptimal but needed for custom Textures later
-            if (resMan.get(drawList.texId, cmd.flightId)) |tex| {
+        for (uiNode.drawList) |draw| { // Suboptimal but needed for custom Textures later
+            const texId = try resolveTexture(draw.texEnum, texAssigns);
+            if (resMan.get(texId, cmd.flightId)) |tex| {
                 try self.checkImageState(tex, .{ .stage = .Fragment, .access = .SampledRead, .layout = .General });
             } else |_| {}
         }
@@ -387,10 +470,11 @@ pub const RenderGraph = struct {
         cmd.updateRenderState(pass.renderState);
         cmd.setViewport(0, 0, @floatFromInt(swapchain.extent.width), @floatFromInt(swapchain.extent.height));
 
-        try bindVertexInputFromPass(cmd, &pass, resMan, cmd.flightId);
+        try bindVertexInputFromPass(cmd, &pass, resMan, cmd.flightId, bufAssigns);
 
         if (pass.indexBuffer) |ibUse| {
-            const idxBuf = try resMan.get(ibUse.bufId, cmd.flightId);
+            const indexBufId = try resolveBuffer(ibUse.bufInput, bufAssigns);
+            const idxBuf = try resMan.get(indexBufId, cmd.flightId);
             cmd.bindIndexBuffer(idxBuf.handle, 0, ibUse.indexType);
         }
 
@@ -401,8 +485,8 @@ pub const RenderGraph = struct {
         const sw = @as(f32, @floatFromInt(swapchain.extent.width));
         const sh = @as(f32, @floatFromInt(swapchain.extent.height));
 
-        var lastTexId: u32 = 0;
-        var lastTexDesc: u32 = 0;
+        var lastTexEnum: ?TextureEnum = null;
+        var lastTexDesc: u32 = undefined;
 
         for (uiNode.drawList) |draw| {
             const x0 = @max(0.0, @min(draw.clipRect[0] - uiNode.displayPos[0], sw));
@@ -413,17 +497,17 @@ pub const RenderGraph = struct {
 
             cmd.setScissor(x0, y0, x1 - x0, y1 - y0);
 
-            const texDesc = if (draw.texId.val == lastTexId) lastTexDesc else blk: {
-                const desc = try resMan.getTextureDescriptor(draw.texId, cmd.flightId, .Sampled);
-                lastTexId = draw.texId.val;
-                lastTexDesc = desc;
-                break :blk desc;
-            };
+            // fetch only when the id differs from the last one (null first iteration always misses)
+            if (lastTexEnum == null or draw.texEnum != lastTexEnum.?) {
+                const texId = try resolveTexture(draw.texEnum, texAssigns);
+                lastTexDesc = try resMan.getTextureDescriptor(texId, cmd.flightId, .Sampled);
+                lastTexEnum = draw.texEnum;
+            }
 
             const pushConstants = vhT.ImGuiPushConstants{
                 .scale = .{ scaleX, scaleY },
                 .translate = .{ translateX, translateY },
-                .texDesc = texDesc,
+                .texDesc = lastTexDesc,
             };
             cmd.setPushData(&pushConstants, @sizeOf(@TypeOf(pushConstants)), 0);
             cmd.drawIndexed(draw.elemCount, 1, draw.idxOffset, draw.vtxOffset, 0);
@@ -433,32 +517,76 @@ pub const RenderGraph = struct {
         cmd.endTimer(.BotOfPipe, timeId);
     }
 
-    fn recordPass(self: *RenderGraph, cmd: *Cmd, pass: *const PassDef, frameData: FrameData, resMan: *ResourceMan, shaderMan: *ShaderManager) !void {
-        const timeId = cmd.startTimer(.TopOfPipe, pass.name, .Pass);
-        cmd.startStatistics(pass.name);
+    fn resolveTexture(texEnum: TextureEnum, texAssigns: *const TextureAssignments) !TexId {
+        if (texAssigns.isKeyUsed(@intFromEnum(texEnum)) == true) return texAssigns.getByKey(@intFromEnum(texEnum)) else {
+            std.debug.print("Error: Texture {s} not assigned\n", .{@tagName(texEnum)});
+            return error.TextureNotAssigned;
+        }
+    }
+
+    fn resolveBuffer(bufEnum: BufferEnum, bufAssigns: *const BufferAssignments) !BufId {
+        if (bufAssigns.isKeyUsed(@intFromEnum(bufEnum)) == true) return bufAssigns.getByKey(@intFromEnum(bufEnum)) else {
+            std.debug.print("Error: Buffer {s} not assigned\n", .{@tagName(bufEnum)});
+            return error.BufferNotAssigned;
+        }
+    }
+
+    fn recordPass(
+        self: *RenderGraph,
+        cmd: *Cmd,
+        pass: *const PassDef,
+        frameData: FrameData,
+        resMan: *ResourceMan,
+        shaderMan: *ShaderManager,
+        bufAssigns: *const BufferAssignments,
+        texAssigns: *const TextureAssignments,
+    ) !void {
+        const timeId = cmd.startTimer(.TopOfPipe, @tagName(pass.name), .Pass);
+        cmd.startStatistics(@tagName(pass.name));
 
         const shaders = shaderMan.getShaders(pass.getShaderIds());
         const shaderSlice = shaders[0..pass.getShaderIds().len];
         cmd.bindShaders(shaderSlice);
-        const pushData = try PushData.init(resMan, pass.getBufUses(), pass.getTexUses(), pass.getMainTexId(), frameData, cmd.flightId);
+
+        var mainTexId: ?TexId = undefined;
+
+        if (pass.getMainTexId()) |mainTexEnum| {
+            mainTexId = try resolveTexture(mainTexEnum, texAssigns);
+        } else mainTexId = null;
+
+        const pushData = try PushData.init(resMan, pass.getBufUses(), pass.getTexUses(), mainTexId, frameData, cmd.flightId, bufAssigns, texAssigns);
         cmd.setPushData(&pushData, @sizeOf(PushData), 0);
 
-        try self.recordPassBarriers(cmd, pass, resMan);
+        try self.recordPassBarriers(cmd, pass, resMan, bufAssigns, texAssigns);
 
         switch (pass.execution) {
-            .taskOrMesh, .taskOrMeshIndirect, .graphics => try recordGraphics(cmd, pushData.width, pushData.height, pass, resMan),
-            .computeOnImg => |computeOnImg| try recordCompute(cmd, computeOnImg.workgroups, computeOnImg.mainTexId, resMan),
+            .taskOrMesh, .taskOrMeshIndirect, .graphics => try recordGraphics(cmd, pushData.width, pushData.height, pass, resMan, bufAssigns, texAssigns),
+            .computeOnImg => |computeOnImg| {
+                const compImgId = try resolveTexture(computeOnImg.mainTexId, texAssigns);
+                try recordCompute(cmd, computeOnImg.workgroups, compImgId, resMan);
+            },
             .compute => |compute| try recordCompute(cmd, compute.workgroups, null, resMan),
-            .computeIndirect => |computeIndirect| try recordComputeIndirect(cmd, computeIndirect, resMan),
+            .computeIndirect => |computeIndirect| {
+                const indirectBufId = try resolveBuffer(computeIndirect.indirectBuf, bufAssigns);
+                try recordComputeIndirect(cmd, indirectBufId, computeIndirect.indirectBufOffset, resMan);
+            },
         }
         cmd.endTimer(.BotOfPipe, timeId);
         cmd.endStatistics();
     }
 
-    fn recordBlit(self: *RenderGraph, cmd: *Cmd, blit: ViewportBlit, resMan: *ResourceMan, swapMan: *SwapchainMan) !void {
+    fn recordBlit(
+        self: *RenderGraph,
+        cmd: *Cmd,
+        blit: ViewportBlit,
+        resMan: *ResourceMan,
+        swapMan: *SwapchainMan,
+        texAssigns: *const TextureAssignments,
+    ) !void {
         const timeId = cmd.startTimer(.TopOfPipe, blit.name, .Blit);
 
-        const texId = blit.srcTexId orelse return error.BlitHasNoSrcTexId;
+        const texEnum = blit.srcTexEnum orelse return error.BlitHasNoSrcTexId;
+        const texId = try resolveTexture(texEnum, texAssigns);
         const renderTex = try resMan.get(texId, cmd.flightId);
 
         const targetIndex = swapMan.getTargetIndex(blit.dstWindowId) orelse return;
@@ -475,23 +603,34 @@ pub const RenderGraph = struct {
         cmd.endTimer(.BotOfPipe, timeId);
     }
 
-    fn recordGraphics(cmd: *Cmd, width: u32, height: u32, pass: *const PassDef, resMan: *ResourceMan) !void {
+    fn recordGraphics(
+        cmd: *Cmd,
+        width: u32,
+        height: u32,
+        pass: *const PassDef,
+        resMan: *ResourceMan,
+        bufAssigns: *const BufferAssignments,
+        texAssigns: *const TextureAssignments,
+    ) !void {
         const depthInf: ?vk.VkRenderingAttachmentInfo = if (pass.depthAtt) |depth| blk: {
-            const texMeta = try resMan.getMeta(depth.texId);
-            const tex = try resMan.get(depth.texId, cmd.flightId);
+            const texId = try resolveTexture(depth.texLink.in, texAssigns);
+            const texMeta = try resMan.getMeta(texId);
+            const tex = try resMan.get(texId, cmd.flightId);
             break :blk try tex.createAttachment(texMeta.typ, depth.clear);
         } else null;
 
         const stencilInf: ?vk.VkRenderingAttachmentInfo = if (pass.stencilAtt) |stencil| blk: {
-            const texMeta = try resMan.getMeta(stencil.texId);
-            const tex = try resMan.get(stencil.texId, cmd.flightId);
+            const texId = try resolveTexture(stencil.texLink.in, texAssigns);
+            const texMeta = try resMan.getMeta(texId);
+            const tex = try resMan.get(texId, cmd.flightId);
             break :blk try tex.createAttachment(texMeta.typ, stencil.clear);
         } else null;
 
         var colorInfs: [8]vk.VkRenderingAttachmentInfo = undefined;
         for (pass.getColorAtts(), 0..) |colorAtt, i| {
-            const texMeta = try resMan.getMeta(colorAtt.texId);
-            const tex = try resMan.get(colorAtt.texId, cmd.flightId);
+            const texId = try resolveTexture(colorAtt.texLink.in, texAssigns);
+            const texMeta = try resMan.getMeta(texId);
+            const tex = try resMan.get(texId, cmd.flightId);
             colorInfs[i] = try tex.createAttachment(texMeta.typ, colorAtt.clear);
         }
 
@@ -505,21 +644,23 @@ pub const RenderGraph = struct {
                 cmd.drawMeshTasks(taskMesh.workgroups.x, taskMesh.workgroups.y, taskMesh.workgroups.z);
             },
             .taskOrMeshIndirect => |taskOrMeshIndirect| {
-                const buffer = try resMan.get(taskOrMeshIndirect.indirectBuf, cmd.flightId);
+                const indirectBufId = try resolveBuffer(taskOrMeshIndirect.indirectBuf, bufAssigns);
+                const buffer = try resMan.get(indirectBufId, cmd.flightId);
                 cmd.drawMeshTasksIndirect(buffer.handle, taskOrMeshIndirect.indirectBufOffset, 1, @sizeOf(vhT.IndirectData));
             },
             .graphics => |graphics| {
-                try bindVertexInputFromPass(cmd, pass, resMan, cmd.flightId);
+                try bindVertexInputFromPass(cmd, pass, resMan, cmd.flightId, bufAssigns);
 
                 if (pass.indexBuffer) |ibUse| {
-                    const idxBuf = try resMan.get(ibUse.bufId, cmd.flightId);
+                    const indexBufId = try resolveBuffer(ibUse.bufInput, bufAssigns);
+                    const idxBuf = try resMan.get(indexBufId, cmd.flightId);
                     cmd.bindIndexBuffer(idxBuf.handle, 0, ibUse.indexType);
                     cmd.drawIndexed(graphics.indexCount, 1, 0, 0, 0);
                 } else {
                     cmd.draw(graphics.vertices, graphics.instances, 0, 0);
                 }
             },
-            .compute, .computeOnImg, .computeIndirect => std.debug.print("ERROR: Compute or ComputeOnImg Pass ({s}) landed in Graphics Recording\n", .{pass.name}),
+            .compute, .computeOnImg, .computeIndirect => std.debug.print("ERROR: Compute or ComputeOnImg Pass ({s}) landed in Graphics Recording\n", .{@tagName(pass.name)}),
         }
         cmd.endRendering();
     }
@@ -567,7 +708,13 @@ pub const RenderGraph = struct {
         } else if (rc.BARRIER_DEBUG) std.debug.print("BakeBarriers: Skipped ({s})\n", .{name});
     }
 
-    fn bindVertexInputFromPass(cmd: *Cmd, pass: *const PassDef, resMan: *ResourceMan, flightId: u8) !void {
+    fn bindVertexInputFromPass(
+        cmd: *Cmd,
+        pass: *const PassDef,
+        resMan: *ResourceMan,
+        flightId: u8,
+        bufAssigns: *const BufferAssignments,
+    ) !void {
         if (pass.vertexBuffers.len == 0) {
             cmd.setVertexInput(null, null);
             return;
@@ -597,26 +744,11 @@ pub const RenderGraph = struct {
 
         var bufHandles: [4]vk.VkBuffer = undefined;
         var bufOffsets: [4]vk.VkDeviceSize = .{0} ** 4;
+
         for (pass.vertexBuffers.constSlice(), 0..) |vbUse, i| {
-            bufHandles[i] = (try resMan.get(vbUse.bufId, flightId)).handle;
+            const vertexBufId = try resolveBuffer(vbUse.bufInput, bufAssigns);
+            bufHandles[i] = (try resMan.get(vertexBufId, flightId)).handle;
         }
         cmd.bindVertexBuffers(0, bufHandles[0..pass.vertexBuffers.len], bufOffsets[0..pass.vertexBuffers.len]);
-    }
-
-    fn isReadOnly(access: vhE.PipeAccess) bool {
-        return switch (access) {
-            .ShaderRead,
-            .IndexRead,
-            .IndirectRead,
-            .VertexAttributeRead,
-            .ColorAttRead,
-            .DepthStencilRead,
-            .TransferRead,
-            .MemoryRead,
-            .UniformRead,
-            .SampledRead,
-            => true,
-            else => false,
-        };
     }
 };

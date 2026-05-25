@@ -1,11 +1,10 @@
-const TextureMeta = @import("../res/TextureMeta.zig").TextureMeta;
+const TextureLink = @import("../../../frameBuild/components.zig").TextureLink;
 const Texture = @import("../res/Texture.zig").Texture;
 const vk = @import("../../../.modules/vk.zig").c;
 const vhE = @import("../../help/Enums.zig");
-const TexId = TextureMeta.TexId;
 
 pub const AttachmentUse = struct {
-    texId: TextureMeta.TexId,
+    texLink: TextureLink,
     stage: vhE.PipeStage = .TopOfPipe,
     access: vhE.PipeAccess = .None,
     layout: vhE.ImageLayout,
@@ -13,8 +12,8 @@ pub const AttachmentUse = struct {
 
     pub const ClearColor = union(enum) { color: [4]f32, depthStencil: vk.VkClearDepthStencilValue };
 
-    pub fn init(id: TexId, stage: vhE.PipeStage, access: vhE.PipeAccess, layout: vhE.ImageLayout, clear: ?ClearColor) AttachmentUse {
-        return .{ .texId = id, .stage = stage, .access = access, .layout = layout, .clear = clear };
+    pub fn init(texLink: TextureLink, stage: vhE.PipeStage, access: vhE.PipeAccess, layout: vhE.ImageLayout, clear: ?ClearColor) AttachmentUse {
+        return .{ .texLink = texLink, .stage = stage, .access = access, .layout = layout, .clear = clear };
     }
 
     pub fn getNeededState(self: *const AttachmentUse) Texture.TextureState {

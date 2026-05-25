@@ -1,8 +1,13 @@
+const TextureAssignments = @import("../../../frameBuild/6_resourceAssigner/ResourceAssignerData.zig").ResourceAssignerData.TextureAssignments;
+const BufferAssignments = @import("../../../frameBuild/6_resourceAssigner/ResourceAssignerData.zig").ResourceAssignerData.BufferAssignments;
+const TextureEnum = @import("../../../frameBuild/enums.zig").TextureEnum;
+const BufferEnum = @import("../../../frameBuild/enums.zig").BufferEnum;
 const ResourceMan = @import("../../sys/ResourceMan.zig").ResourceMan;
-const FrameData = @import("../../../App.zig").FrameData;
 const BufferUse = @import("../pass/BufferUse.zig").BufferUse;
 const TextureUse = @import("../pass/TextureUse.zig").TextureUse;
 const TexId = @import("TextureMeta.zig").TextureMeta.TexId;
+const BufId = @import("BufferMeta.zig").BufferMeta.BufId;
+const FrameData = @import("../../../App.zig").FrameData;
 const std = @import("std");
 
 pub const PushData = extern struct {
@@ -12,7 +17,16 @@ pub const PushData = extern struct {
     height: u32 = 0,
     resourceSlots: [14]u32 = undefined,
 
-    pub fn init(resMan: *ResourceMan, bufUses: []const BufferUse, texUses: []const TextureUse, mainTexId: ?TexId, frameData: FrameData, flightId: u8) !PushData {
+    pub fn init(
+        resMan: *ResourceMan,
+        bufUses: []const BufferUse,
+        texUses: []const TextureUse,
+        mainTexId: ?TexId,
+        frameData: FrameData,
+        flightId: u8,
+        bufAssigns: *const BufferAssignments,
+        texAssigns: *const TextureAssignments,
+    ) !PushData {
         var pcs = PushData{ .runTime = frameData.runTime, .deltaTime = frameData.deltaTime };
         var mask: [14]bool = .{false} ** 14;
 
@@ -21,7 +35,8 @@ pub const PushData = extern struct {
 
             if (shaderSlot) |slot| {
                 if (mask[slot] == false) {
-                    pcs.resourceSlots[slot] = try resMan.getBufferDescriptor(bufUse.bufId, flightId);
+                    const bufId = try resolveBuffer(bufUse.bufLink.in, bufAssigns);
+                    pcs.resourceSlots[slot] = try resMan.getBufferDescriptor(bufId, flightId);
                     mask[slot] = true;
                 } else std.debug.print("Pass Shader Slot {} already used\n", .{slot});
             }
@@ -32,7 +47,8 @@ pub const PushData = extern struct {
 
             if (shaderSlot) |slot| {
                 if (mask[slot] == false) {
-                    pcs.resourceSlots[slot] = try resMan.getTextureDescriptor(texUse.texId, flightId, texUse.descUse);
+                    const texId = try resolveTexture(texUse.texLink.in, texAssigns);
+                    pcs.resourceSlots[slot] = try resMan.getTextureDescriptor(texId, flightId, texUse.descUse);
                     mask[slot] = true;
                 } else std.debug.print("Pass Shader Slot {} already used\n", .{slot});
             }
@@ -47,3 +63,17 @@ pub const PushData = extern struct {
         return pcs;
     }
 };
+
+fn resolveTexture(texEnum: TextureEnum, texAssigns: *const TextureAssignments) !TexId {
+    if (texAssigns.isKeyUsed(@intFromEnum(texEnum)) == true) return texAssigns.getByKey(@intFromEnum(texEnum)) else {
+        std.debug.print("Error: Texture {s} not assigned\n", .{@tagName(texEnum)});
+        return error.TextureNotAssigned;
+    }
+}
+
+fn resolveBuffer(bufEnum: BufferEnum, bufAssigns: *const BufferAssignments) !BufId {
+    if (bufAssigns.isKeyUsed(@intFromEnum(bufEnum)) == true) return bufAssigns.getByKey(@intFromEnum(bufEnum)) else {
+        std.debug.print("Error: Buffer {s} not assigned\n", .{@tagName(bufEnum)});
+        return error.BufferNotAssigned;
+    }
+}

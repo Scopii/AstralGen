@@ -1,11 +1,11 @@
-const BufferMeta = @import("../res/BufferMeta.zig").BufferMeta;
+const BufferEnum = @import("../../../frameBuild/enums.zig").BufferEnum;
 const vk = @import("../../../.modules/vk.zig").c;
 
 pub const IndexBufferUse = struct {
-    bufId: BufferMeta.BufId,
+    bufInput: BufferEnum,
     indexType: vk.VkIndexType = vk.VK_INDEX_TYPE_UINT32,
 
-    pub fn init(bufId: BufferMeta.BufId, indexType: vk.VkIndexType) IndexBufferUse {
-        return .{ .bufId = bufId, .indexType = indexType };
+    pub fn init(bufInput: BufferEnum, indexType: vk.VkIndexType) IndexBufferUse {
+        return .{ .bufInput = bufInput, .indexType = indexType };
     }
 };

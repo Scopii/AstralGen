@@ -1,8 +1,7 @@
 const RendererOutQueue = @import("../RendererOutQueue.zig").RendererOutQueue;
-const TexId = @import("../types/res/TextureMeta.zig").TextureMeta.TexId;
 const LinkedMap = @import("../../.structures/LinkedMap.zig").LinkedMap;
 const SimpleMap = @import("../../.structures/SimpleMap.zig").SimpleMap;
-const FixedList = @import("../../.structures/FixedList.zig").FixedList;
+const TextureEnum = @import("../../frameBuild/enums.zig").TextureEnum;
 const Swapchain = @import("../types/base/Swapchain.zig").Swapchain;
 const Window = @import("../../window/Window.zig").Window;
 const rc = @import("../../.configs/renderConfig.zig");
@@ -93,18 +92,14 @@ pub const SwapchainMan = struct {
         self.swapchains.getPtrByKey(windowId.val).inUse = inUse;
     }
 
-    pub fn getMaxExtent(self: *SwapchainMan, texId: TexId) vk.VkExtent2D {
+    pub fn getMaxExtent(self: *SwapchainMan, texEnum: TextureEnum) vk.VkExtent2D {
         var maxWidth: u32 = 1;
         var maxHeight: u32 = 1;
 
         for (self.swapchains.getItems()) |swapchain| {
-            if (swapchain.renderTexId == texId) {
-                maxWidth = @max(maxWidth, swapchain.extent.width);
-                maxHeight = @max(maxHeight, swapchain.extent.height);
-            }
-            for (swapchain.linkedTexIds) |linkedId| {
+            for (swapchain.linkedTexEnums) |linkedId| {
                 if (linkedId == null) break;
-                if (linkedId == texId) {
+                if (linkedId == texEnum) {
                     maxWidth = @max(maxWidth, swapchain.extent.width);
                     maxHeight = @max(maxHeight, swapchain.extent.height);
                 }
@@ -115,7 +110,7 @@ pub const SwapchainMan = struct {
 
     pub fn createSwapchain(self: *SwapchainMan, window: Window, _: vk.VkCommandPool) !void {
         const surface = try createSurface(window.handle, self.instance);
-        const swapchain = try Swapchain.init(self.alloc, self.gpi, surface, window.extent, self.gpu, window.renderTexId, window.linkedTexIds, null, window.id);
+        const swapchain = try Swapchain.init(self.alloc, self.gpi, surface, window.extent, self.gpu, window.linkedTexEnums, null, window.id);
         self.hiddenSwapchains.upsert(window.id.val, rc.MAX_IN_FLIGHT);
         self.swapchains.upsert(window.id.val, swapchain);
         std.debug.print("Swapchain added to Window {}\n", .{window.id.val});
@@ -135,7 +130,6 @@ pub const SwapchainMan = struct {
         while (i > 0) {
             i -= 1;
             const framesLeft = self.hiddenSwapchains.getPtrByIndex(i);
-            
             if (framesLeft.* == 0) {
                 const windowId = self.hiddenSwapchains.getKeyByIndex(i);
                 rendererOutQueue.append(.{ .framePresentedForWindow = .{ .val = windowId } });

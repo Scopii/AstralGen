@@ -1,4 +1,3 @@
-const TexId = @import("render/types/res/TextureMeta.zig").TextureMeta.TexId;
 const MemoryManager = @import("core/MemoryManager.zig").MemoryManager;
 const RNGenerator = @import("core/RNGenerator.zig").RNGenerator;
 const EngineData = @import("EngineData.zig").EngineData;
@@ -10,11 +9,9 @@ const std = @import("std");
 const TimeSys = @import("time/TimeSys.zig").TimeSys;
 
 const ShaderQueue = @import("shader/ShaderQueue.zig").ShaderQueue;
-const ShaderData = @import("shader/ShaderData.zig").ShaderData;
 const ShaderSys = @import("shader/ShaderSys.zig").ShaderSys;
 
 const WindowQueue = @import("window/WindowQueue.zig").WindowQueue;
-const WindowData = @import("window/WindowData.zig").WindowData;
 const WindowSys = @import("window/WindowSys.zig").WindowSys;
 
 const InputQueue = @import("input/InputQueue.zig").InputQueue;
@@ -28,7 +25,9 @@ const ViewportSys = @import("viewport/ViewportSys.zig").ViewportSys;
 const ViewportId = @import("viewport/ViewportSys.zig").ViewportId;
 const Viewport = @import("viewport/Viewport.zig").Viewport;
 
-const FrameBuildSys = @import("frameBuild/FrameBuildSys.zig").FrameBuildSys;
+const FrameGraphSys = @import("frameBuild/FrameGraphSys.zig").FrameGraphSys;
+const FrameGraphQueue = @import("frameBuild/FrameGraphQueue.zig").FrameGraphQueue;
+const pe = @import("frameBuild/enums.zig");
 
 const RendererOutQueue = @import("render/RendererOutQueue.zig").RendererOutQueue;
 const RendererQueue = @import("render/RendererQueue.zig").RendererQueue;
@@ -50,6 +49,7 @@ pub const App = struct {
     inputQueue: InputQueue = .{},
     shaderQueue: ShaderQueue = .{},
     windowQueue: WindowQueue = .{},
+    frameGraphQueue: FrameGraphQueue = .{},
     rendererQueue: RendererQueue = .{},
     rendererOutQueue: RendererOutQueue = .{},
 
@@ -90,6 +90,9 @@ pub const App = struct {
 
     pub fn deinit(self: *App) void {
         UiSys.deinit(&self.data.ui);
+        FrameGraphSys.deleteBufferManually(&self.data.frameGraph, .ImguiIB, &self.rendererQueue);
+        FrameGraphSys.deleteBufferManually(&self.data.frameGraph, .ImguiVB, &self.rendererQueue);
+        FrameGraphSys.deleteTextureManually(&self.data.frameGraph, .ImguiFontTex, &self.rendererQueue);
         self.renderer.deinit();
         ShaderSys.deinit(&self.data.shader, self.memoryMan.getAllocator());
         WindowSys.deinit(&self.data.window);
@@ -98,8 +101,10 @@ pub const App = struct {
     pub fn setupEntitys(self: *App) !void {
         try ShaderSys.update(&self.data.shader, &self.shaderQueue, &self.rendererQueue, self.memoryMan);
 
-        const mainCamId = self.data.entityData.createCameraEntity(.{ .pos = zm.f32x4(0, 5, -20, 0), .yaw = 170 }, .{ .bufId = rc.mainCamUB.id, .near = 0.1, .far = 100, .fov = 60 });
-        const debugCamId = self.data.entityData.createCameraEntity(.{ .pos = zm.f32x4(0, 20, -45, 0), .yaw = 170 }, .{ .bufId = rc.debugCamUB.id, .near = 0.1, .far = 300, .fov = 110 });
+        for (0..rc.ENTITY_COUNT) |_| _ = self.data.entityData.createRandomRenderEntity(&self.rng);
+
+        const mainCamId = self.data.entityData.createCameraEntity(.{ .pos = zm.f32x4(0, 5, -20, 0), .yaw = 170 }, .{ .bufEnum = .MainCamUB, .near = 0.1, .far = 100, .fov = 60 });
+        const debugCamId = self.data.entityData.createCameraEntity(.{ .pos = zm.f32x4(0, 20, -45, 0), .yaw = 170 }, .{ .bufEnum = .DebugCamUB, .near = 0.1, .far = 300, .fov = 110 });
 
         self.data.viewport.viewports.upsert(10, Viewport{
             .name = "DeptView",
@@ -119,17 +124,16 @@ pub const App = struct {
                 .title = "Depth Window",
                 .w = 16 * 55,
                 .h = 9 * 55,
-                .renderTexId = rc.depthViewTex.id,
                 .x = (1920 / 2) / 1 - 10,
                 .y = 40,
                 .resize = true,
-                .texIds = &[_]TexId{},
+                .texEnums = &[_]pe.TextureEnum{.DepthViewTex},
                 .viewIds = [4]?ViewportId{ .{ .val = 10 }, null, null, null },
             },
         });
 
         self.data.viewport.viewports.upsert(1, Viewport{
-            .name = "CompTest",
+            .name = "MainWindow",
             .cameraEntity = mainCamId,
             .areaX = 0.0,
             .areaY = 0.0,
@@ -146,11 +150,10 @@ pub const App = struct {
                 .title = "Main Window",
                 .w = 16 * 55,
                 .h = 9 * 55,
-                .renderTexId = rc.mainTex.id,
                 .x = 60,
                 .y = 1080 / 2 - 260,
                 .resize = true,
-                .texIds = &[_]TexId{ rc.debugGridDepthTex.id, rc.debugPlaneDepthTex.id, rc.mainDepthTex.id },
+                .texEnums = &[_]pe.TextureEnum{.RayMarchInputTex},
                 .viewIds = [4]?ViewportId{ .{ .val = 1 }, null, null, null },
             },
         });
@@ -211,67 +214,37 @@ pub const App = struct {
             },
             // .blitPass = .QuantPlaneMain,
         });
-
-        for (0..rc.ENTITY_COUNT) |_| _ = self.data.entityData.createRandomRenderEntity(&self.rng);
-
         self.windowQueue.append(.{
             .addWindow = .{
                 .title = "Debug Window",
                 .w = 16 * 55,
                 .h = 9 * 55,
-                .renderTexId = rc.mainTex.id,
                 .x = 1920 / 2 - 10,
                 .y = 1080 / 2 + 40,
                 .resize = true,
-                .texIds = &[_]TexId{ rc.debugGridDepthTex.id, rc.debugPlaneDepthTex.id, rc.mainDepthTex.id },
+                .texEnums = &[_]pe.TextureEnum{
+                    .GridTex,
+                    .GridDepthTex,
+
+                    .DebugGridInputTex,
+                    .DebugGridDepthTex,
+
+                    .PlaneTex,
+                    .PlaneDepthTex,
+
+                    .DebugPlaneInputTex,
+                    .DebugPlaneDepthTex,
+                },
                 .viewIds = [4]?ViewportId{ .{ .val = 3 }, .{ .val = 2 }, .{ .val = 4 }, .{ .val = 5 } },
             },
         });
     }
 
     pub fn setupResources(self: *App) !void {
-        const arena = self.memoryMan.getGlobalArena();
-
         try ShaderSys.update(&self.data.shader, &self.shaderQueue, &self.rendererQueue, self.memoryMan);
-
-        // RENDERING SET UP
-        for (rc.BUFFERS) |bufInf| {
-            const AddBufPtr = @FieldType(RendererQueue.RendererEvent, "addBuffer");
-            const AddBuf = std.meta.Child(AddBufPtr);
-
-            const bufferPtr = try arena.create(AddBuf);
-            bufferPtr.* = .{ .bufInf = bufInf, .data = null };
-            self.rendererQueue.append(.{ .addBuffer = bufferPtr });
-        }
-
-        for (rc.TEXTURES) |texInf| {
-            const AddTexPtr = @FieldType(RendererQueue.RendererEvent, "addTexture");
-            const AddTex = std.meta.Child(AddTexPtr);
-
-            const addTextureDataPtr = try arena.create(AddTex);
-
-            var dataSlice: ?[]const u8 = null;
-
-            // --- PROCEDURAL TEXTURE GENERATION ---
-            if (texInf.id.val == rc.testTilesTex.id.val) {
-                // 256x256 pixels, 4 channels (RGBA) of 16-bit floats
-                const pixels = try arena.alloc([4]f16, 256 * 256);
-                for (0..256) |y| {
-                    for (0..256) |x| {
-                        const isWhite = ((x / 32) + (y / 32)) % 2 == 0;
-                        const val: f16 = if (isWhite) 1.0 else 0.2; // 1.0 (white) or 0.2 (dark)
-
-                        // RGBA -> Blue checkerboard
-                        pixels[y * 256 + x] = .{ val, val, 1.0, 1.0 };
-                    }
-                }
-                dataSlice = std.mem.sliceAsBytes(pixels);
-            }
-            // -------------------------------------
-
-            addTextureDataPtr.* = .{ .texInf = texInf, .data = dataSlice };
-            self.rendererQueue.append(.{ .addTexture = addTextureDataPtr });
-        }
+        try FrameGraphSys.createBufferManually(&self.data.frameGraph, .ImguiIB, &self.rendererQueue, self.memoryMan);
+        try FrameGraphSys.createBufferManually(&self.data.frameGraph, .ImguiVB, &self.rendererQueue, self.memoryMan);
+        try FrameGraphSys.createTextureManually(&self.data.frameGraph, .ImguiFontTex, &self.rendererQueue, self.memoryMan);
 
         try UiSys.init(&self.data.ui, self.memoryMan);
     }
@@ -282,7 +255,7 @@ pub const App = struct {
 
         TimeSys.init(&self.data.time);
 
-        const US_PER_FRAME: u64 = std.time.us_per_s / 15000;
+        const US_PER_FRAME: u64 = std.time.us_per_s / 10;
         var LAST_FRAME: u64 = @intCast(std.time.microTimestamp());
         var US_WAITED: u64 = 0;
 
@@ -309,9 +282,11 @@ pub const App = struct {
                 InputSys.update(&self.data.input, &self.inputQueue);
                 InputSys.convert(&self.data.input, &self.rendererQueue);
 
-                ViewportSys.update(&self.data.viewport, &self.data);
-
                 try WindowSys.update(&self.data.window, &self.data, &self.windowQueue, &self.rendererQueue, self.memoryMan);
+
+                try WindowSys.updateActiveWindows(&self.data.window);
+
+                ViewportSys.update(&self.data.viewport, &self.data);
 
                 // Close Or Idle
                 if (self.data.input.closeApp or self.data.window.appExit) return;
@@ -323,23 +298,62 @@ pub const App = struct {
                 frameData.runTime = TimeSys.getRuntime(&self.data.time, .seconds, f32);
                 frameData.deltaTime = @floatCast(dt);
 
-                try CameraSys.update(&self.data.entityData, dt, &self.data, &self.rendererQueue, self.memoryMan);
+                try CameraSys.update(&self.data.entityData, dt, &self.data, &self.frameGraphQueue, self.memoryMan);
 
-                try RenderPrepSys.extractEntities(&self.data.entityData, &self.rendererQueue, self.memoryMan);
+                try RenderPrepSys.extractEntities(&self.data.entityData, &self.frameGraphQueue, self.memoryMan);
 
-                try WindowSys.updateActiveWindows(&self.data.window);
-
-                try UiSys.update(&self.data.ui, &self.data, &self.rendererQueue, self.memoryMan);
+                try UiSys.update(&self.data.ui, &self.data, &self.frameGraphQueue, self.memoryMan);
 
                 if (rc.CPU_PROFILING) std.debug.print("Cpu pre-Renderer Delta {d:.3} ms, ({d:.1} Real FPS)\n", .{ dt * 0.000001, 1.0 / (dt * 0.000000001) });
 
-                try self.renderer.update(&self.rendererQueue);
+                const start = std.time.microTimestamp();
+                try FrameGraphSys.build(&self.data.frameGraph, &self.data, &self.rendererQueue, self.memoryMan);
+                const end = std.time.microTimestamp();
+                std.debug.print("Frame Graph Build: {d:.3} ms\n", .{@as(f64, @floatFromInt(end - start)) / 1_000.0});
 
-                FrameBuildSys.build(&self.data.frameBuild, &self.data);
+                const updateRequests = self.data.frameGraph.resourceAssigner.updateRequests.getConstItems();
+                const sortedRenderNodes = self.data.frameGraph.passSorter.sortedRenderNodes.constSlice();
+                const bufAssigns = self.data.frameGraph.resourceAssigner.bufAssigns;
+                const texAssigns = self.data.frameGraph.resourceAssigner.texAssigns;
+
+                for (updateRequests) |updateRequest| {
+                    switch (updateRequest) {
+                        .EntityUpdate => {},
+                        .CamMainUpdate => {},
+                        .CanDebugUpdate => {},
+                        .TestTileUpdate => {
+                            // PROCEDURAL TEXTURE GENERATION
+                            const AddTexPtr = @FieldType(FrameGraphQueue.FrameGraphEvent, "updateTexture");
+                            const AddTex = std.meta.Child(AddTexPtr);
+
+                            const arena = self.memoryMan.getGlobalArena();
+
+                            const pixels = try arena.alloc([4]f16, 256 * 256);
+                            for (0..256) |y| {
+                                for (0..256) |x| {
+                                    const isWhite = ((x / 32) + (y / 32)) % 2 == 0;
+                                    const val: f16 = if (isWhite) 1.0 else 0.2; // 1.0 (white) or 0.2 (dark)
+
+                                    // RGBA -> Blue checkerboard
+                                    pixels[y * 256 + x] = .{ val, val, 1.0, 1.0 };
+                                }
+                            }
+
+                            const addTextureDataPtr = try arena.create(AddTex);
+                            addTextureDataPtr.* = .{ .texEnum = .TestTileTex, .data = std.mem.sliceAsBytes(pixels), .newExtent = null };
+                            self.frameGraphQueue.append(.{ .updateTexture = addTextureDataPtr });
+                        },
+                        .GuiUpdate => {},
+                    }
+                }
+
+                try FrameGraphSys.processQueue(&self.data.frameGraph, &self.frameGraphQueue, &self.rendererQueue, self.memoryMan);
+
+                try self.renderer.update(&self.rendererQueue, &texAssigns);
 
                 if (rc.EARLY_GPU_WAIT == false) try renderer.waitForGpu();
 
-                renderer.draw(frameData, &self.data, self.data.window.activeWindows.constSlice(), &self.rendererOutQueue) catch |err| {
+                renderer.draw(frameData, sortedRenderNodes, &bufAssigns, &texAssigns, self.data.window.activeWindows.constSlice(), &self.rendererOutQueue) catch |err| {
                     std.log.err("Error in renderer.submitDraw(): {}", .{err});
                     break;
                 };

@@ -1,9 +1,9 @@
-const RendererQueue = @import("../render/RendererQueue.zig").RendererQueue;
+const FrameGraphQueue = @import("../frameBuild/FrameGraphQueue.zig").FrameGraphQueue;
 const MemoryManager = @import("../core/MemoryManager.zig").MemoryManager;
+const TextureEnum = @import("../frameBuild/enums.zig").TextureEnum;
 const PassDef = @import("../render/types/pass/PassDef.zig");
 const EngineData = @import("../EngineData.zig").EngineData;
 const Window = @import("../window/Window.zig").Window;
-const rc = @import("../.configs/renderConfig.zig");
 const ig = @cImport(@cInclude("imgui_ctx.h"));
 const UiData = @import("UiData.zig").UiData;
 const zgui = @import("zgui");
@@ -24,22 +24,25 @@ pub const UiSys = struct {
         ui.initialized = true;
     }
 
-    pub fn update(ui: *UiData, data: *const EngineData, rendererQueue: *RendererQueue, memoryMan: *MemoryManager) !void {
+    pub fn update(ui: *UiData, data: *const EngineData, frameGraphQueue: *FrameGraphQueue, memoryMan: *MemoryManager) !void {
         ui.activeNodes = &.{};
 
         if (data.window.uiActive) {
-            try processTextures(ui, rendererQueue, memoryMan);
+            try processTextures(ui, frameGraphQueue, memoryMan);
             for (data.window.activeWindows.constSlice()) |*window| buildWindowUi(window, ui, data, data.time.deltaTime);
-            try extractDrawData(ui, data, rendererQueue, memoryMan);
+            try extractDrawData(ui, data, frameGraphQueue, memoryMan);
         }
     }
 
-    fn processTextures(ui: *UiData, rendererQueue: *RendererQueue, memoryMan: *MemoryManager) !void {
+    fn processTextures(ui: *UiData, frameGraphQueue: *FrameGraphQueue, memoryMan: *MemoryManager) !void {
         if (!ui.initialized) return;
         if (ui.contexts.getLength() == 0) return; // at least one window context to access shared atlas
 
         ig.igui_set_current_context(@ptrCast(ui.contexts.getFirst()));
-        const texData = zgui.io.getFontsTexRef().tex_data orelse return;
+        const texData = zgui.io.getFontsTexRef().tex_data orelse {
+            std.debug.print("UI: texData is null\n", .{});
+            return;
+        };
 
         switch (texData.status) {
             .want_create, .want_updates => {
@@ -62,16 +65,17 @@ pub const UiSys = struct {
                     } else return;
                 };
 
-                const PayloadPtr = @FieldType(RendererQueue.RendererEvent, "updateTexture");
+                const PayloadPtr = @FieldType(FrameGraphQueue.FrameGraphEvent, "updateTexture");
                 const updateTexPtr = try arena.create(std.meta.Child(PayloadPtr));
                 updateTexPtr.* = .{
-                    .texId = rc.imguiFontTex.id,
+                    .texEnum = .ImguiFontTex,
                     .data = pixelBytes,
                     .newExtent = .{ .width = @intCast(width), .height = @intCast(height), .depth = 1 },
                 };
-                rendererQueue.append(.{ .updateTexture = updateTexPtr });
+                frameGraphQueue.append(.{ .updateTexture = updateTexPtr });
 
-                texData.tex_id = @enumFromInt(@as(u64, rc.imguiFontTex.id.val));
+                texData.tex_id = @enumFromInt(@as(u64, @intFromEnum(TextureEnum.ImguiFontTex)));
+
                 texData.status = .ok;
             },
             .want_destroy => texData.status = .destroyed,
@@ -205,7 +209,7 @@ pub const UiSys = struct {
         zgui.popStyleVar(.{ .count = 1 });
     }
 
-    fn extractDrawData(ui: *UiData, data: *const EngineData, rendererQueue: *RendererQueue, memoryMan: *MemoryManager) !void {
+    fn extractDrawData(ui: *UiData, data: *const EngineData, frameGraphQueue: *FrameGraphQueue, memoryMan: *MemoryManager) !void {
         const arena = memoryMan.getGlobalArena();
         var uiNodes = std.array_list.Managed(PassDef.UiNode).init(arena);
 
@@ -248,12 +252,12 @@ pub const UiSys = struct {
                 for (cmdList.getCmdBuffer()) |pcmd| {
                     if (pcmd.user_callback != null) continue;
 
-                    var texIdVal: u32 = @intCast(@intFromEnum(pcmd.texture_ref.tex_id));
-                    if (texIdVal == 0) texIdVal = rc.imguiFontTex.id.val;
+                    const rawId = @intFromEnum(pcmd.texture_ref.tex_id);
+                    const texEnum: TextureEnum = if (rawId == 0) .ImguiFontTex else @enumFromInt(@as(u16, @intCast(rawId)));
 
                     try cmdListsArray.append(.{
                         .clipRect = pcmd.clip_rect,
-                        .texId = .{ .val = texIdVal },
+                        .texEnum = texEnum,
                         .vtxOffset = globalVtxOffset + @as(i32, @intCast(pcmd.vtx_offset)),
                         .idxOffset = globalIdxOffset + pcmd.idx_offset,
                         .elemCount = pcmd.elem_count,
@@ -276,15 +280,15 @@ pub const UiSys = struct {
         }
         ui.activeNodes = try uiNodes.toOwnedSlice();
 
-        const PayloadVtx = @FieldType(RendererQueue.RendererEvent, "updateBuffer");
+        const PayloadVtx = @FieldType(FrameGraphQueue.FrameGraphEvent, "updateBuffer");
         const updateVtxPtr = try arena.create(std.meta.Child(PayloadVtx));
-        updateVtxPtr.* = .{ .bufId = rc.imguiVertexSB.id, .data = vtxBuffer };
-        rendererQueue.append(.{ .updateBuffer = updateVtxPtr });
+        updateVtxPtr.* = .{ .bufEnum = .ImguiVB, .data = vtxBuffer };
+        frameGraphQueue.append(.{ .updateBuffer = updateVtxPtr });
 
-        const PayloadIdx = @FieldType(RendererQueue.RendererEvent, "updateBuffer");
+        const PayloadIdx = @FieldType(FrameGraphQueue.FrameGraphEvent, "updateBuffer");
         const updateIdxPtr = try arena.create(std.meta.Child(PayloadIdx));
-        updateIdxPtr.* = .{ .bufId = rc.imguiIndexSB.id, .data = idxBuffer };
-        rendererQueue.append(.{ .updateBuffer = updateIdxPtr });
+        updateIdxPtr.* = .{ .bufEnum = .ImguiIB, .data = idxBuffer };
+        frameGraphQueue.append(.{ .updateBuffer = updateIdxPtr });
     }
 
     pub fn deinit(ui: *UiData) void {

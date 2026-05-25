@@ -32,6 +32,8 @@ pub const RendererQueue = struct {
         updateBuffer: *const struct { bufId: BufId, data: []const u8 },
         updateBufferSegment: *const struct { bufId: BufId, data: []const u8, elementOffset: u32 },
         updateTexture: *const struct { texId: TexId, data:[]const u8, newExtent: ?vk.VkExtent3D },
+        removeTexture: TexId,
+        removeBuffer: BufId,
         updateWindowState: *const Window,
         addRenderNode: *const RenderNode,
 

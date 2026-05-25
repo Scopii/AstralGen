@@ -1,5 +1,5 @@
+const BufferEnum = @import("../frameBuild/enums.zig").BufferEnum;
 const zm = @import("zmath");
-const BufId = @import("../render/types/res/BufferMeta.zig").BufferMeta.BufId;
 
 pub const Transform = struct {
     pos: zm.Vec = zm.f32x4(0, 0, -5, 0),
@@ -15,7 +15,7 @@ pub const CameraComp = struct {
     aspectRatio: f32 = 16.0 / 9.0,
     near: f32 = 0.1,
     far: f32 = 1000.0,
-    bufId: BufId, 
+    bufEnum: BufferEnum, 
 };
 
 pub const RenderableComp = struct {

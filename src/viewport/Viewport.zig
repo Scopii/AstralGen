@@ -1,5 +1,4 @@
-const TexId = @import("../render/types/res/TextureMeta.zig").TextureMeta.TexId;
-const PassEnum = @import("../frameBuild/FrameBuildSys.zig").PassEnum;
+const PassEnum = @import("../frameBuild/enums.zig").PassEnum;
 const EntityId = @import("../ecs/EntityData.zig").EntityId;
 
 pub const Viewport = struct {

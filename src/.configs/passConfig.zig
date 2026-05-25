@@ -1,22 +1,32 @@
+const VertexBufferUse = @import("../render/types/pass/VertexBufferUse.zig").VertexBufferUse;
+const VertexAttribute = @import("../render/types/pass/VertexAttribute.zig").VertexAttribute;
+const IndexBufferUse = @import("../render/types/pass/IndexBufferUse.zig").IndexBufferUse;
 const AttachmentUse = @import("../render/types/pass/AttachmentUse.zig").AttachmentUse;
-const TexId = @import("../render/types/res/TextureMeta.zig").TextureMeta.TexId;
-const BufId = @import("../render/types/res/BufferMeta.zig").BufferMeta.BufId;
 const TextureUse = @import("../render/types/pass/TextureUse.zig").TextureUse;
 const BufferUse = @import("../render/types/pass/BufferUse.zig").BufferUse;
 const PassDef = @import("../render/types/pass/PassDef.zig").PassDef;
 const vk = @import("../.modules/vk.zig").c;
 const sc = @import("shaderConfig.zig");
 
+const TextureEnum = @import("../frameBuild/enums.zig").TextureEnum;
+const BufferEnum = @import("../frameBuild/enums.zig").BufferEnum;
+const PassEnum = @import("../frameBuild/enums.zig").PassEnum;
+
+const TextureLink = @import("../frameBuild/components.zig").TextureLink;
+const BufferLink = @import("../frameBuild/components.zig").BufferLink;
+
+/// MIGHT HAVE TO CHANGE PASS.outputTexId TO .out NOT .in
+///
 pub fn DepthView(def: struct {
-    name: []const u8,
-    outputTex: TexId,
-    depthTex: TexId,
-    camBuf: BufId,
+    name: PassEnum,
+    outputTex: TextureLink,
+    depthTex: TextureLink,
+    camBuf: BufferLink,
 }) PassDef {
     return PassDef.ComputeOnImg(.{
         .name = def.name,
-        .outputTexId = def.outputTex,
-        .execution = .{ .workgroups = .{ .x = 8, .y = 8, .z = 1 }, .mainTexId = def.outputTex },
+        .outputTexId = def.outputTex.in,
+        .execution = .{ .workgroups = .{ .x = 8, .y = 8, .z = 1 }, .mainTexId = def.outputTex.in },
         .compute = sc.depthViewComp,
         .bufUses = &.{
             BufferUse.init(def.camBuf, .Compute, .UniformRead, 3),
@@ -29,15 +39,15 @@ pub fn DepthView(def: struct {
 }
 
 pub fn ImGuiPass(def: struct {
-    name: []const u8,
-    colorAtt: TexId,
-    vertexBuf: BufId,
-    indexBuf: BufId,
+    name: PassEnum,
+    colorAtt: TextureLink,
+    vertexBuf: BufferEnum,
+    indexBuf: BufferEnum,
 }) PassDef {
     return PassDef.Graphics(.{
         .name = def.name,
         .outputTexId = null,
-        .execution = .{ .vertices = 0, .instances = 1, .indexCount = 0, .mainTexId = def.colorAtt },
+        .execution = .{ .vertices = 0, .instances = 1, .indexCount = 0, .mainTexId = def.colorAtt.in },
         .vertex = sc.imguiVert,
         .fragment = sc.imguiFrag,
         .colorAtts = &.{AttachmentUse.init(def.colorAtt, .ColorAtt, .ColorAttReadWrite, .Attachment, .{ .color = .{ 0.0, 0.0, 0.0, 0.0 } })},
@@ -53,30 +63,30 @@ pub fn ImGuiPass(def: struct {
                 .dstAlpha = vk.VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
             },
         },
-        .vertexBuffers = &.{.{ .bufId = def.vertexBuf, .binding = 0, .stride = 20 }},
-        .indexBuffer = .{ .bufId = def.indexBuf, .indexType = vk.VK_INDEX_TYPE_UINT16 },
+        .vertexBuffers = &.{VertexBufferUse.init(def.vertexBuf, 0, 20, vk.VK_VERTEX_INPUT_RATE_VERTEX)},
+        .indexBuffer = IndexBufferUse.init(def.indexBuf, vk.VK_INDEX_TYPE_UINT16),
         .vertexAttributes = &.{
-            .{ .location = 0, .binding = 0, .format = vk.VK_FORMAT_R32G32_SFLOAT, .offset = 0 },
-            .{ .location = 1, .binding = 0, .format = vk.VK_FORMAT_R32G32_SFLOAT, .offset = 8 },
-            .{ .location = 2, .binding = 0, .format = vk.VK_FORMAT_R8G8B8A8_UNORM, .offset = 16 },
+            VertexAttribute{ .location = 0, .binding = 0, .format = vk.VK_FORMAT_R32G32_SFLOAT, .offset = 0 },
+            VertexAttribute{ .location = 1, .binding = 0, .format = vk.VK_FORMAT_R32G32_SFLOAT, .offset = 8 },
+            VertexAttribute{ .location = 2, .binding = 0, .format = vk.VK_FORMAT_R8G8B8A8_UNORM, .offset = 16 },
         },
     });
 }
 
 pub fn CompRayMarch(
     def: struct {
-        name: []const u8,
-        outputTex: TexId,
-        entityBuf: BufId,
-        camBuf: BufId,
-        readbackBuf: BufId,
-        debugTex: TexId,
+        name: PassEnum,
+        outputTex: TextureLink,
+        entityBuf: BufferLink,
+        camBuf: BufferLink,
+        readbackBuf: BufferLink,
+        debugTex: TextureLink,
     },
 ) PassDef {
     return PassDef.ComputeOnImg(.{
         .name = def.name,
-        .outputTexId = def.outputTex,
-        .execution = .{ .workgroups = .{ .x = 8, .y = 8, .z = 1 }, .mainTexId = def.outputTex },
+        .outputTexId = def.outputTex.in,
+        .execution = .{ .workgroups = .{ .x = 8, .y = 8, .z = 1 }, .mainTexId = def.outputTex.in },
         .compute = sc.t1Comp,
         .bufUses = &.{
             BufferUse.init(def.entityBuf, .Compute, .ShaderRead, 0),
@@ -92,22 +102,22 @@ pub fn CompRayMarch(
 
 pub fn EditorGrid(
     def: struct {
-        name: []const u8,
-        colorAtt: TexId,
-        depthAtt: TexId,
-        camBuf: BufId,
+        name: PassEnum,
+        colorAtt: TextureLink,
+        depthAtt: TextureLink,
+        camBuf: BufferLink,
     },
 ) PassDef {
     return PassDef.Mesh(.{
         .name = def.name,
-        .outputTexId = def.colorAtt,
-        .execution = .{ .workgroups = .{ .x = 1, .y = 1, .z = 1 }, .mainTexId = def.colorAtt },
+        .outputTexId = def.colorAtt.in,
+        .execution = .{ .workgroups = .{ .x = 1, .y = 1, .z = 1 }, .mainTexId = def.colorAtt.in },
         .mesh = sc.editorGridMesh,
         .fragment = sc.editorGridFrag,
         .bufUses = &.{
             BufferUse.init(def.camBuf, .Mesh, .UniformRead, 0),
         },
-        .colorAtts = &.{AttachmentUse.init(def.colorAtt, .ColorAtt, .ColorAttReadWrite, .Attachment, .{.color = .{ 0.0, 0.0, 0.0, 0.0 }})},
+        .colorAtts = &.{AttachmentUse.init(def.colorAtt, .ColorAtt, .ColorAttReadWrite, .Attachment, .{ .color = .{ 0.0, 0.0, 0.0, 0.0 } })},
         .depthAtt = AttachmentUse.init(def.depthAtt, .EarlyAndLateFragTest, .DepthStencilReadWrite, .Attachment, null),
         .renderState = .{
             .colorBlend = vk.VK_FALSE,
@@ -121,24 +131,24 @@ pub fn EditorGrid(
 
 pub fn FrustumView(
     def: struct {
-        name: []const u8,
-        colorAtt: TexId,
-        depthAtt: TexId,
-        frustumCamBuf: BufId, // Maybe swapped
-        viewCamBuf: BufId, // Maybe swapped
+        name: PassEnum,
+        colorAtt: TextureLink,
+        depthAtt: TextureLink,
+        frustumCamBuf: BufferLink, // Maybe swapped
+        viewCamBuf: BufferLink, // Maybe swapped
     },
 ) PassDef {
     return PassDef.Mesh(.{
         .name = def.name,
-        .outputTexId = def.colorAtt,
-        .execution = .{ .workgroups = .{ .x = 1, .y = 1, .z = 1 }, .mainTexId = def.colorAtt },
+        .outputTexId = def.colorAtt.in,
+        .execution = .{ .workgroups = .{ .x = 1, .y = 1, .z = 1 }, .mainTexId = def.colorAtt.in },
         .mesh = sc.frustumMesh,
         .fragment = sc.quantFrag,
         .bufUses = &.{
             BufferUse.init(def.frustumCamBuf, .Mesh, .UniformRead, 0),
             BufferUse.init(def.viewCamBuf, .Mesh, .UniformRead, 1),
         },
-        .colorAtts = &.{AttachmentUse.init(def.colorAtt, .ColorAtt, .ColorAttReadWrite, .Attachment, .{.color = .{ 0.0, 0.0, 0.0, 0.0 }})},
+        .colorAtts = &.{AttachmentUse.init(def.colorAtt, .ColorAtt, .ColorAttReadWrite, .Attachment, .{ .color = .{ 0.0, 0.0, 0.0, 0.0 } })},
         .depthAtt = AttachmentUse.init(def.depthAtt, .EarlyAndLateFragTest, .DepthStencilReadWrite, .Attachment, null),
         .renderState = .{
             .depthTest = vk.VK_FALSE, // Depth Currently not in Use
@@ -150,9 +160,9 @@ pub fn FrustumView(
 
 pub fn QuantComp(
     def: struct {
-        name: []const u8,
-        indirectBuf: BufId,
-        entityBuf: BufId,
+        name: PassEnum,
+        indirectBuf: BufferLink,
+        entityBuf: BufferLink,
     },
 ) PassDef {
     return PassDef.Compute(.{
@@ -169,22 +179,22 @@ pub fn QuantComp(
 
 pub fn QuantGrid(
     def: struct {
-        name: []const u8,
-        colorAtt: TexId,
-        depthAtt: TexId,
-        indirectBuf: BufId,
-        viewCam: BufId, // Maybe swapped
-        cullCam: BufId, // Maybe swapped
+        name: PassEnum,
+        colorAtt: TextureLink,
+        depthAtt: TextureLink,
+        indirectBuf: BufferLink,
+        viewCam: BufferLink, // Maybe swapped
+        cullCam: BufferLink, // Maybe swapped
     },
 ) PassDef {
     return PassDef.MeshIndirect(.{
         .name = def.name,
-        .outputTexId = def.colorAtt,
+        .outputTexId = def.colorAtt.in,
         .execution = .{
             .workgroups = .{ .x = 1, .y = 1, .z = 1 },
-            .indirectBuf = def.indirectBuf,
+            .indirectBuf = def.indirectBuf.in,
             .indirectBufOffset = 0,
-            .mainTexId = def.colorAtt,
+            .mainTexId = def.colorAtt.in,
         },
         .mesh = sc.quantGrid,
         .fragment = sc.quantFrag,
@@ -193,8 +203,8 @@ pub fn QuantGrid(
             BufferUse.init(def.viewCam, .Fragment, .UniformRead, 0),
             BufferUse.init(def.cullCam, .Fragment, .UniformRead, 1),
         },
-        .colorAtts = &.{AttachmentUse.init(def.colorAtt, .ColorAtt, .ColorAttReadWrite, .Attachment, .{.color = .{ 0.0, 0.0, 0.0, 0.0 }})},
-        .depthAtt = AttachmentUse.init(def.depthAtt, .EarlyAndLateFragTest, .DepthStencilReadWrite, .Attachment, .{.depthStencil = .{ .depth = 0.0, .stencil = 0 }}),
+        .colorAtts = &.{AttachmentUse.init(def.colorAtt, .ColorAtt, .ColorAttReadWrite, .Attachment, .{ .color = .{ 0.0, 0.0, 0.0, 0.0 } })},
+        .depthAtt = AttachmentUse.init(def.depthAtt, .EarlyAndLateFragTest, .DepthStencilReadWrite, .Attachment, .{ .depthStencil = .{ .depth = 0.0, .stencil = 0 } }),
         .renderState = .{
             .depthTest = vk.VK_TRUE,
             .depthWrite = vk.VK_TRUE,
@@ -206,22 +216,22 @@ pub fn QuantGrid(
 
 pub fn QuantPlane(
     def: struct {
-        name: []const u8,
-        colorAtt: TexId,
-        depthAtt: TexId,
-        indirectBuf: BufId,
-        viewCam: BufId, // Maybe swapped
-        cullCam: BufId, // Maybe swapped
+        name: PassEnum,
+        colorAtt: TextureLink,
+        depthAtt: TextureLink,
+        indirectBuf: BufferLink,
+        viewCam: BufferLink, // Maybe swapped
+        cullCam: BufferLink, // Maybe swapped
     },
 ) PassDef {
     return PassDef.MeshIndirect(.{
         .name = def.name,
-        .outputTexId = def.colorAtt,
+        .outputTexId = def.colorAtt.in,
         .execution = .{
             .workgroups = .{ .x = 1, .y = 1, .z = 1 },
-            .indirectBuf = def.indirectBuf,
+            .indirectBuf = def.indirectBuf.in,
             .indirectBufOffset = 0,
-            .mainTexId = def.colorAtt,
+            .mainTexId = def.colorAtt.in,
         },
         .mesh = sc.quantPlane,
         .fragment = sc.quantFrag,
@@ -230,8 +240,8 @@ pub fn QuantPlane(
             BufferUse.init(def.viewCam, .Fragment, .UniformRead, 0),
             BufferUse.init(def.cullCam, .Fragment, .UniformRead, 1),
         },
-        .colorAtts = &.{AttachmentUse.init(def.colorAtt, .ColorAtt, .ColorAttReadWrite, .Attachment, .{.color = .{ 0.0, 0.0, 0.0, 0.0 }})},
-        .depthAtt = AttachmentUse.init(def.depthAtt, .EarlyAndLateFragTest, .DepthStencilReadWrite, .Attachment, .{.depthStencil = .{ .depth = 0.0, .stencil = 0 }}),
+        .colorAtts = &.{AttachmentUse.init(def.colorAtt, .ColorAtt, .ColorAttReadWrite, .Attachment, .{ .color = .{ 0.0, 0.0, 0.0, 0.0 } })},
+        .depthAtt = AttachmentUse.init(def.depthAtt, .EarlyAndLateFragTest, .DepthStencilReadWrite, .Attachment, .{ .depthStencil = .{ .depth = 0.0, .stencil = 0 } }),
         .renderState = .{
             .depthTest = vk.VK_TRUE,
             .depthWrite = vk.VK_TRUE,
@@ -241,61 +251,61 @@ pub fn QuantPlane(
     });
 }
 
-pub fn CullComp(
-    def: struct {
-        name: []const u8,
-        indirectBuf: BufId,
-        entityBuf: BufId,
-    },
-) PassDef {
-    return PassDef.Compute(.{
-        .name = def.name,
-        .outputTexId = null,
-        .execution = .{ .workgroups = .{ .x = 1, .y = 1, .z = 1 } },
-        .compute = sc.cullTestComp,
-        .bufUses = &.{
-            BufferUse.init(def.indirectBuf, .Compute, .ShaderReadWrite, 0),
-            BufferUse.init(def.entityBuf, .Compute, .ShaderRead, 1),
-        },
-    });
-}
+// pub fn CullComp(
+//     def: struct {
+//         name: []const u8,
+//         indirectBuf: BufferLink,
+//         entityBuf: BufferLink,
+//     },
+// ) PassDef {
+//     return PassDef.Compute(.{
+//         .name = def.name,
+//         .outputTexId = null,
+//         .execution = .{ .workgroups = .{ .x = 1, .y = 1, .z = 1 } },
+//         .compute = sc.cullTestComp,
+//         .bufUses = &.{
+//             BufferUse.init(def.indirectBuf, .Compute, .ShaderReadWrite, 0),
+//             BufferUse.init(def.entityBuf, .Compute, .ShaderRead, 1),
+//         },
+//     });
+// }
 
-pub fn Cull(
-    def: struct {
-        name: []const u8,
-        colorAtt: TexId,
-        depthAtt: TexId,
-        indirectBuf: BufId,
-        viewCam: BufId, // Maybe swapped
-        cullCam: BufId, // Maybe swapped
-    },
-) PassDef {
-    return PassDef.MeshIndirect(.{
-        .name = def.name,
-        .outputTexId = def.colorAtt,
-        .execution = .{
-            .workgroups = .{ .x = 1, .y = 1, .z = 1 },
-            .indirectBuf = def.indirectBuf,
-            .indirectBufOffset = 0,
-            .mainTexId = def.colorAtt,
-        },
-        .mesh = sc.cullTestMesh,
-        .fragment = sc.cullTestFrag,
-        .bufUses = &.{
-            BufferUse.init(def.indirectBuf, .DrawIndirect, .IndirectRead, null),
-            BufferUse.init(def.viewCam, .Fragment, .UniformRead, 0),
-            BufferUse.init(def.cullCam, .Fragment, .UniformRead, 1),
-        },
-        .colorAtts = &.{AttachmentUse.init(def.colorAtt, .ColorAtt, .ColorAttReadWrite, .Attachment, .{.color = .{ 0.0, 0.0, 0.0, 0.0 }})},
-        .depthAtt = AttachmentUse.init(def.depthAtt, .EarlyAndLateFragTest, .DepthStencilReadWrite, .Attachment, .{.depthStencil = .{ .depth = 0.0, .stencil = 0 }}),
-        .renderState = .{
-            .depthTest = vk.VK_TRUE,
-            .depthWrite = vk.VK_TRUE,
-            .depthCompare = vk.VK_COMPARE_OP_GREATER,
-            .cullMode = vk.VK_CULL_MODE_NONE,
-        },
-    });
-}
+// pub fn Cull(
+//     def: struct {
+//         name: []const u8,
+//         colorAtt: TextureLink,
+//         depthAtt: TextureLink,
+//         indirectBuf: BufferLink,
+//         viewCam: BufferLink, // Maybe swapped
+//         cullCam: BufferLink, // Maybe swapped
+//     },
+// ) PassDef {
+//     return PassDef.MeshIndirect(.{
+//         .name = def.name,
+//         .outputTexId = def.colorAtt,
+//         .execution = .{
+//             .workgroups = .{ .x = 1, .y = 1, .z = 1 },
+//             .indirectBuf = def.indirectBuf,
+//             .indirectBufOffset = 0,
+//             .mainTexId = def.colorAtt,
+//         },
+//         .mesh = sc.cullTestMesh,
+//         .fragment = sc.cullTestFrag,
+//         .bufUses = &.{
+//             BufferUse.init(def.indirectBuf, .DrawIndirect, .IndirectRead, null),
+//             BufferUse.init(def.viewCam, .Fragment, .UniformRead, 0),
+//             BufferUse.init(def.cullCam, .Fragment, .UniformRead, 1),
+//         },
+//         .colorAtts = &.{AttachmentUse.init(def.colorAtt, .ColorAtt, .ColorAttReadWrite, .Attachment, .{ .color = .{ 0.0, 0.0, 0.0, 0.0 } })},
+//         .depthAtt = AttachmentUse.init(def.depthAtt, .EarlyAndLateFragTest, .DepthStencilReadWrite, .Attachment, .{ .depthStencil = .{ .depth = 0.0, .stencil = 0 } }),
+//         .renderState = .{
+//             .depthTest = vk.VK_TRUE,
+//             .depthWrite = vk.VK_TRUE,
+//             .depthCompare = vk.VK_COMPARE_OP_GREATER,
+//             .cullMode = vk.VK_CULL_MODE_NONE,
+//         },
+//     });
+// }
 
 // OLD PASSES
 

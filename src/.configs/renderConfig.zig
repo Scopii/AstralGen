@@ -1,5 +1,5 @@
-const TextureMeta = @import("../render/types/res/TextureMeta.zig").TextureMeta;
-const BufferMeta = @import("../render/types/res/BufferMeta.zig").BufferMeta;
+const TexDesc = @import("../render/types/res/TextureMeta.zig").TextureMeta.TexDesc;
+const BufDesc = @import("../render/types/res/BufferMeta.zig").BufferMeta.BufDesc;
 const CameraData = @import("../camera/CameraSys.zig").CamData;
 const vhT = @import("../render/help/Types.zig");
 const vk = @import("../.modules/vk.zig").c;
@@ -27,8 +27,8 @@ pub const STATS_MASK: vk.VkQueryPipelineStatisticFlagBits =
     // vk.VK_QUERY_PIPELINE_STATISTIC_CLIPPING_PRIMITIVES_BIT |
     vk.VK_QUERY_PIPELINE_STATISTIC_COMPUTE_SHADER_INVOCATIONS_BIT |
     vk.VK_QUERY_PIPELINE_STATISTIC_FRAGMENT_SHADER_INVOCATIONS_BIT;
-    // vk.VK_QUERY_PIPELINE_STATISTIC_TASK_SHADER_INVOCATIONS_BIT_EXT |
-    // vk.VK_QUERY_PIPELINE_STATISTIC_MESH_SHADER_INVOCATIONS_BIT_EXT;
+// vk.VK_QUERY_PIPELINE_STATISTIC_TASK_SHADER_INVOCATIONS_BIT_EXT |
+// vk.VK_QUERY_PIPELINE_STATISTIC_MESH_SHADER_INVOCATIONS_BIT_EXT;
 
 pub const GPU_READBACK = false;
 pub const CPU_PROFILING = false;
@@ -38,7 +38,9 @@ pub const SWAPCHAIN_PROFILING = false;
 pub const BARRIER_DEBUG = false;
 pub const RESOURCE_DEBUG = true;
 pub const DESCRIPTOR_DEBUG = true;
-pub const FRAME_BUILD_DEBUG = false;
+pub const PASS_EXTRACTION_DEBUG = false;
+pub const FRAME_GRAPH_DEBUG = true;
+pub const FRAME_BUILDS_TILL_TRANSIENT_DELETION = 0;
 
 // Rendering, Swapchains and Windows
 pub const EARLY_GPU_WAIT = true; // (Reflex Mode)
@@ -46,7 +48,7 @@ pub const MAX_IN_FLIGHT: u8 = 2; // (Frames)
 pub const DESIRED_SWAPCHAIN_IMAGES: u8 = 3;
 pub const DISPLAY_MODE = vk.VK_PRESENT_MODE_IMMEDIATE_KHR; //vk.VK_PRESENT_MODE_IMMEDIATE_KHR
 pub const MAX_WINDOWS: u8 = 8;
-pub const LINKED_TEX_MAX = 3;
+pub const LINKED_TEX_MAX = 12;
 pub const RENDER_TEX_AUTO_RESIZE = true;
 pub const RENDER_TEX_STRETCH = true; // Maybe ignored on AUTO_RESIZE
 pub const USE_MEM_BARRIERS_ON_BUFFERS = true;
@@ -64,22 +66,22 @@ pub const SAMPLER_LINEAR_CLAMP_INDEX: u31 = 0;
 pub const SAMPLER_NEAREST_CLAMP_INDEX: u31 = 1;
 pub const SAMPLER_MAX: u32 = 2;
 
+//////////////// RESOURCE DESCRIPTIONS ///////////////
+
 // Buffers
-pub const indirectSB = BufferMeta.create(.{ .id = .{ .val = 1 }, .mem = .Gpu, .typ = .Indirect, .len = 1, .elementSize = @sizeOf(vhT.IndirectData), .update = .PerFrame });
-pub const readbackSB = BufferMeta.create(.{ .id = .{ .val = 2 }, .mem = .CpuRead, .typ = .Storage, .len = 1, .elementSize = @sizeOf(vhT.ReadbackData), .update = .PerFrame });
+pub const indirectSBDesc = BufDesc{ .share = .persistent, .mem = .Gpu, .typ = .Indirect, .len = 1, .elementSize = @sizeOf(vhT.IndirectData), .update = .PerFrame };
+pub const readbackSBDesc = BufDesc{ .share = .persistent, .mem = .CpuRead, .typ = .Storage, .len = 1, .elementSize = @sizeOf(vhT.ReadbackData), .update = .PerFrame };
 
-pub const entitySB = BufferMeta.create(.{ .id = .{ .val = 3 }, .mem = .Gpu, .typ = .Storage, .len = ENTITY_COUNT, .elementSize = @sizeOf(GpuObjectData), .update = .Rarely, .resize = .Fit });
-pub const mainCamUB = BufferMeta.create(.{ .id = .{ .val = 4 }, .mem = .Gpu, .typ = .Uniform, .len = 1, .elementSize = @sizeOf(CameraData), .update = .Often, .resize = .Fit });
-pub const debugCamUB = BufferMeta.create(.{ .id = .{ .val = 5 }, .mem = .Gpu, .typ = .Uniform, .len = 1, .elementSize = @sizeOf(CameraData), .update = .Often, .resize = .Fit });
+pub const entitySBDesc = BufDesc{ .share = .persistent, .mem = .Gpu, .typ = .Storage, .len = ENTITY_COUNT, .elementSize = @sizeOf(GpuObjectData), .update = .Rarely, .resize = .Fit };
+pub const mainCamUBDesc = BufDesc{ .share = .persistent, .mem = .Gpu, .typ = .Uniform, .len = 1, .elementSize = @sizeOf(CameraData), .update = .Often, .resize = .Fit };
+pub const debugCamUBDesc = BufDesc{ .share = .persistent, .mem = .Gpu, .typ = .Uniform, .len = 1, .elementSize = @sizeOf(CameraData), .update = .Often, .resize = .Fit };
 
-pub const imguiVertexSB = BufferMeta.create(.{ .id = .{ .val = 6 }, .mem = .Gpu, .typ = .Vertex, .len = 1024 * 1024, .elementSize = 1, .update = .Often, .resize = .Grow });
-pub const imguiIndexSB = BufferMeta.create(.{ .id = .{ .val = 7 }, .mem = .Gpu, .typ = .Index, .len = 1024 * 1024, .elementSize = 1, .update = .Often, .resize = .Grow });
-
-pub const BUFFERS: []const BufferMeta.BufInf = &.{ entitySB, mainCamUB, debugCamUB, indirectSB, readbackSB, imguiVertexSB, imguiIndexSB };
+pub const imguiVBDesc = BufDesc{ .share = .persistent, .mem = .Gpu, .typ = .Vertex, .len = 1024 * 1024, .elementSize = 1, .update = .Often, .resize = .Grow };
+pub const imguiIBDesc = BufDesc{ .share = .persistent, .mem = .Gpu, .typ = .Index, .len = 1024 * 1024, .elementSize = 1, .update = .Often, .resize = .Grow };
 
 // Textures
-pub const mainTex = TextureMeta.create(.{
-    .id = .{ .val = 1 },
+pub const rayMarchTexDesc = TexDesc{
+    .share = .transient, // transient
     .mem = .Gpu,
     .descriptors = .StorageSampled,
     .texUse = .{ .storage = true, .colorAtt = true, .sampled = true },
@@ -88,10 +90,22 @@ pub const mainTex = TextureMeta.create(.{
     .height = 1080,
     .update = .Rarely,
     .resize = .Fit,
-});
+};
 
-pub const mainDepthTex = TextureMeta.create(.{
-    .id = .{ .val = 2 },
+pub const gridTexDesc = TexDesc{
+    .share = .transient, // transient
+    .mem = .Gpu,
+    .descriptors = .StorageSampled,
+    .texUse = .{ .storage = true, .colorAtt = true, .sampled = true },
+    .typ = .Color16,
+    .width = 1920,
+    .height = 1080,
+    .update = .Rarely,
+    .resize = .Fit,
+};
+
+pub const gridDepthTexDesc = TexDesc{
+    .share = .persistent,
     .mem = .Gpu,
     .texUse = .{ .depthAtt = true, .sampled = true, .transferSrc = false },
     .descriptors = .SampledOnly,
@@ -100,34 +114,82 @@ pub const mainDepthTex = TextureMeta.create(.{
     .height = 9,
     .update = .Rarely,
     .resize = .Fit,
-});
+};
 
-pub const debugGridDepthTex = TextureMeta.create(.{
-    .id = .{ .val = 3 },
+pub const planeTexDesc = TexDesc{
+    .share = .transient, // transient
+    .mem = .Gpu,
+    .descriptors = .StorageSampled,
+    .texUse = .{ .storage = true, .colorAtt = true, .sampled = true },
+    .typ = .Color16,
+    .width = 1920,
+    .height = 1080,
+    .update = .Rarely,
+    .resize = .Fit,
+};
+
+pub const planeDepthTexDesc = TexDesc{
+    .share = .persistent,
     .mem = .Gpu,
     .texUse = .{ .depthAtt = true, .sampled = true, .transferSrc = false },
     .descriptors = .SampledOnly,
     .typ = .Depth32,
-    .width = 16,
-    .height = 9,
+    .width = 1920,
+    .height = 1080,
     .update = .Rarely,
     .resize = .Fit,
-});
+};
 
-pub const debugPlaneDepthTex = TextureMeta.create(.{
-    .id = .{ .val = 4 },
+pub const debugGridTexDesc = TexDesc{
+    .share = .transient, // transient
+    .mem = .Gpu,
+    .descriptors = .StorageSampled,
+    .texUse = .{ .storage = true, .colorAtt = true, .sampled = true },
+    .typ = .Color16,
+    .width = 1920,
+    .height = 1080,
+    .update = .Rarely,
+    .resize = .Fit,
+};
+
+pub const debugPlaneTexDesc = TexDesc{
+    .share = .transient, // transient
+    .mem = .Gpu,
+    .descriptors = .StorageSampled,
+    .texUse = .{ .storage = true, .colorAtt = true, .sampled = true },
+    .typ = .Color16,
+    .width = 1920,
+    .height = 1080,
+    .update = .Rarely,
+    .resize = .Fit,
+};
+
+pub const debugGridDepthTexDesc = TexDesc{
+    .share = .transient, // Transient??
     .mem = .Gpu,
     .texUse = .{ .depthAtt = true, .sampled = true, .transferSrc = false },
     .descriptors = .SampledOnly,
     .typ = .Depth32,
-    .width = 16,
-    .height = 9,
+    .width = 1920,
+    .height = 1080,
     .update = .Rarely,
     .resize = .Fit,
-});
+};
 
-pub const testTilesTex = TextureMeta.create(.{
-    .id = .{ .val = 5 },
+pub const debugPlaneDepthTexDesc = TexDesc{
+    .share = .transient, // Transient??
+    .mem = .Gpu,
+    .texUse = .{ .depthAtt = true, .sampled = true, .transferSrc = false },
+    .descriptors = .SampledOnly,
+    .typ = .Depth32,
+    .width = 1920,
+    .height = 1080,
+    .update = .Rarely,
+    .resize = .Fit,
+};
+
+pub const testTilesTexDesc = TexDesc{
+    .share = .persistent,
     .mem = .Gpu,
     .texUse = .{ .storage = true, .colorAtt = true },
     .descriptors = .StorageOnly,
@@ -136,10 +198,10 @@ pub const testTilesTex = TextureMeta.create(.{
     .height = 256,
     .update = .Rarely,
     .resize = .Fit,
-});
+};
 
-pub const imguiFontTex = TextureMeta.create(.{
-    .id = .{ .val = 6 },
+pub const imguiFontTexDesc = TexDesc{
+    .share = .persistent,
     .mem = .Gpu,
     .texUse = .{ .colorAtt = true, .sampled = true },
     .typ = .Color8,
@@ -148,26 +210,16 @@ pub const imguiFontTex = TextureMeta.create(.{
     .height = 1,
     .update = .Rarely,
     .resize = .Fit,
-});
+};
 
-pub const depthViewTex = TextureMeta.create(.{
-    .id = .{ .val = 7 },
+pub const depthViewTexDesc = TexDesc{
+    .share = .transient,
     .mem = .Gpu,
     .texUse = .{ .storage = true, .colorAtt = true, .sampled = true },
     .descriptors = .StorageSampled,
     .typ = .Color16,
-    .width = 16,
-    .height = 9,
+    .width = 1920,
+    .height = 1080,
     .update = .Rarely,
     .resize = .Fit,
-});
-
-pub const TEXTURES: []const TextureMeta.TexInf = &.{
-    mainTex,
-    mainDepthTex,
-    debugGridDepthTex,
-    debugPlaneDepthTex,
-    testTilesTex,
-    imguiFontTex,
-    depthViewTex,
 };

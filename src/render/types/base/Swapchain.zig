@@ -1,3 +1,4 @@
+const TextureEnum = @import("../../../frameBuild/enums.zig").TextureEnum;
 const WindowId = @import("../../../window/Window.zig").Window.WindowId;
 const TexId = @import("../res/TextureMeta.zig").TextureMeta.TexId;
 const rc = @import("../../../.configs/renderConfig.zig");
@@ -12,8 +13,7 @@ pub const Swapchain = struct {
     surface: vk.VkSurfaceKHR,
     handle: vk.VkSwapchainKHR,
     curIndex: u32 = 0,
-    renderTexId: TexId,
-    linkedTexIds: [rc.LINKED_TEX_MAX]?TexId,
+    linkedTexEnums: [rc.LINKED_TEX_MAX]?TextureEnum,
     acquireSems: []vk.VkSemaphore, // indexed by max-in-flight.
     renderSems: []vk.VkSemaphore, // indexed by swapchain images
     textures: []Texture, // indexed by swapchain images
@@ -27,8 +27,7 @@ pub const Swapchain = struct {
         surface: vk.VkSurfaceKHR,
         extent: vk.VkExtent2D,
         gpu: vk.VkPhysicalDevice,
-        renderTexId: TexId,
-        linkedTexIds: [rc.LINKED_TEX_MAX]?TexId,
+        linkedTexEnums: [rc.LINKED_TEX_MAX]?TextureEnum,
         oldHandle: ?vk.VkSwapchainKHR,
         windowId: WindowId,
     ) !Swapchain {
@@ -110,9 +109,8 @@ pub const Swapchain = struct {
             .textures = baseTextures,
             .acquireSems = imgRdySems,
             .renderSems = renderDoneSems,
-            .renderTexId = renderTexId,
             .windowId = windowId,
-            .linkedTexIds = linkedTexIds,
+            .linkedTexEnums = linkedTexEnums,
         };
     }
 
@@ -129,7 +127,7 @@ pub const Swapchain = struct {
     }
 
     pub fn recreate(self: *Swapchain, alloc: Allocator, gpi: vk.VkDevice, gpu: vk.VkPhysicalDevice, instance: vk.VkInstance, newExtent: vk.VkExtent2D) !void {
-        const swapchain = try Swapchain.init(alloc, gpi, self.surface, newExtent, gpu, self.renderTexId, self.linkedTexIds, self.handle, self.windowId);
+        const swapchain = try Swapchain.init(alloc, gpi, self.surface, newExtent, gpu, self.linkedTexEnums, self.handle, self.windowId);
         self.deinit(alloc, gpi, instance, .withoutSurface);
         self.* = swapchain;
     }

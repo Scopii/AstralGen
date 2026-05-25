@@ -108,6 +108,14 @@ pub const ResourceMan = struct {
                 else => @compileError("createResources: unsupported type"),
             }
 
+            // sync slot on very first creation if no update has run yet // Could maybe be done better?
+            if (inf.update == .Often) {
+                const meta = self.registry.getMeta(inf.id) catch unreachable;
+                if (meta.lastUpdateFrame == std.math.maxInt(u64) and meta.updateSlot == rc.MAX_IN_FLIGHT - 1) {
+                    meta.updateSlot = flightId;
+                }
+            }
+
             if (rc.RESOURCE_DEBUG == true) {
                 std.debug.print("{s} (ID {}) Created! ", .{ rH.typeName(ResType), inf.id.val });
                 self.vma.printMemoryInfo(resPtr.allocation);

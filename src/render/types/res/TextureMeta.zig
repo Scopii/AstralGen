@@ -14,7 +14,20 @@ pub const TextureMeta = struct {
     lastUpdateFrame: u64 = std.math.maxInt(u64),
     viewType: vk.VkImageViewType,
 
-    pub const TexId = packed struct { val: u32 };
+    pub const TexId = packed struct { val: u16 };
+
+    pub const TexDesc = struct {
+        share: enum { persistent, transient },
+        mem: vhE.MemUsage,
+        typ: vhE.TexTyp,
+        texUse: vhE.TexUsage,
+        descriptors: vhE.TexDescriptorUsage,
+        width: u32,
+        height: u32,
+        depth: u32 = 1,
+        update: vhE.UpdateType,
+        resize: vhE.ResizeType = .Block,
+    };
 
     pub const TexInf = struct {
         id: TexId,
