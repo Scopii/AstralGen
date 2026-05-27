@@ -11,9 +11,6 @@ pub const GraphOptimizerData = struct {
     bufLevelLifetimes: LinkedMap(BufLevelLifetime, 512, u16, 512, 0) = .{},
     texLevelLifetimes: LinkedMap(TexLevelLifetime, 512, u16, 512, 0) = .{},
 
-    bufMemSize: LinkedMap(u64, 512, u16, 512, 0) = .{},
-    texMemSize: LinkedMap(u64, 512, u16, 512, 0) = .{},
-
     graphMemNodes: FixedList(GraphMemoryNode, 512) = .{},
     optimizedGraph: LinkedMap(GraphMemoryNode, 512, u16, 512, 0) = .{},
 };

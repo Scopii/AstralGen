@@ -15,20 +15,22 @@ const GroupMergerData = @import("../5.4_groupMerger/GroupMergerData.zig").GroupM
 const ResourceAssignerData = @import("ResourceAssignerData.zig").ResourceAssignerData;
 const ResourceMapperData = @import("../5.1_resourceMapper/ResourceMapperData.zig").ResourceMapperData;
 const MappingComparatorData = @import("../5.3_mappingComparator/MappingComparatorData.zig").MappingComparatorData;
+const ResourceExtractorData = @import("../2_resourceExtractor/ResourceExtractorData.zig").ResourceExtractorData;
 
 const TextureEnum = pe.TextureEnum;
 const BufferEnum = pe.BufferEnum;
 const TexInf = TextureMeta.TexInf;
 const BufInf = BufferMeta.BufInf;
 
-const resolveBufferEnum = @import("../5.1_resourceMapper/ResourceMapperSys.zig").resolveBufferEnum;
-const resolveTextureEnum = @import("../5.1_resourceMapper/ResourceMapperSys.zig").resolveTextureEnum;
+const resolveBufferEnum = @import("../2_resourceExtractor/ResourceExtractorSys.zig").resolveBufferEnum;
+const resolveTextureEnum = @import("../2_resourceExtractor/ResourceExtractorSys.zig").resolveTextureEnum;
 
 // Step 6
 
 pub const ResourceAssignerSys = struct {
     pub fn buildPersistentResources(
         resourceAssigner: *ResourceAssignerData,
+        resourceExtractor: *const ResourceExtractorData,
         resourceMapper: *const ResourceMapperData,
         mappingComparator: *const MappingComparatorData,
         groupMerger: *const GroupMergerData,
@@ -53,10 +55,12 @@ pub const ResourceAssignerSys = struct {
         // Check needed Shared Lifetimes to create or re-use existing Physical Buffer
         for (groupMerger.sharedBufLifetimes.constSlice()) |sharedBufLifetime| {
             var physCandidateIndex: ?u16 = null;
+            const sharedBufDesc = resourceExtractor.bufDescriptions.getByKey(@intCast(@intFromEnum(sharedBufLifetime.bufDescEnum)));
 
             for (resourceAssigner.unusedTransientBufs.constSlice(), 0..) |transientBuf, i| {
+                const transientBufDesc = resourceExtractor.bufDescriptions.getByKey(@intCast(@intFromEnum(transientBuf.bufDescEnum)));
                 // Check if Desc Fits Existing Info
-                if (bufDescEqual(&transientBuf.bufDesc, &sharedBufLifetime.bufDesc) == true) {
+                if (bufDescEqual(&transientBufDesc, &sharedBufDesc) == true) {
                     physCandidateIndex = @intCast(i);
                     break;
                 }
@@ -70,10 +74,10 @@ pub const ResourceAssignerSys = struct {
             } else {
                 // Candidate not found -> create new
                 const candidate = TransientBuffer{
-                    .bufDesc = sharedBufLifetime.bufDesc,
+                    .bufDescEnum = sharedBufLifetime.bufDescEnum,
                     .bufId = .{ .val = try getFreeBufId(resourceAssigner) },
                 };
-                try createTransientBuffer(candidate.bufDesc, candidate.bufId, rendererQueue, memoryMan);
+                try createTransientBuffer(sharedBufDesc, candidate.bufId, rendererQueue, memoryMan);
                 resourceAssigner.usedTransientBufs.append(candidate) catch std.debug.print("ERROR: 6.ResourceAssigner: Could not Append to usedTransientBufs\n", .{});
             }
         }
@@ -115,10 +119,12 @@ pub const ResourceAssignerSys = struct {
         // Check needed Shared Lifetimes to create or re-use existing Physical Textures
         for (groupMerger.sharedTexLifetimes.constSlice()) |sharedTexLifetime| {
             var physCandidateIndex: ?u16 = null;
+            const sharedTexDesc = resourceExtractor.texDescriptions.getByKey(@intCast(@intFromEnum(sharedTexLifetime.texDescEnum)));
 
             for (resourceAssigner.unusedTransientTexes.constSlice(), 0..) |transientTex, i| {
+                const transientTexDesc = resourceExtractor.texDescriptions.getByKey(@intCast(@intFromEnum(transientTex.texDescEnum)));
                 // Check if Desc Fits Existing Info
-                if (texDescEqual(&transientTex.texDesc, &sharedTexLifetime.texDesc) == true) {
+                if (texDescEqual(&transientTexDesc, &sharedTexDesc) == true) {
                     physCandidateIndex = @intCast(i);
                     break;
                 }
@@ -132,10 +138,10 @@ pub const ResourceAssignerSys = struct {
             } else {
                 // Candidate not found -> create new
                 const candidate = TransientTexture{
-                    .texDesc = sharedTexLifetime.texDesc,
+                    .texDescEnum = sharedTexLifetime.texDescEnum,
                     .texId = .{ .val = try getFreeTexId(resourceAssigner) },
                 };
-                try createTransientTexture(candidate.texDesc, candidate.texId, rendererQueue, memoryMan);
+                try createTransientTexture(sharedTexDesc, candidate.texId, rendererQueue, memoryMan);
                 resourceAssigner.usedTransientTexes.append(candidate) catch std.debug.print("ERROR: 6.ResourceAssigner: Could not Append to usedTransientTexes\n", .{});
             }
         }
@@ -185,12 +191,12 @@ pub const ResourceAssignerSys = struct {
                 },
                 .created => {
                     try createBuffer(resourceAssigner, resourceMapper, bufChanges.rootBuf, rendererQueue, memoryMan, .frameGraph);
-                    resolveBufferRequest(resourceAssigner, bufChanges.rootBuf);
+                    resolveBufferUpdateRequest(resourceAssigner, bufChanges.rootBuf);
                 },
                 .newDesc, .newPass, .newPassAndDesc => {
                     deleteBuffer(resourceAssigner, bufChanges.rootBuf, rendererQueue, .frameGraph);
                     try createBuffer(resourceAssigner, resourceMapper, bufChanges.rootBuf, rendererQueue, memoryMan, .frameGraph);
-                    resolveBufferRequest(resourceAssigner, bufChanges.rootBuf);
+                    resolveBufferUpdateRequest(resourceAssigner, bufChanges.rootBuf);
                 },
             }
         }
@@ -204,12 +210,12 @@ pub const ResourceAssignerSys = struct {
                 },
                 .created => {
                     try createTexture(resourceAssigner, resourceMapper, texChanges.rootTex, rendererQueue, memoryMan, .frameGraph);
-                    resolveTextureRequest(resourceAssigner, texChanges.rootTex);
+                    resolveTextureUpdateRequest(resourceAssigner, texChanges.rootTex);
                 },
                 .newDesc, .newPass, .newPassAndDesc => {
                     deleteTexture(resourceAssigner, texChanges.rootTex, rendererQueue, .frameGraph);
                     try createTexture(resourceAssigner, resourceMapper, texChanges.rootTex, rendererQueue, memoryMan, .frameGraph);
-                    resolveTextureRequest(resourceAssigner, texChanges.rootTex);
+                    resolveTextureUpdateRequest(resourceAssigner, texChanges.rootTex);
                 },
             }
         }
@@ -526,7 +532,7 @@ pub const ResourceAssignerSys = struct {
         resourceAssigner.texIdPool.freeKey(texIdVal);
     }
 
-    pub fn resolveBufferRequest(resourceAssigner: *ResourceAssignerData, bufEnum: BufferEnum) void {
+    pub fn resolveBufferUpdateRequest(resourceAssigner: *ResourceAssignerData, bufEnum: BufferEnum) void {
         const updateRequest: ?pe.UpdateRequestEnum = switch (bufEnum) {
             .MainCamUB => .CamMainUpdate,
             .DebugCamUB => .CanDebugUpdate,
@@ -538,7 +544,7 @@ pub const ResourceAssignerSys = struct {
         if (updateRequest) |request| resourceAssigner.updateRequests.upsert(@intFromEnum(request), request);
     }
 
-    pub fn resolveTextureRequest(resourceAssigner: *ResourceAssignerData, texEnum: TextureEnum) void {
+    pub fn resolveTextureUpdateRequest(resourceAssigner: *ResourceAssignerData, texEnum: TextureEnum) void {
         const updateRequest: ?pe.UpdateRequestEnum = switch (texEnum) {
             .TestTileTex => .TestTileUpdate,
             .ImguiFontTex => .GuiUpdate,
@@ -558,17 +564,5 @@ fn texDescEqual(texDesc1: *const TexDesc, texDesc2: *const TexDesc) bool {
     return std.meta.eql(texDesc1.*, texDesc2.*);
 }
 
-// For all virtual IDs check if buckets contain fitting physical resources
-// If physical resources fit move physical resource to used buckets
-// If no physical resource fits send physical resource creation to rendererQueue
-
-// If all IDs are assigned send resource assignments to renderer
-
-// All resources left in free buckets should get destroyed via rendererQueue
-
-// - SOME RESOURCES HAVE TO REMAIN CONSTANT FOR UPDATES AND ARE ILLEGAL TO BE CREATED OR DESTROYED
-// - WHAT ABOUT INCORRECT/UNSOLVEABLE GRAPH BUILD?
-// - WHAT ABOUT INCORRECT RESROUCE ENUMS IN PASSES?
-// - WHAT ABOUT CORRECT PASS LAYER HANDLING?
 // - WHAT ABOUT INDIRECT DEPENDENCIES? (SPLITTING INTO OUTPUT PASSES AND ALL PASSES? SPLITTING GLOBAL PASSES AND INSTANCE PASSES?)
 // - WHAT ABOUT RESIZES?

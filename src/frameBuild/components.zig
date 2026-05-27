@@ -86,17 +86,17 @@ pub const TexLevelLifetime = struct {
 pub const BufferGroup = struct {
     rootPass: pe.PassEnum,
     rootBuf: pe.BufferEnum,
-    bufDesc: BufDesc,
     startMapIndex: u16,
     endMapIndex: u16,
+    bufDesc: BufDesc,
 };
 
 pub const TextureGroup = struct {
     rootPass: pe.PassEnum,
     rootTex: pe.TextureEnum,
-    texDesc: TexDesc,
     startMapIndex: u16,
     endMapIndex: u16,
+    texDesc: TexDesc,
 };
 
 pub const BufGroupChange = struct {
@@ -110,13 +110,13 @@ pub const TexGroupChange = struct {
 };
 
 pub const PhysicalBufLifetime = struct {
-    bufDesc: BufDesc,
+    bufDescEnum: pe.BufferEnum,
     earliest: u16,
     latest: u16,
 };
 
 pub const PhysicalTexLifetime = struct {
-    texDesc: TexDesc,
+    texDescEnum: pe.TextureEnum,
     earliest: u16,
     latest: u16,
 };
@@ -134,13 +134,13 @@ pub const TextureClear = struct {
 pub const TransientBuffer = struct {
     unusedCounter: u8 = 0,
     bufId: BufId,
-    bufDesc: BufDesc,
+    bufDescEnum: pe.BufferEnum,
 };
 
 pub const TransientTexture = struct {
     unusedCounter: u8 = 0,
     texId: TexId,
-    texDesc: TexDesc,
+    texDescEnum: pe.TextureEnum,
 };
 
 pub const PassAccessRange = struct {

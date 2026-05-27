@@ -8,6 +8,7 @@ const std = @import("std");
 const LifetimeMergerData = @import("../5.2_lifetimeMerger/LifetimeMergerData.zig").LifetimeMergerData;
 const ResourceMapperData = @import("../5.1_resourceMapper/ResourceMapperData.zig").ResourceMapperData;
 const GroupMergerData = @import("GroupMergerData.zig").GroupMergerData;
+const ResourceExtractorData = @import("../2_resourceExtractor/ResourceExtractorData.zig").ResourceExtractorData;
 
 const pe = @import("../enums.zig");
 const TextureEnum = pe.TextureEnum;
@@ -16,7 +17,12 @@ const BufferEnum = pe.BufferEnum;
 // Step 5.4
 
 pub const GroupMergerSys = struct {
-    pub fn buildPassResources(groupMerger: *GroupMergerData, lifetimeMerger: *const LifetimeMergerData, resourceMapper: *const ResourceMapperData) void {
+    pub fn buildPassResources(
+        groupMerger: *GroupMergerData,
+        resourceExtractor: *ResourceExtractorData,
+        lifetimeMerger: *const LifetimeMergerData,
+        resourceMapper: *const ResourceMapperData,
+    ) void {
         // Cleanup and Prep
         groupMerger.sharedBufLifetimes.clear();
         groupMerger.sharedTexLifetimes.clear();
@@ -29,18 +35,19 @@ pub const GroupMergerSys = struct {
 
         // Buffer Group Sharing
         for (lifetimeMerger.transientBufGroupLifetimes.constSlice()) |groupLifetime| {
-            const bufKey: u16 = @intFromEnum(groupLifetime.rootBuf);
-            const bufGroup = resourceMapper.bufGroupsTransient.getByKey(bufKey);
-            const bufGroupDesc = bufGroup.bufDesc;
+            const bufGroupKey: u16 = @intFromEnum(groupLifetime.rootBuf);
+            const bufGroup = resourceMapper.bufGroupsTransient.getByKey(bufGroupKey);
+            const bufGroupDesc = resourceExtractor.bufDescriptions.getByKey(bufGroupKey);
 
             var candidateIndex: ?u16 = null;
 
             for (groupMerger.sharedBufLifetimes.slice(), 0..) |*physLifetime, index| {
+                const physLifetimeDesc = resourceExtractor.bufDescriptions.getByKey(@intCast(@intFromEnum(physLifetime.bufDescEnum)));
 
                 // check if physLifetime could extend forwards
                 if (physLifetime.latest < groupLifetime.earliest) {
                     // If it can extend check if format fits
-                    if (bufDescEqual(&bufGroupDesc, &physLifetime.bufDesc) == true) {
+                    if (bufDescEqual(&bufGroupDesc, &physLifetimeDesc) == true) {
                         physLifetime.latest = groupLifetime.latest;
                         candidateIndex = @intCast(index);
                         break;
@@ -54,10 +61,10 @@ pub const GroupMergerSys = struct {
                     std.debug.print("ERROR: 5.4.GroupMerger: Could not Append to bufClears\n", .{});
                 };
 
-                groupMerger.bufShareIndexMap.upsert(bufKey, candiate);
+                groupMerger.bufShareIndexMap.upsert(bufGroupKey, candiate);
             } else {
                 const physBufLifetime = PhysicalBufLifetime{
-                    .bufDesc = bufGroupDesc,
+                    .bufDescEnum = groupLifetime.rootBuf,
                     .earliest = groupLifetime.earliest,
                     .latest = groupLifetime.latest,
                 };
@@ -69,24 +76,25 @@ pub const GroupMergerSys = struct {
                 groupMerger.bufClears.append(.{ .sharedBufIndex = newIndex, .passAfterClear = bufGroup.rootPass }) catch {
                     std.debug.print("ERROR: 5.4.GroupMerger: Could not Append to texClears\n", .{});
                 };
-                groupMerger.bufShareIndexMap.upsert(bufKey, newIndex);
+                groupMerger.bufShareIndexMap.upsert(bufGroupKey, newIndex);
             }
         }
 
         // Texture Group Sharing
         for (lifetimeMerger.transientTexGroupLifetimes.constSlice()) |groupLifetime| {
-            const texKey: u16 = @intFromEnum(groupLifetime.rootTex);
-            const texGroup = resourceMapper.texGroupsTransient.getByKey(texKey); 
-            const texGroupDesc = texGroup.texDesc;
+            const texGroupKey: u16 = @intFromEnum(groupLifetime.rootTex);
+            const texGroup = resourceMapper.texGroupsTransient.getByKey(texGroupKey);
+            const texGroupDesc = resourceExtractor.texDescriptions.getByKey(texGroupKey);
 
             var candidateIndex: ?u16 = null;
 
             for (groupMerger.sharedTexLifetimes.slice(), 0..) |*physLifetime, index| {
+                const physLifetimeDesc = resourceExtractor.texDescriptions.getByKey(@intCast(@intFromEnum(physLifetime.texDescEnum)));
 
                 // check if physLifetime could extend forwards
                 if (physLifetime.latest < groupLifetime.earliest) {
                     // If it can extend check if format fits
-                    if (texDescEqual(&texGroupDesc, &physLifetime.texDesc) == true) {
+                    if (texDescEqual(&texGroupDesc, &physLifetimeDesc) == true) {
                         physLifetime.latest = groupLifetime.latest;
                         candidateIndex = @intCast(index);
                         break;
@@ -99,10 +107,10 @@ pub const GroupMergerSys = struct {
                 groupMerger.texClears.append(.{ .sharedTexIndex = candiate, .passAfterClear = texGroup.rootPass }) catch {
                     std.debug.print("ERROR: 5.4.GroupMerger: Could not Append to texClears\n", .{});
                 };
-                groupMerger.texShareIndexMap.upsert(texKey, candiate);
+                groupMerger.texShareIndexMap.upsert(texGroupKey, candiate);
             } else {
                 const physTexLifetime = PhysicalTexLifetime{
-                    .texDesc = texGroupDesc,
+                    .texDescEnum = groupLifetime.rootTex,
                     .earliest = groupLifetime.earliest,
                     .latest = groupLifetime.latest,
                 };
@@ -114,7 +122,7 @@ pub const GroupMergerSys = struct {
                 groupMerger.texClears.append(.{ .sharedTexIndex = newIndex, .passAfterClear = texGroup.rootPass }) catch {
                     std.debug.print("ERROR: 5.4.GroupMerger: Could not Append to texClears\n", .{});
                 };
-                groupMerger.texShareIndexMap.upsert(texKey, newIndex);
+                groupMerger.texShareIndexMap.upsert(texGroupKey, newIndex);
             }
         }
 

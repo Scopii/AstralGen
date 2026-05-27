@@ -95,7 +95,7 @@ pub const ResourceMapperSys = struct {
             var root: BufferEnum = undefined;
 
             for (resourceMapper.allSharedBuffers.getConstItems()) |bufEnum| {
-                const newBufDesc = try resolveBufferEnum(bufEnum);
+                const newBufDesc = resourceExtractor.bufDescriptions.getByKey(@intCast(@intFromEnum(bufEnum)));
 
                 if (lastBufDescription) |lastBufDesc| {
                     try compareBufDesc(lastBufEnum, &lastBufDesc, bufEnum, &newBufDesc);
@@ -206,7 +206,7 @@ pub const ResourceMapperSys = struct {
             var root: TextureEnum = undefined;
 
             for (resourceMapper.allSharedTextures.getConstItems()) |texEnum| {
-                const newTexDesc = try resolveTextureEnum(texEnum);
+                const newTexDesc = resourceExtractor.texDescriptions.getByKey(@intCast(@intFromEnum(texEnum)));
 
                 if (lastTexDescription) |lastTexDesc| {
                     try compareTexDesc(lastTexEnum, &lastTexDesc, texEnum, &newTexDesc);
@@ -351,43 +351,3 @@ fn compareTexDesc(texEnum1: TextureEnum, texDesc1: *const TexDesc, texEnum2: Tex
     }
 }
 
-pub fn resolveTextureEnum(texEnum: TextureEnum) !TexDesc {
-    return switch (texEnum) {
-        // Cull stuff Missing
-
-        .RayMarchInputTex => rc.rayMarchTexDesc,
-
-        .GridTex => rc.gridTexDesc,
-        .GridDepthTex => rc.gridDepthTexDesc,
-
-        .DebugGridInputTex, .DebugGridOutputTex => rc.debugGridTexDesc,
-        .DebugGridDepthTex, .DebugGridDepthOutputTex => rc.debugGridDepthTexDesc,
-
-        .PlaneTex => rc.planeTexDesc,
-        .PlaneDepthTex => rc.planeDepthTexDesc,
-
-        .DebugPlaneInputTex, .DebugPlaneOutputTex, .DebugPlaneOutputFrustumViewTex => rc.debugPlaneTexDesc,
-        .DebugPlaneDepthTex => rc.debugPlaneDepthTexDesc,
-
-        .DepthViewTex => rc.depthViewTexDesc,
-
-        .TestTileTex => rc.testTilesTexDesc,
-        .ImguiFontTex => rc.imguiFontTexDesc,
-
-        .Swapchain => return error.TextureEnumHasNoDescription,
-    };
-}
-
-pub fn resolveBufferEnum(bufEnum: BufferEnum) !BufDesc {
-    return switch (bufEnum) {
-        .QuantIndirectInputSB, .QuantIndirectOutputSB => rc.indirectSBDesc,
-        .ReadbackSB => rc.readbackSBDesc,
-
-        .EntitySB => rc.entitySBDesc,
-        .MainCamUB => rc.mainCamUBDesc,
-        .DebugCamUB => rc.debugCamUBDesc,
-
-        .ImguiVB => rc.imguiVBDesc,
-        .ImguiIB => rc.imguiIBDesc,
-    };
-}

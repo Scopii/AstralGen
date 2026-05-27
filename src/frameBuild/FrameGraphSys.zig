@@ -43,10 +43,11 @@ pub const FrameGraphSys = struct {
 
         MappingComparatorSys.buildChanges(&frameGraph.mappingComparator, &frameGraph.resourceMapper);
 
-        GroupMergerSys.buildPassResources(&frameGraph.groupMerger, &frameGraph.lifetimeMerger, &frameGraph.resourceMapper);
+        GroupMergerSys.buildPassResources(&frameGraph.groupMerger, &frameGraph.resourceExtractor, &frameGraph.lifetimeMerger, &frameGraph.resourceMapper);
 
         try ResourceAssignerSys.buildPersistentResources(
             &frameGraph.resourceAssigner,
+            &frameGraph.resourceExtractor,
             &frameGraph.resourceMapper,
             &frameGraph.mappingComparator,
             &frameGraph.groupMerger,

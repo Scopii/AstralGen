@@ -21,15 +21,14 @@ pub const GraphOptimizerSys = struct {
         graphOptimizer.bufLevelLifetimes.clear();
         graphOptimizer.texLevelLifetimes.clear();
 
-        graphOptimizer.bufMemSize.clear();
-        graphOptimizer.texMemSize.clear();
-
         graphOptimizer.graphMemNodes.clear();
         graphOptimizer.optimizedGraph.clear();
 
         // Assign Buffers Lifetime
         for (resourceExtractor.bufAccesses.constSlice()) |bufAccess| {
             const bufInputKey = @intFromEnum(bufAccess.bufInput);
+            if (resourceExtractor.bufMemSize.isKeyUsed(bufInputKey) == false) continue; // Only Transient
+
             const graphLevel = graphExtractor.orderedPasses.getByKey(@intFromEnum(bufAccess.passEnum)).level;
 
             if (graphOptimizer.bufLevelLifetimes.isKeyUsed(bufInputKey) == false) {
@@ -45,6 +44,8 @@ pub const GraphOptimizerSys = struct {
         for (resourceExtractor.bufAccesses.constSlice()) |bufAccess| {
             const bufOutput = bufAccess.bufOutput orelse continue;
             const bufOutputKey = @intFromEnum(bufOutput);
+            if (resourceExtractor.bufMemSize.isKeyUsed(bufOutputKey) == false) continue; // Only Transient
+
             const graphLevel = graphExtractor.orderedPasses.getByKey(@intFromEnum(bufAccess.passEnum)).level;
 
             if (graphOptimizer.bufLevelLifetimes.isKeyUsed(bufOutputKey) == false) {
@@ -60,6 +61,8 @@ pub const GraphOptimizerSys = struct {
         // Assign texture Lifetime
         for (resourceExtractor.texAccesses.constSlice()) |texAccess| {
             const texInputKey = @intFromEnum(texAccess.texInput);
+            if (resourceExtractor.texMemSize.isKeyUsed(texInputKey) == false) continue; // Only Transient
+
             const graphLevel = graphExtractor.orderedPasses.getByKey(@intFromEnum(texAccess.passEnum)).level;
 
             if (graphOptimizer.texLevelLifetimes.isKeyUsed(texInputKey) == false) {
@@ -75,6 +78,8 @@ pub const GraphOptimizerSys = struct {
         for (resourceExtractor.texAccesses.constSlice()) |texAccess| {
             const texOutput = texAccess.texOutput orelse continue;
             const texOutputKey = @intFromEnum(texOutput);
+            if (resourceExtractor.texMemSize.isKeyUsed(texOutputKey) == false) continue; // Only Transient
+
             const graphLevel = graphExtractor.orderedPasses.getByKey(@intFromEnum(texAccess.passEnum)).level;
 
             if (graphOptimizer.texLevelLifetimes.isKeyUsed(texOutputKey) == false) {
@@ -108,75 +113,6 @@ pub const GraphOptimizerSys = struct {
             std.debug.print("\n", .{});
         }
 
-        // Give Every Buffer Memory Size
-        for (resourceExtractor.bufAccesses.constSlice()) |bufAccess| {
-            const bufKey1: u16 = @intCast(@intFromEnum(bufAccess.bufInput));
-
-            if (graphOptimizer.bufLevelLifetimes.isKeyUsed(bufKey1) == true) {
-                const bufDesc = try resolveBufferEnum(bufAccess.bufInput);
-
-                switch (bufDesc.share) {
-                    .transient => graphOptimizer.bufMemSize.upsert(@intFromEnum(bufAccess.bufInput), bufDesc.guessMemoryCost()),
-                    .persistent => {},
-                }
-            }
-
-            const bufKey2: ?u16 = if (bufAccess.bufOutput) |bufOutput| @intCast(@intFromEnum(bufOutput)) else null;
-
-            if (bufKey2 != null and graphOptimizer.bufLevelLifetimes.isKeyUsed(bufKey2.?) == true) {
-                const bufDesc = try resolveBufferEnum(bufAccess.bufOutput.?);
-
-                switch (bufDesc.share) {
-                    .transient => graphOptimizer.bufMemSize.upsert(bufKey2.?, bufDesc.guessMemoryCost()),
-                    .persistent => {},
-                }
-            }
-        }
-
-        // Give Every Texture Memory Size
-        for (resourceExtractor.texAccesses.constSlice()) |texAccess| {
-            const texKey1: u16 = @intCast(@intFromEnum(texAccess.texInput));
-
-            if (graphOptimizer.texLevelLifetimes.isKeyUsed(texKey1) == true) {
-                const texDesc = try resolveTextureEnum(texAccess.texInput);
-
-                switch (texDesc.share) {
-                    .transient => graphOptimizer.texMemSize.upsert(@intFromEnum(texAccess.texInput), texDesc.guessMemoryCost()),
-                    .persistent => {},
-                }
-            }
-
-            const texKey2: ?u16 = if (texAccess.texOutput) |texOutput| @intCast(@intFromEnum(texOutput)) else null;
-
-            if (texKey2 != null and graphOptimizer.texLevelLifetimes.isKeyUsed(texKey2.?) == true) {
-                const texDesc = try resolveTextureEnum(texAccess.texOutput.?);
-
-                switch (texDesc.share) {
-                    .transient => graphOptimizer.texMemSize.upsert(texKey2.?, texDesc.guessMemoryCost()),
-                    .persistent => {},
-                }
-            }
-        }
-
-        // Debug Output 2
-        if (rc.FRAME_GRAPH_DEBUG) {
-            // Buffer Mem Debug
-            for (graphOptimizer.bufMemSize.getConstItems(), 0..) |memSize, i| {
-                const castedIndex: u32 = @intCast(i);
-                const bufKey: u32 = graphOptimizer.bufMemSize.getKeyByIndex(castedIndex);
-                const bufEnum: BufferEnum = @enumFromInt(bufKey);
-                std.debug.print(" {}.Buf ({s}) -> Mem {} Bytes\n", .{ i, @tagName(bufEnum), memSize });
-            }
-            // Texture Mem Debug
-            for (graphOptimizer.texMemSize.getConstItems(), 0..) |memSize, i| {
-                const castedIndex: u32 = @intCast(i);
-                const texKey: u32 = graphOptimizer.texMemSize.getKeyByIndex(castedIndex);
-                const texEnum: TextureEnum = @enumFromInt(texKey);
-                std.debug.print(" {}.Tex ({s}) -> Mem {} Bytes\n", .{ i, @tagName(texEnum), memSize });
-            }
-            std.debug.print("\n", .{});
-        }
-
         // Extend GraphNodes to GraphMemoryNodes
         for (graphExtractor.orderedPasses.getConstItems()) |graphNode| {
             const passKey = @intFromEnum(graphNode.passEnum);
@@ -192,18 +128,18 @@ pub const GraphOptimizerSys = struct {
                 const bufKey2: ?u16 = if (bufAccess.bufOutput) |bufOutput| @intCast(@intFromEnum(bufOutput)) else null;
 
                 // Check Input Buffer Bytes
-                if (graphOptimizer.bufMemSize.isKeyUsed(bufKey1) == true) { // Only Transient were filled!
+                if (resourceExtractor.bufMemSize.isKeyUsed(bufKey1) == true) { // Only Transient were filled!
                     const buf1LevelLifetime = graphOptimizer.bufLevelLifetimes.getByKey(bufKey1);
-                    if (buf1LevelLifetime.firstLevel == graphNode.level and buf1LevelLifetime.lastLevel != graphNode.level) bornBytes += graphOptimizer.bufMemSize.getByKey(bufKey1);
-                    if (buf1LevelLifetime.lastLevel == graphNode.level and buf1LevelLifetime.firstLevel != graphNode.level) dyingBytes += graphOptimizer.bufMemSize.getByKey(bufKey1);
+                    if (buf1LevelLifetime.firstLevel == graphNode.level and buf1LevelLifetime.lastLevel != graphNode.level) bornBytes += resourceExtractor.bufMemSize.getByKey(bufKey1);
+                    if (buf1LevelLifetime.lastLevel == graphNode.level and buf1LevelLifetime.firstLevel != graphNode.level) dyingBytes += resourceExtractor.bufMemSize.getByKey(bufKey1);
                 }
 
                 // Check Output Buffer Bytes
                 if (bufKey2) |key2| {
-                    if (graphOptimizer.bufMemSize.isKeyUsed(key2) == true) { // Only Transient were filled!
+                    if (resourceExtractor.bufMemSize.isKeyUsed(key2) == true) { // Only Transient were filled!
                         const buf2LevelLifetime = graphOptimizer.bufLevelLifetimes.getByKey(key2);
-                        if (buf2LevelLifetime.firstLevel == graphNode.level and buf2LevelLifetime.lastLevel != graphNode.level) bornBytes += graphOptimizer.bufMemSize.getByKey(key2);
-                        if (buf2LevelLifetime.lastLevel == graphNode.level and buf2LevelLifetime.firstLevel != graphNode.level) dyingBytes += graphOptimizer.bufMemSize.getByKey(key2);
+                        if (buf2LevelLifetime.firstLevel == graphNode.level and buf2LevelLifetime.lastLevel != graphNode.level) bornBytes += resourceExtractor.bufMemSize.getByKey(key2);
+                        if (buf2LevelLifetime.lastLevel == graphNode.level and buf2LevelLifetime.firstLevel != graphNode.level) dyingBytes += resourceExtractor.bufMemSize.getByKey(key2);
                     }
                 }
             }
@@ -215,18 +151,18 @@ pub const GraphOptimizerSys = struct {
                 const texKey2: ?u16 = if (texAccess.texOutput) |texOutput| @intCast(@intFromEnum(texOutput)) else null;
 
                 // Check Input Texture Bytes
-                if (graphOptimizer.texMemSize.isKeyUsed(texKey1) == true) { // Only Transient were filled!
+                if (resourceExtractor.texMemSize.isKeyUsed(texKey1) == true) { // Only Transient were filled!
                     const tex1LevelLifetime = graphOptimizer.texLevelLifetimes.getByKey(texKey1);
-                    if (tex1LevelLifetime.firstLevel == graphNode.level and tex1LevelLifetime.lastLevel != graphNode.level) bornBytes += graphOptimizer.texMemSize.getByKey(texKey1);
-                    if (tex1LevelLifetime.lastLevel == graphNode.level and tex1LevelLifetime.firstLevel != graphNode.level) dyingBytes += graphOptimizer.texMemSize.getByKey(texKey1);
+                    if (tex1LevelLifetime.firstLevel == graphNode.level and tex1LevelLifetime.lastLevel != graphNode.level) bornBytes += resourceExtractor.texMemSize.getByKey(texKey1);
+                    if (tex1LevelLifetime.lastLevel == graphNode.level and tex1LevelLifetime.firstLevel != graphNode.level) dyingBytes += resourceExtractor.texMemSize.getByKey(texKey1);
                 }
 
                 // Check Output Buffer Bytes
                 if (texKey2) |key2| {
-                    if (graphOptimizer.texMemSize.isKeyUsed(key2) == true) { // Only Transient were filled!
+                    if (resourceExtractor.texMemSize.isKeyUsed(key2) == true) { // Only Transient were filled!
                         const tex2LevelLifetime = graphOptimizer.texLevelLifetimes.getByKey(key2);
-                        if (tex2LevelLifetime.firstLevel == graphNode.level and tex2LevelLifetime.lastLevel != graphNode.level) bornBytes += graphOptimizer.texMemSize.getByKey(key2);
-                        if (tex2LevelLifetime.lastLevel == graphNode.level and tex2LevelLifetime.firstLevel != graphNode.level) dyingBytes += graphOptimizer.texMemSize.getByKey(key2);
+                        if (tex2LevelLifetime.firstLevel == graphNode.level and tex2LevelLifetime.lastLevel != graphNode.level) bornBytes += resourceExtractor.texMemSize.getByKey(key2);
+                        if (tex2LevelLifetime.lastLevel == graphNode.level and tex2LevelLifetime.firstLevel != graphNode.level) dyingBytes += resourceExtractor.texMemSize.getByKey(key2);
                     }
                 }
             }
