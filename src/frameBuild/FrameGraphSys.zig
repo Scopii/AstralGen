@@ -31,7 +31,7 @@ pub const FrameGraphSys = struct {
 
         DependancyExtractorSys.buildDependencies(&frameGraph.dependancyExtractor, &frameGraph.resourceExtractor);
 
-        GraphExtractorSys.buildGraph(&frameGraph.graphExtractor, &frameGraph.dependancyExtractor, &frameGraph.passExtractor);
+        try GraphExtractorSys.buildGraph(&frameGraph.graphExtractor, &frameGraph.dependancyExtractor, &frameGraph.passExtractor);
 
         try GraphOptimizerSys.assignResourceLevels(&frameGraph.graphOptimizer, &frameGraph.graphExtractor, &frameGraph.resourceExtractor);
 

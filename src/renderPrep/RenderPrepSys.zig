@@ -44,38 +44,39 @@ pub const RenderPrepSys = struct {
         frameGraphQueue.append(.{ .updateBuffer = updateBufferPtr });
     }
 
-    pub fn extractEntity(ecs: *EntityData, frameGraphQueue: *FrameGraphQueue, memoryMan: *MemoryManager) !void {
-        const entityCount = ecs.renderables.getLength();
-        if (entityCount == 0) return;
+    // Only Updating Entitys as Buffer Segments
+    // pub fn extractEntity(ecs: *EntityData, frameGraphQueue: *FrameGraphQueue, memoryMan: *MemoryManager) !void {
+    //     const entityCount = ecs.renderables.getLength();
+    //     if (entityCount == 0) return;
 
-        // Allocate the dense array for this frame
-        const arena = memoryMan.getGlobalArena();
+    //     // Allocate the dense array for this frame
+    //     const arena = memoryMan.getGlobalArena();
 
-        // Join ECS components and pack them into the dense array
-        for (0..entityCount) |i| {
-            const gpuData = try arena.create(GpuObjectData);
+    //     // Join ECS components and pack them into the dense array
+    //     for (0..entityCount) |i| {
+    //         const gpuData = try arena.create(GpuObjectData);
 
-            const entityId = ecs.renderables.getKeyByIndex(@intCast(i));
-            const renderable = ecs.renderables.getByIndex(@intCast(i));
+    //         const entityId = ecs.renderables.getKeyByIndex(@intCast(i));
+    //         const renderable = ecs.renderables.getByIndex(@intCast(i));
 
-            if (!ecs.transforms.isKeyUsed(entityId)) continue;
-            const transform = ecs.transforms.getPtrByKey(entityId);
+    //         if (!ecs.transforms.isKeyUsed(entityId)) continue;
+    //         const transform = ecs.transforms.getPtrByKey(entityId);
 
-            if (transform.isDirty == false) continue;
-            transform.isDirty = false;
+    //         if (transform.isDirty == false) continue;
+    //         transform.isDirty = false;
 
-            gpuData.* = .{
-                .posAndSize = .{ transform.pos[0], transform.pos[1], transform.pos[2], renderable.size },
-                .colorAndSdf = .{ renderable.colorR, renderable.colorG, renderable.colorB, @floatFromInt(@intFromEnum(renderable.sdfId)) },
-            };
+    //         gpuData.* = .{
+    //             .posAndSize = .{ transform.pos[0], transform.pos[1], transform.pos[2], renderable.size },
+    //             .colorAndSdf = .{ renderable.colorR, renderable.colorG, renderable.colorB, @floatFromInt(@intFromEnum(renderable.sdfId)) },
+    //         };
 
-            // Send the packed, dense array to the Renderer Queue
-            const PayloadPtr = @FieldType(FrameGraphQueue.FrameGraphEvent, "updateBufferSegment");
-            const Payload = std.meta.Child(PayloadPtr);
-            const updateBufferSegmentPtr = try arena.create(Payload);
-            updateBufferSegmentPtr.* = .{ .bufId = rc.objectSB.id, .data = std.mem.asBytes(gpuData), .elementOffset = @intCast(i) };
+    //         // Send the packed, dense array to the Renderer Queue
+    //         const PayloadPtr = @FieldType(FrameGraphQueue.FrameGraphEvent, "updateBufferSegment");
+    //         const Payload = std.meta.Child(PayloadPtr);
+    //         const updateBufferSegmentPtr = try arena.create(Payload);
+    //         updateBufferSegmentPtr.* = .{ .bufId = rc.objectSB.id, .data = std.mem.asBytes(gpuData), .elementOffset = @intCast(i) };
 
-            frameGraphQueue.append(.{ .updateBufferSegment = updateBufferSegmentPtr });
-        }
-    }
+    //         frameGraphQueue.append(.{ .updateBufferSegment = updateBufferSegmentPtr });
+    //     }
+    // }
 };

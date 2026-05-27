@@ -30,21 +30,12 @@ pub const GroupMergerSys = struct {
         // Buffer Group Sharing
         for (lifetimeMerger.transientBufGroupLifetimes.constSlice()) |groupLifetime| {
             const bufKey: u16 = @intFromEnum(groupLifetime.rootBuf);
-            const bufGroup = resourceMapper.bufGroupsTransient.getByKey(bufKey); // ONLY PERSISTENT FOR TESTING!!!!!
+            const bufGroup = resourceMapper.bufGroupsTransient.getByKey(bufKey);
             const bufGroupDesc = bufGroup.bufDesc;
 
             var candidateIndex: ?u16 = null;
 
             for (groupMerger.sharedBufLifetimes.slice(), 0..) |*physLifetime, index| {
-                // Check if physLifetime could extend backwards
-                // if (groupLifetime.latest < physLifetime.earliest) {
-                //     // If it can extend check if format fits
-                //     if (bufDescEqual(&bufGroupDesc, &physLifetime.bufDesc) == true) {
-                //         physLifetime.earliest = groupLifetime.earliest;
-                //         candidateIndex = @intCast(index);
-                //         break;
-                //     }
-                // }
 
                 // check if physLifetime could extend forwards
                 if (physLifetime.latest < groupLifetime.earliest) {
@@ -71,11 +62,6 @@ pub const GroupMergerSys = struct {
                     .latest = groupLifetime.latest,
                 };
 
-                // BLOCK WAS BEFORE (Maybe helpful for errors later!):
-                // groupMerger.sharedBufLifetimes.append(physBufLifetime) catch std.debug.print("ERROR: 5.4.GroupMerger: Could not Append to sharedBufLifetimes\n", .{});
-                // groupMerger.bufShareIndexMap.upsert(bufKey, @intCast(groupMerger.sharedBufLifetimes.len - 1));
-                // END BEFORE
-
                 groupMerger.sharedBufLifetimes.append(physBufLifetime) catch std.debug.print("ERROR: 5.4.GroupMerger: Could not Append to sharedBufLifetimes\n", .{});
                 const newIndex: u16 = @intCast(groupMerger.sharedBufLifetimes.len - 1);
 
@@ -90,21 +76,12 @@ pub const GroupMergerSys = struct {
         // Texture Group Sharing
         for (lifetimeMerger.transientTexGroupLifetimes.constSlice()) |groupLifetime| {
             const texKey: u16 = @intFromEnum(groupLifetime.rootTex);
-            const texGroup = resourceMapper.texGroupsTransient.getByKey(texKey); // ONLY PERSISTENT FOR TESTING!!!!!
+            const texGroup = resourceMapper.texGroupsTransient.getByKey(texKey); 
             const texGroupDesc = texGroup.texDesc;
 
             var candidateIndex: ?u16 = null;
 
             for (groupMerger.sharedTexLifetimes.slice(), 0..) |*physLifetime, index| {
-                // Check if physLifetime could extend backwards
-                // if (groupLifetime.latest < physLifetime.earliest) {
-                //     // If it can extend check if format fits
-                //     if (texDescEqual(&texGroupDesc, &physLifetime.texDesc) == true) {
-                //         physLifetime.earliest = groupLifetime.earliest;
-                //         candidateIndex = @intCast(index);
-                //         break;
-                //     }
-                // }
 
                 // check if physLifetime could extend forwards
                 if (physLifetime.latest < groupLifetime.earliest) {

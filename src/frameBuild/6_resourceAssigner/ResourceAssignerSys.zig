@@ -100,7 +100,7 @@ pub const ResourceAssignerSys = struct {
             const bufGroup = resourceMapper.bufGroupsTransient.getByKey(@intCast(bufRootKey));
             // Whole Group needs to be assigned
             for (bufGroup.startMapIndex..bufGroup.endMapIndex + 1) |mapIndex| {
-                const memberKey = resourceMapper.texMapTransient.getKeyByIndex(@intCast(mapIndex));
+                const memberKey = resourceMapper.bufMapTransient.getKeyByIndex(@intCast(mapIndex));
 
                 // Link Buffers Enum To Physical Buf ID
                 if (resourceAssigner.bufAssigns.isKeyUsed(@intCast(memberKey)) == true) {

@@ -25,13 +25,13 @@ pub const LifetimeMergerSys = struct {
         lifetimeMerger.transientTexGroupLifetimes.clear();
 
         // NEW Transient Buffer Group Lifetime Merge
-        for (resourceMapper.bufGroupsTransient.getConstItems()) |group| { // ONLY PERSISTENT WHILE BUILDING IMPLEMENTATION!!!!!!!!!!!!!!
+        for (resourceMapper.bufGroupsTransient.getConstItems()) |group| {
             var earliestLife: ?u16 = null;
             var latestLife: ?u16 = null;
 
             for (group.startMapIndex..group.endMapIndex + 1) |mapIndex| {
                 const castedIndex: u32 = @intCast(mapIndex);
-                const bufKey: u32 = resourceMapper.bufMapTransient.getKeyByIndex(castedIndex); // ONLY PERSISTENT WHILE BUILDING IMPLEMENTATION!!!!!!!!!!!!!!
+                const bufKey: u32 = resourceMapper.bufMapTransient.getKeyByIndex(castedIndex);
                 const bufLifetime = lifetimeExtractor.bufLifetimes.getByKey(@intCast(bufKey));
 
                 if (earliestLife == null or bufLifetime.earliest < earliestLife.?) earliestLife = bufLifetime.earliest;
@@ -44,13 +44,13 @@ pub const LifetimeMergerSys = struct {
         lifetimeMerger.transientBufGroupLifetimes.selectionSort(greaterGroup);
 
         // NEW Transient Texture Group Lifetime Merge
-        for (resourceMapper.texGroupsTransient.getConstItems()) |group| { // ONLY PERSISTENT WHILE BUILDING IMPLEMENTATION!!!!!!!!!!!!!!
+        for (resourceMapper.texGroupsTransient.getConstItems()) |group| { 
             var earliestLife: ?u16 = null;
             var latestLife: ?u16 = null;
 
             for (group.startMapIndex..group.endMapIndex + 1) |mapIndex| {
                 const castedIndex: u32 = @intCast(mapIndex);
-                const texKey: u32 = resourceMapper.texMapTransient.getKeyByIndex(castedIndex); // ONLY PERSISTENT WHILE BUILDING IMPLEMENTATION!!!!!!!!!!!!!!
+                const texKey: u32 = resourceMapper.texMapTransient.getKeyByIndex(castedIndex); 
                 const texLifetime = lifetimeExtractor.texLifetimes.getByKey(@intCast(texKey));
 
                 if (earliestLife == null or texLifetime.earliest < earliestLife.?) earliestLife = texLifetime.earliest;

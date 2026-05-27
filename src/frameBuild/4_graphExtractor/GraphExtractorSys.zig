@@ -9,7 +9,7 @@ const GraphExtractorData = @import("GraphExtractorData.zig").GraphExtractorData;
 // Step 4
 
 pub const GraphExtractorSys = struct {
-    pub fn buildGraph(graphExtractor: *GraphExtractorData, dependancyExtractor: *const DependancyExtractorData, passExtractor: *const PassExtractorData) void {
+    pub fn buildGraph(graphExtractor: *GraphExtractorData, dependancyExtractor: *const DependancyExtractorData, passExtractor: *const PassExtractorData) !void {
         graphExtractor.passDepCounters.clear();
         graphExtractor.orderedPasses.clear();
 
@@ -106,6 +106,40 @@ pub const GraphExtractorSys = struct {
                 const index = counterLength - iterator - 1;
                 if (graphExtractor.passDepCounters.getByIndex(index) == 0) graphExtractor.passDepCounters.removeIndex(index);
             }
+        }
+
+        // Check if Graph is Valid
+        const orderedCount = graphExtractor.orderedPasses.getLength();
+        const totalCount = graphExtractor.unorderedPasses.getLength();
+
+        if (orderedCount != totalCount) {
+            std.debug.print("ERROR: 4.0.GraphExtractor: {} of {} passes scheduled! Graph has a cycle\n", .{ orderedCount, totalCount });
+
+            // Passes in unorderedPasses but not in orderedPasses
+            for (graphExtractor.unorderedPasses.getConstItems()) |passEnum| {
+                const key = @intFromEnum(passEnum);
+                if (graphExtractor.orderedPasses.isKeyUsed(key) == false) {
+                    const remainingDeps = if (graphExtractor.passDepCounters.isKeyUsed(key)) graphExtractor.passDepCounters.getByKey(key) else 0;
+                    std.debug.print("  stuck: {s} (still waiting on {} deps)\n", .{ @tagName(passEnum), remainingDeps });
+                }
+            }
+            std.debug.print("  cycle Buffer edges:\n", .{});
+            for (dependancyExtractor.bufDependancies.constSlice()) |dep| {
+                const predStuck = !graphExtractor.orderedPasses.isKeyUsed(@intFromEnum(dep.predecessor));
+                const succStuck = !graphExtractor.orderedPasses.isKeyUsed(@intFromEnum(dep.successor));
+                if (predStuck and succStuck) {
+                    std.debug.print("    {s} --[{s}]--> {s}\n", .{ @tagName(dep.predecessor), @tagName(dep.bufEnum), @tagName(dep.successor) });
+                }
+            }
+            std.debug.print("  cycle Texture edges:\n", .{});
+            for (dependancyExtractor.texDependancies.constSlice()) |dep| {
+                const predStuck = !graphExtractor.orderedPasses.isKeyUsed(@intFromEnum(dep.predecessor));
+                const succStuck = !graphExtractor.orderedPasses.isKeyUsed(@intFromEnum(dep.successor));
+                if (predStuck and succStuck) {
+                    std.debug.print("    {s} --[{s}]--> {s}\n", .{ @tagName(dep.predecessor), @tagName(dep.texEnum), @tagName(dep.successor) });
+                }
+            }
+            return error.GraphHasCycle;
         }
 
         // Debug Output

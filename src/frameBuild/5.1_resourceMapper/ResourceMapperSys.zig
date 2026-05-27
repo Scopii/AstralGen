@@ -346,7 +346,7 @@ fn compareTexDesc(texEnum1: TextureEnum, texDesc1: *const TexDesc, texEnum2: Tex
     const equal = if (std.meta.eql(texDesc1.*, texDesc2.*)) true else false;
 
     if (equal == false) {
-        std.debug.print("ERROR: ResourceMapperSys: Buffer Descriptions dont match \n({s}:{})\n({s}:{})\n", .{ @tagName(texEnum1), texDesc1, @tagName(texEnum2), texDesc2 });
+        std.debug.print("ERROR: ResourceMapperSys: Texture Descriptions dont match \n({s}:{})\n({s}:{})\n", .{ @tagName(texEnum1), texDesc1, @tagName(texEnum2), texDesc2 });
         return error.BufferDescriptionsDontMatch;
     }
 }
