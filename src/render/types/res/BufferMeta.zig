@@ -22,6 +22,17 @@ pub const BufferMeta = struct {
         typ: vhE.BufferType,
         update: vhE.UpdateType,
         resize: vhE.ResizeType = .Block,
+
+        pub fn guessMemoryCost(self: *const BufDesc) u64 {
+            const rawMemory = @as(u64, self.elementSize) * @as(u64, self.len);
+
+            return switch (self.update) {
+                .Rarely => rawMemory,
+                .Often, .PerFrame => rawMemory * rc.MAX_IN_FLIGHT,
+                
+                // .Rarely, .Often, .PerFrame => rawMemory,
+            };
+        }
     };
 
     pub const BufInf = struct {

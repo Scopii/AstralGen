@@ -1,6 +1,8 @@
 const TextureAccess = @import("../../frameBuild/components.zig").TextureAccess;
 const BufferAccess = @import("../../frameBuild/components.zig").BufferAccess;
+const PassAccessRange = @import("../../frameBuild/components.zig").PassAccessRange;
 const PassDef = @import("../../render/types/pass/PassDef.zig").PassDef;
+const PassEnum = @import("../../frameBuild/enums.zig").PassEnum;
 const rc = @import("../../.configs/renderConfig.zig");
 const std = @import("std");
 
@@ -13,6 +15,8 @@ pub const ResourceExtractorSys = struct {
     pub fn buildAccesses(resourceExtractor: *ResourceExtractorData, passExtractor: *const PassExtractorData) !void {
         resourceExtractor.bufAccesses.clear();
         resourceExtractor.texAccesses.clear();
+
+        resourceExtractor.passAccessRanges.clear();
 
         for (passExtractor.renderNodes.constSlice()) |*renderNode| {
             switch (renderNode.*) {
@@ -30,13 +34,29 @@ pub const ResourceExtractorSys = struct {
         // Debug Output
         if (rc.FRAME_GRAPH_DEBUG) {
             std.debug.print("2.ResourceExtractor: \n", .{});
-            for (resourceExtractor.bufAccesses.constSlice()) |bufAccess| std.debug.print("- BufAccess{}\n", .{bufAccess});
-            for (resourceExtractor.texAccesses.constSlice()) |texAccess| std.debug.print("- TexAccess{}\n", .{texAccess});
+
+            for (resourceExtractor.passAccessRanges.getConstItems(), 0..) |range, i| {
+                const passKey = resourceExtractor.passAccessRanges.getKeyByIndex(@intCast(i));
+                const passEnum: PassEnum = @enumFromInt(passKey);
+
+                std.debug.print(" - Pass Accesses ({s}) (bufIndex {} -> {}) (texIndex {} -> {})\n", .{ @tagName(passEnum), range.firstBuf, range.lastBuf, range.firstTex, range.lastTex });
+                for (range.firstBuf..range.lastBuf, 0..) |index, counter| {
+                    const bufAccess = resourceExtractor.bufAccesses.buffer[index];
+                    std.debug.print("     -> Buf {}. {}\n", .{ counter, bufAccess });
+                }
+                for (range.firstTex..range.lastTex, 0..) |index, counter| {
+                    const texAccess = resourceExtractor.texAccesses.buffer[index];
+                    std.debug.print("     -> Tex {}. {}\n", .{ counter, texAccess });
+                }
+            }
             std.debug.print("\n", .{});
         }
     }
 
     fn getPassAccesses(pass: *const PassDef, resourceExtractor: *ResourceExtractorData) void {
+        const firstBufIndex = resourceExtractor.bufAccesses.len;
+        const firstTexIndex = resourceExtractor.texAccesses.len;
+
         // Any Buffers Use Case
         inline for (.{
             pass.getBufUses(),
@@ -61,7 +81,7 @@ pub const ResourceExtractorSys = struct {
                     .access = .read,
                     .passEnum = pass.name,
                     .bufInput = use.bufInput,
-                    .bufOutput = null,
+                    .bufOutput = null, // True Index and Vertex Buffers dont have Output!
                 };
                 resourceExtractor.bufAccesses.append(bufAccess) catch std.debug.print("ERROR: Resource Extractor bufAccesses append failed!\n", .{});
             }
@@ -84,5 +104,16 @@ pub const ResourceExtractorSys = struct {
                 resourceExtractor.texAccesses.append(texAccess) catch std.debug.print("ERROR: Resource Extractor texAccesses append failed!\n", .{});
             }
         }
+
+        // Append Pass Access Ranges
+        const passAccessRanges = PassAccessRange{
+            .firstBuf = @intCast(firstBufIndex),
+            .firstTex = @intCast(firstTexIndex),
+            .lastBuf = @intCast(resourceExtractor.bufAccesses.len),
+            .lastTex = @intCast(resourceExtractor.texAccesses.len),
+        };
+        const passKey = @intFromEnum(pass.name);
+
+        resourceExtractor.passAccessRanges.upsert(@intCast(passKey), passAccessRanges);
     }
 };

@@ -10,6 +10,6 @@ pub const GraphExtractorData = struct {
     unorderedPasses: LinkedMap(PassEnum, 512, u16, 512, 0) = .{},
     readyPasses: FixedList(GraphNode, 512) = .{},
 
-    // Results
+    // Result
     orderedPasses: LinkedMap(GraphNode, 512, u16, 512, 0) = .{}, // Graph Node Does not Need Pass Since Pass Is Key
 };

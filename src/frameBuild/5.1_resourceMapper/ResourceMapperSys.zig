@@ -11,7 +11,7 @@ const std = @import("std");
 
 const ResourceExtractorData = @import("../2_resourceExtractor/ResourceExtractorData.zig").ResourceExtractorData;
 const LifetimeExtractorData = @import("../5_lifetimeExtractor/LifetimeExtractorData.zig").LifetimeExtractorData;
-const GraphExtractorData = @import("../4_graphExtractor/GraphExtractorData.zig").GraphExtractorData;
+const GraphOptimizerData = @import("../4.5_graphOptimizer/GraphOptimizerData.zig").GraphOptimizerData;
 const ResourceMapperData = @import("ResourceMapperData.zig").ResourceMapperData;
 
 // Step 5.1
@@ -21,7 +21,7 @@ pub const ResourceMapperSys = struct {
         resourceMapper: *ResourceMapperData,
         resourceExtractor: *const ResourceExtractorData,
         lifetimeExtractor: *const LifetimeExtractorData,
-        graphExtractor: *const GraphExtractorData,
+        graphOptimizer: *const GraphOptimizerData,
     ) !void {
         // Move Last Mapping and Clear current
         resourceMapper.bufMapTransient.clear();
@@ -130,7 +130,7 @@ pub const ResourceMapperSys = struct {
             switch (lastBufDescription.?.share) {
                 .transient => {
                     const bufGroup = BufferGroup{
-                        .rootPass = graphExtractor.orderedPasses.getConstItems()[lastLifetime.?.earliest].passEnum,
+                        .rootPass = graphOptimizer.optimizedGraph.getConstItems()[lastLifetime.?.earliest].passEnum,
                         .rootBuf = root,
                         .bufDesc = lastBufDescription.?,
                         .startMapIndex = @intCast(resourceMapper.bufMapTransient.getLength() - resourceMapper.allSharedBuffers.getLength()),
@@ -140,7 +140,7 @@ pub const ResourceMapperSys = struct {
                 },
                 .persistent => {
                     const bufGroup = BufferGroup{
-                        .rootPass = graphExtractor.orderedPasses.getConstItems()[lastLifetime.?.earliest].passEnum,
+                        .rootPass = graphOptimizer.optimizedGraph.getConstItems()[lastLifetime.?.earliest].passEnum,
                         .rootBuf = root,
                         .bufDesc = lastBufDescription.?,
                         .startMapIndex = @intCast(resourceMapper.bufMapPersistent.getLength() - resourceMapper.allSharedBuffers.getLength()),
@@ -241,7 +241,7 @@ pub const ResourceMapperSys = struct {
             switch (lastTexDescription.?.share) {
                 .transient => {
                     const texGroup = TextureGroup{
-                        .rootPass = graphExtractor.orderedPasses.getConstItems()[lastLifetime.?.earliest].passEnum,
+                        .rootPass = graphOptimizer.optimizedGraph.getConstItems()[lastLifetime.?.earliest].passEnum,
                         .rootTex = root,
                         .texDesc = lastTexDescription.?,
                         .startMapIndex = @intCast(resourceMapper.texMapTransient.getLength() - resourceMapper.allSharedTextures.getLength()),
@@ -251,7 +251,7 @@ pub const ResourceMapperSys = struct {
                 },
                 .persistent => {
                     const texGroup = TextureGroup{
-                        .rootPass = graphExtractor.orderedPasses.getConstItems()[lastLifetime.?.earliest].passEnum,
+                        .rootPass = graphOptimizer.optimizedGraph.getConstItems()[lastLifetime.?.earliest].passEnum,
                         .rootTex = root,
                         .texDesc = lastTexDescription.?,
                         .startMapIndex = @intCast(resourceMapper.texMapPersistent.getLength() - resourceMapper.allSharedTextures.getLength()),

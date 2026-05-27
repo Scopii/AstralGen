@@ -33,11 +33,11 @@ pub const FrameGraphSys = struct {
 
         GraphExtractorSys.buildGraph(&frameGraph.graphExtractor, &frameGraph.dependancyExtractor, &frameGraph.passExtractor);
 
-        GraphOptimizerSys.assignResourceLevels(&frameGraph.GraphOptimizerData, &frameGraph.graphExtractor, &frameGraph.resourceExtractor);
+        try GraphOptimizerSys.assignResourceLevels(&frameGraph.graphOptimizer, &frameGraph.graphExtractor, &frameGraph.resourceExtractor);
 
-        LifetimeExtractorSys.assignResourceLifetimes(&frameGraph.lifetimeExtractor, &frameGraph.graphExtractor, &frameGraph.resourceExtractor);
+        LifetimeExtractorSys.assignResourceLifetimes(&frameGraph.lifetimeExtractor, &frameGraph.graphOptimizer, &frameGraph.resourceExtractor);
 
-        try ResourceMapperSys.buildMapping(&frameGraph.resourceMapper, &frameGraph.resourceExtractor, &frameGraph.lifetimeExtractor, &frameGraph.graphExtractor);
+        try ResourceMapperSys.buildMapping(&frameGraph.resourceMapper, &frameGraph.resourceExtractor, &frameGraph.lifetimeExtractor, &frameGraph.graphOptimizer);
 
         LifetimeMergerSys.buildPassResources(&frameGraph.lifetimeMerger, &frameGraph.lifetimeExtractor, &frameGraph.resourceMapper);
 
@@ -54,7 +54,7 @@ pub const FrameGraphSys = struct {
             memoryMan,
         );
 
-        try PassSorterSys.buildFrame(&frameGraph.passSorter, &frameGraph.passExtractor, &frameGraph.graphExtractor, &frameGraph.groupMerger, &frameGraph.resourceAssigner);
+        try PassSorterSys.buildFrame(&frameGraph.passSorter, &frameGraph.passExtractor, &frameGraph.graphOptimizer, &frameGraph.groupMerger, &frameGraph.resourceAssigner);
     }
 
     pub fn createTextureManually(frameGraph: *FrameGraphData, texEnum: TextureEnum, rendererQueue: *RendererQueue, memoryMan: *MemoryManager) !void {

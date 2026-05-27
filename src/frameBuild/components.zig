@@ -142,3 +142,16 @@ pub const TransientTexture = struct {
     texId: TexId,
     texDesc: TexDesc,
 };
+
+pub const PassAccessRange = struct {
+    firstBuf: u16,
+    lastBuf: u16,
+    firstTex: u16,
+    lastTex: u16,
+};
+
+pub const GraphMemoryNode = struct {
+    level: u16,
+    passEnum: pe.PassEnum,
+    memWeight: i64, // bornBytes - dyingBytes,
+};

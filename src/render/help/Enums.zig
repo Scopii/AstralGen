@@ -47,6 +47,16 @@ pub const TexTyp = enum {
             .Stencil8 => vk.VK_IMAGE_ASPECT_STENCIL_BIT,
         };
     }
+
+    pub fn bytesPerPixel(self: TexTyp) u32 {
+        return switch (self) {
+            .Color16 => 8, // R16G16B16A16_SFLOAT
+            .Color8 => 4, // R8G8B8A8_UNORM
+            .Swapchain => 4,
+            .Depth32 => 4, // D32_SFLOAT
+            .Stencil8 => 1, // S8_UINT
+        };
+    }
 };
 
 pub const TexDescriptor = enum {

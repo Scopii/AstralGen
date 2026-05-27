@@ -1,5 +1,5 @@
 const ResourceAssignerData = @import("../6_resourceAssigner/ResourceAssignerData.zig").ResourceAssignerData;
-const GraphExtractorData = @import("../4_graphExtractor/GraphExtractorData.zig").GraphExtractorData;
+const GraphOptimizerData = @import("../4.5_graphOptimizer/GraphOptimizerData.zig").GraphOptimizerData;
 const PassExtractorData = @import("../1_passExtractor/PassExtractorData.zig").PassExtractorData;
 const GroupMergerData = @import("../5.4_groupMerger/GroupMergerData.zig").GroupMergerData;
 const PassSorterData = @import("../7_passSorter/PassSorterData.zig").PassSorterData;
@@ -12,7 +12,7 @@ pub const PassSorterSys = struct {
     pub fn buildFrame(
         passSorter: *PassSorterData,
         passExtractor: *const PassExtractorData,
-        graphExtractor: *const GraphExtractorData,
+        graphOptimizer: *const GraphOptimizerData,
         groupMerger: *const GroupMergerData,
         resourceAssigner: *const ResourceAssignerData,
     ) !void {
@@ -36,7 +36,7 @@ pub const PassSorterSys = struct {
         }
 
         // Check Buckets for Correct Pass
-        for (graphExtractor.orderedPasses.getConstItems()) |graphNode| {
+        for (graphOptimizer.optimizedGraph.getConstItems()) |graphNode| {
             const passEnum = graphNode.passEnum;
 
             var neededClears = false;

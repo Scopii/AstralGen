@@ -27,6 +27,18 @@ pub const TextureMeta = struct {
         depth: u32 = 1,
         update: vhE.UpdateType,
         resize: vhE.ResizeType = .Block,
+
+        pub fn guessMemoryCost(self: *const TexDesc) u64 {
+            const bytesPerPixel = self.typ.bytesPerPixel();
+            const rawMemory = @as(u64, self.width) * @as(u64, self.height) * @as(u64, self.depth) * bytesPerPixel;
+
+            return switch (self.update) {
+                .Rarely => rawMemory,
+                .Often, .PerFrame => rawMemory * rc.MAX_IN_FLIGHT,
+
+                // .Rarely, .Often, .PerFrame => rawMemory,
+            };
+        }
     };
 
     pub const TexInf = struct {
