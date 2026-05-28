@@ -13,50 +13,65 @@ pub const DependancyExtractorSys = struct {
         dependancyExtractor.bufDependancies.clear();
         dependancyExtractor.texDependancies.clear();
 
-        // For Buffers
-        const bufAccesses = resourceExtractor.bufAccesses.constSlice();
+        dependancyExtractor.lastBufWriter.clear();
+        dependancyExtractor.lastTexWriter.clear();
 
-        for (0..bufAccesses.len) |firstIndex| {
-            const firstAccess = bufAccesses[firstIndex];
+        // Register Buffer Producers
+        for (resourceExtractor.bufAccesses.constSlice()) |bufAccess| {
+            if (bufAccess.bufOutput) |bufOutput| {
+                const outputBufKey: u16 = @intFromEnum(bufOutput);
 
-            if (firstAccess.bufOutput) |firstBufOutput| {
-                for (0..bufAccesses.len) |secondIndex| {
-                    if (firstIndex != secondIndex) {
-                        const secondAccess = bufAccesses[secondIndex];
+                // Double Write Check: Only allowed exactly one producer!
+                if (dependancyExtractor.lastBufWriter.isKeyUsed(outputBufKey)) {
+                    const existingWriter = dependancyExtractor.lastBufWriter.getByKey(outputBufKey);
+                    std.debug.print("VALIDATION: Buffer {s} produced by both {s} and {s}\n", .{ @tagName(bufOutput), @tagName(existingWriter), @tagName(bufAccess.passEnum) });
+                }
 
-                        if (firstBufOutput == secondAccess.bufInput) {
-                            const bufDependancy = BufferDependancy{
-                                .bufEnum = firstBufOutput,
-                                .predecessor = firstAccess.passEnum,
-                                .successor = secondAccess.passEnum,
-                            };
-                            dependancyExtractor.bufDependancies.append(bufDependancy) catch std.debug.print("ERROR: Dependancy Extractor bufDependancy append failed!\n", .{});
-                        }
-                    }
+                dependancyExtractor.lastBufWriter.upsert(outputBufKey, bufAccess.passEnum);
+            }
+        }
+
+        // Resolve Buffer Consumers
+        for (resourceExtractor.bufAccesses.constSlice()) |bufAccesses| {
+            const inputBufKey: u16 = @intFromEnum(bufAccesses.bufInput);
+
+            if (dependancyExtractor.lastBufWriter.isKeyUsed(inputBufKey) == true) {
+                // Graph Edge only if its a cross pass dependancy (Pass does not consume its own resourcve)
+                const inputPass = dependancyExtractor.lastBufWriter.getByKey(inputBufKey);
+
+                if (inputPass != bufAccesses.passEnum) {
+                    const bufDep = BufferDependancy{ .bufEnum = bufAccesses.bufInput, .predecessor = inputPass, .successor = bufAccesses.passEnum };
+                    dependancyExtractor.bufDependancies.append(bufDep) catch std.debug.print("ERROR: 3.DependancyExtractor: bufDependancies append failed\n", .{});
                 }
             }
         }
 
-        // For Textures
-        const texAccesses = resourceExtractor.texAccesses.constSlice();
+        // Register Texture Producers
+        for (resourceExtractor.texAccesses.constSlice()) |texAccess| {
+            if (texAccess.texOutput) |texOutput| {
+                const outputTexKey: u16 = @intFromEnum(texOutput);
 
-        for (0..texAccesses.len) |firstIndex| {
-            const firstAccess = texAccesses[firstIndex];
+                // Double Write Check: Only allowed exactly one producer!
+                if (dependancyExtractor.lastTexWriter.isKeyUsed(outputTexKey)) {
+                    const existingWriter = dependancyExtractor.lastTexWriter.getByKey(outputTexKey);
+                    std.debug.print("VALIDATION: Texture {s} produced by both {s} and {s}\n", .{ @tagName(texOutput), @tagName(existingWriter), @tagName(texAccess.passEnum) });
+                }
 
-            if (firstAccess.texOutput) |firstTexOutput| {
-                for (0..texAccesses.len) |secondIndex| {
-                    if (firstIndex != secondIndex) {
-                        const secondAccess = texAccesses[secondIndex];
+                dependancyExtractor.lastTexWriter.upsert(outputTexKey, texAccess.passEnum);
+            }
+        }
 
-                        if (firstTexOutput == secondAccess.texInput) {
-                            const texDependancy = TextureDependancy{
-                                .texEnum = firstTexOutput,
-                                .predecessor = firstAccess.passEnum,
-                                .successor = secondAccess.passEnum,
-                            };
-                            dependancyExtractor.texDependancies.append(texDependancy) catch std.debug.print("ERROR: Dependancy Extractor bufDependancy append failed!\n", .{});
-                        }
-                    }
+        // Resolve Texture Consumers
+        for (resourceExtractor.texAccesses.constSlice()) |texAccesses| {
+            const inputTexKey: u16 = @intFromEnum(texAccesses.texInput);
+
+            if (dependancyExtractor.lastTexWriter.isKeyUsed(inputTexKey) == true) {
+                // Graph Edge only if its a cross pass dependancy (Pass does not consume its own resourcve)
+                const inputPass = dependancyExtractor.lastTexWriter.getByKey(inputTexKey);
+
+                if (inputPass != texAccesses.passEnum) {
+                    const texDep = TextureDependancy{ .texEnum = texAccesses.texInput, .predecessor = inputPass, .successor = texAccesses.passEnum };
+                    dependancyExtractor.texDependancies.append(texDep) catch std.debug.print("ERROR: 3.DependancyExtractor: texDependancies append failed\n", .{});
                 }
             }
         }
