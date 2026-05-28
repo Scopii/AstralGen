@@ -54,7 +54,7 @@ pub fn createInstance(alloc: Allocator) !vk.VkInstance {
     const reqExtensions = sdl.SDL_Vulkan_GetInstanceExtensions(&extCount);
     for (0..extCount) |i| try extensions.append(reqExtensions[i]);
 
-    if (rc.VALIDATION) {
+    if (rc.VALIDATION or rc.GPU_VALIDATION or rc.BEST_PRACTICES) {
         try extensions.append("VK_EXT_debug_utils");
         try layers.append("VK_LAYER_KHRONOS_validation");
         //try layers.append("VK_EXT_layer_settings");

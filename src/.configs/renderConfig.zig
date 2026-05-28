@@ -110,8 +110,8 @@ pub const gridDepthTexDesc = TexDesc{
     .texUse = .{ .depthAtt = true, .sampled = true, .transferSrc = false },
     .descriptors = .SampledOnly,
     .typ = .Depth32,
-    .width = 16,
-    .height = 9,
+    .width = 1920,
+    .height = 1080,
     .update = .Rarely,
     .resize = .Fit,
 };
