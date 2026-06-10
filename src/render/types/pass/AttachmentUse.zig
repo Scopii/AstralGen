@@ -12,8 +12,16 @@ pub const AttachmentUse = struct {
 
     pub const ClearColor = union(enum) { color: [4]f32, depthStencil: vk.VkClearDepthStencilValue };
 
-    pub fn init(texLink: TextureLink, stage: vhE.PipeStage, access: vhE.PipeAccess, layout: vhE.ImageLayout, clear: ?ClearColor) AttachmentUse {
-        return .{ .texLink = texLink, .stage = stage, .access = access, .layout = layout, .clear = clear };
+    pub fn init(texLink: TextureLink, stage: vhE.PipeStage, access: vhE.PipeAccess, clear: ?ClearColor) AttachmentUse {
+        const layout: vhE.ImageLayout = if (access.isReadOnly() == true) .ReadOnly else .Attachment;
+
+        return .{
+            .texLink = texLink,
+            .stage = stage,
+            .access = access,
+            .layout = layout,
+            .clear = clear,
+        };
     }
 
     pub fn getNeededState(self: *const AttachmentUse) Texture.TextureState {

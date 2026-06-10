@@ -11,8 +11,20 @@ pub const TextureUse = struct {
     descUse: vhE.TexDescriptor,
     shaderSlot: ?u32 = null,
 
-    pub fn init(texLink: TextureLink, stage: vhE.PipeStage, access: vhE.PipeAccess, layout: vhE.ImageLayout, shaderSlot: ?u8, descUse: vhE.TexDescriptor) TextureUse {
-        return .{ .texLink = texLink, .stage = stage, .access = access, .layout = layout, .shaderSlot = if (shaderSlot) |slot| slot else null, .descUse = descUse };
+    pub fn init(texLink: TextureLink, stage: vhE.PipeStage, access: vhE.PipeAccess, shaderSlot: ?u8, descUse: vhE.TexDescriptor) TextureUse {
+        const layout: vhE.ImageLayout = switch (descUse) {
+            .Sampled => .ReadOnly,
+            .Storage => .General,
+        };
+        
+        return .{
+            .texLink = texLink,
+            .stage = stage,
+            .access = access,
+            .layout = layout,
+            .shaderSlot = if (shaderSlot) |slot| slot else null,
+            .descUse = descUse,
+        };
     }
 
     pub fn getNeededState(self: *const TextureUse) Texture.TextureState {
