@@ -108,7 +108,8 @@ pub const App = struct {
 
         self.data.viewport.viewports.upsert(10, Viewport{
             .name = "DeptView",
-            .cameraEntity = mainCamId,
+            .renderCamEntityId = mainCamId,
+            .viewCamEntityId = debugCamId,
             .areaX = 0,
             .areaY = 0,
             .areaWidth = 1,
@@ -134,7 +135,8 @@ pub const App = struct {
 
         self.data.viewport.viewports.upsert(1, Viewport{
             .name = "MainWindow",
-            .cameraEntity = mainCamId,
+            .renderCamEntityId = mainCamId,
+            .viewCamEntityId = mainCamId,
             .areaX = 0.0,
             .areaY = 0.0,
             .areaWidth = 1.0,
@@ -160,7 +162,8 @@ pub const App = struct {
 
         self.data.viewport.viewports.upsert(2, Viewport{
             .name = "Top Right",
-            .cameraEntity = mainCamId,
+            .renderCamEntityId = mainCamId,
+            .viewCamEntityId = mainCamId,
             .areaX = 0.5,
             .areaY = 0.0,
             .areaWidth = 0.5,
@@ -174,7 +177,8 @@ pub const App = struct {
 
         self.data.viewport.viewports.upsert(3, Viewport{
             .name = "Top Left",
-            .cameraEntity = debugCamId,
+            .renderCamEntityId = mainCamId,
+            .viewCamEntityId = debugCamId,
             .areaX = 0.0,
             .areaY = 0.0,
             .areaWidth = 0.5,
@@ -188,7 +192,8 @@ pub const App = struct {
         });
         self.data.viewport.viewports.upsert(4, Viewport{
             .name = "Bot Left",
-            .cameraEntity = debugCamId,
+            .renderCamEntityId = mainCamId,
+            .viewCamEntityId = debugCamId,
             .areaX = 0.0,
             .areaY = 0.5,
             .areaWidth = 0.5,
@@ -204,7 +209,8 @@ pub const App = struct {
 
         self.data.viewport.viewports.upsert(5, Viewport{
             .name = "Bot Right",
-            .cameraEntity = mainCamId,
+            .renderCamEntityId = mainCamId,
+            .viewCamEntityId = mainCamId,
             .areaX = 0.5,
             .areaY = 0.5,
             .areaWidth = 0.5,

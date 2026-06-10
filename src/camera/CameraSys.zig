@@ -29,7 +29,7 @@ pub const CameraSys = struct {
         if (data.viewport.selectedViewportId) |viewId| {
             if (data.viewport.viewports.isKeyUsed(viewId.val)) {
                 const viewport = data.viewport.viewports.getByKey(viewId.val);
-                if (viewport.cameraEntity) |entityId| activeCamId = entityId.val;
+                if (viewport.viewCamEntityId) |entityId| activeCamId = entityId.val;
             }
         }
 
@@ -100,7 +100,7 @@ pub const CameraSys = struct {
         // EXTRACT STATE TO RENDERER
         // Iterate linearly over all cameras
         for (data.viewport.viewports.getConstItems()) |viewport| {
-            const camEntityId = viewport.cameraEntity orelse continue;
+            const camEntityId = viewport.viewCamEntityId orelse continue;
 
             if (!ecs.cameras.isKeyUsed(camEntityId.val)) continue;
             if (!ecs.transforms.isKeyUsed(camEntityId.val)) continue;

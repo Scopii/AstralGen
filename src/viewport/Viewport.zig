@@ -7,7 +7,8 @@ pub const Viewport = struct {
     areaY: f32 = 0.0,
     areaWidth: f32 = 1.0,
     areaHeight: f32 = 1.0,
-    cameraEntity: ?EntityId,
+    renderCamEntityId: ?EntityId,
+    viewCamEntityId: ?EntityId,
     opacity: f32 = 1.0,
 
     passes: []const PassEnum,
