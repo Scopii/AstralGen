@@ -8,6 +8,7 @@ const ResourceMan = @import("sys/ResourceMan.zig").ResourceMan;
 const RenderGraph = @import("sys/RenderGraph.zig").RenderGraph;
 const ShaderMan = @import("sys/ShaderMan.zig").ShaderMan;
 const Scheduler = @import("sys/Scheduler.zig").Scheduler;
+const UiNode = @import("types/pass/PassDef.zig").UiNode;
 const Context = @import("sys/Context.zig").Context;
 const rc = @import("../.configs/renderConfig.zig");
 const FrameData = @import("../App.zig").FrameData;
@@ -109,8 +110,7 @@ pub const Renderer = struct {
 
             if (window.resizeTex == true and rc.RENDER_TEX_AUTO_RESIZE and window.state != .needDelete) {
                 for (0..window.linkedTexEnums.len) |i| {
-                    if (window.linkedTexEnums[i] == null) break;
-                    const texEnum = window.linkedTexEnums[i].?;
+                    const texEnum = window.linkedTexEnums[i] orelse continue;
                     try self.updateRenderTexture(texEnum, texAssigns);
                 }
             }
@@ -131,6 +131,7 @@ pub const Renderer = struct {
         self: *Renderer,
         frameData: FrameData,
         renderNodes: []const RenderNode,
+        uiNodes: []const UiNode,
         bufAssigns: *const BufferAssignments,
         texAssigns: *const TextureAssignments,
         activeWindows: []const Window,
@@ -138,6 +139,7 @@ pub const Renderer = struct {
     ) !void {
         self.renderNodes.clearRetainingCapacity();
         try self.renderNodes.appendSlice(renderNodes);
+        for (uiNodes) |uiNode| self.renderNodes.append(.{ .uiNode = uiNode }) catch std.debug.print("Failed to append UiNode\n", .{});
 
         const flightId = try self.scheduler.beginFrame();
         try self.resMan.update(flightId, self.scheduler.totalFrames);

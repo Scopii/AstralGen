@@ -19,7 +19,6 @@ pub const PassSorterSys = struct {
         passSorter.tempPasses.clear();
         passSorter.tempBlits.clear();
         passSorter.tempComposites.clear();
-        passSorter.tempUi.clear();
 
         passSorter.sortedRenderNodes.clear();
         const renderNodes = passExtractor.renderNodes.constSlice();
@@ -30,7 +29,7 @@ pub const PassSorterSys = struct {
                 .passNode => passSorter.tempPasses.append(@intCast(i)) catch std.debug.print("7.PassSorter: Failed to append Pass", .{}),
                 .viewportBlit => passSorter.tempBlits.append(@intCast(i)) catch std.debug.print("7.PassSorter: Failed to append Blit", .{}),
                 .compositeNode => passSorter.tempComposites.append(@intCast(i)) catch std.debug.print("7.PassSorter: Failed to append Composite", .{}),
-                .uiNode => passSorter.tempUi.append(@intCast(i)) catch std.debug.print("7.PassSorter: Failed to append UI", .{}),
+                .uiNode => return error.UiInPassSorter,
                 else => {}, // clears/barriers generated below
             }
         }
@@ -82,11 +81,6 @@ pub const PassSorterSys = struct {
                     passSorter.sortedRenderNodes.append(.{ .compositeNode = composite.* }) catch std.debug.print("7.PassSorter: Composite Append to sortedRenderNodes failed", .{});
                 }
             }
-        }
-
-        // Ui
-        for (passSorter.tempUi.constSlice()) |i| {
-            passSorter.sortedRenderNodes.append(.{ .uiNode = renderNodes[i].uiNode }) catch std.debug.print("7.PassSorter: Ui Append to sortedRenderNodes failed", .{});
         }
 
         // Debug Prints

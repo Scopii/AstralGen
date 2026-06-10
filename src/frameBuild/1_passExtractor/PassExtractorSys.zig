@@ -140,9 +140,6 @@ pub const PassExtractorSys = struct {
             std.debug.print("\n", .{});
         }
 
-        for (data.ui.activeNodes) |uiNode| {
-            passExtractor.renderNodes.append(.{ .uiNode = uiNode }) catch std.debug.print("Failed to append UiNode\n", .{});
-        }
     }
 
     fn createBlit(viewport: *const Viewport, pass: PassEnum, windowId: WindowId, windowWidth: u32, windowHeight: u32) ViewportBlit {

@@ -303,6 +303,7 @@ pub const App = struct {
                 try RenderPrepSys.extractEntities(&self.data.entityData, &self.frameGraphQueue, self.memoryMan);
 
                 try UiSys.update(&self.data.ui, &self.data, &self.frameGraphQueue, self.memoryMan);
+                const uiNodes = self.data.ui.activeNodes;
 
                 if (rc.CPU_PROFILING) std.debug.print("Cpu pre-Renderer Delta {d:.3} ms, ({d:.1} Real FPS)\n", .{ dt * 0.000001, 1.0 / (dt * 0.000000001) });
 
@@ -353,7 +354,7 @@ pub const App = struct {
 
                 if (rc.EARLY_GPU_WAIT == false) try renderer.waitForGpu();
 
-                renderer.draw(frameData, sortedRenderNodes, &bufAssigns, &texAssigns, self.data.window.activeWindows.constSlice(), &self.rendererOutQueue) catch |err| {
+                renderer.draw(frameData, sortedRenderNodes, uiNodes, &bufAssigns, &texAssigns, self.data.window.activeWindows.constSlice(), &self.rendererOutQueue) catch |err| {
                     std.log.err("Error in renderer.submitDraw(): {}", .{err});
                     break;
                 };
