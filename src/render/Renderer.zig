@@ -5,7 +5,7 @@ const BufferMeta = @import("types/res/BufferMeta.zig").BufferMeta;
 const SwapchainMan = @import("sys/SwapchainMan.zig").SwapchainMan;
 const RenderNode = @import("types/pass/PassDef.zig").RenderNode;
 const ResourceMan = @import("sys/ResourceMan.zig").ResourceMan;
-const RenderGraph = @import("sys/RenderGraph.zig").RenderGraph;
+const CmdRecorder = @import("sys/CmdRecorder.zig").CmdRecorder;
 const ShaderMan = @import("sys/ShaderMan.zig").ShaderMan;
 const Scheduler = @import("sys/Scheduler.zig").Scheduler;
 const UiNode = @import("types/pass/PassDef.zig").UiNode;
@@ -28,7 +28,7 @@ pub const Renderer = struct {
     arenaAlloc: Allocator,
     context: Context,
     resMan: ResourceMan,
-    renderGraph: RenderGraph,
+    renderGraph: CmdRecorder,
     shaderMan: ShaderMan,
     swapMan: SwapchainMan,
     scheduler: Scheduler,
@@ -44,7 +44,7 @@ pub const Renderer = struct {
             .arenaAlloc = memoryMan.getGlobalArena(),
             .context = context,
             .resMan = resMan,
-            .renderGraph = try RenderGraph.init(alloc, &context),
+            .renderGraph = try CmdRecorder.init(alloc, &context),
             .shaderMan = try ShaderMan.init(&context),
             .scheduler = try Scheduler.init(&context, rc.MAX_IN_FLIGHT),
             .swapMan = try SwapchainMan.init(alloc, &context),

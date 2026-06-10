@@ -31,7 +31,7 @@ const BufferAssignments = @import("../../frameBuild/6_resourceAssigner/ResourceA
 const TextureEnum = @import("../../frameBuild/enums.zig").TextureEnum;
 const BufferEnum = @import("../../frameBuild/enums.zig").BufferEnum;
 
-pub const RenderGraph = struct {
+pub const CmdRecorder = struct {
     alloc: Allocator,
     gpi: vk.VkDevice,
     cmdMan: CmdManager,
@@ -47,7 +47,7 @@ pub const RenderGraph = struct {
     useGpuStats: bool = false,
     lastPassTyp: ?PassDef.PassExecution = null,
 
-    pub fn init(alloc: Allocator, context: *const Context) !RenderGraph {
+    pub fn init(alloc: Allocator, context: *const Context) !CmdRecorder {
         return .{
             .alloc = alloc,
             .gpi = context.gpi,
@@ -59,7 +59,7 @@ pub const RenderGraph = struct {
         };
     }
 
-    pub fn deinit(self: *RenderGraph) void {
+    pub fn deinit(self: *CmdRecorder) void {
         self.imgBarriers.deinit();
         self.bufBarriers.deinit();
         self.imgClears.deinit();
@@ -67,7 +67,7 @@ pub const RenderGraph = struct {
         self.cmdMan.deinit();
     }
 
-    pub fn toggleGpuProfiling(self: *RenderGraph) void {
+    pub fn toggleGpuProfiling(self: *CmdRecorder) void {
         if (rc.GPU_TIMERS == true) {
             if (self.useGpuTimers == true) self.useGpuTimers = false else self.useGpuTimers = true;
         }
@@ -77,7 +77,7 @@ pub const RenderGraph = struct {
     }
 
     pub fn recordFrame(
-        self: *RenderGraph,
+        self: *CmdRecorder,
         renderNodes: []RenderNode,
         flightId: u8,
         frame: u64,
@@ -111,7 +111,7 @@ pub const RenderGraph = struct {
         return cmd;
     }
 
-    fn recordTransfers(self: *RenderGraph, cmd: *Cmd, resMan: *ResourceMan) !void {
+    fn recordTransfers(self: *CmdRecorder, cmd: *Cmd, resMan: *ResourceMan) !void {
         var resUpdater = &resMan.updater;
         const stagingBuf = resUpdater.getStagingBuffer(cmd.flightId);
 
@@ -172,7 +172,7 @@ pub const RenderGraph = struct {
         resUpdater.resetUpdates(cmd.flightId);
     }
 
-    fn checkImageState(self: *RenderGraph, tex: *Texture, neededState: Texture.TextureState) !void {
+    fn checkImageState(self: *CmdRecorder, tex: *Texture, neededState: Texture.TextureState) !void {
         const state = tex.state;
         if (state.stage == neededState.stage and state.access == neededState.access and state.layout == neededState.layout) return;
         if (state.layout == neededState.layout and state.access.isReadOnly() and neededState.access.isReadOnly()) return; // same layout, both reads
@@ -190,7 +190,7 @@ pub const RenderGraph = struct {
         }
     }
 
-    fn checkBufferState(self: *RenderGraph, buffer: *Buffer, neededState: Buffer.BufferState) !void {
+    fn checkBufferState(self: *CmdRecorder, buffer: *Buffer, neededState: Buffer.BufferState) !void {
         const state = buffer.state;
         if (state.stage == neededState.stage and state.access == neededState.access) return;
         if (state.access.isReadOnly() and neededState.access.isReadOnly()) return;
@@ -207,7 +207,7 @@ pub const RenderGraph = struct {
     }
 
     fn recordPassBarriers(
-        self: *RenderGraph,
+        self: *CmdRecorder,
         cmd: *const Cmd,
         pass: *const PassDef,
         resMan: *ResourceMan,
@@ -271,7 +271,7 @@ pub const RenderGraph = struct {
     }
 
     fn recordNodes(
-        self: *RenderGraph,
+        self: *CmdRecorder,
         cmd: *Cmd,
         renderNodes: []RenderNode,
         frameData: FrameData,
@@ -312,19 +312,19 @@ pub const RenderGraph = struct {
         }
     }
 
-    fn recordBufferClear(self: *RenderGraph, cmd: *Cmd, bufId: BufId, resMan: *ResourceMan) !void {
+    fn recordBufferClear(self: *CmdRecorder, cmd: *Cmd, bufId: BufId, resMan: *ResourceMan) !void {
         const buffer: *Buffer = try resMan.get(bufId, cmd.flightId);
         try self.checkBufferState(buffer, .{ .stage = .Transfer, .access = .TransferWrite });
         try self.bufClears.append(bufId);
     }
 
-    fn recordTextureClear(self: *RenderGraph, cmd: *Cmd, texId: TexId, resMan: *ResourceMan) !void {
+    fn recordTextureClear(self: *CmdRecorder, cmd: *Cmd, texId: TexId, resMan: *ResourceMan) !void {
         const texture: *Texture = try resMan.get(texId, cmd.flightId);
         try self.checkImageState(texture, .{ .stage = .Transfer, .access = .TransferWrite, .layout = .TransferDst });
         try self.imgClears.append(texId);
     }
 
-    fn bakeAndExecuteClears(self: *RenderGraph, cmd: *Cmd, resMan: *ResourceMan) !void {
+    fn bakeAndExecuteClears(self: *CmdRecorder, cmd: *Cmd, resMan: *ResourceMan) !void {
         self.bakeBarriers(cmd, "Clear Barrier");
 
         for (self.imgClears.items) |texId| {
@@ -344,7 +344,7 @@ pub const RenderGraph = struct {
     }
 
     fn recordCompositeNode(
-        self: *RenderGraph,
+        self: *CmdRecorder,
         cmd: *Cmd,
         composite: CompositeNode,
         resMan: *ResourceMan,
@@ -413,7 +413,7 @@ pub const RenderGraph = struct {
     }
 
     fn recordUiNode(
-        self: *RenderGraph,
+        self: *CmdRecorder,
         cmd: *Cmd,
         uiNode: UiNode,
         resMan: *ResourceMan,
@@ -532,7 +532,7 @@ pub const RenderGraph = struct {
     }
 
     fn recordPass(
-        self: *RenderGraph,
+        self: *CmdRecorder,
         cmd: *Cmd,
         pass: *const PassDef,
         frameData: FrameData,
@@ -576,7 +576,7 @@ pub const RenderGraph = struct {
     }
 
     fn recordBlit(
-        self: *RenderGraph,
+        self: *CmdRecorder,
         cmd: *Cmd,
         blit: ViewportBlit,
         resMan: *ResourceMan,
@@ -665,7 +665,7 @@ pub const RenderGraph = struct {
         cmd.endRendering();
     }
 
-    fn recordPresentation(self: *RenderGraph, cmd: *Cmd, swapMan: *SwapchainMan) !void {
+    fn recordPresentation(self: *CmdRecorder, cmd: *Cmd, swapMan: *SwapchainMan) !void {
         const timeId = cmd.startTimer(.TopOfPipe, "Presentation", .Other);
 
         const targetIndices = swapMan.getTargetsIndices();
@@ -678,7 +678,7 @@ pub const RenderGraph = struct {
         cmd.endTimer(.BotOfPipe, timeId);
     }
 
-    fn bakeBarriers(self: *RenderGraph, cmd: *const Cmd, name: []const u8) void {
+    fn bakeBarriers(self: *CmdRecorder, cmd: *const Cmd, name: []const u8) void {
         const imgBarrierCount = self.imgBarriers.items.len;
         const bufBarrierCount = self.bufBarriers.items.len;
         const hasMemBarrier = self.memSrcStage != 0;
