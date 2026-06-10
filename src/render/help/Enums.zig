@@ -145,9 +145,9 @@ pub const PipeAccess = enum(vk.VkAccessFlagBits2) {
     ResourceHeapRead = vk.VK_ACCESS_2_RESOURCE_HEAP_READ_BIT_EXT,
     SamplerHeapRead = vk.VK_ACCESS_2_SAMPLER_HEAP_READ_BIT_EXT,
 
-    ShaderRead = vk.VK_ACCESS_2_SHADER_STORAGE_READ_BIT,
-    ShaderWrite = vk.VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
-    ShaderReadWrite = vk.VK_ACCESS_2_SHADER_STORAGE_READ_BIT | vk.VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+    StorageRead = vk.VK_ACCESS_2_SHADER_STORAGE_READ_BIT,
+    StorageWrite = vk.VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+    storageReadWrite = vk.VK_ACCESS_2_SHADER_STORAGE_READ_BIT | vk.VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
 
     UniformRead = vk.VK_ACCESS_2_UNIFORM_READ_BIT,
 
@@ -178,7 +178,7 @@ pub const PipeAccess = enum(vk.VkAccessFlagBits2) {
 
     pub fn isReadOnly(self: PipeAccess) bool {
         return switch (self) {
-            .ShaderRead,
+            .StorageRead,
             .IndexRead,
             .IndirectRead,
             .VertexAttributeRead,

@@ -32,8 +32,8 @@ pub fn DepthView(def: struct {
             BufferUse.init(def.camBuf, .Compute, .UniformRead, 3),
         },
         .texUses = &.{
-            TextureUse.init(def.outputTex, .Compute, .ShaderWrite, 0, .Storage),
-            TextureUse.init(def.depthTex, .Compute, .ShaderRead, 1, .Sampled),
+            TextureUse.init(def.outputTex, .Compute, .StorageWrite, 0),
+            TextureUse.init(def.depthTex, .Compute, .SampledRead, 1),
         },
     });
 }
@@ -89,13 +89,13 @@ pub fn CompRayMarch(
         .execution = .{ .workgroups = .{ .x = 8, .y = 8, .z = 1 }, .mainTexId = def.outputTex.in },
         .compute = sc.t1Comp,
         .bufUses = &.{
-            BufferUse.init(def.entityBuf, .Compute, .ShaderRead, 0),
+            BufferUse.init(def.entityBuf, .Compute, .StorageRead, 0),
             BufferUse.init(def.camBuf, .Compute, .UniformRead, 1),
-            BufferUse.init(def.readbackBuf, .Compute, .ShaderWrite, 3),
+            BufferUse.init(def.readbackBuf, .Compute, .StorageWrite, 3),
         },
         .texUses = &.{
-            TextureUse.init(def.outputTex, .Compute, .ShaderWrite, 2, .Storage),
-            TextureUse.init(def.debugTex, .Compute, .ShaderRead, 4, .Storage),
+            TextureUse.init(def.outputTex, .Compute, .StorageWrite, 2),
+            TextureUse.init(def.debugTex, .Compute, .StorageRead, 4),
         },
     });
 }
@@ -171,8 +171,8 @@ pub fn QuantComp(
         .execution = .{ .workgroups = .{ .x = 1, .y = 1, .z = 1 } },
         .compute = sc.quantComp,
         .bufUses = &.{
-            BufferUse.init(def.indirectBuf, .Compute, .ShaderReadWrite, 0),
-            BufferUse.init(def.entityBuf, .Compute, .ShaderRead, 1),
+            BufferUse.init(def.indirectBuf, .Compute, .StorageReadWrite, 0),
+            BufferUse.init(def.entityBuf, .Compute, .StorageRead, 1),
         },
     });
 }

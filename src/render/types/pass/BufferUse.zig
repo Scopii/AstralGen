@@ -8,7 +8,17 @@ pub const BufferUse = struct {
     access: vhE.PipeAccess = .None,
     shaderSlot: ?u32 = null,
 
-    pub fn init(bufLink: BufferLink, stage: vhE.PipeStage, access: vhE.PipeAccess, shaderSlot: ?u8) BufferUse {
+    pub const BufUseKind = enum { UniformRead, StorageRead, StorageWrite, StorageReadWrite, IndirectRead };
+
+    pub fn init(bufLink: BufferLink, stage: vhE.PipeStage, bufUseKind: BufUseKind, shaderSlot: ?u8) BufferUse {
+        const access: vhE.PipeAccess = switch (bufUseKind) {
+            .UniformRead => .UniformRead,
+            .StorageRead => .StorageRead,
+            .StorageWrite => .StorageWrite,
+            .StorageReadWrite => .storageReadWrite,
+            .IndirectRead => .IndirectRead,
+        };
+
         return .{ .bufLink = bufLink, .stage = stage, .access = access, .shaderSlot = if (shaderSlot) |slot| slot else null };
     }
 

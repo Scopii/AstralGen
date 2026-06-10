@@ -11,12 +11,26 @@ pub const TextureUse = struct {
     descUse: vhE.TexDescriptor,
     shaderSlot: ?u32 = null,
 
-    pub fn init(texLink: TextureLink, stage: vhE.PipeStage, access: vhE.PipeAccess, shaderSlot: ?u8, descUse: vhE.TexDescriptor) TextureUse {
-        const layout: vhE.ImageLayout = switch (descUse) {
-            .Sampled => .ReadOnly,
-            .Storage => .General,
+    pub const TextureUseKind = enum { SampledRead, StorageRead, StorageWrite, StorageReadWrite };
+
+    pub fn init(texLink: TextureLink, stage: vhE.PipeStage, texUseKind: TextureUseKind, shaderSlot: ?u8) TextureUse {
+        const layout: vhE.ImageLayout = switch (texUseKind) {
+            .SampledRead => .ReadOnly,
+            .StorageRead, .StorageWrite, .StorageReadWrite => .General,
         };
-        
+
+        const descUse: vhE.TexDescriptor = switch (texUseKind) {
+            .SampledRead => .Sampled,
+            .StorageRead, .StorageWrite, .StorageReadWrite => .Storage,
+        };
+
+        const access: vhE.PipeAccess = switch (texUseKind) {
+            .SampledRead => .SampledRead,
+            .StorageRead => .StorageRead,
+            .StorageWrite => .StorageWrite,
+            .StorageReadWrite => .storageReadWrite,
+        };
+
         return .{
             .texLink = texLink,
             .stage = stage,
