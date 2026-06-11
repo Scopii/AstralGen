@@ -139,7 +139,6 @@ pub const PassExtractorSys = struct {
             }
             std.debug.print("\n", .{});
         }
-
     }
 
     fn createBlit(viewport: *const Viewport, pass: PassEnum, windowId: WindowId, windowWidth: u32, windowHeight: u32) ViewportBlit {
@@ -196,7 +195,7 @@ pub const PassExtractorSys = struct {
                     .depthAtt = .{ .in = .GridDepthTex }, //rc.mainDepthTex.id,
                     .indirectBuf = .{ .in = .QuantIndirectOutputSB }, //rc.indirectSB.id,
                     .viewCam = .{ .in = .MainCamUB }, //rc.mainCamUB.id,
-                    .cullCam = .{ .in = .MainCamUB }, //rc.mainCamUB.id,
+                    .renderCam = .{ .in = .MainCamUB }, //rc.mainCamUB.id,
                 });
             },
             .QuantGridDebug => {
@@ -206,7 +205,7 @@ pub const PassExtractorSys = struct {
                     .depthAtt = .{ .in = .DebugGridDepthTex }, //rc.debugGridDepthTex.id,
                     .indirectBuf = .{ .in = .QuantIndirectOutputSB }, //rc.indirectSB.id,
                     .viewCam = .{ .in = .DebugCamUB }, // rc.debugCamUB.id,
-                    .cullCam = .{ .in = .MainCamUB }, //rc.mainCamUB.id,
+                    .renderCam = .{ .in = .MainCamUB }, //rc.mainCamUB.id,
                 });
             },
             .EditorGridGridDebug => {
@@ -232,7 +231,7 @@ pub const PassExtractorSys = struct {
                     .depthAtt = .{ .in = .PlaneDepthTex }, //rc.mainDepthTex.id,
                     .indirectBuf = .{ .in = .QuantIndirectOutputSB }, //rc.indirectSB.id,
                     .viewCam = .{ .in = .MainCamUB }, //rc.mainCamUB.id,
-                    .cullCam = .{ .in = .MainCamUB }, //rc.mainCamUB.id,
+                    .renderCam = .{ .in = .MainCamUB }, //rc.mainCamUB.id,
                 });
             },
             .QuantPlaneDebug => {
@@ -244,7 +243,7 @@ pub const PassExtractorSys = struct {
                         .in = .QuantIndirectOutputSB,
                     }, //rc.indirectSB.id,
                     .viewCam = .{ .in = .DebugCamUB }, //rc.debugCamUB.id,
-                    .cullCam = .{ .in = .MainCamUB }, //rc.mainCamUB.id,
+                    .renderCam = .{ .in = .MainCamUB }, //rc.mainCamUB.id,
                 });
             },
             .FrustumView => {
@@ -252,8 +251,8 @@ pub const PassExtractorSys = struct {
                     .name = .FrustumView,
                     .colorAtt = .{ .in = .DebugPlaneOutputTex, .out = .DebugPlaneOutputFrustumViewTex }, //rc.mainTex.id,
                     .depthAtt = .{ .in = .DebugPlaneDepthTex }, //rc.debugPlaneDepthTex.id,
-                    .frustumCamBuf = .{ .in = .MainCamUB }, //rc.mainCamUB.id,
-                    .viewCamBuf = .{ .in = .DebugCamUB }, //rc.debugCamUB.id,
+                    .renderCam = .{ .in = .MainCamUB }, //rc.mainCamUB.id,
+                    .viewCam = .{ .in = .DebugCamUB }, //rc.debugCamUB.id,
                 });
             },
             .DepthView => {

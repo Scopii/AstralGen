@@ -134,8 +134,8 @@ pub fn FrustumView(
         name: PassEnum,
         colorAtt: TextureLink,
         depthAtt: TextureLink,
-        frustumCamBuf: BufferLink, // Maybe swapped
-        viewCamBuf: BufferLink, // Maybe swapped
+        renderCam: BufferLink, 
+        viewCam: BufferLink, 
     },
 ) PassDef {
     return PassDef.Mesh(.{
@@ -145,8 +145,8 @@ pub fn FrustumView(
         .mesh = sc.frustumMesh,
         .fragment = sc.quantFrag,
         .bufUses = &.{
-            BufferUse.init(def.frustumCamBuf, .Mesh, .UniformRead, 0),
-            BufferUse.init(def.viewCamBuf, .Mesh, .UniformRead, 1),
+            BufferUse.init(def.renderCam, .Mesh, .UniformRead, 0),
+            BufferUse.init(def.viewCam, .Mesh, .UniformRead, 1),
         },
         .colorAtts = &.{AttachmentUse.init(def.colorAtt, .ColorAtt, .ColorAttReadWrite, .{ .color = .{ 0.0, 0.0, 0.0, 0.0 } })},
         .depthAtt = AttachmentUse.init(def.depthAtt, .EarlyAndLateFragTest, .DepthStencilReadWrite, null),
@@ -183,8 +183,8 @@ pub fn QuantGrid(
         colorAtt: TextureLink,
         depthAtt: TextureLink,
         indirectBuf: BufferLink,
-        viewCam: BufferLink, // Maybe swapped
-        cullCam: BufferLink, // Maybe swapped
+        viewCam: BufferLink,
+        renderCam: BufferLink,
     },
 ) PassDef {
     return PassDef.MeshIndirect(.{
@@ -201,7 +201,7 @@ pub fn QuantGrid(
         .bufUses = &.{
             BufferUse.init(def.indirectBuf, .DrawIndirect, .IndirectRead, null),
             BufferUse.init(def.viewCam, .Fragment, .UniformRead, 0),
-            BufferUse.init(def.cullCam, .Fragment, .UniformRead, 1),
+            BufferUse.init(def.renderCam, .Fragment, .UniformRead, 1),
         },
         .colorAtts = &.{AttachmentUse.init(def.colorAtt, .ColorAtt, .ColorAttReadWrite, .{ .color = .{ 0.0, 0.0, 0.0, 0.0 } })},
         .depthAtt = AttachmentUse.init(def.depthAtt, .EarlyAndLateFragTest, .DepthStencilReadWrite, .{ .depthStencil = .{ .depth = 0.0, .stencil = 0 } }),
@@ -220,8 +220,8 @@ pub fn QuantPlane(
         colorAtt: TextureLink,
         depthAtt: TextureLink,
         indirectBuf: BufferLink,
-        viewCam: BufferLink, // Maybe swapped
-        cullCam: BufferLink, // Maybe swapped
+        viewCam: BufferLink,
+        renderCam: BufferLink,
     },
 ) PassDef {
     return PassDef.MeshIndirect(.{
@@ -238,7 +238,7 @@ pub fn QuantPlane(
         .bufUses = &.{
             BufferUse.init(def.indirectBuf, .DrawIndirect, .IndirectRead, null),
             BufferUse.init(def.viewCam, .Fragment, .UniformRead, 0),
-            BufferUse.init(def.cullCam, .Fragment, .UniformRead, 1),
+            BufferUse.init(def.renderCam, .Fragment, .UniformRead, 1),
         },
         .colorAtts = &.{AttachmentUse.init(def.colorAtt, .ColorAtt, .ColorAttReadWrite, .{ .color = .{ 0.0, 0.0, 0.0, 0.0 } })},
         .depthAtt = AttachmentUse.init(def.depthAtt, .EarlyAndLateFragTest, .DepthStencilReadWrite, .{ .depthStencil = .{ .depth = 0.0, .stencil = 0 } }),
