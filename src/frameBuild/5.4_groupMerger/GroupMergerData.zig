@@ -9,12 +9,12 @@ const rc = @import("../../.configs/renderConfig.zig");
 // Step 5.4
 
 pub const GroupMergerData = struct {
-    sharedBufLifetimes: FixedList(PhysicalBufLifetime, 512) = .{},
-    sharedTexLifetimes: FixedList(PhysicalTexLifetime, 512) = .{},
+    sharedBufLifetimes: FixedList(PhysicalBufLifetime, rc.BUF_MAX) = .{},
+    sharedTexLifetimes: FixedList(PhysicalTexLifetime, rc.TEX_MAX) = .{},
 
     bufShareIndexMap: LinkedMap(u16, rc.BUF_MAX, u16, rc.BUF_MAX, 0) = .{}, // key: Group Enum, element: sharedBufLifetime Index
     texShareIndexMap: LinkedMap(u16, rc.TEX_MAX, u16, rc.TEX_MAX, 0) = .{}, // key: Group Enum, element: sharedTexLifetime Index
 
-    bufClears: FixedList(BufferClear, 512) = .{},
-    texClears: FixedList(TextureClear, 512) = .{},
+    bufClears: FixedList(BufferClear, rc.BUF_MAX * rc.PASS_MAX) = .{},
+    texClears: FixedList(TextureClear, rc.TEX_MAX * rc.PASS_MAX) = .{},
 };

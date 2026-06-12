@@ -56,6 +56,8 @@ pub const COMPILING_SHADERS: []const ShaderInf = &.{
     compositeFrag,
 };
 
+// OLD PASSES //
+
 // pub const t1Comp = ShaderInf.init(0, .comp, "compTest/comp.slang", "t1Comp.spv");
 
 // pub const t2Vert = ShaderInf.init(1, .vert, "grapTest/vert.slang", "t2Vert.spv");

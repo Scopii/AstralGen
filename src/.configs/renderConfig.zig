@@ -41,6 +41,7 @@ pub const DESCRIPTOR_DEBUG = true;
 pub const PASS_EXTRACTION_DEBUG = false;
 pub const FRAME_GRAPH_DEBUG = true;
 pub const FRAME_BUILDS_TILL_TRANSIENT_DELETION = 0;
+pub const PASS_MAX = 128;
 
 // Rendering, Swapchains and Windows
 pub const EARLY_GPU_WAIT = true; // (Reflex Mode)

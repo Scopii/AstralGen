@@ -10,14 +10,14 @@ const rc = @import("../../.configs/renderConfig.zig");
 // Step 2
 
 pub const ResourceExtractorData = struct {
-    bufAccesses: FixedList(BufferAccess, 512) = .{},
-    texAccesses: FixedList(TextureAccess, 512) = .{},
+    bufAccesses: FixedList(BufferAccess, rc.PASS_MAX * rc.BUF_MAX) = .{},
+    texAccesses: FixedList(TextureAccess, rc.PASS_MAX * rc.TEX_MAX) = .{},
 
-    bufDescriptions: LinkedMap(BufDesc, 512, u16, 512, 0) = .{},
-    texDescriptions: LinkedMap(TexDesc, 512, u16, 512, 0) = .{},
+    bufDescriptions: LinkedMap(BufDesc, rc.BUF_MAX, u16, rc.BUF_MAX, 0) = .{},
+    texDescriptions: LinkedMap(TexDesc, rc.TEX_MAX, u16, rc.TEX_MAX, 0) = .{},
 
-    bufMemSize: LinkedMap(u64, 512, u16, 512, 0) = .{}, // Only used for transient Buffers
-    texMemSize: LinkedMap(u64, 512, u16, 512, 0) = .{}, // Only used for transient Textures
+    bufMemSize: LinkedMap(u64, rc.BUF_MAX, u16, rc.BUF_MAX, 0) = .{}, // Only used for transient Buffers
+    texMemSize: LinkedMap(u64, rc.TEX_MAX, u16, rc.TEX_MAX, 0) = .{}, // Only used for transient Textures
 
-    passAccessRanges: LinkedMap(PassAccessRange, 128, u16, 128, 0) = .{},
+    passAccessRanges: LinkedMap(PassAccessRange, rc.PASS_MAX, u16, rc.PASS_MAX, 0) = .{},
 };

@@ -17,22 +17,22 @@ const BufId = BufferMeta.BufId;
 
 pub const ResourceAssignerData = struct {
     // Key Pools
-    bufIdPool: KeyPool(u16, 512) = .{},
-    texIdPool: KeyPool(u16, 512) = .{},
+    bufIdPool: KeyPool(u16, rc.BUF_MAX) = .{},
+    texIdPool: KeyPool(u16, rc.TEX_MAX) = .{},
 
     // Transient Storage
-    unusedTransientBufs: FixedList(TransientBuffer, 512) = .{},
-    usedTransientBufs: FixedList(TransientBuffer, 512) = .{},
-    unusedTransientTexes: FixedList(TransientTexture, 512) = .{},
-    usedTransientTexes: FixedList(TransientTexture, 512) = .{},
+    unusedTransientBufs: FixedList(TransientBuffer, rc.BUF_MAX) = .{},
+    usedTransientBufs: FixedList(TransientBuffer, rc.BUF_MAX) = .{},
+    unusedTransientTexes: FixedList(TransientTexture, rc.TEX_MAX) = .{},
+    usedTransientTexes: FixedList(TransientTexture, rc.TEX_MAX) = .{},
 
     // Persistent Storage
-    rootBufPhysicalMap: LinkedMap(BufInf, 512, u16, 512, 0) = .{},
-    rootTexPhysicalMap: LinkedMap(TexInf, 512, u16, 512, 0) = .{},
+    rootBufPhysicalMap: LinkedMap(BufInf, rc.BUF_MAX, u16, rc.BUF_MAX, 0) = .{},
+    rootTexPhysicalMap: LinkedMap(TexInf, rc.TEX_MAX, u16, rc.TEX_MAX, 0) = .{},
 
     // Manuel Storage
-    manualBufs: LinkedMap(BufInf, 64, u16, 64, 0) = .{},
-    manualTexes: LinkedMap(TexInf, 64, u16, 64, 0) = .{},
+    manualBufs: LinkedMap(BufInf, rc.BUF_MAX, u16, rc.BUF_MAX, 0) = .{},
+    manualTexes: LinkedMap(TexInf, rc.TEX_MAX, u16, rc.TEX_MAX, 0) = .{},
 
     // Collective Storage Assignments
     bufAssigns: BufferAssignments = .{},
@@ -40,8 +40,7 @@ pub const ResourceAssignerData = struct {
 
     // Update Requests after Resource Recreations
     updateRequests: LinkedMap(UpdateRequestEnum, 64, u16, 64, 0) = .{},
-
-    pub const BufferIdMap = LinkedMap(BufId, 512, u16, 512, 0);
+    
     pub const BufferAssignments = LinkedMap(BufId, rc.BUF_MAX, u16, rc.BUF_MAX, 0);
     pub const TextureAssignments = LinkedMap(TexId, rc.TEX_MAX, u16, rc.TEX_MAX, 0);
 };
