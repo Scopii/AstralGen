@@ -6,18 +6,18 @@ pub const SHADER_STARTUP_COMPILATION = true;
 pub const SHADER_MAX = 64;
 // Paths
 pub const ROOT_PATH: []const u8 = "../..";
-pub const SHADER_PATH: []const u8 = "assets/shaders";
+pub const SHADER_PATH: []const u8 = "src/.assets/passes";
 pub const SPRV_PATH: []const u8 = "zig-out/shaders";
 
 // Shaders
 pub const cullTestComp = ShaderInf.init(20, .comp, "cullTest/comp.slang", "cullTestComp.spv");
 pub const cullTestMesh = ShaderInf.init(22, .meshNoTask, "cullTest/mesh.slang", "cullTestMesh.spv");
-pub const frustumMesh = ShaderInf.init(23, .meshNoTask, "cullTest/frustum.slang", "frustumMesh.spv");
 pub const cullTestFrag = ShaderInf.init(24, .frag, "cullTest/frag.slang", "cullTestFrag.spv");
 
 pub const quantComp = ShaderInf.init(25, .comp, "quant/comp.slang", "quantComp.spv");
 pub const quantGrid = ShaderInf.init(26, .meshNoTask, "quant/mesh.slang", "quantMesh.spv");
 pub const quantPlane = ShaderInf.init(30, .meshNoTask, "quant/mesh2.slang", "quantMesh2.spv");
+pub const frustumMesh = ShaderInf.init(23, .meshNoTask, "quant/frustumMesh.slang", "frustumMesh.spv");
 pub const quantFrag = ShaderInf.init(27, .frag, "quant/frag.slang", "quantFrag.spv");
 
 pub const editorGridMesh = ShaderInf.init(28, .meshNoTask, "editorGrid/mesh.slang", "editorGridMesh.spv");

@@ -15,6 +15,7 @@ pub const PassEnum = enum {
     EditorGridPlaneDebug,
 
     Imgui, // SPECIAL CASE
+    Composite, // SPECIAL CASE
 };
 
 pub const BufferEnum = enum {

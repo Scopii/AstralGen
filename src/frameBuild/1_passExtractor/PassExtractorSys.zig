@@ -8,7 +8,6 @@ const FixedList = @import("../../.structures/FixedList.zig").FixedList;
 const WindowId = @import("../../window/Window.zig").Window.WindowId;
 const Viewport = @import("../../viewport/Viewport.zig").Viewport;
 const EngineData = @import("../../EngineData.zig").EngineData;
-const pDef = @import("../../.configs/passConfig.zig");
 const rc = @import("../../.configs/renderConfig.zig");
 const pe = @import("../enums.zig");
 const std = @import("std");
@@ -18,6 +17,15 @@ const PassExtractorData = @import("PassExtractorData.zig").PassExtractorData;
 const TextureEnum = pe.TextureEnum;
 const BufferEnum = pe.BufferEnum;
 const PassEnum = pe.PassEnum;
+
+const CompRayMarch = @import("../../.assets/passes/compTest/CompRayMarch.zig").CompRayMarch;
+const EditorGrid = @import("../../.assets/passes/editorGrid/EditorGrid.zig").EditorGrid;
+const QuantComp = @import("../../.assets/passes/quant/QuantComp.zig").QuantComp;
+const QuantGrid = @import("../../.assets/passes/quant/QuantGrid.zig").QuantGrid;
+const QuantPlane = @import("../../.assets/passes/quant/QuantPlane.zig").QuantPlane;
+const FrustumView = @import("../../.assets/passes/quant/FrustumView.zig").FrustumView;
+const DepthView = @import("../../.assets/passes/depthView/DepthView.zig").DepthView;
+
 
 pub const PassExtractorSys = struct {
     pub fn build(passExtractor: *PassExtractorData, data: *const EngineData) void {
@@ -172,7 +180,7 @@ pub const PassExtractorSys = struct {
     fn createPass(passEnum: PassEnum) ?PassDef {
         switch (passEnum) {
             .CompTest => {
-                return pDef.CompRayMarch(.{ // DONE
+                return CompRayMarch(.{ // DONE
                     .name = .CompTest,
                     .entityBuf = .{ .in = .EntitySB }, //rc.entitySB.id,
                     .outputTex = .{ .in = .RayMarchInputTex }, //rc.mainTex.id,
@@ -182,14 +190,14 @@ pub const PassExtractorSys = struct {
                 });
             },
             .QuantComp => {
-                return pDef.QuantComp(.{ // DONE
+                return QuantComp(.{ // DONE
                     .name = .QuantComp,
                     .indirectBuf = .{ .in = .QuantIndirectInputSB, .out = .QuantIndirectOutputSB }, //rc.indirectSB.id,
                     .entityBuf = .{ .in = .EntitySB }, //rc.entitySB.id,
                 });
             },
             .QuantGridMain => { // DONE
-                return pDef.QuantGrid(.{
+                return QuantGrid(.{
                     .name = .QuantGridMain,
                     .colorAtt = .{ .in = .GridTex }, //rc.mainTex.id,
                     .depthAtt = .{ .in = .GridDepthTex }, //rc.mainDepthTex.id,
@@ -199,7 +207,7 @@ pub const PassExtractorSys = struct {
                 });
             },
             .QuantGridDebug => {
-                return pDef.QuantGrid(.{
+                return QuantGrid(.{
                     .name = .QuantGridDebug,
                     .colorAtt = .{ .in = .DebugGridInputTex, .out = .DebugGridOutputTex }, //rc.mainTex.id,
                     .depthAtt = .{ .in = .DebugGridDepthTex }, //rc.debugGridDepthTex.id,
@@ -209,7 +217,7 @@ pub const PassExtractorSys = struct {
                 });
             },
             .EditorGridGridDebug => {
-                return pDef.EditorGrid(.{
+                return EditorGrid(.{
                     .name = .EditorGridGridDebug,
                     .colorAtt = .{ .in = .DebugGridOutputTex }, //rc.mainTex.id,
                     .depthAtt = .{ .in = .DebugGridDepthTex, .out = .DebugGridDepthOutputTex }, //rc.debugGridDepthTex.id,
@@ -217,7 +225,7 @@ pub const PassExtractorSys = struct {
                 });
             },
             .EditorGridPlaneDebug => {
-                return pDef.EditorGrid(.{
+                return EditorGrid(.{
                     .name = .EditorGridPlaneDebug,
                     .colorAtt = .{ .in = .DebugPlaneOutputFrustumViewTex }, //rc.mainTex.id,
                     .depthAtt = .{ .in = .DebugPlaneDepthTex }, //rc.debugPlaneDepthTex.id,
@@ -225,7 +233,7 @@ pub const PassExtractorSys = struct {
                 });
             },
             .QuantPlaneMain => { // DONE
-                return pDef.QuantPlane(.{
+                return QuantPlane(.{
                     .name = .QuantPlaneMain,
                     .colorAtt = .{ .in = .PlaneTex }, //rc.mainTex.id,
                     .depthAtt = .{ .in = .PlaneDepthTex }, //rc.mainDepthTex.id,
@@ -235,7 +243,7 @@ pub const PassExtractorSys = struct {
                 });
             },
             .QuantPlaneDebug => {
-                return pDef.QuantPlane(.{
+                return QuantPlane(.{
                     .name = .QuantPlaneDebug,
                     .colorAtt = .{ .in = .DebugPlaneInputTex, .out = .DebugPlaneOutputTex }, //rc.mainTex.id,
                     .depthAtt = .{ .in = .DebugPlaneDepthTex }, //rc.debugPlaneDepthTex.id,
@@ -247,7 +255,7 @@ pub const PassExtractorSys = struct {
                 });
             },
             .FrustumView => {
-                return pDef.FrustumView(.{
+                return FrustumView(.{
                     .name = .FrustumView,
                     .colorAtt = .{ .in = .DebugPlaneOutputTex, .out = .DebugPlaneOutputFrustumViewTex }, //rc.mainTex.id,
                     .depthAtt = .{ .in = .DebugPlaneDepthTex }, //rc.debugPlaneDepthTex.id,
@@ -256,7 +264,7 @@ pub const PassExtractorSys = struct {
                 });
             },
             .DepthView => {
-                return pDef.DepthView(.{
+                return DepthView(.{
                     .name = .DepthView,
                     .outputTex = .{ .in = .DepthViewTex }, //rc.depthViewTex.id,
                     .depthTex = .{ .in = .DebugGridDepthOutputTex }, //rc.debugGridDepthTex.id,
@@ -264,7 +272,7 @@ pub const PassExtractorSys = struct {
                 });
             },
 
-            .Imgui => return null,
+            .Imgui, .Composite, => return null,
 
             // .CullComp => {
             //     return pDef.CullComp(.{

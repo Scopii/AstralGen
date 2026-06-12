@@ -17,7 +17,6 @@ const ShaderManager = @import("ShaderMan.zig").ShaderMan;
 const rc = @import("../../.configs/renderConfig.zig");
 const sc = @import("../../.configs/shaderConfig.zig");
 const FrameData = @import("../../App.zig").FrameData;
-const pc = @import("../../.configs/passConfig.zig");
 const Cmd = @import("../types/base/Cmd.zig").Cmd;
 const CmdManager = @import("CmdMan.zig").CmdMan;
 const Context = @import("Context.zig").Context;
@@ -30,6 +29,9 @@ const TextureAssignments = @import("../../frameBuild/6_resourceAssigner/Resource
 const BufferAssignments = @import("../../frameBuild/6_resourceAssigner/ResourceAssignerData.zig").ResourceAssignerData.BufferAssignments;
 const TextureEnum = @import("../../frameBuild/enums.zig").TextureEnum;
 const BufferEnum = @import("../../frameBuild/enums.zig").BufferEnum;
+
+const ImGuiPass = @import("../../.assets/passes/Imgui/Imgui.zig").ImGuiPass;
+const Composite = @import("../../.assets/passes/composite/Composite.zig").Composite;
 
 pub const CmdRecorder = struct {
     alloc: Allocator,
@@ -287,7 +289,7 @@ pub const CmdRecorder = struct {
                 .passNode => |passNode| {
                     const specialPass: bool = switch (passNode.pass.execution) {
                         .taskOrMesh, .taskOrMeshIndirect => true,
-                        .computeOnImg, .compute, .computeIndirect, .graphics => false,
+                        .compute, .computeIndirect, .graphics => false,
                     };
                     if (specialPass == true and meshTaskSupport == false) {
                         std.debug.print("PassTyp {s} is not supported -> skipped \n", .{@tagName(passNode.pass.execution)});
@@ -370,17 +372,19 @@ pub const CmdRecorder = struct {
         try self.checkImageState(targetTex, .{ .stage = .ColorAtt, .access = .ColorAttReadWrite, .layout = .Attachment });
         self.bakeBarriers(cmd, "Composite Prep");
 
-        // Viewport/scissor restricted to the target region
-        cmd.setViewport(@floatFromInt(composite.viewOffsetX), @floatFromInt(composite.viewOffsetY), @floatFromInt(composite.viewWidth), @floatFromInt(composite.viewHeight));
-        cmd.setScissor(@floatFromInt(composite.viewOffsetX), @floatFromInt(composite.viewOffsetY), @floatFromInt(composite.viewWidth), @floatFromInt(composite.viewHeight));
-
         // Color attachment = swapchain current image
         const colorAtt = try targetTex.createAttachment(.Swapchain, if (isFirstUse) .{ .color = rc.INITIAL_SWAPCHAIN_COLOR } else null);
         cmd.beginRendering(swapchain.extent.width, swapchain.extent.height, &[_]vk.VkRenderingAttachmentInfo{colorAtt}, null, null);
 
-        const shaderIds = [_]ShaderId{ sc.compositeVert.id, sc.compositeFrag.id };
-        const shaders = shaderMan.getShaders(&shaderIds);
-        cmd.bindShaders(shaders[0..2]);
+        const compositePass = Composite(.{ .name = .Composite });
+
+        const shaders = shaderMan.getShaders(compositePass.getShaderIds());
+        cmd.bindShaders(shaders[0..compositePass.getShaderIds().len]);
+        cmd.updateRenderState(compositePass.renderState);
+
+        // Viewport/scissor restricted to the target region
+        cmd.setViewport(@floatFromInt(composite.viewOffsetX), @floatFromInt(composite.viewOffsetY), @floatFromInt(composite.viewWidth), @floatFromInt(composite.viewHeight));
+        cmd.setScissor(@floatFromInt(composite.viewOffsetX), @floatFromInt(composite.viewOffsetY), @floatFromInt(composite.viewWidth), @floatFromInt(composite.viewHeight));
 
         // Push data
         const pushData = vhT.CompositePushData{
@@ -392,19 +396,6 @@ pub const CmdRecorder = struct {
             .dstHeight = composite.viewHeight,
         };
         cmd.setPushData(&pushData, @sizeOf(@TypeOf(pushData)), 0);
-
-        cmd.updateRenderState(.{
-            .colorBlend = vk.VK_TRUE,
-            .colorBlendEquation = .{
-                .srcColor = vk.VK_BLEND_FACTOR_SRC_ALPHA,
-                .dstColor = vk.VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
-                .srcAlpha = vk.VK_BLEND_FACTOR_ONE,
-                .dstAlpha = vk.VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
-            },
-            .depthTest = vk.VK_FALSE,
-            .depthWrite = vk.VK_FALSE,
-            .cullMode = vk.VK_CULL_MODE_NONE,
-        });
 
         cmd.setVertexInput(null, null);
         cmd.draw(3, 1, 0, 0);
@@ -433,9 +424,8 @@ pub const CmdRecorder = struct {
 
         const isFirstUse = targetTex.state.layout == .Undefined;
 
-        const pass = pc.ImGuiPass(.{
+        const pass = ImGuiPass(.{
             .name = .Imgui,
-            .colorAtt = .{ .in = .Swapchain }, // IS THIS NEEDED?
             .vertexBuf = .ImguiVB,
             .indexBuf = .ImguiIB,
         });
@@ -560,12 +550,18 @@ pub const CmdRecorder = struct {
         try self.recordPassBarriers(cmd, pass, resMan, bufAssigns, texAssigns);
 
         switch (pass.execution) {
-            .taskOrMesh, .taskOrMeshIndirect, .graphics => try recordGraphics(cmd, pushData.width, pushData.height, pass, resMan, bufAssigns, texAssigns),
-            .computeOnImg => |computeOnImg| {
-                const compImgId = try resolveTexture(computeOnImg.mainTexId, texAssigns);
-                try recordCompute(cmd, computeOnImg.workgroups, compImgId, resMan);
+            .taskOrMesh, .taskOrMeshIndirect, .graphics => {
+                try recordGraphics(cmd, pushData.width, pushData.height, pass, resMan, bufAssigns, texAssigns);
             },
-            .compute => |compute| try recordCompute(cmd, compute.workgroups, null, resMan),
+            .compute => |compute| {
+                if (compute.outputTexDispatch == true) {
+                    const outputTex = pass.mainOutputTex orelse return error.ComputeOnImgOutputTexIsNull;
+                    const compImgId = try resolveTexture(outputTex, texAssigns);
+                    try recordCompute(cmd, compute.workgroups, compImgId, resMan);
+                } else {
+                    try recordCompute(cmd, compute.workgroups, null, resMan);
+                }
+            },
             .computeIndirect => |computeIndirect| {
                 const indirectBufId = try resolveBuffer(computeIndirect.indirectBuf, bufAssigns);
                 try recordComputeIndirect(cmd, indirectBufId, computeIndirect.indirectBufOffset, resMan);
@@ -660,7 +656,7 @@ pub const CmdRecorder = struct {
                     cmd.draw(graphics.vertices, graphics.instances, 0, 0);
                 }
             },
-            .compute, .computeOnImg, .computeIndirect => std.debug.print("ERROR: Compute or ComputeOnImg Pass ({s}) landed in Graphics Recording\n", .{@tagName(pass.name)}),
+            .compute, .computeIndirect => std.debug.print("ERROR: Compute or ComputeOnImg Pass ({s}) landed in Graphics Recording\n", .{@tagName(pass.name)}),
         }
         cmd.endRendering();
     }

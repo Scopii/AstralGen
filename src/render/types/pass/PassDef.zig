@@ -20,6 +20,7 @@ pub const Dispatch = struct { x: u32, y: u32, z: u32 };
 
 pub const ComputeExec = struct {
     workgroups: Dispatch,
+    outputTexDispatch: bool,
 };
 
 pub const ComputeIndirectExec = struct {
@@ -27,28 +28,20 @@ pub const ComputeIndirectExec = struct {
     indirectBufOffset: u64 = 0,
 };
 
-pub const ComputeOnImgExec = struct {
-    workgroups: Dispatch,
-    mainTexId: TextureEnum,
-};
-
 pub const TaskOrMeshExec = struct {
     workgroups: Dispatch,
-    mainTexId: TextureEnum,
 };
 
 pub const TaskOrMeshIndirectExec = struct {
     workgroups: Dispatch,
     indirectBuf: BufferEnum,
     indirectBufOffset: u64 = 0,
-    mainTexId: TextureEnum,
 };
 
 pub const GraphicsExec = struct {
     vertices: u32,
     instances: u32,
     indexCount: u32,
-    mainTexId: TextureEnum,
 };
 
 pub const PassNode = struct { pass: PassDef, width: u32, height: u32 };
@@ -127,7 +120,6 @@ pub const PassDef = struct {
     pub const PassExecution = union(enum) {
         compute: ComputeExec,
         computeIndirect: ComputeIndirectExec,
-        computeOnImg: ComputeOnImgExec,
         taskOrMesh: TaskOrMeshExec,
         taskOrMeshIndirect: TaskOrMeshIndirectExec,
         graphics: GraphicsExec,
@@ -229,75 +221,6 @@ pub const PassDef = struct {
 
         pass.bufUses.appendSliceAssumeCapacity(inf.bufUses);
         pass.texUses.appendSliceAssumeCapacity(inf.texUses);
-
-        return pass;
-    }
-
-    pub fn ComputeOnImg(
-        inf: struct {
-            name: PassEnum,
-            outputTexId: ?TextureEnum,
-            execution: ComputeOnImgExec,
-            compute: ShaderInf,
-            bufUses: []const BufferUse = &.{},
-            texUses: []const TextureUse = &.{},
-        },
-    ) PassDef {
-        std.debug.assert(inf.bufUses.len + inf.texUses.len <= 14);
-        std.debug.assert(inf.compute.typ == .comp);
-
-        var pass = PassDef{
-            .name = inf.name,
-            .mainOutputTex = inf.outputTexId,
-            .execution = .{ .computeOnImg = inf.execution },
-        };
-
-        pass.shaderIds.appendAssumeCapacity(inf.compute.id);
-
-        pass.bufUses.appendSliceAssumeCapacity(inf.bufUses);
-        pass.texUses.appendSliceAssumeCapacity(inf.texUses);
-
-        return pass;
-    }
-
-    pub fn TaskMesh(
-        inf: struct {
-            name: []const u8,
-            outputTexId: ?TexId,
-            execution: TaskOrMeshExec,
-            task: ShaderInf,
-            mesh: ShaderInf,
-            fragment: ShaderInf,
-            bufUses: []const BufferUse = &.{},
-            texUses: []const TextureUse = &.{},
-            colorAtts: []const AttachmentUse = &.{},
-            depthAtt: ?AttachmentUse = null,
-            stencilAtt: ?AttachmentUse = null,
-            renderState: RenderState = .{},
-        },
-    ) PassDef {
-        std.debug.assert(inf.bufUses.len + inf.texUses.len <= 14);
-        std.debug.assert(inf.colorAtts.len <= 8);
-        std.debug.assert(inf.task.typ == .task);
-        std.debug.assert(inf.mesh.typ == .meshWithTask);
-        std.debug.assert(inf.fragment.typ == .frag);
-
-        var pass = PassDef{
-            .name = inf.name,
-            .mainOutputTex = inf.outputTexId,
-            .execution = inf.execution,
-            .depthAtt = inf.depthAtt,
-            .stencilAtt = inf.stencilAtt,
-            .renderState = inf.renderState,
-        };
-
-        pass.shaderIds.appendAssumeCapacity(inf.task.id);
-        pass.shaderIds.appendAssumeCapacity(inf.mesh.id);
-        pass.shaderIds.appendAssumeCapacity(inf.fragment.id);
-
-        pass.bufUses.appendSliceAssumeCapacity(inf.bufUses);
-        pass.texUses.appendSliceAssumeCapacity(inf.texUses);
-        pass.colorAtts.appendSliceAssumeCapacity(inf.colorAtts);
 
         return pass;
     }
@@ -444,11 +367,10 @@ pub const PassDef = struct {
 
     pub fn getMainTexId(self: *const PassDef) ?TextureEnum {
         return switch (self.execution) {
-            .taskOrMesh => |taskOrMesh| taskOrMesh.mainTexId,
-            .taskOrMeshIndirect => |taskOrMeshIndirect| taskOrMeshIndirect.mainTexId,
-            .graphics => |graphics| graphics.mainTexId,
-            .computeOnImg => |computeOnImg| computeOnImg.mainTexId,
-            .compute => null,
+            .taskOrMesh => self.mainOutputTex,
+            .taskOrMeshIndirect => self.mainOutputTex,
+            .graphics => self.mainOutputTex,
+            .compute => self.mainOutputTex,
             .computeIndirect => null,
         };
     }
