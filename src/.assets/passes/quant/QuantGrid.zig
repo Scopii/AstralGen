@@ -4,7 +4,7 @@ const p = @import("../passImport.zig");
 
 pub fn QuantGrid(
     def: struct {
-        name: p.PassEnum,
+        string: []const u8,
         colorAtt: p.TextureLink,
         depthAtt: p.TextureLink,
         indirectBuf: p.BufferLink,
@@ -13,7 +13,7 @@ pub fn QuantGrid(
     },
 ) p.PassDef {
     return p.PassDef.MeshIndirect(.{
-        .name = def.name,
+        .name = def.string,
         .outputTexId = def.colorAtt.in,
         .execution = .{
             .workgroups = .{ .x = 1, .y = 1, .z = 1 },

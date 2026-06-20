@@ -3,12 +3,12 @@ const vk = @import("../../../.modules/vk.zig").c;
 const p = @import("../passImport.zig");
 
 pub fn ImGuiPass(def: struct {
-    name: p.PassEnum,
+    string: []const u8,
     vertexBuf: p.BufferEnum,
     indexBuf: p.BufferEnum,
 }) p.PassDef {
     return p.PassDef.Graphics(.{
-        .name = def.name,
+        .name = def.string,
         .outputTexId = null, // Uses Swapchain
         .execution = .{ .vertices = 0, .instances = 1, .indexCount = 0 },
         .vertex = sc.imguiVert,

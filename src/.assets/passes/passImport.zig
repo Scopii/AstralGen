@@ -12,5 +12,4 @@ pub const PassDef = @import("../../../src/render/types/pass/PassDef.zig").PassDe
 
 pub const TextureEnum = @import("../../../src/frameBuild/enums.zig").TextureEnum;
 pub const BufferEnum = @import("../../../src/frameBuild/enums.zig").BufferEnum;
-pub const PassEnum = @import("../../../src/frameBuild/enums.zig").PassEnum;
 

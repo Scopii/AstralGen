@@ -21,7 +21,7 @@ pub const PassSorterSys = struct {
         passSorter.tempComposites.clear();
 
         passSorter.sortedRenderNodes.clear();
-        const renderNodes = passExtractor.renderNodes.constSlice();
+        const renderNodes = passExtractor.renderNodes.getConstItems();
 
         // Sort into Buckets
         for (renderNodes, 0..) |*renderNode, i| {
@@ -36,12 +36,12 @@ pub const PassSorterSys = struct {
 
         // Check Buckets for Correct Pass
         for (graphOptimizer.optimizedGraph.getConstItems()) |graphNode| {
-            const passEnum = graphNode.passEnum;
+            const passId = graphNode.pass;
 
             var neededClears = false;
             // Buffer Clears
             for (groupMerger.bufClears.constSlice()) |bufClear| {
-                if (bufClear.passAfterClear == passEnum) {
+                if (bufClear.passAfterClear.val == passId.val) {
                     // LOOKUP FOR bufClear.Index to ENUM!
                     const bufId = resourceAssigner.usedTransientBufs.buffer[bufClear.sharedBufIndex].bufId;
                     try passSorter.sortedRenderNodes.append(.{ .clearBuffer = bufId });
@@ -50,7 +50,7 @@ pub const PassSorterSys = struct {
             }
             // Texture Clears
             for (groupMerger.texClears.constSlice()) |texClear| {
-                if (texClear.passAfterClear == passEnum) {
+                if (texClear.passAfterClear.val == passId.val) {
                     // LOOKUP FOR texClear.Index to ENUM!
                     const texId = resourceAssigner.usedTransientTexes.buffer[texClear.sharedTexIndex].texId;
                     try passSorter.sortedRenderNodes.append(.{ .clearTexture = texId });
@@ -62,22 +62,23 @@ pub const PassSorterSys = struct {
 
             // Passes
             for (passSorter.tempPasses.constSlice()) |i| {
-                const pass = &renderNodes[i].passNode;
-                if (pass.pass.name == passEnum) {
+                const key = passExtractor.renderNodes.getKeyByIndex(@intCast(i));
+                if (key == passId.val) {
+                    const pass = &renderNodes[i].passNode;
                     passSorter.sortedRenderNodes.append(.{ .passNode = pass.* }) catch std.debug.print("7.PassSorter: Pass Append to sortedRenderNodes failed", .{});
                 }
             }
             // Blits
             for (passSorter.tempBlits.constSlice()) |i| {
                 const blit = &renderNodes[i].viewportBlit;
-                if (blit.pass == passEnum) {
+                if (blit.pass.val == passId.val) {
                     passSorter.sortedRenderNodes.append(.{ .viewportBlit = blit.* }) catch std.debug.print("7.PassSorter: Blit Append to sortedRenderNodes failed", .{});
                 }
             }
             // Composites
             for (passSorter.tempComposites.constSlice()) |i| {
                 const composite = &renderNodes[i].compositeNode;
-                if (composite.pass == passEnum) {
+                if (composite.pass.val == passId.val) {
                     passSorter.sortedRenderNodes.append(.{ .compositeNode = composite.* }) catch std.debug.print("7.PassSorter: Composite Append to sortedRenderNodes failed", .{});
                 }
             }
@@ -86,15 +87,15 @@ pub const PassSorterSys = struct {
         // Debug Prints
         if (rc.FRAME_GRAPH_DEBUG) {
             std.debug.print("7.PassSorter:\n", .{});
-            for (passSorter.sortedRenderNodes.constSlice(), 0..) |*renderNode, i| {
+            for (passSorter.sortedRenderNodes.constSlice(), 0..) |*renderNode, index| {
                 switch (renderNode.*) {
-                    .passNode => |*pass| std.debug.print("- {}. Pass: {s}\n", .{ i, @tagName(pass.pass.name) }),
-                    .compositeNode => |*composite| std.debug.print("- {}. Composite: {s} (Pass {})\n", .{ i, composite.name, composite.pass }),
-                    .viewportBlit => |*blit| std.debug.print("- {}. Blit: {s} (Pass {})\n", .{ i, blit.name, blit.pass }),
-                    .uiNode => |*ui| std.debug.print("- {}. UI: {s} (WindowID {})\n", .{ i, ui.name, ui.windowId }),
-                    .clearBuffer => |*clearBuf| std.debug.print("- {}. ClearBuffer: {}\n", .{ i, clearBuf.* }),
-                    .clearTexture => |*clearTex| std.debug.print("- {}. ClearTexture: {}\n", .{ i, clearTex.* }),
-                    .barrierBakeClears => std.debug.print("- {}. Bake Clears\n", .{i}),
+                    .passNode => |*passNode| std.debug.print("- {}. Pass: {s}\n", .{ index, passNode.pass.name }),
+                    .compositeNode => |*composite| std.debug.print("- {}. Composite: {s} (Pass {})\n", .{ index, composite.name, composite.pass }),
+                    .viewportBlit => |*blit| std.debug.print("- {}. Blit: {s} (Pass {})\n", .{ index, blit.name, blit.pass }),
+                    .uiNode => |*ui| std.debug.print("- {}. UI: {s} (WindowID {})\n", .{ index, ui.name, ui.windowId }),
+                    .clearBuffer => |*clearBuf| std.debug.print("- {}. ClearBuffer: {}\n", .{ index, clearBuf.* }),
+                    .clearTexture => |*clearTex| std.debug.print("- {}. ClearTexture: {}\n", .{ index, clearTex.* }),
+                    .barrierBakeClears => std.debug.print("- {}. Bake Clears\n", .{index}),
                 }
             }
             std.debug.print("\n", .{});

@@ -4,7 +4,6 @@ const PassAccessRange = @import("../../frameBuild/components.zig").PassAccessRan
 const BufDesc = @import("../../render/types/res/BufferMeta.zig").BufferMeta.BufDesc;
 const TexDesc = @import("../../render/types/res/TextureMeta.zig").TextureMeta.TexDesc;
 const PassDef = @import("../../render/types/pass/PassDef.zig").PassDef;
-const PassEnum = @import("../../frameBuild/enums.zig").PassEnum;
 const TextureEnum = @import("../enums.zig").TextureEnum;
 const BufferEnum = @import("../enums.zig").BufferEnum;
 const rc = @import("../../.configs/renderConfig.zig");
@@ -28,9 +27,14 @@ pub const ResourceExtractorSys = struct {
 
         resourceExtractor.passAccessRanges.clear();
 
-        for (passExtractor.renderNodes.constSlice()) |*renderNode| {
-            switch (renderNode.*) {
-                .passNode => |pass| getPassAccesses(&pass.pass, resourceExtractor),
+        for (0..passExtractor.renderNodes.getLength()) |index| {
+            const renderNode = passExtractor.renderNodes.getByIndex(@intCast(index));
+
+            switch (renderNode) {
+                .passNode => |pass| {
+                    const key = passExtractor.renderNodes.getKeyByIndex(@intCast(index));
+                    getPassAccesses(&pass.pass, resourceExtractor, @intCast(key));
+                },
                 .compositeNode => |_| {},
                 .viewportBlit => |_| {},
                 .uiNode => |_| {},
@@ -95,9 +99,9 @@ pub const ResourceExtractorSys = struct {
 
             for (resourceExtractor.passAccessRanges.getConstItems(), 0..) |range, i| {
                 const passKey = resourceExtractor.passAccessRanges.getKeyByIndex(@intCast(i));
-                const passEnum: PassEnum = @enumFromInt(passKey);
+                const passString = passExtractor.passStrings.getByKey(@intCast(passKey));
 
-                std.debug.print(" - Pass Accesses ({s}) (bufIndex {} -> {}) (texIndex {} -> {})\n", .{ @tagName(passEnum), range.firstBuf, range.lastBuf, range.firstTex, range.lastTex });
+                std.debug.print(" - Pass Accesses ({s}) (bufIndex {} -> {}) (texIndex {} -> {})\n", .{ passString, range.firstBuf, range.lastBuf, range.firstTex, range.lastTex });
                 for (range.firstBuf..range.lastBuf, 0..) |index, counter| {
                     const bufAccess = resourceExtractor.bufAccesses.buffer[index];
                     std.debug.print("     -> Buf {}. {}\n", .{ counter, bufAccess });
@@ -130,7 +134,7 @@ pub const ResourceExtractorSys = struct {
         }
     }
 
-    fn getPassAccesses(pass: *const PassDef, resourceExtractor: *ResourceExtractorData) void {
+    fn getPassAccesses(pass: *const PassDef, resourceExtractor: *ResourceExtractorData, passId: u16) void {
         const firstBufIndex = resourceExtractor.bufAccesses.len;
         const firstTexIndex = resourceExtractor.texAccesses.len;
 
@@ -141,7 +145,7 @@ pub const ResourceExtractorSys = struct {
             for (slice) |use| {
                 const bufAccess = BufferAccess{
                     .access = if (use.access.isReadOnly() == true) .read else .write,
-                    .passEnum = pass.name,
+                    .pass = .{ .val = passId },
                     .bufInput = use.bufLink.in,
                     .bufOutput = use.bufLink.out,
                 };
@@ -157,7 +161,7 @@ pub const ResourceExtractorSys = struct {
             for (slice) |use| {
                 const bufAccess = BufferAccess{
                     .access = .read,
-                    .passEnum = pass.name,
+                    .pass = .{ .val = passId },
                     .bufInput = use.bufInput,
                     .bufOutput = null, // True Index and Vertex Buffers dont have Output!
                 };
@@ -175,7 +179,7 @@ pub const ResourceExtractorSys = struct {
             for (slice) |use| {
                 const texAccess = TextureAccess{
                     .access = if (use.access.isReadOnly() == true) .read else .write,
-                    .passEnum = pass.name,
+                    .pass = .{ .val = passId },
                     .texInput = use.texLink.in,
                     .texOutput = use.texLink.out,
                 };
@@ -190,9 +194,8 @@ pub const ResourceExtractorSys = struct {
             .lastBuf = @intCast(resourceExtractor.bufAccesses.len),
             .lastTex = @intCast(resourceExtractor.texAccesses.len),
         };
-        const passKey = @intFromEnum(pass.name);
 
-        resourceExtractor.passAccessRanges.upsert(@intCast(passKey), passAccessRanges);
+        resourceExtractor.passAccessRanges.upsert(@intCast(passId), passAccessRanges);
     }
 };
 

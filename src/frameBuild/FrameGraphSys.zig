@@ -25,11 +25,11 @@ const PassEnum = pe.PassEnum;
 
 pub const FrameGraphSys = struct {
     pub fn build(frameGraph: *FrameGraphData, data: *const EngineData, rendererQueue: *RendererQueue, memoryMan: *MemoryManager) !void {
-        PassExtractorSys.build(&frameGraph.passExtractor, data);
+        try PassExtractorSys.newBuild(&frameGraph.passExtractor, data);
 
         try ResourceExtractorSys.buildAccesses(&frameGraph.resourceExtractor, &frameGraph.passExtractor);
 
-        DependancyExtractorSys.buildDependencies(&frameGraph.dependancyExtractor, &frameGraph.resourceExtractor);
+        DependancyExtractorSys.buildDependencies(&frameGraph.dependancyExtractor, &frameGraph.resourceExtractor, &frameGraph.passExtractor);
 
         try GraphExtractorSys.buildGraph(&frameGraph.graphExtractor, &frameGraph.dependancyExtractor, &frameGraph.passExtractor);
 

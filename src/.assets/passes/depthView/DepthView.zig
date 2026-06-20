@@ -3,13 +3,13 @@ const vk = @import("../../../.modules/vk.zig").c;
 const p = @import("../passImport.zig");
 
 pub fn DepthView(def: struct {
-    name: p.PassEnum,
+    string: []const u8,
     outputTex: p.TextureLink,
     depthTex: p.TextureLink,
     camBuf: p.BufferLink,
 }) p.PassDef {
     return p.PassDef.Compute(.{
-        .name = def.name,
+        .name = def.string,
         .outputTexId = def.outputTex.in,
         .execution = .{
             .workgroups = .{ .x = 8, .y = 8, .z = 1 },

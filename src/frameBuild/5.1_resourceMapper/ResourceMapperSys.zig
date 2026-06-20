@@ -130,7 +130,7 @@ pub const ResourceMapperSys = struct {
             switch (lastBufDescription.?.share) {
                 .transient => {
                     const bufGroup = BufferGroup{
-                        .rootPass = graphOptimizer.optimizedGraph.getConstItems()[lastLifetime.?.earliest].passEnum,
+                        .rootPass = graphOptimizer.optimizedGraph.getConstItems()[lastLifetime.?.earliest].pass,
                         .rootBuf = root,
                         .bufDesc = lastBufDescription.?,
                         .startMapIndex = @intCast(resourceMapper.bufMapTransient.getLength() - resourceMapper.allSharedBuffers.getLength()),
@@ -140,7 +140,7 @@ pub const ResourceMapperSys = struct {
                 },
                 .persistent => {
                     const bufGroup = BufferGroup{
-                        .rootPass = graphOptimizer.optimizedGraph.getConstItems()[lastLifetime.?.earliest].passEnum,
+                        .rootPass = graphOptimizer.optimizedGraph.getConstItems()[lastLifetime.?.earliest].pass,
                         .rootBuf = root,
                         .bufDesc = lastBufDescription.?,
                         .startMapIndex = @intCast(resourceMapper.bufMapPersistent.getLength() - resourceMapper.allSharedBuffers.getLength()),
@@ -241,7 +241,7 @@ pub const ResourceMapperSys = struct {
             switch (lastTexDescription.?.share) {
                 .transient => {
                     const texGroup = TextureGroup{
-                        .rootPass = graphOptimizer.optimizedGraph.getConstItems()[lastLifetime.?.earliest].passEnum,
+                        .rootPass = graphOptimizer.optimizedGraph.getConstItems()[lastLifetime.?.earliest].pass,
                         .rootTex = root,
                         .texDesc = lastTexDescription.?,
                         .startMapIndex = @intCast(resourceMapper.texMapTransient.getLength() - resourceMapper.allSharedTextures.getLength()),
@@ -251,7 +251,7 @@ pub const ResourceMapperSys = struct {
                 },
                 .persistent => {
                     const texGroup = TextureGroup{
-                        .rootPass = graphOptimizer.optimizedGraph.getConstItems()[lastLifetime.?.earliest].passEnum,
+                        .rootPass = graphOptimizer.optimizedGraph.getConstItems()[lastLifetime.?.earliest].pass,
                         .rootTex = root,
                         .texDesc = lastTexDescription.?,
                         .startMapIndex = @intCast(resourceMapper.texMapPersistent.getLength() - resourceMapper.allSharedTextures.getLength()),
@@ -350,4 +350,3 @@ fn compareTexDesc(texEnum1: TextureEnum, texDesc1: *const TexDesc, texEnum2: Tex
         return error.BufferDescriptionsDontMatch;
     }
 }
-

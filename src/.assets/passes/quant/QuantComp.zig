@@ -4,18 +4,15 @@ const p = @import("../passImport.zig");
 
 pub fn QuantComp(
     def: struct {
-        name: p.PassEnum,
+        string: []const u8,
         indirectBuf: p.BufferLink,
         entityBuf: p.BufferLink,
     },
 ) p.PassDef {
     return p.PassDef.Compute(.{
-        .name = def.name,
+        .name = def.string,
         .outputTexId = null,
-        .execution = .{
-            .workgroups = .{ .x = 1, .y = 1, .z = 1 },
-            .outputTexDispatch = false
-        },
+        .execution = .{ .workgroups = .{ .x = 1, .y = 1, .z = 1 }, .outputTexDispatch = false },
         .compute = sc.quantComp,
         .bufUses = &.{
             p.BufferUse.init(def.indirectBuf, .Compute, .StorageReadWrite, 0),

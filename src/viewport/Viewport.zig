@@ -1,4 +1,4 @@
-const PassEnum = @import("../frameBuild/enums.zig").PassEnum;
+
 const EntityId = @import("../ecs/EntityData.zig").EntityId;
 
 pub const Viewport = struct {
@@ -11,8 +11,8 @@ pub const Viewport = struct {
     viewCamEntityId: ?EntityId,
     opacity: f32 = 1.0,
 
-    passes: []const PassEnum,
-    blitPass: ?PassEnum = null,
+    stringPasses: []const []const u8,
+    blitPass: ?[]const u8 = null,
 
     pub fn calcViewWidth(self: *const Viewport, swapchainWidth: u32) u32 {
         return @intFromFloat(@as(f32, @floatFromInt(swapchainWidth)) * self.areaWidth);

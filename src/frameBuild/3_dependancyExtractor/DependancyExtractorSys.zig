@@ -4,12 +4,13 @@ const rc = @import("../../.configs/renderConfig.zig");
 const std = @import("std");
 
 const ResourceExtractorData = @import("../2_resourceExtractor/ResourceExtractorData.zig").ResourceExtractorData;
+const PassExtractorData = @import("../1_passExtractor/PassExtractorData.zig").PassExtractorData;
 const DependancyExtractorData = @import("DependancyExtractorData.zig").DependancyExtractorData;
 
 // Step 3
 
 pub const DependancyExtractorSys = struct {
-    pub fn buildDependencies(dependancyExtractor: *DependancyExtractorData, resourceExtractor: *const ResourceExtractorData) void {
+    pub fn buildDependencies(dependancyExtractor: *DependancyExtractorData, resourceExtractor: *const ResourceExtractorData, passExtractor: *const PassExtractorData) void {
         dependancyExtractor.bufDependancies.clear();
         dependancyExtractor.texDependancies.clear();
 
@@ -24,10 +25,12 @@ pub const DependancyExtractorSys = struct {
                 // Double Write Check: Only allowed exactly one producer!
                 if (dependancyExtractor.lastBufWriter.isKeyUsed(outputBufKey)) {
                     const existingWriter = dependancyExtractor.lastBufWriter.getByKey(outputBufKey);
-                    std.debug.print("VALIDATION: Buffer {s} produced by both {s} and {s}\n", .{ @tagName(bufOutput), @tagName(existingWriter), @tagName(bufAccess.passEnum) });
+                    const writerPassString = passExtractor.passStrings.getByIndex(existingWriter.val);
+                    const passString = passExtractor.passStrings.getByIndex(bufAccess.pass.val);
+                    std.debug.print("VALIDATION: Buffer {s} produced by both {s} and {s}\n", .{ @tagName(bufOutput), writerPassString, passString });
                 }
 
-                dependancyExtractor.lastBufWriter.upsert(outputBufKey, bufAccess.passEnum);
+                dependancyExtractor.lastBufWriter.upsert(outputBufKey, bufAccess.pass);
             }
         }
 
@@ -39,8 +42,8 @@ pub const DependancyExtractorSys = struct {
                 // Graph Edge only if its a cross pass dependancy (Pass does not consume its own resourcve)
                 const inputPass = dependancyExtractor.lastBufWriter.getByKey(inputBufKey);
 
-                if (inputPass != bufAccesses.passEnum) {
-                    const bufDep = BufferDependancy{ .bufEnum = bufAccesses.bufInput, .predecessor = inputPass, .successor = bufAccesses.passEnum };
+                if (inputPass.val != bufAccesses.pass.val) {
+                    const bufDep = BufferDependancy{ .bufEnum = bufAccesses.bufInput, .predecessor = inputPass, .successor = bufAccesses.pass };
                     dependancyExtractor.bufDependancies.append(bufDep) catch std.debug.print("ERROR: 3.DependancyExtractor: bufDependancies append failed\n", .{});
                 }
             }
@@ -54,10 +57,12 @@ pub const DependancyExtractorSys = struct {
                 // Double Write Check: Only allowed exactly one producer!
                 if (dependancyExtractor.lastTexWriter.isKeyUsed(outputTexKey)) {
                     const existingWriter = dependancyExtractor.lastTexWriter.getByKey(outputTexKey);
-                    std.debug.print("VALIDATION: Texture {s} produced by both {s} and {s}\n", .{ @tagName(texOutput), @tagName(existingWriter), @tagName(texAccess.passEnum) });
+                    const writerPassString = passExtractor.passStrings.getByIndex(existingWriter.val);
+                    const passString = passExtractor.passStrings.getByIndex(texAccess.pass.val);
+                    std.debug.print("VALIDATION: Texture {s} produced by both {s} and {s}\n", .{ @tagName(texOutput), writerPassString, passString });
                 }
 
-                dependancyExtractor.lastTexWriter.upsert(outputTexKey, texAccess.passEnum);
+                dependancyExtractor.lastTexWriter.upsert(outputTexKey, texAccess.pass);
             }
         }
 
@@ -69,8 +74,8 @@ pub const DependancyExtractorSys = struct {
                 // Graph Edge only if its a cross pass dependancy (Pass does not consume its own resourcve)
                 const inputPass = dependancyExtractor.lastTexWriter.getByKey(inputTexKey);
 
-                if (inputPass != texAccesses.passEnum) {
-                    const texDep = TextureDependancy{ .texEnum = texAccesses.texInput, .predecessor = inputPass, .successor = texAccesses.passEnum };
+                if (inputPass.val != texAccesses.pass.val) {
+                    const texDep = TextureDependancy{ .texEnum = texAccesses.texInput, .predecessor = inputPass, .successor = texAccesses.pass };
                     dependancyExtractor.texDependancies.append(texDep) catch std.debug.print("ERROR: 3.DependancyExtractor: texDependancies append failed\n", .{});
                 }
             }

@@ -4,14 +4,14 @@ const p = @import("../passImport.zig");
 
 pub fn Composite(
     def: struct {
-        name: p.PassEnum,
+        string: []const u8,
     },
 ) p.PassDef {
     return p.PassDef.Graphics(.{
-        .name = def.name,
+        .name = def.string,
         .outputTexId = null, // Uses Swapchain
         .execution = .{ .vertices = 3, .instances = 1, .indexCount = 0 },
-        .vertex = sc.compositeVert, 
+        .vertex = sc.compositeVert,
         .fragment = sc.compositeFrag,
         .renderState = .{
             .colorBlend = vk.VK_TRUE,

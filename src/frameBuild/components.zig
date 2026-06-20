@@ -6,6 +6,8 @@ const BufInf = @import("../render/types/res/BufferMeta.zig").BufferMeta.BufInf;
 const BufId = @import("../render/types/res/BufferMeta.zig").BufferMeta.BufId;
 pub const pe = @import("enums.zig");
 
+pub const PassId = struct { val: u16 };
+
 pub const TextureLink = struct {
     in: pe.TextureEnum,
     out: ?pe.TextureEnum = null,
@@ -17,14 +19,14 @@ pub const BufferLink = struct {
 };
 
 pub const TextureAccess = struct {
-    passEnum: pe.PassEnum,
+    pass: PassId,
     texInput: pe.TextureEnum,
     texOutput: ?pe.TextureEnum,
     access: enum { write, read },
 };
 
 pub const BufferAccess = struct {
-    passEnum: pe.PassEnum,
+    pass: PassId,
     bufInput: pe.BufferEnum,
     bufOutput: ?pe.BufferEnum,
     access: enum { write, read },
@@ -32,19 +34,19 @@ pub const BufferAccess = struct {
 
 pub const TextureDependancy = struct {
     texEnum: pe.TextureEnum,
-    predecessor: pe.PassEnum,
-    successor: pe.PassEnum,
+    predecessor: PassId,
+    successor: PassId,
 };
 
 pub const BufferDependancy = struct {
     bufEnum: pe.BufferEnum,
-    predecessor: pe.PassEnum,
-    successor: pe.PassEnum,
+    predecessor: PassId,
+    successor: PassId,
 };
 
 pub const GraphNode = struct {
     level: u16,
-    passEnum: pe.PassEnum,
+    pass: PassId,
 };
 
 pub const TextureLifetime = struct {
@@ -84,7 +86,7 @@ pub const TexLevelLifetime = struct {
 };
 
 pub const BufferGroup = struct {
-    rootPass: pe.PassEnum,
+    rootPass: PassId,
     rootBuf: pe.BufferEnum,
     startMapIndex: u16,
     endMapIndex: u16,
@@ -92,7 +94,7 @@ pub const BufferGroup = struct {
 };
 
 pub const TextureGroup = struct {
-    rootPass: pe.PassEnum,
+    rootPass: PassId,
     rootTex: pe.TextureEnum,
     startMapIndex: u16,
     endMapIndex: u16,
@@ -123,12 +125,12 @@ pub const PhysicalTexLifetime = struct {
 
 pub const BufferClear = struct {
     sharedBufIndex: u16,
-    passAfterClear: pe.PassEnum, // First Pass that happens Afterwards
+    passAfterClear: PassId, // First Pass that happens Afterwards
 };
 
 pub const TextureClear = struct {
     sharedTexIndex: u16,
-    passAfterClear: pe.PassEnum, // First Pass that happens Afterwards
+    passAfterClear: PassId, // First Pass that happens Afterwards
 };
 
 pub const TransientBuffer = struct {
@@ -152,6 +154,6 @@ pub const PassAccessRange = struct {
 
 pub const GraphMemoryNode = struct {
     level: u16,
-    passEnum: pe.PassEnum,
+    pass: PassId,
     memWeight: i64, // bornBytes - dyingBytes,
 };

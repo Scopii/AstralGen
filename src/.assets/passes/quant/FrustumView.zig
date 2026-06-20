@@ -4,15 +4,15 @@ const p = @import("../passImport.zig");
 
 pub fn FrustumView(
     def: struct {
-        name: p.PassEnum,
+        string: []const u8,
         colorAtt: p.TextureLink,
         depthAtt: p.TextureLink,
-        renderCam: p.BufferLink, 
-        viewCam: p.BufferLink, 
+        renderCam: p.BufferLink,
+        viewCam: p.BufferLink,
     },
 ) p.PassDef {
     return p.PassDef.Mesh(.{
-        .name = def.name,
+        .name = def.string,
         .outputTexId = def.colorAtt.in,
         .execution = .{ .workgroups = .{ .x = 1, .y = 1, .z = 1 } },
         .mesh = sc.frustumMesh,

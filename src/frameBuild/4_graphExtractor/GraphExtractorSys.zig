@@ -1,5 +1,4 @@
 const rc = @import("../../.configs/renderConfig.zig");
-const PassEnum = @import("../enums.zig").PassEnum;
 const std = @import("std");
 
 const DependancyExtractorData = @import("../3_dependancyExtractor/DependancyExtractorData.zig").DependancyExtractorData;
@@ -15,16 +14,16 @@ pub const GraphExtractorSys = struct {
 
         // Fill Passes with Buffer Dependancy Count
         for (dependancyExtractor.bufDependancies.constSlice()) |bufDep| {
-            const passKey = @intFromEnum(bufDep.successor);
+            const passKey = bufDep.successor.val;
             const curDepCount = if (graphExtractor.passDepCounters.isKeyUsed(passKey)) graphExtractor.passDepCounters.getByKey(passKey) else 0;
-            graphExtractor.passDepCounters.upsert(@intFromEnum(bufDep.successor), curDepCount + 1);
+            graphExtractor.passDepCounters.upsert(bufDep.successor.val, curDepCount + 1);
         }
 
         // Fill Passes with Texture Dependancy Count
         for (dependancyExtractor.texDependancies.constSlice()) |texDep| {
-            const passKey = @intFromEnum(texDep.successor);
+            const passKey = texDep.successor.val;
             const curDepCount = if (graphExtractor.passDepCounters.isKeyUsed(passKey)) graphExtractor.passDepCounters.getByKey(passKey) else 0;
-            graphExtractor.passDepCounters.upsert(@intFromEnum(texDep.successor), curDepCount + 1);
+            graphExtractor.passDepCounters.upsert(texDep.successor.val, curDepCount + 1);
         }
 
         // Debug Output
@@ -34,8 +33,8 @@ pub const GraphExtractorSys = struct {
                 const castedIndex: u32 = @intCast(i);
                 const passDepCount = graphExtractor.passDepCounters.getByIndex(castedIndex);
                 const passKey = graphExtractor.passDepCounters.getKeyByIndex(castedIndex);
-                const passEnum: PassEnum = @enumFromInt(passKey);
-                std.debug.print("- Pass {}: Dependancies {}\n", .{ passEnum, passDepCount });
+                const passString = passExtractor.passStrings.getByKey(@intCast(passKey));
+                std.debug.print("- Pass {s}: Dependancies {}\n", .{ passString, passDepCount });
             }
             std.debug.print("\n", .{});
         }
@@ -43,11 +42,14 @@ pub const GraphExtractorSys = struct {
         graphExtractor.unorderedPasses.clear();
 
         // Load Unordered Passes
-        for (passExtractor.renderNodes.constSlice()) |*renderNode| {
-            switch (renderNode.*) {
+        for (0..passExtractor.renderNodes.getLength()) |index| {
+            const renderNode = passExtractor.renderNodes.getByIndex(@intCast(index));
+
+            switch (renderNode) {
                 .compositeNode, .uiNode, .viewportBlit, .clearBuffer, .clearTexture, .barrierBakeClears => {},
-                .passNode => |passNode| {
-                    graphExtractor.unorderedPasses.upsert(@intFromEnum(passNode.pass.name), passNode.pass.name);
+                .passNode => |_| {
+                    const key = passExtractor.renderNodes.getKeyByIndex(@intCast(index));
+                    graphExtractor.unorderedPasses.upsert(@intCast(key), .{ .val = @intCast(key) });
                 },
             }
         }
@@ -55,12 +57,10 @@ pub const GraphExtractorSys = struct {
         graphExtractor.readyPasses.clear();
 
         // Add all Passes that do not have Dependancys
-        for (graphExtractor.unorderedPasses.getConstItems()) |passEnum| {
-            const passKey = @intFromEnum(passEnum);
-
+        for (graphExtractor.unorderedPasses.getConstItems()) |pass| {
             // If Dependancy Counter is null add to ordered List
-            if (graphExtractor.passDepCounters.isKeyUsed(passKey) == false) {
-                graphExtractor.readyPasses.append(.{ .passEnum = passEnum, .level = 0 }) catch {};
+            if (graphExtractor.passDepCounters.isKeyUsed(pass.val) == false) {
+                graphExtractor.readyPasses.append(.{ .pass = pass, .level = 0 }) catch {};
             }
         }
 
@@ -73,15 +73,15 @@ pub const GraphExtractorSys = struct {
             for (graphExtractor.readyPasses.constSlice()) |readyPass| {
                 // Decrement Dependancy Counters
                 for (dependancyExtractor.bufDependancies.constSlice()) |bufDep| {
-                    if (bufDep.predecessor == readyPass.passEnum) {
-                        const successorCountPtr = graphExtractor.passDepCounters.getPtrByKey(@intFromEnum(bufDep.successor));
+                    if (bufDep.predecessor.val == readyPass.pass.val) {
+                        const successorCountPtr = graphExtractor.passDepCounters.getPtrByKey(bufDep.successor.val);
                         successorCountPtr.* -= 1;
                     }
                 }
 
                 for (dependancyExtractor.texDependancies.constSlice()) |texDep| {
-                    if (texDep.predecessor == readyPass.passEnum) {
-                        const successorCountPtr = graphExtractor.passDepCounters.getPtrByKey(@intFromEnum(texDep.successor));
+                    if (texDep.predecessor.val == readyPass.pass.val) {
+                        const successorCountPtr = graphExtractor.passDepCounters.getPtrByKey(texDep.successor.val);
                         successorCountPtr.* -= 1;
                     }
                 }
@@ -89,14 +89,14 @@ pub const GraphExtractorSys = struct {
 
             // Transfer all Ready Passes to Ordered Map
             for (graphExtractor.readyPasses.constSlice()) |readyPass| {
-                graphExtractor.orderedPasses.upsert(@intFromEnum(readyPass.passEnum), readyPass);
+                graphExtractor.orderedPasses.upsert(readyPass.pass.val, readyPass);
             }
             graphExtractor.readyPasses.clear();
 
             // Fill move passes with Count 0 to readyPasses for new Cycle
             for (graphExtractor.passDepCounters.getConstItems(), 0..) |passDepCounter, i| {
-                const passEnum: PassEnum = @enumFromInt(graphExtractor.passDepCounters.getKeyByIndex(@intCast(i)));
-                if (passDepCounter == 0) graphExtractor.readyPasses.append(.{ .passEnum = passEnum, .level = curLevel }) catch {};
+                const pass = graphExtractor.passDepCounters.getKeyByIndex(@intCast(i));
+                if (passDepCounter == 0) graphExtractor.readyPasses.append(.{ .pass = .{ .val = @intCast(pass) }, .level = curLevel }) catch {};
             }
 
             // Cleanup Counters
@@ -116,27 +116,32 @@ pub const GraphExtractorSys = struct {
             std.debug.print("ERROR: 4.0.GraphExtractor: {} of {} passes scheduled! Graph has a cycle\n", .{ orderedCount, totalCount });
 
             // Passes in unorderedPasses but not in orderedPasses
-            for (graphExtractor.unorderedPasses.getConstItems()) |passEnum| {
-                const key = @intFromEnum(passEnum);
-                if (graphExtractor.orderedPasses.isKeyUsed(key) == false) {
-                    const remainingDeps = if (graphExtractor.passDepCounters.isKeyUsed(key)) graphExtractor.passDepCounters.getByKey(key) else 0;
-                    std.debug.print("  stuck: {s} (still waiting on {} deps)\n", .{ @tagName(passEnum), remainingDeps });
+            for (graphExtractor.unorderedPasses.getConstItems()) |passId| {
+                const passString = passExtractor.passStrings.getByKey(@intCast(passId.val));
+
+                if (graphExtractor.orderedPasses.isKeyUsed(passId.val) == false) {
+                    const remainingDeps = if (graphExtractor.passDepCounters.isKeyUsed(passId.val)) graphExtractor.passDepCounters.getByKey(passId.val) else 0;
+                    std.debug.print("  stuck: {s} (still waiting on {} deps)\n", .{ passString, remainingDeps });
                 }
             }
             std.debug.print("  cycle Buffer edges:\n", .{});
             for (dependancyExtractor.bufDependancies.constSlice()) |dep| {
-                const predStuck = !graphExtractor.orderedPasses.isKeyUsed(@intFromEnum(dep.predecessor));
-                const succStuck = !graphExtractor.orderedPasses.isKeyUsed(@intFromEnum(dep.successor));
+                const predStuck = !graphExtractor.orderedPasses.isKeyUsed(dep.predecessor.val);
+                const succStuck = !graphExtractor.orderedPasses.isKeyUsed(dep.successor.val);
                 if (predStuck and succStuck) {
-                    std.debug.print("    {s} --[{s}]--> {s}\n", .{ @tagName(dep.predecessor), @tagName(dep.bufEnum), @tagName(dep.successor) });
+                    const predString = passExtractor.passStrings.getByKey(dep.predecessor.val);
+                    const succString = passExtractor.passStrings.getByKey(dep.successor.val);
+                    std.debug.print("    {s} --[{s}]--> {s}\n", .{ predString, @tagName(dep.bufEnum), succString });
                 }
             }
             std.debug.print("  cycle Texture edges:\n", .{});
             for (dependancyExtractor.texDependancies.constSlice()) |dep| {
-                const predStuck = !graphExtractor.orderedPasses.isKeyUsed(@intFromEnum(dep.predecessor));
-                const succStuck = !graphExtractor.orderedPasses.isKeyUsed(@intFromEnum(dep.successor));
+                const predStuck = !graphExtractor.orderedPasses.isKeyUsed(dep.predecessor.val);
+                const succStuck = !graphExtractor.orderedPasses.isKeyUsed(dep.successor.val);
                 if (predStuck and succStuck) {
-                    std.debug.print("    {s} --[{s}]--> {s}\n", .{ @tagName(dep.predecessor), @tagName(dep.texEnum), @tagName(dep.successor) });
+                    const predString = passExtractor.passStrings.getByKey(dep.predecessor.val);
+                    const succString = passExtractor.passStrings.getByKey(dep.successor.val);
+                    std.debug.print("    {s} --[{s}]--> {s}\n", .{ predString, @tagName(dep.texEnum), succString });
                 }
             }
             return error.GraphHasCycle;

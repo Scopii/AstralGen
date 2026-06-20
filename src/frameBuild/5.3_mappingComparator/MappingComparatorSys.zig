@@ -31,7 +31,7 @@ pub const MappingComparatorSys = struct {
                 const lastGroupInf = resourceMapper.lastBufGroupsPersistent.getByKey(groupRootKey);
 
                 const newDesc = !bufDescEqual(&lastGroupInf.bufDesc, &newGroupInf.bufDesc);
-                const newPass = if (lastGroupInf.rootPass == newGroupInf.rootPass) false else true;
+                const newPass = if (lastGroupInf.rootPass.val == newGroupInf.rootPass.val) false else true;
 
                 if (newDesc == true and newPass == true) mappingComparator.persistentBufChanges.appendAssumeCapacity(.{ .rootBuf = groupRootEnum, .change = .newDesc });
                 if (newDesc == true and newPass == false) mappingComparator.persistentBufChanges.appendAssumeCapacity(.{ .rootBuf = groupRootEnum, .change = .newPass });
@@ -63,7 +63,7 @@ pub const MappingComparatorSys = struct {
                 const lastGroupInf = resourceMapper.lastTexGroupsPersistent.getByKey(groupRootKey);
 
                 const newDesc = !texDescEqual(&lastGroupInf.texDesc, &newGroupInf.texDesc);
-                const newPass = if (lastGroupInf.rootPass == newGroupInf.rootPass) false else true;
+                const newPass = if (lastGroupInf.rootPass.val == newGroupInf.rootPass.val) false else true;
 
                 if (newDesc == true and newPass == true) mappingComparator.persistentTexChanges.appendAssumeCapacity(.{ .rootTex = groupRootEnum, .change = .newDesc });
                 if (newDesc == true and newPass == false) mappingComparator.persistentTexChanges.appendAssumeCapacity(.{ .rootTex = groupRootEnum, .change = .newPass });

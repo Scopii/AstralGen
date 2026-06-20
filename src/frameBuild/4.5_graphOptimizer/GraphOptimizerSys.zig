@@ -29,7 +29,7 @@ pub const GraphOptimizerSys = struct {
             const bufInputKey = @intFromEnum(bufAccess.bufInput);
             if (resourceExtractor.bufMemSize.isKeyUsed(bufInputKey) == false) continue; // Only Transient
 
-            const graphLevel = graphExtractor.orderedPasses.getByKey(@intFromEnum(bufAccess.passEnum)).level;
+            const graphLevel = graphExtractor.orderedPasses.getByKey(bufAccess.pass.val).level;
 
             if (graphOptimizer.bufLevelLifetimes.isKeyUsed(bufInputKey) == false) {
                 const bufLevelLifetime = BufLevelLifetime{ .bufEnum = bufAccess.bufInput, .firstLevel = graphLevel, .lastLevel = graphLevel };
@@ -46,7 +46,7 @@ pub const GraphOptimizerSys = struct {
             const bufOutputKey = @intFromEnum(bufOutput);
             if (resourceExtractor.bufMemSize.isKeyUsed(bufOutputKey) == false) continue; // Only Transient
 
-            const graphLevel = graphExtractor.orderedPasses.getByKey(@intFromEnum(bufAccess.passEnum)).level;
+            const graphLevel = graphExtractor.orderedPasses.getByKey(bufAccess.pass.val).level;
 
             if (graphOptimizer.bufLevelLifetimes.isKeyUsed(bufOutputKey) == false) {
                 const bufLevelLifetime = BufLevelLifetime{ .bufEnum = bufOutput, .firstLevel = graphLevel, .lastLevel = graphLevel };
@@ -63,7 +63,7 @@ pub const GraphOptimizerSys = struct {
             const texInputKey = @intFromEnum(texAccess.texInput);
             if (resourceExtractor.texMemSize.isKeyUsed(texInputKey) == false) continue; // Only Transient
 
-            const graphLevel = graphExtractor.orderedPasses.getByKey(@intFromEnum(texAccess.passEnum)).level;
+            const graphLevel = graphExtractor.orderedPasses.getByKey(texAccess.pass.val).level;
 
             if (graphOptimizer.texLevelLifetimes.isKeyUsed(texInputKey) == false) {
                 const texLevelLifetime = TexLevelLifetime{ .texEnum = texAccess.texInput, .firstLevel = graphLevel, .lastLevel = graphLevel };
@@ -80,7 +80,7 @@ pub const GraphOptimizerSys = struct {
             const texOutputKey = @intFromEnum(texOutput);
             if (resourceExtractor.texMemSize.isKeyUsed(texOutputKey) == false) continue; // Only Transient
 
-            const graphLevel = graphExtractor.orderedPasses.getByKey(@intFromEnum(texAccess.passEnum)).level;
+            const graphLevel = graphExtractor.orderedPasses.getByKey(texAccess.pass.val).level;
 
             if (graphOptimizer.texLevelLifetimes.isKeyUsed(texOutputKey) == false) {
                 const texLevelLifetime = TexLevelLifetime{ .texEnum = texOutput, .firstLevel = graphLevel, .lastLevel = graphLevel };
@@ -115,8 +115,7 @@ pub const GraphOptimizerSys = struct {
 
         // Extend GraphNodes to GraphMemoryNodes
         for (graphExtractor.orderedPasses.getConstItems()) |graphNode| {
-            const passKey = @intFromEnum(graphNode.passEnum);
-            const accessRange = resourceExtractor.passAccessRanges.getByKey(passKey);
+            const accessRange = resourceExtractor.passAccessRanges.getByKey(graphNode.pass.val);
 
             var bornBytes: u64 = 0;
             var dyingBytes: u64 = 0;
@@ -170,7 +169,7 @@ pub const GraphOptimizerSys = struct {
             const castedBornBytes: i64 = @intCast(bornBytes);
             const castedDyingBytes: i64 = @intCast(dyingBytes);
 
-            const graphMemNode = GraphMemoryNode{ .level = graphNode.level, .passEnum = graphNode.passEnum, .memWeight = castedBornBytes - castedDyingBytes };
+            const graphMemNode = GraphMemoryNode{ .level = graphNode.level, .pass = graphNode.pass, .memWeight = castedBornBytes - castedDyingBytes };
             graphOptimizer.graphMemNodes.append(graphMemNode) catch std.debug.print("ERROR: 4.5.PassOptimizer: Append to graphMemNodes failed!", .{});
         }
 
@@ -178,7 +177,7 @@ pub const GraphOptimizerSys = struct {
         graphOptimizer.graphMemNodes.selectionSort(greaterGraphMemNode);
 
         for (graphOptimizer.graphMemNodes.constSlice()) |graphMemNode| {
-            const graphPassKey = @intFromEnum(graphMemNode.passEnum);
+            const graphPassKey = graphMemNode.pass.val;
             graphOptimizer.optimizedGraph.upsert(@intCast(graphPassKey), graphMemNode);
         }
 

@@ -4,7 +4,7 @@ const p = @import("../passImport.zig");
 
 pub fn CompRayMarch(
     def: struct {
-        name: p.PassEnum,
+        string: []const u8,
         outputTex: p.TextureLink,
         entityBuf: p.BufferLink,
         camBuf: p.BufferLink,
@@ -13,7 +13,7 @@ pub fn CompRayMarch(
     },
 ) p.PassDef {
     return p.PassDef.Compute(.{
-        .name = def.name,
+        .name = def.string,
         .outputTexId = def.outputTex.in,
         .execution = .{
             .workgroups = .{ .x = 8, .y = 8, .z = 1 },

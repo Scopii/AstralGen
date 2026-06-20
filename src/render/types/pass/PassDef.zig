@@ -6,7 +6,7 @@ const VertexAttribute = @import("VertexAttribute.zig").VertexAttribute;
 const WindowId = @import("../../../window/Window.zig").Window.WindowId;
 const ShaderInf = @import("../../../shader/ShaderInf.zig").ShaderInf;
 const IndexBufferUse = @import("IndexBufferUse.zig").IndexBufferUse;
-const PassEnum = @import("../../../frameBuild/enums.zig").PassEnum;
+const PassId = @import("../../../frameBuild/components.zig").PassId;
 const ShaderId = @import("../../../shader/ShaderSys.zig").ShaderId;
 const RenderState = @import("../pass/RenderState.zig").RenderState;
 const TexId = @import("../res/TextureMeta.zig").TextureMeta.TexId;
@@ -17,34 +17,13 @@ const BufferUse = @import("BufferUse.zig").BufferUse;
 const std = @import("std");
 
 pub const Dispatch = struct { x: u32, y: u32, z: u32 };
-
-pub const ComputeExec = struct {
-    workgroups: Dispatch,
-    outputTexDispatch: bool,
-};
-
-pub const ComputeIndirectExec = struct {
-    indirectBuf: BufferEnum,
-    indirectBufOffset: u64 = 0,
-};
-
-pub const TaskOrMeshExec = struct {
-    workgroups: Dispatch,
-};
-
-pub const TaskOrMeshIndirectExec = struct {
-    workgroups: Dispatch,
-    indirectBuf: BufferEnum,
-    indirectBufOffset: u64 = 0,
-};
-
-pub const GraphicsExec = struct {
-    vertices: u32,
-    instances: u32,
-    indexCount: u32,
-};
-
 pub const PassNode = struct { pass: PassDef, width: u32, height: u32 };
+
+pub const ComputeExec = struct { workgroups: Dispatch, outputTexDispatch: bool };
+pub const ComputeIndirectExec = struct { indirectBuf: BufferEnum, indirectBufOffset: u64 = 0 };
+pub const TaskOrMeshExec = struct { workgroups: Dispatch };
+pub const TaskOrMeshIndirectExec = struct { workgroups: Dispatch, indirectBuf: BufferEnum, indirectBufOffset: u64 = 0 };
+pub const GraphicsExec = struct { vertices: u32, instances: u32, indexCount: u32 };
 
 pub const RenderNode = union(enum) {
     viewportBlit: ViewportBlit,
@@ -58,7 +37,7 @@ pub const RenderNode = union(enum) {
 
 pub const CompositeNode = struct {
     name: []const u8,
-    pass: PassEnum,
+    pass: PassId,
     windowId: WindowId,
     srcTexEnum: ?TextureEnum = null,
     viewWidth: u32,
@@ -87,7 +66,7 @@ pub const UiNode = struct {
 
 pub const ViewportBlit = struct {
     name: []const u8,
-    pass: PassEnum,
+    pass: PassId,
     srcTexEnum: ?TextureEnum = null,
     dstWindowId: WindowId,
     viewWidth: u32,
@@ -97,7 +76,7 @@ pub const ViewportBlit = struct {
 };
 
 pub const PassDef = struct {
-    name: PassEnum,
+    name: []const u8,
     execution: PassExecution,
     mainOutputTex: ?TextureEnum,
 
@@ -127,7 +106,7 @@ pub const PassDef = struct {
 
     pub fn Graphics(
         inf: struct {
-            name: PassEnum,
+            name: []const u8,
             outputTexId: ?TextureEnum,
             execution: GraphicsExec,
             vertex: ShaderInf,
@@ -173,7 +152,7 @@ pub const PassDef = struct {
 
     pub fn Compute(
         inf: struct {
-            name: PassEnum,
+            name: []const u8,
             outputTexId: ?TextureEnum,
             execution: ComputeExec,
             compute: ShaderInf,
@@ -269,7 +248,7 @@ pub const PassDef = struct {
 
     pub fn Mesh(
         inf: struct {
-            name: PassEnum,
+            name: []const u8,
             outputTexId: ?TextureEnum,
             execution: TaskOrMeshExec,
             mesh: ShaderInf,
@@ -308,7 +287,7 @@ pub const PassDef = struct {
 
     pub fn MeshIndirect(
         inf: struct {
-            name: PassEnum,
+            name: []const u8,
             outputTexId: ?TextureEnum,
             execution: TaskOrMeshIndirectExec,
             mesh: ShaderInf,

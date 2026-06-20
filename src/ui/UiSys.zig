@@ -185,14 +185,14 @@ pub const UiSys = struct {
                     .thickness = 1.0,
                 });
 
-                for (viewport.passes, 0..) |pass, i| {
+                for (viewport.stringPasses, 0..) |pass, i| {
                     const passHeight = 100 + (i * 20);
                     const castedHeight: f32 = @floatFromInt(passHeight);
 
                     drawList.addTextUnformatted(
                         .{ viewX + 10, viewY + castedHeight },
                         zgui.colorConvertFloat4ToU32(.{ 0.8, 0.8, 0.8, 1.0 }),
-                        @tagName(pass),
+                        pass,
                     );
                 }
 

@@ -114,8 +114,8 @@ pub const App = struct {
             .areaY = 0,
             .areaWidth = 1,
             .areaHeight = 1,
-            .passes = &.{
-                .DepthView,
+            .stringPasses = &.{
+                "DepthView",
             },
             // .blitPass = .DepthView,
         });
@@ -141,8 +141,8 @@ pub const App = struct {
             .areaY = 0.0,
             .areaWidth = 1.0,
             .areaHeight = 1.0,
-            .passes = &.{
-                .CompTest,
+            .stringPasses = &.{
+                "CompRayMarch",
             },
             // .blitPass = .CompTest,
         });
@@ -168,9 +168,9 @@ pub const App = struct {
             .areaY = 0.0,
             .areaWidth = 0.5,
             .areaHeight = 0.5,
-            .passes = &.{
-                .QuantComp,
-                .QuantGridMain,
+            .stringPasses = &.{
+                "QuantComp",
+                "QuantGridMain",
             },
             // .blitPass = .QuantGridMain,
         });
@@ -183,10 +183,10 @@ pub const App = struct {
             .areaY = 0.0,
             .areaWidth = 0.5,
             .areaHeight = 0.5,
-            .passes = &.{
-                .QuantComp,
-                .QuantGridDebug,
-                .EditorGridGridDebug,
+            .stringPasses = &.{
+                "QuantComp",
+                "QuantGridDebug",
+                "EditorGridGridDebug",
             },
             // .blitPass = .EditorGrid,
         });
@@ -198,11 +198,11 @@ pub const App = struct {
             .areaY = 0.5,
             .areaWidth = 0.5,
             .areaHeight = 0.5,
-            .passes = &.{
-                .QuantComp,
-                .QuantPlaneDebug,
-                .FrustumView,
-                .EditorGridPlaneDebug,
+            .stringPasses = &.{
+                "QuantComp",
+                "QuantPlaneDebug",
+                "FrustumView",
+                "EditorGridPlaneDebug",
             },
             // .blitPass = .FrustumView,
         });
@@ -215,8 +215,8 @@ pub const App = struct {
             .areaY = 0.5,
             .areaWidth = 0.5,
             .areaHeight = 0.5,
-            .passes = &.{
-                .QuantPlaneMain,
+            .stringPasses = &.{
+                "QuantPlaneMain",
             },
             // .blitPass = .QuantPlaneMain,
         });

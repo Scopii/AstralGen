@@ -251,7 +251,7 @@ pub const CmdRecorder = struct {
             const buf = try resMan.get(bufId, cmd.flightId);
             try self.checkBufferState(buf, .{ .stage = .VertexInput, .access = .IndexRead });
         }
-        self.bakeBarriers(cmd, @tagName(pass.name));
+        self.bakeBarriers(cmd, pass.name);
     }
 
     fn recordCompute(cmd: *const Cmd, dispatch: Dispatch, renderTexId: ?TexId, resMan: *ResourceMan) !void {
@@ -376,7 +376,7 @@ pub const CmdRecorder = struct {
         const colorAtt = try targetTex.createAttachment(.Swapchain, if (isFirstUse) .{ .color = rc.INITIAL_SWAPCHAIN_COLOR } else null);
         cmd.beginRendering(swapchain.extent.width, swapchain.extent.height, &[_]vk.VkRenderingAttachmentInfo{colorAtt}, null, null);
 
-        const compositePass = Composite(.{ .name = .Composite });
+        const compositePass = Composite(.{ .string = "Composite" });
 
         const shaders = shaderMan.getShaders(compositePass.getShaderIds());
         cmd.bindShaders(shaders[0..compositePass.getShaderIds().len]);
@@ -425,7 +425,7 @@ pub const CmdRecorder = struct {
         const isFirstUse = targetTex.state.layout == .Undefined;
 
         const pass = ImGuiPass(.{
-            .name = .Imgui,
+            .string = "Imgui",
             .vertexBuf = .ImguiVB,
             .indexBuf = .ImguiIB,
         });
@@ -531,8 +531,8 @@ pub const CmdRecorder = struct {
         bufAssigns: *const BufferAssignments,
         texAssigns: *const TextureAssignments,
     ) !void {
-        const timeId = cmd.startTimer(.TopOfPipe, @tagName(pass.name), .Pass);
-        cmd.startStatistics(@tagName(pass.name));
+        const timeId = cmd.startTimer(.TopOfPipe, pass.name, .Pass);
+        cmd.startStatistics(pass.name);
 
         const shaders = shaderMan.getShaders(pass.getShaderIds());
         const shaderSlice = shaders[0..pass.getShaderIds().len];
@@ -656,7 +656,7 @@ pub const CmdRecorder = struct {
                     cmd.draw(graphics.vertices, graphics.instances, 0, 0);
                 }
             },
-            .compute, .computeIndirect => std.debug.print("ERROR: Compute or ComputeOnImg Pass ({s}) landed in Graphics Recording\n", .{@tagName(pass.name)}),
+            .compute, .computeIndirect => std.debug.print("ERROR: Compute or ComputeOnImg Pass ({s}) landed in Graphics Recording\n", .{pass.name}),
         }
         cmd.endRendering();
     }

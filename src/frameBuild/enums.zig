@@ -1,22 +1,22 @@
-pub const PassEnum = enum {
-    QuantComp,
-    QuantGridMain,
-    QuantGridDebug,
-    QuantPlaneMain,
-    QuantPlaneDebug,
+// pub const PassEnum = enum {
+//     QuantComp,
+//     QuantGridMain,
+//     QuantGridDebug,
+//     QuantPlaneMain,
+//     QuantPlaneDebug,
 
-    FrustumView,
+//     FrustumView,
 
-    DepthView,
+//     DepthView,
 
-    CompTest,
+//     CompRayMarch,
 
-    EditorGridGridDebug,
-    EditorGridPlaneDebug,
+//     EditorGridGridDebug,
+//     EditorGridPlaneDebug,
 
-    Imgui, // SPECIAL CASE
-    Composite, // SPECIAL CASE
-};
+//     Imgui, // SPECIAL CASE
+//     Composite, // SPECIAL CASE
+// };
 
 pub const BufferEnum = enum {
     QuantIndirectInputSB,
