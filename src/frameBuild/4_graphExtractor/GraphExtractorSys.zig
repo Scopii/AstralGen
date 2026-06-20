@@ -30,10 +30,9 @@ pub const GraphExtractorSys = struct {
         if (rc.FRAME_GRAPH_DEBUG) {
             std.debug.print("4.GraphExtractor: \n", .{});
             for (0..graphExtractor.passDepCounters.getLength()) |i| {
-                const castedIndex: u32 = @intCast(i);
-                const passDepCount = graphExtractor.passDepCounters.getByIndex(castedIndex);
-                const passKey = graphExtractor.passDepCounters.getKeyByIndex(castedIndex);
-                const passString = passExtractor.passStrings.getByKey(@intCast(passKey));
+                const passDepCount = graphExtractor.passDepCounters.getByIndex(@intCast(i));
+                const passKey = graphExtractor.passDepCounters.getKeyByIndex(@intCast(i));
+                const passString = passExtractor.passStrings.getByKey(passKey);
                 std.debug.print("- Pass {s}: Dependancies {}\n", .{ passString, passDepCount });
             }
             std.debug.print("\n", .{});
@@ -49,7 +48,7 @@ pub const GraphExtractorSys = struct {
                 .compositeNode, .uiNode, .viewportBlit, .clearBuffer, .clearTexture, .barrierBakeClears => {},
                 .passNode => |_| {
                     const key = passExtractor.renderNodes.getKeyByIndex(@intCast(index));
-                    graphExtractor.unorderedPasses.upsert(@intCast(key), .{ .val = @intCast(key) });
+                    graphExtractor.unorderedPasses.upsert(key, .{ .val = key });
                 },
             }
         }
@@ -96,7 +95,7 @@ pub const GraphExtractorSys = struct {
             // Fill move passes with Count 0 to readyPasses for new Cycle
             for (graphExtractor.passDepCounters.getConstItems(), 0..) |passDepCounter, i| {
                 const pass = graphExtractor.passDepCounters.getKeyByIndex(@intCast(i));
-                if (passDepCounter == 0) graphExtractor.readyPasses.append(.{ .pass = .{ .val = @intCast(pass) }, .level = curLevel }) catch {};
+                if (passDepCounter == 0) graphExtractor.readyPasses.append(.{ .pass = .{ .val = pass }, .level = curLevel }) catch {};
             }
 
             // Cleanup Counters
@@ -117,7 +116,7 @@ pub const GraphExtractorSys = struct {
 
             // Passes in unorderedPasses but not in orderedPasses
             for (graphExtractor.unorderedPasses.getConstItems()) |passId| {
-                const passString = passExtractor.passStrings.getByKey(@intCast(passId.val));
+                const passString = passExtractor.passStrings.getByKey(passId.val);
 
                 if (graphExtractor.orderedPasses.isKeyUsed(passId.val) == false) {
                     const remainingDeps = if (graphExtractor.passDepCounters.isKeyUsed(passId.val)) graphExtractor.passDepCounters.getByKey(passId.val) else 0;

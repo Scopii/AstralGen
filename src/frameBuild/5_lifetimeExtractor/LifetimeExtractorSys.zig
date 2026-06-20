@@ -80,8 +80,7 @@ pub const LifetimeExtractorSys = struct {
 
             // Buffer Debug
             for (0..lifetimeExtractor.bufLifetimes.getLength()) |i| {
-                const castedIndex: u32 = @intCast(i);
-                const bufLifetime = lifetimeExtractor.bufLifetimes.getByIndex(castedIndex);
+                const bufLifetime = lifetimeExtractor.bufLifetimes.getByIndex(@intCast(i));
                 const earliestPass = graphOptimizer.optimizedGraph.getConstItems()[bufLifetime.earliest].pass;
                 const latestPass = graphOptimizer.optimizedGraph.getConstItems()[bufLifetime.latest].pass;
                 std.debug.print("- Buf Lifetime: {s}: ({} -> {}) ({} -> {})\n", .{ @tagName(bufLifetime.bufEnum), bufLifetime.earliest, bufLifetime.latest, earliestPass, latestPass });
@@ -89,8 +88,7 @@ pub const LifetimeExtractorSys = struct {
 
             // Texture Debug
             for (0..lifetimeExtractor.texLifetimes.getLength()) |i| {
-                const castedIndex: u32 = @intCast(i);
-                const texLifetime = lifetimeExtractor.texLifetimes.getByIndex(castedIndex);
+                const texLifetime = lifetimeExtractor.texLifetimes.getByIndex(@intCast(i));
                 const earliestPass = graphOptimizer.optimizedGraph.getConstItems()[texLifetime.earliest].pass;
                 const latestPass = graphOptimizer.optimizedGraph.getConstItems()[texLifetime.latest].pass;
                 std.debug.print("- Tex Lifetime: {s}: ({} -> {}) ({} -> {})\n", .{ @tagName(texLifetime.texEnum), texLifetime.earliest, texLifetime.latest, earliestPass, latestPass });

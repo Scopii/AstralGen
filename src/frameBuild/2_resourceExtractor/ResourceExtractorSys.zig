@@ -33,7 +33,7 @@ pub const ResourceExtractorSys = struct {
             switch (renderNode) {
                 .passNode => |pass| {
                     const key = passExtractor.renderNodes.getKeyByIndex(@intCast(index));
-                    getPassAccesses(&pass.pass, resourceExtractor, @intCast(key));
+                    getPassAccesses(&pass.pass, resourceExtractor, key);
                 },
                 .compositeNode => |_| {},
                 .viewportBlit => |_| {},
@@ -46,7 +46,7 @@ pub const ResourceExtractorSys = struct {
         // Resolve and Save Buffer Descriptions
         for (resourceExtractor.bufAccesses.constSlice()) |bufAccess| {
             // For Input
-            const bufKey1: u16 = @intCast(@intFromEnum(bufAccess.bufInput));
+            const bufKey1: u16 = @intFromEnum(bufAccess.bufInput);
             if (resourceExtractor.bufDescriptions.isKeyUsed(bufKey1) == false) {
                 const bufDesc1 = try resolveBufferEnum(bufAccess.bufInput);
                 resourceExtractor.bufDescriptions.upsert(bufKey1, bufDesc1);
@@ -56,7 +56,7 @@ pub const ResourceExtractorSys = struct {
             }
 
             // For Output
-            const bufKey2: ?u16 = if (bufAccess.bufOutput) |bufOutput| @intCast(@intFromEnum(bufOutput)) else null;
+            const bufKey2: ?u16 = if (bufAccess.bufOutput) |bufOutput| @intFromEnum(bufOutput) else null;
             if (bufKey2) |key2| {
                 if (resourceExtractor.bufDescriptions.isKeyUsed(key2) == false) {
                     const bufDesc2 = try resolveBufferEnum(bufAccess.bufOutput.?);
@@ -71,7 +71,7 @@ pub const ResourceExtractorSys = struct {
         // Resolve and Save Texture Descriptions
         for (resourceExtractor.texAccesses.constSlice()) |texAccess| {
             // For Input
-            const texKey1: u16 = @intCast(@intFromEnum(texAccess.texInput));
+            const texKey1: u16 = @intFromEnum(texAccess.texInput);
             if (resourceExtractor.texDescriptions.isKeyUsed(texKey1) == false) {
                 const texDesc1 = try resolveTextureEnum(texAccess.texInput);
                 resourceExtractor.texDescriptions.upsert(texKey1, texDesc1);
@@ -81,7 +81,7 @@ pub const ResourceExtractorSys = struct {
             }
 
             // For Output
-            const texKey2: ?u16 = if (texAccess.texOutput) |texOutput| @intCast(@intFromEnum(texOutput)) else null;
+            const texKey2: ?u16 = if (texAccess.texOutput) |texOutput| @intFromEnum(texOutput) else null;
             if (texKey2) |key2| {
                 if (resourceExtractor.texDescriptions.isKeyUsed(key2) == false) {
                     const texDesc2 = try resolveTextureEnum(texAccess.texOutput.?);
@@ -99,7 +99,7 @@ pub const ResourceExtractorSys = struct {
 
             for (resourceExtractor.passAccessRanges.getConstItems(), 0..) |range, i| {
                 const passKey = resourceExtractor.passAccessRanges.getKeyByIndex(@intCast(i));
-                const passString = passExtractor.passStrings.getByKey(@intCast(passKey));
+                const passString = passExtractor.passStrings.getByKey(passKey);
 
                 std.debug.print(" - Pass Accesses ({s}) (bufIndex {} -> {}) (texIndex {} -> {})\n", .{ passString, range.firstBuf, range.lastBuf, range.firstTex, range.lastTex });
                 for (range.firstBuf..range.lastBuf, 0..) |index, counter| {
@@ -118,15 +118,13 @@ pub const ResourceExtractorSys = struct {
         if (rc.FRAME_GRAPH_DEBUG) {
             // Buffer Mem Debug
             for (resourceExtractor.bufMemSize.getConstItems(), 0..) |memSize, i| {
-                const castedIndex: u32 = @intCast(i);
-                const bufKey: u32 = resourceExtractor.bufMemSize.getKeyByIndex(castedIndex);
+                const bufKey: u32 = resourceExtractor.bufMemSize.getKeyByIndex(@intCast(i));
                 const bufEnum: BufferEnum = @enumFromInt(bufKey);
                 std.debug.print(" {}.Buf ({s}) -> Mem {} Bytes\n", .{ i, @tagName(bufEnum), memSize });
             }
             // Texture Mem Debug
             for (resourceExtractor.texMemSize.getConstItems(), 0..) |memSize, i| {
-                const castedIndex: u32 = @intCast(i);
-                const texKey: u32 = resourceExtractor.texMemSize.getKeyByIndex(castedIndex);
+                const texKey: u32 = resourceExtractor.texMemSize.getKeyByIndex(@intCast(i));
                 const texEnum: TextureEnum = @enumFromInt(texKey);
                 std.debug.print(" {}.Tex ({s}) -> Mem {} Bytes\n", .{ i, @tagName(texEnum), memSize });
             }
@@ -195,7 +193,7 @@ pub const ResourceExtractorSys = struct {
             .lastTex = @intCast(resourceExtractor.texAccesses.len),
         };
 
-        resourceExtractor.passAccessRanges.upsert(@intCast(passId), passAccessRanges);
+        resourceExtractor.passAccessRanges.upsert(passId, passAccessRanges);
     }
 };
 

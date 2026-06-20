@@ -7,7 +7,6 @@ const TexGroupLifetime = @import("../../frameBuild/components.zig").TexGroupLife
 const pe = @import("../enums.zig");
 const TextureEnum = pe.TextureEnum;
 const BufferEnum = pe.BufferEnum;
-const PassEnum = pe.PassEnum;
 
 const PassExtractorData = @import("../1_passExtractor/PassExtractorData.zig").PassExtractorData;
 const ResourceExtractorData = @import("../2_resourceExtractor/ResourceExtractorData.zig").ResourceExtractorData;
@@ -30,9 +29,8 @@ pub const LifetimeMergerSys = struct {
             var latestLife: ?u16 = null;
 
             for (group.startMapIndex..group.endMapIndex + 1) |mapIndex| {
-                const castedIndex: u32 = @intCast(mapIndex);
-                const bufKey: u32 = resourceMapper.bufMapTransient.getKeyByIndex(castedIndex);
-                const bufLifetime = lifetimeExtractor.bufLifetimes.getByKey(@intCast(bufKey));
+                const bufKey = resourceMapper.bufMapTransient.getKeyByIndex(@intCast(mapIndex));
+                const bufLifetime = lifetimeExtractor.bufLifetimes.getByKey(bufKey);
 
                 if (earliestLife == null or bufLifetime.earliest < earliestLife.?) earliestLife = bufLifetime.earliest;
                 if (latestLife == null or bufLifetime.latest > latestLife.?) latestLife = bufLifetime.latest;
@@ -49,9 +47,8 @@ pub const LifetimeMergerSys = struct {
             var latestLife: ?u16 = null;
 
             for (group.startMapIndex..group.endMapIndex + 1) |mapIndex| {
-                const castedIndex: u32 = @intCast(mapIndex);
-                const texKey: u32 = resourceMapper.texMapTransient.getKeyByIndex(castedIndex); 
-                const texLifetime = lifetimeExtractor.texLifetimes.getByKey(@intCast(texKey));
+                const texKey = resourceMapper.texMapTransient.getKeyByIndex(@intCast(mapIndex)); 
+                const texLifetime = lifetimeExtractor.texLifetimes.getByKey(texKey);
 
                 if (earliestLife == null or texLifetime.earliest < earliestLife.?) earliestLife = texLifetime.earliest;
                 if (latestLife == null or texLifetime.latest > latestLife.?) latestLife = texLifetime.latest;

@@ -95,7 +95,7 @@ pub const ResourceMapperSys = struct {
             var root: BufferEnum = undefined;
 
             for (resourceMapper.allSharedBuffers.getConstItems()) |bufEnum| {
-                const newBufDesc = resourceExtractor.bufDescriptions.getByKey(@intCast(@intFromEnum(bufEnum)));
+                const newBufDesc = resourceExtractor.bufDescriptions.getByKey(@intFromEnum(bufEnum));
 
                 if (lastBufDescription) |lastBufDesc| {
                     try compareBufDesc(lastBufEnum, &lastBufDesc, bufEnum, &newBufDesc);
@@ -206,7 +206,7 @@ pub const ResourceMapperSys = struct {
             var root: TextureEnum = undefined;
 
             for (resourceMapper.allSharedTextures.getConstItems()) |texEnum| {
-                const newTexDesc = resourceExtractor.texDescriptions.getByKey(@intCast(@intFromEnum(texEnum)));
+                const newTexDesc = resourceExtractor.texDescriptions.getByKey(@intFromEnum(texEnum));
 
                 if (lastTexDescription) |lastTexDesc| {
                     try compareTexDesc(lastTexEnum, &lastTexDesc, texEnum, &newTexDesc);
@@ -294,8 +294,7 @@ pub const ResourceMapperSys = struct {
             for (resourceMapper.bufGroupsPersistent.getConstItems(), 0..) |group, i| {
                 std.debug.print("BufGroup (Persistent {}) (RootRes {}) (RootPass {}) (mapIndex {} -> {})\n", .{ i, group.rootBuf, group.rootPass, group.startMapIndex, group.endMapIndex });
                 for (group.startMapIndex..group.endMapIndex + 1, 0..) |mapIndex, counter| {
-                    const castedIndex: u32 = @intCast(mapIndex);
-                    const bufEnum: BufferEnum = @enumFromInt(resourceMapper.bufMapPersistent.getKeyByIndex(castedIndex));
+                    const bufEnum: BufferEnum = @enumFromInt(resourceMapper.bufMapPersistent.getKeyByIndex(@intCast(mapIndex)));
                     std.debug.print("     -> {}. {s}\n", .{ counter, @tagName(bufEnum) });
                 }
             }
@@ -303,8 +302,7 @@ pub const ResourceMapperSys = struct {
             for (resourceMapper.bufGroupsTransient.getConstItems(), 0..) |group, i| {
                 std.debug.print("BufGroup (Transient {}) (RootRes {}) (RootPass {}) (mapIndex {} -> {})\n", .{ i, group.rootBuf, group.rootPass, group.startMapIndex, group.endMapIndex });
                 for (group.startMapIndex..group.endMapIndex + 1, 0..) |mapIndex, counter| {
-                    const castedIndex: u32 = @intCast(mapIndex);
-                    const bufEnum: BufferEnum = @enumFromInt(resourceMapper.bufMapTransient.getKeyByIndex(castedIndex));
+                    const bufEnum: BufferEnum = @enumFromInt(resourceMapper.bufMapTransient.getKeyByIndex(@intCast(mapIndex)));
                     std.debug.print("     -> {}. {s}\n", .{ counter, @tagName(bufEnum) });
                 }
             }
@@ -313,8 +311,7 @@ pub const ResourceMapperSys = struct {
             for (resourceMapper.texGroupsPersistent.getConstItems(), 0..) |group, i| {
                 std.debug.print("TexGroup (Persistent {}) (RootRes {}) (RootPass {}) (mapIndex {} -> {})\n", .{ i, group.rootTex, group.rootPass, group.startMapIndex, group.endMapIndex });
                 for (group.startMapIndex..group.endMapIndex + 1, 0..) |mapIndex, counter| {
-                    const castedIndex: u32 = @intCast(mapIndex);
-                    const texEnum: TextureEnum = @enumFromInt(resourceMapper.texMapPersistent.getKeyByIndex(castedIndex));
+                    const texEnum: TextureEnum = @enumFromInt(resourceMapper.texMapPersistent.getKeyByIndex(@intCast(mapIndex)));
                     std.debug.print("     -> {}. {s}\n", .{ counter, @tagName(texEnum) });
                 }
             }
@@ -322,8 +319,7 @@ pub const ResourceMapperSys = struct {
             for (resourceMapper.texGroupsTransient.getConstItems(), 0..) |group, i| {
                 std.debug.print("TexGroup (Transient {}) (RootRes {}) (RootPass {}) (mapIndex {} -> {})\n", .{ i, group.rootTex, group.rootPass, group.startMapIndex, group.endMapIndex });
                 for (group.startMapIndex..group.endMapIndex + 1, 0..) |mapIndex, counter| {
-                    const castedIndex: u32 = @intCast(mapIndex);
-                    const texEnum: TextureEnum = @enumFromInt(resourceMapper.texMapTransient.getKeyByIndex(castedIndex));
+                    const texEnum: TextureEnum = @enumFromInt(resourceMapper.texMapTransient.getKeyByIndex(@intCast(mapIndex)));
                     std.debug.print("     -> {}. {s}\n", .{ counter, @tagName(texEnum) });
                 }
             }

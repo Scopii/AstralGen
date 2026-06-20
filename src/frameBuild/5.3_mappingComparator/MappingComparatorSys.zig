@@ -21,8 +21,7 @@ pub const MappingComparatorSys = struct {
 
         // Buffer Changes
         for (resourceMapper.bufGroupsPersistent.getConstItems(), 0..) |newGroupInf, i| {
-            const castedIndex: u32 = @intCast(i);
-            const groupRootKey: u16 = @intCast(resourceMapper.bufGroupsPersistent.getKeyByIndex(castedIndex));
+            const groupRootKey: u16 = resourceMapper.bufGroupsPersistent.getKeyByIndex(@intCast(i));
             const groupRootEnum: BufferEnum = @enumFromInt(groupRootKey);
 
             const isGroupInLast = resourceMapper.lastBufGroupsPersistent.isKeyUsed(groupRootKey);
@@ -42,9 +41,8 @@ pub const MappingComparatorSys = struct {
             }
         }
 
-        for (resourceMapper.lastBufGroupsPersistent.getConstItems(), 0..) |_, i| {
-            const castedIndex: u32 = @intCast(i);
-            const groupRootKey: u16 = @intCast(resourceMapper.bufGroupsPersistent.getKeyByIndex(castedIndex));
+        for (0..resourceMapper.lastBufGroupsPersistent.getLength()) |i| {
+            const groupRootKey: u16 = resourceMapper.bufGroupsPersistent.getKeyByIndex(@intCast(i));
             const groupRootEnum: BufferEnum = @enumFromInt(groupRootKey);
 
             const isGroupInNew = resourceMapper.bufGroupsPersistent.isKeyUsed(groupRootKey);
@@ -53,8 +51,7 @@ pub const MappingComparatorSys = struct {
 
         // Texture Changes
         for (resourceMapper.texGroupsPersistent.getConstItems(), 0..) |newGroupInf, i| {
-            const castedIndex: u32 = @intCast(i);
-            const groupRootKey: u16 = @intCast(resourceMapper.texGroupsPersistent.getKeyByIndex(castedIndex));
+            const groupRootKey: u16 = resourceMapper.texGroupsPersistent.getKeyByIndex(@intCast(i));
             const groupRootEnum: TextureEnum = @enumFromInt(groupRootKey);
 
             const isGroupInLast = resourceMapper.lastTexGroupsPersistent.isKeyUsed(groupRootKey);
@@ -74,9 +71,8 @@ pub const MappingComparatorSys = struct {
             }
         }
 
-        for (resourceMapper.lastTexGroupsPersistent.getConstItems(), 0..) |_, i| {
-            const castedIndex: u32 = @intCast(i);
-            const groupRootKey: u16 = @intCast(resourceMapper.texGroupsPersistent.getKeyByIndex(castedIndex));
+        for (0..resourceMapper.lastTexGroupsPersistent.getLength()) |i| {
+            const groupRootKey: u16 = resourceMapper.texGroupsPersistent.getKeyByIndex(@intCast(i));
             const groupRootEnum: TextureEnum = @enumFromInt(groupRootKey);
 
             const isGroupInNew = resourceMapper.texGroupsPersistent.isKeyUsed(groupRootKey);

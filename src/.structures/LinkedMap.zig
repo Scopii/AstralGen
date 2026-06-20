@@ -6,14 +6,17 @@ fn FindSmallestIntType(number: usize) type {
 }
 
 pub fn LinkedMap(comptime itemType: type, comptime capacity: u32, comptime keyType: type, comptime keyMax: u32, comptime keyMin: u32) type {
-    comptime {
-        if (keyMax < capacity) @compileError("MapArray: keyMax must be >= size");
-        if (keyMin > keyMax) @compileError("MapArray: keyMax must be > keyMin");
-    }
-
     const keyRange = keyMax - keyMin + 1;
     const sentinel = keyRange + 1;
     const smallKeyType = FindSmallestIntType(sentinel);
+
+    comptime {
+        if (keyMax < capacity) @compileError("MapArray: keyMax must be >= size");
+        if (keyMin > keyMax) @compileError("MapArray: keyMax must be > keyMin");
+
+        if (keyMax > std.math.maxInt(keyType)) @compileError("MapArray: keyMax must fit in keyType");
+        if (keyRange < capacity) @compileError("LinkedMap: keyRange (keyMax-keyMin+1) must be >= capacity so smallKeyType can hold indices");
+    }
 
     return struct {
         const Self = @This();
@@ -90,9 +93,9 @@ pub fn LinkedMap(comptime itemType: type, comptime capacity: u32, comptime keyTy
             self.slotMap.len -= 1;
         }
 
-        pub inline fn getKeyByIndex(self: *const Self, index: u32) u32 {
+        pub inline fn getKeyByIndex(self: *const Self, index: u32) keyType {
             std.debug.assert(self.isLinked(index));
-            return self.links[index] + keyMin;
+            return @intCast(self.links[index] + keyMin);
         }
 
         pub fn swapIndices(self: *Self, index1: u32, index2: u32) void {
@@ -169,11 +172,11 @@ pub fn LinkedMap(comptime itemType: type, comptime capacity: u32, comptime keyTy
             return self.slotMap.getConstItems();
         }
 
-        pub inline fn getKeyMax(self: *const Self) u32 {
+        pub inline fn getKeyMax(self: *const Self) keyType {
             return self.slotMap.getKeyMax();
         }
 
-        pub inline fn getKeyMin(self: *const Self) u32 {
+        pub inline fn getKeyMin(self: *const Self) keyType {
             return self.slotMap.getKeyMin();
         }
 

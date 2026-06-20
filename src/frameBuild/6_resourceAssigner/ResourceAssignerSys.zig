@@ -55,10 +55,10 @@ pub const ResourceAssignerSys = struct {
         // Check needed Shared Lifetimes to create or re-use existing Physical Buffer
         for (groupMerger.sharedBufLifetimes.constSlice()) |sharedBufLifetime| {
             var physCandidateIndex: ?u16 = null;
-            const sharedBufDesc = resourceExtractor.bufDescriptions.getByKey(@intCast(@intFromEnum(sharedBufLifetime.bufDescEnum)));
+            const sharedBufDesc = resourceExtractor.bufDescriptions.getByKey(@intFromEnum(sharedBufLifetime.bufDescEnum));
 
             for (resourceAssigner.unusedTransientBufs.constSlice(), 0..) |transientBuf, i| {
-                const transientBufDesc = resourceExtractor.bufDescriptions.getByKey(@intCast(@intFromEnum(transientBuf.bufDescEnum)));
+                const transientBufDesc = resourceExtractor.bufDescriptions.getByKey(@intFromEnum(transientBuf.bufDescEnum));
                 // Check if Desc Fits Existing Info
                 if (bufDescEqual(&transientBufDesc, &sharedBufDesc) == true) {
                     physCandidateIndex = @intCast(i);
@@ -97,32 +97,31 @@ pub const ResourceAssignerSys = struct {
 
         // Assign Shared Transient Lifetimes to Buffers
         for (groupMerger.bufShareIndexMap.getConstItems(), 0..) |sharedIndex, i| {
-            const castedIndex: u32 = @intCast(i);
-            const bufRootKey = groupMerger.bufShareIndexMap.getKeyByIndex(castedIndex);
+            const bufRootKey = groupMerger.bufShareIndexMap.getKeyByIndex(@intCast(i));
             const bufId = resourceAssigner.usedTransientBufs.buffer[sharedIndex].bufId;
 
-            const bufGroup = resourceMapper.bufGroupsTransient.getByKey(@intCast(bufRootKey));
+            const bufGroup = resourceMapper.bufGroupsTransient.getByKey(bufRootKey);
             // Whole Group needs to be assigned
             for (bufGroup.startMapIndex..bufGroup.endMapIndex + 1) |mapIndex| {
                 const memberKey = resourceMapper.bufMapTransient.getKeyByIndex(@intCast(mapIndex));
 
                 // Link Buffers Enum To Physical Buf ID
-                if (resourceAssigner.bufAssigns.isKeyUsed(@intCast(memberKey)) == true) {
+                if (resourceAssigner.bufAssigns.isKeyUsed(memberKey) == true) {
                     const bufEnum: BufferEnum = @enumFromInt(memberKey);
                     std.debug.print("ERROR: 6.ResourceAssigner: Buffer Enum {s} already assigned!\n", .{@tagName(bufEnum)});
                     return error.BufEnumAlreadyAssigned;
                 }
-                resourceAssigner.bufAssigns.upsert(@intCast(memberKey), bufId);
+                resourceAssigner.bufAssigns.upsert(memberKey, bufId);
             }
         }
 
         // Check needed Shared Lifetimes to create or re-use existing Physical Textures
         for (groupMerger.sharedTexLifetimes.constSlice()) |sharedTexLifetime| {
             var physCandidateIndex: ?u16 = null;
-            const sharedTexDesc = resourceExtractor.texDescriptions.getByKey(@intCast(@intFromEnum(sharedTexLifetime.texDescEnum)));
+            const sharedTexDesc = resourceExtractor.texDescriptions.getByKey(@intFromEnum(sharedTexLifetime.texDescEnum));
 
             for (resourceAssigner.unusedTransientTexes.constSlice(), 0..) |transientTex, i| {
-                const transientTexDesc = resourceExtractor.texDescriptions.getByKey(@intCast(@intFromEnum(transientTex.texDescEnum)));
+                const transientTexDesc = resourceExtractor.texDescriptions.getByKey(@intFromEnum(transientTex.texDescEnum));
                 // Check if Desc Fits Existing Info
                 if (texDescEqual(&transientTexDesc, &sharedTexDesc) == true) {
                     physCandidateIndex = @intCast(i);
@@ -161,22 +160,21 @@ pub const ResourceAssignerSys = struct {
 
         // Assign Shared Transient Lifetimes to Textures
         for (groupMerger.texShareIndexMap.getConstItems(), 0..) |sharedIndex, i| {
-            const castedIndex: u32 = @intCast(i);
-            const texRootKey = groupMerger.texShareIndexMap.getKeyByIndex(castedIndex);
+            const texRootKey = groupMerger.texShareIndexMap.getKeyByIndex(@intCast(i));
             const texId = resourceAssigner.usedTransientTexes.buffer[sharedIndex].texId;
 
-            const texGroup = resourceMapper.texGroupsTransient.getByKey(@intCast(texRootKey));
+            const texGroup = resourceMapper.texGroupsTransient.getByKey(texRootKey);
             // Whole Group needs to be assigned
             for (texGroup.startMapIndex..texGroup.endMapIndex + 1) |mapIndex| {
                 const memberKey = resourceMapper.texMapTransient.getKeyByIndex(@intCast(mapIndex));
 
                 // Link Textures Enum To Physical Tex ID
-                if (resourceAssigner.texAssigns.isKeyUsed(@intCast(memberKey)) == true) {
+                if (resourceAssigner.texAssigns.isKeyUsed(memberKey) == true) {
                     const texEnum: TextureEnum = @enumFromInt(memberKey);
                     std.debug.print("ERROR: 6.ResourceAssigner: Texture Enum {s} already assigned!\n", .{@tagName(texEnum)});
                     return error.TexEnumAlreadyAssigned;
                 }
-                resourceAssigner.texAssigns.upsert(@intCast(memberKey), texId);
+                resourceAssigner.texAssigns.upsert(memberKey, texId);
             }
         }
 
@@ -225,7 +223,7 @@ pub const ResourceAssignerSys = struct {
         // Create Manuel Buffer Assignments
         for (resourceAssigner.manualBufs.getConstItems(), 0..) |bufInf, i| {
             const enumKey = resourceAssigner.manualBufs.getKeyByIndex(@intCast(i));
-            resourceAssigner.bufAssigns.upsert(@intCast(enumKey), bufInf.id);
+            resourceAssigner.bufAssigns.upsert(enumKey, bufInf.id);
         }
 
         // Create Persistent Buffer Assignments
@@ -234,22 +232,21 @@ pub const ResourceAssignerSys = struct {
             const rootBufPhysicalId = resourceAssigner.rootBufPhysicalMap.getByKey(rootBufKey);
 
             for (bufGroup.startMapIndex..bufGroup.endMapIndex + 1) |mapIndex| {
-                const castedIndex: u32 = @intCast(mapIndex);
-                const bufEnumKey = resourceMapper.bufMapPersistent.getKeyByIndex(castedIndex);
+                const bufEnumKey = resourceMapper.bufMapPersistent.getKeyByIndex(@intCast(mapIndex));
 
                 // Link Buffer Enum To Physical Buf ID
-                if (resourceAssigner.bufAssigns.isKeyUsed(@intCast(bufEnumKey)) == true) {
+                if (resourceAssigner.bufAssigns.isKeyUsed(bufEnumKey) == true) {
                     std.debug.print("ERROR: 6.ResourceAssigner: Buffer Enum {s}  already assigned!\n", .{@tagName(bufGroup.rootBuf)});
                     return error.BufEnumAlreadyAssigned;
                 }
-                resourceAssigner.bufAssigns.upsert(@intCast(bufEnumKey), rootBufPhysicalId.id);
+                resourceAssigner.bufAssigns.upsert(bufEnumKey, rootBufPhysicalId.id);
             }
         }
 
         // Create Manuel Texture Assignments
         for (resourceAssigner.manualTexes.getConstItems(), 0..) |texInf, i| {
             const enumKey = resourceAssigner.manualTexes.getKeyByIndex(@intCast(i));
-            resourceAssigner.texAssigns.upsert(@intCast(enumKey), texInf.id);
+            resourceAssigner.texAssigns.upsert(enumKey, texInf.id);
         }
 
         // Create Persistent Texture Assignment
@@ -258,15 +255,14 @@ pub const ResourceAssignerSys = struct {
             const rootTexPhysicalId = resourceAssigner.rootTexPhysicalMap.getByKey(rootTexKey);
 
             for (texGroup.startMapIndex..texGroup.endMapIndex + 1) |mapIndex| {
-                const castedIndex: u32 = @intCast(mapIndex);
-                const texEnumkey = resourceMapper.texMapPersistent.getKeyByIndex(castedIndex);
+                const texEnumkey = resourceMapper.texMapPersistent.getKeyByIndex(@intCast(mapIndex));
 
                 // Link Texture Enum To Physical Tex ID
-                if (resourceAssigner.texAssigns.isKeyUsed(@intCast(texEnumkey)) == true) {
+                if (resourceAssigner.texAssigns.isKeyUsed(texEnumkey) == true) {
                     std.debug.print("ERROR: 6.ResourceAssigner: Texture Enum {s}  already assigned!\n", .{@tagName(texGroup.rootTex)});
                     return error.BufEnumAlreadyAssigned;
                 }
-                resourceAssigner.texAssigns.upsert(@intCast(texEnumkey), rootTexPhysicalId.id);
+                resourceAssigner.texAssigns.upsert(texEnumkey, rootTexPhysicalId.id);
             }
         }
 
@@ -285,16 +281,14 @@ pub const ResourceAssignerSys = struct {
             std.debug.print("\n", .{});
             // Buffers
             for (resourceAssigner.bufAssigns.getConstItems(), 0..) |bufId, i| {
-                const castedIndex: u16 = @intCast(i);
-                const bufKey = resourceAssigner.bufAssigns.getKeyByIndex(castedIndex);
+                const bufKey = resourceAssigner.bufAssigns.getKeyByIndex(@intCast(i));
                 const bufEnum: BufferEnum = @enumFromInt(bufKey);
                 std.debug.print(" - Buf {s} assigned -> BufId{}\n", .{ @tagName(bufEnum), bufId });
             }
             std.debug.print("\n", .{});
             // Textures
             for (resourceAssigner.texAssigns.getConstItems(), 0..) |texId, i| {
-                const castedIndex: u16 = @intCast(i);
-                const texKey = resourceAssigner.texAssigns.getKeyByIndex(castedIndex);
+                const texKey = resourceAssigner.texAssigns.getKeyByIndex(@intCast(i));
                 const texEnum: TextureEnum = @enumFromInt(texKey);
                 std.debug.print(" - Tex {s} assigned -> TexId{}\n", .{ @tagName(texEnum), texId });
             }

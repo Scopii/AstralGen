@@ -5,15 +5,18 @@ fn FindSmallestIntType(number: usize) type {
 }
 
 pub fn SimpleMap(comptime itemType: type, comptime capacity: u32, comptime keyType: type, comptime keyMax: u32, comptime keyMin: u32) type {
-    comptime {
-        if (keyMax < capacity) @compileError("MapArray: keyMax must be >= size");
-        if (keyMin > keyMax) @compileError("MapArray: keyMax must be > keyMin");
-    }
-
     const keyRange = keyMax - keyMin + 1;
     const sentinel = keyRange + 1;
     const smallKeyType = FindSmallestIntType(sentinel);
     const indexType = FindSmallestIntType(capacity + 1);
+
+    comptime {
+        if (keyMax < capacity) @compileError("MapArray: keyMax must be >= size");
+        if (keyMin > keyMax) @compileError("MapArray: keyMax must be > keyMin");
+
+        if (keyMax > std.math.maxInt(keyType)) @compileError("MapArray: keyMax must fit in keyType");
+        if (keyRange < capacity) @compileError("LinkedMap: keyRange (keyMax-keyMin+1) must be >= capacity so smallKeyType can hold indices");
+    }
 
     return struct {
         const Self = @This();
@@ -118,11 +121,11 @@ pub fn SimpleMap(comptime itemType: type, comptime capacity: u32, comptime keyTy
             return self.items[0..self.len];
         }
 
-        pub inline fn getKeyMax(_: *const Self) u32 {
+        pub inline fn getKeyMax(_: *const Self) keyType {
             return keyMax;
         }
 
-        pub inline fn getKeyMin(_: *const Self) u32 {
+        pub inline fn getKeyMin(_: *const Self) keyType {
             return keyMin;
         }
 

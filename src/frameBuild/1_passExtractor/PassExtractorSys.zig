@@ -114,6 +114,7 @@ pub const PassExtractorSys = struct {
                 std.debug.print("ERROR: 1.PassExtractor 1: Could not createPass with passString ({s})!\n", .{passString});
                 return error.CreatePass;
             };
+            if (passExtractor.renderNodes.isFull() == true) return error.RenderNodesFull;
             passExtractor.renderNodes.upsert(@intCast(passStringIndex), .{ .passNode = .{ .pass = pass, .width = passWidth, .height = passHeight } });
             if (rc.PASS_EXTRACTION_DEBUG) std.debug.print("Pass {s} added (width {} height {})\n", .{ passString, passWidth, passHeight });
 
@@ -124,6 +125,7 @@ pub const PassExtractorSys = struct {
                         .passNode, .uiNode, .clearBuffer, .clearTexture, .barrierBakeClears => unreachable,
                         inline else => |*node| node.srcTexEnum = outputTex, // BLITS AND COMPOSITES GET SRC TEX ENUM!!
                     }
+                    if (passExtractor.renderNodes.isFull() == true) return error.RenderNodesFull;
                     passExtractor.renderNodes.appendUnlinked(renderNode.*);
                 }
             }

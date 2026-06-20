@@ -42,7 +42,7 @@ pub const GroupMergerSys = struct {
             var candidateIndex: ?u16 = null;
 
             for (groupMerger.sharedBufLifetimes.slice(), 0..) |*physLifetime, index| {
-                const physLifetimeDesc = resourceExtractor.bufDescriptions.getByKey(@intCast(@intFromEnum(physLifetime.bufDescEnum)));
+                const physLifetimeDesc = resourceExtractor.bufDescriptions.getByKey(@intFromEnum(physLifetime.bufDescEnum));
 
                 // check if physLifetime could extend forwards
                 if (physLifetime.latest < groupLifetime.earliest) {
@@ -89,7 +89,7 @@ pub const GroupMergerSys = struct {
             var candidateIndex: ?u16 = null;
 
             for (groupMerger.sharedTexLifetimes.slice(), 0..) |*physLifetime, index| {
-                const physLifetimeDesc = resourceExtractor.texDescriptions.getByKey(@intCast(@intFromEnum(physLifetime.texDescEnum)));
+                const physLifetimeDesc = resourceExtractor.texDescriptions.getByKey(@intFromEnum(physLifetime.texDescEnum));
 
                 // check if physLifetime could extend forwards
                 if (physLifetime.latest < groupLifetime.earliest) {
@@ -134,8 +134,7 @@ pub const GroupMergerSys = struct {
             }
             std.debug.print("\n", .{});
             for (groupMerger.bufShareIndexMap.getConstItems(), 0..) |sharedIndex, i| {
-                const castedIndex: u32 = @intCast(i);
-                const bufKey = groupMerger.bufShareIndexMap.getKeyByIndex(castedIndex);
+                const bufKey = groupMerger.bufShareIndexMap.getKeyByIndex(@intCast(i));
                 const bufEnum: BufferEnum = @enumFromInt(bufKey);
                 std.debug.print("- {}. Buf {s} -> Shared Index {}\n", .{ i, @tagName(bufEnum), sharedIndex });
             }
@@ -146,8 +145,7 @@ pub const GroupMergerSys = struct {
             }
             std.debug.print("\n", .{});
             for (groupMerger.texShareIndexMap.getConstItems(), 0..) |sharedIndex, i| {
-                const castedIndex: u32 = @intCast(i);
-                const texKey = groupMerger.texShareIndexMap.getKeyByIndex(castedIndex);
+                const texKey = groupMerger.texShareIndexMap.getKeyByIndex(@intCast(i));
                 const texEnum: TextureEnum = @enumFromInt(texKey);
                 std.debug.print("- {}. Tex {s} -> Shared Index {}\n", .{ i, @tagName(texEnum), sharedIndex });
             }

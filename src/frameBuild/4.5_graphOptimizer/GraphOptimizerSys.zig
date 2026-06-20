@@ -3,16 +3,12 @@ const BufLevelLifetime = @import("../../frameBuild/components.zig").BufLevelLife
 const GraphMemoryNode = @import("../../frameBuild/components.zig").GraphMemoryNode;
 const TextureEnum = @import("../../frameBuild/enums.zig").TextureEnum;
 const BufferEnum = @import("../../frameBuild/enums.zig").BufferEnum;
-const PassEnum = @import("../../frameBuild/enums.zig").PassEnum;
 const rc = @import("../../.configs/renderConfig.zig");
 const std = @import("std");
 
 const ResourceExtractorData = @import("../2_resourceExtractor/ResourceExtractorData.zig").ResourceExtractorData;
 const GraphOptimizerData = @import("../4.5_graphOptimizer/GraphOptimizerData.zig").GraphOptimizerData;
 const GraphExtractorData = @import("../4_graphExtractor/GraphExtractorData.zig").GraphExtractorData;
-
-const resolveBufferEnum = @import("../5.1_resourceMapper/ResourceMapperSys.zig").resolveBufferEnum;
-const resolveTextureEnum = @import("../5.1_resourceMapper/ResourceMapperSys.zig").resolveTextureEnum;
 
 // Step 4.5
 
@@ -98,15 +94,13 @@ pub const GraphOptimizerSys = struct {
 
             // Buffer Debug
             for (0..graphOptimizer.bufLevelLifetimes.getLength()) |i| {
-                const castedIndex: u32 = @intCast(i);
-                const bufLevelLifetime = graphOptimizer.bufLevelLifetimes.getByIndex(castedIndex);
+                const bufLevelLifetime = graphOptimizer.bufLevelLifetimes.getByIndex(@intCast(i));
                 std.debug.print("- Buf Graph Lifetime: (Level {} -> {}) {s} \n", .{ bufLevelLifetime.firstLevel, bufLevelLifetime.lastLevel, @tagName(bufLevelLifetime.bufEnum) });
             }
 
             // Texture Debug
             for (0..graphOptimizer.texLevelLifetimes.getLength()) |i| {
-                const castedIndex: u32 = @intCast(i);
-                const texLevelLifetime = graphOptimizer.texLevelLifetimes.getByIndex(castedIndex);
+                const texLevelLifetime = graphOptimizer.texLevelLifetimes.getByIndex(@intCast(i));
                 std.debug.print("- Tex Graph Lifetime: (Level {} -> {}) {s}\n", .{ texLevelLifetime.firstLevel, texLevelLifetime.lastLevel, @tagName(texLevelLifetime.texEnum) });
             }
 
@@ -123,8 +117,8 @@ pub const GraphOptimizerSys = struct {
             // Buffers
             for (accessRange.firstBuf..accessRange.lastBuf) |bufIndex| {
                 const bufAccess = resourceExtractor.bufAccesses.buffer[bufIndex];
-                const bufKey1: u16 = @intCast(@intFromEnum(bufAccess.bufInput));
-                const bufKey2: ?u16 = if (bufAccess.bufOutput) |bufOutput| @intCast(@intFromEnum(bufOutput)) else null;
+                const bufKey1: u16 = @intFromEnum(bufAccess.bufInput);
+                const bufKey2: ?u16 = if (bufAccess.bufOutput) |bufOutput| @intFromEnum(bufOutput) else null;
 
                 // Check Input Buffer Bytes
                 if (resourceExtractor.bufMemSize.isKeyUsed(bufKey1) == true) { // Only Transient were filled!
@@ -146,8 +140,8 @@ pub const GraphOptimizerSys = struct {
             // Textures
             for (accessRange.firstTex..accessRange.lastTex) |texIndex| {
                 const texAccess = resourceExtractor.texAccesses.buffer[texIndex];
-                const texKey1: u16 = @intCast(@intFromEnum(texAccess.texInput));
-                const texKey2: ?u16 = if (texAccess.texOutput) |texOutput| @intCast(@intFromEnum(texOutput)) else null;
+                const texKey1: u16 = @intFromEnum(texAccess.texInput);
+                const texKey2: ?u16 = if (texAccess.texOutput) |texOutput| @intFromEnum(texOutput) else null;
 
                 // Check Input Texture Bytes
                 if (resourceExtractor.texMemSize.isKeyUsed(texKey1) == true) { // Only Transient were filled!
@@ -178,7 +172,7 @@ pub const GraphOptimizerSys = struct {
 
         for (graphOptimizer.graphMemNodes.constSlice()) |graphMemNode| {
             const graphPassKey = graphMemNode.pass.val;
-            graphOptimizer.optimizedGraph.upsert(@intCast(graphPassKey), graphMemNode);
+            graphOptimizer.optimizedGraph.upsert(graphPassKey, graphMemNode);
         }
 
         // Debug Output 3

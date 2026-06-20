@@ -8,7 +8,6 @@ const std = @import("std");
 const pe = @import("enums.zig");
 const TextureEnum = pe.TextureEnum;
 const BufferEnum = pe.BufferEnum;
-const PassEnum = pe.PassEnum;
 
 pub const FrameGraphQueue = struct {
     frameGraphEvents: FixedList(FrameGraphEvent, 127) = .{},

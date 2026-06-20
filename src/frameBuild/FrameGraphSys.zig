@@ -21,7 +21,6 @@ const PassSorterSys = @import("7_passSorter/PassSorterSys.zig").PassSorterSys;
 
 const TextureEnum = pe.TextureEnum;
 const BufferEnum = pe.BufferEnum;
-const PassEnum = pe.PassEnum;
 
 pub const FrameGraphSys = struct {
     pub fn build(frameGraph: *FrameGraphData, data: *const EngineData, rendererQueue: *RendererQueue, memoryMan: *MemoryManager) !void {
