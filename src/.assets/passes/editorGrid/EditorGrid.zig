@@ -22,11 +22,11 @@ pub fn EditorGrid(
         .colorAtts = &.{p.AttachmentUse.init(def.colorAtt, .ColorAtt, .ColorAttReadWrite, .{ .color = .{ 0.0, 0.0, 0.0, 0.0 } })},
         .depthAtt = p.AttachmentUse.init(def.depthAtt, .EarlyAndLateFragTest, .DepthStencilReadWrite, null),
         .renderState = .{
-            .colorBlend = vk.VK_FALSE,
-            .depthTest = vk.VK_TRUE,
-            .depthWrite = vk.VK_TRUE,
-            .depthCompare = vk.VK_COMPARE_OP_GREATER,
-            .cullMode = vk.VK_CULL_MODE_NONE,
+            .colorBlend = .False,
+            .depthTest = .True,
+            .depthWrite = .True,
+            .depthCompare = .Greater,
+            .cullMode = .None,
         },
     });
 }

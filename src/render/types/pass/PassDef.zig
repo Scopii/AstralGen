@@ -76,7 +76,7 @@ pub const ViewportBlit = struct {
 };
 
 pub const PassDef = struct {
-    name: []const u8,
+    name: FixedList(u8, 30) = .{},
     execution: PassExecution,
     mainOutputTex: ?TextureEnum,
 
@@ -128,13 +128,13 @@ pub const PassDef = struct {
         std.debug.assert(inf.fragment.typ == .frag);
 
         var pass = PassDef{
-            .name = inf.name,
             .mainOutputTex = inf.outputTexId,
             .execution = .{ .graphics = inf.execution },
             .depthAtt = inf.depthAtt,
             .stencilAtt = inf.stencilAtt,
             .renderState = inf.renderState,
         };
+        pass.name.appendSliceAssumeCapacity(inf.name);
 
         pass.shaderIds.appendAssumeCapacity(inf.vertex.id);
         pass.shaderIds.appendAssumeCapacity(inf.fragment.id);
@@ -164,10 +164,10 @@ pub const PassDef = struct {
         std.debug.assert(inf.compute.typ == .comp);
 
         var pass = PassDef{
-            .name = inf.name,
             .mainOutputTex = inf.outputTexId,
             .execution = .{ .compute = inf.execution },
         };
+        pass.name.appendSliceAssumeCapacity(inf.name);
 
         pass.shaderIds.appendAssumeCapacity(inf.compute.id);
 
@@ -191,10 +191,10 @@ pub const PassDef = struct {
         std.debug.assert(inf.compute.typ == .comp);
 
         var pass = PassDef{
-            .name = inf.name,
             .mainOutputTex = inf.outputTexId,
             .execution = .{ .compute = inf.execution },
         };
+        pass.name.appendSliceAssumeCapacity(inf.name);
 
         pass.shaderIds.appendAssumeCapacity(inf.compute.id);
 
@@ -227,13 +227,13 @@ pub const PassDef = struct {
         std.debug.assert(inf.fragment.typ == .frag);
 
         var pass = PassDef{
-            .name = inf.name,
             .mainOutputTex = inf.outputTexId,
             .execution = inf.execution,
             .depthAtt = inf.depthAtt,
             .stencilAtt = inf.stencilAtt,
             .renderState = inf.renderState,
         };
+        pass.name.appendSliceAssumeCapacity(inf.name);
 
         pass.shaderIds.appendAssumeCapacity(inf.task.id);
         pass.shaderIds.appendAssumeCapacity(inf.mesh.id);
@@ -267,13 +267,13 @@ pub const PassDef = struct {
         std.debug.assert(inf.fragment.typ == .frag);
 
         var pass = PassDef{
-            .name = inf.name,
             .mainOutputTex = inf.outputTexId,
             .execution = .{ .taskOrMesh = inf.execution },
             .depthAtt = inf.depthAtt,
             .stencilAtt = inf.stencilAtt,
             .renderState = inf.renderState,
         };
+        pass.name.appendSliceAssumeCapacity(inf.name);
 
         pass.shaderIds.appendAssumeCapacity(inf.mesh.id);
         pass.shaderIds.appendAssumeCapacity(inf.fragment.id);
@@ -306,13 +306,13 @@ pub const PassDef = struct {
         std.debug.assert(inf.fragment.typ == .frag);
 
         var pass = PassDef{
-            .name = inf.name,
             .mainOutputTex = inf.outputTexId,
             .execution = .{ .taskOrMeshIndirect = inf.execution },
             .depthAtt = inf.depthAtt,
             .stencilAtt = inf.stencilAtt,
             .renderState = inf.renderState,
         };
+        pass.name.appendSliceAssumeCapacity(inf.name);
 
         pass.shaderIds.appendAssumeCapacity(inf.mesh.id);
         pass.shaderIds.appendAssumeCapacity(inf.fragment.id);
@@ -322,6 +322,10 @@ pub const PassDef = struct {
         pass.colorAtts.appendSliceAssumeCapacity(inf.colorAtts);
 
         return pass;
+    }
+
+    pub fn getName(self: *const PassDef) []const u8 {
+        return self.name.constSlice();
     }
 
     pub fn getShaderIds(self: *const PassDef) []const ShaderId {

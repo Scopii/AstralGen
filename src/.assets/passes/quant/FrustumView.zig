@@ -24,8 +24,8 @@ pub fn FrustumView(
         .colorAtts = &.{p.AttachmentUse.init(def.colorAtt, .ColorAtt, .ColorAttReadWrite, .{ .color = .{ 0.0, 0.0, 0.0, 0.0 } })},
         .depthAtt = p.AttachmentUse.init(def.depthAtt, .EarlyAndLateFragTest, .DepthStencilReadWrite, null),
         .renderState = .{
-            .depthTest = vk.VK_FALSE, // Depth Currently not in Use
-            .depthWrite = vk.VK_FALSE, // Depth Currently not in Use
+            .depthTest = .False, // Depth Currently not in Use
+            .depthWrite = .False, // Depth Currently not in Use
             .lineWidth = 2.0,
         },
     });

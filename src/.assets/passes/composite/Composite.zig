@@ -14,16 +14,18 @@ pub fn Composite(
         .vertex = sc.compositeVert,
         .fragment = sc.compositeFrag,
         .renderState = .{
-            .colorBlend = vk.VK_TRUE,
+            .colorBlend = .True,
             .colorBlendEquation = .{
-                .srcColor = vk.VK_BLEND_FACTOR_SRC_ALPHA,
-                .dstColor = vk.VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
-                .srcAlpha = vk.VK_BLEND_FACTOR_ONE,
-                .dstAlpha = vk.VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+                .srcColor = .SrcAlpha,
+                .dstColor = .OneMinusSrcAlpha,
+                .colorOperation = .Add,
+                .srcAlpha = .One,
+                .dstAlpha = .OneMinusSrcAlpha,
+                .alphaOperation = .Add,
             },
-            .depthTest = vk.VK_FALSE,
-            .depthWrite = vk.VK_FALSE,
-            .cullMode = vk.VK_CULL_MODE_NONE,
+            .depthTest = .False,
+            .depthWrite = .False,
+            .cullMode = .None,
         },
     });
 }

@@ -220,6 +220,7 @@ pub const App = struct {
             },
             // .blitPass = .QuantPlaneMain,
         });
+
         self.windowQueue.append(.{
             .addWindow = .{
                 .title = "Debug Window",

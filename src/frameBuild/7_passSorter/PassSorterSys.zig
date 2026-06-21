@@ -89,7 +89,7 @@ pub const PassSorterSys = struct {
             std.debug.print("7.PassSorter:\n", .{});
             for (passSorter.sortedRenderNodes.constSlice(), 0..) |*renderNode, index| {
                 switch (renderNode.*) {
-                    .passNode => |*passNode| std.debug.print("- {}. Pass: {s}\n", .{ index, passNode.pass.name }),
+                    .passNode => |*passNode| std.debug.print("- {}. Pass: {s}\n", .{ index, passNode.pass.getName() }),
                     .compositeNode => |*composite| std.debug.print("- {}. Composite: {s} (Pass {})\n", .{ index, composite.name, composite.pass }),
                     .viewportBlit => |*blit| std.debug.print("- {}. Blit: {s} (Pass {})\n", .{ index, blit.name, blit.pass }),
                     .uiNode => |*ui| std.debug.print("- {}. UI: {s} (WindowID {})\n", .{ index, ui.name, ui.windowId }),

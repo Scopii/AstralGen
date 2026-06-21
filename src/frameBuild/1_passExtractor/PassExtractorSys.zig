@@ -137,7 +137,7 @@ pub const PassExtractorSys = struct {
             std.debug.print("1.PassExtractor: \n", .{});
             for (passExtractor.renderNodes.getConstItems(), 0..) |*renderNode, i| {
                 switch (renderNode.*) {
-                    .passNode => |*pass| std.debug.print("- {}. Pass: {s}\n", .{ i, pass.pass.name }),
+                    .passNode => |*pass| std.debug.print("- {}. Pass: {s}\n", .{ i, pass.pass.getName() }),
                     .compositeNode => |*composite| std.debug.print("- {}. Composite: {s} (Pass {})\n", .{ i, composite.name, composite.pass }),
                     .viewportBlit => |*blit| std.debug.print("- {}. Blit: {s} (Pass {})\n", .{ i, blit.name, blit.pass }),
                     .uiNode => |*ui| std.debug.print("- {}. ERROR UI ILLEGAL {s}\n", .{ i, ui.name }),

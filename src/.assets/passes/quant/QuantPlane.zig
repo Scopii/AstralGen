@@ -30,10 +30,10 @@ pub fn QuantPlane(
         .colorAtts = &.{p.AttachmentUse.init(def.colorAtt, .ColorAtt, .ColorAttReadWrite, .{ .color = .{ 0.0, 0.0, 0.0, 0.0 } })},
         .depthAtt = p.AttachmentUse.init(def.depthAtt, .EarlyAndLateFragTest, .DepthStencilReadWrite, .{ .depthStencil = .{ .depth = 0.0, .stencil = 0 } }),
         .renderState = .{
-            .depthTest = vk.VK_TRUE,
-            .depthWrite = vk.VK_TRUE,
-            .depthCompare = vk.VK_COMPARE_OP_GREATER,
-            .cullMode = vk.VK_CULL_MODE_NONE,
+            .depthTest = .True,
+            .depthWrite = .True,
+            .depthCompare = .Greater,
+            .cullMode = .None,
         },
     });
 }

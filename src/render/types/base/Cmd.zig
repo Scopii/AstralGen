@@ -534,7 +534,7 @@ pub const Cmd = struct {
     }
 
     pub fn clearDepthImage(self: *const Cmd, img: vk.VkImage, depth: f32, stencil: u32) void {
-        const clearValues = vk.VkClearDepthStencilValue{.depth = depth, .stencil = stencil};
+        const clearValues = vk.VkClearDepthStencilValue{ .depth = depth, .stencil = stencil };
         const subRange = vhF.createSubresourceRange(vk.VK_IMAGE_ASPECT_DEPTH_BIT, 0, 1, 0, 1);
         vk.vkCmdClearDepthStencilImage(self.handle, img, vk.VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clearValues, 1, &subRange);
     }
@@ -554,65 +554,65 @@ pub const Cmd = struct {
 
         // Rasterization & Geometry
         if (force or cur.polygonMode != new.polygonMode) {
-            vkFn.vkCmdSetPolygonModeEXT.?(cmd, new.polygonMode);
+            vkFn.vkCmdSetPolygonModeEXT.?(cmd, @intFromEnum(new.polygonMode));
             stateChanges += 1;
         }
         if (force or cur.cullMode != new.cullMode) {
-            vk.vkCmdSetCullMode(cmd, new.cullMode);
+            vk.vkCmdSetCullMode(cmd, @intFromEnum(new.cullMode));
             stateChanges += 1;
         }
         if (force or cur.frontFace != new.frontFace) {
-            vk.vkCmdSetFrontFace(cmd, new.frontFace);
+            vk.vkCmdSetFrontFace(cmd, @intFromEnum(new.frontFace));
             stateChanges += 1;
         }
         if (force or cur.topology != new.topology) {
-            vk.vkCmdSetPrimitiveTopology(cmd, new.topology);
+            vk.vkCmdSetPrimitiveTopology(cmd, @intFromEnum(new.topology));
             stateChanges += 1;
         }
 
         if (force or cur.primitiveRestart != new.primitiveRestart) {
-            vk.vkCmdSetPrimitiveRestartEnable(cmd, new.primitiveRestart);
+            vk.vkCmdSetPrimitiveRestartEnable(cmd, @intFromEnum(new.primitiveRestart));
             stateChanges += 1;
         }
         if (force or cur.rasterDiscard != new.rasterDiscard) {
-            vk.vkCmdSetRasterizerDiscardEnable(cmd, new.rasterDiscard);
+            vk.vkCmdSetRasterizerDiscardEnable(cmd, @intFromEnum(new.rasterDiscard));
             stateChanges += 1;
         }
         if (force or cur.rasterSamples != new.rasterSamples) {
-            vkFn.vkCmdSetRasterizationSamplesEXT.?(cmd, new.rasterSamples);
+            vkFn.vkCmdSetRasterizationSamplesEXT.?(cmd, @intFromEnum(new.rasterSamples));
             stateChanges += 1;
         }
 
-        const sampleMask: u32 = new.sample.sampleMask;
+        const sampleMask: u32 = @intFromEnum(new.sample.sampleMask);
         if (force or !std.meta.eql(cur.sample, new.sample)) {
-            vkFn.vkCmdSetSampleMaskEXT.?(cmd, new.sample.sampling, &sampleMask);
+            vkFn.vkCmdSetSampleMaskEXT.?(cmd, @intFromEnum(new.sample.sampling), &sampleMask);
             stateChanges += 1;
         }
 
         // Depth & Stencil
         if (force or cur.depthBoundsTest != new.depthBoundsTest) {
-            vk.vkCmdSetDepthBoundsTestEnable(cmd, new.depthBoundsTest);
+            vk.vkCmdSetDepthBoundsTestEnable(cmd, @intFromEnum(new.depthBoundsTest));
             stateChanges += 1;
         }
         if (force or cur.depthBias != new.depthBias) {
-            vk.vkCmdSetDepthBiasEnable(cmd, new.depthBias);
+            vk.vkCmdSetDepthBiasEnable(cmd, @intFromEnum(new.depthBias));
             stateChanges += 1;
         }
         if (force or cur.depthClamp != new.depthClamp) {
-            vkFn.vkCmdSetDepthClampEnableEXT.?(cmd, new.depthClamp);
+            vkFn.vkCmdSetDepthClampEnableEXT.?(cmd, @intFromEnum(new.depthClamp));
             stateChanges += 1;
         }
 
         if (force or cur.depthTest != new.depthTest) {
-            vk.vkCmdSetDepthTestEnable(cmd, new.depthTest);
+            vk.vkCmdSetDepthTestEnable(cmd, @intFromEnum(new.depthTest));
             stateChanges += 1;
         }
         if (force or cur.depthWrite != new.depthWrite) {
-            vk.vkCmdSetDepthWriteEnable(cmd, new.depthWrite);
+            vk.vkCmdSetDepthWriteEnable(cmd, @intFromEnum(new.depthWrite));
             stateChanges += 1;
         }
         if (force or cur.depthCompare != new.depthCompare) {
-            vk.vkCmdSetDepthCompareOp(cmd, new.depthCompare);
+            vk.vkCmdSetDepthCompareOp(cmd, @intFromEnum(new.depthCompare));
             stateChanges += 1;
         }
         if (force or !std.meta.eql(cur.depthValues, new.depthValues)) {
@@ -621,85 +621,93 @@ pub const Cmd = struct {
         }
 
         if (force or cur.stencilTest != new.stencilTest) {
-            vk.vkCmdSetStencilTestEnable(cmd, new.stencilTest);
+            vk.vkCmdSetStencilTestEnable(cmd, @intFromEnum(new.stencilTest));
             stateChanges += 1;
         }
         if (force or !std.meta.eql(cur.stencilOp, new.stencilOp)) {
-            vk.vkCmdSetStencilOp(cmd, new.stencilOp[0], new.stencilOp[1], new.stencilOp[2], new.stencilOp[3], new.stencilOp[4]);
+            vk.vkCmdSetStencilOp(
+                cmd,
+                @intFromEnum(new.stencilOp.faceMask),
+                @intFromEnum(new.stencilOp.failOp),
+                @intFromEnum(new.stencilOp.passOp),
+                @intFromEnum(new.stencilOp.depthFailOp),
+                @intFromEnum(new.stencilOp.compareOp),
+            );
             stateChanges += 1;
         }
         if (force or !std.meta.eql(cur.stencilCompare, new.stencilCompare)) {
-            vk.vkCmdSetStencilCompareMask(cmd, new.stencilCompare.faceMask, new.stencilCompare.mask);
+            vk.vkCmdSetStencilCompareMask(cmd, @intFromEnum(new.stencilCompare.faceMask), new.stencilCompare.mask);
             stateChanges += 1;
         }
         if (force or !std.meta.eql(cur.stencilWrite, new.stencilWrite)) {
-            vk.vkCmdSetStencilWriteMask(cmd, new.stencilWrite.faceMask, new.stencilWrite.mask);
+            vk.vkCmdSetStencilWriteMask(cmd, @intFromEnum(new.stencilWrite.faceMask), new.stencilWrite.mask);
             stateChanges += 1;
         }
         if (force or !std.meta.eql(cur.stencilReference, new.stencilReference)) {
-            vk.vkCmdSetStencilReference(cmd, new.stencilReference.faceMask, new.stencilReference.mask);
+            vk.vkCmdSetStencilReference(cmd, @intFromEnum(new.stencilReference.faceMask), new.stencilReference.mask);
             stateChanges += 1;
         }
 
         // Color & Blending
-        const blendEnable = new.colorBlend;
-        const colorBlendAttachments = [_]vk.VkBool32{blendEnable} ** 8;
+        const blendEnable = @intFromEnum(new.colorBlend);
+        const colorBlendAttachments = [8]vk.VkBool32{ blendEnable, blendEnable, blendEnable, blendEnable, blendEnable, blendEnable, blendEnable, blendEnable };
         if (force or cur.colorBlend != new.colorBlend) {
             vkFn.vkCmdSetColorBlendEnableEXT.?(cmd, 0, 8, &colorBlendAttachments);
             stateChanges += 1;
         }
 
         const oldBlendEquation = vk.VkColorBlendEquationEXT{
-            .srcColorBlendFactor = cur.colorBlendEquation.srcColor,
-            .dstColorBlendFactor = cur.colorBlendEquation.dstColor,
-            .colorBlendOp = cur.colorBlendEquation.colorOperation,
-            .srcAlphaBlendFactor = cur.colorBlendEquation.srcAlpha,
-            .dstAlphaBlendFactor = cur.colorBlendEquation.dstAlpha,
-            .alphaBlendOp = cur.colorBlendEquation.alphaOperation,
+            .srcColorBlendFactor = @intFromEnum(cur.colorBlendEquation.srcColor),
+            .dstColorBlendFactor = @intFromEnum(cur.colorBlendEquation.dstColor),
+            .colorBlendOp = @intFromEnum(cur.colorBlendEquation.colorOperation),
+            .srcAlphaBlendFactor = @intFromEnum(cur.colorBlendEquation.srcAlpha),
+            .dstAlphaBlendFactor = @intFromEnum(cur.colorBlendEquation.dstAlpha),
+            .alphaBlendOp = @intFromEnum(cur.colorBlendEquation.alphaOperation),
         };
 
         const blendEquation = vk.VkColorBlendEquationEXT{
-            .srcColorBlendFactor = new.colorBlendEquation.srcColor,
-            .dstColorBlendFactor = new.colorBlendEquation.dstColor,
-            .colorBlendOp = new.colorBlendEquation.colorOperation,
-            .srcAlphaBlendFactor = new.colorBlendEquation.srcAlpha,
-            .dstAlphaBlendFactor = new.colorBlendEquation.dstAlpha,
-            .alphaBlendOp = new.colorBlendEquation.alphaOperation,
+            .srcColorBlendFactor = @intFromEnum(new.colorBlendEquation.srcColor),
+            .dstColorBlendFactor = @intFromEnum(new.colorBlendEquation.dstColor),
+            .colorBlendOp = @intFromEnum(new.colorBlendEquation.colorOperation),
+            .srcAlphaBlendFactor = @intFromEnum(new.colorBlendEquation.srcAlpha),
+            .dstAlphaBlendFactor = @intFromEnum(new.colorBlendEquation.dstAlpha),
+            .alphaBlendOp = @intFromEnum(new.colorBlendEquation.alphaOperation),
         };
-        const equations = [_]vk.VkColorBlendEquationEXT{blendEquation} ** 8;
+        const equations = [8]vk.VkColorBlendEquationEXT{ blendEquation, blendEquation, blendEquation, blendEquation, blendEquation, blendEquation, blendEquation, blendEquation };
         if (force or !std.meta.eql(oldBlendEquation, blendEquation)) {
             vkFn.vkCmdSetColorBlendEquationEXT.?(cmd, 0, 8, &equations);
             stateChanges += 1;
         }
 
-        const oldBlendConsts = [_]f32{ cur.blendConstants.red, cur.blendConstants.green, cur.blendConstants.blue, cur.blendConstants.alpha };
-        const blendConsts = [_]f32{ new.blendConstants.red, new.blendConstants.green, new.blendConstants.blue, new.blendConstants.alpha };
+        const oldBlendConsts = [4]f32{ cur.blendConstants.red, cur.blendConstants.green, cur.blendConstants.blue, cur.blendConstants.alpha };
+        const blendConsts = [4]f32{ new.blendConstants.red, new.blendConstants.green, new.blendConstants.blue, new.blendConstants.alpha };
         if (force or !std.meta.eql(oldBlendConsts, blendConsts)) {
             vk.vkCmdSetBlendConstants(cmd, &blendConsts);
             stateChanges += 1;
         }
 
-        const colWriteMasks = [_]vk.VkColorComponentFlags{new.colorWriteMask} ** 8;
         if (force or cur.colorWriteMask != new.colorWriteMask) {
+            const colMask = @intFromEnum(new.colorWriteMask);
+            const colWriteMasks = [8]vk.VkColorComponentFlags{ colMask, colMask, colMask, colMask, colMask, colMask, colMask, colMask };
             vkFn.vkCmdSetColorWriteMaskEXT.?(cmd, 0, 8, &colWriteMasks);
             stateChanges += 1;
         }
 
         if (force or cur.alphaToOne != new.alphaToOne) {
-            vkFn.vkCmdSetAlphaToOneEnableEXT.?(cmd, new.alphaToOne);
+            vkFn.vkCmdSetAlphaToOneEnableEXT.?(cmd, @intFromEnum(new.alphaToOne));
             stateChanges += 1;
         }
         if (force or cur.alphaToCoverage != new.alphaToCoverage) {
-            vkFn.vkCmdSetAlphaToCoverageEnableEXT.?(cmd, new.alphaToCoverage);
+            vkFn.vkCmdSetAlphaToCoverageEnableEXT.?(cmd, @intFromEnum(new.alphaToCoverage));
             stateChanges += 1;
         }
 
         if (force or cur.logicOp != new.logicOp) {
-            vkFn.vkCmdSetLogicOpEnableEXT.?(cmd, new.logicOp);
+            vkFn.vkCmdSetLogicOpEnableEXT.?(cmd, @intFromEnum(new.logicOp));
             stateChanges += 1;
         }
         if (force or cur.logicOpType != new.logicOpType) {
-            vkFn.vkCmdSetLogicOpEXT.?(cmd, new.logicOpType);
+            vkFn.vkCmdSetLogicOpEXT.?(cmd, @intFromEnum(new.logicOpType));
             stateChanges += 1;
         }
 
@@ -709,11 +717,11 @@ pub const Cmd = struct {
             stateChanges += 1;
         }
         if (force or cur.conservativeRasterMode != new.conservativeRasterMode) {
-            vkFn.vkCmdSetConservativeRasterizationModeEXT.?(cmd, new.conservativeRasterMode);
+            vkFn.vkCmdSetConservativeRasterizationModeEXT.?(cmd, @intFromEnum(new.conservativeRasterMode));
             stateChanges += 1;
         }
 
-        const combinerOps = [_]vk.VkFragmentShadingRateCombinerOpKHR{ new.fragShadingRate.operation, new.fragShadingRate.operation };
+        const combinerOps = [2]vk.VkFragmentShadingRateCombinerOpKHR{ @intFromEnum(new.fragShadingRate.operation1), @intFromEnum(new.fragShadingRate.operation2) };
         const extent = vk.VkExtent2D{ .width = new.fragShadingRate.width, .height = new.fragShadingRate.height };
         if (force or !std.meta.eql(cur.fragShadingRate, new.fragShadingRate)) {
             vkFn.vkCmdSetFragmentShadingRateKHR.?(cmd, &extent, &combinerOps);

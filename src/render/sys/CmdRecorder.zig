@@ -251,7 +251,7 @@ pub const CmdRecorder = struct {
             const buf = try resMan.get(bufId, cmd.flightId);
             try self.checkBufferState(buf, .{ .stage = .VertexInput, .access = .IndexRead });
         }
-        self.bakeBarriers(cmd, pass.name);
+        self.bakeBarriers(cmd, pass.getName());
     }
 
     fn recordCompute(cmd: *const Cmd, dispatch: Dispatch, renderTexId: ?TexId, resMan: *ResourceMan) !void {
@@ -531,8 +531,8 @@ pub const CmdRecorder = struct {
         bufAssigns: *const BufferAssignments,
         texAssigns: *const TextureAssignments,
     ) !void {
-        const timeId = cmd.startTimer(.TopOfPipe, pass.name, .Pass);
-        cmd.startStatistics(pass.name);
+        const timeId = cmd.startTimer(.TopOfPipe, pass.getName(), .Pass);
+        cmd.startStatistics(pass.getName());
 
         const shaders = shaderMan.getShaders(pass.getShaderIds());
         const shaderSlice = shaders[0..pass.getShaderIds().len];
@@ -656,7 +656,7 @@ pub const CmdRecorder = struct {
                     cmd.draw(graphics.vertices, graphics.instances, 0, 0);
                 }
             },
-            .compute, .computeIndirect => std.debug.print("ERROR: Compute or ComputeOnImg Pass ({s}) landed in Graphics Recording\n", .{pass.name}),
+            .compute, .computeIndirect => std.debug.print("ERROR: Compute or ComputeOnImg Pass ({s}) landed in Graphics Recording\n", .{pass.getName()}),
         }
         cmd.endRendering();
     }
