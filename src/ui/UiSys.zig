@@ -1,7 +1,7 @@
 const FrameGraphQueue = @import("../frameBuild/FrameGraphQueue.zig").FrameGraphQueue;
 const MemoryManager = @import("../core/MemoryManager.zig").MemoryManager;
 const TextureEnum = @import("../frameBuild/enums.zig").TextureEnum;
-const PassDef = @import("../render/types/pass/PassDef.zig");
+const UiNode = @import("../render/types/pass/RenderNode.zig").UiNode;
 const EngineData = @import("../EngineData.zig").EngineData;
 const Window = @import("../window/Window.zig").Window;
 const ig = @cImport(@cInclude("imgui_ctx.h"));
@@ -211,7 +211,7 @@ pub const UiSys = struct {
 
     fn extractDrawData(ui: *UiData, data: *const EngineData, frameGraphQueue: *FrameGraphQueue, memoryMan: *MemoryManager) !void {
         const arena = memoryMan.getGlobalArena();
-        var uiNodes = std.array_list.Managed(PassDef.UiNode).init(arena);
+        var uiNodes = std.array_list.Managed(UiNode).init(arena);
 
         var totalVtxBytes: u32 = 0;
         var totalIdxBytes: u32 = 0;
@@ -240,7 +240,7 @@ pub const UiSys = struct {
             const drawData = zgui.getDrawData();
             if (drawData.total_vtx_count == 0) continue;
 
-            var cmdListsArray = std.array_list.Managed(PassDef.UiNode.UiDraw).init(arena);
+            var cmdListsArray = std.array_list.Managed(UiNode.UiDraw).init(arena);
 
             for (drawData.cmd_lists.items[0..@intCast(drawData.cmd_lists_count)]) |cmdList| {
                 const vtxData = cmdList.getVertexBuffer();

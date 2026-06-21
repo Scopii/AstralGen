@@ -1,5 +1,5 @@
 const LinkedMap = @import("../.structures/LinkedMap.zig").LinkedMap;
-const UiNode = @import("../render/types/pass/PassDef.zig").UiNode;
+const UiNode = @import("../render/types/pass/RenderNode.zig").UiNode;
 const rc = @import("../.configs/renderConfig.zig");
 
 pub const UiData = struct {

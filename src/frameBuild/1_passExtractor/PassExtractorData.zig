@@ -1,4 +1,4 @@
-const RenderNode = @import("../../render/types/pass/PassDef.zig").RenderNode;
+const RenderNode = @import("../../render/types/pass/RenderNode.zig").RenderNode;
 const FixedList = @import("../../.structures/FixedList.zig").FixedList;
 const SimpleMap = @import("../../.structures/SimpleMap.zig").SimpleMap;
 const LinkedMap = @import("../../.structures/LinkedMap.zig").LinkedMap;
