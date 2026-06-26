@@ -16,13 +16,13 @@ const std = @import("std");
 const PassExtractorData = @import("PassExtractorData.zig").PassExtractorData;
 const ResourceRegistryData = @import("../0_resourceRegistry/ResourceRegistryData.zig").ResourceRegistryData;
 
-const CompRayMarch = @import("../../.assets/passes/compTest/CompRayMarch.zig").CompRayMarch;
-const EditorGrid = @import("../../.assets/passes/editorGrid/EditorGrid.zig").EditorGrid;
-const QuantComp = @import("../../.assets/passes/quant/QuantComp.zig").QuantComp;
-const QuantGrid = @import("../../.assets/passes/quant/QuantGrid.zig").QuantGrid;
-const QuantPlane = @import("../../.assets/passes/quant/QuantPlane.zig").QuantPlane;
-const FrustumView = @import("../../.assets/passes/quant/FrustumView.zig").FrustumView;
-const DepthView = @import("../../.assets/passes/depthView/DepthView.zig").DepthView;
+// const CompRayMarch = @import("../../.assets/passes/compTest/CompRayMarch.zig").CompRayMarch;
+// const EditorGrid = @import("../../.assets/passes/editorGrid/EditorGrid.zig").EditorGrid;
+// const QuantComp = @import("../../.assets/passes/quant/QuantComp.zig").QuantComp;
+// const QuantGrid = @import("../../.assets/passes/quant/QuantGrid.zig").QuantGrid;
+// const QuantPlane = @import("../../.assets/passes/quant/QuantPlane.zig").QuantPlane;
+// const FrustumView = @import("../../.assets/passes/quant/FrustumView.zig").FrustumView;
+// const DepthView = @import("../../.assets/passes/depthView/DepthView.zig").DepthView;
 
 const RenderStateUnion = @import("../../render/types/pass/RenderState.zig").RenderStateUnion;
 const VertexBufferSlot = @import("../../render/types/pass/VertexBufferSlot.zig").VertexBufferSlot;
@@ -40,6 +40,9 @@ const AttachmentUse = @import("../../render/types/pass/AttachmentUse.zig").Attac
 const VertexBufferUse = @import("../../render/types/pass/VertexBufferUse.zig").VertexBufferUse;
 const IndexBufferUse = @import("../../render/types/pass/IndexBufferUse.zig").IndexBufferUse;
 const VertexAttribute = @import("../../render/types/pass/VertexAttribute.zig").VertexAttribute;
+
+const ComputeIndirectExec = @import("../../render/types/pass/PassDef.zig").ComputeIndirectExec;
+const TaskOrMeshIndirectExec = @import("../../render/types/pass/PassDef.zig").TaskOrMeshIndirectExec;
 
 pub const PassExtractorSys = struct {
     pub fn newBuild(passExtractor: *PassExtractorData, resourceRegistry: *const ResourceRegistryData, data: *const EngineData) !void {
@@ -77,6 +80,7 @@ pub const PassExtractorSys = struct {
 
         for (0..passExtractor.passStrings.getLength()) |passStringIndex| {
             const passString = passExtractor.passStrings.getByIndex(@intCast(passStringIndex));
+            const passId = try resourceRegistry.getPassId(passString);
             var passWidth: u32 = 0;
             var passHeight: u32 = 0;
 
@@ -112,12 +116,12 @@ pub const PassExtractorSys = struct {
                             // Check Blit or Composite
                             if (viewport.blitPass) |usedBlit| {
                                 if (std.mem.eql(u8, passString, usedBlit)) {
-                                    const blit = createBlit(&viewport, .id(@intCast(passStringIndex)), window.id, window.extent.width, window.extent.height);
+                                    const blit = createBlit(&viewport, passId, window.id, window.extent.width, window.extent.height);
                                     tempBlitsAndComposits.append(.{ .viewportBlit = blit }) catch std.debug.print("PassDef Could not Append Blit\n", .{});
                                     break;
                                 }
                             } else {
-                                const composite = createComposite(&viewport, .id(@intCast(passStringIndex)), window.id, window.extent.width, window.extent.height);
+                                const composite = createComposite(&viewport, passId, window.id, window.extent.width, window.extent.height);
                                 tempBlitsAndComposits.append(.{ .compositeNode = composite }) catch std.debug.print("PassDef Could not Append Composite\n", .{});
                             }
                         }
@@ -131,7 +135,7 @@ pub const PassExtractorSys = struct {
                 return error.CreatePass;
             };
             if (passExtractor.renderNodes.isFull() == true) return error.RenderNodesFull;
-            passExtractor.renderNodes.upsert(@intCast(passStringIndex), .{ .passNode = .{ .pass = pass, .width = passWidth, .height = passHeight } });
+            passExtractor.renderNodes.upsert(passId.val(), .{ .passNode = .{ .pass = pass, .width = passWidth, .height = passHeight } });
             if (rc.PASS_EXTRACTION_DEBUG) std.debug.print("Pass {s} added (width {} height {})\n", .{ passString, passWidth, passHeight });
 
             // Assign Blits/Compsites to SrcTextureId
@@ -154,8 +158,8 @@ pub const PassExtractorSys = struct {
             for (passExtractor.renderNodes.getConstItems(), 0..) |*renderNode, i| {
                 switch (renderNode.*) {
                     .passNode => |*pass| std.debug.print("- {}. Pass: {s}\n", .{ i, pass.pass.getName() }),
-                    .compositeNode => |*composite| std.debug.print("- {}. Composite: {s} (Pass {})\n", .{ i, composite.name, composite.pass }),
-                    .viewportBlit => |*blit| std.debug.print("- {}. Blit: {s} (Pass {})\n", .{ i, blit.name, blit.pass }),
+                    .compositeNode => |*composite| std.debug.print("- {}. Composite: {s} (Pass {s})\n", .{ i, composite.name, try resourceRegistry.getPassName(composite.pass) }),
+                    .viewportBlit => |*blit| std.debug.print("- {}. Blit: {s} (Pass {s})\n", .{ i, blit.name, try resourceRegistry.getPassName(blit.pass) }),
                     .uiNode => |*ui| std.debug.print("- {}. ERROR UI ILLEGAL {s}\n", .{ i, ui.name }),
                     .clearBuffer, .clearTexture, .barrierBakeClears => unreachable,
                 }
@@ -197,7 +201,7 @@ pub const PassExtractorSys = struct {
 
         var filledPass = PassDef{
             .name = undefined,
-            .execution = passDef.execution,
+            .execution = undefined,
             .mainOutputTex = if (passDef.outputTex) |output| try resourceRegistry.getTexturePassId(output) else null,
         };
 
@@ -205,6 +209,35 @@ pub const PassExtractorSys = struct {
 
         for (passDef.passAttribute.constSlice()) |attribute| {
             switch (attribute) {
+                .execution => |exec| {
+                    switch (exec) {
+                        .computeIndirect => |compIndirect| {
+                            const compIndirectExec = ComputeIndirectExec{
+                                .indirectBuf = try resourceRegistry.getBufferPassId(compIndirect.indirectBuf),
+                                .indirectBufOffset = compIndirect.indirectBufOffset,
+                            };
+                            filledPass.execution = .{ .computeIndirect = compIndirectExec };
+                        },
+                        .taskOrMeshIndirect => |taskOrMeshIndirect| {
+                            const taskMeshIndirectExec = TaskOrMeshIndirectExec{
+                                .workgroups = taskOrMeshIndirect.workgroups,
+                                .indirectBuf = try resourceRegistry.getBufferPassId(taskOrMeshIndirect.indirectBuf),
+                                .indirectBufOffset = taskOrMeshIndirect.indirectBufOffset,
+                            };
+                            filledPass.execution = .{ .taskOrMeshIndirect = taskMeshIndirectExec };
+                        },
+                        .compute => |comp| {
+                            filledPass.execution = .{ .compute = comp };
+                        },
+                        .taskOrMesh => |taskOrMesh| {
+                            filledPass.execution = .{ .taskOrMesh = taskOrMesh };
+                        },
+                        .graphics => |graphics| {
+                            filledPass.execution = .{ .graphics = graphics };
+                        },
+                        // inline else => |val, tag| @field(filledPass.execution, @tagName(tag)) = val,
+                    }
+                },
                 .shaderInf => |shaderInf| {
                     filledPass.shaderIds.appendAssumeCapacity(shaderInf.id);
                 },
@@ -303,94 +336,130 @@ pub const PassExtractorSys = struct {
 
     fn createPass(passString: []const u8, resourceRegistry: *const ResourceRegistryData) ?PassDef {
         if (std.mem.eql(u8, passString, "CompRayMarch")) {
-            return CompRayMarch(.{ // DONE
-                .string = "CompRayMarch",
-                .entityBuf = .{ .in = rc.EntitySB },
-                .outputTex = .{ .in = rc.RayMarchInputTex },
-                .camBuf = .{ .in = rc.MainCamUB },
-                .readbackBuf = .{ .in = rc.ReadbackSB },
-                .debugTex = .{ .in = rc.TestTileTex },
-            });
+            // return CompRayMarch(.{
+            //     .string = "CompRayMarch",
+            //     .entityBuf = .{ .in = rc.EntitySB }, // "EntitySB"
+            //     .outputTex = .{ .in = rc.RayMarchInputTex }, // "RayMarchInputTex"
+            //     .camBuf = .{ .in = rc.MainCamUB }, // "MainCamUB"
+            //     .readbackBuf = .{ .in = rc.ReadbackSB }, // "ReadbackSB"
+            //     .debugTex = .{ .in = rc.TestTileTex }, // "TestTileTex"
+            // });
+            return fillPassDefinition(resourceRegistry, "CompRayMarch") catch |err| {
+                std.debug.print("ERROR: CompRayMarch fillPassDefinition failed: {}\n", .{err});
+                return null;
+            };
         }
 
         if (std.mem.eql(u8, passString, "QuantComp")) {
-            return QuantComp(.{ // DONE
-                .string = "QuantComp",
-                .indirectBuf = .{ .in = rc.QuantIndirectInputSB, .out = rc.QuantIndirectOutputSB },
-                .entityBuf = .{ .in = rc.EntitySB },
-            });
+            // return QuantComp(.{
+            //     .string = "QuantComp",
+            //     .indirectBuf = .{ .in = rc.QuantIndirectInputSB, .out = rc.QuantIndirectOutputSB }, // "QuantIndirectInputSB" "QuantIndirectOutputSB"
+            //     .entityBuf = .{ .in = rc.EntitySB }, // "EntitySB"
+            // });
+            return fillPassDefinition(resourceRegistry, "QuantComp") catch |err| {
+                std.debug.print("ERROR: QuantComp fillPassDefinition failed: {}\n", .{err});
+                return null;
+            };
         }
 
         if (std.mem.eql(u8, passString, "QuantGridMain")) {
-            return QuantGrid(.{
-                .string = "QuantGridMain",
-                .colorAtt = .{ .in = rc.GridTex },
-                .depthAtt = .{ .in = rc.GridDepthTex },
-                .indirectBuf = .{ .in = rc.QuantIndirectOutputSB },
-                .viewCam = .{ .in = rc.MainCamUB },
-                .renderCam = .{ .in = rc.MainCamUB },
-            });
+            // return QuantGrid(.{
+            //     .string = "QuantGridMain",
+            //     .colorAtt = .{ .in = rc.GridTex }, // "GridTex"
+            //     .depthAtt = .{ .in = rc.GridDepthTex }, // "GridDepthTex"
+            //     .indirectBuf = .{ .in = rc.QuantIndirectOutputSB }, // "QuantIndirectOutputSB"
+            //     .viewCam = .{ .in = rc.MainCamUB }, // "MainCamUB"
+            //     .renderCam = .{ .in = rc.MainCamUB }, // "MainCamUB"
+            // });
+            return fillPassDefinition(resourceRegistry, "QuantGridMain") catch |err| {
+                std.debug.print("ERROR: QuantGridMain fillPassDefinition failed: {}\n", .{err});
+                return null;
+            };
         }
 
         if (std.mem.eql(u8, passString, "QuantGridDebug")) {
-            return QuantGrid(.{
-                .string = "QuantGridDebug",
-                .colorAtt = .{ .in = rc.DebugGridInputTex, .out = rc.DebugGridOutputTex },
-                .depthAtt = .{ .in = rc.DebugGridDepthTex },
-                .indirectBuf = .{ .in = rc.QuantIndirectOutputSB },
-                .viewCam = .{ .in = rc.DebugCamUB },
-                .renderCam = .{ .in = rc.MainCamUB },
-            });
+            // return QuantGrid(.{
+            //     .string = "QuantGridDebug",
+            //     .colorAtt = .{ .in = rc.DebugGridInputTex, .out = rc.DebugGridOutputTex }, // "DebugGridInputTex" "DebugGridOutputTex"
+            //     .depthAtt = .{ .in = rc.DebugGridDepthTex }, // "DebugGridDepthTex"
+            //     .indirectBuf = .{ .in = rc.QuantIndirectOutputSB }, // "QuantIndirectOutputSB"
+            //     .viewCam = .{ .in = rc.DebugCamUB }, // "DebugCamUB"
+            //     .renderCam = .{ .in = rc.MainCamUB }, // "MainCamUB"
+            // });
+            return fillPassDefinition(resourceRegistry, "QuantGridDebug") catch |err| {
+                std.debug.print("ERROR: QuantGridDebug fillPassDefinition failed: {}\n", .{err});
+                return null;
+            };
         }
 
         if (std.mem.eql(u8, passString, "EditorGridGridDebug")) {
-            return EditorGrid(.{
-                .string = "EditorGridGridDebug",
-                .colorAtt = .{ .in = rc.DebugGridOutputTex },
-                .depthAtt = .{ .in = rc.DebugGridDepthTex, .out = rc.DebugGridDepthOutputTex },
-                .camBuf = .{ .in = rc.DebugCamUB },
-            });
+            // return EditorGrid(.{
+            //     .string = "EditorGridGridDebug",
+            //     .colorAtt = .{ .in = rc.DebugGridOutputTex }, // "DebugGridOutputTex"
+            //     .depthAtt = .{ .in = rc.DebugGridDepthTex, .out = rc.DebugGridDepthOutputTex }, // "DebugGridDepthTex" "DebugGridDepthOutputTex"
+            //     .camBuf = .{ .in = rc.DebugCamUB }, // "DebugCamUB"
+            // });
+            return fillPassDefinition(resourceRegistry, "EditorGridGridDebug") catch |err| {
+                std.debug.print("ERROR: EditorGridGridDebug fillPassDefinition failed: {}\n", .{err});
+                return null;
+            };
         }
 
         if (std.mem.eql(u8, passString, "EditorGridPlaneDebug")) {
-            return EditorGrid(.{
-                .string = "EditorGridPlaneDebug",
-                .colorAtt = .{ .in = rc.DebugPlaneOutputFrustumViewTex },
-                .depthAtt = .{ .in = rc.DebugPlaneDepthTex },
-                .camBuf = .{ .in = rc.DebugCamUB },
-            });
+            // return EditorGrid(.{
+            //     .string = "EditorGridPlaneDebug",
+            //     .colorAtt = .{ .in = rc.DebugPlaneOutputFrustumViewTex }, // "DebugPlaneOutputFrustumViewTex"
+            //     .depthAtt = .{ .in = rc.DebugPlaneDepthTex }, // "DebugPlaneDepthTex"
+            //     .camBuf = .{ .in = rc.DebugCamUB }, // "DebugCamUB"
+            // });
+            return fillPassDefinition(resourceRegistry, "EditorGridPlaneDebug") catch |err| {
+                std.debug.print("ERROR: EditorGridPlaneDebug fillPassDefinition failed: {}\n", .{err});
+                return null;
+            };
         }
 
         if (std.mem.eql(u8, passString, "QuantPlaneMain")) {
-            return QuantPlane(.{
-                .string = "QuantPlaneMain",
-                .colorAtt = .{ .in = rc.PlaneTex },
-                .depthAtt = .{ .in = rc.PlaneDepthTex },
-                .indirectBuf = .{ .in = rc.QuantIndirectOutputSB },
-                .viewCam = .{ .in = rc.MainCamUB },
-                .renderCam = .{ .in = rc.MainCamUB },
-            });
+            // return QuantPlane(.{
+            //     .string = "QuantPlaneMain",
+            //     .colorAtt = .{ .in = rc.PlaneTex },
+            //     .depthAtt = .{ .in = rc.PlaneDepthTex },
+            //     .indirectBuf = .{ .in = rc.QuantIndirectOutputSB }, // "QuantIndirectOutputSB"
+            //     .viewCam = .{ .in = rc.MainCamUB }, // "MainCamUB"
+            //     .renderCam = .{ .in = rc.MainCamUB }, // "MainCamUB"
+            // });
+            return fillPassDefinition(resourceRegistry, "QuantPlaneMain") catch |err| {
+                std.debug.print("ERROR: QuantPlaneMain fillPassDefinition failed: {}\n", .{err});
+                return null;
+            };
         }
 
         if (std.mem.eql(u8, passString, "QuantPlaneDebug")) {
-            return QuantPlane(.{
-                .string = "QuantPlaneDebug",
-                .colorAtt = .{ .in = rc.DebugPlaneInputTex, .out = rc.DebugPlaneOutputTex },
-                .depthAtt = .{ .in = rc.DebugPlaneDepthTex },
-                .indirectBuf = .{ .in = rc.QuantIndirectOutputSB },
-                .viewCam = .{ .in = rc.DebugCamUB },
-                .renderCam = .{ .in = rc.MainCamUB },
-            });
+            // return QuantPlane(.{
+            //     .string = "QuantPlaneDebug",
+            //     .colorAtt = .{ .in = rc.DebugPlaneInputTex, .out = rc.DebugPlaneOutputTex }, // "DebugPlaneInputTex" "DebugPlaneOutputTex"
+            //     .depthAtt = .{ .in = rc.DebugPlaneDepthTex }, // "DebugPlaneDepthTex"
+            //     .indirectBuf = .{ .in = rc.QuantIndirectOutputSB }, // "QuantIndirectOutputSB"
+            //     .viewCam = .{ .in = rc.DebugCamUB }, // "DebugCamUB"
+            //     .renderCam = .{ .in = rc.MainCamUB }, // "MainCamUB"
+            // });
+            return fillPassDefinition(resourceRegistry, "QuantPlaneDebug") catch |err| {
+                std.debug.print("ERROR: QuantPlaneDebug fillPassDefinition failed: {}\n", .{err});
+                return null;
+            };
         }
 
         if (std.mem.eql(u8, passString, "FrustumView")) {
-            return FrustumView(.{
-                .string = "FrustumView",
-                .colorAtt = .{ .in = rc.DebugPlaneOutputTex, .out = rc.DebugPlaneOutputFrustumViewTex },
-                .depthAtt = .{ .in = rc.DebugPlaneDepthTex },
-                .renderCam = .{ .in = rc.MainCamUB },
-                .viewCam = .{ .in = rc.DebugCamUB },
-            });
+            // return FrustumView(.{
+            //     .string = "FrustumView",
+            //     .colorAtt = .{ .in = rc.DebugPlaneOutputTex, .out = rc.DebugPlaneOutputFrustumViewTex }, // "DebugPlaneOutputTex" "DebugPlaneOutputFrustumViewTex"
+            //     .depthAtt = .{ .in = rc.DebugPlaneDepthTex }, // "DebugPlaneDepthTex"
+            //     .renderCam = .{ .in = rc.MainCamUB }, // "MainCamUB"
+            //     .viewCam = .{ .in = rc.DebugCamUB }, // "DebugCamUB"
+            // });
+            return fillPassDefinition(resourceRegistry, "FrustumView") catch |err| {
+                std.debug.print("ERROR: FrustumView fillPassDefinition failed: {}\n", .{err});
+                return null;
+            };
         }
 
         if (std.mem.eql(u8, passString, "DepthView")) {
@@ -406,8 +475,8 @@ pub const PassExtractorSys = struct {
             //     return null;
             // };
 
-            return fillPassDefinition(resourceRegistry, "DepthView") catch |err| { // capture err instead of discarding it
-                std.debug.print("ERROR: DepthView fillPassDefinition failed: {}\n", .{err}); // tells you exactly which lookup failed
+            return fillPassDefinition(resourceRegistry, "DepthView") catch |err| {
+                std.debug.print("ERROR: DepthView fillPassDefinition failed: {}\n", .{err});
                 return null;
             };
         }

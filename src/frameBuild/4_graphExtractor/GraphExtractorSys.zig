@@ -157,7 +157,8 @@ pub const GraphExtractorSys = struct {
         // Debug Output
         if (rc.FRAME_GRAPH_DEBUG) {
             for (graphExtractor.orderedPasses.getConstItems(), 0..) |pass, i| {
-                std.debug.print("- Nr. {}: {}\n", .{ i, pass });
+                const passName = try resourceRegistry.getPassName(pass.pass);
+                std.debug.print("- Nr. {}: .( .level = {}, .pass = {s})\n", .{ i, pass.level, passName });
             }
             std.debug.print("\n", .{});
         }

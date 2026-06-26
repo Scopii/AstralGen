@@ -35,6 +35,10 @@ pub const ResourceRegistryData = struct {
         if (self.passNames.isKeyUsed(passId.val()) == true) return self.passNames.getConstPtrByKey(passId.val()).get() else return error.PassIdHasNoName;
     }
 
+    pub fn getPassId(self: *const ResourceRegistryData, passName: []const u8) !PassId {
+        return self.passIdMap.get(passName) orelse return error.PassStringHasNoPassId;
+    }
+
     pub fn getPassDefinition(self: *const ResourceRegistryData, passName: []const u8) !*const PassDefinition {
         const passId = self.passIdMap.get(passName) orelse return error.PassStringHasNoPassId;
         return self.passDefinitions.getConstPtrByKey(passId.val());

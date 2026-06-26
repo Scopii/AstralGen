@@ -18,6 +18,9 @@ const String = @import("../../../globalHelper.zig").String;
 pub const Dispatch = struct { x: u32, y: u32, z: u32 };
 pub const PassNode = struct { pass: PassDef, width: u32, height: u32 };
 
+pub const ComputeIndirectExecSlot = struct { indirectBuf: []const u8, indirectBufOffset: u64 = 0 };
+pub const TaskOrMeshIndirectExecSlot = struct { workgroups: Dispatch, indirectBuf: []const u8, indirectBufOffset: u64 = 0 };
+
 pub const ComputeExec = struct { workgroups: Dispatch, outputTexDispatch: bool };
 pub const ComputeIndirectExec = struct { indirectBuf: BufPassId, indirectBufOffset: u64 = 0 };
 pub const TaskOrMeshExec = struct { workgroups: Dispatch };
@@ -50,6 +53,14 @@ pub const PassDef = struct {
         computeIndirect: ComputeIndirectExec,
         taskOrMesh: TaskOrMeshExec,
         taskOrMeshIndirect: TaskOrMeshIndirectExec,
+        graphics: GraphicsExec,
+    };
+
+    pub const PassExecutionSlot = union(enum) {
+        compute: ComputeExec,
+        computeIndirect: ComputeIndirectExecSlot,
+        taskOrMesh: TaskOrMeshExec,
+        taskOrMeshIndirect: TaskOrMeshIndirectExecSlot,
         graphics: GraphicsExec,
     };
 

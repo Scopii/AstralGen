@@ -16,7 +16,7 @@ pub const PassSorterSys = struct {
         graphOptimizer: *const GraphOptimizerData,
         groupMerger: *const GroupMergerData,
         resourceAssigner: *const ResourceAssignerData,
-        _: *const ResourceRegistryData,
+        resourceRegistry: *const ResourceRegistryData,
     ) !void {
         passSorter.tempPasses.clear();
         passSorter.tempBlits.clear();
@@ -92,8 +92,8 @@ pub const PassSorterSys = struct {
             for (passSorter.sortedRenderNodes.constSlice(), 0..) |*renderNode, index| {
                 switch (renderNode.*) {
                     .passNode => |*passNode| std.debug.print("- {}. Pass: {s}\n", .{ index, passNode.pass.getName() }),
-                    .compositeNode => |*composite| std.debug.print("- {}. Composite: {s} (Pass {})\n", .{ index, composite.name, composite.pass }),
-                    .viewportBlit => |*blit| std.debug.print("- {}. Blit: {s} (Pass {})\n", .{ index, blit.name, blit.pass }),
+                    .compositeNode => |*composite| std.debug.print("- {}. Composite: {s} (Pass {s})\n", .{ index, composite.name, try resourceRegistry.getPassName(composite.pass) }),
+                    .viewportBlit => |*blit| std.debug.print("- {}. Blit: {s} (Pass {s})\n", .{ index, blit.name, try resourceRegistry.getPassName(blit.pass) }),
                     .uiNode => |*ui| std.debug.print("- {}. UI: {s} (WindowID {})\n", .{ index, ui.name, ui.windowId }),
                     .clearBuffer => |*clearBuf| std.debug.print("- {}. ClearBuffer: {}\n", .{ index, clearBuf.* }),
                     .clearTexture => |*clearTex| std.debug.print("- {}. ClearTexture: {}\n", .{ index, clearTex.* }),

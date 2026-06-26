@@ -186,7 +186,8 @@ pub const GraphOptimizerSys = struct {
         // Debug Output 3
         if (rc.FRAME_GRAPH_DEBUG) {
             for (graphOptimizer.optimizedGraph.getConstItems(), 0..) |pass, i| {
-                std.debug.print("- Nr. {}: {}\n", .{ i, pass });
+                const passName = try resourceRegistry.getPassName(pass.pass);
+                std.debug.print("- Nr. {}: .( .level = {}, .pass = {s}, .memWeight = {} )\n", .{ i, pass.level, passName, pass.memWeight });
             }
             std.debug.print("\n", .{});
         }

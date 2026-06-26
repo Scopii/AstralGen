@@ -108,14 +108,16 @@ pub const ResourceExtractorSys = struct {
                     const inputName = try resourceRegistry.getBufferName(bufAccess.bufInput);
                     const outputName = if (bufAccess.bufOutput) |output| try resourceRegistry.getBufferName(output) else "null";
                     const access = @tagName(bufAccess.access);
-                    std.debug.print("     -> Buf {}. ( .pass = {}, .bufInput = {s}, .bufOutput = {s}, .access = {s})\n", .{ counter, bufAccess.pass, inputName, outputName, access });
+                    const passName = try resourceRegistry.getPassName(bufAccess.pass);
+                    std.debug.print("     -> Buf {}. ( .pass = {s}, .bufInput = {s}, .bufOutput = {s}, .access = {s})\n", .{ counter, passName, inputName, outputName, access });
                 }
                 for (range.firstTex..range.lastTex, 0..) |index, counter| {
                     const texAccess = resourceExtractor.texAccesses.buffer[index];
                     const inputName = try resourceRegistry.getTextureName(texAccess.texInput);
                     const outputName = if (texAccess.texOutput) |output| try resourceRegistry.getTextureName(output) else "null";
                     const access = @tagName(texAccess.access);
-                    std.debug.print("     -> Tex {}. ( .pass = {}, .texInput = {s}, .texOutput = {s}, .access = {s})\n", .{ counter, texAccess.pass, inputName, outputName, access });
+                    const passName = try resourceRegistry.getPassName(texAccess.pass);
+                    std.debug.print("     -> Tex {}. ( .pass = {s}, .texInput = {s}, .texOutput = {s}, .access = {s})\n", .{ counter, passName, inputName, outputName, access });
                 }
             }
             std.debug.print("\n", .{});

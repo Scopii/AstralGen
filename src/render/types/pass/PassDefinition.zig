@@ -5,13 +5,18 @@ const IndexBufferSlot = @import("IndexBufferSlot.zig").IndexBufferSlot;
 const VertexAttribute = @import("VertexAttribute.zig").VertexAttribute;
 const ShaderInf = @import("../../../shader/ShaderInf.zig").ShaderInf;
 const AttachmentSlot = @import("AttachmentSlot.zig").AttachmentSlot;
-const PassExecution = @import("PassDef.zig").PassDef.PassExecution;
+const PassExecutionSlot = @import("PassDef.zig").PassDef.PassExecutionSlot;
 const ShaderId = @import("../../../shader/ShaderSys.zig").ShaderId;
 const RenderState = @import("../pass/RenderState.zig").RenderState;
 const TexId = @import("../res/TextureMeta.zig").TextureMeta.TexId;
 const TextureSlot = @import("TextureSlot.zig").TextureSlot;
 const BufferSlot = @import("BufferSlot.zig").BufferSlot;
 const std = @import("std");
+
+const TextureStringLink = @import("../../../frameBuild/components.zig").TextureStringLink;
+const BufferStringLink = @import("../../../frameBuild/components.zig").BufferStringLink;
+const vhE = @import("../../help/Enums.zig");
+const ClearColor = @import("AttachmentUse.zig").AttachmentUse.ClearColor;
 
 const String = @import("../../../globalHelper.zig").String;
 
@@ -36,11 +41,12 @@ const MAX_PASS_ATTRIBUTES = 80;
 
 pub const PassDefinition = struct {
     name: String(30, "PASS_NAME_MISSING") = .{},
-    execution: PassExecution,
     outputTex: ?[]const u8,
     passAttribute: FixedList(PassAttribute, MAX_PASS_ATTRIBUTES) = .{},
 
     pub const PassAttribute = union(enum) {
+        execution: PassExecutionSlot,
+
         shaderInf: ShaderInf,
         bufSlot: BufferSlot,
         texSlot: TextureSlot,
@@ -54,15 +60,58 @@ pub const PassDefinition = struct {
         vertexAttribute: VertexAttribute,
 
         renderState: RenderStateUnion,
+
+        pub fn exec(passExec: PassExecutionSlot) PassAttribute {
+            return .{ .execution = passExec };
+        }
+
+        pub fn shader(shaderInf: ShaderInf) PassAttribute {
+            return .{ .shaderInf = shaderInf };
+        }
+
+        pub fn buf(bufLink: BufferStringLink, stage: vhE.PipeStage, bufUseKind: BufferSlot.BufUseKind, shaderSlot: ?u8) PassAttribute {
+            return .{ .bufSlot = BufferSlot.init(bufLink, stage, bufUseKind, shaderSlot) };
+        }
+
+        pub fn tex(texLink: TextureStringLink, stage: vhE.PipeStage, texUseKind: TextureSlot.TextureUseKind, shaderSlot: ?u8) PassAttribute {
+            return .{ .texSlot = TextureSlot.init(texLink, stage, texUseKind, shaderSlot) };
+        }
+
+        pub fn color(texLink: TextureStringLink, stage: vhE.PipeStage, access: vhE.PipeAccess, clear: ?ClearColor) PassAttribute {
+            return .{ .colorAtt = AttachmentSlot.init(texLink, stage, access, clear) };
+        }
+
+        pub fn depth(texLink: TextureStringLink, stage: vhE.PipeStage, access: vhE.PipeAccess, clear: ?ClearColor) PassAttribute {
+            return .{ .depthAtt = AttachmentSlot.init(texLink, stage, access, clear) };
+        }
+
+        pub fn stencil(texLink: TextureStringLink, stage: vhE.PipeStage, access: vhE.PipeAccess, clear: ?ClearColor) PassAttribute {
+            return .{ .stencilAtt = AttachmentSlot.init(texLink, stage, access, clear) };
+        }
+
+        pub fn vertexBuf(bufInput: []const u8, binding: u32, stride: u32, inputRate: c_uint) PassAttribute {
+            return .{ .vertexBuffer = VertexBufferSlot.init(bufInput, binding, stride, inputRate) };
+        }
+
+        pub fn indexBuf(bufInput: []const u8, indexType: c_uint) PassAttribute {
+            return .{ .indexBuffer = IndexBufferSlot.init(bufInput, indexType) };
+        }
+
+        pub fn vertexAttrib(location: u32, binding: u32, format: c_uint, offset: u32) PassAttribute {
+            return .{ .vertexAttribute = VertexAttribute.init(location, binding, format, offset) };
+        }
+
+        pub fn state(stateUnion: RenderStateUnion) PassAttribute {
+            return .{ .renderState = stateUnion };
+        }
     };
 
     // pub fn initComp(name: []const u8, execution: PassExecution.Com, outputTex: ?[]const u8, passAttributes: []const PassAttribute) !PassDefinition {
     //     try init(name, execution, outputTex, passAttributes);
     // }
 
-    pub fn init(def: struct { name: []const u8, execution: PassExecution, outputTex: ?[]const u8, passAttributes: []const PassAttribute }) PassDefinition {
+    pub fn init(def: struct { name: []const u8, outputTex: ?[]const u8, passAttributes: []const PassAttribute }) PassDefinition {
         var passDef = PassDefinition{
-            .execution = def.execution,
             .outputTex = def.outputTex,
         };
         passDef.name.fill(def.name);
@@ -72,10 +121,18 @@ pub const PassDefinition = struct {
     }
 
     pub fn validate(self: *const PassDefinition) !void {
+        var execution: ?PassExecutionSlot = null;
         var counts = AttributeCounts{};
 
         for (self.passAttribute.constSlice()) |attribute| {
             switch (attribute) {
+                .execution => |exec| {
+                    if (execution == null) execution = exec else {
+                        std.debug.print("Pass {s} ERROR \n", .{self.name.get()});
+                        return error.PassHasMoreThanOneExecution;
+                    }
+                },
+
                 .shaderInf => |shaderInf| {
                     switch (shaderInf.typ) {
                         .comp => counts.comps += 1,
@@ -106,12 +163,17 @@ pub const PassDefinition = struct {
 
         if (counts.bufAndTex >= 14) return error.PassDefTooManyResources;
 
-        switch (self.execution) {
-            .compute => try isComputeValid(counts),
-            .computeIndirect => try isComputeValid(counts),
-            .taskOrMesh => try isTaskOrMeshValid(counts),
-            .taskOrMeshIndirect => try isTaskOrMeshValid(counts),
-            .graphics => try isGraphicsValid(counts),
+        if (execution) |exec| {
+            switch (exec) {
+                .compute => try isComputeValid(counts),
+                .computeIndirect => try isComputeValid(counts),
+                .taskOrMesh => try isTaskOrMeshValid(counts),
+                .taskOrMeshIndirect => try isTaskOrMeshValid(counts),
+                .graphics => try isGraphicsValid(counts),
+            }
+        } else {
+            std.debug.print("ERROR: Pass {s} has no execution\n", .{self.name.get()});
+            return error.PassHasNoExecution;
         }
     }
 

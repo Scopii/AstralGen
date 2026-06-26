@@ -94,11 +94,15 @@ pub const DependancyExtractorSys = struct {
             std.debug.print("3.DependancyExtractor: \n", .{});
             for (dependancyExtractor.bufDependancies.constSlice()) |bufDep| {
                 const bufName = try resourceRegistry.getBufferName(bufDep.buf);
-                std.debug.print("- BufDep .( .buf = {s}, .predecessor = {}, .successor = {})\n", .{bufName, bufDep.predecessor, bufDep.successor});
+                const predecessorName = try resourceRegistry.getPassName(bufDep.predecessor);
+                const successorName = try resourceRegistry.getPassName(bufDep.successor);
+                std.debug.print("- BufDep .( .buf = {s}, .predecessor = {s}, .successor = {s})\n", .{ bufName, predecessorName, successorName });
             }
             for (dependancyExtractor.texDependancies.constSlice()) |texDep| {
                 const texName = try resourceRegistry.getTextureName(texDep.tex);
-                std.debug.print("- TexDep .( .tex = {s}, .predecessor = {}, .successor = {})\n", .{texName, texDep.predecessor, texDep.successor});
+                const predecessorName = try resourceRegistry.getPassName(texDep.predecessor);
+                const successorName = try resourceRegistry.getPassName(texDep.successor);
+                std.debug.print("- TexDep .( .tex = {s}, .predecessor = {s}, .successor = {s})\n", .{ texName, predecessorName, successorName });
             }
             std.debug.print("\n", .{});
         }

@@ -89,8 +89,11 @@ pub const LifetimeExtractorSys = struct {
                 const bufLifetime = lifetimeExtractor.bufLifetimes.getByIndex(@intCast(i));
                 const earliestPass = graphOptimizer.optimizedGraph.getConstItems()[bufLifetime.earliest].pass;
                 const latestPass = graphOptimizer.optimizedGraph.getConstItems()[bufLifetime.latest].pass;
+                
                 const bufName = try resourceRegistry.getBufferName(bufLifetime.buf);
-                std.debug.print("- Buf Lifetime: {s}: ({} -> {}) ({} -> {})\n", .{ bufName, bufLifetime.earliest, bufLifetime.latest, earliestPass, latestPass });
+                const earliestName = try resourceRegistry.getPassName(earliestPass);
+                const latestName = try resourceRegistry.getPassName(latestPass);
+                std.debug.print("- Buf Lifetime: {s}: ({} -> {}) ({s} -> {s})\n", .{ bufName, bufLifetime.earliest, bufLifetime.latest, earliestName, latestName });
             }
 
             // Texture Debug
@@ -98,8 +101,11 @@ pub const LifetimeExtractorSys = struct {
                 const texLifetime = lifetimeExtractor.texLifetimes.getByIndex(@intCast(i));
                 const earliestPass = graphOptimizer.optimizedGraph.getConstItems()[texLifetime.earliest].pass;
                 const latestPass = graphOptimizer.optimizedGraph.getConstItems()[texLifetime.latest].pass;
+                
                 const texName = try resourceRegistry.getTextureName(texLifetime.tex);
-                std.debug.print("- Tex Lifetime: {s}: ({} -> {}) ({} -> {})\n", .{ texName, texLifetime.earliest, texLifetime.latest, earliestPass, latestPass });
+                const earliestName = try resourceRegistry.getPassName(earliestPass);
+                const latestName = try resourceRegistry.getPassName(latestPass);
+                std.debug.print("- Tex Lifetime: {s}: ({} -> {}) ({s} -> {s})\n", .{ texName, texLifetime.earliest, texLifetime.latest, earliestName, latestName });
             }
 
             std.debug.print("\n", .{});

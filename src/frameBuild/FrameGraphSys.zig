@@ -26,12 +26,30 @@ const BufPassId = pe.BufPassId;
 const rc = @import("../.configs/renderConfig.zig");
 
 const depthViewPass = @import("../.assets/passes/depthView/DepthView.zig").depthViewPass;
+const compRayMarchPass = @import("../.assets/passes/compTest/CompRayMarch.zig").compRayMarchPass;
+const editorGridGridDebugPass = @import("../.assets/passes/editorGrid/EditorGrid.zig").editorGridGridDebugPass;
+const editorGridPlaneDebugPass = @import("../.assets/passes/editorGrid/EditorGrid.zig").editorGridPlaneDebugPass;
+const frustumViewPass = @import("../.assets/passes/quant/FrustumView.zig").frustumViewPass;
+const quantGridPass = @import("../.assets/passes/quant/Quant.zig").quantGridPass;
+const quantGridDebugPass = @import("../.assets/passes/quant/Quant.zig").quantGridDebugPass;
+const quantPlanePass = @import("../.assets/passes/quant/Quant.zig").quantPlanePass;
+const quantPlaneDebugPass = @import("../.assets/passes/quant/Quant.zig").quantPlaneDebugPass;
+const quantCompPass = @import("../.assets/passes/quant/QuantComp.zig").quantCompPass;
 
 pub const FrameGraphSys = struct {
     pub fn init(graph: *FrameGraphData, alloc: std.mem.Allocator) !void {
         try ResourceRegistrySys.init(&graph.resourceRegistry, alloc);
 
         try ResourceRegistrySys.addPassDefinition(&graph.resourceRegistry, .id(0), depthViewPass);
+        try ResourceRegistrySys.addPassDefinition(&graph.resourceRegistry, .id(1), compRayMarchPass);
+        try ResourceRegistrySys.addPassDefinition(&graph.resourceRegistry, .id(2), editorGridGridDebugPass);
+        try ResourceRegistrySys.addPassDefinition(&graph.resourceRegistry, .id(3), editorGridPlaneDebugPass);
+        try ResourceRegistrySys.addPassDefinition(&graph.resourceRegistry, .id(4), frustumViewPass);
+        try ResourceRegistrySys.addPassDefinition(&graph.resourceRegistry, .id(5), quantGridPass);
+        try ResourceRegistrySys.addPassDefinition(&graph.resourceRegistry, .id(6), quantGridDebugPass);
+        try ResourceRegistrySys.addPassDefinition(&graph.resourceRegistry, .id(7), quantPlanePass);
+        try ResourceRegistrySys.addPassDefinition(&graph.resourceRegistry, .id(8), quantPlaneDebugPass);
+        try ResourceRegistrySys.addPassDefinition(&graph.resourceRegistry, .id(9), quantCompPass);
 
         // Buffers
         try ResourceRegistrySys.addBufferDefinition(&graph.resourceRegistry, rc.QuantIndirectInputSB, "QuantIndirectInputSB", rc.indirectSBDesc);

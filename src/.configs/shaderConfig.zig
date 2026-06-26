@@ -10,9 +10,9 @@ pub const SHADER_PATH: []const u8 = "src/.assets/passes";
 pub const SPRV_PATH: []const u8 = "zig-out/shaders";
 
 // Shaders
-pub const cullTestComp = ShaderInf.init(20, .comp, "cullTest/comp.slang", "cullTestComp.spv");
-pub const cullTestMesh = ShaderInf.init(22, .meshNoTask, "cullTest/mesh.slang", "cullTestMesh.spv");
-pub const cullTestFrag = ShaderInf.init(24, .frag, "cullTest/frag.slang", "cullTestFrag.spv");
+// pub const cullTestComp = ShaderInf.init(20, .comp, "cullTest/comp.slang", "cullTestComp.spv");
+// pub const cullTestMesh = ShaderInf.init(22, .meshNoTask, "cullTest/mesh.slang", "cullTestMesh.spv");
+// pub const cullTestFrag = ShaderInf.init(24, .frag, "cullTest/frag.slang", "cullTestFrag.spv");
 
 pub const quantComp = ShaderInf.init(25, .comp, "quant/comp.slang", "quantComp.spv");
 pub const quantGrid = ShaderInf.init(26, .meshNoTask, "quant/mesh.slang", "quantMesh.spv");
@@ -33,14 +33,14 @@ pub const compositeVert = ShaderInf.init(32, .vert, "composite/vert.slang", "com
 pub const compositeFrag = ShaderInf.init(33, .frag, "composite/frag.slang", "compositeFrag.spv");
 
 pub const COMPILING_SHADERS: []const ShaderInf = &.{
-    cullTestComp,
-    cullTestMesh,
-    frustumMesh,
-    cullTestFrag,
+    // cullTestComp,
+    // cullTestMesh,
+    // cullTestFrag,
 
     quantComp,
     quantGrid,
     quantPlane,
+    frustumMesh,
     quantFrag,
 
     editorGridMesh,

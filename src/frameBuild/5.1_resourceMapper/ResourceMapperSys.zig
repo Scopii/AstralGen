@@ -274,23 +274,27 @@ pub const ResourceMapperSys = struct {
             // Buffer Debug
             for (resourceMapper.lastBufGroupsPersistent.getConstItems(), 0..) |group, i| {
                 const rootBufName = try resourceRegistry.getBufferName(group.rootBuf);
-                std.debug.print("BufGroup (Persistent {}) (RootRes {s}) (RootPass {}) (mapIndex {} -> {})\n", .{ i, rootBufName, group.rootPass, group.startMapIndex, group.endMapIndex });
+                const rootPassName = try resourceRegistry.getPassName(group.rootPass);
+                std.debug.print("BufGroup (Persistent {}) (RootRes {s}) (RootPass {s}) (mapIndex {} -> {})\n", .{ i, rootBufName, rootPassName, group.startMapIndex, group.endMapIndex });
             }
 
             for (resourceMapper.lastBufGroupsTransient.getConstItems(), 0..) |group, i| {
                 const rootBufName = try resourceRegistry.getBufferName(group.rootBuf);
-                std.debug.print("BufGroup (Transient {}) (RootRes {s}) (RootPass {}) (mapIndex {} -> {})\n", .{ i, rootBufName, group.rootPass, group.startMapIndex, group.endMapIndex });
+                const rootPassName = try resourceRegistry.getPassName(group.rootPass);
+                std.debug.print("BufGroup (Transient {}) (RootRes {s}) (RootPass {s}) (mapIndex {} -> {})\n", .{ i, rootBufName, rootPassName, group.startMapIndex, group.endMapIndex });
             }
 
             // Group Debug Textures
             for (resourceMapper.lastTexGroupsPersistent.getConstItems(), 0..) |group, i| {
                 const rootTexName = try resourceRegistry.getTextureName(group.rootTex);
-                std.debug.print("TexGroup (Persistent {}) (RootRes {s}) (RootPass {}) (mapIndex {} -> {})\n", .{ i, rootTexName, group.rootPass, group.startMapIndex, group.endMapIndex });
+                const rootPassName = try resourceRegistry.getPassName(group.rootPass);
+                std.debug.print("TexGroup (Persistent {}) (RootRes {s}) (RootPass {s}) (mapIndex {} -> {})\n", .{ i, rootTexName, rootPassName, group.startMapIndex, group.endMapIndex });
             }
 
             for (resourceMapper.lastTexGroupsTransient.getConstItems(), 0..) |group, i| {
                 const rootTexName = try resourceRegistry.getTextureName(group.rootTex);
-                std.debug.print("TexGroup (Transient {}) (RootRes {s}) (RootPass {}) (mapIndex {} -> {})\n", .{ i, rootTexName, group.rootPass, group.startMapIndex, group.endMapIndex });
+                const rootPassName = try resourceRegistry.getPassName(group.rootPass);
+                std.debug.print("TexGroup (Transient {}) (RootRes {s}) (RootPass {s}) (mapIndex {} -> {})\n", .{ i, rootTexName, rootPassName, group.startMapIndex, group.endMapIndex });
             }
 
             std.debug.print("\n", .{});
@@ -299,7 +303,9 @@ pub const ResourceMapperSys = struct {
             // Group Debug Buffers
             for (resourceMapper.bufGroupsPersistent.getConstItems(), 0..) |group, i| {
                 const rootBufName = try resourceRegistry.getBufferName(group.rootBuf);
-                std.debug.print("BufGroup (Persistent {}) (RootRes {s}) (RootPass {}) (mapIndex {} -> {})\n", .{ i, rootBufName, group.rootPass, group.startMapIndex, group.endMapIndex });
+                const rootPassName = try resourceRegistry.getPassName(group.rootPass);
+                std.debug.print("BufGroup (Persistent {}) (RootRes {s}) (RootPass {s}) (mapIndex {} -> {})\n", .{ i, rootBufName, rootPassName, group.startMapIndex, group.endMapIndex });
+                
                 for (group.startMapIndex..group.endMapIndex + 1, 0..) |mapIndex, counter| {
                     const bufKey: u16 = resourceMapper.bufMapPersistent.getKeyByIndex(@intCast(mapIndex));
                     const bufName = try resourceRegistry.getBufferName(.id(bufKey));
@@ -309,7 +315,9 @@ pub const ResourceMapperSys = struct {
 
             for (resourceMapper.bufGroupsTransient.getConstItems(), 0..) |group, i| {
                 const rootBufName = try resourceRegistry.getBufferName(group.rootBuf);
-                std.debug.print("BufGroup (Transient {}) (RootRes {s}) (RootPass {}) (mapIndex {} -> {})\n", .{ i, rootBufName, group.rootPass, group.startMapIndex, group.endMapIndex });
+                const rootPassName = try resourceRegistry.getPassName(group.rootPass);
+                std.debug.print("BufGroup (Transient {}) (RootRes {s}) (RootPass {s}) (mapIndex {} -> {})\n", .{ i, rootBufName, rootPassName, group.startMapIndex, group.endMapIndex });
+                
                 for (group.startMapIndex..group.endMapIndex + 1, 0..) |mapIndex, counter| {
                     const bufKey: u16 = resourceMapper.bufMapTransient.getKeyByIndex(@intCast(mapIndex));
                     const bufName = try resourceRegistry.getBufferName(.id(bufKey));
@@ -320,7 +328,9 @@ pub const ResourceMapperSys = struct {
             // Group Debug Textures
             for (resourceMapper.texGroupsPersistent.getConstItems(), 0..) |group, i| {
                 const rootTexName = try resourceRegistry.getTextureName(group.rootTex);
-                std.debug.print("TexGroup (Persistent {}) (RootRes {s}) (RootPass {}) (mapIndex {} -> {})\n", .{ i, rootTexName, group.rootPass, group.startMapIndex, group.endMapIndex });
+                const rootPassName = try resourceRegistry.getPassName(group.rootPass);
+                std.debug.print("TexGroup (Persistent {}) (RootRes {s}) (RootPass {s}) (mapIndex {} -> {})\n", .{ i, rootTexName, rootPassName, group.startMapIndex, group.endMapIndex });
+
                 for (group.startMapIndex..group.endMapIndex + 1, 0..) |mapIndex, counter| {
                     const texKey: u16 = resourceMapper.texMapPersistent.getKeyByIndex(@intCast(mapIndex));
                     const texName = try resourceRegistry.getTextureName(.id(texKey));
@@ -330,7 +340,9 @@ pub const ResourceMapperSys = struct {
 
             for (resourceMapper.texGroupsTransient.getConstItems(), 0..) |group, i| {
                 const rootTexName = try resourceRegistry.getTextureName(group.rootTex);
-                std.debug.print("TexGroup (Transient {}) (RootRes {s}) (RootPass {}) (mapIndex {} -> {})\n", .{ i, rootTexName, group.rootPass, group.startMapIndex, group.endMapIndex });
+                const rootPassName = try resourceRegistry.getPassName(group.rootPass);
+                std.debug.print("TexGroup (Transient {}) (RootRes {s}) (RootPass {s}) (mapIndex {} -> {})\n", .{ i, rootTexName, rootPassName, group.startMapIndex, group.endMapIndex });
+                
                 for (group.startMapIndex..group.endMapIndex + 1, 0..) |mapIndex, counter| {
                     const texKey: u16 = resourceMapper.texMapTransient.getKeyByIndex(@intCast(mapIndex));
                     const texName = try resourceRegistry.getTextureName(.id(texKey));

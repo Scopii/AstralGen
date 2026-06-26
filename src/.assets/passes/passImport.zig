@@ -26,3 +26,8 @@ pub const IndexBufferSlot = @import("../../../src/render/types/pass/IndexBufferS
 pub const AttachmentSlot = @import("../../../src/render/types/pass/AttachmentSlot.zig").AttachmentSlot;
 pub const TextureSlot = @import("../../../src/render/types/pass/TextureSlot.zig").TextureSlot;
 pub const BufferSlot = @import("../../../src/render/types/pass/BufferSlot.zig").BufferSlot;
+
+pub const TextureStringLink = @import("../../../src/frameBuild/components.zig").TextureStringLink;
+pub const BufferStringLink = @import("../../../src/frameBuild/components.zig").BufferStringLink;
+
+pub const ShaderInf = @import("../../../src/shader/ShaderInf.zig").ShaderInf;
