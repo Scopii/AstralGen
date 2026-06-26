@@ -4,26 +4,32 @@ const std = @import("std");
 const DependancyExtractorData = @import("../3_dependancyExtractor/DependancyExtractorData.zig").DependancyExtractorData;
 const PassExtractorData = @import("../1_passExtractor/PassExtractorData.zig").PassExtractorData;
 const GraphExtractorData = @import("GraphExtractorData.zig").GraphExtractorData;
+const ResourceRegistryData = @import("../0_resourceRegistry/ResourceRegistryData.zig").ResourceRegistryData;
 
 // Step 4
 
 pub const GraphExtractorSys = struct {
-    pub fn buildGraph(graphExtractor: *GraphExtractorData, dependancyExtractor: *const DependancyExtractorData, passExtractor: *const PassExtractorData) !void {
+    pub fn buildGraph(
+        graphExtractor: *GraphExtractorData,
+        dependancyExtractor: *const DependancyExtractorData,
+        passExtractor: *const PassExtractorData,
+        resourceRegistry: *const ResourceRegistryData,
+    ) !void {
         graphExtractor.passDepCounters.clear();
         graphExtractor.orderedPasses.clear();
 
         // Fill Passes with Buffer Dependancy Count
         for (dependancyExtractor.bufDependancies.constSlice()) |bufDep| {
-            const passKey = bufDep.successor.val;
+            const passKey = bufDep.successor.val();
             const curDepCount = if (graphExtractor.passDepCounters.isKeyUsed(passKey)) graphExtractor.passDepCounters.getByKey(passKey) else 0;
-            graphExtractor.passDepCounters.upsert(bufDep.successor.val, curDepCount + 1);
+            graphExtractor.passDepCounters.upsert(bufDep.successor.val(), curDepCount + 1);
         }
 
         // Fill Passes with Texture Dependancy Count
         for (dependancyExtractor.texDependancies.constSlice()) |texDep| {
-            const passKey = texDep.successor.val;
+            const passKey = texDep.successor.val();
             const curDepCount = if (graphExtractor.passDepCounters.isKeyUsed(passKey)) graphExtractor.passDepCounters.getByKey(passKey) else 0;
-            graphExtractor.passDepCounters.upsert(texDep.successor.val, curDepCount + 1);
+            graphExtractor.passDepCounters.upsert(texDep.successor.val(), curDepCount + 1);
         }
 
         // Debug Output
@@ -48,7 +54,7 @@ pub const GraphExtractorSys = struct {
                 .compositeNode, .uiNode, .viewportBlit, .clearBuffer, .clearTexture, .barrierBakeClears => {},
                 .passNode => |_| {
                     const key = passExtractor.renderNodes.getKeyByIndex(@intCast(index));
-                    graphExtractor.unorderedPasses.upsert(key, .{ .val = key });
+                    graphExtractor.unorderedPasses.upsert(key, .id(key));
                 },
             }
         }
@@ -58,7 +64,7 @@ pub const GraphExtractorSys = struct {
         // Add all Passes that do not have Dependancys
         for (graphExtractor.unorderedPasses.getConstItems()) |pass| {
             // If Dependancy Counter is null add to ordered List
-            if (graphExtractor.passDepCounters.isKeyUsed(pass.val) == false) {
+            if (graphExtractor.passDepCounters.isKeyUsed(pass.val()) == false) {
                 graphExtractor.readyPasses.append(.{ .pass = pass, .level = 0 }) catch {};
             }
         }
@@ -72,15 +78,15 @@ pub const GraphExtractorSys = struct {
             for (graphExtractor.readyPasses.constSlice()) |readyPass| {
                 // Decrement Dependancy Counters
                 for (dependancyExtractor.bufDependancies.constSlice()) |bufDep| {
-                    if (bufDep.predecessor.val == readyPass.pass.val) {
-                        const successorCountPtr = graphExtractor.passDepCounters.getPtrByKey(bufDep.successor.val);
+                    if (bufDep.predecessor.val() == readyPass.pass.val()) {
+                        const successorCountPtr = graphExtractor.passDepCounters.getPtrByKey(bufDep.successor.val());
                         successorCountPtr.* -= 1;
                     }
                 }
 
                 for (dependancyExtractor.texDependancies.constSlice()) |texDep| {
-                    if (texDep.predecessor.val == readyPass.pass.val) {
-                        const successorCountPtr = graphExtractor.passDepCounters.getPtrByKey(texDep.successor.val);
+                    if (texDep.predecessor.val() == readyPass.pass.val()) {
+                        const successorCountPtr = graphExtractor.passDepCounters.getPtrByKey(texDep.successor.val());
                         successorCountPtr.* -= 1;
                     }
                 }
@@ -88,14 +94,14 @@ pub const GraphExtractorSys = struct {
 
             // Transfer all Ready Passes to Ordered Map
             for (graphExtractor.readyPasses.constSlice()) |readyPass| {
-                graphExtractor.orderedPasses.upsert(readyPass.pass.val, readyPass);
+                graphExtractor.orderedPasses.upsert(readyPass.pass.val(), readyPass);
             }
             graphExtractor.readyPasses.clear();
 
             // Fill move passes with Count 0 to readyPasses for new Cycle
             for (graphExtractor.passDepCounters.getConstItems(), 0..) |passDepCounter, i| {
                 const pass = graphExtractor.passDepCounters.getKeyByIndex(@intCast(i));
-                if (passDepCounter == 0) graphExtractor.readyPasses.append(.{ .pass = .{ .val = pass }, .level = curLevel }) catch {};
+                if (passDepCounter == 0) graphExtractor.readyPasses.append(.{ .pass = .id(pass), .level = curLevel }) catch {};
             }
 
             // Cleanup Counters
@@ -116,31 +122,33 @@ pub const GraphExtractorSys = struct {
 
             // Passes in unorderedPasses but not in orderedPasses
             for (graphExtractor.unorderedPasses.getConstItems()) |passId| {
-                const passString = passExtractor.passStrings.getByKey(passId.val);
+                const passString = passExtractor.passStrings.getByKey(passId.val());
 
-                if (graphExtractor.orderedPasses.isKeyUsed(passId.val) == false) {
-                    const remainingDeps = if (graphExtractor.passDepCounters.isKeyUsed(passId.val)) graphExtractor.passDepCounters.getByKey(passId.val) else 0;
+                if (graphExtractor.orderedPasses.isKeyUsed(passId.val()) == false) {
+                    const remainingDeps = if (graphExtractor.passDepCounters.isKeyUsed(passId.val())) graphExtractor.passDepCounters.getByKey(passId.val()) else 0;
                     std.debug.print("  stuck: {s} (still waiting on {} deps)\n", .{ passString, remainingDeps });
                 }
             }
             std.debug.print("  cycle Buffer edges:\n", .{});
             for (dependancyExtractor.bufDependancies.constSlice()) |dep| {
-                const predStuck = !graphExtractor.orderedPasses.isKeyUsed(dep.predecessor.val);
-                const succStuck = !graphExtractor.orderedPasses.isKeyUsed(dep.successor.val);
+                const predStuck = !graphExtractor.orderedPasses.isKeyUsed(dep.predecessor.val());
+                const succStuck = !graphExtractor.orderedPasses.isKeyUsed(dep.successor.val());
                 if (predStuck and succStuck) {
-                    const predString = passExtractor.passStrings.getByKey(dep.predecessor.val);
-                    const succString = passExtractor.passStrings.getByKey(dep.successor.val);
-                    std.debug.print("    {s} --[{s}]--> {s}\n", .{ predString, @tagName(dep.bufEnum), succString });
+                    const predString = passExtractor.passStrings.getByKey(dep.predecessor.val());
+                    const succString = passExtractor.passStrings.getByKey(dep.successor.val());
+                    const bufName = try resourceRegistry.getBufferName(dep.buf);
+                    std.debug.print("    {s} --[{s}]--> {s}\n", .{ predString, bufName, succString });
                 }
             }
             std.debug.print("  cycle Texture edges:\n", .{});
             for (dependancyExtractor.texDependancies.constSlice()) |dep| {
-                const predStuck = !graphExtractor.orderedPasses.isKeyUsed(dep.predecessor.val);
-                const succStuck = !graphExtractor.orderedPasses.isKeyUsed(dep.successor.val);
+                const predStuck = !graphExtractor.orderedPasses.isKeyUsed(dep.predecessor.val());
+                const succStuck = !graphExtractor.orderedPasses.isKeyUsed(dep.successor.val());
                 if (predStuck and succStuck) {
-                    const predString = passExtractor.passStrings.getByKey(dep.predecessor.val);
-                    const succString = passExtractor.passStrings.getByKey(dep.successor.val);
-                    std.debug.print("    {s} --[{s}]--> {s}\n", .{ predString, @tagName(dep.texEnum), succString });
+                    const predString = passExtractor.passStrings.getByKey(dep.predecessor.val());
+                    const succString = passExtractor.passStrings.getByKey(dep.successor.val());
+                    const texName = try resourceRegistry.getTextureName(dep.tex);
+                    std.debug.print("    {s} --[{s}]--> {s}\n", .{ predString, texName, succString });
                 }
             }
             return error.GraphHasCycle;

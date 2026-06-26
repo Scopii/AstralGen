@@ -41,9 +41,9 @@ pub fn getShaderBit(stageEnum: vhE.ShaderStage) vk.VkShaderStageFlagBits {
     return switch (stageEnum) {
         .comp => vk.VK_SHADER_STAGE_COMPUTE_BIT,
         .vert => vk.VK_SHADER_STAGE_VERTEX_BIT,
-        .tessControl => vk.VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT,
-        .tessEval => vk.VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT,
-        .geometry => vk.VK_SHADER_STAGE_GEOMETRY_BIT,
+        // .tessControl => vk.VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT,
+        // .tessEval => vk.VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT,
+        // .geometry => vk.VK_SHADER_STAGE_GEOMETRY_BIT,
         .task => vk.VK_SHADER_STAGE_TASK_BIT_EXT,
         .meshWithTask => vk.VK_SHADER_STAGE_MESH_BIT_EXT,
         .meshNoTask => vk.VK_SHADER_STAGE_MESH_BIT_EXT,

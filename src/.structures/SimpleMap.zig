@@ -145,11 +145,19 @@ pub fn SimpleMap(comptime itemType: type, comptime capacity: u32, comptime keyTy
             return &self.items[self.keys[(key - keyMin)]];
         }
 
+        pub inline fn getConstPtrByKey(self: *const Self, key: keyType) *const itemType {
+            return &self.items[self.keys[(key - keyMin)]];
+        }
+
         pub inline fn getByIndex(self: *const Self, index: u32) itemType {
             return self.items[index];
         }
 
         pub inline fn getPtrByIndex(self: *Self, index: u32) *itemType {
+            return &self.items[index];
+        }
+
+        pub inline fn getConstPtrByIndex(self: *const Self, index: u32) *const itemType {
             return &self.items[index];
         }
 

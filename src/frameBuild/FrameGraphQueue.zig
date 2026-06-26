@@ -1,13 +1,11 @@
 const TexInf = @import("../render/types/res/TextureMeta.zig").TextureMeta.TexInf;
 const BufInf = @import("../render/types/res/BufferMeta.zig").BufferMeta.BufInf;
-const RenderNode = @import("../render/types/pass/PassDef.zig").RenderNode;
 const FixedList = @import("../.structures/FixedList.zig").FixedList;
+const TexPassId = @import("components.zig").TexPassId;
+const BufPassId = @import("components.zig").BufPassId;
 const vk = @import("../.modules/vk.zig").c;
+const pe = @import("components.zig");
 const std = @import("std");
-
-const pe = @import("enums.zig");
-const TextureEnum = pe.TextureEnum;
-const BufferEnum = pe.BufferEnum;
 
 pub const FrameGraphQueue = struct {
     frameGraphEvents: FixedList(FrameGraphEvent, 127) = .{},
@@ -29,9 +27,9 @@ pub const FrameGraphQueue = struct {
         updateBufferSegment: *const GraphBufferUpdateSegment,
         updateTexture: *const GraphTextureUpdate,
 
-        pub const GraphBufferUpdate = struct { bufEnum: BufferEnum, data: []const u8 };
-        pub const GraphBufferUpdateSegment = struct { bufEnum: BufferEnum, data: []const u8, elementOffset: u32 };
-        pub const GraphTextureUpdate = struct { texEnum: TextureEnum, data: []const u8, newExtent: ?vk.VkExtent3D };
+        pub const GraphBufferUpdate = struct { bufPassId: BufPassId, data: []const u8 };
+        pub const GraphBufferUpdateSegment = struct { bufPassId: BufPassId, data: []const u8, elementOffset: u32 };
+        pub const GraphTextureUpdate = struct { texPassId: TexPassId, data: []const u8, newExtent: ?vk.VkExtent3D };
 
         // addTexture: *const struct { texInf: TexInf, data: ?[]const u8 }, ??
         // addBuffer: *const struct { bufInf: BufInf, data: ?[]const u8 }, ??

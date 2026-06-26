@@ -16,14 +16,12 @@ const ResourceAssignerData = @import("ResourceAssignerData.zig").ResourceAssigne
 const ResourceMapperData = @import("../5.1_resourceMapper/ResourceMapperData.zig").ResourceMapperData;
 const MappingComparatorData = @import("../5.3_mappingComparator/MappingComparatorData.zig").MappingComparatorData;
 const ResourceExtractorData = @import("../2_resourceExtractor/ResourceExtractorData.zig").ResourceExtractorData;
+const ResourceRegistryData = @import("../0_resourceRegistry/ResourceRegistryData.zig").ResourceRegistryData;
 
-const TextureEnum = pe.TextureEnum;
-const BufferEnum = pe.BufferEnum;
+const TexPassId = @import("../components.zig").TexPassId;
+const BufPassId = @import("../components.zig").BufPassId;
 const TexInf = TextureMeta.TexInf;
 const BufInf = BufferMeta.BufInf;
-
-const resolveBufferEnum = @import("../2_resourceExtractor/ResourceExtractorSys.zig").resolveBufferEnum;
-const resolveTextureEnum = @import("../2_resourceExtractor/ResourceExtractorSys.zig").resolveTextureEnum;
 
 // Step 6
 
@@ -34,6 +32,7 @@ pub const ResourceAssignerSys = struct {
         resourceMapper: *const ResourceMapperData,
         mappingComparator: *const MappingComparatorData,
         groupMerger: *const GroupMergerData,
+        resourceRegistry: *const ResourceRegistryData,
         rendererQueue: *RendererQueue,
         memoryMan: *MemoryManager,
     ) !void {
@@ -55,10 +54,10 @@ pub const ResourceAssignerSys = struct {
         // Check needed Shared Lifetimes to create or re-use existing Physical Buffer
         for (groupMerger.sharedBufLifetimes.constSlice()) |sharedBufLifetime| {
             var physCandidateIndex: ?u16 = null;
-            const sharedBufDesc = resourceExtractor.bufDescriptions.getByKey(@intFromEnum(sharedBufLifetime.bufDescEnum));
+            const sharedBufDesc = resourceExtractor.bufDescriptions.getByKey(sharedBufLifetime.bufDescId.val());
 
             for (resourceAssigner.unusedTransientBufs.constSlice(), 0..) |transientBuf, i| {
-                const transientBufDesc = resourceExtractor.bufDescriptions.getByKey(@intFromEnum(transientBuf.bufDescEnum));
+                const transientBufDesc = resourceExtractor.bufDescriptions.getByKey(transientBuf.bufDescId.val());
                 // Check if Desc Fits Existing Info
                 if (bufDescEqual(&transientBufDesc, &sharedBufDesc) == true) {
                     physCandidateIndex = @intCast(i);
@@ -74,10 +73,10 @@ pub const ResourceAssignerSys = struct {
             } else {
                 // Candidate not found -> create new
                 const candidate = TransientBuffer{
-                    .bufDescEnum = sharedBufLifetime.bufDescEnum,
-                    .bufId = .{ .val = try getFreeBufId(resourceAssigner) },
+                    .bufDescId = sharedBufLifetime.bufDescId,
+                    .hardwareBuf = .{ .val = try getFreeBufId(resourceAssigner) },
                 };
-                try createTransientBuffer(sharedBufDesc, candidate.bufId, rendererQueue, memoryMan);
+                try createTransientBuffer(sharedBufDesc, candidate.hardwareBuf, rendererQueue, memoryMan);
                 resourceAssigner.usedTransientBufs.append(candidate) catch std.debug.print("ERROR: 6.ResourceAssigner: Could not Append to usedTransientBufs\n", .{});
             }
         }
@@ -90,7 +89,7 @@ pub const ResourceAssignerSys = struct {
             const transientBuf = &resourceAssigner.unusedTransientBufs.buffer[index];
 
             if (transientBuf.unusedCounter >= rc.FRAME_BUILDS_TILL_TRANSIENT_DELETION) {
-                deleteTransientBuffer(transientBuf.bufId, rendererQueue);
+                deleteTransientBuffer(transientBuf.hardwareBuf, rendererQueue);
                 resourceAssigner.unusedTransientBufs.swapRemove(@intCast(index));
             } else transientBuf.unusedCounter += 1;
         }
@@ -98,7 +97,7 @@ pub const ResourceAssignerSys = struct {
         // Assign Shared Transient Lifetimes to Buffers
         for (groupMerger.bufShareIndexMap.getConstItems(), 0..) |sharedIndex, i| {
             const bufRootKey = groupMerger.bufShareIndexMap.getKeyByIndex(@intCast(i));
-            const bufId = resourceAssigner.usedTransientBufs.buffer[sharedIndex].bufId;
+            const bufId = resourceAssigner.usedTransientBufs.buffer[sharedIndex].hardwareBuf;
 
             const bufGroup = resourceMapper.bufGroupsTransient.getByKey(bufRootKey);
             // Whole Group needs to be assigned
@@ -107,8 +106,8 @@ pub const ResourceAssignerSys = struct {
 
                 // Link Buffers Enum To Physical Buf ID
                 if (resourceAssigner.bufAssigns.isKeyUsed(memberKey) == true) {
-                    const bufEnum: BufferEnum = @enumFromInt(memberKey);
-                    std.debug.print("ERROR: 6.ResourceAssigner: Buffer Enum {s} already assigned!\n", .{@tagName(bufEnum)});
+                    const bufName = try resourceRegistry.getBufferName(.id(memberKey));
+                    std.debug.print("ERROR: 6.ResourceAssigner: Buffer Name {s} already assigned!\n", .{bufName});
                     return error.BufEnumAlreadyAssigned;
                 }
                 resourceAssigner.bufAssigns.upsert(memberKey, bufId);
@@ -118,10 +117,10 @@ pub const ResourceAssignerSys = struct {
         // Check needed Shared Lifetimes to create or re-use existing Physical Textures
         for (groupMerger.sharedTexLifetimes.constSlice()) |sharedTexLifetime| {
             var physCandidateIndex: ?u16 = null;
-            const sharedTexDesc = resourceExtractor.texDescriptions.getByKey(@intFromEnum(sharedTexLifetime.texDescEnum));
+            const sharedTexDesc = resourceExtractor.texDescriptions.getByKey(sharedTexLifetime.texDescId.val());
 
             for (resourceAssigner.unusedTransientTexes.constSlice(), 0..) |transientTex, i| {
-                const transientTexDesc = resourceExtractor.texDescriptions.getByKey(@intFromEnum(transientTex.texDescEnum));
+                const transientTexDesc = resourceExtractor.texDescriptions.getByKey(transientTex.texDescId.val());
                 // Check if Desc Fits Existing Info
                 if (texDescEqual(&transientTexDesc, &sharedTexDesc) == true) {
                     physCandidateIndex = @intCast(i);
@@ -137,10 +136,10 @@ pub const ResourceAssignerSys = struct {
             } else {
                 // Candidate not found -> create new
                 const candidate = TransientTexture{
-                    .texDescEnum = sharedTexLifetime.texDescEnum,
-                    .texId = .{ .val = try getFreeTexId(resourceAssigner) },
+                    .texDescId = sharedTexLifetime.texDescId,
+                    .hardwareTex = .{ .val = try getFreeTexId(resourceAssigner) },
                 };
-                try createTransientTexture(sharedTexDesc, candidate.texId, rendererQueue, memoryMan);
+                try createTransientTexture(sharedTexDesc, candidate.hardwareTex, rendererQueue, memoryMan);
                 resourceAssigner.usedTransientTexes.append(candidate) catch std.debug.print("ERROR: 6.ResourceAssigner: Could not Append to usedTransientTexes\n", .{});
             }
         }
@@ -153,7 +152,7 @@ pub const ResourceAssignerSys = struct {
             const transientTex = &resourceAssigner.unusedTransientTexes.buffer[index];
 
             if (transientTex.unusedCounter >= rc.FRAME_BUILDS_TILL_TRANSIENT_DELETION) {
-                deleteTransientTexture(transientTex.texId, rendererQueue);
+                deleteTransientTexture(transientTex.hardwareTex, rendererQueue);
                 resourceAssigner.unusedTransientTexes.swapRemove(@intCast(index));
             } else transientTex.unusedCounter += 1;
         }
@@ -161,7 +160,7 @@ pub const ResourceAssignerSys = struct {
         // Assign Shared Transient Lifetimes to Textures
         for (groupMerger.texShareIndexMap.getConstItems(), 0..) |sharedIndex, i| {
             const texRootKey = groupMerger.texShareIndexMap.getKeyByIndex(@intCast(i));
-            const texId = resourceAssigner.usedTransientTexes.buffer[sharedIndex].texId;
+            const texId = resourceAssigner.usedTransientTexes.buffer[sharedIndex].hardwareTex;
 
             const texGroup = resourceMapper.texGroupsTransient.getByKey(texRootKey);
             // Whole Group needs to be assigned
@@ -170,8 +169,8 @@ pub const ResourceAssignerSys = struct {
 
                 // Link Textures Enum To Physical Tex ID
                 if (resourceAssigner.texAssigns.isKeyUsed(memberKey) == true) {
-                    const texEnum: TextureEnum = @enumFromInt(memberKey);
-                    std.debug.print("ERROR: 6.ResourceAssigner: Texture Enum {s} already assigned!\n", .{@tagName(texEnum)});
+                    const texName = try resourceRegistry.getTextureName(.id(memberKey));
+                    std.debug.print("ERROR: 6.ResourceAssigner: Texture Name {s} already assigned!\n", .{texName});
                     return error.TexEnumAlreadyAssigned;
                 }
                 resourceAssigner.texAssigns.upsert(memberKey, texId);
@@ -185,15 +184,15 @@ pub const ResourceAssignerSys = struct {
             switch (bufChanges.change) {
                 .unchanged => {},
                 .deleted => {
-                    deleteBuffer(resourceAssigner, bufChanges.rootBuf, rendererQueue, .frameGraph);
+                    deleteBuffer(resourceAssigner, resourceRegistry, bufChanges.rootBuf, rendererQueue, .frameGraph);
                 },
                 .created => {
-                    try createBuffer(resourceAssigner, resourceMapper, bufChanges.rootBuf, rendererQueue, memoryMan, .frameGraph);
+                    try createBuffer(resourceAssigner, resourceMapper, resourceRegistry, bufChanges.rootBuf, rendererQueue, memoryMan, .frameGraph);
                     resolveBufferUpdateRequest(resourceAssigner, bufChanges.rootBuf);
                 },
                 .newDesc, .newPass, .newPassAndDesc => {
-                    deleteBuffer(resourceAssigner, bufChanges.rootBuf, rendererQueue, .frameGraph);
-                    try createBuffer(resourceAssigner, resourceMapper, bufChanges.rootBuf, rendererQueue, memoryMan, .frameGraph);
+                    deleteBuffer(resourceAssigner, resourceRegistry, bufChanges.rootBuf, rendererQueue, .frameGraph);
+                    try createBuffer(resourceAssigner, resourceMapper, resourceRegistry, bufChanges.rootBuf, rendererQueue, memoryMan, .frameGraph);
                     resolveBufferUpdateRequest(resourceAssigner, bufChanges.rootBuf);
                 },
             }
@@ -204,15 +203,15 @@ pub const ResourceAssignerSys = struct {
             switch (texChanges.change) {
                 .unchanged => {},
                 .deleted => {
-                    deleteTexture(resourceAssigner, texChanges.rootTex, rendererQueue, .frameGraph);
+                    deleteTexture(resourceAssigner, resourceRegistry, texChanges.rootTex, rendererQueue, .frameGraph);
                 },
                 .created => {
-                    try createTexture(resourceAssigner, resourceMapper, texChanges.rootTex, rendererQueue, memoryMan, .frameGraph);
+                    try createTexture(resourceAssigner, resourceMapper, resourceRegistry, texChanges.rootTex, rendererQueue, memoryMan, .frameGraph);
                     resolveTextureUpdateRequest(resourceAssigner, texChanges.rootTex);
                 },
                 .newDesc, .newPass, .newPassAndDesc => {
-                    deleteTexture(resourceAssigner, texChanges.rootTex, rendererQueue, .frameGraph);
-                    try createTexture(resourceAssigner, resourceMapper, texChanges.rootTex, rendererQueue, memoryMan, .frameGraph);
+                    deleteTexture(resourceAssigner, resourceRegistry, texChanges.rootTex, rendererQueue, .frameGraph);
+                    try createTexture(resourceAssigner, resourceMapper, resourceRegistry, texChanges.rootTex, rendererQueue, memoryMan, .frameGraph);
                     resolveTextureUpdateRequest(resourceAssigner, texChanges.rootTex);
                 },
             }
@@ -228,15 +227,16 @@ pub const ResourceAssignerSys = struct {
 
         // Create Persistent Buffer Assignments
         for (resourceMapper.bufGroupsPersistent.getConstItems()) |bufGroup| {
-            const rootBufKey = @intFromEnum(bufGroup.rootBuf);
+            const rootBufKey = bufGroup.rootBuf.val();
             const rootBufPhysicalId = resourceAssigner.rootBufPhysicalMap.getByKey(rootBufKey);
 
             for (bufGroup.startMapIndex..bufGroup.endMapIndex + 1) |mapIndex| {
                 const bufEnumKey = resourceMapper.bufMapPersistent.getKeyByIndex(@intCast(mapIndex));
 
-                // Link Buffer Enum To Physical Buf ID
+                // Link Buffer Pass ID To Physical Buf ID
                 if (resourceAssigner.bufAssigns.isKeyUsed(bufEnumKey) == true) {
-                    std.debug.print("ERROR: 6.ResourceAssigner: Buffer Enum {s}  already assigned!\n", .{@tagName(bufGroup.rootBuf)});
+                    const bufName = try resourceRegistry.getBufferName(bufGroup.rootBuf);
+                    std.debug.print("ERROR: 6.ResourceAssigner: Buffer {s} already assigned!\n", .{bufName});
                     return error.BufEnumAlreadyAssigned;
                 }
                 resourceAssigner.bufAssigns.upsert(bufEnumKey, rootBufPhysicalId.id);
@@ -251,15 +251,16 @@ pub const ResourceAssignerSys = struct {
 
         // Create Persistent Texture Assignment
         for (resourceMapper.texGroupsPersistent.getConstItems()) |texGroup| {
-            const rootTexKey = @intFromEnum(texGroup.rootTex);
-            const rootTexPhysicalId = resourceAssigner.rootTexPhysicalMap.getByKey(rootTexKey);
+            const rootTexKey = texGroup.rootTex;
+            const rootTexPhysicalId = resourceAssigner.rootTexPhysicalMap.getByKey(rootTexKey.val());
 
             for (texGroup.startMapIndex..texGroup.endMapIndex + 1) |mapIndex| {
                 const texEnumkey = resourceMapper.texMapPersistent.getKeyByIndex(@intCast(mapIndex));
 
-                // Link Texture Enum To Physical Tex ID
+                // Link Texture Pass ID To Physical Tex ID
                 if (resourceAssigner.texAssigns.isKeyUsed(texEnumkey) == true) {
-                    std.debug.print("ERROR: 6.ResourceAssigner: Texture Enum {s}  already assigned!\n", .{@tagName(texGroup.rootTex)});
+                    const texName = try resourceRegistry.getTextureName(texGroup.rootTex);
+                    std.debug.print("ERROR: 6.ResourceAssigner: Texture {s} already assigned!\n", .{texName});
                     return error.BufEnumAlreadyAssigned;
                 }
                 resourceAssigner.texAssigns.upsert(texEnumkey, rootTexPhysicalId.id);
@@ -271,26 +272,26 @@ pub const ResourceAssignerSys = struct {
             std.debug.print("6.ResourceAssigner\n", .{});
             // Transient Buffer View:
             for (resourceAssigner.usedTransientBufs.constSlice(), 0..) |transientBuf, i| {
-                std.debug.print(" - Transient Buf {} -> (BufId {}) (unused for {} Builds)\n", .{ i, transientBuf.bufId, transientBuf.unusedCounter });
+                std.debug.print(" - Transient Buf {} -> (BufId {}) (unused for {} Builds)\n", .{ i, transientBuf.hardwareBuf, transientBuf.unusedCounter });
             }
             std.debug.print("\n", .{});
             // Transient Texture View:
             for (resourceAssigner.usedTransientTexes.constSlice(), 0..) |transientTex, i| {
-                std.debug.print(" - Transient Tex {} -> (TexId {}) (unused for {} Builds)\n", .{ i, transientTex.texId, transientTex.unusedCounter });
+                std.debug.print(" - Transient Tex {} -> (TexId {}) (unused for {} Builds)\n", .{ i, transientTex.hardwareTex, transientTex.unusedCounter });
             }
             std.debug.print("\n", .{});
             // Buffers
             for (resourceAssigner.bufAssigns.getConstItems(), 0..) |bufId, i| {
                 const bufKey = resourceAssigner.bufAssigns.getKeyByIndex(@intCast(i));
-                const bufEnum: BufferEnum = @enumFromInt(bufKey);
-                std.debug.print(" - Buf {s} assigned -> BufId{}\n", .{ @tagName(bufEnum), bufId });
+                const bufName = try resourceRegistry.getBufferName(.id(bufKey));
+                std.debug.print(" - Buf {s} assigned -> BufId{}\n", .{ bufName, bufId });
             }
             std.debug.print("\n", .{});
             // Textures
             for (resourceAssigner.texAssigns.getConstItems(), 0..) |texId, i| {
                 const texKey = resourceAssigner.texAssigns.getKeyByIndex(@intCast(i));
-                const texEnum: TextureEnum = @enumFromInt(texKey);
-                std.debug.print(" - Tex {s} assigned -> TexId{}\n", .{ @tagName(texEnum), texId });
+                const texName = try resourceRegistry.getTextureName(.id(texKey));
+                std.debug.print(" - Tex {s} assigned -> TexId{}\n", .{ texName, texId });
             }
             std.debug.print("\n", .{});
         }
@@ -356,18 +357,19 @@ pub const ResourceAssignerSys = struct {
     pub fn createBuffer(
         resourceAssigner: *ResourceAssignerData,
         resourceMapper: *const ResourceMapperData,
-        bufEnum: BufferEnum,
+        resourceRegistry: *const ResourceRegistryData,
+        bufPassId: BufPassId,
         rendererQueue: *RendererQueue,
         memoryMan: *MemoryManager,
         authority: enum { frameGraph, manuel },
     ) !void {
         // Add Physical Assignment
         const bufId = try getFreeBufId(resourceAssigner);
-        const rootBufKey = @intFromEnum(bufEnum);
+        const rootBufKey = bufPassId.val();
 
         const bufDesc = switch (authority) {
             .frameGraph => resourceMapper.bufGroupsPersistent.getByKey(rootBufKey).bufDesc,
-            .manuel => try resolveBufferEnum(bufEnum),
+            .manuel => try resourceRegistry.getBufferDefinition(bufPassId),
         };
 
         const bufInf = BufInf{
@@ -396,12 +398,19 @@ pub const ResourceAssignerSys = struct {
         bufferPtr.* = .{ .bufInf = bufInf, .data = null };
         rendererQueue.append(.{ .addBuffer = bufferPtr });
 
-        std.debug.print("6.Resource Assigner: Root Buf {} (BufId {}) Creation send to Renderer\n", .{ bufEnum, bufId });
+        const rootBufName = try resourceRegistry.getBufferName(bufPassId);
+        std.debug.print("6.Resource Assigner: Root Buf {s} (BufId {}) Creation send to Renderer\n", .{ rootBufName, bufId });
     }
 
-    pub fn deleteBuffer(resourceAssigner: *ResourceAssignerData, bufEnum: BufferEnum, rendererQueue: *RendererQueue, authority: enum { frameGraph, manuel }) void {
+    pub fn deleteBuffer(
+        resourceAssigner: *ResourceAssignerData,
+        resourceRegistry: *const ResourceRegistryData,
+        bufPassId: BufPassId,
+        rendererQueue: *RendererQueue,
+        authority: enum { frameGraph, manuel },
+    ) void {
         // Remove Physical Assignment
-        const rootBufKey = @intFromEnum(bufEnum);
+        const rootBufKey = bufPassId.val();
 
         const isUsed = switch (authority) {
             .frameGraph => resourceAssigner.rootBufPhysicalMap.isKeyUsed(rootBufKey),
@@ -409,7 +418,8 @@ pub const ResourceAssignerSys = struct {
         };
 
         if (isUsed == false) {
-            std.debug.print("ERROR: 6.ResourceAssigner: Buffer {s} Authority {s} no Physical ID -> cant be destroyed!\n", .{ @tagName(bufEnum), @tagName(authority) });
+            const bufName = resourceRegistry.getBufferName(bufPassId) catch undefined;
+            std.debug.print("ERROR: 6.ResourceAssigner: Buffer {s} Authority {s} no Physical ID -> cant be destroyed!\n", .{ bufName, @tagName(authority) });
             return;
         }
 
@@ -427,24 +437,26 @@ pub const ResourceAssignerSys = struct {
         // RENDERER QUEUE SEND DELETE (Stop Renderer missing?)
         rendererQueue.append(.{ .removeBuffer = bufInf.id });
 
-        std.debug.print("6.Resource Assigner: Root Buf {} (BufId {}) Deletion send to Renderer\n", .{ bufEnum, bufInf.id.val });
+        const rootBufName = resourceRegistry.getBufferName(bufPassId) catch "UNKNOWN";
+        std.debug.print("6.Resource Assigner: Root Buf {s} (BufId {}) Deletion send to Renderer\n", .{ rootBufName, bufInf.id.val });
     }
 
     pub fn createTexture(
         resourceAssigner: *ResourceAssignerData,
         resourceMapper: *const ResourceMapperData,
-        texEnum: TextureEnum,
+        resourceRegistry: *const ResourceRegistryData,
+        texPassId: TexPassId,
         rendererQueue: *RendererQueue,
         memoryMan: *MemoryManager,
         authority: enum { frameGraph, manuel },
     ) !void {
         // Add Physical Assignment
         const texId = try getFreeTexId(resourceAssigner);
-        const rootTexKey = @intFromEnum(texEnum);
+        const rootTexKey = texPassId.val();
 
         const texDesc = switch (authority) {
             .frameGraph => resourceMapper.texGroupsPersistent.getByKey(rootTexKey).texDesc,
-            .manuel => try resolveTextureEnum(texEnum),
+            .manuel => try resourceRegistry.getTextureDefinition(texPassId),
         };
 
         const texInf = TexInf{
@@ -476,12 +488,19 @@ pub const ResourceAssignerSys = struct {
         addTextureDataPtr.* = .{ .texInf = texInf, .data = null };
         rendererQueue.append(.{ .addTexture = addTextureDataPtr });
 
-        std.debug.print("6.Resource Assigner: Root Tex {} (TexId {}) Creation send to Renderer\n", .{ texEnum, texId });
+        const rootBufName = try resourceRegistry.getTextureName(texPassId);
+        std.debug.print("6.Resource Assigner: Root Tex {s} (TexId {}) Creation send to Renderer\n", .{ rootBufName, texId });
     }
 
-    pub fn deleteTexture(resourceAssigner: *ResourceAssignerData, texEnum: TextureEnum, rendererQueue: *RendererQueue, authority: enum { frameGraph, manuel }) void {
+    pub fn deleteTexture(
+        resourceAssigner: *ResourceAssignerData,
+        resourceRegistry: *const ResourceRegistryData,
+        texPassId: TexPassId,
+        rendererQueue: *RendererQueue,
+        authority: enum { frameGraph, manuel },
+    ) void {
         // Remove Physical Assignment
-        const rootTexKey = @intFromEnum(texEnum);
+        const rootTexKey = texPassId.val();
 
         const isUsed = switch (authority) {
             .frameGraph => resourceAssigner.rootTexPhysicalMap.isKeyUsed(rootTexKey),
@@ -489,7 +508,8 @@ pub const ResourceAssignerSys = struct {
         };
 
         if (isUsed == false) {
-            std.debug.print("ERROR: 6.ResourceAssigner: Texture {s} Authority {s} no Physical ID -> cant be destroyed!\n", .{ @tagName(texEnum), @tagName(authority) });
+            const texName = resourceRegistry.getTextureName(texPassId) catch undefined;
+            std.debug.print("ERROR: 6.ResourceAssigner: Texture {s} Authority {s} no Physical ID -> cant be destroyed!\n", .{ texName, @tagName(authority) });
             return;
         }
 
@@ -507,7 +527,8 @@ pub const ResourceAssignerSys = struct {
         // RENDERER QUEUE SEND DELETE (Stop Renderer missing?)
         rendererQueue.append(.{ .removeTexture = texInf.id });
 
-        std.debug.print("6.Resource Assigner: Root tex {} (TexId {}) Deletion send to Renderer\n", .{ texEnum, texInf.id.val });
+        const rootBufName = resourceRegistry.getTextureName(texPassId) catch "UNKNOWN";
+        std.debug.print("6.Resource Assigner: Root Tex {s} (TexId {}) Deletion send to Renderer\n", .{ rootBufName, texInf.id.val });
     }
 
     pub fn getFreeBufId(resourceAssigner: *ResourceAssignerData) !u16 {
@@ -526,22 +547,22 @@ pub const ResourceAssignerSys = struct {
         resourceAssigner.texIdPool.freeKey(texIdVal);
     }
 
-    pub fn resolveBufferUpdateRequest(resourceAssigner: *ResourceAssignerData, bufEnum: BufferEnum) void {
-        const updateRequest: ?pe.UpdateRequestEnum = switch (bufEnum) {
-            .MainCamUB => .CamMainUpdate,
-            .DebugCamUB => .CanDebugUpdate,
-            .ImguiIB => .GuiUpdate,
-            .ImguiVB => .GuiUpdate,
-            .EntitySB => .EntityUpdate,
+    pub fn resolveBufferUpdateRequest(resourceAssigner: *ResourceAssignerData, bufPassId: BufPassId) void {
+        const updateRequest: ?pe.UpdateRequestEnum = switch (bufPassId.val()) {
+            rc.MainCamUB.val() => .CamMainUpdate,
+            rc.DebugCamUB.val() => .CanDebugUpdate,
+            rc.ImguiIB.val() => .GuiUpdate,
+            rc.ImguiVB.val() => .GuiUpdate,
+            rc.EntitySB.val() => .EntityUpdate,
             else => null,
         };
         if (updateRequest) |request| resourceAssigner.updateRequests.upsert(@intFromEnum(request), request);
     }
 
-    pub fn resolveTextureUpdateRequest(resourceAssigner: *ResourceAssignerData, texEnum: TextureEnum) void {
-        const updateRequest: ?pe.UpdateRequestEnum = switch (texEnum) {
-            .TestTileTex => .TestTileUpdate,
-            .ImguiFontTex => .GuiUpdate,
+    pub fn resolveTextureUpdateRequest(resourceAssigner: *ResourceAssignerData, texPassId: TexPassId) void {
+        const updateRequest: ?pe.UpdateRequestEnum = switch (texPassId.val()) {
+            rc.TestTileTex.val() => .TestTileUpdate,
+            rc.ImguiFontTex.val() => .GuiUpdate,
             else => null,
         };
         if (updateRequest) |request| {

@@ -14,9 +14,7 @@ const pe = @import("../enums.zig");
 const std = @import("std");
 
 const PassExtractorData = @import("PassExtractorData.zig").PassExtractorData;
-
-const TextureEnum = pe.TextureEnum;
-const BufferEnum = pe.BufferEnum;
+const ResourceRegistryData = @import("../0_resourceRegistry/ResourceRegistryData.zig").ResourceRegistryData;
 
 const CompRayMarch = @import("../../.assets/passes/compTest/CompRayMarch.zig").CompRayMarch;
 const EditorGrid = @import("../../.assets/passes/editorGrid/EditorGrid.zig").EditorGrid;
@@ -26,8 +24,25 @@ const QuantPlane = @import("../../.assets/passes/quant/QuantPlane.zig").QuantPla
 const FrustumView = @import("../../.assets/passes/quant/FrustumView.zig").FrustumView;
 const DepthView = @import("../../.assets/passes/depthView/DepthView.zig").DepthView;
 
+const RenderStateUnion = @import("../../render/types/pass/RenderState.zig").RenderStateUnion;
+const VertexBufferSlot = @import("../../render/types/pass/VertexBufferSlot.zig").VertexBufferSlot;
+const IndexBufferSlot = @import("../../render/types/pass/IndexBufferSlot.zig").IndexBufferSlot;
+const AttachmentSlot = @import("../../render/types/pass/AttachmentSlot.zig").AttachmentSlot;
+const PassExecution = @import("../../render/types/pass/PassDef.zig").PassDef.PassExecution;
+const ShaderId = @import("../../shader/ShaderSys.zig").ShaderId;
+const RenderState = @import("../../render/types/pass/RenderState.zig").RenderState;
+const TexId = @import("../../render/types/res/TextureMeta.zig").TextureMeta.TexId;
+const TextureSlot = @import("../../render/types/pass/TextureSlot.zig").TextureSlot;
+const BufferSlot = @import("../../render/types/pass/BufferSlot.zig").BufferSlot;
+const BufferUse = @import("../../render/types/pass/BufferUse.zig").BufferUse;
+const TextureUse = @import("../../render/types/pass/TextureUse.zig").TextureUse;
+const AttachmentUse = @import("../../render/types/pass/AttachmentUse.zig").AttachmentUse;
+const VertexBufferUse = @import("../../render/types/pass/VertexBufferUse.zig").VertexBufferUse;
+const IndexBufferUse = @import("../../render/types/pass/IndexBufferUse.zig").IndexBufferUse;
+const VertexAttribute = @import("../../render/types/pass/VertexAttribute.zig").VertexAttribute;
+
 pub const PassExtractorSys = struct {
-    pub fn newBuild(passExtractor: *PassExtractorData, data: *const EngineData) !void {
+    pub fn newBuild(passExtractor: *PassExtractorData, resourceRegistry: *const ResourceRegistryData, data: *const EngineData) !void {
         // Cleanup
         passExtractor.renderNodes.clear();
         passExtractor.passStrings.clear();
@@ -35,6 +50,7 @@ pub const PassExtractorSys = struct {
         // Checking Which Passes are Used
         const activeViewportIds = data.viewport.activeViewportIds.getConstItems();
 
+        // SHOULD BE IMPROVED USING A HASH MAP INSTEAD OF ITERATING ALL PASSES FOR EVERY NEW PASS!
         for (activeViewportIds) |viewportId| {
             const viewport = data.viewport.viewports.getByKey(viewportId.val);
 
@@ -96,12 +112,12 @@ pub const PassExtractorSys = struct {
                             // Check Blit or Composite
                             if (viewport.blitPass) |usedBlit| {
                                 if (std.mem.eql(u8, passString, usedBlit)) {
-                                    const blit = createBlit(&viewport, .{ .val = @intCast(passStringIndex) }, window.id, window.extent.width, window.extent.height);
+                                    const blit = createBlit(&viewport, .id(@intCast(passStringIndex)), window.id, window.extent.width, window.extent.height);
                                     tempBlitsAndComposits.append(.{ .viewportBlit = blit }) catch std.debug.print("PassDef Could not Append Blit\n", .{});
                                     break;
                                 }
                             } else {
-                                const composite = createComposite(&viewport, .{ .val = @intCast(passStringIndex) }, window.id, window.extent.width, window.extent.height);
+                                const composite = createComposite(&viewport, .id(@intCast(passStringIndex)), window.id, window.extent.width, window.extent.height);
                                 tempBlitsAndComposits.append(.{ .compositeNode = composite }) catch std.debug.print("PassDef Could not Append Composite\n", .{});
                             }
                         }
@@ -110,7 +126,7 @@ pub const PassExtractorSys = struct {
             }
 
             // Add Pass
-            const pass = createPass(passString) orelse {
+            const pass = createPass(passString, resourceRegistry) orelse {
                 std.debug.print("ERROR: 1.PassExtractor 1: Could not createPass with passString ({s})!\n", .{passString});
                 return error.CreatePass;
             };
@@ -123,7 +139,7 @@ pub const PassExtractorSys = struct {
                 for (tempBlitsAndComposits.slice()) |*renderNode| {
                     switch (renderNode.*) {
                         .passNode, .uiNode, .clearBuffer, .clearTexture, .barrierBakeClears => unreachable,
-                        inline else => |*node| node.srcTexEnum = outputTex, // BLITS AND COMPOSITES GET SRC TEX ENUM!!
+                        inline else => |*node| node.srcTexPassId = outputTex, // BLITS AND COMPOSITES GET SRC TEX ENUM!!
                     }
                     if (passExtractor.renderNodes.isFull() == true) return error.RenderNodesFull;
                     passExtractor.renderNodes.appendUnlinked(renderNode.*);
@@ -176,107 +192,224 @@ pub const PassExtractorSys = struct {
         };
     }
 
-    fn createPass(passString: []const u8) ?PassDef {
+    pub fn fillPassDefinition(resourceRegistry: *const ResourceRegistryData, passName: []const u8) !PassDef {
+        const passDef = try resourceRegistry.getPassDefinition(passName);
+
+        var filledPass = PassDef{
+            .name = undefined,
+            .execution = passDef.execution,
+            .mainOutputTex = if (passDef.outputTex) |output| try resourceRegistry.getTexturePassId(output) else null,
+        };
+
+        filledPass.name.fill(passDef.name.get());
+
+        for (passDef.passAttribute.constSlice()) |attribute| {
+            switch (attribute) {
+                .shaderInf => |shaderInf| {
+                    filledPass.shaderIds.appendAssumeCapacity(shaderInf.id);
+                },
+                .bufSlot => |bufSlot| {
+                    const bufUse = BufferUse{
+                        .bufLink = .{
+                            .in = try resourceRegistry.getBufferPassId(bufSlot.bufLink.in),
+                            .out = if (bufSlot.bufLink.out) |output| try resourceRegistry.getBufferPassId(output) else null,
+                        },
+                        .stage = bufSlot.stage,
+                        .access = bufSlot.access,
+                        .shaderSlot = bufSlot.shaderSlot,
+                    };
+                    filledPass.bufUses.appendAssumeCapacity(bufUse);
+                },
+                .texSlot => |texSlot| {
+                    const texUse = TextureUse{
+                        .texLink = .{
+                            .in = try resourceRegistry.getTexturePassId(texSlot.texLink.in),
+                            .out = if (texSlot.texLink.out) |output| try resourceRegistry.getTexturePassId(output) else null,
+                        },
+                        .stage = texSlot.stage,
+                        .access = texSlot.access,
+                        .layout = texSlot.layout,
+                        .descUse = texSlot.descUse,
+                        .shaderSlot = texSlot.shaderSlot,
+                    };
+                    filledPass.texUses.appendAssumeCapacity(texUse);
+                },
+
+                .colorAtt => |attSlot| {
+                    const colorAttUse = AttachmentUse{
+                        .texLink = .{
+                            .in = try resourceRegistry.getTexturePassId(attSlot.texLink.in),
+                            .out = if (attSlot.texLink.out) |output| try resourceRegistry.getTexturePassId(output) else null,
+                        },
+                        .stage = attSlot.stage,
+                        .access = attSlot.access,
+                        .layout = attSlot.layout,
+                        .clear = if (attSlot.clear) |clear| clear else null,
+                    };
+                    filledPass.colorAtts.appendAssumeCapacity(colorAttUse);
+                },
+                .depthAtt => |depthSlot| {
+                    const depthAttUse = AttachmentUse{
+                        .texLink = .{
+                            .in = try resourceRegistry.getTexturePassId(depthSlot.texLink.in),
+                            .out = if (depthSlot.texLink.out) |output| try resourceRegistry.getTexturePassId(output) else null,
+                        },
+                        .stage = depthSlot.stage,
+                        .access = depthSlot.access,
+                        .layout = depthSlot.layout,
+                        .clear = depthSlot.clear,
+                    };
+                    filledPass.depthAtt = depthAttUse;
+                },
+                .stencilAtt => |stencilSlot| {
+                    filledPass.stencilAtt = AttachmentUse{
+                        .texLink = .{
+                            .in = try resourceRegistry.getTexturePassId(stencilSlot.texLink.in),
+                            .out = if (stencilSlot.texLink.out) |output| try resourceRegistry.getTexturePassId(output) else null,
+                        },
+                        .stage = stencilSlot.stage,
+                        .access = stencilSlot.access,
+                        .layout = stencilSlot.layout,
+                        .clear = stencilSlot.clear,
+                    };
+                },
+
+                .vertexBuffer => |vertexBufSlot| {
+                    const vertBufUse = VertexBufferUse{
+                        .bufInput = try resourceRegistry.getBufferPassId(vertexBufSlot.bufInput),
+                        .binding = vertexBufSlot.binding,
+                        .stride = vertexBufSlot.stride,
+                        .inputRate = vertexBufSlot.inputRate,
+                    };
+                    filledPass.vertexBuffers.appendAssumeCapacity(vertBufUse);
+                },
+                .indexBuffer => |indexBufSlot| {
+                    filledPass.indexBuffer = IndexBufferUse{
+                        .bufInput = try resourceRegistry.getBufferPassId(indexBufSlot.bufInput),
+                        .indexType = indexBufSlot.indexType,
+                    };
+                },
+                .vertexAttribute => |vertAttrib| {
+                    filledPass.vertexAttributes.appendAssumeCapacity(vertAttrib);
+                },
+                .renderState => |stateChange| switch (stateChange) {
+                    inline else => |val, tag| @field(filledPass.renderState, @tagName(tag)) = val,
+                },
+            }
+        }
+
+        return filledPass;
+    }
+
+    fn createPass(passString: []const u8, resourceRegistry: *const ResourceRegistryData) ?PassDef {
         if (std.mem.eql(u8, passString, "CompRayMarch")) {
             return CompRayMarch(.{ // DONE
                 .string = "CompRayMarch",
-                .entityBuf = .{ .in = .EntitySB }, //rc.entitySB.id,
-                .outputTex = .{ .in = .RayMarchInputTex }, //rc.mainTex.id,
-                .camBuf = .{ .in = .MainCamUB }, //rc.mainCamUB.id,
-                .readbackBuf = .{ .in = .ReadbackSB }, //rc.readbackSB.id, // SHOULD MAYBE HAVE OUTPUT?
-                .debugTex = .{ .in = .TestTileTex }, //rc.testTilesTex.id,
+                .entityBuf = .{ .in = rc.EntitySB },
+                .outputTex = .{ .in = rc.RayMarchInputTex },
+                .camBuf = .{ .in = rc.MainCamUB },
+                .readbackBuf = .{ .in = rc.ReadbackSB },
+                .debugTex = .{ .in = rc.TestTileTex },
             });
         }
 
         if (std.mem.eql(u8, passString, "QuantComp")) {
             return QuantComp(.{ // DONE
                 .string = "QuantComp",
-                .indirectBuf = .{ .in = .QuantIndirectInputSB, .out = .QuantIndirectOutputSB }, //rc.indirectSB.id,
-                .entityBuf = .{ .in = .EntitySB }, //rc.entitySB.id,
+                .indirectBuf = .{ .in = rc.QuantIndirectInputSB, .out = rc.QuantIndirectOutputSB },
+                .entityBuf = .{ .in = rc.EntitySB },
             });
         }
 
         if (std.mem.eql(u8, passString, "QuantGridMain")) {
             return QuantGrid(.{
                 .string = "QuantGridMain",
-                .colorAtt = .{ .in = .GridTex }, //rc.mainTex.id,
-                .depthAtt = .{ .in = .GridDepthTex }, //rc.mainDepthTex.id,
-                .indirectBuf = .{ .in = .QuantIndirectOutputSB }, //rc.indirectSB.id,
-                .viewCam = .{ .in = .MainCamUB }, //rc.mainCamUB.id,
-                .renderCam = .{ .in = .MainCamUB }, //rc.mainCamUB.id,
+                .colorAtt = .{ .in = rc.GridTex },
+                .depthAtt = .{ .in = rc.GridDepthTex },
+                .indirectBuf = .{ .in = rc.QuantIndirectOutputSB },
+                .viewCam = .{ .in = rc.MainCamUB },
+                .renderCam = .{ .in = rc.MainCamUB },
             });
         }
 
         if (std.mem.eql(u8, passString, "QuantGridDebug")) {
             return QuantGrid(.{
                 .string = "QuantGridDebug",
-                .colorAtt = .{ .in = .DebugGridInputTex, .out = .DebugGridOutputTex }, //rc.mainTex.id,
-                .depthAtt = .{ .in = .DebugGridDepthTex }, //rc.debugGridDepthTex.id,
-                .indirectBuf = .{ .in = .QuantIndirectOutputSB }, //rc.indirectSB.id,
-                .viewCam = .{ .in = .DebugCamUB }, // rc.debugCamUB.id,
-                .renderCam = .{ .in = .MainCamUB }, //rc.mainCamUB.id,
+                .colorAtt = .{ .in = rc.DebugGridInputTex, .out = rc.DebugGridOutputTex },
+                .depthAtt = .{ .in = rc.DebugGridDepthTex },
+                .indirectBuf = .{ .in = rc.QuantIndirectOutputSB },
+                .viewCam = .{ .in = rc.DebugCamUB },
+                .renderCam = .{ .in = rc.MainCamUB },
             });
         }
 
         if (std.mem.eql(u8, passString, "EditorGridGridDebug")) {
             return EditorGrid(.{
                 .string = "EditorGridGridDebug",
-                .colorAtt = .{ .in = .DebugGridOutputTex }, //rc.mainTex.id,
-                .depthAtt = .{ .in = .DebugGridDepthTex, .out = .DebugGridDepthOutputTex }, //rc.debugGridDepthTex.id,
-                .camBuf = .{ .in = .DebugCamUB }, //rc.debugCamUB.id,
+                .colorAtt = .{ .in = rc.DebugGridOutputTex },
+                .depthAtt = .{ .in = rc.DebugGridDepthTex, .out = rc.DebugGridDepthOutputTex },
+                .camBuf = .{ .in = rc.DebugCamUB },
             });
         }
 
         if (std.mem.eql(u8, passString, "EditorGridPlaneDebug")) {
             return EditorGrid(.{
                 .string = "EditorGridPlaneDebug",
-                .colorAtt = .{ .in = .DebugPlaneOutputFrustumViewTex }, //rc.mainTex.id,
-                .depthAtt = .{ .in = .DebugPlaneDepthTex }, //rc.debugPlaneDepthTex.id,
-                .camBuf = .{ .in = .DebugCamUB }, //rc.debugCamUB.id,
+                .colorAtt = .{ .in = rc.DebugPlaneOutputFrustumViewTex },
+                .depthAtt = .{ .in = rc.DebugPlaneDepthTex },
+                .camBuf = .{ .in = rc.DebugCamUB },
             });
         }
 
         if (std.mem.eql(u8, passString, "QuantPlaneMain")) {
             return QuantPlane(.{
                 .string = "QuantPlaneMain",
-                .colorAtt = .{ .in = .PlaneTex }, //rc.mainTex.id,
-                .depthAtt = .{ .in = .PlaneDepthTex }, //rc.mainDepthTex.id,
-                .indirectBuf = .{ .in = .QuantIndirectOutputSB }, //rc.indirectSB.id,
-                .viewCam = .{ .in = .MainCamUB }, //rc.mainCamUB.id,
-                .renderCam = .{ .in = .MainCamUB }, //rc.mainCamUB.id,
+                .colorAtt = .{ .in = rc.PlaneTex },
+                .depthAtt = .{ .in = rc.PlaneDepthTex },
+                .indirectBuf = .{ .in = rc.QuantIndirectOutputSB },
+                .viewCam = .{ .in = rc.MainCamUB },
+                .renderCam = .{ .in = rc.MainCamUB },
             });
         }
 
         if (std.mem.eql(u8, passString, "QuantPlaneDebug")) {
             return QuantPlane(.{
                 .string = "QuantPlaneDebug",
-                .colorAtt = .{ .in = .DebugPlaneInputTex, .out = .DebugPlaneOutputTex }, //rc.mainTex.id,
-                .depthAtt = .{ .in = .DebugPlaneDepthTex }, //rc.debugPlaneDepthTex.id,
-                .indirectBuf = .{
-                    .in = .QuantIndirectOutputSB,
-                }, //rc.indirectSB.id,
-                .viewCam = .{ .in = .DebugCamUB }, //rc.debugCamUB.id,
-                .renderCam = .{ .in = .MainCamUB }, //rc.mainCamUB.id,
+                .colorAtt = .{ .in = rc.DebugPlaneInputTex, .out = rc.DebugPlaneOutputTex },
+                .depthAtt = .{ .in = rc.DebugPlaneDepthTex },
+                .indirectBuf = .{ .in = rc.QuantIndirectOutputSB },
+                .viewCam = .{ .in = rc.DebugCamUB },
+                .renderCam = .{ .in = rc.MainCamUB },
             });
         }
 
         if (std.mem.eql(u8, passString, "FrustumView")) {
             return FrustumView(.{
                 .string = "FrustumView",
-                .colorAtt = .{ .in = .DebugPlaneOutputTex, .out = .DebugPlaneOutputFrustumViewTex }, //rc.mainTex.id,
-                .depthAtt = .{ .in = .DebugPlaneDepthTex }, //rc.debugPlaneDepthTex.id,
-                .renderCam = .{ .in = .MainCamUB }, //rc.mainCamUB.id,
-                .viewCam = .{ .in = .DebugCamUB }, //rc.debugCamUB.id,
+                .colorAtt = .{ .in = rc.DebugPlaneOutputTex, .out = rc.DebugPlaneOutputFrustumViewTex },
+                .depthAtt = .{ .in = rc.DebugPlaneDepthTex },
+                .renderCam = .{ .in = rc.MainCamUB },
+                .viewCam = .{ .in = rc.DebugCamUB },
             });
         }
 
         if (std.mem.eql(u8, passString, "DepthView")) {
-            return DepthView(.{
-                .string = "DepthView",
-                .outputTex = .{ .in = .DepthViewTex }, //rc.depthViewTex.id,
-                .depthTex = .{ .in = .DebugGridDepthOutputTex }, //rc.debugGridDepthTex.id,
-                .camBuf = .{ .in = .MainCamUB }, //rc.mainCamUB.id,
-            });
+            // return DepthView(.{
+            //     .string = "DepthView",
+            //     .outputTex = .{ .in = rc.DepthViewTex },
+            //     .depthTex = .{ .in = rc.DebugGridDepthOutputTex },
+            //     .camBuf = .{ .in = rc.MainCamUB },
+            // });
+
+            // return fillPassDefinition(resourceRegistry, "DepthView") catch {
+            //     // std.debug.print("ERROR: 1.PassExtractor: Could not find Pass Definition ({s})\n", .{passString});
+            //     return null;
+            // };
+
+            return fillPassDefinition(resourceRegistry, "DepthView") catch |err| { // capture err instead of discarding it
+                std.debug.print("ERROR: DepthView fillPassDefinition failed: {}\n", .{err}); // tells you exactly which lookup failed
+                return null;
+            };
         }
 
         return null;

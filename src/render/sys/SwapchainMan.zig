@@ -1,7 +1,7 @@
 const RendererOutQueue = @import("../RendererOutQueue.zig").RendererOutQueue;
 const LinkedMap = @import("../../.structures/LinkedMap.zig").LinkedMap;
 const SimpleMap = @import("../../.structures/SimpleMap.zig").SimpleMap;
-const TextureEnum = @import("../../frameBuild/enums.zig").TextureEnum;
+const TexPassId = @import("../../frameBuild/components.zig").TexPassId;
 const Swapchain = @import("../types/base/Swapchain.zig").Swapchain;
 const Window = @import("../../window/Window.zig").Window;
 const rc = @import("../../.configs/renderConfig.zig");
@@ -92,14 +92,15 @@ pub const SwapchainMan = struct {
         self.swapchains.getPtrByKey(windowId.val).inUse = inUse;
     }
 
-    pub fn getMaxExtent(self: *SwapchainMan, texEnum: TextureEnum) vk.VkExtent2D {
+    pub fn getMaxExtent(self: *SwapchainMan, texPassId: TexPassId) vk.VkExtent2D {
         var maxWidth: u32 = 1;
         var maxHeight: u32 = 1;
 
         for (self.swapchains.getItems()) |swapchain| {
-            for (swapchain.linkedTexEnums) |linkedId| {
-                if (linkedId == null) break;
-                if (linkedId == texEnum) {
+            for (swapchain.linkedTexPassIds) |linkedId| {
+                if (linkedId == null) continue;
+
+                if (linkedId.?.val() == texPassId.val()) {
                     maxWidth = @max(maxWidth, swapchain.extent.width);
                     maxHeight = @max(maxHeight, swapchain.extent.height);
                 }
@@ -110,7 +111,7 @@ pub const SwapchainMan = struct {
 
     pub fn createSwapchain(self: *SwapchainMan, window: Window, _: vk.VkCommandPool) !void {
         const surface = try createSurface(window.handle, self.instance);
-        const swapchain = try Swapchain.init(self.alloc, self.gpi, surface, window.extent, self.gpu, window.linkedTexEnums, null, window.id);
+        const swapchain = try Swapchain.init(self.alloc, self.gpi, surface, window.extent, self.gpu, window.linkedTexPassId, null, window.id);
         self.hiddenSwapchains.upsert(window.id.val, rc.MAX_IN_FLIGHT);
         self.swapchains.upsert(window.id.val, swapchain);
         std.debug.print("Swapchain added to Window {}\n", .{window.id.val});

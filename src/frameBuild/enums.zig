@@ -18,47 +18,47 @@
 //     Composite, // SPECIAL CASE
 // };
 
-pub const BufferEnum = enum {
-    QuantIndirectInputSB,
-    QuantIndirectOutputSB,
+// pub const BufferEnum = enum {
+//     QuantIndirectInputSB,
+//     QuantIndirectOutputSB,
 
-    ReadbackSB, // 1
+//     ReadbackSB, // 1
 
-    EntitySB, // 2
-    MainCamUB, // 3
-    DebugCamUB, // 4
+//     EntitySB, // 2
+//     MainCamUB, // 3
+//     DebugCamUB, // 4
 
-    ImguiVB, // 5
-    ImguiIB, // 6
-};
+//     ImguiVB, // 5
+//     ImguiIB, // 6
+// };
 
-pub const TextureEnum = enum {
-    RayMarchInputTex, // 0
+// pub const TextureEnum = enum {
+//     RayMarchInputTex, // 0
 
-    GridTex, // 1
-    GridDepthTex, // 2
+//     GridTex, // 1
+//     GridDepthTex, // 2
 
-    DebugGridInputTex, // 3
-    DebugGridOutputTex,
-    DebugGridDepthTex, // 4
-    DebugGridDepthOutputTex,
+//     DebugGridInputTex, // 3
+//     DebugGridOutputTex,
+//     DebugGridDepthTex, // 4
+//     DebugGridDepthOutputTex,
 
-    PlaneTex, // 5
-    PlaneDepthTex, // 6
+//     PlaneTex, // 5
+//     PlaneDepthTex, // 6
 
-    DebugPlaneInputTex, // 7
-    DebugPlaneOutputTex,
-    DebugPlaneOutputFrustumViewTex,
-    DebugPlaneDepthTex, // 8
+//     DebugPlaneInputTex, // 7
+//     DebugPlaneOutputTex,
+//     DebugPlaneOutputFrustumViewTex,
+//     DebugPlaneDepthTex, // 8
 
-    DepthViewTex, // 9
+//     DepthViewTex, // 9
 
-    TestTileTex, // 10
+//     TestTileTex, // 10
 
-    ImguiFontTex, // 11
+//     ImguiFontTex, // 11
 
-    Swapchain, // SPECIAL CASE (Unsigned)
-};
+//     Swapchain, // SPECIAL CASE (Unsigned)
+// };
 
 pub const UpdateRequestEnum = enum {
     EntityUpdate,

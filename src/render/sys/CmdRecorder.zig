@@ -27,8 +27,8 @@ const std = @import("std");
 
 const TextureAssignments = @import("../../frameBuild/6_resourceAssigner/ResourceAssignerData.zig").ResourceAssignerData.TextureAssignments;
 const BufferAssignments = @import("../../frameBuild/6_resourceAssigner/ResourceAssignerData.zig").ResourceAssignerData.BufferAssignments;
-const TextureEnum = @import("../../frameBuild/enums.zig").TextureEnum;
-const BufferEnum = @import("../../frameBuild/enums.zig").BufferEnum;
+const TexPassId = @import("../../frameBuild/components.zig").TexPassId;
+const BufPassId = @import("../../frameBuild/components.zig").BufPassId;
 
 const ImGuiPass = @import("../../.assets/passes/Imgui/Imgui.zig").ImGuiPass;
 const Composite = @import("../../.assets/passes/composite/Composite.zig").Composite;
@@ -362,7 +362,7 @@ pub const CmdRecorder = struct {
 
         const isFirstUse = targetTex.state.layout == .Undefined;
 
-        const texEnum = composite.srcTexEnum orelse return error.CompositeHasNoSrcTexId;
+        const texEnum = composite.srcTexPassId orelse return error.CompositeHasNoSrcTexId;
         const texId = try resolveTexture(texEnum, texAssigns);
         const srcTex = try resMan.get(texId, cmd.flightId);
         const srcDesc = try resMan.getTextureDescriptor(texId, cmd.flightId, .Sampled);
@@ -426,8 +426,8 @@ pub const CmdRecorder = struct {
 
         const pass = ImGuiPass(.{
             .string = "Imgui",
-            .vertexBuf = .ImguiVB,
-            .indexBuf = .ImguiIB,
+            .vertexBuf = rc.ImguiVB,
+            .indexBuf = rc.ImguiIB,
         });
 
         try self.checkImageState(targetTex, .{ .stage = .ColorAtt, .access = .ColorAttReadWrite, .layout = .Attachment });
@@ -444,7 +444,7 @@ pub const CmdRecorder = struct {
             try self.checkBufferState(buf, .{ .stage = .VertexInput, .access = .IndexRead });
         }
         for (uiNode.drawList) |draw| { // Suboptimal but needed for custom Textures later
-            const texId = try resolveTexture(draw.texEnum, texAssigns);
+            const texId = try resolveTexture(draw.texPassId, texAssigns);
             if (resMan.get(texId, cmd.flightId)) |tex| {
                 try self.checkImageState(tex, .{ .stage = .Fragment, .access = .SampledRead, .layout = .General });
             } else |_| {}
@@ -475,7 +475,7 @@ pub const CmdRecorder = struct {
         const sw = @as(f32, @floatFromInt(swapchain.extent.width));
         const sh = @as(f32, @floatFromInt(swapchain.extent.height));
 
-        var lastTexEnum: ?TextureEnum = null;
+        var lastTexPassId: ?TexPassId = null;
         var lastTexDesc: u32 = undefined;
 
         for (uiNode.drawList) |draw| {
@@ -488,10 +488,10 @@ pub const CmdRecorder = struct {
             cmd.setScissor(x0, y0, x1 - x0, y1 - y0);
 
             // fetch only when the id differs from the last one (null first iteration always misses)
-            if (lastTexEnum == null or draw.texEnum != lastTexEnum.?) {
-                const texId = try resolveTexture(draw.texEnum, texAssigns);
+            if (lastTexPassId == null or draw.texPassId.val() != lastTexPassId.?.val()) {
+                const texId = try resolveTexture(draw.texPassId, texAssigns);
                 lastTexDesc = try resMan.getTextureDescriptor(texId, cmd.flightId, .Sampled);
-                lastTexEnum = draw.texEnum;
+                lastTexPassId = draw.texPassId;
             }
 
             const pushConstants = vhT.ImGuiPushConstants{
@@ -507,16 +507,16 @@ pub const CmdRecorder = struct {
         cmd.endTimer(.BotOfPipe, timeId);
     }
 
-    fn resolveTexture(texEnum: TextureEnum, texAssigns: *const TextureAssignments) !TexId {
-        if (texAssigns.isKeyUsed(@intFromEnum(texEnum)) == true) return texAssigns.getByKey(@intFromEnum(texEnum)) else {
-            std.debug.print("Error: Texture {s} not assigned\n", .{@tagName(texEnum)});
+    fn resolveTexture(texPassId: TexPassId, texAssigns: *const TextureAssignments) !TexId {
+        if (texAssigns.isKeyUsed(texPassId.val()) == true) return texAssigns.getByKey(texPassId.val()) else {
+            std.debug.print("Error: Texture Pass ID {} not assigned\n", .{texPassId.val()});
             return error.TextureNotAssigned;
         }
     }
 
-    fn resolveBuffer(bufEnum: BufferEnum, bufAssigns: *const BufferAssignments) !BufId {
-        if (bufAssigns.isKeyUsed(@intFromEnum(bufEnum)) == true) return bufAssigns.getByKey(@intFromEnum(bufEnum)) else {
-            std.debug.print("Error: Buffer {s} not assigned\n", .{@tagName(bufEnum)});
+    fn resolveBuffer(bufPassId: BufPassId, bufAssigns: *const BufferAssignments) !BufId {
+        if (bufAssigns.isKeyUsed(bufPassId.val()) == true) return bufAssigns.getByKey(bufPassId.val()) else {
+            std.debug.print("Error: Buffer Pass ID {} not assigned\n", .{bufPassId.val()});
             return error.BufferNotAssigned;
         }
     }
@@ -581,7 +581,7 @@ pub const CmdRecorder = struct {
     ) !void {
         const timeId = cmd.startTimer(.TopOfPipe, blit.name, .Blit);
 
-        const texEnum = blit.srcTexEnum orelse return error.BlitHasNoSrcTexId;
+        const texEnum = blit.srcTexPassId orelse return error.BlitHasNoSrcTexId;
         const texId = try resolveTexture(texEnum, texAssigns);
         const renderTex = try resMan.get(texId, cmd.flightId);
 

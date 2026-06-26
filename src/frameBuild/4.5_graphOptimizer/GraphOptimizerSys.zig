@@ -6,6 +6,7 @@ const BufferEnum = @import("../../frameBuild/enums.zig").BufferEnum;
 const rc = @import("../../.configs/renderConfig.zig");
 const std = @import("std");
 
+const ResourceRegistryData = @import("../0_resourceRegistry/ResourceRegistryData.zig").ResourceRegistryData;
 const ResourceExtractorData = @import("../2_resourceExtractor/ResourceExtractorData.zig").ResourceExtractorData;
 const GraphOptimizerData = @import("../4.5_graphOptimizer/GraphOptimizerData.zig").GraphOptimizerData;
 const GraphExtractorData = @import("../4_graphExtractor/GraphExtractorData.zig").GraphExtractorData;
@@ -13,7 +14,12 @@ const GraphExtractorData = @import("../4_graphExtractor/GraphExtractorData.zig")
 // Step 4.5
 
 pub const GraphOptimizerSys = struct {
-    pub fn assignResourceLevels(graphOptimizer: *GraphOptimizerData, graphExtractor: *const GraphExtractorData, resourceExtractor: *const ResourceExtractorData) !void {
+    pub fn assignResourceLevels(
+        graphOptimizer: *GraphOptimizerData,
+        graphExtractor: *const GraphExtractorData,
+        resourceExtractor: *const ResourceExtractorData,
+        resourceRegistry: *const ResourceRegistryData,
+    ) !void {
         graphOptimizer.bufLevelLifetimes.clear();
         graphOptimizer.texLevelLifetimes.clear();
 
@@ -22,13 +28,13 @@ pub const GraphOptimizerSys = struct {
 
         // Assign Buffers Lifetime
         for (resourceExtractor.bufAccesses.constSlice()) |bufAccess| {
-            const bufInputKey = @intFromEnum(bufAccess.bufInput);
+            const bufInputKey = bufAccess.bufInput.val();
             if (resourceExtractor.bufMemSize.isKeyUsed(bufInputKey) == false) continue; // Only Transient
 
-            const graphLevel = graphExtractor.orderedPasses.getByKey(bufAccess.pass.val).level;
+            const graphLevel = graphExtractor.orderedPasses.getByKey(bufAccess.pass.val()).level;
 
             if (graphOptimizer.bufLevelLifetimes.isKeyUsed(bufInputKey) == false) {
-                const bufLevelLifetime = BufLevelLifetime{ .bufEnum = bufAccess.bufInput, .firstLevel = graphLevel, .lastLevel = graphLevel };
+                const bufLevelLifetime = BufLevelLifetime{ .buf = bufAccess.bufInput, .firstLevel = graphLevel, .lastLevel = graphLevel };
                 graphOptimizer.bufLevelLifetimes.upsert(bufInputKey, bufLevelLifetime);
             } else {
                 var bufLevelLifetime = graphOptimizer.bufLevelLifetimes.getPtrByKey(bufInputKey);
@@ -39,13 +45,13 @@ pub const GraphOptimizerSys = struct {
 
         for (resourceExtractor.bufAccesses.constSlice()) |bufAccess| {
             const bufOutput = bufAccess.bufOutput orelse continue;
-            const bufOutputKey = @intFromEnum(bufOutput);
+            const bufOutputKey = bufOutput.val();
             if (resourceExtractor.bufMemSize.isKeyUsed(bufOutputKey) == false) continue; // Only Transient
 
-            const graphLevel = graphExtractor.orderedPasses.getByKey(bufAccess.pass.val).level;
+            const graphLevel = graphExtractor.orderedPasses.getByKey(bufAccess.pass.val()).level;
 
             if (graphOptimizer.bufLevelLifetimes.isKeyUsed(bufOutputKey) == false) {
-                const bufLevelLifetime = BufLevelLifetime{ .bufEnum = bufOutput, .firstLevel = graphLevel, .lastLevel = graphLevel };
+                const bufLevelLifetime = BufLevelLifetime{ .buf = bufOutput, .firstLevel = graphLevel, .lastLevel = graphLevel };
                 graphOptimizer.bufLevelLifetimes.upsert(bufOutputKey, bufLevelLifetime);
             } else {
                 var bufLevelLifetime = graphOptimizer.bufLevelLifetimes.getPtrByKey(bufOutputKey);
@@ -56,13 +62,13 @@ pub const GraphOptimizerSys = struct {
 
         // Assign texture Lifetime
         for (resourceExtractor.texAccesses.constSlice()) |texAccess| {
-            const texInputKey = @intFromEnum(texAccess.texInput);
+            const texInputKey = texAccess.texInput.val();
             if (resourceExtractor.texMemSize.isKeyUsed(texInputKey) == false) continue; // Only Transient
 
-            const graphLevel = graphExtractor.orderedPasses.getByKey(texAccess.pass.val).level;
+            const graphLevel = graphExtractor.orderedPasses.getByKey(texAccess.pass.val()).level;
 
             if (graphOptimizer.texLevelLifetimes.isKeyUsed(texInputKey) == false) {
-                const texLevelLifetime = TexLevelLifetime{ .texEnum = texAccess.texInput, .firstLevel = graphLevel, .lastLevel = graphLevel };
+                const texLevelLifetime = TexLevelLifetime{ .tex = texAccess.texInput, .firstLevel = graphLevel, .lastLevel = graphLevel };
                 graphOptimizer.texLevelLifetimes.upsert(texInputKey, texLevelLifetime);
             } else {
                 var texLevelLifetime = graphOptimizer.texLevelLifetimes.getPtrByKey(texInputKey);
@@ -73,13 +79,13 @@ pub const GraphOptimizerSys = struct {
 
         for (resourceExtractor.texAccesses.constSlice()) |texAccess| {
             const texOutput = texAccess.texOutput orelse continue;
-            const texOutputKey = @intFromEnum(texOutput);
+            const texOutputKey = texOutput.val();
             if (resourceExtractor.texMemSize.isKeyUsed(texOutputKey) == false) continue; // Only Transient
 
-            const graphLevel = graphExtractor.orderedPasses.getByKey(texAccess.pass.val).level;
+            const graphLevel = graphExtractor.orderedPasses.getByKey(texAccess.pass.val()).level;
 
             if (graphOptimizer.texLevelLifetimes.isKeyUsed(texOutputKey) == false) {
-                const texLevelLifetime = TexLevelLifetime{ .texEnum = texOutput, .firstLevel = graphLevel, .lastLevel = graphLevel };
+                const texLevelLifetime = TexLevelLifetime{ .tex = texOutput, .firstLevel = graphLevel, .lastLevel = graphLevel };
                 graphOptimizer.texLevelLifetimes.upsert(texOutputKey, texLevelLifetime);
             } else {
                 var texLevelLifetime = graphOptimizer.texLevelLifetimes.getPtrByKey(texOutputKey);
@@ -95,13 +101,15 @@ pub const GraphOptimizerSys = struct {
             // Buffer Debug
             for (0..graphOptimizer.bufLevelLifetimes.getLength()) |i| {
                 const bufLevelLifetime = graphOptimizer.bufLevelLifetimes.getByIndex(@intCast(i));
-                std.debug.print("- Buf Graph Lifetime: (Level {} -> {}) {s} \n", .{ bufLevelLifetime.firstLevel, bufLevelLifetime.lastLevel, @tagName(bufLevelLifetime.bufEnum) });
+                const bufName = try resourceRegistry.getBufferName(bufLevelLifetime.buf);
+                std.debug.print("- Buf Graph Lifetime: (Level {} -> {}) {s} \n", .{ bufLevelLifetime.firstLevel, bufLevelLifetime.lastLevel, bufName });
             }
 
             // Texture Debug
             for (0..graphOptimizer.texLevelLifetimes.getLength()) |i| {
                 const texLevelLifetime = graphOptimizer.texLevelLifetimes.getByIndex(@intCast(i));
-                std.debug.print("- Tex Graph Lifetime: (Level {} -> {}) {s}\n", .{ texLevelLifetime.firstLevel, texLevelLifetime.lastLevel, @tagName(texLevelLifetime.texEnum) });
+                const texName = try resourceRegistry.getTextureName(texLevelLifetime.tex);
+                std.debug.print("- Tex Graph Lifetime: (Level {} -> {}) {s}\n", .{ texLevelLifetime.firstLevel, texLevelLifetime.lastLevel, texName });
             }
 
             std.debug.print("\n", .{});
@@ -109,7 +117,7 @@ pub const GraphOptimizerSys = struct {
 
         // Extend GraphNodes to GraphMemoryNodes
         for (graphExtractor.orderedPasses.getConstItems()) |graphNode| {
-            const accessRange = resourceExtractor.passAccessRanges.getByKey(graphNode.pass.val);
+            const accessRange = resourceExtractor.passAccessRanges.getByKey(graphNode.pass.val());
 
             var bornBytes: u64 = 0;
             var dyingBytes: u64 = 0;
@@ -117,8 +125,8 @@ pub const GraphOptimizerSys = struct {
             // Buffers
             for (accessRange.firstBuf..accessRange.lastBuf) |bufIndex| {
                 const bufAccess = resourceExtractor.bufAccesses.buffer[bufIndex];
-                const bufKey1: u16 = @intFromEnum(bufAccess.bufInput);
-                const bufKey2: ?u16 = if (bufAccess.bufOutput) |bufOutput| @intFromEnum(bufOutput) else null;
+                const bufKey1: u16 = bufAccess.bufInput.val();
+                const bufKey2: ?u16 = if (bufAccess.bufOutput) |bufOutput| bufOutput.val() else null;
 
                 // Check Input Buffer Bytes
                 if (resourceExtractor.bufMemSize.isKeyUsed(bufKey1) == true) { // Only Transient were filled!
@@ -140,8 +148,8 @@ pub const GraphOptimizerSys = struct {
             // Textures
             for (accessRange.firstTex..accessRange.lastTex) |texIndex| {
                 const texAccess = resourceExtractor.texAccesses.buffer[texIndex];
-                const texKey1: u16 = @intFromEnum(texAccess.texInput);
-                const texKey2: ?u16 = if (texAccess.texOutput) |texOutput| @intFromEnum(texOutput) else null;
+                const texKey1: u16 = texAccess.texInput.val();
+                const texKey2: ?u16 = if (texAccess.texOutput) |texOutput| texOutput.val() else null;
 
                 // Check Input Texture Bytes
                 if (resourceExtractor.texMemSize.isKeyUsed(texKey1) == true) { // Only Transient were filled!
@@ -171,7 +179,7 @@ pub const GraphOptimizerSys = struct {
         graphOptimizer.graphMemNodes.selectionSort(greaterGraphMemNode);
 
         for (graphOptimizer.graphMemNodes.constSlice()) |graphMemNode| {
-            const graphPassKey = graphMemNode.pass.val;
+            const graphPassKey = graphMemNode.pass.val();
             graphOptimizer.optimizedGraph.upsert(graphPassKey, graphMemNode);
         }
 

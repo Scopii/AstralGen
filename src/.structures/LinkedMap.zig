@@ -196,12 +196,20 @@ pub fn LinkedMap(comptime itemType: type, comptime capacity: u32, comptime keyTy
             return self.slotMap.getPtrByKey(key);
         }
 
+        pub inline fn getConstPtrByKey(self: *const Self, key: keyType) *const itemType {
+            return self.slotMap.getConstPtrByKey(key);
+        }
+
         pub inline fn getByIndex(self: *const Self, index: u32) itemType {
             return self.slotMap.getByIndex(index);
         }
 
         pub inline fn getPtrByIndex(self: *Self, index: u32) *itemType {
             return self.slotMap.getPtrByIndex(index);
+        }
+
+        pub inline fn getConstPtrByIndex(self: *const Self, index: u32) *const itemType {
+            return self.slotMap.getConstPtrByIndex(index);
         }
 
         pub inline fn getFirst(self: *const Self) itemType {

@@ -1,21 +1,22 @@
+const TexDesc = @import("../../render/types/res/TextureMeta.zig").TextureMeta.TexDesc;
+const BufDesc = @import("../../render/types/res/BufferMeta.zig").BufferMeta.BufDesc;
+const PassAccessRange = @import("../../frameBuild/components.zig").PassAccessRange;
 const TextureAccess = @import("../../frameBuild/components.zig").TextureAccess;
 const BufferAccess = @import("../../frameBuild/components.zig").BufferAccess;
-const PassAccessRange = @import("../../frameBuild/components.zig").PassAccessRange;
-const BufDesc = @import("../../render/types/res/BufferMeta.zig").BufferMeta.BufDesc;
-const TexDesc = @import("../../render/types/res/TextureMeta.zig").TextureMeta.TexDesc;
 const PassDef = @import("../../render/types/pass/PassDef.zig").PassDef;
-const TextureEnum = @import("../enums.zig").TextureEnum;
-const BufferEnum = @import("../enums.zig").BufferEnum;
+const TexPassId = @import("../components.zig").TexPassId;
+const BufPassId = @import("../components.zig").BufPassId;
 const rc = @import("../../.configs/renderConfig.zig");
 const std = @import("std");
 
 const ResourceExtractorData = @import("ResourceExtractorData.zig").ResourceExtractorData;
+const ResourceRegistryData = @import("../0_resourceRegistry/ResourceRegistryData.zig").ResourceRegistryData;
 const PassExtractorData = @import("../1_passExtractor/PassExtractorData.zig").PassExtractorData;
 
 // Step 2
 
 pub const ResourceExtractorSys = struct {
-    pub fn buildAccesses(resourceExtractor: *ResourceExtractorData, passExtractor: *const PassExtractorData) !void {
+    pub fn buildAccesses(resourceExtractor: *ResourceExtractorData, passExtractor: *const PassExtractorData, resourceRegistry: *const ResourceRegistryData) !void {
         resourceExtractor.bufAccesses.clear();
         resourceExtractor.texAccesses.clear();
 
@@ -46,9 +47,9 @@ pub const ResourceExtractorSys = struct {
         // Resolve and Save Buffer Descriptions
         for (resourceExtractor.bufAccesses.constSlice()) |bufAccess| {
             // For Input
-            const bufKey1: u16 = @intFromEnum(bufAccess.bufInput);
+            const bufKey1: u16 = bufAccess.bufInput.val();
             if (resourceExtractor.bufDescriptions.isKeyUsed(bufKey1) == false) {
-                const bufDesc1 = try resolveBufferEnum(bufAccess.bufInput);
+                const bufDesc1 = try resourceRegistry.getBufferDefinition(bufAccess.bufInput);
                 resourceExtractor.bufDescriptions.upsert(bufKey1, bufDesc1);
 
                 // If Description is Share = Transient add memSize
@@ -56,10 +57,10 @@ pub const ResourceExtractorSys = struct {
             }
 
             // For Output
-            const bufKey2: ?u16 = if (bufAccess.bufOutput) |bufOutput| @intFromEnum(bufOutput) else null;
+            const bufKey2: ?u16 = if (bufAccess.bufOutput) |bufOutput| bufOutput.val() else null;
             if (bufKey2) |key2| {
                 if (resourceExtractor.bufDescriptions.isKeyUsed(key2) == false) {
-                    const bufDesc2 = try resolveBufferEnum(bufAccess.bufOutput.?);
+                    const bufDesc2 = try resourceRegistry.getBufferDefinition(bufAccess.bufOutput.?);
                     resourceExtractor.bufDescriptions.upsert(key2, bufDesc2);
 
                     // If Description is Share = Transient add memSize
@@ -71,9 +72,9 @@ pub const ResourceExtractorSys = struct {
         // Resolve and Save Texture Descriptions
         for (resourceExtractor.texAccesses.constSlice()) |texAccess| {
             // For Input
-            const texKey1: u16 = @intFromEnum(texAccess.texInput);
+            const texKey1: u16 = texAccess.texInput.val();
             if (resourceExtractor.texDescriptions.isKeyUsed(texKey1) == false) {
-                const texDesc1 = try resolveTextureEnum(texAccess.texInput);
+                const texDesc1 = try resourceRegistry.getTextureDefinition(texAccess.texInput);
                 resourceExtractor.texDescriptions.upsert(texKey1, texDesc1);
 
                 // If Description is Share = Transient add memSize
@@ -81,10 +82,10 @@ pub const ResourceExtractorSys = struct {
             }
 
             // For Output
-            const texKey2: ?u16 = if (texAccess.texOutput) |texOutput| @intFromEnum(texOutput) else null;
+            const texKey2: ?u16 = if (texAccess.texOutput) |texOutput| texOutput.val() else null;
             if (texKey2) |key2| {
                 if (resourceExtractor.texDescriptions.isKeyUsed(key2) == false) {
-                    const texDesc2 = try resolveTextureEnum(texAccess.texOutput.?);
+                    const texDesc2 = try resourceRegistry.getTextureDefinition(texAccess.texOutput.?);
                     resourceExtractor.texDescriptions.upsert(key2, texDesc2);
 
                     // If Description is Share = Transient add memSize
@@ -104,11 +105,17 @@ pub const ResourceExtractorSys = struct {
                 std.debug.print(" - Pass Accesses ({s}) (bufIndex {} -> {}) (texIndex {} -> {})\n", .{ passString, range.firstBuf, range.lastBuf, range.firstTex, range.lastTex });
                 for (range.firstBuf..range.lastBuf, 0..) |index, counter| {
                     const bufAccess = resourceExtractor.bufAccesses.buffer[index];
-                    std.debug.print("     -> Buf {}. {}\n", .{ counter, bufAccess });
+                    const inputName = try resourceRegistry.getBufferName(bufAccess.bufInput);
+                    const outputName = if (bufAccess.bufOutput) |output| try resourceRegistry.getBufferName(output) else "null";
+                    const access = @tagName(bufAccess.access);
+                    std.debug.print("     -> Buf {}. ( .pass = {}, .bufInput = {s}, .bufOutput = {s}, .access = {s})\n", .{ counter, bufAccess.pass, inputName, outputName, access });
                 }
                 for (range.firstTex..range.lastTex, 0..) |index, counter| {
                     const texAccess = resourceExtractor.texAccesses.buffer[index];
-                    std.debug.print("     -> Tex {}. {}\n", .{ counter, texAccess });
+                    const inputName = try resourceRegistry.getTextureName(texAccess.texInput);
+                    const outputName = if (texAccess.texOutput) |output| try resourceRegistry.getTextureName(output) else "null";
+                    const access = @tagName(texAccess.access);
+                    std.debug.print("     -> Tex {}. ( .pass = {}, .texInput = {s}, .texOutput = {s}, .access = {s})\n", .{ counter, texAccess.pass, inputName, outputName, access });
                 }
             }
             std.debug.print("\n", .{});
@@ -118,15 +125,15 @@ pub const ResourceExtractorSys = struct {
         if (rc.FRAME_GRAPH_DEBUG) {
             // Buffer Mem Debug
             for (resourceExtractor.bufMemSize.getConstItems(), 0..) |memSize, i| {
-                const bufKey: u32 = resourceExtractor.bufMemSize.getKeyByIndex(@intCast(i));
-                const bufEnum: BufferEnum = @enumFromInt(bufKey);
-                std.debug.print(" {}.Buf ({s}) -> Mem {} Bytes\n", .{ i, @tagName(bufEnum), memSize });
+                const bufKey: u16 = resourceExtractor.bufMemSize.getKeyByIndex(@intCast(i));
+                const bufName = try resourceRegistry.getBufferName(.id(bufKey));
+                std.debug.print(" {}.Buf ({s}) -> Mem {} Bytes\n", .{ i, bufName, memSize });
             }
             // Texture Mem Debug
             for (resourceExtractor.texMemSize.getConstItems(), 0..) |memSize, i| {
-                const texKey: u32 = resourceExtractor.texMemSize.getKeyByIndex(@intCast(i));
-                const texEnum: TextureEnum = @enumFromInt(texKey);
-                std.debug.print(" {}.Tex ({s}) -> Mem {} Bytes\n", .{ i, @tagName(texEnum), memSize });
+                const texKey: u16 = resourceExtractor.texMemSize.getKeyByIndex(@intCast(i));
+                const texName = try resourceRegistry.getTextureName(.id(texKey));
+                std.debug.print(" {}.Tex ({s}) -> Mem {} Bytes\n", .{ i, texName, memSize });
             }
             std.debug.print("\n", .{});
         }
@@ -143,7 +150,7 @@ pub const ResourceExtractorSys = struct {
             for (slice) |use| {
                 const bufAccess = BufferAccess{
                     .access = if (use.access.isReadOnly() == true) .read else .write,
-                    .pass = .{ .val = passId },
+                    .pass = .id(passId),
                     .bufInput = use.bufLink.in,
                     .bufOutput = use.bufLink.out,
                 };
@@ -159,7 +166,7 @@ pub const ResourceExtractorSys = struct {
             for (slice) |use| {
                 const bufAccess = BufferAccess{
                     .access = .read,
-                    .pass = .{ .val = passId },
+                    .pass = .id(passId),
                     .bufInput = use.bufInput,
                     .bufOutput = null, // True Index and Vertex Buffers dont have Output!
                 };
@@ -177,7 +184,7 @@ pub const ResourceExtractorSys = struct {
             for (slice) |use| {
                 const texAccess = TextureAccess{
                     .access = if (use.access.isReadOnly() == true) .read else .write,
-                    .pass = .{ .val = passId },
+                    .pass = .id(passId),
                     .texInput = use.texLink.in,
                     .texOutput = use.texLink.out,
                 };
@@ -196,44 +203,3 @@ pub const ResourceExtractorSys = struct {
         resourceExtractor.passAccessRanges.upsert(passId, passAccessRanges);
     }
 };
-
-pub fn resolveTextureEnum(texEnum: TextureEnum) !TexDesc {
-    return switch (texEnum) {
-        // Cull stuff Missing
-
-        .RayMarchInputTex => rc.rayMarchTexDesc,
-
-        .GridTex => rc.gridTexDesc,
-        .GridDepthTex => rc.gridDepthTexDesc,
-
-        .DebugGridInputTex, .DebugGridOutputTex => rc.debugGridTexDesc,
-        .DebugGridDepthTex, .DebugGridDepthOutputTex => rc.debugGridDepthTexDesc,
-
-        .PlaneTex => rc.planeTexDesc,
-        .PlaneDepthTex => rc.planeDepthTexDesc,
-
-        .DebugPlaneInputTex, .DebugPlaneOutputTex, .DebugPlaneOutputFrustumViewTex => rc.debugPlaneTexDesc,
-        .DebugPlaneDepthTex => rc.debugPlaneDepthTexDesc,
-
-        .DepthViewTex => rc.depthViewTexDesc,
-
-        .TestTileTex => rc.testTilesTexDesc,
-        .ImguiFontTex => rc.imguiFontTexDesc,
-
-        .Swapchain => return error.TextureEnumHasNoDescription,
-    };
-}
-
-pub fn resolveBufferEnum(bufEnum: BufferEnum) !BufDesc {
-    return switch (bufEnum) {
-        .QuantIndirectInputSB, .QuantIndirectOutputSB => rc.indirectSBDesc,
-        .ReadbackSB => rc.readbackSBDesc,
-
-        .EntitySB => rc.entitySBDesc,
-        .MainCamUB => rc.mainCamUBDesc,
-        .DebugCamUB => rc.debugCamUBDesc,
-
-        .ImguiVB => rc.imguiVBDesc,
-        .ImguiIB => rc.imguiIBDesc,
-    };
-}

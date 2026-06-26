@@ -19,7 +19,7 @@ const std = @import("std");
 const TextureAssignments = @import("../frameBuild/6_resourceAssigner/ResourceAssignerData.zig").ResourceAssignerData.TextureAssignments;
 const BufferAssignments = @import("../frameBuild/6_resourceAssigner/ResourceAssignerData.zig").ResourceAssignerData.BufferAssignments;
 const RendererOutQueue = @import("RendererOutQueue.zig").RendererOutQueue;
-const TextureEnum = @import("../frameBuild/enums.zig").TextureEnum;
+const TexPassId = @import("../frameBuild/components.zig").TexPassId;
 const RendererQueue = @import("RendererQueue.zig").RendererQueue;
 const Window = @import("../window/Window.zig").Window;
 
@@ -109,17 +109,17 @@ pub const Renderer = struct {
             }
 
             if (window.resizeTex == true and rc.RENDER_TEX_AUTO_RESIZE and window.state != .needDelete) {
-                for (0..window.linkedTexEnums.len) |i| {
-                    const texEnum = window.linkedTexEnums[i] orelse continue;
+                for (0..window.linkedTexPassId.len) |i| {
+                    const texEnum = window.linkedTexPassId[i] orelse continue;
                     try self.updateRenderTexture(texEnum, texAssigns);
                 }
             }
         }
     }
 
-    fn updateRenderTexture(self: *Renderer, texEnum: TextureEnum, texAssigns: *const TextureAssignments) !void {
-        const newExtent = self.swapMan.getMaxExtent(texEnum);
-        const texId = if (texAssigns.isKeyUsed(@intFromEnum(texEnum)) == true) texAssigns.getByKey(@intFromEnum(texEnum)) else return error.TextureNotAssigned;
+    fn updateRenderTexture(self: *Renderer, texPassId: TexPassId, texAssigns: *const TextureAssignments) !void {
+        const newExtent = self.swapMan.getMaxExtent(texPassId);
+        const texId = if (texAssigns.isKeyUsed(texPassId.val()) == true) texAssigns.getByKey(texPassId.val()) else return error.TextureNotAssigned;
         try self.resMan.resizeTextureResource(texId, newExtent.width, newExtent.height, 1, self.scheduler.totalFrames, self.scheduler.flightId);
     }
 

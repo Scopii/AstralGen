@@ -199,9 +199,9 @@ pub const PipeAccess = enum(vk.VkAccessFlagBits2) {
 pub const ShaderStage = enum {
     comp,
     vert,
-    tessControl,
-    tessEval,
-    geometry,
+    // tessControl,
+    // tessEval,
+    // geometry,
     task,
     meshWithTask,
     meshNoTask,

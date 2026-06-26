@@ -138,3 +138,52 @@ pub const RenderState = struct {
 
     fragShadingRate: FragShadingRate = .{ .width = 1, .height = 1, .operation1 = .Keep, .operation2 = .Keep },
 };
+
+pub const RenderStateUnion = union(enum)  {
+    // Rasterization & Geometry
+    polygonMode: PolygonMode,
+    cullMode: CullMode,
+    frontFace: FrontFace,
+    topology: Topology,
+
+    primitiveRestart: PrimitiveRestart,
+    rasterDiscard: RasterDiscard,
+    rasterSamples: RasterSamples,
+
+    sample: Sample,
+
+    // Depth & Stencil
+    depthBoundsTest: DepthBoundsTest,
+    depthBias: DepthBias,
+    depthClamp: DepthClamp,
+    depthTest: DepthTest,
+    depthWrite: DepthWrite,
+    depthCompare: DepthCompare,
+    depthValues: DepthValues,
+
+    stencilTest: StencilTest,
+    stencilOp: StencilOp,
+    stencilCompare: StencilCompare,
+    stencilWrite: StencilWrite,
+    stencilReference: StencilReference,
+
+    // // Color & Blending
+    colorBlend: ColorBlend,
+
+    colorBlendEquation: ColorBlendEquation,
+
+    blendConstants: BlendConstants,
+    colorWriteMask: ColorWriteMask,
+
+    alphaToOne: AlphaToOne,
+    alphaToCoverage: AlphaToCoverage,
+
+    logicOp: LogicOp,
+    logicOpType: LogicOpType,
+
+    // // Advanced / Debug
+    lineWidth: f32,
+    conservativeRasterMode: ConservativeRasterMode,
+
+    fragShadingRate: FragShadingRate,
+};

@@ -1,9 +1,10 @@
 const FrameGraphQueue = @import("../frameBuild/FrameGraphQueue.zig").FrameGraphQueue;
 const MemoryManager = @import("../core/MemoryManager.zig").MemoryManager;
-const TextureEnum = @import("../frameBuild/enums.zig").TextureEnum;
 const UiNode = @import("../render/types/pass/RenderNode.zig").UiNode;
+const TexPassId = @import("../frameBuild/components.zig").TexPassId;
 const EngineData = @import("../EngineData.zig").EngineData;
 const Window = @import("../window/Window.zig").Window;
+const rc = @import("../.configs/renderConfig.zig");
 const ig = @cImport(@cInclude("imgui_ctx.h"));
 const UiData = @import("UiData.zig").UiData;
 const zgui = @import("zgui");
@@ -68,13 +69,13 @@ pub const UiSys = struct {
                 const PayloadPtr = @FieldType(FrameGraphQueue.FrameGraphEvent, "updateTexture");
                 const updateTexPtr = try arena.create(std.meta.Child(PayloadPtr));
                 updateTexPtr.* = .{
-                    .texEnum = .ImguiFontTex,
+                    .texPassId = rc.ImguiFontTex,
                     .data = pixelBytes,
                     .newExtent = .{ .width = @intCast(width), .height = @intCast(height), .depth = 1 },
                 };
                 frameGraphQueue.append(.{ .updateTexture = updateTexPtr });
 
-                texData.tex_id = @enumFromInt(@as(u64, @intFromEnum(TextureEnum.ImguiFontTex)));
+                texData.tex_id = @enumFromInt(@as(u64, rc.ImguiFontTex.val()));
 
                 texData.status = .ok;
             },
@@ -253,11 +254,11 @@ pub const UiSys = struct {
                     if (pcmd.user_callback != null) continue;
 
                     const rawId = @intFromEnum(pcmd.texture_ref.tex_id);
-                    const texEnum: TextureEnum = if (rawId == 0) .ImguiFontTex else @enumFromInt(@as(u16, @intCast(rawId)));
+                    const texPassId: TexPassId = if (rawId == 0) rc.ImguiFontTex else TexPassId.id(@as(u16, @intCast(rawId)));
 
                     try cmdListsArray.append(.{
                         .clipRect = pcmd.clip_rect,
-                        .texEnum = texEnum,
+                        .texPassId = texPassId,
                         .vtxOffset = globalVtxOffset + @as(i32, @intCast(pcmd.vtx_offset)),
                         .idxOffset = globalIdxOffset + pcmd.idx_offset,
                         .elemCount = pcmd.elem_count,
@@ -282,12 +283,12 @@ pub const UiSys = struct {
 
         const PayloadVtx = @FieldType(FrameGraphQueue.FrameGraphEvent, "updateBuffer");
         const updateVtxPtr = try arena.create(std.meta.Child(PayloadVtx));
-        updateVtxPtr.* = .{ .bufEnum = .ImguiVB, .data = vtxBuffer };
+        updateVtxPtr.* = .{ .bufPassId = rc.ImguiVB, .data = vtxBuffer };
         frameGraphQueue.append(.{ .updateBuffer = updateVtxPtr });
 
         const PayloadIdx = @FieldType(FrameGraphQueue.FrameGraphEvent, "updateBuffer");
         const updateIdxPtr = try arena.create(std.meta.Child(PayloadIdx));
-        updateIdxPtr.* = .{ .bufEnum = .ImguiIB, .data = idxBuffer };
+        updateIdxPtr.* = .{ .bufPassId = rc.ImguiIB, .data = idxBuffer };
         frameGraphQueue.append(.{ .updateBuffer = updateIdxPtr });
     }
 

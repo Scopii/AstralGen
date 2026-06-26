@@ -1,6 +1,7 @@
 const MemoryManager = @import("core/MemoryManager.zig").MemoryManager;
 const RNGenerator = @import("core/RNGenerator.zig").RNGenerator;
 const EngineData = @import("EngineData.zig").EngineData;
+const pe = @import("frameBuild/components.zig");
 const sc = @import(".configs/shaderConfig.zig");
 const rc = @import(".configs/renderConfig.zig");
 const zm = @import("zmath");
@@ -27,7 +28,6 @@ const Viewport = @import("viewport/Viewport.zig").Viewport;
 
 const FrameGraphSys = @import("frameBuild/FrameGraphSys.zig").FrameGraphSys;
 const FrameGraphQueue = @import("frameBuild/FrameGraphQueue.zig").FrameGraphQueue;
-const pe = @import("frameBuild/enums.zig");
 
 const RendererOutQueue = @import("render/RendererOutQueue.zig").RendererOutQueue;
 const RendererQueue = @import("render/RendererQueue.zig").RendererQueue;
@@ -57,6 +57,8 @@ pub const App = struct {
 
     pub fn init(memoryMan: *MemoryManager) !App {
         var data: EngineData = .{};
+
+        try FrameGraphSys.init(&data.frameGraph, memoryMan.getAllocator());
 
         WindowSys.init(&data.window) catch |err| {
             std.debug.print("Astral App Error WindowManager could not launch, Err {}\n", .{err});
@@ -90,9 +92,10 @@ pub const App = struct {
 
     pub fn deinit(self: *App) void {
         UiSys.deinit(&self.data.ui);
-        FrameGraphSys.deleteBufferManually(&self.data.frameGraph, .ImguiIB, &self.rendererQueue);
-        FrameGraphSys.deleteBufferManually(&self.data.frameGraph, .ImguiVB, &self.rendererQueue);
-        FrameGraphSys.deleteTextureManually(&self.data.frameGraph, .ImguiFontTex, &self.rendererQueue);
+        FrameGraphSys.deleteBufferManually(&self.data.frameGraph, rc.ImguiIB, &self.rendererQueue);
+        FrameGraphSys.deleteBufferManually(&self.data.frameGraph, rc.ImguiVB, &self.rendererQueue);
+        FrameGraphSys.deleteTextureManually(&self.data.frameGraph, rc.ImguiFontTex, &self.rendererQueue);
+        FrameGraphSys.deinit(&self.data.frameGraph);
         self.renderer.deinit();
         ShaderSys.deinit(&self.data.shader, self.memoryMan.getAllocator());
         WindowSys.deinit(&self.data.window);
@@ -103,8 +106,8 @@ pub const App = struct {
 
         for (0..rc.ENTITY_COUNT) |_| _ = self.data.entityData.createRandomRenderEntity(&self.rng);
 
-        const mainCamId = self.data.entityData.createCameraEntity(.{ .pos = zm.f32x4(0, 5, -20, 0), .yaw = 170 }, .{ .bufEnum = .MainCamUB, .near = 0.1, .far = 100, .fov = 60 });
-        const debugCamId = self.data.entityData.createCameraEntity(.{ .pos = zm.f32x4(0, 20, -45, 0), .yaw = 170 }, .{ .bufEnum = .DebugCamUB, .near = 0.1, .far = 300, .fov = 110 });
+        const mainCamId = self.data.entityData.createCameraEntity(.{ .pos = zm.f32x4(0, 5, -20, 0), .yaw = 170 }, .{ .bufPassId = rc.MainCamUB, .near = 0.1, .far = 100, .fov = 60 });
+        const debugCamId = self.data.entityData.createCameraEntity(.{ .pos = zm.f32x4(0, 20, -45, 0), .yaw = 170 }, .{ .bufPassId = rc.DebugCamUB, .near = 0.1, .far = 300, .fov = 110 });
 
         self.data.viewport.viewports.upsert(10, Viewport{
             .name = "DeptView",
@@ -128,7 +131,7 @@ pub const App = struct {
                 .x = (1920 / 2) / 1 - 10,
                 .y = 40,
                 .resize = true,
-                .texEnums = &[_]pe.TextureEnum{.DepthViewTex},
+                .texPassIds = &[_]pe.TexPassId{rc.DepthViewTex},
                 .viewIds = [4]?ViewportId{ .{ .val = 10 }, null, null, null },
             },
         });
@@ -155,7 +158,7 @@ pub const App = struct {
                 .x = 60,
                 .y = 1080 / 2 - 260,
                 .resize = true,
-                .texEnums = &[_]pe.TextureEnum{.RayMarchInputTex},
+                .texPassIds = &[_]pe.TexPassId{rc.RayMarchInputTex},
                 .viewIds = [4]?ViewportId{ .{ .val = 1 }, null, null, null },
             },
         });
@@ -229,18 +232,18 @@ pub const App = struct {
                 .x = 1920 / 2 - 10,
                 .y = 1080 / 2 + 40,
                 .resize = true,
-                .texEnums = &[_]pe.TextureEnum{
-                    .GridTex,
-                    .GridDepthTex,
+                .texPassIds = &[_]pe.TexPassId{
+                    rc.GridTex,
+                    rc.GridDepthTex,
 
-                    .DebugGridInputTex,
-                    .DebugGridDepthTex,
+                    rc.DebugGridInputTex,
+                    rc.DebugGridDepthTex,
 
-                    .PlaneTex,
-                    .PlaneDepthTex,
+                    rc.PlaneTex,
+                    rc.PlaneDepthTex,
 
-                    .DebugPlaneInputTex,
-                    .DebugPlaneDepthTex,
+                    rc.DebugPlaneInputTex,
+                    rc.DebugPlaneDepthTex,
                 },
                 .viewIds = [4]?ViewportId{ .{ .val = 3 }, .{ .val = 2 }, .{ .val = 4 }, .{ .val = 5 } },
             },
@@ -249,9 +252,9 @@ pub const App = struct {
 
     pub fn setupResources(self: *App) !void {
         try ShaderSys.update(&self.data.shader, &self.shaderQueue, &self.rendererQueue, self.memoryMan);
-        try FrameGraphSys.createBufferManually(&self.data.frameGraph, .ImguiIB, &self.rendererQueue, self.memoryMan);
-        try FrameGraphSys.createBufferManually(&self.data.frameGraph, .ImguiVB, &self.rendererQueue, self.memoryMan);
-        try FrameGraphSys.createTextureManually(&self.data.frameGraph, .ImguiFontTex, &self.rendererQueue, self.memoryMan);
+        try FrameGraphSys.createBufferManually(&self.data.frameGraph, rc.ImguiIB, &self.rendererQueue, self.memoryMan);
+        try FrameGraphSys.createBufferManually(&self.data.frameGraph, rc.ImguiVB, &self.rendererQueue, self.memoryMan);
+        try FrameGraphSys.createTextureManually(&self.data.frameGraph, rc.ImguiFontTex, &self.rendererQueue, self.memoryMan);
 
         try UiSys.init(&self.data.ui, self.memoryMan);
     }
@@ -348,7 +351,7 @@ pub const App = struct {
                             }
 
                             const addTextureDataPtr = try arena.create(AddTex);
-                            addTextureDataPtr.* = .{ .texEnum = .TestTileTex, .data = std.mem.sliceAsBytes(pixels), .newExtent = null };
+                            addTextureDataPtr.* = .{ .texPassId = rc.TestTileTex, .data = std.mem.sliceAsBytes(pixels), .newExtent = null };
                             self.frameGraphQueue.append(.{ .updateTexture = addTextureDataPtr });
                         },
                         .GuiUpdate => {},

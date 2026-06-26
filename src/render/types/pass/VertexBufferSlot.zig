@@ -1,13 +1,12 @@
-const BufPassId = @import("../../../frameBuild/components.zig").BufPassId;
 const vk = @import("../../../.modules/vk.zig").c;
 
-pub const VertexBufferUse = struct {
-    bufInput: BufPassId,
+pub const VertexBufferSlot = struct {
+    bufInput: []const u8,
     binding: u32,
     stride: u32,
     inputRate: vk.VkVertexInputRate = vk.VK_VERTEX_INPUT_RATE_VERTEX,
 
-    pub fn init(bufInput: BufPassId, binding: u32, stride: u32, inputRate: vk.VkVertexInputRate) VertexBufferUse {
+    pub fn init(bufInput: []const u8, binding: u32, stride: u32, inputRate: vk.VkVertexInputRate) VertexBufferSlot {
         return .{ .bufInput = bufInput, .binding = binding, .stride = stride, .inputRate = inputRate };
     }
 };

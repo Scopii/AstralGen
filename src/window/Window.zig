@@ -1,5 +1,5 @@
 const ViewportId = @import("../viewport/ViewportSys.zig").ViewportId;
-const TextureEnum = @import("../frameBuild/enums.zig").TextureEnum;
+const TexPassId = @import("../frameBuild/components.zig").TexPassId;
 const rc = @import("../.configs/renderConfig.zig");
 const sdl = @import("../.modules/sdl.zig").c;
 const vk = @import("../.modules/vk.zig").c;
@@ -10,7 +10,7 @@ pub const Window = struct {
     name: []const u8,
     handle: *sdl.SDL_Window,
     state: WindowState = .needCreation,
-    linkedTexEnums: [rc.LINKED_TEX_MAX]?TextureEnum,
+    linkedTexPassId: [rc.LINKED_TEX_MAX]?TexPassId,
     extent: vk.VkExtent2D,
     id: WindowId,
     resizeTex: bool,
@@ -23,11 +23,11 @@ pub const Window = struct {
         windowProps: sdl.SDL_PropertiesID,
         extent: vk.VkExtent2D,
         resizeTex: bool,
-        linkedTexEnums: []const TextureEnum,
+        linkedTexPassId: []const TexPassId,
         viewIds: [4]?ViewportId,
         name: []const u8,
     ) !Window {
-        if (linkedTexEnums.len > rc.LINKED_TEX_MAX) return error.WindowLinkedTexturesOverflow;
+        if (linkedTexPassId.len > rc.LINKED_TEX_MAX) return error.WindowLinkedTexturesOverflow;
 
         const winHandle = sdl.SDL_CreateWindowWithProperties(windowProps) orelse {
             std.log.err("SDL_CreateWindowWithProperties failed: {s}\n", .{sdl.SDL_GetError()});
@@ -35,8 +35,8 @@ pub const Window = struct {
         };
         const windowId = sdl.SDL_GetWindowID(winHandle);
 
-        var actualTexEnums: [rc.LINKED_TEX_MAX]?TextureEnum = .{null} ** rc.LINKED_TEX_MAX;
-        for (0..linkedTexEnums.len) |i| actualTexEnums[i] = linkedTexEnums[i];
+        var actualTexEnums: [rc.LINKED_TEX_MAX]?TexPassId = .{null} ** rc.LINKED_TEX_MAX;
+        for (0..linkedTexPassId.len) |i| actualTexEnums[i] = linkedTexPassId[i];
 
         var window = Window{
             .name = name,
@@ -44,7 +44,7 @@ pub const Window = struct {
             .extent = extent,
             .id = .{ .val = windowId },
             .resizeTex = resizeTex,
-            .linkedTexEnums = actualTexEnums,
+            .linkedTexPassId = actualTexEnums,
             .viewIds = viewIds,
         };
 

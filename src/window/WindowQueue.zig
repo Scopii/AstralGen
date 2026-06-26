@@ -1,6 +1,6 @@
 const ViewportId = @import("../viewport/ViewportSys.zig").ViewportId;
 const FixedList = @import("../.structures/FixedList.zig").FixedList;
-const TextureEnum = @import("../frameBuild/enums.zig").TextureEnum;
+const TexPassId = @import("../frameBuild/components.zig").TexPassId;
 const std = @import("std");
 
 pub const WindowQueue = struct {
@@ -20,5 +20,5 @@ pub const WindowQueue = struct {
 };
 
 pub const WindowEvent = union(enum) {
-    addWindow: struct { title: [:0]const u8, w: c_int, h: c_int, x: c_int, y: c_int, resize: bool, texEnums: []const TextureEnum, viewIds: [4]?ViewportId },
+    addWindow: struct { title: [:0]const u8, w: c_int, h: c_int, x: c_int, y: c_int, resize: bool, texPassIds: []const TexPassId, viewIds: [4]?ViewportId },
 };

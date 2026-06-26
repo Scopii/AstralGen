@@ -25,3 +25,20 @@ pub fn DepthView(def: struct {
         },
     });
 }
+
+pub const depthViewPass = p.PassDefinition.init(.{
+    .name = "DepthView",
+    .execution = .{
+        .compute = .{
+            .workgroups = .{ .x = 8, .y = 8, .z = 1 },
+            .outputTexDispatch = true,
+        },
+    },
+    .outputTex = "DepthViewTex",
+    .passAttributes = &.{
+        p.PassAttrib{ .shaderInf = sc.depthViewComp },
+        p.PassAttrib{ .bufSlot = p.BufferSlot.init(.{ .in = "MainCamUB" }, .Compute, .UniformRead, 3) },
+        p.PassAttrib{ .texSlot = p.TextureSlot.init(.{ .in = "DepthViewTex" }, .Compute, .StorageWrite, 0) },
+        p.PassAttrib{ .texSlot = p.TextureSlot.init(.{ .in = "DebugGridDepthOutputTex" }, .Compute, .SampledRead, 1) },
+    },
+});

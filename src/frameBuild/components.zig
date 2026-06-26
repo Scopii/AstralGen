@@ -6,40 +6,75 @@ const BufInf = @import("../render/types/res/BufferMeta.zig").BufferMeta.BufInf;
 const BufId = @import("../render/types/res/BufferMeta.zig").BufferMeta.BufId;
 pub const pe = @import("enums.zig");
 
-pub const PassId = struct { val: u16 };
+const IdAdvanced = @import("../globalHelper.zig").IdAdvanced;
+const Id = @import("../globalHelper.zig").Id;
+
+pub const BufPassId = Id(u16, .BufPassId);
+pub const TexPassId = Id(u16, .TexPassId);
+pub const PassId = Id(u16, .PassId);
+
+// pub const TexPassId = IdAdvanced(u16, .TexPassId, &.{
+//     .{ .RayMarchInputTex, null },
+//     .{ .GridTex, null },
+//     .{ .GridDepthTex, null },
+//     .{ .DebugGridInputTex, null },
+//     .{ .DebugGridOutputTex, null },
+//     .{ .DebugGridDepthTex, null },
+//     .{ .DebugGridDepthOutputTex, null },
+//     .{ .PlaneTex, null },
+//     .{ .PlaneDepthTex, null },
+//     .{ .DebugPlaneInputTex, null },
+//     .{ .DebugPlaneOutputTex, null },
+//     .{ .DebugPlaneOutputFrustumViewTex, null },
+//     .{ .DebugPlaneDepthTex, null },
+//     .{ .DepthViewTex, null },
+//     .{ .TestTileTex, null },
+//     .{ .ImguiFontTex, null },
+//     // .{ .Swapchain, null },
+// });
 
 pub const TextureLink = struct {
-    in: pe.TextureEnum,
-    out: ?pe.TextureEnum = null,
+    in: TexPassId,
+    out: ?TexPassId = null,
 };
 
 pub const BufferLink = struct {
-    in: pe.BufferEnum,
-    out: ?pe.BufferEnum = null,
+    in: BufPassId,
+    out: ?BufPassId = null,
+};
+
+pub const TextureStringLink = struct {
+    in: []const u8,
+    out: ?[]const u8 = null,
+};
+
+pub const BufferStringLink = struct {
+    in: []const u8,
+    out: ?[]const u8 = null,
 };
 
 pub const TextureAccess = struct {
     pass: PassId,
-    texInput: pe.TextureEnum,
-    texOutput: ?pe.TextureEnum,
+    texInput: TexPassId,
+    texOutput: ?TexPassId,
     access: enum { write, read },
 };
 
 pub const BufferAccess = struct {
     pass: PassId,
-    bufInput: pe.BufferEnum,
-    bufOutput: ?pe.BufferEnum,
+    bufInput: BufPassId,
+    bufOutput: ?BufPassId,
     access: enum { write, read },
 };
 
 pub const TextureDependancy = struct {
-    texEnum: pe.TextureEnum,
+    tex: TexPassId,
     predecessor: PassId,
     successor: PassId,
 };
 
 pub const BufferDependancy = struct {
-    bufEnum: pe.BufferEnum,
+    buf: BufPassId,
     predecessor: PassId,
     successor: PassId,
 };
@@ -50,44 +85,44 @@ pub const GraphNode = struct {
 };
 
 pub const TextureLifetime = struct {
-    texEnum: pe.TextureEnum,
+    tex: TexPassId,
     earliest: u16,
     latest: u16,
 };
 
 pub const BufferLifetime = struct {
-    bufEnum: pe.BufferEnum,
+    buf: BufPassId,
     earliest: u16,
     latest: u16,
 };
 
 pub const BufGroupLifetime = struct {
-    rootBuf: pe.BufferEnum,
+    rootBuf: BufPassId,
     earliest: u16,
     latest: u16,
 };
 
 pub const TexGroupLifetime = struct {
-    rootTex: pe.TextureEnum,
+    rootTex: TexPassId,
     earliest: u16,
     latest: u16,
 };
 
 pub const BufLevelLifetime = struct {
-    bufEnum: pe.BufferEnum,
+    buf: BufPassId,
     firstLevel: u16,
     lastLevel: u16,
 };
 
 pub const TexLevelLifetime = struct {
-    texEnum: pe.TextureEnum,
+    tex: TexPassId,
     firstLevel: u16,
     lastLevel: u16,
 };
 
 pub const BufferGroup = struct {
     rootPass: PassId,
-    rootBuf: pe.BufferEnum,
+    rootBuf: BufPassId,
     startMapIndex: u16,
     endMapIndex: u16,
     bufDesc: BufDesc,
@@ -95,30 +130,30 @@ pub const BufferGroup = struct {
 
 pub const TextureGroup = struct {
     rootPass: PassId,
-    rootTex: pe.TextureEnum,
+    rootTex: TexPassId,
     startMapIndex: u16,
     endMapIndex: u16,
     texDesc: TexDesc,
 };
 
 pub const BufGroupChange = struct {
-    rootBuf: pe.BufferEnum,
+    rootBuf: BufPassId,
     change: enum { created, deleted, newDesc, newPass, newPassAndDesc, unchanged },
 };
 
 pub const TexGroupChange = struct {
-    rootTex: pe.TextureEnum,
+    rootTex: TexPassId,
     change: enum { created, deleted, newDesc, newPass, newPassAndDesc, unchanged },
 };
 
 pub const PhysicalBufLifetime = struct {
-    bufDescEnum: pe.BufferEnum,
+    bufDescId: BufPassId,
     earliest: u16,
     latest: u16,
 };
 
 pub const PhysicalTexLifetime = struct {
-    texDescEnum: pe.TextureEnum,
+    texDescId: TexPassId,
     earliest: u16,
     latest: u16,
 };
@@ -135,14 +170,14 @@ pub const TextureClear = struct {
 
 pub const TransientBuffer = struct {
     unusedCounter: u8 = 0,
-    bufId: BufId,
-    bufDescEnum: pe.BufferEnum,
+    hardwareBuf: BufId,
+    bufDescId: BufPassId,
 };
 
 pub const TransientTexture = struct {
     unusedCounter: u8 = 0,
-    texId: TexId,
-    texDescEnum: pe.TextureEnum,
+    hardwareTex: TexId,
+    texDescId: TexPassId,
 };
 
 pub const PassAccessRange = struct {

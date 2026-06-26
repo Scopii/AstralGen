@@ -4,8 +4,8 @@ const p = @import("../passImport.zig");
 
 pub fn ImGuiPass(def: struct {
     string: []const u8,
-    vertexBuf: p.BufferEnum,
-    indexBuf: p.BufferEnum,
+    vertexBuf: p.BufPassId,
+    indexBuf: p.BufPassId,
 }) p.PassDef {
     return p.PassDef.Graphics(.{
         .name = def.string,

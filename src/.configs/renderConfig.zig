@@ -19,7 +19,7 @@ pub const ROBUST_VALIDATION = false;
 pub const GPU_TIMERS = true;
 pub const GPU_STATS = false;
 
-pub const GPU_QUERY_INTERVAL = 100;
+pub const GPU_QUERY_INTERVAL = 1;
 pub const GPU_TIME_QUERYS = 63;
 pub const GPU_STATS_QUERYS: u8 = 32;
 pub const STATS_MASK: vk.VkQueryPipelineStatisticFlagBits =
@@ -224,3 +224,32 @@ pub const depthViewTexDesc = TexDesc{
     .update = .Rarely,
     .resize = .Fit,
 };
+
+pub const BufPassId = @import("../frameBuild/components.zig").BufPassId;
+pub const QuantIndirectInputSB: BufPassId = .id(1);
+pub const QuantIndirectOutputSB: BufPassId = .id(2);
+pub const ReadbackSB: BufPassId = .id(3);
+pub const EntitySB: BufPassId = .id(4);
+pub const MainCamUB: BufPassId = .id(5);
+pub const DebugCamUB: BufPassId = .id(6);
+pub const ImguiVB: BufPassId = .id(7);
+pub const ImguiIB: BufPassId = .id(8);
+
+pub const TexPassId = @import("../frameBuild/components.zig").TexPassId;
+pub const RayMarchInputTex: TexPassId = .id(1);
+pub const GridTex: TexPassId = .id(2);
+pub const GridDepthTex: TexPassId = .id(3);
+pub const DebugGridInputTex: TexPassId = .id(4);
+pub const DebugGridOutputTex: TexPassId = .id(5);
+pub const DebugGridDepthTex: TexPassId = .id(6);
+pub const DebugGridDepthOutputTex: TexPassId = .id(7);
+pub const PlaneTex: TexPassId = .id(8);
+pub const PlaneDepthTex: TexPassId = .id(9);
+pub const DebugPlaneInputTex: TexPassId = .id(10);
+pub const DebugPlaneOutputTex: TexPassId = .id(11);
+pub const DebugPlaneOutputFrustumViewTex: TexPassId = .id(12);
+pub const DebugPlaneDepthTex: TexPassId = .id(13);
+pub const DepthViewTex: TexPassId = .id(14);
+pub const TestTileTex: TexPassId = .id(15);
+pub const ImguiFontTex: TexPassId = .id(16);
+// pub const Swapchain: TexPassId = .id(17);

@@ -1,7 +1,7 @@
 const TextureAssignments = @import("../../../frameBuild/6_resourceAssigner/ResourceAssignerData.zig").ResourceAssignerData.TextureAssignments;
 const BufferAssignments = @import("../../../frameBuild/6_resourceAssigner/ResourceAssignerData.zig").ResourceAssignerData.BufferAssignments;
-const TextureEnum = @import("../../../frameBuild/enums.zig").TextureEnum;
-const BufferEnum = @import("../../../frameBuild/enums.zig").BufferEnum;
+const TexPassId = @import("../../../frameBuild/components.zig").TexPassId;
+const BufPassId = @import("../../../frameBuild/components.zig").BufPassId;
 const ResourceMan = @import("../../sys/ResourceMan.zig").ResourceMan;
 const BufferUse = @import("../pass/BufferUse.zig").BufferUse;
 const TextureUse = @import("../pass/TextureUse.zig").TextureUse;
@@ -64,16 +64,16 @@ pub const PushData = extern struct {
     }
 };
 
-fn resolveTexture(texEnum: TextureEnum, texAssigns: *const TextureAssignments) !TexId {
-    if (texAssigns.isKeyUsed(@intFromEnum(texEnum)) == true) return texAssigns.getByKey(@intFromEnum(texEnum)) else {
-        std.debug.print("Error: Texture {s} not assigned\n", .{@tagName(texEnum)});
+fn resolveTexture(texPassId: TexPassId, texAssigns: *const TextureAssignments) !TexId {
+    if (texAssigns.isKeyUsed(texPassId.val()) == true) return texAssigns.getByKey(texPassId.val()) else {
+        std.debug.print("Error: Texture Pass ID {} not assigned\n", .{texPassId.val()});
         return error.TextureNotAssigned;
     }
 }
 
-fn resolveBuffer(bufEnum: BufferEnum, bufAssigns: *const BufferAssignments) !BufId {
-    if (bufAssigns.isKeyUsed(@intFromEnum(bufEnum)) == true) return bufAssigns.getByKey(@intFromEnum(bufEnum)) else {
-        std.debug.print("Error: Buffer {s} not assigned\n", .{@tagName(bufEnum)});
+fn resolveBuffer(bufPassId: BufPassId, bufAssigns: *const BufferAssignments) !BufId {
+    if (bufAssigns.isKeyUsed(bufPassId.val()) == true) return bufAssigns.getByKey(bufPassId.val()) else {
+        std.debug.print("Error: Buffer Pass ID {} not assigned\n", .{bufPassId.val()});
         return error.BufferNotAssigned;
     }
 }

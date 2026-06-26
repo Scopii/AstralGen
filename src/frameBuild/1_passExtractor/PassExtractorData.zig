@@ -8,5 +8,5 @@ const rc = @import("../../.configs/renderConfig.zig");
 
 pub const PassExtractorData = struct {
     passStrings: SimpleMap([]const u8, rc.PASS_MAX, u16, rc.PASS_MAX, 0) = .{}, // Maybe Rename Pass Size?
-    renderNodes: LinkedMap(RenderNode, rc.PASS_MAX, u16, rc.PASS_MAX, 0) = .{}, // Node Size > Pass Size
+    renderNodes: LinkedMap(RenderNode, rc.PASS_MAX, u16, rc.PASS_MAX, 0) = .{}, // Node Size > Pass Size (Has Composites/Blits) Should Split!
 };

@@ -121,7 +121,7 @@ pub const CameraSys = struct {
                 const Payload = std.meta.Child(PayloadPtr);
 
                 const updateBufferPtr = try arena.create(Payload);
-                updateBufferPtr.* = .{ .bufEnum = camComp.bufEnum, .data = std.mem.asBytes(camDataPtr) };
+                updateBufferPtr.* = .{ .bufPassId = camComp.bufPassId, .data = std.mem.asBytes(camDataPtr) };
 
                 frameGraphQueue.append(.{ .updateBuffer = updateBufferPtr });
 

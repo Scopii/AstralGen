@@ -5,9 +5,8 @@ const BufGroupLifetime = @import("../../frameBuild/components.zig").BufGroupLife
 const TexGroupLifetime = @import("../../frameBuild/components.zig").TexGroupLifetime;
 
 const pe = @import("../enums.zig");
-const TextureEnum = pe.TextureEnum;
-const BufferEnum = pe.BufferEnum;
 
+const ResourceRegistryData = @import("../0_resourceRegistry/ResourceRegistryData.zig").ResourceRegistryData;
 const PassExtractorData = @import("../1_passExtractor/PassExtractorData.zig").PassExtractorData;
 const ResourceExtractorData = @import("../2_resourceExtractor/ResourceExtractorData.zig").ResourceExtractorData;
 const DependancyExtractorData = @import("../3_dependancyExtractor/DependancyExtractorData.zig").DependancyExtractorData;
@@ -19,7 +18,12 @@ const LifetimeMergerData = @import("LifetimeMergerData.zig").LifetimeMergerData;
 // Step 5.2
 
 pub const LifetimeMergerSys = struct {
-    pub fn buildPassResources(lifetimeMerger: *LifetimeMergerData, lifetimeExtractor: *const LifetimeExtractorData, resourceMapper: *const ResourceMapperData) void {
+    pub fn buildPassResources(
+        lifetimeMerger: *LifetimeMergerData,
+        lifetimeExtractor: *const LifetimeExtractorData,
+        resourceMapper: *const ResourceMapperData,
+        resourceRegistry: *const ResourceRegistryData,
+    ) !void {
         lifetimeMerger.transientBufGroupLifetimes.clear();
         lifetimeMerger.transientTexGroupLifetimes.clear();
 
@@ -42,12 +46,12 @@ pub const LifetimeMergerSys = struct {
         lifetimeMerger.transientBufGroupLifetimes.selectionSort(greaterGroup);
 
         // NEW Transient Texture Group Lifetime Merge
-        for (resourceMapper.texGroupsTransient.getConstItems()) |group| { 
+        for (resourceMapper.texGroupsTransient.getConstItems()) |group| {
             var earliestLife: ?u16 = null;
             var latestLife: ?u16 = null;
 
             for (group.startMapIndex..group.endMapIndex + 1) |mapIndex| {
-                const texKey = resourceMapper.texMapTransient.getKeyByIndex(@intCast(mapIndex)); 
+                const texKey = resourceMapper.texMapTransient.getKeyByIndex(@intCast(mapIndex));
                 const texLifetime = lifetimeExtractor.texLifetimes.getByKey(texKey);
 
                 if (earliestLife == null or texLifetime.earliest < earliestLife.?) earliestLife = texLifetime.earliest;
@@ -63,11 +67,13 @@ pub const LifetimeMergerSys = struct {
             std.debug.print("5.2.LifetimeMerger: \n", .{});
             // Buffer Debug
             for (lifetimeMerger.transientBufGroupLifetimes.constSlice(), 0..) |groupLifetime, i| {
-                std.debug.print("- {}. Transient Buf Group (Root {s}) ({} -> {})\n", .{ i, @tagName(groupLifetime.rootBuf), groupLifetime.earliest, groupLifetime.latest });
+                const bufName = try resourceRegistry.getBufferName(groupLifetime.rootBuf);
+                std.debug.print("- {}. Transient Buf Group (Root {s}) ({} -> {})\n", .{ i, bufName, groupLifetime.earliest, groupLifetime.latest });
             }
             // Texture Debug
             for (lifetimeMerger.transientTexGroupLifetimes.constSlice(), 0..) |groupLifetime, i| {
-                std.debug.print("- {}. Transient Tex Group (Root {s}) ({} -> {})\n", .{ i, @tagName(groupLifetime.rootTex), groupLifetime.earliest, groupLifetime.latest });
+                const texName = try resourceRegistry.getTextureName(groupLifetime.rootTex);
+                std.debug.print("- {}. Transient Tex Group (Root {s}) ({} -> {})\n", .{ i, texName, groupLifetime.earliest, groupLifetime.latest });
             }
             std.debug.print("\n", .{});
         }

@@ -5,14 +5,13 @@ const BufDesc = @import("../../render/types/res/BufferMeta.zig").BufferMeta.BufD
 const rc = @import("../../.configs/renderConfig.zig");
 const std = @import("std");
 
+const ResourceRegistryData = @import("../0_resourceRegistry/ResourceRegistryData.zig").ResourceRegistryData;
 const LifetimeMergerData = @import("../5.2_lifetimeMerger/LifetimeMergerData.zig").LifetimeMergerData;
 const ResourceMapperData = @import("../5.1_resourceMapper/ResourceMapperData.zig").ResourceMapperData;
 const GroupMergerData = @import("GroupMergerData.zig").GroupMergerData;
 const ResourceExtractorData = @import("../2_resourceExtractor/ResourceExtractorData.zig").ResourceExtractorData;
 
 const pe = @import("../enums.zig");
-const TextureEnum = pe.TextureEnum;
-const BufferEnum = pe.BufferEnum;
 
 // Step 5.4
 
@@ -22,7 +21,8 @@ pub const GroupMergerSys = struct {
         resourceExtractor: *ResourceExtractorData,
         lifetimeMerger: *const LifetimeMergerData,
         resourceMapper: *const ResourceMapperData,
-    ) void {
+        resourceRegistry: *const ResourceRegistryData,
+    ) !void {
         // Cleanup and Prep
         groupMerger.sharedBufLifetimes.clear();
         groupMerger.sharedTexLifetimes.clear();
@@ -35,14 +35,14 @@ pub const GroupMergerSys = struct {
 
         // Buffer Group Sharing
         for (lifetimeMerger.transientBufGroupLifetimes.constSlice()) |groupLifetime| {
-            const bufGroupKey: u16 = @intFromEnum(groupLifetime.rootBuf);
+            const bufGroupKey: u16 = groupLifetime.rootBuf.val();
             const bufGroup = resourceMapper.bufGroupsTransient.getByKey(bufGroupKey);
             const bufGroupDesc = resourceExtractor.bufDescriptions.getByKey(bufGroupKey);
 
             var candidateIndex: ?u16 = null;
 
             for (groupMerger.sharedBufLifetimes.slice(), 0..) |*physLifetime, index| {
-                const physLifetimeDesc = resourceExtractor.bufDescriptions.getByKey(@intFromEnum(physLifetime.bufDescEnum));
+                const physLifetimeDesc = resourceExtractor.bufDescriptions.getByKey(physLifetime.bufDescId.val());
 
                 // check if physLifetime could extend forwards
                 if (physLifetime.latest < groupLifetime.earliest) {
@@ -64,7 +64,7 @@ pub const GroupMergerSys = struct {
                 groupMerger.bufShareIndexMap.upsert(bufGroupKey, candiate);
             } else {
                 const physBufLifetime = PhysicalBufLifetime{
-                    .bufDescEnum = groupLifetime.rootBuf,
+                    .bufDescId = groupLifetime.rootBuf,
                     .earliest = groupLifetime.earliest,
                     .latest = groupLifetime.latest,
                 };
@@ -82,14 +82,14 @@ pub const GroupMergerSys = struct {
 
         // Texture Group Sharing
         for (lifetimeMerger.transientTexGroupLifetimes.constSlice()) |groupLifetime| {
-            const texGroupKey: u16 = @intFromEnum(groupLifetime.rootTex);
+            const texGroupKey: u16 = groupLifetime.rootTex.val();
             const texGroup = resourceMapper.texGroupsTransient.getByKey(texGroupKey);
             const texGroupDesc = resourceExtractor.texDescriptions.getByKey(texGroupKey);
 
             var candidateIndex: ?u16 = null;
 
             for (groupMerger.sharedTexLifetimes.slice(), 0..) |*physLifetime, index| {
-                const physLifetimeDesc = resourceExtractor.texDescriptions.getByKey(@intFromEnum(physLifetime.texDescEnum));
+                const physLifetimeDesc = resourceExtractor.texDescriptions.getByKey(physLifetime.texDescId.val());
 
                 // check if physLifetime could extend forwards
                 if (physLifetime.latest < groupLifetime.earliest) {
@@ -110,7 +110,7 @@ pub const GroupMergerSys = struct {
                 groupMerger.texShareIndexMap.upsert(texGroupKey, candiate);
             } else {
                 const physTexLifetime = PhysicalTexLifetime{
-                    .texDescEnum = groupLifetime.rootTex,
+                    .texDescId = groupLifetime.rootTex,
                     .earliest = groupLifetime.earliest,
                     .latest = groupLifetime.latest,
                 };
@@ -135,8 +135,8 @@ pub const GroupMergerSys = struct {
             std.debug.print("\n", .{});
             for (groupMerger.bufShareIndexMap.getConstItems(), 0..) |sharedIndex, i| {
                 const bufKey = groupMerger.bufShareIndexMap.getKeyByIndex(@intCast(i));
-                const bufEnum: BufferEnum = @enumFromInt(bufKey);
-                std.debug.print("- {}. Buf {s} -> Shared Index {}\n", .{ i, @tagName(bufEnum), sharedIndex });
+                const bufName = try resourceRegistry.getBufferName(.id(bufKey));
+                std.debug.print("- {}. Buf {s} -> Shared Index {}\n", .{ i, bufName, sharedIndex });
             }
             std.debug.print("\n", .{});
             // Texture Debug
@@ -146,8 +146,8 @@ pub const GroupMergerSys = struct {
             std.debug.print("\n", .{});
             for (groupMerger.texShareIndexMap.getConstItems(), 0..) |sharedIndex, i| {
                 const texKey = groupMerger.texShareIndexMap.getKeyByIndex(@intCast(i));
-                const texEnum: TextureEnum = @enumFromInt(texKey);
-                std.debug.print("- {}. Tex {s} -> Shared Index {}\n", .{ i, @tagName(texEnum), sharedIndex });
+                const texName = try resourceRegistry.getTextureName(.id(texKey));
+                std.debug.print("- {}. Tex {s} -> Shared Index {}\n", .{ i, texName, sharedIndex });
             }
             std.debug.print("\n", .{});
         }

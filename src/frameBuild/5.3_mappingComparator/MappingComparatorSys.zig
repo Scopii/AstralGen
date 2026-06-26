@@ -2,27 +2,26 @@ const TexDesc = @import("../../render/types/res/TextureMeta.zig").TextureMeta.Te
 const BufDesc = @import("../../render/types/res/BufferMeta.zig").BufferMeta.BufDesc;
 const TexGroupChange = @import("../../frameBuild/components.zig").TexGroupChange;
 const BufGroupChange = @import("../../frameBuild/components.zig").BufGroupChange;
+const TexPassId = @import("../components.zig").TexPassId;
+const BufPassId = @import("../components.zig").BufPassId;
 const rc = @import("../../.configs/renderConfig.zig");
-const pe = @import("../enums.zig");
 const std = @import("std");
 
+const ResourceRegistryData = @import("../0_resourceRegistry/ResourceRegistryData.zig").ResourceRegistryData;
 const ResourceMapperData = @import("../5.1_resourceMapper/ResourceMapperData.zig").ResourceMapperData;
 const MappingComparatorData = @import("MappingComparatorData.zig").MappingComparatorData;
-
-const TextureEnum = pe.TextureEnum;
-const BufferEnum = pe.BufferEnum;
 
 // Step 6
 
 pub const MappingComparatorSys = struct {
-    pub fn buildChanges(mappingComparator: *MappingComparatorData, resourceMapper: *const ResourceMapperData) void {
+    pub fn buildChanges(mappingComparator: *MappingComparatorData, resourceMapper: *const ResourceMapperData, resourceRegistry: *const ResourceRegistryData) !void {
         mappingComparator.persistentBufChanges.clear();
         mappingComparator.persistentTexChanges.clear();
 
         // Buffer Changes
         for (resourceMapper.bufGroupsPersistent.getConstItems(), 0..) |newGroupInf, i| {
             const groupRootKey: u16 = resourceMapper.bufGroupsPersistent.getKeyByIndex(@intCast(i));
-            const groupRootEnum: BufferEnum = @enumFromInt(groupRootKey);
+            const groupRootId: BufPassId = .id(groupRootKey);
 
             const isGroupInLast = resourceMapper.lastBufGroupsPersistent.isKeyUsed(groupRootKey);
 
@@ -30,29 +29,29 @@ pub const MappingComparatorSys = struct {
                 const lastGroupInf = resourceMapper.lastBufGroupsPersistent.getByKey(groupRootKey);
 
                 const newDesc = !bufDescEqual(&lastGroupInf.bufDesc, &newGroupInf.bufDesc);
-                const newPass = if (lastGroupInf.rootPass.val == newGroupInf.rootPass.val) false else true;
+                const newPass = if (lastGroupInf.rootPass.val() == newGroupInf.rootPass.val()) false else true;
 
-                if (newDesc == true and newPass == true) mappingComparator.persistentBufChanges.appendAssumeCapacity(.{ .rootBuf = groupRootEnum, .change = .newDesc });
-                if (newDesc == true and newPass == false) mappingComparator.persistentBufChanges.appendAssumeCapacity(.{ .rootBuf = groupRootEnum, .change = .newPass });
-                if (newDesc == false and newPass == true) mappingComparator.persistentBufChanges.appendAssumeCapacity(.{ .rootBuf = groupRootEnum, .change = .newPassAndDesc });
-                if (newDesc == false and newPass == false) mappingComparator.persistentBufChanges.appendAssumeCapacity(.{ .rootBuf = groupRootEnum, .change = .unchanged });
+                if (newDesc == true and newPass == true) mappingComparator.persistentBufChanges.appendAssumeCapacity(.{ .rootBuf = groupRootId, .change = .newDesc });
+                if (newDesc == true and newPass == false) mappingComparator.persistentBufChanges.appendAssumeCapacity(.{ .rootBuf = groupRootId, .change = .newPass });
+                if (newDesc == false and newPass == true) mappingComparator.persistentBufChanges.appendAssumeCapacity(.{ .rootBuf = groupRootId, .change = .newPassAndDesc });
+                if (newDesc == false and newPass == false) mappingComparator.persistentBufChanges.appendAssumeCapacity(.{ .rootBuf = groupRootId, .change = .unchanged });
             } else {
-                mappingComparator.persistentBufChanges.appendAssumeCapacity(BufGroupChange{ .rootBuf = groupRootEnum, .change = .created });
+                mappingComparator.persistentBufChanges.appendAssumeCapacity(BufGroupChange{ .rootBuf = groupRootId, .change = .created });
             }
         }
 
         for (0..resourceMapper.lastBufGroupsPersistent.getLength()) |i| {
             const groupRootKey: u16 = resourceMapper.bufGroupsPersistent.getKeyByIndex(@intCast(i));
-            const groupRootEnum: BufferEnum = @enumFromInt(groupRootKey);
+            const groupRootId: BufPassId = .id(groupRootKey);
 
             const isGroupInNew = resourceMapper.bufGroupsPersistent.isKeyUsed(groupRootKey);
-            if (isGroupInNew == false) mappingComparator.persistentBufChanges.appendAssumeCapacity(BufGroupChange{ .rootBuf = groupRootEnum, .change = .deleted });
+            if (isGroupInNew == false) mappingComparator.persistentBufChanges.appendAssumeCapacity(BufGroupChange{ .rootBuf = groupRootId, .change = .deleted });
         }
 
         // Texture Changes
         for (resourceMapper.texGroupsPersistent.getConstItems(), 0..) |newGroupInf, i| {
             const groupRootKey: u16 = resourceMapper.texGroupsPersistent.getKeyByIndex(@intCast(i));
-            const groupRootEnum: TextureEnum = @enumFromInt(groupRootKey);
+            const groupRootId: TexPassId = .id(groupRootKey);
 
             const isGroupInLast = resourceMapper.lastTexGroupsPersistent.isKeyUsed(groupRootKey);
 
@@ -60,33 +59,35 @@ pub const MappingComparatorSys = struct {
                 const lastGroupInf = resourceMapper.lastTexGroupsPersistent.getByKey(groupRootKey);
 
                 const newDesc = !texDescEqual(&lastGroupInf.texDesc, &newGroupInf.texDesc);
-                const newPass = if (lastGroupInf.rootPass.val == newGroupInf.rootPass.val) false else true;
+                const newPass = if (lastGroupInf.rootPass.val() == newGroupInf.rootPass.val()) false else true;
 
-                if (newDesc == true and newPass == true) mappingComparator.persistentTexChanges.appendAssumeCapacity(.{ .rootTex = groupRootEnum, .change = .newDesc });
-                if (newDesc == true and newPass == false) mappingComparator.persistentTexChanges.appendAssumeCapacity(.{ .rootTex = groupRootEnum, .change = .newPass });
-                if (newDesc == false and newPass == true) mappingComparator.persistentTexChanges.appendAssumeCapacity(.{ .rootTex = groupRootEnum, .change = .newPassAndDesc });
-                if (newDesc == false and newPass == false) mappingComparator.persistentTexChanges.appendAssumeCapacity(.{ .rootTex = groupRootEnum, .change = .unchanged });
+                if (newDesc == true and newPass == true) mappingComparator.persistentTexChanges.appendAssumeCapacity(.{ .rootTex = groupRootId, .change = .newDesc });
+                if (newDesc == true and newPass == false) mappingComparator.persistentTexChanges.appendAssumeCapacity(.{ .rootTex = groupRootId, .change = .newPass });
+                if (newDesc == false and newPass == true) mappingComparator.persistentTexChanges.appendAssumeCapacity(.{ .rootTex = groupRootId, .change = .newPassAndDesc });
+                if (newDesc == false and newPass == false) mappingComparator.persistentTexChanges.appendAssumeCapacity(.{ .rootTex = groupRootId, .change = .unchanged });
             } else {
-                mappingComparator.persistentTexChanges.appendAssumeCapacity(TexGroupChange{ .rootTex = groupRootEnum, .change = .created });
+                mappingComparator.persistentTexChanges.appendAssumeCapacity(TexGroupChange{ .rootTex = groupRootId, .change = .created });
             }
         }
 
         for (0..resourceMapper.lastTexGroupsPersistent.getLength()) |i| {
             const groupRootKey: u16 = resourceMapper.texGroupsPersistent.getKeyByIndex(@intCast(i));
-            const groupRootEnum: TextureEnum = @enumFromInt(groupRootKey);
+            const groupRootId: TexPassId = .id(groupRootKey);
 
             const isGroupInNew = resourceMapper.texGroupsPersistent.isKeyUsed(groupRootKey);
-            if (isGroupInNew == false) mappingComparator.persistentTexChanges.appendAssumeCapacity(TexGroupChange{ .rootTex = groupRootEnum, .change = .deleted });
+            if (isGroupInNew == false) mappingComparator.persistentTexChanges.appendAssumeCapacity(TexGroupChange{ .rootTex = groupRootId, .change = .deleted });
         }
 
         // Debug Output
         if (rc.FRAME_GRAPH_DEBUG) {
             std.debug.print("5.3.MappingComparator: \n", .{});
             for (mappingComparator.persistentBufChanges.constSlice()) |bufGroupChange| {
-                std.debug.print("- Persistent BufGroup {s}: {s}\n", .{ @tagName(bufGroupChange.rootBuf), @tagName(bufGroupChange.change) });
+                const rootBufName = try resourceRegistry.getBufferName(bufGroupChange.rootBuf);
+                std.debug.print("- Persistent BufGroup {s}: {s}\n", .{ rootBufName, @tagName(bufGroupChange.change) });
             }
             for (mappingComparator.persistentTexChanges.constSlice()) |texGroupChange| {
-                std.debug.print("- Persistent TexGroup {s}: {s}\n", .{ @tagName(texGroupChange.rootTex), @tagName(texGroupChange.change) });
+                const rootTexName = try resourceRegistry.getTextureName(texGroupChange.rootTex);
+                std.debug.print("- Persistent TexGroup {s}: {s}\n", .{ rootTexName, @tagName(texGroupChange.change) });
             }
             std.debug.print("\n", .{});
         }

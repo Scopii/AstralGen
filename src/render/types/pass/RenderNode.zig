@@ -1,4 +1,4 @@
-const TextureEnum = @import("../../../frameBuild/enums.zig").TextureEnum;
+const TexPassId = @import("../../../frameBuild/components.zig").TexPassId;
 const WindowId = @import("../../../window/Window.zig").Window.WindowId;
 const PassId = @import("../../../frameBuild/components.zig").PassId;
 const TexId = @import("../res/TextureMeta.zig").TextureMeta.TexId;
@@ -19,7 +19,7 @@ pub const CompositeNode = struct {
     name: []const u8,
     pass: PassId,
     windowId: WindowId,
-    srcTexEnum: ?TextureEnum = null,
+    srcTexPassId: ?TexPassId = null,
     viewWidth: u32,
     viewHeight: u32,
     viewOffsetX: i32,
@@ -37,7 +37,7 @@ pub const UiNode = struct {
 
     pub const UiDraw = struct {
         clipRect: [4]f32,
-        texEnum: TextureEnum,
+        texPassId: TexPassId,
         vtxOffset: i32,
         idxOffset: u32,
         elemCount: u32,
@@ -47,7 +47,7 @@ pub const UiNode = struct {
 pub const ViewportBlit = struct {
     name: []const u8,
     pass: PassId,
-    srcTexEnum: ?TextureEnum = null,
+    srcTexPassId: ?TexPassId = null,
     dstWindowId: WindowId,
     viewWidth: u32,
     viewHeight: u32,

@@ -1,3 +1,4 @@
+const ResourceRegistryData = @import("../0_resourceRegistry/ResourceRegistryData.zig").ResourceRegistryData;
 const ResourceAssignerData = @import("../6_resourceAssigner/ResourceAssignerData.zig").ResourceAssignerData;
 const GraphOptimizerData = @import("../4.5_graphOptimizer/GraphOptimizerData.zig").GraphOptimizerData;
 const PassExtractorData = @import("../1_passExtractor/PassExtractorData.zig").PassExtractorData;
@@ -15,6 +16,7 @@ pub const PassSorterSys = struct {
         graphOptimizer: *const GraphOptimizerData,
         groupMerger: *const GroupMergerData,
         resourceAssigner: *const ResourceAssignerData,
+        _: *const ResourceRegistryData,
     ) !void {
         passSorter.tempPasses.clear();
         passSorter.tempBlits.clear();
@@ -41,18 +43,18 @@ pub const PassSorterSys = struct {
             var neededClears = false;
             // Buffer Clears
             for (groupMerger.bufClears.constSlice()) |bufClear| {
-                if (bufClear.passAfterClear.val == passId.val) {
+                if (bufClear.passAfterClear.val() == passId.val()) {
                     // LOOKUP FOR bufClear.Index to ENUM!
-                    const bufId = resourceAssigner.usedTransientBufs.buffer[bufClear.sharedBufIndex].bufId;
+                    const bufId = resourceAssigner.usedTransientBufs.buffer[bufClear.sharedBufIndex].hardwareBuf;
                     try passSorter.sortedRenderNodes.append(.{ .clearBuffer = bufId });
                     neededClears = true;
                 }
             }
             // Texture Clears
             for (groupMerger.texClears.constSlice()) |texClear| {
-                if (texClear.passAfterClear.val == passId.val) {
+                if (texClear.passAfterClear.val() == passId.val()) {
                     // LOOKUP FOR texClear.Index to ENUM!
-                    const texId = resourceAssigner.usedTransientTexes.buffer[texClear.sharedTexIndex].texId;
+                    const texId = resourceAssigner.usedTransientTexes.buffer[texClear.sharedTexIndex].hardwareTex;
                     try passSorter.sortedRenderNodes.append(.{ .clearTexture = texId });
                     neededClears = true;
                 }
@@ -63,7 +65,7 @@ pub const PassSorterSys = struct {
             // Passes
             for (passSorter.tempPasses.constSlice()) |i| {
                 const key = passExtractor.renderNodes.getKeyByIndex(@intCast(i));
-                if (key == passId.val) {
+                if (key == passId.val()) {
                     const pass = &renderNodes[i].passNode;
                     passSorter.sortedRenderNodes.append(.{ .passNode = pass.* }) catch std.debug.print("7.PassSorter: Pass Append to sortedRenderNodes failed", .{});
                 }
@@ -71,14 +73,14 @@ pub const PassSorterSys = struct {
             // Blits
             for (passSorter.tempBlits.constSlice()) |i| {
                 const blit = &renderNodes[i].viewportBlit;
-                if (blit.pass.val == passId.val) {
+                if (blit.pass.val() == passId.val()) {
                     passSorter.sortedRenderNodes.append(.{ .viewportBlit = blit.* }) catch std.debug.print("7.PassSorter: Blit Append to sortedRenderNodes failed", .{});
                 }
             }
             // Composites
             for (passSorter.tempComposites.constSlice()) |i| {
                 const composite = &renderNodes[i].compositeNode;
-                if (composite.pass.val == passId.val) {
+                if (composite.pass.val() == passId.val()) {
                     passSorter.sortedRenderNodes.append(.{ .compositeNode = composite.* }) catch std.debug.print("7.PassSorter: Composite Append to sortedRenderNodes failed", .{});
                 }
             }

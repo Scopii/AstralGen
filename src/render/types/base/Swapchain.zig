@@ -1,4 +1,4 @@
-const TextureEnum = @import("../../../frameBuild/enums.zig").TextureEnum;
+const TexPassId = @import("../../../frameBuild/components.zig").TexPassId;
 const WindowId = @import("../../../window/Window.zig").Window.WindowId;
 const TexId = @import("../res/TextureMeta.zig").TextureMeta.TexId;
 const rc = @import("../../../.configs/renderConfig.zig");
@@ -13,7 +13,7 @@ pub const Swapchain = struct {
     surface: vk.VkSurfaceKHR,
     handle: vk.VkSwapchainKHR,
     curIndex: u32 = 0,
-    linkedTexEnums: [rc.LINKED_TEX_MAX]?TextureEnum,
+    linkedTexPassIds: [rc.LINKED_TEX_MAX]?TexPassId,
     acquireSems: []vk.VkSemaphore, // indexed by max-in-flight.
     renderSems: []vk.VkSemaphore, // indexed by swapchain images
     textures: []Texture, // indexed by swapchain images
@@ -27,7 +27,7 @@ pub const Swapchain = struct {
         surface: vk.VkSurfaceKHR,
         extent: vk.VkExtent2D,
         gpu: vk.VkPhysicalDevice,
-        linkedTexEnums: [rc.LINKED_TEX_MAX]?TextureEnum,
+        linkedTexPassIds: [rc.LINKED_TEX_MAX]?TexPassId,
         oldHandle: ?vk.VkSwapchainKHR,
         windowId: WindowId,
     ) !Swapchain {
@@ -110,7 +110,7 @@ pub const Swapchain = struct {
             .acquireSems = imgRdySems,
             .renderSems = renderDoneSems,
             .windowId = windowId,
-            .linkedTexEnums = linkedTexEnums,
+            .linkedTexPassIds = linkedTexPassIds,
         };
     }
 
@@ -127,7 +127,7 @@ pub const Swapchain = struct {
     }
 
     pub fn recreate(self: *Swapchain, alloc: Allocator, gpi: vk.VkDevice, gpu: vk.VkPhysicalDevice, instance: vk.VkInstance, newExtent: vk.VkExtent2D) !void {
-        const swapchain = try Swapchain.init(alloc, gpi, self.surface, newExtent, gpu, self.linkedTexEnums, self.handle, self.windowId);
+        const swapchain = try Swapchain.init(alloc, gpi, self.surface, newExtent, gpu, self.linkedTexPassIds, self.handle, self.windowId);
         self.deinit(alloc, gpi, instance, .withoutSurface);
         self.* = swapchain;
     }

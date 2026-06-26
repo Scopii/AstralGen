@@ -1,6 +1,6 @@
 const FixedList = @import("../../../.structures/FixedList.zig").FixedList;
-const TextureEnum = @import("../../../frameBuild/enums.zig").TextureEnum;
-const BufferEnum = @import("../../../frameBuild/enums.zig").BufferEnum;
+const TexPassId = @import("../../../frameBuild/components.zig").TexPassId;
+const BufPassId = @import("../../../frameBuild/components.zig").BufPassId;
 const VertexBufferUse = @import("VertexBufferUse.zig").VertexBufferUse;
 const VertexAttribute = @import("VertexAttribute.zig").VertexAttribute;
 const ShaderInf = @import("../../../shader/ShaderInf.zig").ShaderInf;
@@ -13,19 +13,21 @@ const TextureUse = @import("TextureUse.zig").TextureUse;
 const BufferUse = @import("BufferUse.zig").BufferUse;
 const std = @import("std");
 
+const String = @import("../../../globalHelper.zig").String;
+
 pub const Dispatch = struct { x: u32, y: u32, z: u32 };
 pub const PassNode = struct { pass: PassDef, width: u32, height: u32 };
 
 pub const ComputeExec = struct { workgroups: Dispatch, outputTexDispatch: bool };
-pub const ComputeIndirectExec = struct { indirectBuf: BufferEnum, indirectBufOffset: u64 = 0 };
+pub const ComputeIndirectExec = struct { indirectBuf: BufPassId, indirectBufOffset: u64 = 0 };
 pub const TaskOrMeshExec = struct { workgroups: Dispatch };
-pub const TaskOrMeshIndirectExec = struct { workgroups: Dispatch, indirectBuf: BufferEnum, indirectBufOffset: u64 = 0 };
+pub const TaskOrMeshIndirectExec = struct { workgroups: Dispatch, indirectBuf: BufPassId, indirectBufOffset: u64 = 0 };
 pub const GraphicsExec = struct { vertices: u32, instances: u32, indexCount: u32 };
 
 pub const PassDef = struct {
-    name: FixedList(u8, 30) = .{},
+    name: String(30, "PASS_NAME_MISSING") = .{},
     execution: PassExecution,
-    mainOutputTex: ?TextureEnum,
+    mainOutputTex: ?TexPassId,
 
     // All passes
     shaderIds: FixedList(ShaderId, 3) = .{},
@@ -54,7 +56,7 @@ pub const PassDef = struct {
     pub fn Graphics(
         inf: struct {
             name: []const u8,
-            outputTexId: ?TextureEnum,
+            outputTexId: ?TexPassId,
             execution: GraphicsExec,
             vertex: ShaderInf,
             fragment: ShaderInf,
@@ -81,7 +83,7 @@ pub const PassDef = struct {
             .stencilAtt = inf.stencilAtt,
             .renderState = inf.renderState,
         };
-        pass.name.appendSliceAssumeCapacity(inf.name);
+        pass.name.fill(inf.name);
 
         pass.shaderIds.appendAssumeCapacity(inf.vertex.id);
         pass.shaderIds.appendAssumeCapacity(inf.fragment.id);
@@ -100,7 +102,7 @@ pub const PassDef = struct {
     pub fn Compute(
         inf: struct {
             name: []const u8,
-            outputTexId: ?TextureEnum,
+            outputTexId: ?TexPassId,
             execution: ComputeExec,
             compute: ShaderInf,
             bufUses: []const BufferUse = &.{},
@@ -114,7 +116,7 @@ pub const PassDef = struct {
             .mainOutputTex = inf.outputTexId,
             .execution = .{ .compute = inf.execution },
         };
-        pass.name.appendSliceAssumeCapacity(inf.name);
+        pass.name.fill(inf.name);
 
         pass.shaderIds.appendAssumeCapacity(inf.compute.id);
 
@@ -127,7 +129,7 @@ pub const PassDef = struct {
     pub fn ComputeIndirect(
         inf: struct {
             name: []const u8,
-            outputTexId: ?TexId,
+            outputTexId: ?TexPassId,
             execution: ComputeIndirectExec,
             compute: ShaderInf,
             bufUses: []const BufferUse = &.{},
@@ -139,9 +141,9 @@ pub const PassDef = struct {
 
         var pass = PassDef{
             .mainOutputTex = inf.outputTexId,
-            .execution = .{ .compute = inf.execution },
+            .execution = .{ .computeIndirect = inf.execution },
         };
-        pass.name.appendSliceAssumeCapacity(inf.name);
+        pass.name.fill(inf.name);
 
         pass.shaderIds.appendAssumeCapacity(inf.compute.id);
 
@@ -154,7 +156,7 @@ pub const PassDef = struct {
     pub fn TaskMeshIndirect(
         inf: struct {
             name: []const u8,
-            outputTexId: ?TexId,
+            outputTexId: ?TexPassId,
             execution: TaskOrMeshIndirectExec,
             task: ShaderInf,
             mesh: ShaderInf,
@@ -175,12 +177,12 @@ pub const PassDef = struct {
 
         var pass = PassDef{
             .mainOutputTex = inf.outputTexId,
-            .execution = inf.execution,
+            .execution = .{ .taskOrMeshIndirect = inf.execution },
             .depthAtt = inf.depthAtt,
             .stencilAtt = inf.stencilAtt,
             .renderState = inf.renderState,
         };
-        pass.name.appendSliceAssumeCapacity(inf.name);
+        pass.name.fill(inf.name);
 
         pass.shaderIds.appendAssumeCapacity(inf.task.id);
         pass.shaderIds.appendAssumeCapacity(inf.mesh.id);
@@ -196,7 +198,7 @@ pub const PassDef = struct {
     pub fn Mesh(
         inf: struct {
             name: []const u8,
-            outputTexId: ?TextureEnum,
+            outputTexId: ?TexPassId,
             execution: TaskOrMeshExec,
             mesh: ShaderInf,
             fragment: ShaderInf,
@@ -220,7 +222,7 @@ pub const PassDef = struct {
             .stencilAtt = inf.stencilAtt,
             .renderState = inf.renderState,
         };
-        pass.name.appendSliceAssumeCapacity(inf.name);
+        pass.name.fill(inf.name);
 
         pass.shaderIds.appendAssumeCapacity(inf.mesh.id);
         pass.shaderIds.appendAssumeCapacity(inf.fragment.id);
@@ -235,7 +237,7 @@ pub const PassDef = struct {
     pub fn MeshIndirect(
         inf: struct {
             name: []const u8,
-            outputTexId: ?TextureEnum,
+            outputTexId: ?TexPassId,
             execution: TaskOrMeshIndirectExec,
             mesh: ShaderInf,
             fragment: ShaderInf,
@@ -259,7 +261,7 @@ pub const PassDef = struct {
             .stencilAtt = inf.stencilAtt,
             .renderState = inf.renderState,
         };
-        pass.name.appendSliceAssumeCapacity(inf.name);
+        pass.name.fill(inf.name);
 
         pass.shaderIds.appendAssumeCapacity(inf.mesh.id);
         pass.shaderIds.appendAssumeCapacity(inf.fragment.id);
@@ -272,7 +274,7 @@ pub const PassDef = struct {
     }
 
     pub fn getName(self: *const PassDef) []const u8 {
-        return self.name.constSlice();
+        return self.name.get();
     }
 
     pub fn getShaderIds(self: *const PassDef) []const ShaderId {
@@ -295,7 +297,7 @@ pub const PassDef = struct {
         return self.vertexBuffers.constSlice();
     }
 
-    pub fn getMainTexId(self: *const PassDef) ?TextureEnum {
+    pub fn getMainTexId(self: *const PassDef) ?TexPassId {
         return switch (self.execution) {
             .taskOrMesh => self.mainOutputTex,
             .taskOrMeshIndirect => self.mainOutputTex,

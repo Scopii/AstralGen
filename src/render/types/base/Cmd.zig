@@ -12,7 +12,7 @@ const Shader = @import("Shader.zig").Shader;
 const std = @import("std");
 
 pub const QueryPair = struct {
-    name: []const u8,
+    name: FixedList(u8, 30) = .{},
     typ: enum { Pass, Blit, Other, Composite, Ui },
     startIndex: u8 = 0,
     endIndex: u8 = 0,
@@ -127,7 +127,11 @@ pub const Cmd = struct {
             }
 
             self.writeTimestamp(qPool, @intFromEnum(pipeStage), index);
-            self.timeQueries.upsert(queryPairs, .{ .name = name, .typ = typ, .startIndex = index });
+
+            var queryPair = QueryPair{ .typ = typ, .startIndex = index };
+            queryPair.name.appendSliceAssumeCapacity(name);
+
+            self.timeQueries.upsert(queryPairs, queryPair);
             self.timeQueryCounter += 1;
             return queryPairs;
         }
@@ -188,7 +192,7 @@ pub const Cmd = struct {
                 const diff = results[query.endIndex] - results[query.startIndex];
                 const gpuQueryMs = (@as(f64, @floatFromInt(diff)) * timestampPeriod) / 1_000_000.0;
                 untrackedMs -= gpuQueryMs;
-                std.debug.print(" - {d:.3} ms ({d:5.2} %) {}: {s}\n", .{ gpuQueryMs, (gpuQueryMs / gpuFrameMs) * 100, query.typ, query.name });
+                std.debug.print(" - {d:.3} ms ({d:5.2} %) {}: {s}\n", .{ gpuQueryMs, (gpuQueryMs / gpuFrameMs) * 100, query.typ, query.name.constSlice() });
             }
             std.debug.print("Untracked {d:.3} ms ({d:5.2} %)\n", .{ untrackedMs + 0.00001, (untrackedMs / gpuFrameMs) * 100 + 0.00001 }); // + 0.00001 to avoid precision loss negative
         }
@@ -262,7 +266,10 @@ pub const Cmd = struct {
                     return;
                 }
                 vk.vkCmdBeginQuery(self.handle, pool, index, 0);
-                self.activeStatQuery = .{ .name = name, .typ = .Other, .startIndex = index };
+
+                var queryPair = QueryPair{ .startIndex = index, .typ = .Other };
+                queryPair.name.appendSliceAssumeCapacity(name);
+                self.activeStatQuery = queryPair;
             }
         }
     }
@@ -319,7 +326,7 @@ pub const Cmd = struct {
 
         std.debug.print("Pipeline Stats ({} passes):\n", .{count});
         for (self.statQueries.constSlice()) |query| {
-            std.debug.print(" {s}:\n", .{query.name});
+            std.debug.print(" {s}:\n", .{query.name.constSlice()});
             var resultIndex: u8 = 0;
             for (statLabels) |def| {
                 if (rc.STATS_MASK & @as(u32, @bitCast(def.bit)) != 0) {
