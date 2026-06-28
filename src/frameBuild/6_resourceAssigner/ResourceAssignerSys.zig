@@ -75,7 +75,7 @@ pub const ResourceAssignerSys = struct {
                 // Candidate not found -> create new
                 const candidate = TransientBuffer{
                     .bufDescId = sharedBufLifetime.bufDescId,
-                    .hardwareBuf = .{ .val = try getFreeBufId(resourceAssigner) },
+                    .hardwareBuf = try getFreeBufId(resourceAssigner),
                 };
                 try createTransientBuffer(sharedBufDesc, candidate.hardwareBuf, rendererQueue, memoryMan);
                 resourceAssigner.usedTransientBufs.append(candidate) catch std.debug.print("ERROR: 6.ResourceAssigner: Could not Append to usedTransientBufs\n", .{});
@@ -138,7 +138,7 @@ pub const ResourceAssignerSys = struct {
                 // Candidate not found -> create new
                 const candidate = TransientTexture{
                     .texDescId = sharedTexLifetime.texDescId,
-                    .hardwareTex = .{ .val = try getFreeTexId(resourceAssigner) },
+                    .hardwareTex = try getFreeTexId(resourceAssigner),
                 };
                 try createTransientTexture(sharedTexDesc, candidate.hardwareTex, rendererQueue, memoryMan);
                 resourceAssigner.usedTransientTexes.append(candidate) catch std.debug.print("ERROR: 6.ResourceAssigner: Could not Append to usedTransientTexes\n", .{});
@@ -374,7 +374,7 @@ pub const ResourceAssignerSys = struct {
         };
 
         const bufInf = BufInf{
-            .id = .{ .val = bufId },
+            .id = bufId,
             .mem = bufDesc.mem,
             .elementSize = bufDesc.elementSize,
             .len = bufDesc.len,
@@ -428,7 +428,7 @@ pub const ResourceAssignerSys = struct {
             .frameGraph => resourceAssigner.rootBufPhysicalMap.getByKey(rootBufKey),
             .manuel => resourceAssigner.manualBufs.getByKey(rootBufKey),
         };
-        freeUpBufId(resourceAssigner, bufInf.id.val);
+        freeUpBufId(resourceAssigner, bufInf.id);
 
         switch (authority) {
             .frameGraph => resourceAssigner.rootBufPhysicalMap.remove(rootBufKey),
@@ -439,7 +439,7 @@ pub const ResourceAssignerSys = struct {
         rendererQueue.append(.{ .removeBuffer = bufInf.id });
 
         const rootBufName = resourceRegistry.getBufferName(bufPassId) catch "UNKNOWN";
-        std.debug.print("6.Resource Assigner: Root Buf {s} (BufId {}) Deletion send to Renderer\n", .{ rootBufName, bufInf.id.val });
+        std.debug.print("6.Resource Assigner: Root Buf {s} (BufId {}) Deletion send to Renderer\n", .{ rootBufName, bufInf.id.val() });
     }
 
     pub fn createTexture(
@@ -461,7 +461,7 @@ pub const ResourceAssignerSys = struct {
         };
 
         const texInf = TexInf{
-            .id = .{ .val = texId },
+            .id = texId,
             .mem = texDesc.mem,
             .typ = texDesc.typ,
             .texUse = texDesc.texUse,
@@ -518,7 +518,7 @@ pub const ResourceAssignerSys = struct {
             .frameGraph => resourceAssigner.rootTexPhysicalMap.getByKey(rootTexKey),
             .manuel => resourceAssigner.manualTexes.getByKey(rootTexKey),
         };
-        freeUpTexId(resourceAssigner, texInf.id.val);
+        freeUpTexId(resourceAssigner, texInf.id);
 
         switch (authority) {
             .frameGraph => resourceAssigner.rootTexPhysicalMap.remove(rootTexKey),
@@ -529,23 +529,25 @@ pub const ResourceAssignerSys = struct {
         rendererQueue.append(.{ .removeTexture = texInf.id });
 
         const rootBufName = resourceRegistry.getTextureName(texPassId) catch "UNKNOWN";
-        std.debug.print("6.Resource Assigner: Root Tex {s} (TexId {}) Deletion send to Renderer\n", .{ rootBufName, texInf.id.val });
+        std.debug.print("6.Resource Assigner: Root Tex {s} (TexId {}) Deletion send to Renderer\n", .{ rootBufName, texInf.id.val() });
     }
 
-    pub fn getFreeBufId(resourceAssigner: *ResourceAssignerData) !u16 {
-        return if (resourceAssigner.bufIdPool.isFull() == false) resourceAssigner.bufIdPool.reserveKey() else error.BufIdsFullyUsed;
+    pub fn getFreeBufId(resourceAssigner: *ResourceAssignerData) !BufId {
+        const bufKey = resourceAssigner.bufIdPool.tryReserveKey() orelse return error.BufIdsFullyUsed;
+        return .id(bufKey);
     }
 
-    pub fn freeUpBufId(resourceAssigner: *ResourceAssignerData, bufIdVal: u16) void {
-        resourceAssigner.bufIdPool.freeKey(bufIdVal);
+    pub fn freeUpBufId(resourceAssigner: *ResourceAssignerData, bufId: BufId) void {
+        resourceAssigner.bufIdPool.freeKey(bufId.val());
     }
 
-    pub fn getFreeTexId(resourceAssigner: *ResourceAssignerData) !u16 {
-        return if (resourceAssigner.texIdPool.isFull() == false) resourceAssigner.texIdPool.reserveKey() else error.TexIdsFullyUsed;
+    pub fn getFreeTexId(resourceAssigner: *ResourceAssignerData) !TexId {
+        const texKey = resourceAssigner.texIdPool.tryReserveKey() orelse return error.TexIdsFullyUsed;
+        return .id(texKey);
     }
 
-    pub fn freeUpTexId(resourceAssigner: *ResourceAssignerData, texIdVal: u16) void {
-        resourceAssigner.texIdPool.freeKey(texIdVal);
+    pub fn freeUpTexId(resourceAssigner: *ResourceAssignerData, texId: TexId) void {
+        resourceAssigner.texIdPool.freeKey(texId.val());
     }
 
     pub fn resolveBufferUpdateRequest(resourceAssigner: *ResourceAssignerData, bufPassId: BufPassId) void {

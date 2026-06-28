@@ -1,12 +1,15 @@
 const IdAdvanced = @import("../globalHelper.zig").IdAdvanced;
 const Id = @import("../globalHelper.zig").Id;
 
-pub const ViewportId = Id(u8, .ViewportId);
 pub const EntityId = Id(u32, .EntityId);
+
 pub const WindowId = Id(u32, .WindowId);
+pub const ViewportId = Id(u8, .ViewportId);
+
 pub const ShaderId = Id(u8, .ShaderId);
-pub const TexId = packed struct { val: u16 };
-pub const BufId = packed struct { val: u16 };
+
+pub const TexId = Id(u16, .TexId);
+pub const BufId = Id(u16, .BufId);
 
 pub const PassId = Id(u16, .PassId);
 pub const BufPassId = Id(u16, .BufPassId);

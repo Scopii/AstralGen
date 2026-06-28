@@ -14,7 +14,7 @@ pub const ResourceQueue = struct {
     texDeletions: FixedList(Texture, rc.TEX_MAX) = .{},
 
     pub fn addCreation(self: *ResourceQueue, inf: anytype) void {
-        self.creationMapOf(rH.ResOfInf(@TypeOf(inf))).upsert(inf.id.val, inf);
+        self.creationMapOf(rH.ResOfInf(@TypeOf(inf))).upsert(inf.id.val(), inf);
     }
 
     pub fn addDeletion(self: *ResourceQueue, val: anytype) !void {
@@ -31,12 +31,12 @@ pub const ResourceQueue = struct {
 
     pub fn checkCreation(self: *ResourceQueue, id: anytype) ?*rH.InfOfId(@TypeOf(id)) {
         const map = self.creationMapOf(rH.ResOfId(@TypeOf(id)));
-        return if (map.isKeyUsed(id.val)) map.getPtrByKey(id.val) else null;
+        return if (map.isKeyUsed(id.val())) map.getPtrByKey(id.val()) else null;
     }
 
     pub fn invalidateCreation(self: *ResourceQueue, id: anytype) void {
         const map = self.creationMapOf(rH.ResOfId(@TypeOf(id)));
-        if (map.isKeyUsed(id.val)) map.remove(id.val);
+        if (map.isKeyUsed(id.val())) map.remove(id.val());
     }
 
     pub fn clearCreations(self: *ResourceQueue, comptime T: type) void {

@@ -71,7 +71,7 @@ pub const ResourceUpdater = struct {
         if (stagingOffset + bytes.len > rc.STAGING_BUF_SIZE) return error.StagingBufferFull;
 
         const texTransfer = TexTransfer{ .srcOffset = stagingOffset, .dstTexId = texId, .width = width, .height = height };
-        self.fullTexUpdateLists[flightId].upsert(texId.val, texTransfer);
+        self.fullTexUpdateLists[flightId].upsert(texId.val(), texTransfer);
         self.stagingOffsets[flightId] += (bytes.len + 15) & ~@as(u64, 15);
 
         const stagingPtr: [*]u8 = @ptrCast(self.stagingBuffers[flightId].mappedPtr);
@@ -102,7 +102,7 @@ pub const ResourceUpdater = struct {
         if (stagingOffset + bytes.len > rc.STAGING_BUF_SIZE) return error.StagingBufferFull;
 
         const transfer = BufTransfer{ .srcOffset = stagingOffset, .dstResId = bufId, .dstOffset = 0, .size = bytes.len };
-        self.fullUpdateLists[flightId].upsert(bufId.val, transfer);
+        self.fullUpdateLists[flightId].upsert(bufId.val(), transfer);
         self.stagingOffsets[flightId] += (bytes.len + 15) & ~@as(u64, 15);
 
         const stagingPtr: [*]u8 = @ptrCast(self.stagingBuffers[flightId].mappedPtr);

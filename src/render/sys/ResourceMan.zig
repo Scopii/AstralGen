@@ -114,7 +114,7 @@ pub const ResourceMan = struct {
             }
 
             if (rc.RESOURCE_DEBUG == true) {
-                std.debug.print("{s} (ID {}) Created! ", .{ rH.typeName(ResType), inf.id.val });
+                std.debug.print("{s} (ID {}) Created! ", .{ rH.typeName(ResType), inf.id.val() });
                 self.vma.printMemoryInfo(resPtr.allocation);
             }
         }
@@ -195,7 +195,7 @@ pub const ResourceMan = struct {
                 else => unreachable,
             }
         }
-        if (rc.RESOURCE_DEBUG == true) std.debug.print("{s} added! (ID {}) (Frame {}) ({}) ({})\n", .{ rH.typeName(ResType), inf.id.val, curFrame, inf.typ, meta.update });
+        if (rc.RESOURCE_DEBUG == true) std.debug.print("{s} added! (ID {}) (Frame {}) ({}) ({})\n", .{ rH.typeName(ResType), inf.id.val(), curFrame, inf.typ, meta.update });
     }
 
     pub fn removeResource(self: *ResourceMan, id: anytype, curFrame: u64) !void {
@@ -210,7 +210,7 @@ pub const ResourceMan = struct {
         for (0..QUEUE_COUNT) |i| self.queues[i].invalidateCreation(id); // Abort
         self.removeMeta(id);
 
-        if (rc.RESOURCE_DEBUG == true) std.debug.print("{s} Removed! (ID {}) (Frame {})\n", .{ rH.typeName(ResType), id.val, curFrame });
+        if (rc.RESOURCE_DEBUG == true) std.debug.print("{s} Removed! (ID {}) (Frame {})\n", .{ rH.typeName(ResType), id.val(), curFrame });
     }
 
     pub fn updateTextureResource(self: *ResourceMan, texId: TexId, curFrame: u64, flightId: u8, data: anytype, newExtent: ?vk.VkExtent3D) !void {
@@ -337,7 +337,7 @@ pub const ResourceMan = struct {
             };
             try self.removeResource(texId, curFrame); // kills alive + aborts tickets
             try self.addResource(newInf, curFrame, flightId, null); // re-queues all
-            std.debug.print("Texture (ID {}) resized ({}x{} to {}x{})\n", .{ texId.val, oldWidth, oldHeight, newWidth, newHeight }); // Depth missing
+            std.debug.print("Texture (ID {}) resized ({}x{} to {}x{})\n", .{ texId.val(), oldWidth, oldHeight, newWidth, newHeight }); // Depth missing
             return;
         }
 
@@ -346,7 +346,7 @@ pub const ResourceMan = struct {
                 texInf.width = newWidth;
                 texInf.height = newHeight;
                 texInf.depth = newDepth;
-                std.debug.print("Texture (ID {}) Queue {} resized before creation to {}x{}\n", .{ texId.val, i, newWidth, newHeight }); // Depth missing
+                std.debug.print("Texture (ID {}) Queue {} resized before creation to {}x{}\n", .{ texId.val(), i, newWidth, newHeight }); // Depth missing
             }
         }
     }

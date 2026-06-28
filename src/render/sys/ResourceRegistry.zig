@@ -53,31 +53,31 @@ pub const ResourceRegistry = struct {
 
     // Meta
     pub fn addMeta(self: *ResourceRegistry, id: anytype, meta: anytype) void {
-        self.metaMapOf(rH.ResOfId(@TypeOf(id))).upsert(id.val, meta);
+        self.metaMapOf(rH.ResOfId(@TypeOf(id))).upsert(id.val(), meta);
     }
 
     pub fn getMeta(self: *ResourceRegistry, id: anytype) !*rH.MetaOfId(@TypeOf(id)) {
         const map = self.metaMapOf(rH.ResOfId(@TypeOf(id)));
-        if (map.isKeyUsed(id.val)) return map.getPtrByKey(id.val) else {
+        if (map.isKeyUsed(id.val())) return map.getPtrByKey(id.val()) else {
             std.debug.print("ERROR: ResourceMan: id {} (Type {}) not found\n", .{ id, @TypeOf(id) });
             return error.GetMetaIdNotUsed;
         }
     }
 
     pub fn removeMeta(self: *ResourceRegistry, id: anytype) void {
-        self.metaMapOf(rH.ResOfId(@TypeOf(id))).remove(id.val);
+        self.metaMapOf(rH.ResOfId(@TypeOf(id))).remove(id.val());
     }
 
     // Resources
     pub fn add(self: *ResourceRegistry, id: anytype, val: anytype, updateTyp: vhE.UpdateType, flightId: u8) *@TypeOf(val) {
         const map = self.getHolder(updateTyp, flightId).mapOf(@TypeOf(val));
-        map.upsert(id.val, val);
-        return map.getPtrByKey(id.val);
+        map.upsert(id.val(), val);
+        return map.getPtrByKey(id.val());
     }
 
     pub fn get(self: *ResourceRegistry, id: anytype, updateTyp: vhE.UpdateType, flightId: u8, updateSlot: u8) !*rH.ResOfId(@TypeOf(id)) {
         const map = self.getResHolder(updateTyp, flightId, updateSlot).mapOf(rH.ResOfId(@TypeOf(id)));
-        if (map.isKeyUsed(id.val)) return map.getPtrByKey(id.val) else {
+        if (map.isKeyUsed(id.val())) return map.getPtrByKey(id.val()) else {
             std.debug.print("ERROR: ResourceMan: id {} (Type {}) not found\n", .{ id, @TypeOf(id) });
             return error.GetIdNotUsed;
         }
@@ -85,15 +85,15 @@ pub const ResourceRegistry = struct {
 
     pub fn remove(self: *ResourceRegistry, id: anytype, updateTyp: vhE.UpdateType, flightId: u8) ?rH.ResOfId(@TypeOf(id)) {
         const map = self.getHolder(updateTyp, flightId).mapOf(rH.ResOfId(@TypeOf(id)));
-        if (!map.isKeyUsed(id.val)) return null;
-        const res = map.getPtrByKey(id.val).*;
-        map.remove(id.val);
+        if (!map.isKeyUsed(id.val())) return null;
+        const res = map.getPtrByKey(id.val()).*;
+        map.remove(id.val());
         return res;
     }
 
     pub fn check(self: *ResourceRegistry, id: anytype, updateTyp: vhE.UpdateType, flightId: u8, updateSlot: u8) ?*rH.ResOfId(@TypeOf(id)) {
         const map = self.getResHolder(updateTyp, flightId, updateSlot).mapOf(rH.ResOfId(@TypeOf(id)));
-        return if (map.isKeyUsed(id.val)) map.getPtrByKey(id.val) else null;
+        return if (map.isKeyUsed(id.val())) map.getPtrByKey(id.val()) else null;
     }
 
     // Helper
