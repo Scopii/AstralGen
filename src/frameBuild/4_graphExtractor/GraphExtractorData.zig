@@ -2,7 +2,7 @@ const LinkedMap = @import("../../.structures/LinkedMap.zig").LinkedMap;
 const FixedList = @import("../../.structures/FixedList.zig").FixedList;
 const SimpleMap = @import("../../.structures/SimpleMap.zig").SimpleMap;
 const GraphNode = @import("../../frameBuild/components.zig").GraphNode;
-const PassId = @import("../../frameBuild/components.zig").PassId;
+const PassId = @import("../../.configs/idConfig.zig").PassId;
 const rc = @import("../../.configs/renderConfig.zig");
 
 // Step 4

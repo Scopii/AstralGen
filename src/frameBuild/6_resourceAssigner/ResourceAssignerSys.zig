@@ -1,12 +1,13 @@
 const TexDesc = @import("../../render/types/res/TextureMeta.zig").TextureMeta.TexDesc;
 const TransientTexture = @import("../../frameBuild/components.zig").TransientTexture;
-const TransientBuffer = @import("../../frameBuild/components.zig").TransientBuffer;
 const BufDesc = @import("../../render/types/res/BufferMeta.zig").BufferMeta.BufDesc;
+const TransientBuffer = @import("../../frameBuild/components.zig").TransientBuffer;
 const TextureMeta = @import("../../render/types/res/TextureMeta.zig").TextureMeta;
-const TexId = @import("../../render/types/res/TextureMeta.zig").TextureMeta.TexId;
 const BufferMeta = @import("../../render/types/res/BufferMeta.zig").BufferMeta;
 const RendererQueue = @import("../../render/RendererQueue.zig").RendererQueue;
 const MemoryManager = @import("../../core/MemoryManager.zig").MemoryManager;
+const TexId = @import("../../.configs/idConfig.zig").TexId;
+const BufId = @import("../../.configs/idConfig.zig").BufId;
 const rc = @import("../../.configs/renderConfig.zig");
 const pe = @import("../enums.zig");
 const std = @import("std");
@@ -18,8 +19,8 @@ const MappingComparatorData = @import("../5.3_mappingComparator/MappingComparato
 const ResourceExtractorData = @import("../2_resourceExtractor/ResourceExtractorData.zig").ResourceExtractorData;
 const ResourceRegistryData = @import("../0_resourceRegistry/ResourceRegistryData.zig").ResourceRegistryData;
 
-const TexPassId = @import("../components.zig").TexPassId;
-const BufPassId = @import("../components.zig").BufPassId;
+const TexPassId = @import("../../.configs/idConfig.zig").TexPassId;
+const BufPassId = @import("../../.configs/idConfig.zig").BufPassId;
 const TexInf = TextureMeta.TexInf;
 const BufInf = BufferMeta.BufInf;
 
@@ -297,7 +298,7 @@ pub const ResourceAssignerSys = struct {
         }
     }
 
-    pub fn createTransientBuffer(bufDesc: BufDesc, bufId: BufferMeta.BufId, rendererQueue: *RendererQueue, memoryMan: *MemoryManager) !void {
+    pub fn createTransientBuffer(bufDesc: BufDesc, bufId: BufId, rendererQueue: *RendererQueue, memoryMan: *MemoryManager) !void {
         const bufInf = BufInf{
             .id = bufId,
             .elementSize = bufDesc.elementSize,
@@ -318,13 +319,13 @@ pub const ResourceAssignerSys = struct {
         std.debug.print("6.Resource Assigner: Transient Buf (BufId {}) Creation send to Renderer\n", .{bufInf.id});
     }
 
-    pub fn deleteTransientBuffer(bufId: BufferMeta.BufId, rendererQueue: *RendererQueue) void {
+    pub fn deleteTransientBuffer(bufId: BufId, rendererQueue: *RendererQueue) void {
         // RENDERER QUEUE SEND DELETE (Stop Renderer missing?)
         rendererQueue.append(.{ .removeBuffer = bufId });
         std.debug.print("6.Resource Assigner: Transient Buf (BufId {}) Deletion send to Renderer\n", .{bufId});
     }
 
-    pub fn createTransientTexture(texDesc: TexDesc, texId: TextureMeta.TexId, rendererQueue: *RendererQueue, memoryMan: *MemoryManager) !void {
+    pub fn createTransientTexture(texDesc: TexDesc, texId: TexId, rendererQueue: *RendererQueue, memoryMan: *MemoryManager) !void {
         const texInf = TexInf{
             .id = texId,
             .mem = texDesc.mem,
@@ -348,7 +349,7 @@ pub const ResourceAssignerSys = struct {
         std.debug.print("6.Resource Assigner: Transient Tex (TexId {}) Creation send to Renderer\n", .{texInf.id});
     }
 
-    pub fn deleteTransientTexture(texId: TextureMeta.TexId, rendererQueue: *RendererQueue) void {
+    pub fn deleteTransientTexture(texId: TexId, rendererQueue: *RendererQueue) void {
         // RENDERER QUEUE SEND DELETE (Stop Renderer missing?)
         rendererQueue.append(.{ .removeTexture = texId });
         std.debug.print("6.Resource Assigner: Transient Tex (TexId {}) Deletion send to Renderer\n", .{texId});

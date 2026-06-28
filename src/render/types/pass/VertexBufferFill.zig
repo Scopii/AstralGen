@@ -1,6 +1,5 @@
+const BufId = @import("../../../.configs/idConfig.zig").BufId;
 const vk = @import("../../../.modules/vk.zig").c;
-
-const BufId = @import("../res/BufferMeta.zig").BufferMeta.BufId;
 
 pub const VertexBufferFill = struct {
     bufId: BufId,

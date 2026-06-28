@@ -1,5 +1,4 @@
-
-const EntityId = @import("../ecs/EntityData.zig").EntityId;
+const EntityId = @import("../.configs/idConfig.zig").EntityId;
 
 pub const Viewport = struct {
     name: []const u8,

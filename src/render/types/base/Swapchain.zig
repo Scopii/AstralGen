@@ -1,13 +1,12 @@
-const TexPassId = @import("../../../frameBuild/components.zig").TexPassId;
-const WindowId = @import("../../../window/Window.zig").Window.WindowId;
-const TexId = @import("../res/TextureMeta.zig").TextureMeta.TexId;
+const TexPassId = @import("../../../.configs/idConfig.zig").TexPassId;
+const WindowId = @import("../../../.configs/idConfig.zig").WindowId;
 const rc = @import("../../../.configs/renderConfig.zig");
 const Texture = @import("../res/Texture.zig").Texture;
 const vk = @import("../../../.modules/vk.zig").c;
 const vhF = @import("../../help/Functions.zig");
 const vhE = @import("../../help/Enums.zig");
-const Allocator = std.mem.Allocator;
 const std = @import("std");
+const Allocator = std.mem.Allocator;
 
 pub const Swapchain = struct {
     surface: vk.VkSurfaceKHR,

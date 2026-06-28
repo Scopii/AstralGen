@@ -27,9 +27,9 @@ pub const CameraSys = struct {
         var activeCamId: ?u32 = null;
 
         if (data.viewport.selectedViewportId) |viewId| {
-            if (data.viewport.viewports.isKeyUsed(viewId.val)) {
-                const viewport = data.viewport.viewports.getByKey(viewId.val);
-                if (viewport.viewCamEntityId) |entityId| activeCamId = entityId.val;
+            if (data.viewport.viewports.isKeyUsed(viewId.val())) {
+                const viewport = data.viewport.viewports.getByKey(viewId.val());
+                if (viewport.viewCamEntityId) |entityId| activeCamId = entityId.val();
             }
         }
 
@@ -102,11 +102,11 @@ pub const CameraSys = struct {
         for (data.viewport.viewports.getConstItems()) |viewport| {
             const camEntityId = viewport.viewCamEntityId orelse continue;
 
-            if (!ecs.cameras.isKeyUsed(camEntityId.val)) continue;
-            if (!ecs.transforms.isKeyUsed(camEntityId.val)) continue;
+            if (!ecs.cameras.isKeyUsed(camEntityId.val())) continue;
+            if (!ecs.transforms.isKeyUsed(camEntityId.val())) continue;
 
-            var transform = ecs.transforms.getPtrByKey(camEntityId.val);
-            const camComp = ecs.cameras.getPtrByKey(camEntityId.val);
+            var transform = ecs.transforms.getPtrByKey(camEntityId.val());
+            const camComp = ecs.cameras.getPtrByKey(camEntityId.val());
 
             if (transform.isDirty) {
                 // Calculate all GPU matrices based on raw component data

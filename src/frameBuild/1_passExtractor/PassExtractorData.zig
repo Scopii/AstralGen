@@ -3,8 +3,8 @@ const ViewportBlit = @import("../../render/types/pass/RenderNode.zig").ViewportB
 const FixedList = @import("../../.structures/FixedList.zig").FixedList;
 const SimpleMap = @import("../../.structures/SimpleMap.zig").SimpleMap;
 const LinkedMap = @import("../../.structures/LinkedMap.zig").LinkedMap;
+const PassId = @import("../../.configs/idConfig.zig").PassId;
 const rc = @import("../../.configs/renderConfig.zig");
-const PassId = @import("../components.zig").PassId;
 
 // Step 1
 

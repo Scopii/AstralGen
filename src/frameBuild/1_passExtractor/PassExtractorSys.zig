@@ -1,12 +1,12 @@
 const CompositeNode = @import("../../render/types/pass/RenderNode.zig").CompositeNode;
 const PassInstance = @import("../../render/types/pass/PassInstance.zig").PassInstance;
 const ViewportBlit = @import("../../render/types/pass/RenderNode.zig").ViewportBlit;
-const WindowId = @import("../../window/Window.zig").Window.WindowId;
+const TexPassId = @import("../../.configs/idConfig.zig").TexPassId;
+const WindowId = @import("../../.configs/idConfig.zig").WindowId;
 const Viewport = @import("../../viewport/Viewport.zig").Viewport;
 const EngineData = @import("../../EngineData.zig").EngineData;
+const PassId = @import("../../.configs/idConfig.zig").PassId;
 const rc = @import("../../.configs/renderConfig.zig");
-const PassId = @import("../components.zig").PassId;
-const TexPassId = @import("../components.zig").TexPassId;
 const std = @import("std");
 
 const ResourceRegistryData = @import("../0_resourceRegistry/ResourceRegistryData.zig").ResourceRegistryData;
@@ -24,7 +24,7 @@ pub const PassExtractorSys = struct {
 
         // Extracting all Unique Passes
         for (data.viewport.activeViewportIds.getConstItems()) |viewportId| {
-            const viewport = data.viewport.viewports.getByKey(viewportId.val);
+            const viewport = data.viewport.viewports.getByKey(viewportId.val());
 
             for (viewport.stringPasses) |stringPass| {
                 // Append PassId if Pass has Definition
@@ -48,7 +48,7 @@ pub const PassExtractorSys = struct {
                     // Window Viewports
                     for (window.viewIds) |windowViewId| {
                         if (windowViewId) |viewId| {
-                            const viewport = data.viewport.viewports.getByKey(viewId.val);
+                            const viewport = data.viewport.viewports.getByKey(viewId.val());
                             var usedPass: ?[]const u8 = null;
 
                             for (viewport.stringPasses) |stringPass| {

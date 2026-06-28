@@ -1,6 +1,6 @@
 const PassDefinition = @import("../../render/types/pass/PassDefinition.zig").PassDefinition;
 const PassAccessRange = @import("../../frameBuild/components.zig").PassAccessRange;
-const PassId = @import("../components.zig").PassId;
+const PassId = @import("../../.configs/idConfig.zig").PassId;
 const rc = @import("../../.configs/renderConfig.zig");
 const std = @import("std");
 

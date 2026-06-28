@@ -1,6 +1,6 @@
 const LinkedMap = @import("../.structures/LinkedMap.zig").LinkedMap;
 const FixedList = @import("../.structures/FixedList.zig").FixedList;
-const ViewportId = @import("ViewportSys.zig").ViewportId;
+const ViewportId = @import("../.configs/idConfig.zig").ViewportId;
 const rc = @import("../.configs/renderConfig.zig");
 const Viewport = @import("Viewport.zig").Viewport;
 

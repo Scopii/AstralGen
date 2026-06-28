@@ -1,24 +1,26 @@
+const TextureMeta = @import("../types/res/TextureMeta.zig").TextureMeta;
 const SimpleMap = @import("../../.structures/SimpleMap.zig").SimpleMap;
 const BufferMeta = @import("../types/res/BufferMeta.zig").BufferMeta;
-const TextureMeta = @import("../types/res/TextureMeta.zig").TextureMeta;
-const Buffer = @import("../types/res/Buffer.zig").Buffer;
 const Texture = @import("../types/res/Texture.zig").Texture;
+const TexId = @import("../../.configs/idConfig.zig").TexId;
+const BufId = @import("../../.configs/idConfig.zig").BufId;
+const Buffer = @import("../types/res/Buffer.zig").Buffer;
 const rc = @import("../../.configs/renderConfig.zig");
 const vk = @import("../../.modules/vk.zig").c;
-const Allocator = std.mem.Allocator;
 const Vma = @import("Vma.zig").Vma;
 const std = @import("std");
+const Allocator = std.mem.Allocator;
 
 pub const BufTransfer = struct { // Should be BufferTransfer
     srcOffset: u64,
-    dstResId: BufferMeta.BufId,
+    dstResId: BufId,
     dstOffset: u64,
     size: u64,
 };
 
 pub const TexTransfer = struct {
     srcOffset: u64,
-    dstTexId: TextureMeta.TexId,
+    dstTexId: TexId,
     width: u32,
     height: u32,
 };
@@ -64,7 +66,7 @@ pub const ResourceUpdater = struct {
         return self.fullTexUpdateLists[flightId].getItems();
     }
 
-    pub fn stageTextureUpdate(self: *ResourceUpdater, texId: TextureMeta.TexId, bytes: []const u8, width: u32, height: u32, flightId: u8) !void {
+    pub fn stageTextureUpdate(self: *ResourceUpdater, texId: TexId, bytes: []const u8, width: u32, height: u32, flightId: u8) !void {
         const stagingOffset = self.stagingOffsets[flightId];
         if (stagingOffset + bytes.len > rc.STAGING_BUF_SIZE) return error.StagingBufferFull;
 
@@ -95,7 +97,7 @@ pub const ResourceUpdater = struct {
         return self.stagingBuffers[flightId].handle;
     }
 
-    pub fn stageBufferUpdate(self: *ResourceUpdater, bufId: BufferMeta.BufId, bytes: []const u8, flightId: u8) !void {
+    pub fn stageBufferUpdate(self: *ResourceUpdater, bufId: BufId, bytes: []const u8, flightId: u8) !void {
         const stagingOffset = self.stagingOffsets[flightId];
         if (stagingOffset + bytes.len > rc.STAGING_BUF_SIZE) return error.StagingBufferFull;
 
@@ -107,7 +109,7 @@ pub const ResourceUpdater = struct {
         @memcpy(stagingPtr[stagingOffset..][0..bytes.len], bytes);
     }
 
-    pub fn stageBufferSegmentUpdate(self: *ResourceUpdater, bufId: BufferMeta.BufId, bytes: []const u8, flightId: u8, offset: u64) !void {
+    pub fn stageBufferSegmentUpdate(self: *ResourceUpdater, bufId: BufId, bytes: []const u8, flightId: u8, offset: u64) !void {
         const stagingOffset = self.stagingOffsets[flightId];
         if (stagingOffset + bytes.len > rc.STAGING_BUF_SIZE) return error.StagingBufferFull;
 

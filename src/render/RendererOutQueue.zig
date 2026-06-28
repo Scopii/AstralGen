@@ -1,4 +1,5 @@
 const FixedList = @import("../.structures/FixedList.zig").FixedList;
+const WindowId = @import("../.configs/idConfig.zig").WindowId;
 const Window = @import("../window/Window.zig").Window;
 const std = @import("std");
 
@@ -18,6 +19,6 @@ pub const RendererOutQueue = struct {
     }
 
     pub const RendererOutEvent = union(enum) {
-        framePresentedForWindow: Window.WindowId,
+        framePresentedForWindow: WindowId,
     };
 };

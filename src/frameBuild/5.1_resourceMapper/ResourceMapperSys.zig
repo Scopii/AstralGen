@@ -4,8 +4,8 @@ const TextureLifetime = @import("../../frameBuild/components.zig").TextureLifeti
 const BufferLifetime = @import("../../frameBuild/components.zig").BufferLifetime;
 const TextureGroup = @import("../../frameBuild/components.zig").TextureGroup;
 const BufferGroup = @import("../../frameBuild/components.zig").BufferGroup;
-const TexPassId = @import("../components.zig").TexPassId;
-const BufPassId = @import("../components.zig").BufPassId;
+const TexPassId = @import("../../.configs/idConfig.zig").TexPassId;
+const BufPassId = @import("../../.configs/idConfig.zig").BufPassId;
 const rc = @import("../../.configs/renderConfig.zig");
 const std = @import("std");
 

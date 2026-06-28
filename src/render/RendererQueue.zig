@@ -1,10 +1,10 @@
-const BufId = @import("../render/types/res/BufferMeta.zig").BufferMeta.BufId;
 const TexInf = @import("../render/types/res/TextureMeta.zig").TextureMeta.TexInf;
-const TexId = @import("../render/types/res/TextureMeta.zig").TextureMeta.TexId;
 const BufInf = @import("../render/types/res/BufferMeta.zig").BufferMeta.BufInf;
-const LoadedShader = @import("../shader/LoadedShader.zig").LoadedShader;
 const RenderNode = @import("../render/types/pass/RenderNode.zig").RenderNode;
+const LoadedShader = @import("../shader/LoadedShader.zig").LoadedShader;
 const FixedList = @import("../.structures/FixedList.zig").FixedList;
+const TexId = @import("../.configs/idConfig.zig").TexId;
+const BufId = @import("../.configs/idConfig.zig").BufId;
 const Window = @import("../window/Window.zig").Window;
 const vk = @import("../.modules/vk.zig").c;
 const std = @import("std");
@@ -31,7 +31,7 @@ pub const RendererQueue = struct {
         addBuffer: *const struct { bufInf: BufInf, data: ?[]const u8 },
         updateBuffer: *const struct { bufId: BufId, data: []const u8 },
         updateBufferSegment: *const struct { bufId: BufId, data: []const u8, elementOffset: u32 },
-        updateTexture: *const struct { texId: TexId, data:[]const u8, newExtent: ?vk.VkExtent3D },
+        updateTexture: *const struct { texId: TexId, data: []const u8, newExtent: ?vk.VkExtent3D },
         removeTexture: TexId,
         removeBuffer: BufId,
         updateWindowState: *const Window,

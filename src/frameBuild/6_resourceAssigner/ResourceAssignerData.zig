@@ -6,12 +6,12 @@ const BufferMeta = @import("../../render/types/res/BufferMeta.zig").BufferMeta;
 const LinkedMap = @import("../../.structures/LinkedMap.zig").LinkedMap;
 const FixedList = @import("../../.structures/FixedList.zig").FixedList;
 const KeyPool = @import("../../.structures/KeyPool.zig").KeyPool;
+const TexId = @import("../../.configs/idConfig.zig").TexId;
+const BufId = @import("../../.configs/idConfig.zig").BufId;
 const rc = @import("../../.configs/renderConfig.zig");
 
 const TexInf = TextureMeta.TexInf;
 const BufInf = BufferMeta.BufInf;
-const TexId = TextureMeta.TexId;
-const BufId = BufferMeta.BufId;
 
 // Step 6
 
@@ -40,7 +40,7 @@ pub const ResourceAssignerData = struct {
 
     // Update Requests after Resource Recreations
     updateRequests: LinkedMap(UpdateRequestEnum, 64, u16, 64, 0) = .{},
-    
+
     pub const BufferAssignments = LinkedMap(BufId, rc.BUF_MAX, u16, rc.BUF_MAX, 0);
     pub const TextureAssignments = LinkedMap(TexId, rc.TEX_MAX, u16, rc.TEX_MAX, 0);
 };

@@ -1,3 +1,4 @@
+const BufId = @import("../../../.configs/idConfig.zig").BufId;
 const rc = @import("../../../.configs/renderConfig.zig");
 const vk = @import("../../../.modules/vk.zig").c;
 const vhE = @import("../../help/Enums.zig");
@@ -11,8 +12,6 @@ pub const BufferMeta = struct {
     updateSlot: u8 = rc.MAX_IN_FLIGHT - 1,
     lastUpdateFrame: u64 = std.math.maxInt(u64),
     elementSize: u32,
-
-    pub const BufId = packed struct { val: u16 };
 
     pub const BufDesc = struct {
         share: enum { persistent, transient },

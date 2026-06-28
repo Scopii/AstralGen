@@ -11,8 +11,6 @@ const ShaderData = @import("ShaderData.zig").ShaderData;
 const ShaderQueue = @import("ShaderQueue.zig").ShaderQueue;
 const RendererQueue = @import("../render/RendererQueue.zig").RendererQueue;
 
-pub const ShaderId = packed struct { val: u8 };
-
 pub const ShaderSys = struct {
     pub fn init(shaderData: *ShaderData, alloc: Allocator) !void {
         // Assign paths

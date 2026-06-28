@@ -1,19 +1,17 @@
 const FixedList = @import("../../../.structures/FixedList.zig").FixedList;
 const VertexBufferFill = @import("VertexBufferFill.zig").VertexBufferFill;
 const VertexAttribute = @import("VertexAttribute.zig").VertexAttribute;
-const ShaderInf = @import("../../../shader/ShaderInf.zig").ShaderInf;
 const IndexBufferFill = @import("IndexBufferFill.zig").IndexBufferFill;
-const ShaderId = @import("../../../shader/ShaderSys.zig").ShaderId;
-const RenderState = @import("../pass/RenderState.zig").RenderState;
+const ShaderInf = @import("../../../shader/ShaderInf.zig").ShaderInf;
+const ShaderId = @import("../../../.configs/idConfig.zig").ShaderId;
 const AttachmentFill = @import("AttachmentFill.zig").AttachmentFill;
+const RenderState = @import("../pass/RenderState.zig").RenderState;
+const BufId = @import("../../../.configs/idConfig.zig").BufId;
+const TexId = @import("../../../.configs/idConfig.zig").TexId;
 const TextureFill = @import("TextureFill.zig").TextureFill;
+const String = @import("../../../globalHelper.zig").String;
 const BufferFill = @import("BufferFill.zig").BufferFill;
 const std = @import("std");
-
-const BufId = @import("../res/BufferMeta.zig").BufferMeta.BufId;
-const TexId = @import("../res/TextureMeta.zig").TextureMeta.TexId;
-
-const String = @import("../../../globalHelper.zig").String;
 
 pub const PassNode = struct { pass: PassInstance, passWidth: u32, passHeight: u32 };
 

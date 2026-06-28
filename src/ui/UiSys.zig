@@ -89,16 +89,16 @@ pub const UiSys = struct {
     fn buildWindowUi(window: *const Window, ui: *UiData, data: *const EngineData, deltaTime: i128) void {
         if (!ui.initialized) return;
 
-        if (!ui.contexts.isKeyUsed(window.id.val)) {
+        if (!ui.contexts.isKeyUsed(window.id.val())) {
             // New Context
             const context = ig.igui_create_context(@ptrCast(ui.fontAtlas));
-            ui.contexts.upsert(window.id.val, @ptrCast(context));
+            ui.contexts.upsert(window.id.val(), @ptrCast(context));
             ig.igui_set_current_context(@ptrCast(context));
             zgui.backend.initVulkan(window.handle);
             zgui.io.setBackendFlags(.{ .renderer_has_textures = true, .renderer_has_vtx_offset = true });
         } else {
             // Change Context
-            ig.igui_set_current_context(@ptrCast(ui.contexts.getByKey(window.id.val)));
+            ig.igui_set_current_context(@ptrCast(ui.contexts.getByKey(window.id.val())));
         }
 
         zgui.io.setDisplaySize(@floatFromInt(window.extent.width), @floatFromInt(window.extent.height));
@@ -145,7 +145,7 @@ pub const UiSys = struct {
         flags.no_background = true; // Opened Tab has no Background
 
         var buf: [32]u8 = undefined;
-        const panelName = std.fmt.bufPrintZ(&buf, "Window (ID {d})", .{window.id.val}) catch "";
+        const panelName = std.fmt.bufPrintZ(&buf, "Window (ID {d})", .{window.id.val()}) catch "";
 
         // const style = zgui.getStyle();
         // const activeColor = style.colors[@intFromEnum(zgui.StyleCol.title_bg)];
@@ -164,16 +164,16 @@ pub const UiSys = struct {
             zgui.text("This UI controls the entire OS window.", .{});
 
             if (zgui.button("Settings", .{})) {
-                std.debug.print("Settings clicked on Window {}\n", .{window.id.val});
+                std.debug.print("Settings clicked on Window {}\n", .{window.id.val()});
             }
         }
 
         // Viewports:
         for (window.viewIds) |viewIdOpt| {
             if (viewIdOpt) |viewId| {
-                if (data.viewport.viewports.isKeyUsed(viewId.val) == false) continue;
+                if (data.viewport.viewports.isKeyUsed(viewId.val()) == false) continue;
 
-                const viewport = data.viewport.viewports.getByKey(viewId.val);
+                const viewport = data.viewport.viewports.getByKey(viewId.val());
                 // Viewport Border
                 const viewX = @as(f32, @floatFromInt(viewport.calcViewX(@intFromFloat(width))));
                 const viewY = @as(f32, @floatFromInt(viewport.calcViewY(@intFromFloat(height))));
@@ -218,8 +218,8 @@ pub const UiSys = struct {
         var totalIdxBytes: u32 = 0;
 
         for (data.window.activeWindows.constSlice()) |window| {
-            if (!ui.contexts.isKeyUsed(window.id.val)) continue;
-            ig.igui_set_current_context(@ptrCast(ui.contexts.getByKey(window.id.val)));
+            if (!ui.contexts.isKeyUsed(window.id.val())) continue;
+            ig.igui_set_current_context(@ptrCast(ui.contexts.getByKey(window.id.val())));
 
             const drawData = zgui.getDrawData();
             totalVtxBytes += @intCast(drawData.total_vtx_count * @sizeOf(zgui.DrawVert));
@@ -237,8 +237,8 @@ pub const UiSys = struct {
         for (data.window.activeWindows.constSlice()) |window| {
             const firstDrawIndex = ui.uiDraws.len;
 
-            if (!ui.contexts.isKeyUsed(window.id.val)) continue;
-            ig.igui_set_current_context(@ptrCast(ui.contexts.getByKey(window.id.val)));
+            if (!ui.contexts.isKeyUsed(window.id.val())) continue;
+            ig.igui_set_current_context(@ptrCast(ui.contexts.getByKey(window.id.val())));
 
             const drawData = zgui.getDrawData();
             if (drawData.total_vtx_count == 0) continue;

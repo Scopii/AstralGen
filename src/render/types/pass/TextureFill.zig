@@ -1,8 +1,6 @@
-const TextureStringLink = @import("../../../frameBuild/components.zig").TextureStringLink;
+const TexId = @import("../../../.configs/idConfig.zig").TexId;
 const Texture = @import("../res/Texture.zig").Texture;
 const vhE = @import("../../help/Enums.zig");
-
-const TexId = @import("../res/TextureMeta.zig").TextureMeta.TexId;
 
 pub const TextureFill = struct {
     texId: TexId,

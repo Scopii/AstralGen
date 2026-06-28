@@ -1,34 +1,10 @@
 const TexDesc = @import("../render/types/res/TextureMeta.zig").TextureMeta.TexDesc;
-const TexId = @import("../render/types/res/TextureMeta.zig").TextureMeta.TexId;
 const BufDesc = @import("../render/types/res/BufferMeta.zig").BufferMeta.BufDesc;
-const BufId = @import("../render/types/res/BufferMeta.zig").BufferMeta.BufId;
-
-const IdAdvanced = @import("../globalHelper.zig").IdAdvanced;
-const Id = @import("../globalHelper.zig").Id;
-
-pub const BufPassId = Id(u16, .BufPassId);
-pub const TexPassId = Id(u16, .TexPassId);
-pub const PassId = Id(u16, .PassId);
-
-// pub const TexPassId = IdAdvanced(u16, .TexPassId, &.{
-//     .{ .RayMarchInputTex, null },
-//     .{ .GridTex, null },
-//     .{ .GridDepthTex, null },
-//     .{ .DebugGridInputTex, null },
-//     .{ .DebugGridOutputTex, null },
-//     .{ .DebugGridDepthTex, null },
-//     .{ .DebugGridDepthOutputTex, null },
-//     .{ .PlaneTex, null },
-//     .{ .PlaneDepthTex, null },
-//     .{ .DebugPlaneInputTex, null },
-//     .{ .DebugPlaneOutputTex, null },
-//     .{ .DebugPlaneOutputFrustumViewTex, null },
-//     .{ .DebugPlaneDepthTex, null },
-//     .{ .DepthViewTex, null },
-//     .{ .TestTileTex, null },
-//     .{ .ImguiFontTex, null },
-//     // .{ .Swapchain, null },
-// });
+const BufPassId = @import("../.configs/idConfig.zig").BufPassId;
+const TexPassId = @import("../.configs/idConfig.zig").TexPassId;
+const PassId = @import("../.configs/idConfig.zig").PassId;
+const TexId = @import("../.configs/idConfig.zig").TexId;
+const BufId = @import("../.configs/idConfig.zig").BufId;
 
 pub const TextureLink = struct {
     in: TexPassId,

@@ -5,8 +5,8 @@ const BufferLink = @import("../../frameBuild/components.zig").BufferLink;
 const LinkedMap = @import("../../.structures/LinkedMap.zig").LinkedMap;
 const SimpleMap = @import("../../.structures/SimpleMap.zig").SimpleMap;
 const FixedList = @import("../../.structures/FixedList.zig").FixedList;
-const TexPassId = @import("../../frameBuild/components.zig").TexPassId;
-const BufPassId = @import("../../frameBuild/components.zig").BufPassId;
+const TexPassId = @import("../../.configs/idConfig.zig").TexPassId;
+const BufPassId = @import("../../.configs/idConfig.zig").BufPassId;
 const rc = @import("../../.configs/renderConfig.zig");
 
 // Step 5.1

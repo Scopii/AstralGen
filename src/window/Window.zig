@@ -1,5 +1,6 @@
-const ViewportId = @import("../viewport/ViewportSys.zig").ViewportId;
-const TexPassId = @import("../frameBuild/components.zig").TexPassId;
+const ViewportId = @import("../.configs/idConfig.zig").ViewportId;
+const TexPassId = @import("../.configs/idConfig.zig").TexPassId;
+const WindowId = @import("../.configs/idConfig.zig").WindowId;
 const rc = @import("../.configs/renderConfig.zig");
 const sdl = @import("../.modules/sdl.zig").c;
 const vk = @import("../.modules/vk.zig").c;
@@ -16,8 +17,6 @@ pub const Window = struct {
     resizeTex: bool,
     relativeMouse: bool = false,
     viewIds: [4]?ViewportId = .{null} ** 4,
-
-    pub const WindowId = packed struct { val: u32 };
 
     pub fn init(
         windowProps: sdl.SDL_PropertiesID,
@@ -42,7 +41,7 @@ pub const Window = struct {
             .name = name,
             .handle = winHandle,
             .extent = extent,
-            .id = .{ .val = windowId },
+            .id = .id(windowId),
             .resizeTex = resizeTex,
             .linkedTexPassId = actualTexEnums,
             .viewIds = viewIds,

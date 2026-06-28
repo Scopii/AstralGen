@@ -1,4 +1,4 @@
-const BufPassId = @import("../frameBuild/components.zig").BufPassId;
+const BufPassId = @import("../.configs/idConfig.zig").BufPassId;
 const zm = @import("zmath");
 
 pub const Transform = struct {

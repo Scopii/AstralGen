@@ -1,4 +1,4 @@
-const ShaderId = @import("../shader/ShaderSys.zig").ShaderId;
+const ShaderId = @import("../.configs/idConfig.zig").ShaderId;
 const vkE = @import("../render/help/Enums.zig");
 
 pub const ShaderInf = struct {
@@ -9,7 +9,7 @@ pub const ShaderInf = struct {
 
     pub fn init(id: u32, typ: vkE.ShaderStage, file: []const u8, spvFile: []const u8) ShaderInf {
         return .{
-            .id = .{ .val = id },
+            .id = .id(id),
             .typ = typ,
             .file = file,
             .spvFile = spvFile,

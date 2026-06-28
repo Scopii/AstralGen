@@ -1,5 +1,3 @@
-const TexId = @import("../render/types/res/TextureMeta.zig").TextureMeta.TexId;
-const BufId = @import("../render/types/res/BufferMeta.zig").BufferMeta.BufId;
 const RendererQueue = @import("../render/RendererQueue.zig").RendererQueue;
 const MemoryManager = @import("../core/MemoryManager.zig").MemoryManager;
 const FrameGraphQueue = @import("FrameGraphQueue.zig").FrameGraphQueue;
@@ -7,10 +5,12 @@ const FrameGraphData = @import("FrameGraphData.zig").FrameGraphData;
 const EngineData = @import("../EngineData.zig").EngineData;
 const rc = @import("../.configs/renderConfig.zig");
 const UiData = @import("../ui/UiData.zig").UiData;
-const pe = @import("components.zig");
+const ic = @import("../.configs/idConfig.zig");
 const std = @import("std");
-const TexPassId = pe.TexPassId;
-const BufPassId = pe.BufPassId;
+const TexPassId = ic.TexPassId;
+const BufPassId = ic.BufPassId;
+const BufId = ic.BufId;
+const TexId = ic.TexId;
 
 const ResourceRegistrySys = @import("0_resourceRegistry/ResourceRegistrySys.zig").ResourceRegistrySys;
 const PassExtractorSys = @import("1_passExtractor/PassExtractorSys.zig").PassExtractorSys;

@@ -1,24 +1,22 @@
-const ResourceRegistryData = @import("../0_resourceRegistry/ResourceRegistryData.zig").ResourceRegistryData;
-const ResourceAssignerData = @import("../6_resourceAssigner/ResourceAssignerData.zig").ResourceAssignerData;
-const GraphOptimizerData = @import("../4.5_graphOptimizer/GraphOptimizerData.zig").GraphOptimizerData;
-const PassExtractorData = @import("../1_passExtractor/PassExtractorData.zig").PassExtractorData;
-const GroupMergerData = @import("../5.4_groupMerger/GroupMergerData.zig").GroupMergerData;
-const PassSorterData = @import("../7_passSorter/PassSorterData.zig").PassSorterData;
-const rc = @import("../../.configs/renderConfig.zig");
-const std = @import("std");
-
-const PassId = @import("../components.zig").PassId;
-const PassInstance = @import("../../render/types/pass/PassInstance.zig").PassInstance;
-
-const BufferFill = @import("../../render/types/pass/BufferFill.zig").BufferFill;
-const TextureFill = @import("../../render/types/pass/TextureFill.zig").TextureFill;
-const AttachmentFill = @import("../../render/types/pass/AttachmentFill.zig").AttachmentFill;
+const TaskOrMeshIndirectExec = @import("../../render/types/pass/PassInstance.zig").TaskOrMeshIndirectExec;
+const ComputeIndirectExec = @import("../../render/types/pass/PassInstance.zig").ComputeIndirectExec;
 const VertexBufferFill = @import("../../render/types/pass/VertexBufferFill.zig").VertexBufferFill;
 const IndexBufferFill = @import("../../render/types/pass/IndexBufferFill.zig").IndexBufferFill;
 const VertexAttribute = @import("../../render/types/pass/VertexAttribute.zig").VertexAttribute;
+const AttachmentFill = @import("../../render/types/pass/AttachmentFill.zig").AttachmentFill;
+const PassInstance = @import("../../render/types/pass/PassInstance.zig").PassInstance;
+const TextureFill = @import("../../render/types/pass/TextureFill.zig").TextureFill;
+const BufferFill = @import("../../render/types/pass/BufferFill.zig").BufferFill;
+const PassId = @import("../../.configs/idConfig.zig").PassId;
+const rc = @import("../../.configs/renderConfig.zig");
+const std = @import("std");
 
-const ComputeIndirectExec = @import("../../render/types/pass/PassInstance.zig").ComputeIndirectExec;
-const TaskOrMeshIndirectExec = @import("../../render/types/pass/PassInstance.zig").TaskOrMeshIndirectExec;
+const ResourceRegistryData = @import("../0_resourceRegistry/ResourceRegistryData.zig").ResourceRegistryData;
+const PassExtractorData = @import("../1_passExtractor/PassExtractorData.zig").PassExtractorData;
+const GraphOptimizerData = @import("../4.5_graphOptimizer/GraphOptimizerData.zig").GraphOptimizerData;
+const GroupMergerData = @import("../5.4_groupMerger/GroupMergerData.zig").GroupMergerData;
+const ResourceAssignerData = @import("../6_resourceAssigner/ResourceAssignerData.zig").ResourceAssignerData;
+const PassSorterData = @import("../7_passSorter/PassSorterData.zig").PassSorterData;
 
 // Step 7
 

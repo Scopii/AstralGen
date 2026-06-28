@@ -1,9 +1,9 @@
 const MemoryManager = @import("core/MemoryManager.zig").MemoryManager;
 const RNGenerator = @import("core/RNGenerator.zig").RNGenerator;
 const EngineData = @import("EngineData.zig").EngineData;
-const pe = @import("frameBuild/components.zig");
 const sc = @import(".configs/shaderConfig.zig");
 const rc = @import(".configs/renderConfig.zig");
+const ic = @import(".configs/idConfig.zig");
 const zm = @import("zmath");
 const std = @import("std");
 
@@ -23,7 +23,6 @@ const CameraSys = @import("camera/CameraSys.zig").CameraSys;
 const RenderPrepSys = @import("renderPrep/RenderPrepSys.zig").RenderPrepSys;
 
 const ViewportSys = @import("viewport/ViewportSys.zig").ViewportSys;
-const ViewportId = @import("viewport/ViewportSys.zig").ViewportId;
 const Viewport = @import("viewport/Viewport.zig").Viewport;
 
 const FrameGraphSys = @import("frameBuild/FrameGraphSys.zig").FrameGraphSys;
@@ -104,10 +103,10 @@ pub const App = struct {
     pub fn setupEntitys(self: *App) !void {
         try ShaderSys.update(&self.data.shader, &self.shaderQueue, &self.rendererQueue, self.memoryMan);
 
-        for (0..rc.ENTITY_COUNT) |_| _ = self.data.entityData.createRandomRenderEntity(&self.rng);
+        for (0..rc.ENTITY_COUNT) |_| _ = try self.data.entityData.createRandomRenderEntity(&self.rng);
 
-        const mainCamId = self.data.entityData.createCameraEntity(.{ .pos = zm.f32x4(0, 5, -20, 0), .yaw = 170 }, .{ .bufPassId = rc.MainCamUB, .near = 0.1, .far = 100, .fov = 60 });
-        const debugCamId = self.data.entityData.createCameraEntity(.{ .pos = zm.f32x4(0, 20, -45, 0), .yaw = 170 }, .{ .bufPassId = rc.DebugCamUB, .near = 0.1, .far = 300, .fov = 110 });
+        const mainCamId = try self.data.entityData.createCameraEntity(.{ .pos = zm.f32x4(0, 5, -20, 0), .yaw = 170 }, .{ .bufPassId = rc.MainCamUB, .near = 0.1, .far = 100, .fov = 60 });
+        const debugCamId = try self.data.entityData.createCameraEntity(.{ .pos = zm.f32x4(0, 20, -45, 0), .yaw = 170 }, .{ .bufPassId = rc.DebugCamUB, .near = 0.1, .far = 300, .fov = 110 });
 
         self.data.viewport.viewports.upsert(10, Viewport{
             .name = "DeptView",
@@ -131,8 +130,8 @@ pub const App = struct {
                 .x = (1920 / 2) / 1 - 10,
                 .y = 40,
                 .resize = true,
-                .texPassIds = &[_]pe.TexPassId{rc.DepthViewTex},
-                .viewIds = [4]?ViewportId{ .{ .val = 10 }, null, null, null },
+                .texPassIds = &[_]ic.TexPassId{rc.DepthViewTex},
+                .viewIds = [4]?ic.ViewportId{ .id(10), null, null, null },
             },
         });
 
@@ -158,8 +157,8 @@ pub const App = struct {
                 .x = 60,
                 .y = 1080 / 2 - 260,
                 .resize = true,
-                .texPassIds = &[_]pe.TexPassId{rc.RayMarchInputTex},
-                .viewIds = [4]?ViewportId{ .{ .val = 1 }, null, null, null },
+                .texPassIds = &[_]ic.TexPassId{rc.RayMarchInputTex},
+                .viewIds = [4]?ic.ViewportId{ .id(1), null, null, null },
             },
         });
 
@@ -232,7 +231,7 @@ pub const App = struct {
                 .x = 1920 / 2 - 10,
                 .y = 1080 / 2 + 40,
                 .resize = true,
-                .texPassIds = &[_]pe.TexPassId{
+                .texPassIds = &[_]ic.TexPassId{
                     rc.GridTex,
                     rc.GridDepthTex,
 
@@ -245,7 +244,7 @@ pub const App = struct {
                     rc.DebugPlaneInputTex,
                     rc.DebugPlaneDepthTex,
                 },
-                .viewIds = [4]?ViewportId{ .{ .val = 3 }, .{ .val = 2 }, .{ .val = 4 }, .{ .val = 5 } },
+                .viewIds = [4]?ic.ViewportId{ .id(3), .id(2), .id(4), .id(5) },
             },
         });
     }
@@ -323,7 +322,7 @@ pub const App = struct {
 
                 const updateRequests = self.data.frameGraph.resourceAssigner.updateRequests.getConstItems();
                 const sortedRenderNodes = self.data.frameGraph.passSorter.sortedRenderNodes.constSlice();
-                
+
                 // const bufAssigns = self.data.frameGraph.resourceAssigner.bufAssigns;
                 const texAssigns = self.data.frameGraph.resourceAssigner.texAssigns;
 

@@ -1,6 +1,6 @@
-const ViewportId = @import("../viewport/ViewportSys.zig").ViewportId;
 const FixedList = @import("../.structures/FixedList.zig").FixedList;
-const TexPassId = @import("../frameBuild/components.zig").TexPassId;
+const ViewportId = @import("../.configs/idConfig.zig").ViewportId;
+const TexPassId = @import("../.configs/idConfig.zig").TexPassId;
 const std = @import("std");
 
 pub const WindowQueue = struct {

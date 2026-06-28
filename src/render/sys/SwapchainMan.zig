@@ -1,12 +1,13 @@
 const RendererOutQueue = @import("../RendererOutQueue.zig").RendererOutQueue;
 const LinkedMap = @import("../../.structures/LinkedMap.zig").LinkedMap;
 const SimpleMap = @import("../../.structures/SimpleMap.zig").SimpleMap;
-const TexPassId = @import("../../frameBuild/components.zig").TexPassId;
 const Swapchain = @import("../types/base/Swapchain.zig").Swapchain;
+const TexPassId = @import("../../.configs/idConfig.zig").TexPassId;
+const WindowId = @import("../../.configs/idConfig.zig").WindowId;
 const Window = @import("../../window/Window.zig").Window;
 const rc = @import("../../.configs/renderConfig.zig");
-const Context = @import("Context.zig").Context;
 const sdl = @import("../../.modules/sdl.zig").c;
+const Context = @import("Context.zig").Context;
 const vk = @import("../../.modules/vk.zig").c;
 const vhF = @import("../help/Functions.zig");
 const Allocator = std.mem.Allocator;
@@ -42,10 +43,12 @@ pub const SwapchainMan = struct {
         self.targetIndices.clear();
 
         for (activeWindows) |*window| {
-            const swapchain = self.swapchains.getPtrByKey(window.id.val);
+            const swapchain = self.swapchains.getPtrByKey(window.id.val());
 
             const start = if (rc.SWAPCHAIN_PROFILING == true) std.time.microTimestamp() else 0;
             const result1 = swapchain.acquireNextImage(self.gpi, flightId);
+
+            const windowIdVal = window.id.val();
 
             switch (result1) {
                 vk.VK_SUCCESS => {},
@@ -58,20 +61,20 @@ pub const SwapchainMan = struct {
                     const result2 = swapchain.acquireNextImage(self.gpi, flightId);
 
                     if (result2 != vk.VK_SUCCESS) {
-                        std.debug.print("Could not Resolve Swapchain Error {} (ID {}) {}", .{ result2, window.id.val, swapchain.* });
+                        std.debug.print("Could not Resolve Swapchain Error {} (ID {}) {}", .{ result2, windowIdVal, swapchain.* });
                         continue;
-                    } else std.debug.print("Resolved Error for Swapchain {} (ID {}) {}", .{ result2, window.id.val, swapchain.* });
+                    } else std.debug.print("Resolved Error for Swapchain {} (ID {}) {}", .{ result2, windowIdVal, swapchain.* });
                 },
                 else => try vhF.check(result1, "Could not acquire swapchain image with unknown error"),
             }
 
             swapchain.getCurTexture().state = .{ .layout = .Undefined, .stage = .ColorAtt, .access = .None }; // Transfer -> TopOfPipe or ColorAttachmentOutput?
-            const mapIndex = self.swapchains.getIndexByKey(window.id.val);
-            self.targetIndices.upsert(window.id.val, mapIndex);
+            const mapIndex = self.swapchains.getIndexByKey(windowIdVal);
+            self.targetIndices.upsert(windowIdVal, mapIndex);
 
             if (rc.SWAPCHAIN_PROFILING == true) {
                 const end = std.time.microTimestamp();
-                std.debug.print("Swapchain (ID {}) Acquire {d:.3} ms\n", .{ window.id.val, @as(f64, @floatFromInt(end - start)) / 1_000.0 });
+                std.debug.print("Swapchain (ID {}) Acquire {d:.3} ms\n", .{ windowIdVal, @as(f64, @floatFromInt(end - start)) / 1_000.0 });
             }
         }
     }
@@ -84,12 +87,12 @@ pub const SwapchainMan = struct {
         return self.swapchains.getPtrByIndex(swapchainIndex);
     }
 
-    pub fn getTargetIndex(self: *SwapchainMan, windowId: Window.WindowId) ?u32 {
-        if (self.targetIndices.isKeyUsed(windowId.val) == true) return self.targetIndices.getByKey(windowId.val) else return null;
+    pub fn getTargetIndex(self: *SwapchainMan, windowId: WindowId) ?u32 {
+        if (self.targetIndices.isKeyUsed(windowId.val()) == true) return self.targetIndices.getByKey(windowId.val()) else return null;
     }
 
-    pub fn changeState(self: *SwapchainMan, windowId: Window.WindowId, inUse: bool) void {
-        self.swapchains.getPtrByKey(windowId.val).inUse = inUse;
+    pub fn changeState(self: *SwapchainMan, windowId: WindowId, inUse: bool) void {
+        self.swapchains.getPtrByKey(windowId.val()).inUse = inUse;
     }
 
     pub fn getMaxExtent(self: *SwapchainMan, texPassId: TexPassId) vk.VkExtent2D {
@@ -109,18 +112,18 @@ pub const SwapchainMan = struct {
         return vk.VkExtent2D{ .width = maxWidth, .height = maxHeight };
     }
 
-    pub fn createSwapchain(self: *SwapchainMan, window: Window, _: vk.VkCommandPool) !void {
+    pub fn createSwapchain(self: *SwapchainMan, window: Window) !void {
         const surface = try createSurface(window.handle, self.instance);
         const swapchain = try Swapchain.init(self.alloc, self.gpi, surface, window.extent, self.gpu, window.linkedTexPassId, null, window.id);
-        self.hiddenSwapchains.upsert(window.id.val, rc.MAX_IN_FLIGHT);
-        self.swapchains.upsert(window.id.val, swapchain);
-        std.debug.print("Swapchain added to Window {}\n", .{window.id.val});
+        self.hiddenSwapchains.upsert(window.id.val(), rc.MAX_IN_FLIGHT);
+        self.swapchains.upsert(window.id.val(), swapchain);
+        std.debug.print("Swapchain added to Window {}\n", .{window.id.val()});
     }
 
-    pub fn recreateSwapchain(self: *SwapchainMan, windowId: Window.WindowId, newExtent: vk.VkExtent2D, _: vk.VkCommandPool) !void {
-        const swapchainPtr = self.swapchains.getPtrByKey(windowId.val);
+    pub fn recreateSwapchain(self: *SwapchainMan, windowId: WindowId, newExtent: vk.VkExtent2D) !void {
+        const swapchainPtr = self.swapchains.getPtrByKey(windowId.val());
         try swapchainPtr.recreate(self.alloc, self.gpi, self.gpu, self.instance, newExtent);
-        self.hiddenSwapchains.upsert(windowId.val, rc.MAX_IN_FLIGHT);
+        self.hiddenSwapchains.upsert(windowId.val(), rc.MAX_IN_FLIGHT);
         std.debug.print("Swapchain recreated\n", .{});
     }
 
@@ -133,7 +136,7 @@ pub const SwapchainMan = struct {
             const framesLeft = self.hiddenSwapchains.getPtrByIndex(i);
             if (framesLeft.* == 0) {
                 const windowId = self.hiddenSwapchains.getKeyByIndex(i);
-                rendererOutQueue.append(.{ .framePresentedForWindow = .{ .val = windowId } });
+                rendererOutQueue.append(.{ .framePresentedForWindow = .id(windowId) });
                 self.hiddenSwapchains.removeIndex(i);
             } else {
                 framesLeft.* -= 1;
@@ -141,13 +144,13 @@ pub const SwapchainMan = struct {
         }
     }
 
-    pub fn removeSwapchains(self: *SwapchainMan, windowId: Window.WindowId) void {
-        if (self.swapchains.isKeyValid(windowId.val) == true) {
-            const swapchain = self.swapchains.getPtrByKey(windowId.val);
+    pub fn removeSwapchains(self: *SwapchainMan, windowId: WindowId) void {
+        if (self.swapchains.isKeyValid(windowId.val()) == true) {
+            const swapchain = self.swapchains.getPtrByKey(windowId.val());
             swapchain.deinit(self.alloc, self.gpi, self.instance, .withSurface);
-            self.swapchains.remove(windowId.val);
+            self.swapchains.remove(windowId.val());
 
-            std.debug.print("Swapchain Key {} destroyed\n", .{windowId.val});
+            std.debug.print("Swapchain Key {} destroyed\n", .{windowId.val()});
         } else std.debug.print("Swapchain to destroy missing.\n", .{});
     }
 };

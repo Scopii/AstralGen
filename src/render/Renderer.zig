@@ -1,28 +1,27 @@
+const RendererOutQueue = @import("RendererOutQueue.zig").RendererOutQueue;
 const MemoryManager = @import("../core/MemoryManager.zig").MemoryManager;
 const LoadedShader = @import("../shader/LoadedShader.zig").LoadedShader;
 const TextureMeta = @import("types/res/TextureMeta.zig").TextureMeta;
-const TexId = @import("types/res/TextureMeta.zig").TextureMeta.TexId;
-const BufferMeta = @import("types/res/BufferMeta.zig").BufferMeta;
-const BufId = @import("types/res/BufferMeta.zig").BufferMeta.BufId;
-const SwapchainMan = @import("sys/SwapchainMan.zig").SwapchainMan;
 const RenderNode = @import("types/pass/RenderNode.zig").RenderNode;
+const BufferMeta = @import("types/res/BufferMeta.zig").BufferMeta;
+const SwapchainMan = @import("sys/SwapchainMan.zig").SwapchainMan;
+const RendererQueue = @import("RendererQueue.zig").RendererQueue;
 const ResourceMan = @import("sys/ResourceMan.zig").ResourceMan;
 const CmdRecorder = @import("sys/CmdRecorder.zig").CmdRecorder;
+const UiNode = @import("types/pass/RenderNode.zig").UiNode;
 const ShaderMan = @import("sys/ShaderMan.zig").ShaderMan;
 const Scheduler = @import("sys/Scheduler.zig").Scheduler;
-const UiNode = @import("types/pass/RenderNode.zig").UiNode;
+const TexId = @import("../.configs/idConfig.zig").TexId;
+const BufId = @import("../.configs/idConfig.zig").BufId;
 const Context = @import("sys/Context.zig").Context;
 const rc = @import("../.configs/renderConfig.zig");
 const FrameData = @import("../App.zig").FrameData;
 const vk = @import("../.modules/vk.zig").c;
-const Allocator = std.mem.Allocator;
 const std = @import("std");
+const Allocator = std.mem.Allocator;
 
 const TextureAssignments = @import("../frameBuild/6_resourceAssigner/ResourceAssignerData.zig").ResourceAssignerData.TextureAssignments;
-const BufferAssignments = @import("../frameBuild/6_resourceAssigner/ResourceAssignerData.zig").ResourceAssignerData.BufferAssignments;
-const RendererOutQueue = @import("RendererOutQueue.zig").RendererOutQueue;
-const TexPassId = @import("../frameBuild/components.zig").TexPassId;
-const RendererQueue = @import("RendererQueue.zig").RendererQueue;
+const TexPassId = @import("../.configs/idConfig.zig").TexPassId;
 const Window = @import("../window/Window.zig").Window;
 
 pub const Renderer = struct {
@@ -103,8 +102,8 @@ pub const Renderer = struct {
 
         for (tempWindows) |window| {
             switch (window.state) {
-                .needCreation => try self.swapMan.createSwapchain(window, self.renderGraph.cmdMan.cmdPool),
-                .needUpdate => try self.swapMan.recreateSwapchain(window.id, window.extent, self.renderGraph.cmdMan.cmdPool),
+                .needCreation => try self.swapMan.createSwapchain(window),
+                .needUpdate => try self.swapMan.recreateSwapchain(window.id, window.extent),
                 .needDelete => self.swapMan.removeSwapchains(window.id),
                 .needActive, .needInactive => self.swapMan.changeState(window.id, if (window.state == .needActive) true else false),
                 else => std.debug.print("Warning: Window State {s} cant be handled in Renderer\n", .{@tagName(window.state)}),
@@ -176,7 +175,7 @@ pub const Renderer = struct {
                 continue;
             }
 
-            if (self.shaderMan.isShaderIdUsed(loadedShader.shaderInf.id.val) == true) {
+            if (self.shaderMan.isShaderIdUsed(loadedShader.shaderInf.id.val()) == true) {
                 _ = vk.vkDeviceWaitIdle(self.context.gpi);
                 break;
             }
@@ -188,7 +187,7 @@ pub const Renderer = struct {
         try self.resMan.addResource(resInf, self.scheduler.totalFrames, self.scheduler.flightId, data);
     }
 
-    pub fn updateBuffer(self: *Renderer, bufId: BufferMeta.BufId, data: anytype) !void {
+    pub fn updateBuffer(self: *Renderer, bufId: BufId, data: anytype) !void {
         try self.resMan.updateBufferResource(bufId, self.scheduler.totalFrames, self.scheduler.flightId, data);
     }
 
@@ -196,11 +195,11 @@ pub const Renderer = struct {
         try self.resMan.removeResource(resId, self.scheduler.totalFrames);
     }
 
-    pub fn updateTexture(self: *Renderer, texId: TextureMeta.TexId, data: anytype, newExtent: ?vk.VkExtent3D) !void {
+    pub fn updateTexture(self: *Renderer, texId: TexId, data: anytype, newExtent: ?vk.VkExtent3D) !void {
         try self.resMan.updateTextureResource(texId, self.scheduler.totalFrames, self.scheduler.flightId, data, newExtent);
     }
 
-    pub fn updateBufferSegment(self: *Renderer, bufId: BufferMeta.BufId, data: anytype, element: u32) !void {
+    pub fn updateBufferSegment(self: *Renderer, bufId: BufId, data: anytype, element: u32) !void {
         try self.resMan.updateBufferResourceSegment(bufId, self.scheduler.flightId, data, element);
     }
 };

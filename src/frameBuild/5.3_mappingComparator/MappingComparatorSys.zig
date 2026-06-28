@@ -2,8 +2,8 @@ const TexDesc = @import("../../render/types/res/TextureMeta.zig").TextureMeta.Te
 const BufDesc = @import("../../render/types/res/BufferMeta.zig").BufferMeta.BufDesc;
 const TexGroupChange = @import("../../frameBuild/components.zig").TexGroupChange;
 const BufGroupChange = @import("../../frameBuild/components.zig").BufGroupChange;
-const TexPassId = @import("../components.zig").TexPassId;
-const BufPassId = @import("../components.zig").BufPassId;
+const TexPassId = @import("../../.configs/idConfig.zig").TexPassId;
+const BufPassId = @import("../../.configs/idConfig.zig").BufPassId;
 const rc = @import("../../.configs/renderConfig.zig");
 const std = @import("std");
 

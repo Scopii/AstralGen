@@ -6,15 +6,17 @@ const BufferMeta = @import("../types/res/BufferMeta.zig").BufferMeta;
 const ResourceQueue = @import("ResourceQueue.zig").ResourceQueue;
 const DescriptorMan = @import("DescriptorMan.zig").DescriptorMan;
 const Texture = @import("../types/res/Texture.zig").Texture;
+const TexId = @import("../../.configs/idConfig.zig").TexId;
+const BufId = @import("../../.configs/idConfig.zig").BufId;
 const Buffer = @import("../types/res/Buffer.zig").Buffer;
 const rc = @import("../../.configs/renderConfig.zig");
 const Context = @import("Context.zig").Context;
 const vk = @import("../../.modules/vk.zig").c;
 const vhT = @import("../help/Types.zig");
 const vhE = @import("../help/Enums.zig");
-const Allocator = std.mem.Allocator;
 const Vma = @import("Vma.zig").Vma;
 const std = @import("std");
+const Allocator = std.mem.Allocator;
 
 pub fn checkBufferResize(resize: vhE.ResizeType, newSize: u64, oldSize: u64) !bool {
     return switch (resize) {
@@ -47,16 +49,16 @@ pub fn convertToByteSlice(data: anytype) ![]const u8 {
 
 pub fn InfOfId(comptime T: type) type {
     return switch (T) {
-        BufferMeta.BufId => BufferMeta.BufInf,
-        TextureMeta.TexId => TextureMeta.TexInf,
+        BufId => BufferMeta.BufInf,
+        TexId => TextureMeta.TexInf,
         else => @compileError("InfOfId: unsupported type"),
     };
 }
 
 pub fn IdOfRes(comptime T: type) type {
     return switch (T) {
-        Buffer => BufferMeta.BufId,
-        Texture => TextureMeta.TexId,
+        Buffer => BufId,
+        Texture => TexId,
         else => @compileError("IdOfRes: unsupported type"),
     };
 }
@@ -79,8 +81,8 @@ pub fn ResOfInf(comptime T: type) type {
 
 pub fn ResOfId(comptime T: type) type {
     return switch (T) {
-        BufferMeta.BufId => Buffer,
-        TextureMeta.TexId => Texture,
+        BufId => Buffer,
+        TexId => Texture,
         else => @compileError("ResOfId: unsupported type"),
     };
 }
@@ -95,8 +97,8 @@ pub fn MetaOfRes(comptime T: type) type {
 
 pub fn MetaOfId(comptime T: type) type {
     return switch (T) {
-        BufferMeta.BufId => BufferMeta,
-        TextureMeta.TexId => TextureMeta,
+        BufId => BufferMeta,
+        TexId => TextureMeta,
         else => @compileError("MetaOfId: unsupported type"),
     };
 }

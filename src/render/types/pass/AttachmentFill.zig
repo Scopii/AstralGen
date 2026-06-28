@@ -1,5 +1,5 @@
 const ClearValue = @import("AttachmentSlot.zig").AttachmentSlot.ClearValue;
-const TexId = @import("../res/TextureMeta.zig").TextureMeta.TexId;
+const TexId = @import("../../../.configs/idConfig.zig").TexId;
 const Texture = @import("../res/Texture.zig").Texture;
 const vk = @import("../../../.modules/vk.zig").c;
 const vhE = @import("../../help/Enums.zig");

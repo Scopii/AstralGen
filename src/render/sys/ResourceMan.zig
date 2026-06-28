@@ -7,6 +7,8 @@ const ResourceQueue = @import("ResourceQueue.zig").ResourceQueue;
 const DescriptorMan = @import("DescriptorMan.zig").DescriptorMan;
 const KeyPool = @import("../../.structures/KeyPool.zig").KeyPool;
 const Texture = @import("../types/res/Texture.zig").Texture;
+const TexId = @import("../../.configs/idConfig.zig").TexId;
+const BufId = @import("../../.configs/idConfig.zig").BufId;
 const Buffer = @import("../types/res/Buffer.zig").Buffer;
 const rc = @import("../../.configs/renderConfig.zig");
 const vk = @import("../../.modules/vk.zig").c;
@@ -20,8 +22,6 @@ const std = @import("std");
 
 const TexInf = TextureMeta.TexInf;
 const BufInf = BufferMeta.BufInf;
-const TexId = TextureMeta.TexId;
-const BufId = BufferMeta.BufId;
 
 const QUEUE_COUNT = (rc.MAX_IN_FLIGHT + 1);
 
@@ -34,7 +34,6 @@ pub const ResourceMan = struct {
     queues: [QUEUE_COUNT]ResourceQueue,
 
     texturePool: LinkedMap(TexId, 32, u31, 32, 0) = .{},
-    teyKeyPool: KeyPool(u31, 100) = .{},
 
     pub fn init(alloc: Allocator, context: *const Context) !ResourceMan {
         const vma = try Vma.init(context.instance, context.gpi, context.gpu);
@@ -61,8 +60,6 @@ pub const ResourceMan = struct {
         self.descMan.deinit(&self.vma);
         self.vma.deinit();
 
-        const key = self.teyKeyPool.reserveKey();
-        self.teyKeyPool.freeKey(key);
     }
 
     fn destroyResources(self: *ResourceMan, queue: *ResourceQueue, comptime ResType: type) u64 {

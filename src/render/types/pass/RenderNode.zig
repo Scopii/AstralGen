@@ -1,9 +1,9 @@
-const TexPassId = @import("../../../frameBuild/components.zig").TexPassId;
-const BufPassId = @import("../../../frameBuild/components.zig").BufPassId;
-const WindowId = @import("../../../window/Window.zig").Window.WindowId;
-const PassId = @import("../../../frameBuild/components.zig").PassId;
-const TexId = @import("../res/TextureMeta.zig").TextureMeta.TexId;
-const BufId = @import("../res/BufferMeta.zig").BufferMeta.BufId;
+const TexPassId = @import("../../../.configs/idConfig.zig").TexPassId;
+const BufPassId = @import("../../../.configs/idConfig.zig").BufPassId;
+const WindowId = @import("../../../.configs/idConfig.zig").WindowId;
+const PassId = @import("../../../.configs/idConfig.zig").PassId;
+const TexId = @import("../../../.configs/idConfig.zig").TexId;
+const BufId = @import("../../../.configs/idConfig.zig").BufId;
 const PassNode = @import("PassInstance.zig").PassNode;
 
 pub const TexUnion = union(enum) {

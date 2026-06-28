@@ -2,10 +2,10 @@ const PassDefinition = @import("../../render/types/pass/PassDefinition.zig").Pas
 const TexDesc = @import("../../render/types/res/TextureMeta.zig").TextureMeta.TexDesc;
 const ResourceRegistryData = @import("ResourceRegistryData.zig").ResourceRegistryData;
 const BufDesc = @import("../../render/types/res/BufferMeta.zig").BufferMeta.BufDesc;
-const BufPassId = @import("../components.zig").BufPassId;
-const TexPassId = @import("../components.zig").TexPassId;
+const BufPassId = @import("../../.configs/idConfig.zig").BufPassId;
+const TexPassId = @import("../../.configs/idConfig.zig").TexPassId;
+const PassId = @import("../../.configs/idConfig.zig").PassId;
 const rc = @import("../../.configs/renderConfig.zig");
-const PassId = @import("../components.zig").PassId;
 const std = @import("std");
 
 pub const ResourceRegistrySys = struct {

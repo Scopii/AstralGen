@@ -1,3 +1,4 @@
+const TexId = @import("../../../.configs/idConfig.zig").TexId;
 const rc = @import("../../../.configs/renderConfig.zig");
 const vk = @import("../../../.modules/vk.zig").c;
 const vhE = @import("../../help/Enums.zig");
@@ -13,8 +14,6 @@ pub const TextureMeta = struct {
     updateSlot: u8 = rc.MAX_IN_FLIGHT - 1,
     lastUpdateFrame: u64 = std.math.maxInt(u64),
     viewType: vk.VkImageViewType,
-
-    pub const TexId = packed struct { val: u16 };
 
     pub const TexDesc = struct {
         share: enum { persistent, transient },

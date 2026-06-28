@@ -226,7 +226,7 @@ pub const depthViewTexDesc = TexDesc{
     .resize = .Fit,
 };
 
-pub const BufPassId = @import("../frameBuild/components.zig").BufPassId;
+pub const BufPassId = @import("../.configs/idConfig.zig").BufPassId;
 pub const QuantIndirectInputSB: BufPassId = .id(1);
 pub const QuantIndirectOutputSB: BufPassId = .id(2);
 pub const ReadbackSB: BufPassId = .id(3);
@@ -236,7 +236,7 @@ pub const DebugCamUB: BufPassId = .id(6);
 pub const ImguiVB: BufPassId = .id(7);
 pub const ImguiIB: BufPassId = .id(8);
 
-pub const TexPassId = @import("../frameBuild/components.zig").TexPassId;
+pub const TexPassId = @import("../.configs/idConfig.zig").TexPassId;
 pub const RayMarchInputTex: TexPassId = .id(1);
 pub const GridTex: TexPassId = .id(2);
 pub const GridDepthTex: TexPassId = .id(3);

@@ -1,8 +1,6 @@
-const BufferStringLink = @import("../../../frameBuild/components.zig").BufferStringLink;
+const BufId = @import("../../../.configs/idConfig.zig").BufId;
 const Buffer = @import("../res/Buffer.zig").Buffer;
 const vhE = @import("../../help/Enums.zig");
-
-const BufId = @import("../res/BufferMeta.zig").BufferMeta.BufId;
 
 pub const BufferFill = struct {
     bufId: BufId,

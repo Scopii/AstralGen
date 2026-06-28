@@ -1,16 +1,15 @@
 const PassInstance = @import("../types/pass/PassInstance.zig").PassInstance;
 const CompositeNode = @import("../types/pass/RenderNode.zig").CompositeNode;
 const ViewportBlit = @import("../types/pass/RenderNode.zig").ViewportBlit;
-const TexId = @import("../types/res/TextureMeta.zig").TextureMeta.TexId;
 const RenderNode = @import("../types/pass/RenderNode.zig").RenderNode;
-const BufId = @import("../types/res/BufferMeta.zig").BufferMeta.BufId;
 const Swapchain = @import("../types/base/Swapchain.zig").Swapchain;
-const ShaderId = @import("../../shader/ShaderSys.zig").ShaderId;
 const PushData = @import("../types/res/PushData.zig").PushData;
 const UiNode = @import("../types/pass/RenderNode.zig").UiNode;
 const SwapchainMan = @import("SwapchainMan.zig").SwapchainMan;
 const Texture = @import("../types/res/Texture.zig").Texture;
 const ResourceMan = @import("ResourceMan.zig").ResourceMan;
+const TexId = @import("../../.configs/idConfig.zig").TexId;
+const BufId = @import("../../.configs/idConfig.zig").BufId;
 const Buffer = @import("../types/res/Buffer.zig").Buffer;
 const ShaderManager = @import("ShaderMan.zig").ShaderMan;
 const rc = @import("../../.configs/renderConfig.zig");
@@ -23,11 +22,6 @@ const vk = @import("../../.modules/vk.zig").c;
 const vhT = @import("../help/Types.zig");
 const Allocator = std.mem.Allocator;
 const std = @import("std");
-
-const TextureAssignments = @import("../../frameBuild/6_resourceAssigner/ResourceAssignerData.zig").ResourceAssignerData.TextureAssignments;
-const BufferAssignments = @import("../../frameBuild/6_resourceAssigner/ResourceAssignerData.zig").ResourceAssignerData.BufferAssignments;
-const TexPassId = @import("../../frameBuild/components.zig").TexPassId;
-const BufPassId = @import("../../frameBuild/components.zig").BufPassId;
 
 const ImGuiPass = @import("../../.assets/passes/Imgui/Imgui.zig").ImGuiPass;
 const Composite = @import("../../.assets/passes/composite/Composite.zig").Composite;
@@ -403,7 +397,7 @@ pub const CmdRecorder = struct {
         const timeId = cmd.startTimer(.TopOfPipe, uiNode.name, .Ui);
 
         const targetIndex = swapMan.getTargetIndex(uiNode.windowId) orelse {
-            std.debug.print("RecordUI: no swapchain target for window {}\n", .{uiNode.windowId.val});
+            std.debug.print("RecordUI: no swapchain target for window {}\n", .{uiNode.windowId.val()});
             return;
         };
         const swapchain = swapMan.getTargetByIndex(targetIndex);

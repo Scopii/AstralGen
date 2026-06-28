@@ -1,9 +1,10 @@
 const RendererOutQueue = @import("../render/RendererOutQueue.zig").RendererOutQueue;
 const RendererQueue = @import("../render/RendererQueue.zig").RendererQueue;
 const MemoryManager = @import("../core/MemoryManager.zig").MemoryManager;
-const ViewportId = @import("../viewport/ViewportSys.zig").ViewportId;
-const TexPassId = @import("../frameBuild/components.zig").TexPassId;
+const ViewportId = @import("../.configs/idConfig.zig").ViewportId;
 const InputQueue = @import("../input/InputQueue.zig").InputQueue;
+const TexPassId = @import("../.configs/idConfig.zig").TexPassId;
+const WindowId = @import("../.configs/idConfig.zig").WindowId;
 const EngineData = @import("../EngineData.zig").EngineData;
 const WindowQueue = @import("WindowQueue.zig").WindowQueue;
 const KeyEvent = @import("../input/InputSys.zig").KeyEvent;
@@ -42,7 +43,7 @@ pub const WindowSys = struct {
         for (rendererOutQueue.get()) |event| {
             switch (event) {
                 .framePresentedForWindow => |windowId| {
-                    const hiddenWindow = windowData.windows.getPtrByKey(windowId.val);
+                    const hiddenWindow = windowData.windows.getPtrByKey(windowId.val());
                     hiddenWindow.show();
                     hiddenWindow.setOpacity(1.0);
                     hiddenWindow.restore();
@@ -94,12 +95,13 @@ pub const WindowSys = struct {
         window.minimize();
 
         // window.setRelativeMouseMode(false);
+        const windowIdVal = window.id.val();
+        windowData.windows.upsert(windowIdVal, window);
 
-        windowData.windows.upsert(window.id.val, window);
-        try windowData.changedWindows.append(windowData.windows.getByKey(window.id.val));
+        try windowData.changedWindows.append(windowData.windows.getByKey(windowIdVal));
         windowData.openWindows += 1;
-        windowData.mainWindow = windowData.windows.getPtrByKey(window.id.val);
-        std.debug.print("Window ID {} created\n", .{window.id.val});
+        windowData.mainWindow = windowData.windows.getPtrByKey(windowIdVal);
+        std.debug.print("Window ID {} created\n", .{windowIdVal});
     }
 
     pub fn showErrorBox(title: [:0]const u8, message: [:0]const u8) void {
@@ -112,14 +114,14 @@ pub const WindowSys = struct {
 
     fn cleanupChangesWindows(windowData: *WindowData) void {
         for (windowData.changedWindows.slice()) |tempWindow| {
-            const actualWindow = windowData.windows.getPtrByKey(tempWindow.id.val);
+            const actualWindow = windowData.windows.getPtrByKey(tempWindow.id.val());
 
             switch (tempWindow.state) {
                 .needDelete => destroyWindow(windowData, actualWindow.id),
                 .needUpdate, .needCreation => actualWindow.state = .active,
                 .needActive => actualWindow.state = .active,
                 .needInactive => actualWindow.state = .inactive,
-                else => std.debug.print("WindowManager: Window {} State {s} should not need cleanup\n", .{ tempWindow.id.val, @tagName(tempWindow.state) }),
+                else => std.debug.print("WindowManager: Window {} State {s} should not need cleanup\n", .{ tempWindow.id.val(), @tagName(tempWindow.state) }),
             }
         }
         windowData.changedWindows.clear();
@@ -154,10 +156,11 @@ pub const WindowSys = struct {
     fn processGuiEvent(windowId: u32, event: *const sdl.SDL_Event, data: *const EngineData) void {
         if (!data.ui.initialized or !data.ui.contexts.isKeyUsed(windowId)) return;
 
+        // WHAT IS THIS FUNCTION BLOCK FOR? //
         var targetId = windowId;
-        if (windowId == 0) { // Global Events pushed to main Window ?
+        if (windowId == 0) { // Global Events pushed to main Window? (Are they actually?)
             if (data.window.mainWindow) |mainWindow| {
-                targetId = mainWindow.id.val;
+                targetId = mainWindow.id.val();
             } else return;
         }
 
@@ -186,10 +189,10 @@ pub const WindowSys = struct {
         };
     }
 
-    fn destroyWindow(windowData: *WindowData, windowId: Window.WindowId) void {
-        const window = windowData.windows.getByKey(windowId.val);
+    fn destroyWindow(windowData: *WindowData, windowId: WindowId) void {
+        const window = windowData.windows.getByKey(windowId.val());
         window.deinit();
-        windowData.windows.remove(windowId.val);
+        windowData.windows.remove(windowId.val());
     }
 
     fn toggleMainFullscreen(windowData: *WindowData) !void {
