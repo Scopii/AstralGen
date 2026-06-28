@@ -11,8 +11,8 @@ const std = @import("std");
 
 const ResourceRegistryData = @import("../0_resourceRegistry/ResourceRegistryData.zig").ResourceRegistryData;
 const ResourceExtractorData = @import("../2_resourceExtractor/ResourceExtractorData.zig").ResourceExtractorData;
-const LifetimeExtractorData = @import("../5_lifetimeExtractor/LifetimeExtractorData.zig").LifetimeExtractorData;
 const GraphOptimizerData = @import("../4.5_graphOptimizer/GraphOptimizerData.zig").GraphOptimizerData;
+const LifetimeExtractorData = @import("../5_lifetimeExtractor/LifetimeExtractorData.zig").LifetimeExtractorData;
 const ResourceMapperData = @import("ResourceMapperData.zig").ResourceMapperData;
 
 // Step 5.1
@@ -305,7 +305,7 @@ pub const ResourceMapperSys = struct {
                 const rootBufName = try resourceRegistry.getBufferName(group.rootBuf);
                 const rootPassName = try resourceRegistry.getPassName(group.rootPass);
                 std.debug.print("BufGroup (Persistent {}) (RootRes {s}) (RootPass {s}) (mapIndex {} -> {})\n", .{ i, rootBufName, rootPassName, group.startMapIndex, group.endMapIndex });
-                
+
                 for (group.startMapIndex..group.endMapIndex + 1, 0..) |mapIndex, counter| {
                     const bufKey: u16 = resourceMapper.bufMapPersistent.getKeyByIndex(@intCast(mapIndex));
                     const bufName = try resourceRegistry.getBufferName(.id(bufKey));
@@ -317,7 +317,7 @@ pub const ResourceMapperSys = struct {
                 const rootBufName = try resourceRegistry.getBufferName(group.rootBuf);
                 const rootPassName = try resourceRegistry.getPassName(group.rootPass);
                 std.debug.print("BufGroup (Transient {}) (RootRes {s}) (RootPass {s}) (mapIndex {} -> {})\n", .{ i, rootBufName, rootPassName, group.startMapIndex, group.endMapIndex });
-                
+
                 for (group.startMapIndex..group.endMapIndex + 1, 0..) |mapIndex, counter| {
                     const bufKey: u16 = resourceMapper.bufMapTransient.getKeyByIndex(@intCast(mapIndex));
                     const bufName = try resourceRegistry.getBufferName(.id(bufKey));
@@ -342,7 +342,7 @@ pub const ResourceMapperSys = struct {
                 const rootTexName = try resourceRegistry.getTextureName(group.rootTex);
                 const rootPassName = try resourceRegistry.getPassName(group.rootPass);
                 std.debug.print("TexGroup (Transient {}) (RootRes {s}) (RootPass {s}) (mapIndex {} -> {})\n", .{ i, rootTexName, rootPassName, group.startMapIndex, group.endMapIndex });
-                
+
                 for (group.startMapIndex..group.endMapIndex + 1, 0..) |mapIndex, counter| {
                     const texKey: u16 = resourceMapper.texMapTransient.getKeyByIndex(@intCast(mapIndex));
                     const texName = try resourceRegistry.getTextureName(.id(texKey));

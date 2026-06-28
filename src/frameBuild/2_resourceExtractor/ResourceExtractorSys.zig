@@ -1,17 +1,12 @@
-const TexDesc = @import("../../render/types/res/TextureMeta.zig").TextureMeta.TexDesc;
-const BufDesc = @import("../../render/types/res/BufferMeta.zig").BufferMeta.BufDesc;
+const PassDefinition = @import("../../render/types/pass/PassDefinition.zig").PassDefinition;
 const PassAccessRange = @import("../../frameBuild/components.zig").PassAccessRange;
-const TextureAccess = @import("../../frameBuild/components.zig").TextureAccess;
-const BufferAccess = @import("../../frameBuild/components.zig").BufferAccess;
-const PassDef = @import("../../render/types/pass/PassDef.zig").PassDef;
-const TexPassId = @import("../components.zig").TexPassId;
-const BufPassId = @import("../components.zig").BufPassId;
+const PassId = @import("../components.zig").PassId;
 const rc = @import("../../.configs/renderConfig.zig");
 const std = @import("std");
 
-const ResourceExtractorData = @import("ResourceExtractorData.zig").ResourceExtractorData;
 const ResourceRegistryData = @import("../0_resourceRegistry/ResourceRegistryData.zig").ResourceRegistryData;
 const PassExtractorData = @import("../1_passExtractor/PassExtractorData.zig").PassExtractorData;
+const ResourceExtractorData = @import("ResourceExtractorData.zig").ResourceExtractorData;
 
 // Step 2
 
@@ -28,20 +23,10 @@ pub const ResourceExtractorSys = struct {
 
         resourceExtractor.passAccessRanges.clear();
 
-        for (0..passExtractor.renderNodes.getLength()) |index| {
-            const renderNode = passExtractor.renderNodes.getByIndex(@intCast(index));
-
-            switch (renderNode) {
-                .passNode => |pass| {
-                    const key = passExtractor.renderNodes.getKeyByIndex(@intCast(index));
-                    getPassAccesses(&pass.pass, resourceExtractor, key);
-                },
-                .compositeNode => |_| {},
-                .viewportBlit => |_| {},
-                .uiNode => |_| {},
-                .clearBuffer, .clearTexture => return error.ClearBufferOrTextureIllegal,
-                .barrierBakeClears => return error.BakeBarriersIllegal,
-            }
+        for (0..passExtractor.activePasses.getLength()) |index| {
+            const passId = passExtractor.activePasses.getByIndex(@intCast(index));
+            const passDef = try resourceRegistry.getPassDefinitionById(passId);
+            try getPassAccesses(passDef, resourceExtractor, passId, resourceRegistry);
         }
 
         // Resolve and Save Buffer Descriptions
@@ -100,7 +85,7 @@ pub const ResourceExtractorSys = struct {
 
             for (resourceExtractor.passAccessRanges.getConstItems(), 0..) |range, i| {
                 const passKey = resourceExtractor.passAccessRanges.getKeyByIndex(@intCast(i));
-                const passString = passExtractor.passStrings.getByKey(passKey);
+                const passString = try resourceRegistry.getPassName(.id(passKey));
 
                 std.debug.print(" - Pass Accesses ({s}) (bufIndex {} -> {}) (texIndex {} -> {})\n", .{ passString, range.firstBuf, range.lastBuf, range.firstTex, range.lastTex });
                 for (range.firstBuf..range.lastBuf, 0..) |index, counter| {
@@ -141,56 +126,45 @@ pub const ResourceExtractorSys = struct {
         }
     }
 
-    fn getPassAccesses(pass: *const PassDef, resourceExtractor: *ResourceExtractorData, passId: u16) void {
+    fn getPassAccesses(passDef: *const PassDefinition, resourceExtractor: *ResourceExtractorData, passId: PassId, resourceRegistry: *const ResourceRegistryData) !void {
         const firstBufIndex = resourceExtractor.bufAccesses.len;
         const firstTexIndex = resourceExtractor.texAccesses.len;
 
-        // Buffers Use Cases
-        inline for (.{
-            pass.getBufUses(),
-        }) |slice| {
-            for (slice) |use| {
-                const bufAccess = BufferAccess{
-                    .access = if (use.access.isReadOnly() == true) .read else .write,
-                    .pass = .id(passId),
-                    .bufInput = use.bufLink.in,
-                    .bufOutput = use.bufLink.out,
-                };
-                resourceExtractor.bufAccesses.append(bufAccess) catch std.debug.print("ERROR: Resource Extractor bufAccesses append failed!\n", .{});
-            }
-        }
-
-        // Special Buffer Use Cases
-        inline for (.{
-            pass.getVertexBufUse(),
-            if (pass.indexBuffer) |indexBuf| &.{indexBuf} else &.{},
-        }) |slice| {
-            for (slice) |use| {
-                const bufAccess = BufferAccess{
-                    .access = .read,
-                    .pass = .id(passId),
-                    .bufInput = use.bufInput,
-                    .bufOutput = null, // True Index and Vertex Buffers dont have Output!
-                };
-                resourceExtractor.bufAccesses.append(bufAccess) catch std.debug.print("ERROR: Resource Extractor bufAccesses append failed!\n", .{});
-            }
-        }
-
-        // Texture Use Cases
-        inline for (.{
-            pass.getTexUses(),
-            pass.getColorAtts(),
-            if (pass.depthAtt) |depthAtt| &.{depthAtt} else &.{},
-            if (pass.stencilAtt) |stencilAtt| &.{stencilAtt} else &.{},
-        }) |slice| {
-            for (slice) |use| {
-                const texAccess = TextureAccess{
-                    .access = if (use.access.isReadOnly() == true) .read else .write,
-                    .pass = .id(passId),
-                    .texInput = use.texLink.in,
-                    .texOutput = use.texLink.out,
-                };
-                resourceExtractor.texAccesses.append(texAccess) catch std.debug.print("ERROR: Resource Extractor texAccesses append failed!\n", .{});
+        for (passDef.passAttribute.constSlice()) |attribute| {
+            switch (attribute) {
+                .bufSlot => |bufSlot| {
+                    resourceExtractor.bufAccesses.append(.{
+                        .pass = passId,
+                        .bufInput = try resourceRegistry.getBufferPassId(bufSlot.bufLink.in),
+                        .bufOutput = if (bufSlot.bufLink.out) |output| try resourceRegistry.getBufferPassId(output) else null,
+                        .access = if (bufSlot.access.isReadOnly() == true) .read else .write,
+                    }) catch return error.PassCoreLinksFull;
+                },
+                .vertexBuffer => |vertexBufSlot| {
+                    resourceExtractor.bufAccesses.append(.{
+                        .pass = passId,
+                        .bufInput = try resourceRegistry.getBufferPassId(vertexBufSlot.bufInput),
+                        .bufOutput = null,
+                        .access = .read,
+                    }) catch return error.PassCoreLinksFull;
+                },
+                .indexBuffer => |indexBufSlot| {
+                    resourceExtractor.bufAccesses.append(.{
+                        .pass = passId,
+                        .bufInput = try resourceRegistry.getBufferPassId(indexBufSlot.bufInput),
+                        .bufOutput = null,
+                        .access = .read,
+                    }) catch return error.PassCoreLinksFull;
+                },
+                .vertexAttribute, .renderState, .execution, .shaderInf => {},
+                inline else => |texSlotTypes| {
+                    resourceExtractor.texAccesses.append(.{
+                        .pass = passId,
+                        .texInput = try resourceRegistry.getTexturePassId(texSlotTypes.texLink.in),
+                        .texOutput = if (texSlotTypes.texLink.out) |output| try resourceRegistry.getTexturePassId(output) else null,
+                        .access = if (texSlotTypes.access.isReadOnly() == true) .read else .write,
+                    }) catch return error.PassCoreLinksFull;
+                },
             }
         }
 
@@ -202,6 +176,6 @@ pub const ResourceExtractorSys = struct {
             .lastTex = @intCast(resourceExtractor.texAccesses.len),
         };
 
-        resourceExtractor.passAccessRanges.upsert(passId, passAccessRanges);
+        resourceExtractor.passAccessRanges.upsert(passId.val(), passAccessRanges);
     }
 };

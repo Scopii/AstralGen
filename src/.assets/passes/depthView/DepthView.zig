@@ -29,13 +29,8 @@ const p = @import("../passImport.zig");
 pub const depthViewPass = p.PassDefinition.init(.{
     .name = "DepthView",
     .outputTex = "DepthViewTex",
-    .passAttributes = &.{
-        p.PassAttrib.exec(.{
-            .compute = .{
-                .workgroups = .{ .x = 8, .y = 8, .z = 1 },
-                .outputTexDispatch = true,
-            },
-        }),
+    .attributes = &.{
+        p.PassAttrib.execCompute(.{ .groupX = 8, .groupY = 8, .groupZ = 1, .outputTexDispatch = true }),
         //
         p.PassAttrib.shader(sc.depthViewComp),
         //

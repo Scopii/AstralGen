@@ -3,6 +3,7 @@ const TextureLink = @import("../../frameBuild/components.zig").TextureLink;
 const BufferGroup = @import("../../frameBuild/components.zig").BufferGroup;
 const BufferLink = @import("../../frameBuild/components.zig").BufferLink;
 const LinkedMap = @import("../../.structures/LinkedMap.zig").LinkedMap;
+const SimpleMap = @import("../../.structures/SimpleMap.zig").SimpleMap;
 const FixedList = @import("../../.structures/FixedList.zig").FixedList;
 const TexPassId = @import("../../frameBuild/components.zig").TexPassId;
 const BufPassId = @import("../../frameBuild/components.zig").BufPassId;
@@ -20,7 +21,7 @@ pub const ResourceMapperData = struct {
     // Temporary (For Buffers)
     bufPassIds: LinkedMap(BufPassId, rc.BUF_MAX, u16, rc.BUF_MAX, 0) = .{},
     linkedBuffers: FixedList(BufferLink, rc.BUF_MAX) = .{},
-    allSharedBuffers: LinkedMap(BufPassId, rc.BUF_MAX, u16, rc.BUF_MAX, 0) = .{},
+    allSharedBuffers: SimpleMap(BufPassId, rc.BUF_MAX, u16, rc.BUF_MAX, 0) = .{},
 
     // Buffer Results
     bufMapTransient: LinkedMap(BufPassId, rc.BUF_MAX, u16, rc.BUF_MAX, 0) = .{},
@@ -32,7 +33,7 @@ pub const ResourceMapperData = struct {
     // Temporary (For Textures)
     texPassIds: LinkedMap(TexPassId, rc.TEX_MAX, u16, rc.TEX_MAX, 0) = .{},
     linkedTextures: FixedList(TextureLink, rc.TEX_MAX) = .{},
-    allSharedTextures: LinkedMap(TexPassId, rc.TEX_MAX, u16, rc.TEX_MAX, 0) = .{},
+    allSharedTextures: SimpleMap(TexPassId, rc.TEX_MAX, u16, rc.TEX_MAX, 0) = .{},
 
     // Texture Results
     texMapTransient: LinkedMap(TexPassId, rc.TEX_MAX, u16, rc.TEX_MAX, 0) = .{},

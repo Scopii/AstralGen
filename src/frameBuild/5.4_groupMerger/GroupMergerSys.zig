@@ -6,12 +6,11 @@ const rc = @import("../../.configs/renderConfig.zig");
 const std = @import("std");
 
 const ResourceRegistryData = @import("../0_resourceRegistry/ResourceRegistryData.zig").ResourceRegistryData;
-const LifetimeMergerData = @import("../5.2_lifetimeMerger/LifetimeMergerData.zig").LifetimeMergerData;
-const ResourceMapperData = @import("../5.1_resourceMapper/ResourceMapperData.zig").ResourceMapperData;
-const GroupMergerData = @import("GroupMergerData.zig").GroupMergerData;
 const ResourceExtractorData = @import("../2_resourceExtractor/ResourceExtractorData.zig").ResourceExtractorData;
+const ResourceMapperData = @import("../5.1_resourceMapper/ResourceMapperData.zig").ResourceMapperData;
+const LifetimeMergerData = @import("../5.2_lifetimeMerger/LifetimeMergerData.zig").LifetimeMergerData;
+const GroupMergerData = @import("GroupMergerData.zig").GroupMergerData;
 
-const pe = @import("../enums.zig");
 
 // Step 5.4
 

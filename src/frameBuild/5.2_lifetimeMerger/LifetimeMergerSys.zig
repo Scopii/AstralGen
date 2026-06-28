@@ -1,10 +1,7 @@
-const rc = @import("../../.configs/renderConfig.zig");
-const std = @import("std");
-
 const BufGroupLifetime = @import("../../frameBuild/components.zig").BufGroupLifetime;
 const TexGroupLifetime = @import("../../frameBuild/components.zig").TexGroupLifetime;
-
-const pe = @import("../enums.zig");
+const rc = @import("../../.configs/renderConfig.zig");
+const std = @import("std");
 
 const ResourceRegistryData = @import("../0_resourceRegistry/ResourceRegistryData.zig").ResourceRegistryData;
 const PassExtractorData = @import("../1_passExtractor/PassExtractorData.zig").PassExtractorData;

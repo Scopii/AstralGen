@@ -1,9 +1,16 @@
+const TexId = @import("../render/types/res/TextureMeta.zig").TextureMeta.TexId;
+const BufId = @import("../render/types/res/BufferMeta.zig").BufferMeta.BufId;
 const RendererQueue = @import("../render/RendererQueue.zig").RendererQueue;
 const MemoryManager = @import("../core/MemoryManager.zig").MemoryManager;
 const FrameGraphQueue = @import("FrameGraphQueue.zig").FrameGraphQueue;
 const FrameGraphData = @import("FrameGraphData.zig").FrameGraphData;
 const EngineData = @import("../EngineData.zig").EngineData;
+const rc = @import("../.configs/renderConfig.zig");
+const UiData = @import("../ui/UiData.zig").UiData;
+const pe = @import("components.zig");
 const std = @import("std");
+const TexPassId = pe.TexPassId;
+const BufPassId = pe.BufPassId;
 
 const ResourceRegistrySys = @import("0_resourceRegistry/ResourceRegistrySys.zig").ResourceRegistrySys;
 const PassExtractorSys = @import("1_passExtractor/PassExtractorSys.zig").PassExtractorSys;
@@ -14,16 +21,10 @@ const GraphOptimizerSys = @import("4.5_graphOptimizer/GraphOptimizerSys.zig").Gr
 const LifetimeExtractorSys = @import("5_lifetimeExtractor/LifetimeExtractorSys.zig").LifetimeExtractorSys;
 const ResourceMapperSys = @import("5.1_resourceMapper/ResourceMapperSys.zig").ResourceMapperSys;
 const LifetimeMergerSys = @import("5.2_lifetimeMerger/LifetimeMergerSys.zig").LifetimeMergerSys;
+const MappingComparatorSys = @import("5.3_mappingComparator/MappingComparatorSys.zig").MappingComparatorSys;
 const GroupMergerSys = @import("5.4_groupMerger/GroupMergerSys.zig").GroupMergerSys;
 const ResourceAssignerSys = @import("6_resourceAssigner/ResourceAssignerSys.zig").ResourceAssignerSys;
-const MappingComparatorSys = @import("5.3_mappingComparator/MappingComparatorSys.zig").MappingComparatorSys;
 const PassSorterSys = @import("7_passSorter/PassSorterSys.zig").PassSorterSys;
-
-const pe = @import("components.zig");
-const TexPassId = pe.TexPassId;
-const BufPassId = pe.BufPassId;
-
-const rc = @import("../.configs/renderConfig.zig");
 
 const depthViewPass = @import("../.assets/passes/depthView/DepthView.zig").depthViewPass;
 const compRayMarchPass = @import("../.assets/passes/compTest/CompRayMarch.zig").compRayMarchPass;
@@ -98,7 +99,7 @@ pub const FrameGraphSys = struct {
 
         try ResourceExtractorSys.buildAccesses(&graph.resourceExtractor, &graph.passExtractor, &graph.resourceRegistry);
 
-        try DependancyExtractorSys.buildDependencies(&graph.dependancyExtractor, &graph.resourceExtractor, &graph.passExtractor, &graph.resourceRegistry);
+        try DependancyExtractorSys.buildDependencies(&graph.dependancyExtractor, &graph.resourceExtractor, &graph.resourceRegistry);
 
         try GraphExtractorSys.buildGraph(&graph.graphExtractor, &graph.dependancyExtractor, &graph.passExtractor, &graph.resourceRegistry);
 
@@ -142,6 +143,37 @@ pub const FrameGraphSys = struct {
 
     pub fn deleteBufferManually(frameGraph: *FrameGraphData, bufPassId: BufPassId, rendererQueue: *RendererQueue) void {
         ResourceAssignerSys.deleteBuffer(&frameGraph.resourceAssigner, &frameGraph.resourceRegistry, bufPassId, rendererQueue, .manuel);
+    }
+
+    pub fn getBufHardwareId(frameGraph: *const FrameGraphData, name: []const u8) !BufId {
+        const bufPassId = try frameGraph.resourceRegistry.getBufferPassId(name);
+        const hardwareBufId = frameGraph.resourceAssigner.bufAssigns.getByKey(bufPassId.val());
+        return hardwareBufId;
+    }
+
+    pub fn getTexHardwareId(frameGraph: *const FrameGraphData, name: []const u8) !TexId {
+        const texPassId = try frameGraph.resourceRegistry.getTexturePassId(name);
+        const hardwareTexId = frameGraph.resourceAssigner.texAssigns.getByKey(texPassId.val());
+        return hardwareTexId;
+    }
+
+    pub fn fillUiHardwareIds(frameGraph: *const FrameGraphData, uiData: *UiData) !void { // UiData not const!?
+        for (uiData.uiNodes.slice()) |*uiNode| {
+            if (uiNode.imguiVB != .bufName) return error.UiImguiVBNeedsToBeNameForResolve;
+            if (uiNode.imguiIB != .bufName) return error.UiImguiIBNeedsToBeNameForResolve;
+
+            const imguiVBHardwareID = try getBufHardwareId(frameGraph, uiNode.imguiVB.bufName);
+            const imguiIBHardwareID = try getBufHardwareId(frameGraph, uiNode.imguiIB.bufName);
+
+            uiNode.imguiVB = .{ .bufId = imguiVBHardwareID };
+            uiNode.imguiIB = .{ .bufId = imguiIBHardwareID };
+        }
+
+        for (uiData.uiDraws.slice()) |*uiDraw| {
+            if (uiDraw.drawTex != .texName) return error.UiImguiDrawTexNeedsToBeNameForResolve;
+            const imguiTexHardwareID = try getTexHardwareId(frameGraph, uiDraw.drawTex.texName);
+            uiDraw.drawTex = .{ .texId = imguiTexHardwareID };
+        }
     }
 
     pub fn processQueue(frameGraph: *const FrameGraphData, frameGraphQueue: *FrameGraphQueue, rendererQueue: *RendererQueue, memoryMan: *MemoryManager) !void {

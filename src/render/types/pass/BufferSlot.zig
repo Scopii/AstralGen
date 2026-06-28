@@ -19,10 +19,11 @@ pub const BufferSlot = struct {
             .IndirectRead => .IndirectRead,
         };
 
-        return .{ .bufLink = bufLink, .stage = stage, .access = access, .shaderSlot = if (shaderSlot) |slot| slot else null };
-    }
-
-    pub fn getNeededState(self: *const BufferSlot) Buffer.BufferState {
-        return .{ .stage = self.stage, .access = self.access };
+        return .{
+            .bufLink = bufLink,
+            .stage = stage,
+            .access = access,
+            .shaderSlot = if (shaderSlot) |slot| slot else null,
+        };
     }
 };

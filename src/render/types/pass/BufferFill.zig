@@ -1,16 +1,18 @@
-const BufferLink = @import("../../../frameBuild/components.zig").BufferLink;
+const BufferStringLink = @import("../../../frameBuild/components.zig").BufferStringLink;
 const Buffer = @import("../res/Buffer.zig").Buffer;
 const vhE = @import("../../help/Enums.zig");
 
-pub const BufferUse = struct {
-    bufLink: BufferLink,
+const BufId = @import("../res/BufferMeta.zig").BufferMeta.BufId;
+
+pub const BufferFill = struct {
+    bufId: BufId,
     stage: vhE.PipeStage = .TopOfPipe,
     access: vhE.PipeAccess = .None,
     shaderSlot: ?u32 = null,
 
     pub const BufUseKind = enum { UniformRead, StorageRead, StorageWrite, StorageReadWrite, IndirectRead };
 
-    pub fn init(bufLink: BufferLink, stage: vhE.PipeStage, bufUseKind: BufUseKind, shaderSlot: ?u8) BufferUse {
+    pub fn init(bufId: BufId, stage: vhE.PipeStage, bufUseKind: BufUseKind, shaderSlot: ?u8) BufferFill {
         const access: vhE.PipeAccess = switch (bufUseKind) {
             .UniformRead => .UniformRead,
             .StorageRead => .StorageRead,
@@ -19,10 +21,15 @@ pub const BufferUse = struct {
             .IndirectRead => .IndirectRead,
         };
 
-        return .{ .bufLink = bufLink, .stage = stage, .access = access, .shaderSlot = if (shaderSlot) |slot| slot else null };
+        return .{
+            .bufId = bufId,
+            .stage = stage,
+            .access = access,
+            .shaderSlot = if (shaderSlot) |slot| slot else null,
+        };
     }
 
-    pub fn getNeededState(self: *const BufferUse) Buffer.BufferState {
+    pub fn getNeededState(self: *const BufferFill) Buffer.BufferState {
         return .{ .stage = self.stage, .access = self.access };
     }
 };

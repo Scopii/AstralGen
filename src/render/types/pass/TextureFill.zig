@@ -1,10 +1,11 @@
+const TextureStringLink = @import("../../../frameBuild/components.zig").TextureStringLink;
 const Texture = @import("../res/Texture.zig").Texture;
 const vhE = @import("../../help/Enums.zig");
 
-const TextureLink = @import("../../../frameBuild/components.zig").TextureLink;
+const TexId = @import("../res/TextureMeta.zig").TextureMeta.TexId;
 
-pub const TextureUse = struct {
-    texLink: TextureLink,
+pub const TextureFill = struct {
+    texId: TexId,
     stage: vhE.PipeStage = .TopOfPipe,
     access: vhE.PipeAccess = .None,
     layout: vhE.ImageLayout,
@@ -13,7 +14,7 @@ pub const TextureUse = struct {
 
     pub const TextureUseKind = enum { SampledRead, StorageRead, StorageWrite, StorageReadWrite };
 
-    pub fn init(texLink: TextureLink, stage: vhE.PipeStage, texUseKind: TextureUseKind, shaderSlot: ?u8) TextureUse {
+    pub fn init(texId: TexId, stage: vhE.PipeStage, texUseKind: TextureUseKind, shaderSlot: ?u8) TextureFill {
         const layout: vhE.ImageLayout = switch (texUseKind) {
             .SampledRead => .ReadOnly,
             .StorageRead, .StorageWrite, .StorageReadWrite => .General,
@@ -32,7 +33,7 @@ pub const TextureUse = struct {
         };
 
         return .{
-            .texLink = texLink,
+            .texId = texId,
             .stage = stage,
             .access = access,
             .layout = layout,
@@ -41,7 +42,7 @@ pub const TextureUse = struct {
         };
     }
 
-    pub fn getNeededState(self: *const TextureUse) Texture.TextureState {
+    pub fn getNeededState(self: *const TextureFill) Texture.TextureState {
         return .{ .stage = self.stage, .access = self.access, .layout = self.layout };
     }
 };

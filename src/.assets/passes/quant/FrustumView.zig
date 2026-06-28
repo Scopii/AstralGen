@@ -34,17 +34,13 @@ const p = @import("../passImport.zig");
 pub const frustumViewPass = p.PassDefinition.init(.{
     .name = "FrustumView",
     .outputTex = "DebugPlaneOutputTex",
-    .passAttributes = &.{
-        p.PassAttrib.exec(.{
-            .taskOrMesh = .{
-                .workgroups = .{ .x = 1, .y = 1, .z = 1 },
-            },
-        }),
+    .attributes = &.{
+        p.PassAttrib.execTaskOrMesh(.{ .groupX = 1, .groupY = 1, .groupZ = 1 }),
         //
         p.PassAttrib.shader(sc.frustumMesh),
         p.PassAttrib.shader(sc.quantFrag),
         //
-        p.PassAttrib.color(.{ .in = "DebugPlaneOutputTex", .out = "DebugPlaneOutputFrustumViewTex" }, .ColorAtt, .ColorAttReadWrite, .{ .color = .{ 0.0, 0.0, 0.0, 0.0 } }),
+        p.PassAttrib.color(.{ .in = "DebugPlaneOutputTex", .out = "DebugPlaneOutputFrustumViewTex" }, .ColorAtt, .ColorAttReadWrite, .{ .R = 0.0, .G = 0.0, .B = 0.0, .A = 0.0 }),
         p.PassAttrib.depth(.{ .in = "DebugPlaneDepthTex" }, .EarlyAndLateFragTest, .DepthStencilReadWrite, null),
         //
         p.PassAttrib.buf(.{ .in = "MainCamUB" }, .Mesh, .UniformRead, 0),

@@ -14,7 +14,6 @@ pub const DependancyExtractorSys = struct {
     pub fn buildDependencies(
         dependancyExtractor: *DependancyExtractorData,
         resourceExtractor: *const ResourceExtractorData,
-        passExtractor: *const PassExtractorData,
         resourceRegistry: *const ResourceRegistryData,
     ) !void {
         dependancyExtractor.bufDependancies.clear();
@@ -31,8 +30,8 @@ pub const DependancyExtractorSys = struct {
                 // Double Write Check: Only allowed exactly one producer!
                 if (dependancyExtractor.lastBufWriter.isKeyUsed(outputBufKey)) {
                     const existingWriter = dependancyExtractor.lastBufWriter.getByKey(outputBufKey);
-                    const writerPassString = passExtractor.passStrings.getByIndex(existingWriter.val());
-                    const passString = passExtractor.passStrings.getByIndex(bufAccess.pass.val());
+                    const writerPassString = try resourceRegistry.getPassName(existingWriter);
+                    const passString = try resourceRegistry.getPassName(bufAccess.pass);
                     const bufName = try resourceRegistry.getBufferName(bufOutput);
                     std.debug.print("VALIDATION: Buffer {s} produced by both {s} and {s}\n", .{ bufName, writerPassString, passString });
                 }
@@ -64,8 +63,8 @@ pub const DependancyExtractorSys = struct {
                 // Double Write Check: Only allowed exactly one producer!
                 if (dependancyExtractor.lastTexWriter.isKeyUsed(outputTexKey)) {
                     const existingWriter = dependancyExtractor.lastTexWriter.getByKey(outputTexKey);
-                    const writerPassString = passExtractor.passStrings.getByIndex(existingWriter.val());
-                    const passString = passExtractor.passStrings.getByIndex(texAccess.pass.val());
+                    const writerPassString = try resourceRegistry.getPassName(existingWriter);
+                    const passString = try resourceRegistry.getPassName(texAccess.pass);
                     const texName = try resourceRegistry.getTextureName(texOutput);
                     std.debug.print("VALIDATION: Texture {s} produced by both {s} and {s}\n", .{ texName, writerPassString, passString });
                 }

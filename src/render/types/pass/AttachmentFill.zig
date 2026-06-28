@@ -1,22 +1,21 @@
-const TextureLink = @import("../../../frameBuild/components.zig").TextureLink;
+const ClearValue = @import("AttachmentSlot.zig").AttachmentSlot.ClearValue;
+const TexId = @import("../res/TextureMeta.zig").TextureMeta.TexId;
 const Texture = @import("../res/Texture.zig").Texture;
 const vk = @import("../../../.modules/vk.zig").c;
 const vhE = @import("../../help/Enums.zig");
 
-pub const AttachmentUse = struct {
-    texLink: TextureLink,
+pub const AttachmentFill = struct {
+    texId: TexId,
     stage: vhE.PipeStage = .TopOfPipe,
     access: vhE.PipeAccess = .None,
     layout: vhE.ImageLayout,
-    clear: ?ClearColor,
+    clear: ?ClearValue,
 
-    pub const ClearColor = union(enum) { color: [4]f32, depthStencil: vk.VkClearDepthStencilValue };
-
-    pub fn init(texLink: TextureLink, stage: vhE.PipeStage, access: vhE.PipeAccess, clear: ?ClearColor) AttachmentUse {
+    pub fn init(texId: TexId, stage: vhE.PipeStage, access: vhE.PipeAccess, clear: ?ClearValue) AttachmentFill {
         const layout: vhE.ImageLayout = if (access.isReadOnly() == true) .ReadOnly else .Attachment;
 
         return .{
-            .texLink = texLink,
+            .texId = texId,
             .stage = stage,
             .access = access,
             .layout = layout,
@@ -24,7 +23,7 @@ pub const AttachmentUse = struct {
         };
     }
 
-    pub fn getNeededState(self: *const AttachmentUse) Texture.TextureState {
+    pub fn getNeededState(self: *const AttachmentFill) Texture.TextureState {
         return .{ .stage = self.stage, .access = self.access, .layout = self.layout };
     }
 };

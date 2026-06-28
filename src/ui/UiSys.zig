@@ -26,7 +26,8 @@ pub const UiSys = struct {
     }
 
     pub fn update(ui: *UiData, data: *const EngineData, frameGraphQueue: *FrameGraphQueue, memoryMan: *MemoryManager) !void {
-        ui.activeNodes = &.{};
+        ui.uiNodes.clear();
+        ui.uiDraws.clear();
 
         if (data.window.uiActive) {
             try processTextures(ui, frameGraphQueue, memoryMan);
@@ -212,7 +213,6 @@ pub const UiSys = struct {
 
     fn extractDrawData(ui: *UiData, data: *const EngineData, frameGraphQueue: *FrameGraphQueue, memoryMan: *MemoryManager) !void {
         const arena = memoryMan.getGlobalArena();
-        var uiNodes = std.array_list.Managed(UiNode).init(arena);
 
         var totalVtxBytes: u32 = 0;
         var totalIdxBytes: u32 = 0;
@@ -235,13 +235,13 @@ pub const UiSys = struct {
         var globalIdxOffset: u32 = 0;
 
         for (data.window.activeWindows.constSlice()) |window| {
+            const firstDrawIndex = ui.uiDraws.len;
+
             if (!ui.contexts.isKeyUsed(window.id.val)) continue;
             ig.igui_set_current_context(@ptrCast(ui.contexts.getByKey(window.id.val)));
 
             const drawData = zgui.getDrawData();
             if (drawData.total_vtx_count == 0) continue;
-
-            var cmdListsArray = std.array_list.Managed(UiNode.UiDraw).init(arena);
 
             for (drawData.cmd_lists.items[0..@intCast(drawData.cmd_lists_count)]) |cmdList| {
                 const vtxData = cmdList.getVertexBuffer();
@@ -253,16 +253,17 @@ pub const UiSys = struct {
                 for (cmdList.getCmdBuffer()) |pcmd| {
                     if (pcmd.user_callback != null) continue;
 
-                    const rawId = @intFromEnum(pcmd.texture_ref.tex_id);
-                    const texPassId: TexPassId = if (rawId == 0) rc.ImguiFontTex else TexPassId.id(@as(u16, @intCast(rawId)));
+                    // const rawId = @intFromEnum(pcmd.texture_ref.tex_id);
+                    // const texPassId: TexPassId = if (rawId == 0) rc.ImguiFontTex else TexPassId.id(@as(u16, @intCast(rawId)));
 
-                    try cmdListsArray.append(.{
+                    const uiDraw = UiNode.UiDraw{
+                        .drawTex = .{ .texName = "ImguiFontTex" }, // texPassId
                         .clipRect = pcmd.clip_rect,
-                        .texPassId = texPassId,
                         .vtxOffset = globalVtxOffset + @as(i32, @intCast(pcmd.vtx_offset)),
                         .idxOffset = globalIdxOffset + pcmd.idx_offset,
                         .elemCount = pcmd.elem_count,
-                    });
+                    };
+                    ui.uiDraws.append(uiDraw) catch return error.UiDrawsFUll;
                 }
 
                 vtxCursor += @intCast(vtxData.len * @sizeOf(zgui.DrawVert));
@@ -271,15 +272,19 @@ pub const UiSys = struct {
                 globalVtxOffset += @intCast(vtxData.len);
             }
 
-            try uiNodes.append(.{
+            const lastDrawIndex = ui.uiDraws.len;
+
+            ui.uiNodes.append(UiNode{
                 .name = window.name,
                 .windowId = window.id,
                 .displayPos = drawData.display_pos,
                 .displaySize = drawData.display_size,
-                .drawList = try cmdListsArray.toOwnedSlice(),
-            });
+                .imguiVB = .{ .bufName = "ImguiVB" },
+                .imguiIB = .{ .bufName = "ImguiIB" },
+                .firstDrawIndex = @intCast(firstDrawIndex),
+                .lastDrawIndex = @intCast(lastDrawIndex),
+            }) catch return error.UiNodesFUll;
         }
-        ui.activeNodes = try uiNodes.toOwnedSlice();
 
         const PayloadVtx = @FieldType(FrameGraphQueue.FrameGraphEvent, "updateBuffer");
         const updateVtxPtr = try arena.create(std.meta.Child(PayloadVtx));

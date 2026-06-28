@@ -1,4 +1,4 @@
-const ClearColor = @import("../pass/AttachmentUse.zig").AttachmentUse.ClearColor;
+const ClearValue = @import("../pass/AttachmentSlot.zig").AttachmentSlot.ClearValue;
 const vk = @import("../../../.modules/vk.zig").c;
 const vhF = @import("../../help/Functions.zig");
 const vhE = @import("../../help/Enums.zig");
@@ -19,17 +19,17 @@ pub const Texture = struct {
         layout: vhE.ImageLayout = .Undefined,
     };
 
-    pub fn createAttachment(self: *const Texture, format: vhE.TexTyp, clear: ?ClearColor) !vk.VkRenderingAttachmentInfo {
+    pub fn createAttachment(self: *const Texture, format: vhE.TexTyp, clear: ?ClearValue) !vk.VkRenderingAttachmentInfo {
         var clearValue: vk.VkClearValue = undefined;
 
         if (clear) |clearColor| {
             switch (clearColor) {
                 .color => |color| switch (format) {
-                    .Color16, .Color8, .Swapchain => clearValue = vk.VkClearValue{ .color = .{ .float32 = color } },
+                    .Color16, .Color8, .Swapchain => clearValue = vk.VkClearValue{ .color = .{ .float32 = .{ color.R, color.G, color.B, color.A } } },
                     else => return error.ColorFormatHasDepthColor,
                 },
-                .depthStencil => |depthStencil| switch (format) {
-                    .Depth32, .Stencil8 => clearValue = vk.VkClearValue{ .depthStencil = depthStencil },
+                .depth => |depthStencil| switch (format) {
+                    .Depth32, .Stencil8 => clearValue = vk.VkClearValue{ .depthStencil = .{ .depth = depthStencil.depthStencil.depth, .stencil = depthStencil.depthStencil.stencil } },
                     else => return error.DepthFormatHasDepthColor,
                 },
             }

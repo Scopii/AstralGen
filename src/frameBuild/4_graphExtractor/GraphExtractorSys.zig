@@ -38,7 +38,7 @@ pub const GraphExtractorSys = struct {
             for (0..graphExtractor.passDepCounters.getLength()) |i| {
                 const passDepCount = graphExtractor.passDepCounters.getByIndex(@intCast(i));
                 const passKey = graphExtractor.passDepCounters.getKeyByIndex(@intCast(i));
-                const passString = passExtractor.passStrings.getByKey(passKey);
+                const passString = try resourceRegistry.getPassName(.id(passKey));
                 std.debug.print("- Pass {s}: Dependancies {}\n", .{ passString, passDepCount });
             }
             std.debug.print("\n", .{});
@@ -47,16 +47,8 @@ pub const GraphExtractorSys = struct {
         graphExtractor.unorderedPasses.clear();
 
         // Load Unordered Passes
-        for (0..passExtractor.renderNodes.getLength()) |index| {
-            const renderNode = passExtractor.renderNodes.getByIndex(@intCast(index));
-
-            switch (renderNode) {
-                .compositeNode, .uiNode, .viewportBlit, .clearBuffer, .clearTexture, .barrierBakeClears => {},
-                .passNode => |_| {
-                    const key = passExtractor.renderNodes.getKeyByIndex(@intCast(index));
-                    graphExtractor.unorderedPasses.upsert(key, .id(key));
-                },
-            }
+        for (passExtractor.activePasses.getConstItems()) |passId| {
+            graphExtractor.unorderedPasses.upsert(passId.val(), passId);
         }
 
         graphExtractor.readyPasses.clear();
@@ -122,7 +114,7 @@ pub const GraphExtractorSys = struct {
 
             // Passes in unorderedPasses but not in orderedPasses
             for (graphExtractor.unorderedPasses.getConstItems()) |passId| {
-                const passString = passExtractor.passStrings.getByKey(passId.val());
+                const passString = try resourceRegistry.getPassName(passId);
 
                 if (graphExtractor.orderedPasses.isKeyUsed(passId.val()) == false) {
                     const remainingDeps = if (graphExtractor.passDepCounters.isKeyUsed(passId.val())) graphExtractor.passDepCounters.getByKey(passId.val()) else 0;
@@ -134,8 +126,8 @@ pub const GraphExtractorSys = struct {
                 const predStuck = !graphExtractor.orderedPasses.isKeyUsed(dep.predecessor.val());
                 const succStuck = !graphExtractor.orderedPasses.isKeyUsed(dep.successor.val());
                 if (predStuck and succStuck) {
-                    const predString = passExtractor.passStrings.getByKey(dep.predecessor.val());
-                    const succString = passExtractor.passStrings.getByKey(dep.successor.val());
+                    const predString = try resourceRegistry.getPassName(dep.predecessor);
+                    const succString = try resourceRegistry.getPassName(dep.successor);
                     const bufName = try resourceRegistry.getBufferName(dep.buf);
                     std.debug.print("    {s} --[{s}]--> {s}\n", .{ predString, bufName, succString });
                 }
@@ -145,8 +137,8 @@ pub const GraphExtractorSys = struct {
                 const predStuck = !graphExtractor.orderedPasses.isKeyUsed(dep.predecessor.val());
                 const succStuck = !graphExtractor.orderedPasses.isKeyUsed(dep.successor.val());
                 if (predStuck and succStuck) {
-                    const predString = passExtractor.passStrings.getByKey(dep.predecessor.val());
-                    const succString = passExtractor.passStrings.getByKey(dep.successor.val());
+                    const predString = try resourceRegistry.getPassName(dep.predecessor);
+                    const succString = try resourceRegistry.getPassName(dep.successor);
                     const texName = try resourceRegistry.getTextureName(dep.tex);
                     std.debug.print("    {s} --[{s}]--> {s}\n", .{ predString, texName, succString });
                 }

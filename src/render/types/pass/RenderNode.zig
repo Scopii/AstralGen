@@ -1,9 +1,22 @@
 const TexPassId = @import("../../../frameBuild/components.zig").TexPassId;
+const BufPassId = @import("../../../frameBuild/components.zig").BufPassId;
 const WindowId = @import("../../../window/Window.zig").Window.WindowId;
 const PassId = @import("../../../frameBuild/components.zig").PassId;
 const TexId = @import("../res/TextureMeta.zig").TextureMeta.TexId;
 const BufId = @import("../res/BufferMeta.zig").BufferMeta.BufId;
-const PassNode = @import("PassDef.zig").PassNode;
+const PassNode = @import("PassInstance.zig").PassNode;
+
+pub const TexUnion = union(enum) {
+    texName: []const u8, // Should be String?
+    texPassId: TexPassId,
+    texId: TexId,
+};
+
+pub const BufUnion = union(enum) {
+    bufName: []const u8, // Should be String?
+    bufPassId: BufPassId,
+    bufId: BufId,
+};
 
 pub const RenderNode = union(enum) {
     viewportBlit: ViewportBlit,
@@ -16,10 +29,10 @@ pub const RenderNode = union(enum) {
 };
 
 pub const CompositeNode = struct {
-    name: []const u8,
+    name: []const u8, // Should be String
     pass: PassId,
     windowId: WindowId,
-    srcTexPassId: ?TexPassId = null,
+    srcTexUnion: TexUnion,
     viewWidth: u32,
     viewHeight: u32,
     viewOffsetX: i32,
@@ -29,15 +42,18 @@ pub const CompositeNode = struct {
 };
 
 pub const UiNode = struct {
-    name: []const u8,
+    name: []const u8, // Should be String
     windowId: WindowId,
     displayPos: [2]f32,
     displaySize: [2]f32,
-    drawList: []const UiDraw,
+    imguiVB: BufUnion,
+    imguiIB: BufUnion,
+    firstDrawIndex: u32,
+    lastDrawIndex: u32,
 
     pub const UiDraw = struct {
+        drawTex: TexUnion,
         clipRect: [4]f32,
-        texPassId: TexPassId,
         vtxOffset: i32,
         idxOffset: u32,
         elemCount: u32,
@@ -45,9 +61,9 @@ pub const UiNode = struct {
 };
 
 pub const ViewportBlit = struct {
-    name: []const u8,
+    name: []const u8, // Should be String
     pass: PassId,
-    srcTexPassId: ?TexPassId = null,
+    srcTexUnion: TexUnion,
     dstWindowId: WindowId,
     viewWidth: u32,
     viewHeight: u32,

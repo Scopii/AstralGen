@@ -1,15 +1,13 @@
 const TexLevelLifetime = @import("../../frameBuild/components.zig").TexLevelLifetime;
 const BufLevelLifetime = @import("../../frameBuild/components.zig").BufLevelLifetime;
 const GraphMemoryNode = @import("../../frameBuild/components.zig").GraphMemoryNode;
-const TextureEnum = @import("../../frameBuild/enums.zig").TextureEnum;
-const BufferEnum = @import("../../frameBuild/enums.zig").BufferEnum;
 const rc = @import("../../.configs/renderConfig.zig");
 const std = @import("std");
 
 const ResourceRegistryData = @import("../0_resourceRegistry/ResourceRegistryData.zig").ResourceRegistryData;
 const ResourceExtractorData = @import("../2_resourceExtractor/ResourceExtractorData.zig").ResourceExtractorData;
-const GraphOptimizerData = @import("../4.5_graphOptimizer/GraphOptimizerData.zig").GraphOptimizerData;
 const GraphExtractorData = @import("../4_graphExtractor/GraphExtractorData.zig").GraphExtractorData;
+const GraphOptimizerData = @import("../4.5_graphOptimizer/GraphOptimizerData.zig").GraphOptimizerData;
 
 // Step 4.5
 
@@ -97,7 +95,7 @@ pub const GraphOptimizerSys = struct {
         // Debug Output
         if (rc.FRAME_GRAPH_DEBUG) {
             std.debug.print("4.5.GraphOptimizer: \n", .{});
-
+            
             // Buffer Debug
             for (0..graphOptimizer.bufLevelLifetimes.getLength()) |i| {
                 const bufLevelLifetime = graphOptimizer.bufLevelLifetimes.getByIndex(@intCast(i));

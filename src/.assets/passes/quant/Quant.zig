@@ -133,19 +133,13 @@ pub fn QuantTemplate(
     return p.PassDefinition.init(.{
         .name = def.string,
         .outputTex = def.colorAtt.in,
-        .passAttributes = &.{
-            p.PassAttrib.exec(.{
-                .taskOrMeshIndirect = .{
-                    .workgroups = .{ .x = 1, .y = 1, .z = 1 },
-                    .indirectBuf = def.indirectBuf.in,
-                    .indirectBufOffset = 0,
-                },
-            }),
+        .attributes = &.{
+            p.PassAttrib.execTaskOrMeshIndirect(.{ .groupX = 1, .groupY = 1, .groupZ = 1, .indirectBuf = def.indirectBuf.in, .indirectBufOffset = 0 }),
             //
             p.PassAttrib.shader(def.meshShader),
             p.PassAttrib.shader(def.fragShader),
             //
-            p.PassAttrib.color(def.colorAtt, .ColorAtt, .ColorAttReadWrite, .{ .color = .{ 0.0, 0.0, 0.0, 0.0 } }),
+            p.PassAttrib.color(def.colorAtt, .ColorAtt, .ColorAttReadWrite, .{ .R = 0.0, .G = 0.0, .B = 0.0, .A = 0.0 }),
             p.PassAttrib.depth(def.depthAtt, .EarlyAndLateFragTest, .DepthStencilReadWrite, .{ .depthStencil = .{ .depth = 0.0, .stencil = 0 } }),
             //
             p.PassAttrib.buf(def.indirectBuf, .DrawIndirect, .IndirectRead, null),

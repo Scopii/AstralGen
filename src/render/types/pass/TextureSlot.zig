@@ -39,8 +39,4 @@ pub const TextureSlot = struct {
             .descUse = descUse,
         };
     }
-
-    pub fn getNeededState(self: *const TextureSlot) Texture.TextureState {
-        return .{ .stage = self.stage, .access = self.access, .layout = self.layout };
-    }
 };

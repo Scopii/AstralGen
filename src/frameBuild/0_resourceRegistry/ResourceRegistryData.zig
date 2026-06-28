@@ -1,19 +1,15 @@
+const PassDefinition = @import("../../render/types/pass/PassDefinition.zig").PassDefinition;
 const TexDesc = @import("../../render/types/res/TextureMeta.zig").TextureMeta.TexDesc;
 const BufDesc = @import("../../render/types/res/BufferMeta.zig").BufferMeta.BufDesc;
 const LinkedMap = @import("../../.structures/LinkedMap.zig").LinkedMap;
 const FixedList = @import("../../.structures/FixedList.zig").FixedList;
 const SimpleMap = @import("../../.structures/SimpleMap.zig").SimpleMap;
 const KeyPool = @import("../../.structures/KeyPool.zig").KeyPool;
-const rc = @import("../../.configs/renderConfig.zig");
-const sc = @import("../../.configs/shaderConfig.zig");
-const PassId = @import("../components.zig").PassId;
-const std = @import("std");
-
 const String = @import("../../globalHelper.zig").String;
-
-const PassDefinition = @import("../../render/types/pass/PassDefinition.zig").PassDefinition;
-
+const rc = @import("../../.configs/renderConfig.zig");
+const PassId = @import("../components.zig").PassId;
 const pe = @import("../components.zig");
+const std = @import("std");
 const TexPassId = pe.TexPassId;
 const BufPassId = pe.BufPassId;
 
@@ -42,6 +38,10 @@ pub const ResourceRegistryData = struct {
     pub fn getPassDefinition(self: *const ResourceRegistryData, passName: []const u8) !*const PassDefinition {
         const passId = self.passIdMap.get(passName) orelse return error.PassStringHasNoPassId;
         return self.passDefinitions.getConstPtrByKey(passId.val());
+    }
+
+    pub fn getPassDefinitionById(self: *const ResourceRegistryData, passId: PassId) !*const PassDefinition {
+        if (self.passDefinitions.isKeyUsed(passId.val()) == true) return self.passDefinitions.getConstPtrByKey(passId.val()) else return error.PassIdHasNoDefinition;
     }
 
     pub fn getBufferPassId(self: *const ResourceRegistryData, name: []const u8) !BufPassId {

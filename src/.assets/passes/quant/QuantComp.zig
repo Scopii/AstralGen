@@ -24,13 +24,8 @@ const p = @import("../passImport.zig");
 pub const quantCompPass = p.PassDefinition.init(.{
     .name = "QuantComp",
     .outputTex = null,
-    .passAttributes = &.{
-        p.PassAttrib.exec(.{
-            .compute = .{
-                .workgroups = .{ .x = 1, .y = 1, .z = 1 },
-                .outputTexDispatch = false,
-            },
-        }),
+    .attributes = &.{
+        p.PassAttrib.execCompute(.{ .groupX = 1, .groupY = 1, .groupZ = 1, .outputTexDispatch = false }),
         //
         p.PassAttrib.shader(sc.quantComp),
         //

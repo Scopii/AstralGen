@@ -1,3 +1,4 @@
+const ClearColor = @import("../render/types/pass/AttachmentSlot.zig").AttachmentSlot.ClearColor;
 const TexDesc = @import("../render/types/res/TextureMeta.zig").TextureMeta.TexDesc;
 const BufDesc = @import("../render/types/res/BufferMeta.zig").BufferMeta.BufDesc;
 const CameraData = @import("../camera/CameraSys.zig").CamData;
@@ -54,7 +55,7 @@ pub const RENDER_TEX_AUTO_RESIZE = true;
 pub const RENDER_TEX_STRETCH = true; // Maybe ignored on AUTO_RESIZE
 pub const USE_MEM_BARRIERS_ON_BUFFERS = true;
 pub const USE_MEM_BARRIER_ON_IMAGES = true;
-pub const INITIAL_SWAPCHAIN_COLOR: [4]f32 = .{ 0.0, 0.0, 0.1, 1.0 };
+pub const INITIAL_SWAPCHAIN_COLOR: ClearColor = .{ .R = 0.0, .G = 0.0, .B = 0.1, .A = 1.0 };
 
 // Resource Information
 pub const BUF_MAX = 63;

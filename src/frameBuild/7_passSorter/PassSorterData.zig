@@ -7,9 +7,5 @@ const rc = @import("../../.configs/renderConfig.zig");
 // Step 7
 
 pub const PassSorterData = struct {
-    tempPasses: FixedList(u16, rc.PASS_MAX) = .{},
-    tempBlits: FixedList(u16, rc.PASS_MAX) = .{},
-    tempComposites: FixedList(u16, rc.PASS_MAX) = .{},
-    
-    sortedRenderNodes: FixedList(RenderNode, rc.PASS_MAX) = .{},
+    sortedRenderNodes: FixedList(RenderNode, rc.PASS_MAX + rc.MAX_WINDOWS * 4) = .{},
 };

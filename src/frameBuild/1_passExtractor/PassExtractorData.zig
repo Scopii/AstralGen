@@ -1,12 +1,16 @@
-const RenderNode = @import("../../render/types/pass/RenderNode.zig").RenderNode;
+const CompositeNode = @import("../../render/types/pass/RenderNode.zig").CompositeNode;
+const ViewportBlit = @import("../../render/types/pass/RenderNode.zig").ViewportBlit;
 const FixedList = @import("../../.structures/FixedList.zig").FixedList;
 const SimpleMap = @import("../../.structures/SimpleMap.zig").SimpleMap;
 const LinkedMap = @import("../../.structures/LinkedMap.zig").LinkedMap;
 const rc = @import("../../.configs/renderConfig.zig");
+const PassId = @import("../components.zig").PassId;
 
 // Step 1
 
 pub const PassExtractorData = struct {
-    passStrings: SimpleMap([]const u8, rc.PASS_MAX, u16, rc.PASS_MAX, 0) = .{}, // Maybe Rename Pass Size?
-    renderNodes: LinkedMap(RenderNode, rc.PASS_MAX, u16, rc.PASS_MAX, 0) = .{}, // Node Size > Pass Size (Has Composites/Blits) Should Split!
+    activePasses: SimpleMap(PassId, rc.PASS_MAX, u16, rc.PASS_MAX, 0) = .{},
+    passResolutions: SimpleMap(struct { width: u32, height: u32 }, rc.PASS_MAX, u16, rc.PASS_MAX, 0) = .{},
+    composites: FixedList(CompositeNode, rc.MAX_WINDOWS * 4) = .{},
+    blits: FixedList(ViewportBlit, rc.MAX_WINDOWS * 4) = .{},
 };

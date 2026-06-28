@@ -1,10 +1,7 @@
 const TexDesc = @import("../render/types/res/TextureMeta.zig").TextureMeta.TexDesc;
-const TexInf = @import("../render/types/res/TextureMeta.zig").TextureMeta.TexInf;
 const TexId = @import("../render/types/res/TextureMeta.zig").TextureMeta.TexId;
 const BufDesc = @import("../render/types/res/BufferMeta.zig").BufferMeta.BufDesc;
-const BufInf = @import("../render/types/res/BufferMeta.zig").BufferMeta.BufInf;
 const BufId = @import("../render/types/res/BufferMeta.zig").BufferMeta.BufId;
-pub const pe = @import("enums.zig");
 
 const IdAdvanced = @import("../globalHelper.zig").IdAdvanced;
 const Id = @import("../globalHelper.zig").Id;
@@ -44,13 +41,13 @@ pub const BufferLink = struct {
 };
 
 pub const TextureStringLink = struct {
-    in: []const u8,
-    out: ?[]const u8 = null,
+    in: []const u8, // Should be String?
+    out: ?[]const u8 = null, // Should be String?
 };
 
 pub const BufferStringLink = struct {
-    in: []const u8,
-    out: ?[]const u8 = null,
+    in: []const u8, // Should be String?
+    out: ?[]const u8 = null, // Should be String?
 };
 
 pub const TextureAccess = struct {

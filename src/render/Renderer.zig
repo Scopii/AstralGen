@@ -1,7 +1,9 @@
 const MemoryManager = @import("../core/MemoryManager.zig").MemoryManager;
 const LoadedShader = @import("../shader/LoadedShader.zig").LoadedShader;
 const TextureMeta = @import("types/res/TextureMeta.zig").TextureMeta;
+const TexId = @import("types/res/TextureMeta.zig").TextureMeta.TexId;
 const BufferMeta = @import("types/res/BufferMeta.zig").BufferMeta;
+const BufId = @import("types/res/BufferMeta.zig").BufferMeta.BufId;
 const SwapchainMan = @import("sys/SwapchainMan.zig").SwapchainMan;
 const RenderNode = @import("types/pass/RenderNode.zig").RenderNode;
 const ResourceMan = @import("sys/ResourceMan.zig").ResourceMan;
@@ -132,8 +134,7 @@ pub const Renderer = struct {
         frameData: FrameData,
         renderNodes: []const RenderNode,
         uiNodes: []const UiNode,
-        bufAssigns: *const BufferAssignments,
-        texAssigns: *const TextureAssignments,
+        uiDraws: []const UiNode.UiDraw,
         activeWindows: []const Window,
         rendererOutQueue: *RendererOutQueue,
     ) !void {
@@ -154,8 +155,7 @@ pub const Renderer = struct {
             &self.resMan,
             &self.shaderMan,
             self.context.meshTaskSupp,
-            bufAssigns,
-            texAssigns,
+            uiDraws,
         );
 
         try self.scheduler.queueSubmit(cmd, &self.swapMan, self.context.graphicsQ);

@@ -1,3 +1,4 @@
+const PassExecutionSlot = @import("PassInstance.zig").PassInstance.PassExecutionSlot;
 const RenderStateUnion = @import("../pass/RenderState.zig").RenderStateUnion;
 const FixedList = @import("../../../.structures/FixedList.zig").FixedList;
 const VertexBufferSlot = @import("VertexBufferSlot.zig").VertexBufferSlot;
@@ -5,7 +6,6 @@ const IndexBufferSlot = @import("IndexBufferSlot.zig").IndexBufferSlot;
 const VertexAttribute = @import("VertexAttribute.zig").VertexAttribute;
 const ShaderInf = @import("../../../shader/ShaderInf.zig").ShaderInf;
 const AttachmentSlot = @import("AttachmentSlot.zig").AttachmentSlot;
-const PassExecutionSlot = @import("PassDef.zig").PassDef.PassExecutionSlot;
 const ShaderId = @import("../../../shader/ShaderSys.zig").ShaderId;
 const RenderState = @import("../pass/RenderState.zig").RenderState;
 const TexId = @import("../res/TextureMeta.zig").TextureMeta.TexId;
@@ -16,9 +16,17 @@ const std = @import("std");
 const TextureStringLink = @import("../../../frameBuild/components.zig").TextureStringLink;
 const BufferStringLink = @import("../../../frameBuild/components.zig").BufferStringLink;
 const vhE = @import("../../help/Enums.zig");
-const ClearColor = @import("AttachmentUse.zig").AttachmentUse.ClearColor;
+const ClearColor = @import("AttachmentSlot.zig").AttachmentSlot.ClearColor;
+const ClearDepth = @import("AttachmentSlot.zig").AttachmentSlot.ClearDepth;
+const ClearValue = @import("AttachmentSlot.zig").AttachmentSlot.ClearValue;
 
 const String = @import("../../../globalHelper.zig").String;
+
+const ComputeExec = @import("PassInstance.zig").ComputeExec;
+const ComputeIndirectExecSlot = @import("PassInstance.zig").ComputeIndirectExecSlot;
+const TaskOrMeshIndirectExecSlot = @import("PassInstance.zig").TaskOrMeshIndirectExecSlot;
+const TaskOrMeshExec = @import("PassInstance.zig").TaskOrMeshExec;
+const GraphicsExec = @import("PassInstance.zig").GraphicsExec;
 
 const AttributeCounts = struct {
     comps: u8 = 0,
@@ -61,8 +69,24 @@ pub const PassDefinition = struct {
 
         renderState: RenderStateUnion,
 
-        pub fn exec(passExec: PassExecutionSlot) PassAttribute {
-            return .{ .execution = passExec };
+        pub fn execCompute(passExec: ComputeExec) PassAttribute {
+            return .{ .execution = .{ .compute = passExec } };
+        }
+
+        pub fn execComputeIndirect(passExec: ComputeIndirectExecSlot) PassAttribute {
+            return .{ .execution = .{ .computeIndirect = passExec } };
+        }
+
+        pub fn execGraphics(passExec: GraphicsExec) PassAttribute {
+            return .{ .execution = .{ .graphics = passExec } };
+        }
+
+        pub fn execTaskOrMesh(passExec: TaskOrMeshExec) PassAttribute {
+            return .{ .execution = .{ .taskOrMesh = passExec } };
+        }
+
+        pub fn execTaskOrMeshIndirect(passExec: TaskOrMeshIndirectExecSlot) PassAttribute {
+            return .{ .execution = .{ .taskOrMeshIndirect = passExec } };
         }
 
         pub fn shader(shaderInf: ShaderInf) PassAttribute {
@@ -77,16 +101,16 @@ pub const PassDefinition = struct {
             return .{ .texSlot = TextureSlot.init(texLink, stage, texUseKind, shaderSlot) };
         }
 
-        pub fn color(texLink: TextureStringLink, stage: vhE.PipeStage, access: vhE.PipeAccess, clear: ?ClearColor) PassAttribute {
-            return .{ .colorAtt = AttachmentSlot.init(texLink, stage, access, clear) };
+        pub fn color(texLink: TextureStringLink, stage: vhE.PipeStage, access: vhE.PipeAccess, clearColor: ?ClearColor) PassAttribute {
+            return .{ .colorAtt = AttachmentSlot.init(texLink, stage, access, if (clearColor) |col| ClearValue{ .color = col } else null) };
         }
 
-        pub fn depth(texLink: TextureStringLink, stage: vhE.PipeStage, access: vhE.PipeAccess, clear: ?ClearColor) PassAttribute {
-            return .{ .depthAtt = AttachmentSlot.init(texLink, stage, access, clear) };
+        pub fn depth(texLink: TextureStringLink, stage: vhE.PipeStage, access: vhE.PipeAccess, clear: ?ClearDepth) PassAttribute {
+            return .{ .depthAtt = AttachmentSlot.init(texLink, stage, access, if (clear) |dep| ClearValue{ .depth = dep } else null) };
         }
 
-        pub fn stencil(texLink: TextureStringLink, stage: vhE.PipeStage, access: vhE.PipeAccess, clear: ?ClearColor) PassAttribute {
-            return .{ .stencilAtt = AttachmentSlot.init(texLink, stage, access, clear) };
+        pub fn stencil(texLink: TextureStringLink, stage: vhE.PipeStage, access: vhE.PipeAccess, clear: ?ClearDepth) PassAttribute {
+            return .{ .stencilAtt = AttachmentSlot.init(texLink, stage, access, if (clear) |dep| ClearValue{ .depth = dep } else null) };
         }
 
         pub fn vertexBuf(bufInput: []const u8, binding: u32, stride: u32, inputRate: c_uint) PassAttribute {
@@ -106,17 +130,13 @@ pub const PassDefinition = struct {
         }
     };
 
-    // pub fn initComp(name: []const u8, execution: PassExecution.Com, outputTex: ?[]const u8, passAttributes: []const PassAttribute) !PassDefinition {
-    //     try init(name, execution, outputTex, passAttributes);
-    // }
-
-    pub fn init(def: struct { name: []const u8, outputTex: ?[]const u8, passAttributes: []const PassAttribute }) PassDefinition {
+    pub fn init(def: struct { name: []const u8, outputTex: ?[]const u8, attributes: []const PassAttribute }) PassDefinition {
         var passDef = PassDefinition{
             .outputTex = def.outputTex,
         };
         passDef.name.fill(def.name);
-        std.debug.assert(def.passAttributes.len <= MAX_PASS_ATTRIBUTES);
-        passDef.passAttribute.appendSliceAssumeCapacity(def.passAttributes);
+        std.debug.assert(def.attributes.len <= MAX_PASS_ATTRIBUTES);
+        passDef.passAttribute.appendSliceAssumeCapacity(def.attributes);
         return passDef;
     }
 
