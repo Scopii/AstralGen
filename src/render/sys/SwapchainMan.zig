@@ -95,26 +95,9 @@ pub const SwapchainMan = struct {
         self.swapchains.getPtrByKey(windowId.val()).inUse = inUse;
     }
 
-    pub fn getMaxExtent(self: *SwapchainMan, texPassId: TexPassId) vk.VkExtent2D {
-        var maxWidth: u32 = 1;
-        var maxHeight: u32 = 1;
-
-        for (self.swapchains.getItems()) |swapchain| {
-            for (swapchain.linkedTexPassIds) |linkedId| {
-                if (linkedId == null) continue;
-
-                if (linkedId.?.val() == texPassId.val()) {
-                    maxWidth = @max(maxWidth, swapchain.extent.width);
-                    maxHeight = @max(maxHeight, swapchain.extent.height);
-                }
-            }
-        }
-        return vk.VkExtent2D{ .width = maxWidth, .height = maxHeight };
-    }
-
     pub fn createSwapchain(self: *SwapchainMan, window: Window) !void {
         const surface = try createSurface(window.handle, self.instance);
-        const swapchain = try Swapchain.init(self.alloc, self.gpi, surface, window.extent, self.gpu, window.linkedTexPassId, null, window.id);
+        const swapchain = try Swapchain.init(self.alloc, self.gpi, surface, window.extent, self.gpu, null, window.id);
         self.hiddenSwapchains.upsert(window.id.val(), rc.MAX_IN_FLIGHT);
         self.swapchains.upsert(window.id.val(), swapchain);
         std.debug.print("Swapchain added to Window {}\n", .{window.id.val()});

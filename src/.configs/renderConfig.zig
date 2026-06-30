@@ -43,6 +43,7 @@ pub const PASS_EXTRACTION_DEBUG = false;
 pub const FRAME_GRAPH_DEBUG = true;
 pub const FRAME_BUILDS_TILL_TRANSIENT_DELETION = 0;
 pub const PASS_MAX = 128;
+pub const MAX_PASS_ATTRIBUTES = 80;
 
 // Rendering, Swapchains and Windows
 pub const EARLY_GPU_WAIT = true; // (Reflex Mode)
@@ -92,6 +93,7 @@ pub const rayMarchTexDesc = TexDesc{
     .height = 1080,
     .update = .Rarely,
     .resize = .Fit,
+    .fitPass = true,
 };
 
 pub const gridTexDesc = TexDesc{
@@ -104,6 +106,7 @@ pub const gridTexDesc = TexDesc{
     .height = 1080,
     .update = .Rarely,
     .resize = .Fit,
+    .fitPass = true,
 };
 
 pub const gridDepthTexDesc = TexDesc{
@@ -116,6 +119,7 @@ pub const gridDepthTexDesc = TexDesc{
     .height = 1080,
     .update = .Rarely,
     .resize = .Fit,
+    .fitPass = true,
 };
 
 pub const planeTexDesc = TexDesc{
@@ -128,6 +132,7 @@ pub const planeTexDesc = TexDesc{
     .height = 1080,
     .update = .Rarely,
     .resize = .Fit,
+    .fitPass = true,
 };
 
 pub const planeDepthTexDesc = TexDesc{
@@ -140,6 +145,7 @@ pub const planeDepthTexDesc = TexDesc{
     .height = 1080,
     .update = .Rarely,
     .resize = .Fit,
+    .fitPass = true,
 };
 
 pub const debugGridTexDesc = TexDesc{
@@ -152,6 +158,7 @@ pub const debugGridTexDesc = TexDesc{
     .height = 1080,
     .update = .Rarely,
     .resize = .Fit,
+    .fitPass = true,
 };
 
 pub const debugPlaneTexDesc = TexDesc{
@@ -164,6 +171,7 @@ pub const debugPlaneTexDesc = TexDesc{
     .height = 1080,
     .update = .Rarely,
     .resize = .Fit,
+    .fitPass = true,
 };
 
 pub const debugGridDepthTexDesc = TexDesc{
@@ -176,6 +184,7 @@ pub const debugGridDepthTexDesc = TexDesc{
     .height = 1080,
     .update = .Rarely,
     .resize = .Fit,
+    .fitPass = true,
 };
 
 pub const debugPlaneDepthTexDesc = TexDesc{
@@ -188,6 +197,7 @@ pub const debugPlaneDepthTexDesc = TexDesc{
     .height = 1080,
     .update = .Rarely,
     .resize = .Fit,
+    .fitPass = true,
 };
 
 pub const testTilesTexDesc = TexDesc{
@@ -200,6 +210,7 @@ pub const testTilesTexDesc = TexDesc{
     .height = 256,
     .update = .Rarely,
     .resize = .Fit,
+    .fitPass = false,
 };
 
 pub const imguiFontTexDesc = TexDesc{
@@ -212,6 +223,7 @@ pub const imguiFontTexDesc = TexDesc{
     .height = 1,
     .update = .Rarely,
     .resize = .Fit,
+    .fitPass = false,
 };
 
 pub const depthViewTexDesc = TexDesc{
@@ -224,6 +236,7 @@ pub const depthViewTexDesc = TexDesc{
     .height = 1080,
     .update = .Rarely,
     .resize = .Fit,
+    .fitPass = true,
 };
 
 pub const BufPassId = @import("../.configs/idConfig.zig").BufPassId;

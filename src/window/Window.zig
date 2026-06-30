@@ -11,31 +11,18 @@ pub const Window = struct {
     name: []const u8,
     handle: *sdl.SDL_Window,
     state: WindowState = .needCreation,
-    linkedTexPassId: [rc.LINKED_TEX_MAX]?TexPassId,
     extent: vk.VkExtent2D,
     id: WindowId,
     resizeTex: bool,
     relativeMouse: bool = false,
     viewIds: [4]?ViewportId = .{null} ** 4,
 
-    pub fn init(
-        windowProps: sdl.SDL_PropertiesID,
-        extent: vk.VkExtent2D,
-        resizeTex: bool,
-        linkedTexPassId: []const TexPassId,
-        viewIds: [4]?ViewportId,
-        name: []const u8,
-    ) !Window {
-        if (linkedTexPassId.len > rc.LINKED_TEX_MAX) return error.WindowLinkedTexturesOverflow;
-
+    pub fn init(windowProps: sdl.SDL_PropertiesID, extent: vk.VkExtent2D, resizeTex: bool, viewIds: [4]?ViewportId, name: []const u8) !Window {
         const winHandle = sdl.SDL_CreateWindowWithProperties(windowProps) orelse {
             std.log.err("SDL_CreateWindowWithProperties failed: {s}\n", .{sdl.SDL_GetError()});
             return error.WindowInitFailed;
         };
         const windowId = sdl.SDL_GetWindowID(winHandle);
-
-        var actualTexEnums: [rc.LINKED_TEX_MAX]?TexPassId = .{null} ** rc.LINKED_TEX_MAX;
-        for (0..linkedTexPassId.len) |i| actualTexEnums[i] = linkedTexPassId[i];
 
         var window = Window{
             .name = name,
@@ -43,7 +30,6 @@ pub const Window = struct {
             .extent = extent,
             .id = .id(windowId),
             .resizeTex = resizeTex,
-            .linkedTexPassId = actualTexEnums,
             .viewIds = viewIds,
         };
 

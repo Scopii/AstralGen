@@ -113,11 +113,10 @@ pub const FrameGraphSys = struct {
 
         try MappingComparatorSys.buildChanges(&graph.mappingComparator, &graph.resourceMapper, &graph.resourceRegistry);
 
-        try GroupMergerSys.buildPassResources(&graph.groupMerger, &graph.resourceExtractor, &graph.lifetimeMerger, &graph.resourceMapper, &graph.resourceRegistry);
+        try GroupMergerSys.buildPassResources(&graph.groupMerger, &graph.lifetimeMerger, &graph.resourceMapper, &graph.resourceRegistry);
 
         try ResourceAssignerSys.buildPersistentResources(
             &graph.resourceAssigner,
-            &graph.resourceExtractor,
             &graph.resourceMapper,
             &graph.mappingComparator,
             &graph.groupMerger,
@@ -126,7 +125,14 @@ pub const FrameGraphSys = struct {
             memoryMan,
         );
 
-        try PassSorterSys.buildFrame(&graph.passSorter, &graph.passExtractor, &graph.graphOptimizer, &graph.groupMerger, &graph.resourceAssigner, &graph.resourceRegistry);
+        try PassSorterSys.buildFrame(
+            &graph.passSorter,
+            &graph.passExtractor,
+            &graph.graphOptimizer,
+            &graph.groupMerger,
+            &graph.resourceAssigner,
+            &graph.resourceRegistry,
+        );
     }
 
     pub fn createTextureManually(frameGraph: *FrameGraphData, texPassId: TexPassId, rendererQueue: *RendererQueue, memoryMan: *MemoryManager) !void {

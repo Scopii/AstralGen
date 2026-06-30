@@ -29,7 +29,6 @@ const BufInf = BufferMeta.BufInf;
 pub const ResourceAssignerSys = struct {
     pub fn buildPersistentResources(
         resourceAssigner: *ResourceAssignerData,
-        resourceExtractor: *const ResourceExtractorData,
         resourceMapper: *const ResourceMapperData,
         mappingComparator: *const MappingComparatorData,
         groupMerger: *const GroupMergerData,
@@ -55,12 +54,11 @@ pub const ResourceAssignerSys = struct {
         // Check needed Shared Lifetimes to create or re-use existing Physical Buffer
         for (groupMerger.sharedBufLifetimes.constSlice()) |sharedBufLifetime| {
             var physCandidateIndex: ?u16 = null;
-            const sharedBufDesc = resourceExtractor.bufDescriptions.getByKey(sharedBufLifetime.bufDescId.val());
+            const sharedBufDesc = resourceMapper.bufGroupsTransient.getByKey(sharedBufLifetime.bufDescId.val()).bufDesc;
 
             for (resourceAssigner.unusedTransientBufs.constSlice(), 0..) |transientBuf, i| {
-                const transientBufDesc = resourceExtractor.bufDescriptions.getByKey(transientBuf.bufDescId.val());
                 // Check if Desc Fits Existing Info
-                if (bufDescEqual(&transientBufDesc, &sharedBufDesc) == true) {
+                if (bufDescEqual(&transientBuf.bufDesc, &sharedBufDesc) == true) {
                     physCandidateIndex = @intCast(i);
                     break;
                 }
@@ -74,7 +72,7 @@ pub const ResourceAssignerSys = struct {
             } else {
                 // Candidate not found -> create new
                 const candidate = TransientBuffer{
-                    .bufDescId = sharedBufLifetime.bufDescId,
+                    .bufDesc = sharedBufDesc,
                     .hardwareBuf = try getFreeBufId(resourceAssigner),
                 };
                 try createTransientBuffer(sharedBufDesc, candidate.hardwareBuf, rendererQueue, memoryMan);
@@ -92,6 +90,7 @@ pub const ResourceAssignerSys = struct {
             if (transientBuf.unusedCounter >= rc.FRAME_BUILDS_TILL_TRANSIENT_DELETION) {
                 deleteTransientBuffer(transientBuf.hardwareBuf, rendererQueue);
                 resourceAssigner.unusedTransientBufs.swapRemove(@intCast(index));
+                freeUpBufId(resourceAssigner, transientBuf.hardwareBuf);
             } else transientBuf.unusedCounter += 1;
         }
 
@@ -118,12 +117,11 @@ pub const ResourceAssignerSys = struct {
         // Check needed Shared Lifetimes to create or re-use existing Physical Textures
         for (groupMerger.sharedTexLifetimes.constSlice()) |sharedTexLifetime| {
             var physCandidateIndex: ?u16 = null;
-            const sharedTexDesc = resourceExtractor.texDescriptions.getByKey(sharedTexLifetime.texDescId.val());
+            const sharedTexDesc = resourceMapper.texGroupsTransient.getByKey(sharedTexLifetime.texDescId.val()).texDesc;
 
             for (resourceAssigner.unusedTransientTexes.constSlice(), 0..) |transientTex, i| {
-                const transientTexDesc = resourceExtractor.texDescriptions.getByKey(transientTex.texDescId.val());
                 // Check if Desc Fits Existing Info
-                if (texDescEqual(&transientTexDesc, &sharedTexDesc) == true) {
+                if (texDescEqual(&transientTex.texDesc, &sharedTexDesc) == true) {
                     physCandidateIndex = @intCast(i);
                     break;
                 }
@@ -137,7 +135,7 @@ pub const ResourceAssignerSys = struct {
             } else {
                 // Candidate not found -> create new
                 const candidate = TransientTexture{
-                    .texDescId = sharedTexLifetime.texDescId,
+                    .texDesc = sharedTexDesc,
                     .hardwareTex = try getFreeTexId(resourceAssigner),
                 };
                 try createTransientTexture(sharedTexDesc, candidate.hardwareTex, rendererQueue, memoryMan);
@@ -155,6 +153,7 @@ pub const ResourceAssignerSys = struct {
             if (transientTex.unusedCounter >= rc.FRAME_BUILDS_TILL_TRANSIENT_DELETION) {
                 deleteTransientTexture(transientTex.hardwareTex, rendererQueue);
                 resourceAssigner.unusedTransientTexes.swapRemove(@intCast(index));
+                freeUpTexId(resourceAssigner, transientTex.hardwareTex);
             } else transientTex.unusedCounter += 1;
         }
 
@@ -273,26 +272,26 @@ pub const ResourceAssignerSys = struct {
             std.debug.print("6.ResourceAssigner\n", .{});
             // Transient Buffer View:
             for (resourceAssigner.usedTransientBufs.constSlice(), 0..) |transientBuf, i| {
-                std.debug.print(" - Transient Buf {} -> (BufId {}) (unused for {} Builds)\n", .{ i, transientBuf.hardwareBuf, transientBuf.unusedCounter });
+                std.debug.print(" - Transient Buf {} -> (BufId {}) (unused for {} Builds)\n", .{ i, transientBuf.hardwareBuf.val(), transientBuf.unusedCounter });
             }
             std.debug.print("\n", .{});
             // Transient Texture View:
             for (resourceAssigner.usedTransientTexes.constSlice(), 0..) |transientTex, i| {
-                std.debug.print(" - Transient Tex {} -> (TexId {}) (unused for {} Builds)\n", .{ i, transientTex.hardwareTex, transientTex.unusedCounter });
+                std.debug.print(" - Transient Tex {} -> (TexId {}) (unused for {} Builds)\n", .{ i, transientTex.hardwareTex.val(), transientTex.unusedCounter });
             }
             std.debug.print("\n", .{});
             // Buffers
             for (resourceAssigner.bufAssigns.getConstItems(), 0..) |bufId, i| {
                 const bufKey = resourceAssigner.bufAssigns.getKeyByIndex(@intCast(i));
                 const bufName = try resourceRegistry.getBufferName(.id(bufKey));
-                std.debug.print(" - Buf {s} assigned -> BufId{}\n", .{ bufName, bufId });
+                std.debug.print(" - Buf {s} assigned -> BufId {}\n", .{ bufName, bufId.val() });
             }
             std.debug.print("\n", .{});
             // Textures
             for (resourceAssigner.texAssigns.getConstItems(), 0..) |texId, i| {
                 const texKey = resourceAssigner.texAssigns.getKeyByIndex(@intCast(i));
                 const texName = try resourceRegistry.getTextureName(.id(texKey));
-                std.debug.print(" - Tex {s} assigned -> TexId{}\n", .{ texName, texId });
+                std.debug.print(" - Tex {s} assigned -> TexId {}\n", .{ texName, texId.val() });
             }
             std.debug.print("\n", .{});
         }

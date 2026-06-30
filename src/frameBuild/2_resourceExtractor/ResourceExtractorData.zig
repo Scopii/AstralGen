@@ -14,8 +14,8 @@ pub const ResourceExtractorData = struct {
     bufAccesses: FixedList(BufferAccess, rc.PASS_MAX * rc.BUF_MAX) = .{},
     texAccesses: FixedList(TextureAccess, rc.PASS_MAX * rc.TEX_MAX) = .{},
 
-    bufDescriptions: SimpleMap(BufDesc, rc.BUF_MAX, u16, rc.BUF_MAX, 0) = .{},
-    texDescriptions: SimpleMap(TexDesc, rc.TEX_MAX, u16, rc.TEX_MAX, 0) = .{},
+    bufDescriptions: LinkedMap(BufDesc, rc.BUF_MAX, u16, rc.BUF_MAX, 0) = .{},
+    texDescriptions: LinkedMap(TexDesc, rc.TEX_MAX, u16, rc.TEX_MAX, 0) = .{},
 
     bufMemSize: LinkedMap(u64, rc.BUF_MAX, u16, rc.BUF_MAX, 0) = .{}, // Only used for transient Buffers
     texMemSize: LinkedMap(u64, rc.TEX_MAX, u16, rc.TEX_MAX, 0) = .{}, // Only used for transient Textures

@@ -7,6 +7,7 @@ const AttachmentFill = @import("../../render/types/pass/AttachmentFill.zig").Att
 const PassInstance = @import("../../render/types/pass/PassInstance.zig").PassInstance;
 const TextureFill = @import("../../render/types/pass/TextureFill.zig").TextureFill;
 const BufferFill = @import("../../render/types/pass/BufferFill.zig").BufferFill;
+const RendererQueue = @import("../../render/RendererQueue.zig").RendererQueue;
 const PassId = @import("../../.configs/idConfig.zig").PassId;
 const rc = @import("../../.configs/renderConfig.zig");
 const std = @import("std");
@@ -30,6 +31,7 @@ pub const PassSorterSys = struct {
         resourceRegistry: *const ResourceRegistryData,
     ) !void {
         passSorter.sortedRenderNodes.clear();
+        passSorter.texResizes.clear();
 
         const composites = passExtractor.composites.constSlice();
         const blits = passExtractor.blits.constSlice();
@@ -61,8 +63,8 @@ pub const PassSorterSys = struct {
             if (neededClears) try passSorter.sortedRenderNodes.append(.barrierBakeClears);
 
             // Passes
-            const renderSize = passExtractor.passResolutions.getByKey(passId.val());
-            const passInstance = try fillPassHardwareIds(passId, resourceAssigner, resourceRegistry);
+            const renderSize = passExtractor.passResolutions.getByKey(passId.val()); // DONE TWICE
+            const passInstance = try fillPassHardwareIds(passSorter, passId, passExtractor, resourceAssigner, resourceRegistry);
 
             passSorter.sortedRenderNodes.append(.{ .passNode = .{ .pass = passInstance, .passWidth = renderSize.width, .passHeight = renderSize.height } }) catch {
                 std.debug.print("7.PassSorter: Pass Append to sortedRenderNodes failed", .{});
@@ -120,8 +122,8 @@ pub const PassSorterSys = struct {
                     .compositeNode => |*composite| std.debug.print("- {}. Composite: {s} (Pass {s})\n", .{ index, composite.name, try resourceRegistry.getPassName(composite.pass) }),
                     .viewportBlit => |*blit| std.debug.print("- {}. Blit: {s} (Pass {s})\n", .{ index, blit.name, try resourceRegistry.getPassName(blit.pass) }),
                     .uiNode => |*ui| std.debug.print("- {}. UI: {s} (WindowID {})\n", .{ index, ui.name, ui.windowId }),
-                    .clearBuffer => |*clearBuf| std.debug.print("- {}. ClearBuffer: {}\n", .{ index, clearBuf.* }),
-                    .clearTexture => |*clearTex| std.debug.print("- {}. ClearTexture: {}\n", .{ index, clearTex.* }),
+                    .clearBuffer => |*clearBuf| std.debug.print("- {}. ClearBuffer: BufId {}\n", .{ index, clearBuf.val() }),
+                    .clearTexture => |*clearTex| std.debug.print("- {}. ClearTexture: TexId {}\n", .{ index, clearTex.val() }),
                     .barrierBakeClears => std.debug.print("- {}. Bake Clears\n", .{index}),
                 }
             }
@@ -130,9 +132,16 @@ pub const PassSorterSys = struct {
     }
 };
 
-fn fillPassHardwareIds(passId: PassId, resourceAssigner: *const ResourceAssignerData, resourceRegistry: *const ResourceRegistryData) !PassInstance {
+fn fillPassHardwareIds(
+    passSorter: *PassSorterData,
+    passId: PassId,
+    passExtractor: *const PassExtractorData,
+    resourceAssigner: *const ResourceAssignerData,
+    resourceRegistry: *const ResourceRegistryData,
+) !PassInstance {
     const passName = try resourceRegistry.getPassName(passId);
     const passDef = try resourceRegistry.getPassDefinition(passName);
+    const renderSize = passExtractor.passResolutions.getByKey(passId.val());
 
     const mainOutputTexId = if (passDef.outputTex) |output| try resourceRegistry.getTexturePassId(output) else null;
 
@@ -201,6 +210,12 @@ fn fillPassHardwareIds(passId: PassId, resourceAssigner: *const ResourceAssigner
             .texSlot => |texSlot| {
                 const texPassId = try resourceRegistry.getTexturePassId(texSlot.texLink.in);
                 const hardwareTexId = resourceAssigner.texAssigns.getByKey(texPassId.val());
+                const texDef = try resourceRegistry.getTextureDefinition(texPassId);
+
+                if (texDef.fitPass == true and passSorter.texResizes.isKeyUsed(hardwareTexId.val())) {
+                    const cur = passSorter.texResizes.getByKey(hardwareTexId.val());
+                    passSorter.texResizes.upsert(hardwareTexId.val(), .{ .width = @max(cur.width, renderSize.width), .height = @max(cur.height, renderSize.height) });
+                } else passSorter.texResizes.upsert(hardwareTexId.val(), .{ .width = renderSize.width, .height = renderSize.height });
 
                 const texUse = TextureFill{
                     .texId = hardwareTexId,
@@ -216,6 +231,12 @@ fn fillPassHardwareIds(passId: PassId, resourceAssigner: *const ResourceAssigner
             .colorAtt => |attSlot| {
                 const texPassId = try resourceRegistry.getTexturePassId(attSlot.texLink.in);
                 const hardwareTexId = resourceAssigner.texAssigns.getByKey(texPassId.val());
+                const texDef = try resourceRegistry.getTextureDefinition(texPassId);
+
+                if (texDef.fitPass == true and passSorter.texResizes.isKeyUsed(hardwareTexId.val())) {
+                    const cur = passSorter.texResizes.getByKey(hardwareTexId.val());
+                    passSorter.texResizes.upsert(hardwareTexId.val(), .{ .width = @max(cur.width, renderSize.width), .height = @max(cur.height, renderSize.height) });
+                } else passSorter.texResizes.upsert(hardwareTexId.val(), .{ .width = renderSize.width, .height = renderSize.height });
 
                 const colorAttUse = AttachmentFill{
                     .texId = hardwareTexId,
@@ -229,6 +250,12 @@ fn fillPassHardwareIds(passId: PassId, resourceAssigner: *const ResourceAssigner
             .depthAtt => |depthSlot| {
                 const texPassId = try resourceRegistry.getTexturePassId(depthSlot.texLink.in);
                 const hardwareTexId = resourceAssigner.texAssigns.getByKey(texPassId.val());
+                const texDef = try resourceRegistry.getTextureDefinition(texPassId);
+
+                if (texDef.fitPass == true and passSorter.texResizes.isKeyUsed(hardwareTexId.val())) {
+                    const cur = passSorter.texResizes.getByKey(hardwareTexId.val());
+                    passSorter.texResizes.upsert(hardwareTexId.val(), .{ .width = @max(cur.width, renderSize.width), .height = @max(cur.height, renderSize.height) });
+                } else passSorter.texResizes.upsert(hardwareTexId.val(), .{ .width = renderSize.width, .height = renderSize.height });
 
                 const depthAttUse = AttachmentFill{
                     .texId = hardwareTexId,
@@ -242,6 +269,12 @@ fn fillPassHardwareIds(passId: PassId, resourceAssigner: *const ResourceAssigner
             .stencilAtt => |stencilSlot| {
                 const texPassId = try resourceRegistry.getTexturePassId(stencilSlot.texLink.in);
                 const hardwareTexId = resourceAssigner.texAssigns.getByKey(texPassId.val());
+                const texDef = try resourceRegistry.getTextureDefinition(texPassId);
+
+                if (texDef.fitPass == true and passSorter.texResizes.isKeyUsed(hardwareTexId.val())) {
+                    const cur = passSorter.texResizes.getByKey(hardwareTexId.val());
+                    passSorter.texResizes.upsert(hardwareTexId.val(), .{ .width = @max(cur.width, renderSize.width), .height = @max(cur.height, renderSize.height) });
+                } else passSorter.texResizes.upsert(hardwareTexId.val(), .{ .width = renderSize.width, .height = renderSize.height });
 
                 filledPass.stencilAtt = AttachmentFill{
                     .texId = hardwareTexId,

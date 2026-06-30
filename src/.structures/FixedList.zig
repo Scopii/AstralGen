@@ -5,22 +5,18 @@ pub fn FixedList(comptime T: type, comptime capacity: usize) type {
         const Self = @This();
 
         buffer: [capacity]T = undefined,
-        len: usize = 0,
-
-        pub fn init() Self {
-            return .{ .len = 0 };
-        }
+        len: std.math.IntFittingRange(0, capacity) = 0,
 
         pub fn appendSlice(self: *Self, items: []const T) !void {
             if (self.len + items.len > capacity) return error.ListFull;
             @memcpy(self.buffer[self.len .. items.len + self.len], items);
-            self.len += items.len;
+            self.len += @intCast(items.len);
         }
 
         pub fn appendSliceAssumeCapacity(self: *Self, items: []const T) void {
             std.debug.assert(self.len + items.len <= capacity);
             @memcpy(self.buffer[self.len .. self.len + items.len], items);
-            self.len += items.len;
+            self.len += @intCast(items.len);
         }
 
         pub fn append(self: *Self, item: T) !void {

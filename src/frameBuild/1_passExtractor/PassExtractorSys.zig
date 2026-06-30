@@ -93,7 +93,8 @@ pub const PassExtractorSys = struct {
             std.debug.print("1.PassExtractor: \n", .{});
             for (passExtractor.activePasses.getConstItems(), 0..) |passId, i| {
                 const passCoreName = try resourceRegistry.getPassName(passId);
-                std.debug.print("- Pass {}. {s}\n", .{ i, passCoreName });
+                const passSize = passExtractor.passResolutions.getByKey(passId.val());
+                std.debug.print("- Pass {}. {s} (Size {} x {})\n", .{ i, passCoreName, passSize.width, passSize.height });
             }
             for (passExtractor.composites.constSlice(), 0..) |composite, i| {
                 std.debug.print("- Composite {}. {s} (Pass {s})\n", .{ i, composite.name, try resourceRegistry.getPassName(composite.pass) });

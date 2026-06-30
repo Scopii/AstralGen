@@ -1,7 +1,9 @@
 const TexDesc = @import("../render/types/res/TextureMeta.zig").TextureMeta.TexDesc;
 const BufDesc = @import("../render/types/res/BufferMeta.zig").BufferMeta.BufDesc;
+const ViewportId = @import("../.configs/idConfig.zig").ViewportId;
 const BufPassId = @import("../.configs/idConfig.zig").BufPassId;
 const TexPassId = @import("../.configs/idConfig.zig").TexPassId;
+const WindowId = @import("../.configs/idConfig.zig").WindowId;
 const PassId = @import("../.configs/idConfig.zig").PassId;
 const TexId = @import("../.configs/idConfig.zig").TexId;
 const BufId = @import("../.configs/idConfig.zig").BufId;
@@ -144,13 +146,13 @@ pub const TextureClear = struct {
 pub const TransientBuffer = struct {
     unusedCounter: u8 = 0,
     hardwareBuf: BufId,
-    bufDescId: BufPassId,
+    bufDesc: BufDesc,
 };
 
 pub const TransientTexture = struct {
     unusedCounter: u8 = 0,
     hardwareTex: TexId,
-    texDescId: TexPassId,
+    texDesc: TexDesc,
 };
 
 pub const PassAccessRange = struct {
@@ -165,3 +167,17 @@ pub const GraphMemoryNode = struct {
     pass: PassId,
     memWeight: i64, // bornBytes - dyingBytes,
 };
+
+// pub const BlitDesc = struct {
+//     passId: PassId,
+//     outputTexPassId: TexPassId,
+//     dstWindowId: WindowId,
+//     viewportId: ViewportId,
+// };
+
+// pub const CompositeDesc = struct {
+//     passId: PassId,
+//     outputTexPassId: TexPassId,
+//     dstWindowId: WindowId,
+//     viewportId: ViewportId,
+// };

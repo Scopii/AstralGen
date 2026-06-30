@@ -12,7 +12,6 @@ pub const Swapchain = struct {
     surface: vk.VkSurfaceKHR,
     handle: vk.VkSwapchainKHR,
     curIndex: u32 = 0,
-    linkedTexPassIds: [rc.LINKED_TEX_MAX]?TexPassId,
     acquireSems: []vk.VkSemaphore, // indexed by max-in-flight.
     renderSems: []vk.VkSemaphore, // indexed by swapchain images
     textures: []Texture, // indexed by swapchain images
@@ -20,16 +19,7 @@ pub const Swapchain = struct {
     inUse: bool = true,
     windowId: WindowId,
 
-    pub fn init(
-        alloc: Allocator,
-        gpi: vk.VkDevice,
-        surface: vk.VkSurfaceKHR,
-        extent: vk.VkExtent2D,
-        gpu: vk.VkPhysicalDevice,
-        linkedTexPassIds: [rc.LINKED_TEX_MAX]?TexPassId,
-        oldHandle: ?vk.VkSwapchainKHR,
-        windowId: WindowId,
-    ) !Swapchain {
+    pub fn init(alloc: Allocator, gpi: vk.VkDevice, surface: vk.VkSurfaceKHR, extent: vk.VkExtent2D, gpu: vk.VkPhysicalDevice, oldHandle: ?vk.VkSwapchainKHR, windowId: WindowId) !Swapchain {
         const mode = rc.DISPLAY_MODE; //try pickPresentMode();
         const caps = try getSurfaceCaps(gpu, surface);
         const realExtent = pickExtent(&caps, extent);
@@ -109,7 +99,6 @@ pub const Swapchain = struct {
             .acquireSems = imgRdySems,
             .renderSems = renderDoneSems,
             .windowId = windowId,
-            .linkedTexPassIds = linkedTexPassIds,
         };
     }
 
@@ -126,7 +115,7 @@ pub const Swapchain = struct {
     }
 
     pub fn recreate(self: *Swapchain, alloc: Allocator, gpi: vk.VkDevice, gpu: vk.VkPhysicalDevice, instance: vk.VkInstance, newExtent: vk.VkExtent2D) !void {
-        const swapchain = try Swapchain.init(alloc, gpi, self.surface, newExtent, gpu, self.linkedTexPassIds, self.handle, self.windowId);
+        const swapchain = try Swapchain.init(alloc, gpi, self.surface, newExtent, gpu, self.handle, self.windowId);
         self.deinit(alloc, gpi, instance, .withoutSurface);
         self.* = swapchain;
     }

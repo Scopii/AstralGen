@@ -17,7 +17,6 @@ const GroupMergerData = @import("GroupMergerData.zig").GroupMergerData;
 pub const GroupMergerSys = struct {
     pub fn buildPassResources(
         groupMerger: *GroupMergerData,
-        resourceExtractor: *ResourceExtractorData,
         lifetimeMerger: *const LifetimeMergerData,
         resourceMapper: *const ResourceMapperData,
         resourceRegistry: *const ResourceRegistryData,
@@ -36,12 +35,12 @@ pub const GroupMergerSys = struct {
         for (lifetimeMerger.transientBufGroupLifetimes.constSlice()) |groupLifetime| {
             const bufGroupKey: u16 = groupLifetime.rootBuf.val();
             const bufGroup = resourceMapper.bufGroupsTransient.getByKey(bufGroupKey);
-            const bufGroupDesc = resourceExtractor.bufDescriptions.getByKey(bufGroupKey);
+            const bufGroupDesc = bufGroup.bufDesc;
 
             var candidateIndex: ?u16 = null;
 
             for (groupMerger.sharedBufLifetimes.slice(), 0..) |*physLifetime, index| {
-                const physLifetimeDesc = resourceExtractor.bufDescriptions.getByKey(physLifetime.bufDescId.val());
+                const physLifetimeDesc = resourceMapper.bufGroupsTransient.getByKey(physLifetime.bufDescId.val()).bufDesc;
 
                 // check if physLifetime could extend forwards
                 if (physLifetime.latest < groupLifetime.earliest) {
@@ -83,12 +82,12 @@ pub const GroupMergerSys = struct {
         for (lifetimeMerger.transientTexGroupLifetimes.constSlice()) |groupLifetime| {
             const texGroupKey: u16 = groupLifetime.rootTex.val();
             const texGroup = resourceMapper.texGroupsTransient.getByKey(texGroupKey);
-            const texGroupDesc = resourceExtractor.texDescriptions.getByKey(texGroupKey);
+            const texGroupDesc = texGroup.texDesc;
 
             var candidateIndex: ?u16 = null;
 
             for (groupMerger.sharedTexLifetimes.slice(), 0..) |*physLifetime, index| {
-                const physLifetimeDesc = resourceExtractor.texDescriptions.getByKey(physLifetime.texDescId.val());
+                const physLifetimeDesc = resourceMapper.texGroupsTransient.getByKey(physLifetime.texDescId.val()).texDesc;
 
                 // check if physLifetime could extend forwards
                 if (physLifetime.latest < groupLifetime.earliest) {

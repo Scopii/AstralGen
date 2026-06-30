@@ -130,7 +130,6 @@ pub const App = struct {
                 .x = (1920 / 2) / 1 - 10,
                 .y = 40,
                 .resize = true,
-                .texPassIds = &[_]ic.TexPassId{rc.DepthViewTex},
                 .viewIds = [4]?ic.ViewportId{ .id(10), null, null, null },
             },
         });
@@ -157,7 +156,6 @@ pub const App = struct {
                 .x = 60,
                 .y = 1080 / 2 - 260,
                 .resize = true,
-                .texPassIds = &[_]ic.TexPassId{rc.RayMarchInputTex},
                 .viewIds = [4]?ic.ViewportId{ .id(1), null, null, null },
             },
         });
@@ -231,19 +229,6 @@ pub const App = struct {
                 .x = 1920 / 2 - 10,
                 .y = 1080 / 2 + 40,
                 .resize = true,
-                .texPassIds = &[_]ic.TexPassId{
-                    rc.GridTex,
-                    rc.GridDepthTex,
-
-                    rc.DebugGridInputTex,
-                    rc.DebugGridDepthTex,
-
-                    rc.PlaneTex,
-                    rc.PlaneDepthTex,
-
-                    rc.DebugPlaneInputTex,
-                    rc.DebugPlaneDepthTex,
-                },
                 .viewIds = [4]?ic.ViewportId{ .id(3), .id(2), .id(4), .id(5) },
             },
         });
@@ -376,6 +361,8 @@ pub const App = struct {
 
                 self.memoryMan.resetArena();
                 ShaderSys.freeFreshShaders(&self.data.shader, self.memoryMan.getAllocator()); // SHOULD CHANGE TO USE ARENA
+
+                // return error.STOP;
 
                 // if (rc.CPU_PROFILING or renderer.renderGraph.useGpuProfiling or rc.SWAPCHAIN_PROFILING) std.debug.print("\n", .{});
             } else {

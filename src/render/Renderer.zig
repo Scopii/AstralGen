@@ -69,7 +69,6 @@ pub const Renderer = struct {
             // std.debug.print("Renderer Queue Event: {s}\n", .{@tagName(rendererEvent)});
             switch (rendererEvent) {
                 .toggleGpuProfiling => self.renderGraph.toggleGpuProfiling(),
-                .updateWindowState => {},
                 .addRenderNode => |node| try self.renderNodes.append(node.*),
                 .addTexture => |inf| try self.addResource(inf.texInf, inf.data),
                 .addBuffer => |inf| try self.addResource(inf.bufInf, inf.data),
@@ -79,20 +78,25 @@ pub const Renderer = struct {
                 .addShader => |loadedShader| try self.addShaders(&[_]LoadedShader{loadedShader.*}),
                 .removeTexture => |texId| try self.removeResource(texId),
                 .removeBuffer => |bufId| try self.removeResource(bufId),
+                .updateWindowState,
+                => {},
             }
         }
         // Has to happen after so that new assignments and resource changes are applied correctly
         for (rendererQueue.get()) |rendererEvent| {
             // std.debug.print("Renderer Queue Event: {s}\n", .{@tagName(rendererEvent)});
             switch (rendererEvent) {
-                .updateWindowState => |window| try self.updateWindowStates(&[_]Window{window.*}, texAssigns),
+                .updateWindowState => |window| {
+                    // std.debug.print("Renderer Queue Event: {}\n", .{window});
+                    try self.updateWindowStates(&[_]Window{window.*}, texAssigns);
+                },
                 else => {},
             }
         }
         rendererQueue.clear();
     }
 
-    fn updateWindowStates(self: *Renderer, tempWindows: []const Window, texAssigns: *const TextureAssignments) !void {
+    fn updateWindowStates(self: *Renderer, tempWindows: []const Window, _: *const TextureAssignments) !void {
         for (tempWindows) |tempWindow| {
             if (tempWindow.state == .needDelete or tempWindow.state == .needUpdate) {
                 _ = vk.vkDeviceWaitIdle(self.context.gpi);
@@ -108,20 +112,7 @@ pub const Renderer = struct {
                 .needActive, .needInactive => self.swapMan.changeState(window.id, if (window.state == .needActive) true else false),
                 else => std.debug.print("Warning: Window State {s} cant be handled in Renderer\n", .{@tagName(window.state)}),
             }
-
-            if (window.resizeTex == true and rc.RENDER_TEX_AUTO_RESIZE and window.state != .needDelete) {
-                for (0..window.linkedTexPassId.len) |i| {
-                    const texEnum = window.linkedTexPassId[i] orelse continue;
-                    try self.updateRenderTexture(texEnum, texAssigns);
-                }
-            }
         }
-    }
-
-    fn updateRenderTexture(self: *Renderer, texPassId: TexPassId, texAssigns: *const TextureAssignments) !void {
-        const newExtent = self.swapMan.getMaxExtent(texPassId);
-        const texId = if (texAssigns.isKeyUsed(texPassId.val()) == true) texAssigns.getByKey(texPassId.val()) else return error.TextureNotAssigned;
-        try self.resMan.resizeTextureResource(texId, newExtent.width, newExtent.height, 1, self.scheduler.totalFrames, self.scheduler.flightId);
     }
 
     pub fn waitForGpu(self: *Renderer) !void {
@@ -144,6 +135,8 @@ pub const Renderer = struct {
         const flightId = try self.scheduler.beginFrame();
         try self.resMan.update(flightId, self.scheduler.totalFrames);
         try self.swapMan.updateTargets(flightId, activeWindows);
+
+        // if (self.scheduler.totalFrames == 0) return error.STOP;
 
         const cmd = try self.renderGraph.recordFrame(
             self.renderNodes.items,

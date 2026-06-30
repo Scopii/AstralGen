@@ -26,6 +26,7 @@ pub const TextureMeta = struct {
         depth: u32 = 1,
         update: vhE.UpdateType,
         resize: vhE.ResizeType = .Block,
+        fitPass: bool,
 
         pub fn guessMemoryCost(self: *const TexDesc) u64 {
             const bytesPerPixel = self.typ.bytesPerPixel();

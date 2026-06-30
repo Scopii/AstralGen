@@ -97,10 +97,10 @@ pub const ResourceMapperSys = struct {
             var root: BufPassId = undefined;
 
             for (resourceMapper.allSharedBuffers.getConstItems()) |bufPassId| {
-                const newBufDesc = resourceExtractor.bufDescriptions.getByKey(bufPassId.val());
+                var newBufDesc = resourceExtractor.bufDescriptions.getByKey(bufPassId.val());
 
                 if (lastBufDescription) |lastBufDesc| {
-                    try compareBufDesc(lastBufPassId, &lastBufDesc, bufPassId, &newBufDesc, resourceRegistry);
+                    newBufDesc = try compareBufDesc(lastBufPassId, &lastBufDesc, bufPassId, &newBufDesc, resourceRegistry);
                 }
 
                 // Check Root Lifetime
@@ -208,10 +208,10 @@ pub const ResourceMapperSys = struct {
             var root: TexPassId = undefined;
 
             for (resourceMapper.allSharedTextures.getConstItems()) |texPassId| {
-                const newTexDesc = resourceExtractor.texDescriptions.getByKey(texPassId.val());
+                var newTexDesc = resourceExtractor.texDescriptions.getByKey(texPassId.val());
 
                 if (lastTexDescription) |lastTexDesc| {
-                    try compareTexDesc(lastTexPassId, &lastTexDesc, texPassId, &newTexDesc, resourceRegistry);
+                    newTexDesc = try compareTexDesc(lastTexPassId, &lastTexDesc, texPassId, &newTexDesc, resourceRegistry);
                 }
 
                 // Check Root Lifetime
@@ -355,26 +355,58 @@ pub const ResourceMapperSys = struct {
     }
 };
 
-fn compareBufDesc(bufId1: BufPassId, bufDesc1: *const BufDesc, bufId2: BufPassId, bufDesc2: *const BufDesc, resourceRegistry: *const ResourceRegistryData) !void {
+fn compareBufDesc(bufId1: BufPassId, bufDesc1: *const BufDesc, bufId2: BufPassId, bufDesc2: *const BufDesc, resourceRegistry: *const ResourceRegistryData) !BufDesc {
     const equal = if (std.meta.eql(bufDesc1.*, bufDesc2.*)) true else false;
 
-    const bufName1 = try resourceRegistry.getBufferName(bufId1);
-    const bufName2 = try resourceRegistry.getBufferName(bufId2);
-
     if (equal == false) {
+        const bufName1 = try resourceRegistry.getBufferName(bufId1);
+        const bufName2 = try resourceRegistry.getBufferName(bufId2);
         std.debug.print("ERROR: ResourceMapperSys: Buffer Descriptions dont match \n({s}:{})\n({s}:{})\n", .{ bufName1, bufDesc1, bufName2, bufDesc2 });
         return error.BufferDescriptionsDontMatch;
     }
+
+    return bufDesc1.*;
 }
 
-fn compareTexDesc(texId1: TexPassId, texDesc1: *const TexDesc, texId2: TexPassId, texDesc2: *const TexDesc, resourceRegistry: *const ResourceRegistryData) !void {
-    const equal = if (std.meta.eql(texDesc1.*, texDesc2.*)) true else false;
+fn compareTexDesc(texId1: TexPassId, texDesc1: *const TexDesc, texId2: TexPassId, texDesc2: *const TexDesc, resourceRegistry: *const ResourceRegistryData) !TexDesc {
+    // const equal = if (std.meta.eql(texDesc1.*, texDesc2.*)) true else false;
 
-    const texName1 = try resourceRegistry.getTextureName(texId1);
-    const texName2 = try resourceRegistry.getTextureName(texId2);
+    const equal = if (texDesc1.share == texDesc2.share and
+        texDesc1.mem == texDesc2.mem and
+        texDesc1.typ == texDesc2.typ and
+        texDesc1.texUse == texDesc2.texUse and
+        texDesc1.descriptors == texDesc2.descriptors and
+        // texDesc1.width == texDesc2.width and
+        // texDesc1.height == texDesc2.height and
+        texDesc1.depth == texDesc2.depth and
+        texDesc1.update == texDesc2.update and
+        texDesc1.resize == texDesc2.resize and
+        texDesc1.fitPass == texDesc2.fitPass)
+        true
+    else
+        false;
+
+    const maxWidth = @max(texDesc1.width, texDesc2.width);
+    const maxHeight = @max(texDesc1.height, texDesc2.height);
 
     if (equal == false) {
+        const texName1 = try resourceRegistry.getTextureName(texId1);
+        const texName2 = try resourceRegistry.getTextureName(texId2);
         std.debug.print("ERROR: ResourceMapperSys: Texture Descriptions dont match \n({s}:{})\n({s}:{})\n", .{ texName1, texDesc1, texName2, texDesc2 });
-        return error.BufferDescriptionsDontMatch;
+        return error.TextureDescriptionsDontMatch;
     }
+
+    return TexDesc{
+        .share = texDesc1.share,
+        .mem = texDesc1.mem,
+        .typ = texDesc1.typ,
+        .texUse = texDesc1.texUse,
+        .descriptors = texDesc1.descriptors,
+        .depth = texDesc1.depth,
+        .width = maxWidth,
+        .height = maxHeight,
+        .update = texDesc1.update,
+        .resize = texDesc1.resize,
+        .fitPass = texDesc1.fitPass,
+    };
 }

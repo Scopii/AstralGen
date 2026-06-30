@@ -1,3 +1,5 @@
+const TextureStringLink = @import("../../../frameBuild/components.zig").TextureStringLink;
+const BufferStringLink = @import("../../../frameBuild/components.zig").BufferStringLink;
 const PassExecutionSlot = @import("PassInstance.zig").PassInstance.PassExecutionSlot;
 const RenderStateUnion = @import("../pass/RenderState.zig").RenderStateUnion;
 const FixedList = @import("../../../.structures/FixedList.zig").FixedList;
@@ -6,27 +8,23 @@ const IndexBufferSlot = @import("IndexBufferSlot.zig").IndexBufferSlot;
 const VertexAttribute = @import("VertexAttribute.zig").VertexAttribute;
 const ShaderInf = @import("../../../shader/ShaderInf.zig").ShaderInf;
 const AttachmentSlot = @import("AttachmentSlot.zig").AttachmentSlot;
-const ShaderId = @import("../../../shader/ShaderSys.zig").ShaderId;
 const RenderState = @import("../pass/RenderState.zig").RenderState;
-const TexId = @import("../res/TextureMeta.zig").TextureMeta.TexId;
 const TextureSlot = @import("TextureSlot.zig").TextureSlot;
+const String = @import("../../../globalHelper.zig").String;
+const rc = @import("../../../.configs/renderConfig.zig");
 const BufferSlot = @import("BufferSlot.zig").BufferSlot;
+const vhE = @import("../../help/Enums.zig");
 const std = @import("std");
 
-const TextureStringLink = @import("../../../frameBuild/components.zig").TextureStringLink;
-const BufferStringLink = @import("../../../frameBuild/components.zig").BufferStringLink;
-const vhE = @import("../../help/Enums.zig");
-const ClearColor = @import("AttachmentSlot.zig").AttachmentSlot.ClearColor;
-const ClearDepth = @import("AttachmentSlot.zig").AttachmentSlot.ClearDepth;
-const ClearValue = @import("AttachmentSlot.zig").AttachmentSlot.ClearValue;
+const ClearColor = AttachmentSlot.ClearColor;
+const ClearDepth = AttachmentSlot.ClearDepth;
+const ClearValue = AttachmentSlot.ClearValue;
 
-const String = @import("../../../globalHelper.zig").String;
-
-const ComputeExec = @import("PassInstance.zig").ComputeExec;
-const ComputeIndirectExecSlot = @import("PassInstance.zig").ComputeIndirectExecSlot;
 const TaskOrMeshIndirectExecSlot = @import("PassInstance.zig").TaskOrMeshIndirectExecSlot;
+const ComputeIndirectExecSlot = @import("PassInstance.zig").ComputeIndirectExecSlot;
 const TaskOrMeshExec = @import("PassInstance.zig").TaskOrMeshExec;
 const GraphicsExec = @import("PassInstance.zig").GraphicsExec;
+const ComputeExec = @import("PassInstance.zig").ComputeExec;
 
 const AttributeCounts = struct {
     comps: u8 = 0,
@@ -45,12 +43,10 @@ const AttributeCounts = struct {
     renderStateChanges: u8 = 0,
 };
 
-const MAX_PASS_ATTRIBUTES = 80;
-
 pub const PassDefinition = struct {
     name: String(30, "PASS_NAME_MISSING") = .{},
     outputTex: ?[]const u8,
-    passAttribute: FixedList(PassAttribute, MAX_PASS_ATTRIBUTES) = .{},
+    passAttribute: FixedList(PassAttribute, rc.MAX_PASS_ATTRIBUTES) = .{},
 
     pub const PassAttribute = union(enum) {
         execution: PassExecutionSlot,
@@ -135,7 +131,7 @@ pub const PassDefinition = struct {
             .outputTex = def.outputTex,
         };
         passDef.name.fill(def.name);
-        std.debug.assert(def.attributes.len <= MAX_PASS_ATTRIBUTES);
+        std.debug.assert(def.attributes.len <= rc.MAX_PASS_ATTRIBUTES);
         passDef.passAttribute.appendSliceAssumeCapacity(def.attributes);
         return passDef;
     }
