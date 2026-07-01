@@ -317,26 +317,26 @@ pub const App = struct {
                         .CamMainUpdate => {},
                         .CanDebugUpdate => {},
                         .TestTileUpdate => {
-                            // PROCEDURAL TEXTURE GENERATION
-                            const AddTexPtr = @FieldType(FrameGraphQueue.FrameGraphEvent, "updateTexture");
-                            const AddTex = std.meta.Child(AddTexPtr);
+                            // // PROCEDURAL TEXTURE GENERATION
+                            // const AddTexPtr = @FieldType(FrameGraphQueue.FrameGraphEvent, "updateTexture");
+                            // const AddTex = std.meta.Child(AddTexPtr);
 
-                            const arena = self.memoryMan.getGlobalArena();
+                            // const arena = self.memoryMan.getGlobalArena();
 
-                            const pixels = try arena.alloc([4]f16, 256 * 256);
-                            for (0..256) |y| {
-                                for (0..256) |x| {
-                                    const isWhite = ((x / 32) + (y / 32)) % 2 == 0;
-                                    const val: f16 = if (isWhite) 1.0 else 0.2; // 1.0 (white) or 0.2 (dark)
+                            // const pixels = try arena.alloc([4]f16, 256 * 256);
+                            // for (0..256) |y| {
+                            //     for (0..256) |x| {
+                            //         const isWhite = ((x / 32) + (y / 32)) % 2 == 0;
+                            //         const val: f16 = if (isWhite) 1.0 else 0.2; // 1.0 (white) or 0.2 (dark)
 
-                                    // RGBA -> Blue checkerboard
-                                    pixels[y * 256 + x] = .{ val, val, 1.0, 1.0 };
-                                }
-                            }
+                            //         // RGBA -> Blue checkerboard
+                            //         pixels[y * 256 + x] = .{ val, val, 1.0, 1.0 };
+                            //     }
+                            // }
 
-                            const addTextureDataPtr = try arena.create(AddTex);
-                            addTextureDataPtr.* = .{ .texPassId = rc.TestTileTex, .data = std.mem.sliceAsBytes(pixels), .newExtent = null };
-                            self.frameGraphQueue.append(.{ .updateTexture = addTextureDataPtr });
+                            // const addTextureDataPtr = try arena.create(AddTex);
+                            // addTextureDataPtr.* = .{ .texPassId = rc.TestTileTex, .data = std.mem.sliceAsBytes(pixels), .newExtent = null };
+                            // self.frameGraphQueue.append(.{ .updateTexture = addTextureDataPtr });
                         },
                         .GuiUpdate => {},
                     }

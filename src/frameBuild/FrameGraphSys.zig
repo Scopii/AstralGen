@@ -86,7 +86,7 @@ pub const FrameGraphSys = struct {
 
         try ResourceRegistrySys.addTextureDefinition(&graph.resourceRegistry, rc.DepthViewTex, "DepthViewTex", rc.depthViewTexDesc);
 
-        try ResourceRegistrySys.addTextureDefinition(&graph.resourceRegistry, rc.TestTileTex, "TestTileTex", rc.testTilesTexDesc);
+        // try ResourceRegistrySys.addTextureDefinition(&graph.resourceRegistry, rc.TestTileTex, "TestTileTex", rc.testTilesTexDesc);
         try ResourceRegistrySys.addTextureDefinition(&graph.resourceRegistry, rc.ImguiFontTex, "ImguiFontTex", rc.imguiFontTexDesc);
     }
 

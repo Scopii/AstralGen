@@ -57,23 +57,23 @@ pub const ResourceExtractorSys = struct {
         // Resolve and Save Texture Descriptions
         for (resourceExtractor.texAccesses.constSlice()) |texAccess| {
             const passSize = passExtractor.passResolutions.getByKey(texAccess.pass.val());
+            const isWrite = (texAccess.access == .write or texAccess.texOutput != null);
 
             // For Input
             const texKey1: u16 = texAccess.texInput.val();
             if (resourceExtractor.texDescriptions.isKeyUsed(texKey1) == false) {
                 var texDesc1 = try resourceRegistry.getTextureDefinition(texAccess.texInput);
                 if (texDesc1.fitPass == true) {
-                    texDesc1.width = passSize.width;
-                    texDesc1.height = passSize.height;
-                }
+                    texDesc1.width = 0; // Reset default (SHOULD BE passSize.width ??)
+                    texDesc1.height = 0; // Reset default (SHOULD BE passSize.width ??)
+                } // CURRENT IMPLEMENTATION MAKES DepthView FULLSCREEN BUT LOW RES
                 resourceExtractor.texDescriptions.upsert(texKey1, texDesc1);
-            } else {
-                var texDesc1 = resourceExtractor.texDescriptions.getPtrByKey(texKey1);
-                if (texDesc1.fitPass == true) {
-                    texDesc1.width = @max(texDesc1.width, passSize.width);
-                    texDesc1.height = @max(texDesc1.height, passSize.height);
-                }
             }
+            var texDesc1 = resourceExtractor.texDescriptions.getPtrByKey(texKey1);
+            if (texDesc1.fitPass == true and isWrite) { // ONLY IS WRITE IS TEMPORARY!
+                texDesc1.width = @max(texDesc1.width, passSize.width);
+                texDesc1.height = @max(texDesc1.height, passSize.height);
+            } // CAN DOUBLE WRITE BE CHECKED HERE?
 
             // For Output
             const texKey2: ?u16 = if (texAccess.texOutput) |texOutput| texOutput.val() else null;
@@ -81,17 +81,16 @@ pub const ResourceExtractorSys = struct {
                 if (resourceExtractor.texDescriptions.isKeyUsed(key2) == false) {
                     var texDesc2 = try resourceRegistry.getTextureDefinition(texAccess.texOutput.?);
                     if (texDesc2.fitPass == true) {
-                        texDesc2.width = passSize.width;
-                        texDesc2.height = passSize.height;
-                    }
+                        texDesc2.width = 0; // Reset default (SHOULD BE passSize.width ??)
+                        texDesc2.height = 0; // Reset default (SHOULD BE passSize.width ??)
+                    } // CURRENT IMPLEMENTATION MAKES DepthView FULLSCREEN BUT LOW RES
                     resourceExtractor.texDescriptions.upsert(key2, texDesc2);
-                } else {
-                    var texDesc2 = resourceExtractor.texDescriptions.getPtrByKey(key2);
-                    if (texDesc2.fitPass == true) {
-                        texDesc2.width = @max(texDesc2.width, passSize.width);
-                        texDesc2.height = @max(texDesc2.height, passSize.height);
-                    }
                 }
+                var texDesc2 = resourceExtractor.texDescriptions.getPtrByKey(key2);
+                if (texDesc2.fitPass == true and isWrite) { // ONLY IS WRITE IS TEMPORARY!
+                    texDesc2.width = @max(texDesc2.width, passSize.width);
+                    texDesc2.height = @max(texDesc2.height, passSize.height);
+                } // CAN DOUBLE WRITE BE CHECKED HERE?
             }
         }
 

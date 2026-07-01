@@ -364,6 +364,10 @@ pub const CmdRecorder = struct {
 
         // Color attachment = swapchain current image
         const colorAtt = try targetTex.createAttachment(.Swapchain, if (isFirstUse) .{ .color = rc.INITIAL_SWAPCHAIN_COLOR } else null);
+        
+        std.debug.print("SrcTex Extent: {}x{}, ", .{ srcTex.extent.width, srcTex.extent.height });
+        std.debug.print("Composite {s}: windowId {} targetIndex {} -> swapchain {}x{} vs composite viewport {}x{}\n", .{ composite.name, composite.windowId.val(), targetIndex, swapchain.extent.width, swapchain.extent.height, composite.viewWidth, composite.viewHeight });
+        
         cmd.beginRendering(swapchain.extent.width, swapchain.extent.height, &[_]vk.VkRenderingAttachmentInfo{colorAtt}, null, null);
 
         const compositePass = Composite(.{ .string = "Composite" });

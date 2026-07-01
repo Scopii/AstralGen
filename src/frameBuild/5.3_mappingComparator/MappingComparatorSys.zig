@@ -31,9 +31,9 @@ pub const MappingComparatorSys = struct {
                 const newDesc = !bufDescEqual(&lastGroupInf.bufDesc, &newGroupInf.bufDesc);
                 const newPass = if (lastGroupInf.rootPass.val() == newGroupInf.rootPass.val()) false else true;
 
-                if (newDesc == true and newPass == true) mappingComparator.persistentBufChanges.appendAssumeCapacity(.{ .rootBuf = groupRootId, .change = .newDesc });
-                if (newDesc == true and newPass == false) mappingComparator.persistentBufChanges.appendAssumeCapacity(.{ .rootBuf = groupRootId, .change = .newPass });
-                if (newDesc == false and newPass == true) mappingComparator.persistentBufChanges.appendAssumeCapacity(.{ .rootBuf = groupRootId, .change = .newPassAndDesc });
+                if (newDesc == true and newPass == true) mappingComparator.persistentBufChanges.appendAssumeCapacity(.{ .rootBuf = groupRootId, .change = .newPassAndDesc });
+                if (newDesc == true and newPass == false) mappingComparator.persistentBufChanges.appendAssumeCapacity(.{ .rootBuf = groupRootId, .change = .newDesc });
+                if (newDesc == false and newPass == true) mappingComparator.persistentBufChanges.appendAssumeCapacity(.{ .rootBuf = groupRootId, .change = .newPass });
                 if (newDesc == false and newPass == false) mappingComparator.persistentBufChanges.appendAssumeCapacity(.{ .rootBuf = groupRootId, .change = .unchanged });
             } else {
                 mappingComparator.persistentBufChanges.appendAssumeCapacity(BufGroupChange{ .rootBuf = groupRootId, .change = .created });
@@ -41,7 +41,7 @@ pub const MappingComparatorSys = struct {
         }
 
         for (0..resourceMapper.lastBufGroupsPersistent.getLength()) |i| {
-            const groupRootKey: u16 = resourceMapper.bufGroupsPersistent.getKeyByIndex(@intCast(i));
+            const groupRootKey: u16 = resourceMapper.lastBufGroupsPersistent.getKeyByIndex(@intCast(i));
             const groupRootId: BufPassId = .id(groupRootKey);
 
             const isGroupInNew = resourceMapper.bufGroupsPersistent.isKeyUsed(groupRootKey);
@@ -61,9 +61,9 @@ pub const MappingComparatorSys = struct {
                 const newDesc = !texDescEqual(&lastGroupInf.texDesc, &newGroupInf.texDesc);
                 const newPass = if (lastGroupInf.rootPass.val() == newGroupInf.rootPass.val()) false else true;
 
-                if (newDesc == true and newPass == true) mappingComparator.persistentTexChanges.appendAssumeCapacity(.{ .rootTex = groupRootId, .change = .newDesc });
-                if (newDesc == true and newPass == false) mappingComparator.persistentTexChanges.appendAssumeCapacity(.{ .rootTex = groupRootId, .change = .newPass });
-                if (newDesc == false and newPass == true) mappingComparator.persistentTexChanges.appendAssumeCapacity(.{ .rootTex = groupRootId, .change = .newPassAndDesc });
+                if (newDesc == true and newPass == true) mappingComparator.persistentTexChanges.appendAssumeCapacity(.{ .rootTex = groupRootId, .change = .newPassAndDesc });
+                if (newDesc == true and newPass == false) mappingComparator.persistentTexChanges.appendAssumeCapacity(.{ .rootTex = groupRootId, .change = .newDesc });
+                if (newDesc == false and newPass == true) mappingComparator.persistentTexChanges.appendAssumeCapacity(.{ .rootTex = groupRootId, .change = .newPass });
                 if (newDesc == false and newPass == false) mappingComparator.persistentTexChanges.appendAssumeCapacity(.{ .rootTex = groupRootId, .change = .unchanged });
             } else {
                 mappingComparator.persistentTexChanges.appendAssumeCapacity(TexGroupChange{ .rootTex = groupRootId, .change = .created });
@@ -71,7 +71,7 @@ pub const MappingComparatorSys = struct {
         }
 
         for (0..resourceMapper.lastTexGroupsPersistent.getLength()) |i| {
-            const groupRootKey: u16 = resourceMapper.texGroupsPersistent.getKeyByIndex(@intCast(i));
+            const groupRootKey: u16 = resourceMapper.lastTexGroupsPersistent.getKeyByIndex(@intCast(i));
             const groupRootId: TexPassId = .id(groupRootKey);
 
             const isGroupInNew = resourceMapper.texGroupsPersistent.isKeyUsed(groupRootKey);
