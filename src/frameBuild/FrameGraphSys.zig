@@ -12,20 +12,20 @@ const BufPassId = ic.BufPassId;
 const BufId = ic.BufId;
 const TexId = ic.TexId;
 
-const ResourceRegistrySys = @import("0_resourceRegistry/ResourceRegistrySys.zig").ResourceRegistrySys;
-const PassExtractorSys = @import("1_passExtractor/PassExtractorSys.zig").PassExtractorSys;
-const AccessExtractorSys = @import("1.5_accessExtractor/AccessExtractorSys.zig").AccessExtractorSys;
-const ResourceExtractorSys = @import("2_resourceExtractor/ResourceExtractorSys.zig").ResourceExtractorSys;
-const DependancyExtractorSys = @import("3_dependancyExtractor/DependancyExtractorSys.zig").DependancyExtractorSys;
-const GraphExtractorSys = @import("4_graphExtractor/GraphExtractorSys.zig").GraphExtractorSys;
-const GraphOptimizerSys = @import("4.5_graphOptimizer/GraphOptimizerSys.zig").GraphOptimizerSys;
-const LifetimeExtractorSys = @import("5_lifetimeExtractor/LifetimeExtractorSys.zig").LifetimeExtractorSys;
-const ResourceMapperSys = @import("5.1_resourceMapper/ResourceMapperSys.zig").ResourceMapperSys;
-const LifetimeMergerSys = @import("5.2_lifetimeMerger/LifetimeMergerSys.zig").LifetimeMergerSys;
-const MappingComparatorSys = @import("5.3_mappingComparator/MappingComparatorSys.zig").MappingComparatorSys;
-const GroupMergerSys = @import("5.4_groupMerger/GroupMergerSys.zig").GroupMergerSys;
-const ResourceAssignerSys = @import("6_resourceAssigner/ResourceAssignerSys.zig").ResourceAssignerSys;
-const PassSorterSys = @import("7_passSorter/PassSorterSys.zig").PassSorterSys;
+const RegistrySys = @import("0_Registry/RegistrySys.zig").RegistrySys;
+const PassSys = @import("1_Pass/PassSys.zig").PassSys;
+const AccessSys = @import("1.5_Access/AccessSys.zig").AccessSys;
+const ResourceSys = @import("2_Resource/ResourceSys.zig").ResourceSys;
+const DependancySys = @import("3_Dependancy/DependancySys.zig").DependancySys;
+const GraphSys = @import("4_Graph/GraphSys.zig").GraphSys;
+const OptimizerSys = @import("4.5_Optimizer/OptimizerSys.zig").OptimizerSys;
+const LifetimeSys = @import("5_Lifetime/LifetimeSys.zig").LifetimeSys;
+const MapperSys = @import("5.1_Mapper/MapperSys.zig").MapperSys;
+const MergerSys = @import("5.2_Merger/MergerSys.zig").MergerSys;
+const ComparatorSys = @import("5.3_Comparator/ComparatorSys.zig").ComparatorSys;
+const GroupSys = @import("5.4_Group/GroupSys.zig").GroupSys;
+const AssignerSys = @import("6_Assigner/AssignerSys.zig").AssignerSys;
+const SorterSys = @import("7_Sorter/SorterSys.zig").SorterSys;
 
 const depthViewPass = @import("../.assets/passes/depthView/DepthView.zig").depthViewPass;
 const compRayMarchPass = @import("../.assets/passes/compTest/CompRayMarch.zig").compRayMarchPass;
@@ -40,129 +40,129 @@ const quantCompPass = @import("../.assets/passes/quant/QuantComp.zig").quantComp
 
 pub const FrameGraphSys = struct {
     pub fn init(graph: *FrameGraphData, alloc: std.mem.Allocator) !void {
-        try ResourceRegistrySys.init(&graph.resourceRegistry, alloc);
+        try RegistrySys.init(&graph.registry, alloc);
 
-        try ResourceRegistrySys.addPassDefinition(&graph.resourceRegistry, .id(0), depthViewPass);
-        try ResourceRegistrySys.addPassDefinition(&graph.resourceRegistry, .id(1), compRayMarchPass);
-        try ResourceRegistrySys.addPassDefinition(&graph.resourceRegistry, .id(2), editorGridGridDebugPass);
-        try ResourceRegistrySys.addPassDefinition(&graph.resourceRegistry, .id(3), editorGridPlaneDebugPass);
-        try ResourceRegistrySys.addPassDefinition(&graph.resourceRegistry, .id(4), frustumViewPass);
-        try ResourceRegistrySys.addPassDefinition(&graph.resourceRegistry, .id(5), quantGridPass);
-        try ResourceRegistrySys.addPassDefinition(&graph.resourceRegistry, .id(6), quantGridDebugPass);
-        try ResourceRegistrySys.addPassDefinition(&graph.resourceRegistry, .id(7), quantPlanePass);
-        try ResourceRegistrySys.addPassDefinition(&graph.resourceRegistry, .id(8), quantPlaneDebugPass);
-        try ResourceRegistrySys.addPassDefinition(&graph.resourceRegistry, .id(9), quantCompPass);
+        try RegistrySys.addPassDefinition(&graph.registry, .id(0), depthViewPass);
+        try RegistrySys.addPassDefinition(&graph.registry, .id(1), compRayMarchPass);
+        try RegistrySys.addPassDefinition(&graph.registry, .id(2), editorGridGridDebugPass);
+        try RegistrySys.addPassDefinition(&graph.registry, .id(3), editorGridPlaneDebugPass);
+        try RegistrySys.addPassDefinition(&graph.registry, .id(4), frustumViewPass);
+        try RegistrySys.addPassDefinition(&graph.registry, .id(5), quantGridPass);
+        try RegistrySys.addPassDefinition(&graph.registry, .id(6), quantGridDebugPass);
+        try RegistrySys.addPassDefinition(&graph.registry, .id(7), quantPlanePass);
+        try RegistrySys.addPassDefinition(&graph.registry, .id(8), quantPlaneDebugPass);
+        try RegistrySys.addPassDefinition(&graph.registry, .id(9), quantCompPass);
 
         // Buffers
-        try ResourceRegistrySys.addBufferDefinition(&graph.resourceRegistry, rc.QuantIndirectInputSB, "QuantIndirectInputSB", rc.indirectSBDesc);
-        try ResourceRegistrySys.addBufferDefinition(&graph.resourceRegistry, rc.QuantIndirectOutputSB, "QuantIndirectOutputSB", rc.indirectSBDesc);
-        try ResourceRegistrySys.addBufferDefinition(&graph.resourceRegistry, rc.ReadbackSB, "ReadbackSB", rc.readbackSBDesc);
+        try RegistrySys.addBufferDefinition(&graph.registry, rc.QuantIndirectInputSB, "QuantIndirectInputSB", rc.indirectSBDesc);
+        try RegistrySys.addBufferDefinition(&graph.registry, rc.QuantIndirectOutputSB, "QuantIndirectOutputSB", rc.indirectSBDesc);
+        try RegistrySys.addBufferDefinition(&graph.registry, rc.ReadbackSB, "ReadbackSB", rc.readbackSBDesc);
 
-        try ResourceRegistrySys.addBufferDefinition(&graph.resourceRegistry, rc.EntitySB, "EntitySB", rc.entitySBDesc);
-        try ResourceRegistrySys.addBufferDefinition(&graph.resourceRegistry, rc.MainCamUB, "MainCamUB", rc.mainCamUBDesc);
-        try ResourceRegistrySys.addBufferDefinition(&graph.resourceRegistry, rc.DebugCamUB, "DebugCamUB", rc.debugCamUBDesc);
+        try RegistrySys.addBufferDefinition(&graph.registry, rc.EntitySB, "EntitySB", rc.entitySBDesc);
+        try RegistrySys.addBufferDefinition(&graph.registry, rc.MainCamUB, "MainCamUB", rc.mainCamUBDesc);
+        try RegistrySys.addBufferDefinition(&graph.registry, rc.DebugCamUB, "DebugCamUB", rc.debugCamUBDesc);
 
-        try ResourceRegistrySys.addBufferDefinition(&graph.resourceRegistry, rc.ImguiVB, "ImguiVB", rc.imguiVBDesc);
-        try ResourceRegistrySys.addBufferDefinition(&graph.resourceRegistry, rc.ImguiIB, "ImguiIB", rc.imguiIBDesc);
+        try RegistrySys.addBufferDefinition(&graph.registry, rc.ImguiVB, "ImguiVB", rc.imguiVBDesc);
+        try RegistrySys.addBufferDefinition(&graph.registry, rc.ImguiIB, "ImguiIB", rc.imguiIBDesc);
 
         // Textures
-        try ResourceRegistrySys.addTextureDefinition(&graph.resourceRegistry, rc.RayMarchInputTex, "RayMarchInputTex", rc.rayMarchTexDesc);
+        try RegistrySys.addTextureDefinition(&graph.registry, rc.RayMarchInputTex, "RayMarchInputTex", rc.rayMarchTexDesc);
 
-        try ResourceRegistrySys.addTextureDefinition(&graph.resourceRegistry, rc.GridTex, "GridTex", rc.gridTexDesc);
-        try ResourceRegistrySys.addTextureDefinition(&graph.resourceRegistry, rc.GridDepthTex, "GridDepthTex", rc.gridDepthTexDesc);
+        try RegistrySys.addTextureDefinition(&graph.registry, rc.GridTex, "GridTex", rc.gridTexDesc);
+        try RegistrySys.addTextureDefinition(&graph.registry, rc.GridDepthTex, "GridDepthTex", rc.gridDepthTexDesc);
 
-        try ResourceRegistrySys.addTextureDefinition(&graph.resourceRegistry, rc.DebugGridInputTex, "DebugGridInputTex", rc.debugGridTexDesc);
-        try ResourceRegistrySys.addTextureDefinition(&graph.resourceRegistry, rc.DebugGridOutputTex, "DebugGridOutputTex", rc.debugGridTexDesc);
+        try RegistrySys.addTextureDefinition(&graph.registry, rc.DebugGridInputTex, "DebugGridInputTex", rc.debugGridTexDesc);
+        try RegistrySys.addTextureDefinition(&graph.registry, rc.DebugGridOutputTex, "DebugGridOutputTex", rc.debugGridTexDesc);
 
-        try ResourceRegistrySys.addTextureDefinition(&graph.resourceRegistry, rc.DebugGridDepthTex, "DebugGridDepthTex", rc.debugGridDepthTexDesc);
-        try ResourceRegistrySys.addTextureDefinition(&graph.resourceRegistry, rc.DebugGridDepthOutputTex, "DebugGridDepthOutputTex", rc.debugGridDepthTexDesc);
+        try RegistrySys.addTextureDefinition(&graph.registry, rc.DebugGridDepthTex, "DebugGridDepthTex", rc.debugGridDepthTexDesc);
+        try RegistrySys.addTextureDefinition(&graph.registry, rc.DebugGridDepthOutputTex, "DebugGridDepthOutputTex", rc.debugGridDepthTexDesc);
 
-        try ResourceRegistrySys.addTextureDefinition(&graph.resourceRegistry, rc.PlaneTex, "PlaneTex", rc.planeTexDesc);
-        try ResourceRegistrySys.addTextureDefinition(&graph.resourceRegistry, rc.PlaneDepthTex, "PlaneDepthTex", rc.planeDepthTexDesc);
+        try RegistrySys.addTextureDefinition(&graph.registry, rc.PlaneTex, "PlaneTex", rc.planeTexDesc);
+        try RegistrySys.addTextureDefinition(&graph.registry, rc.PlaneDepthTex, "PlaneDepthTex", rc.planeDepthTexDesc);
 
-        try ResourceRegistrySys.addTextureDefinition(&graph.resourceRegistry, rc.DebugPlaneInputTex, "DebugPlaneInputTex", rc.debugPlaneTexDesc);
-        try ResourceRegistrySys.addTextureDefinition(&graph.resourceRegistry, rc.DebugPlaneOutputTex, "DebugPlaneOutputTex", rc.debugPlaneTexDesc);
-        try ResourceRegistrySys.addTextureDefinition(&graph.resourceRegistry, rc.DebugPlaneOutputFrustumViewTex, "DebugPlaneOutputFrustumViewTex", rc.debugPlaneTexDesc);
-        try ResourceRegistrySys.addTextureDefinition(&graph.resourceRegistry, rc.DebugPlaneDepthTex, "DebugPlaneDepthTex", rc.debugPlaneDepthTexDesc);
+        try RegistrySys.addTextureDefinition(&graph.registry, rc.DebugPlaneInputTex, "DebugPlaneInputTex", rc.debugPlaneTexDesc);
+        try RegistrySys.addTextureDefinition(&graph.registry, rc.DebugPlaneOutputTex, "DebugPlaneOutputTex", rc.debugPlaneTexDesc);
+        try RegistrySys.addTextureDefinition(&graph.registry, rc.DebugPlaneOutputFrustumViewTex, "DebugPlaneOutputFrustumViewTex", rc.debugPlaneTexDesc);
+        try RegistrySys.addTextureDefinition(&graph.registry, rc.DebugPlaneDepthTex, "DebugPlaneDepthTex", rc.debugPlaneDepthTexDesc);
 
-        try ResourceRegistrySys.addTextureDefinition(&graph.resourceRegistry, rc.DepthViewTex, "DepthViewTex", rc.depthViewTexDesc);
+        try RegistrySys.addTextureDefinition(&graph.registry, rc.DepthViewTex, "DepthViewTex", rc.depthViewTexDesc);
 
-        try ResourceRegistrySys.addTextureDefinition(&graph.resourceRegistry, rc.TestTileTex, "TestTileTex", rc.testTilesTexDesc);
-        try ResourceRegistrySys.addTextureDefinition(&graph.resourceRegistry, rc.ImguiFontTex, "ImguiFontTex", rc.imguiFontTexDesc);
+        try RegistrySys.addTextureDefinition(&graph.registry, rc.TestTileTex, "TestTileTex", rc.testTilesTexDesc);
+        try RegistrySys.addTextureDefinition(&graph.registry, rc.ImguiFontTex, "ImguiFontTex", rc.imguiFontTexDesc);
     }
 
     pub fn deinit(graph: *FrameGraphData) void {
-        ResourceRegistrySys.deinit(&graph.resourceRegistry);
+        RegistrySys.deinit(&graph.registry);
     }
 
     pub fn build(graph: *FrameGraphData, data: *const EngineData, rendererQueue: *RendererQueue, memoryMan: *MemoryManager) !void {
-        try PassExtractorSys.newBuild(&graph.passExtractor, &graph.resourceRegistry, data);
+        try PassSys.newBuild(&graph.pass, &graph.registry, data);
 
-        try AccessExtractorSys.buildAccesses(&graph.accessExtractor, &graph.passExtractor, &graph.resourceRegistry);
+        try AccessSys.buildAccesses(&graph.access, &graph.pass, &graph.registry);
 
-        try ResourceExtractorSys.buildResources(&graph.resourceExtractor, &graph.accessExtractor, &graph.passExtractor, &graph.resourceRegistry);
+        try ResourceSys.buildResources(&graph.resource, &graph.access, &graph.pass, &graph.registry);
 
-        try DependancyExtractorSys.buildDependencies(&graph.dependancyExtractor, &graph.accessExtractor, &graph.resourceRegistry);
+        try DependancySys.buildDependencies(&graph.dependancy, &graph.access, &graph.registry);
 
-        try GraphExtractorSys.buildGraph(&graph.graphExtractor, &graph.dependancyExtractor, &graph.passExtractor, &graph.resourceRegistry);
+        try GraphSys.buildGraph(&graph.graph, &graph.dependancy, &graph.pass, &graph.registry);
 
-        try GraphOptimizerSys.assignResourceLevels(&graph.graphOptimizer, &graph.graphExtractor, &graph.accessExtractor, &graph.resourceExtractor, &graph.resourceRegistry);
+        try OptimizerSys.assignResourceLevels(&graph.optimizer, &graph.graph, &graph.access, &graph.resource, &graph.registry);
 
-        try LifetimeExtractorSys.assignResourceLifetimes(&graph.lifetimeExtractor, &graph.graphOptimizer, &graph.accessExtractor, &graph.resourceRegistry);
+        try LifetimeSys.assignResourceLifetimes(&graph.lifetime, &graph.optimizer, &graph.access, &graph.registry);
 
-        try ResourceMapperSys.buildMapping(&graph.resourceMapper, &graph.accessExtractor, &graph.resourceExtractor, &graph.lifetimeExtractor, &graph.graphOptimizer, &graph.resourceRegistry);
+        try MapperSys.buildMapping(&graph.mapper, &graph.access, &graph.resource, &graph.lifetime, &graph.optimizer, &graph.registry);
 
-        try LifetimeMergerSys.buildPassResources(&graph.lifetimeMerger, &graph.lifetimeExtractor, &graph.resourceMapper, &graph.resourceRegistry);
+        try MergerSys.buildPassResources(&graph.merger, &graph.lifetime, &graph.mapper, &graph.registry);
 
-        try MappingComparatorSys.buildChanges(&graph.mappingComparator, &graph.resourceMapper, &graph.resourceRegistry);
+        try ComparatorSys.buildChanges(&graph.comparator, &graph.mapper, &graph.registry);
 
-        try GroupMergerSys.buildPassResources(&graph.groupMerger, &graph.lifetimeMerger, &graph.resourceMapper, &graph.resourceRegistry);
+        try GroupSys.buildPassResources(&graph.group, &graph.merger, &graph.mapper, &graph.registry);
 
-        try ResourceAssignerSys.buildPersistentResources(
-            &graph.resourceAssigner,
-            &graph.resourceMapper,
-            &graph.mappingComparator,
-            &graph.groupMerger,
-            &graph.resourceRegistry,
+        try AssignerSys.buildPersistentResources(
+            &graph.assigner,
+            &graph.mapper,
+            &graph.comparator,
+            &graph.group,
+            &graph.registry,
             rendererQueue,
             memoryMan,
         );
 
-        try PassSorterSys.buildFrame(
-            &graph.passSorter,
-            &graph.passExtractor,
-            &graph.graphOptimizer,
-            &graph.groupMerger,
-            &graph.resourceAssigner,
-            &graph.resourceRegistry,
+        try SorterSys.buildFrame(
+            &graph.sorter,
+            &graph.pass,
+            &graph.optimizer,
+            &graph.group,
+            &graph.assigner,
+            &graph.registry,
         );
     }
 
     pub fn createTextureManually(frameGraph: *FrameGraphData, texPassId: TexPassId, rendererQueue: *RendererQueue, memoryMan: *MemoryManager) !void {
-        try ResourceAssignerSys.createTexture(&frameGraph.resourceAssigner, &frameGraph.resourceMapper, &frameGraph.resourceRegistry, texPassId, rendererQueue, memoryMan, .manuel);
+        try AssignerSys.createTexture(&frameGraph.assigner, &frameGraph.mapper, &frameGraph.registry, texPassId, rendererQueue, memoryMan, .manuel);
     }
 
     pub fn deleteTextureManually(frameGraph: *FrameGraphData, texPassId: TexPassId, rendererQueue: *RendererQueue) void {
-        ResourceAssignerSys.deleteTexture(&frameGraph.resourceAssigner, &frameGraph.resourceRegistry, texPassId, rendererQueue, .manuel);
+        AssignerSys.deleteTexture(&frameGraph.assigner, &frameGraph.registry, texPassId, rendererQueue, .manuel);
     }
 
     pub fn createBufferManually(frameGraph: *FrameGraphData, bufPassId: BufPassId, rendererQueue: *RendererQueue, memoryMan: *MemoryManager) !void {
-        try ResourceAssignerSys.createBuffer(&frameGraph.resourceAssigner, &frameGraph.resourceMapper, &frameGraph.resourceRegistry, bufPassId, rendererQueue, memoryMan, .manuel);
+        try AssignerSys.createBuffer(&frameGraph.assigner, &frameGraph.mapper, &frameGraph.registry, bufPassId, rendererQueue, memoryMan, .manuel);
     }
 
     pub fn deleteBufferManually(frameGraph: *FrameGraphData, bufPassId: BufPassId, rendererQueue: *RendererQueue) void {
-        ResourceAssignerSys.deleteBuffer(&frameGraph.resourceAssigner, &frameGraph.resourceRegistry, bufPassId, rendererQueue, .manuel);
+        AssignerSys.deleteBuffer(&frameGraph.assigner, &frameGraph.registry, bufPassId, rendererQueue, .manuel);
     }
 
     pub fn getBufHardwareId(frameGraph: *const FrameGraphData, name: []const u8) !BufId {
-        const bufPassId = try frameGraph.resourceRegistry.getBufferPassId(name);
-        const hardwareBufId = frameGraph.resourceAssigner.bufAssigns.getByKey(bufPassId.val());
+        const bufPassId = try frameGraph.registry.getBufferPassId(name);
+        const hardwareBufId = frameGraph.assigner.bufAssigns.getByKey(bufPassId.val());
         return hardwareBufId;
     }
 
     pub fn getTexHardwareId(frameGraph: *const FrameGraphData, name: []const u8) !TexId {
-        const texPassId = try frameGraph.resourceRegistry.getTexturePassId(name);
-        const hardwareTexId = frameGraph.resourceAssigner.texAssigns.getByKey(texPassId.val());
+        const texPassId = try frameGraph.registry.getTexturePassId(name);
+        const hardwareTexId = frameGraph.assigner.texAssigns.getByKey(texPassId.val());
         return hardwareTexId;
     }
 
@@ -194,7 +194,7 @@ pub const FrameGraphSys = struct {
                     const hardwareId: BufId = switch (updateBuffer.bufUnion) {
                         .bufId => |bufId| bufId,
                         .bufName => |bufName| try getBufHardwareId(frameGraph, bufName),
-                        .bufPassId => |bufPassId| frameGraph.resourceAssigner.bufAssigns.getByKey(bufPassId.val()),
+                        .bufPassId => |bufPassId| frameGraph.assigner.bufAssigns.getByKey(bufPassId.val()),
                     };
 
                     const PayloadPtr = @FieldType(RendererQueue.RendererEvent, "updateBuffer");
@@ -209,7 +209,7 @@ pub const FrameGraphSys = struct {
                     const hardwareId: BufId = switch (updateBufferSegment.bufUnion) {
                         .bufId => |bufId| bufId,
                         .bufName => |bufName| try getBufHardwareId(frameGraph, bufName),
-                        .bufPassId => |bufPassId| frameGraph.resourceAssigner.bufAssigns.getByKey(bufPassId.val()),
+                        .bufPassId => |bufPassId| frameGraph.assigner.bufAssigns.getByKey(bufPassId.val()),
                     };
 
                     const PayloadPtr = @FieldType(RendererQueue.RendererEvent, "updateBufferSegment");
@@ -224,7 +224,7 @@ pub const FrameGraphSys = struct {
                     const hardwareId: TexId = switch (updateTexture.texUnion) {
                         .texId => |texId| texId,
                         .texName => |texName| try getTexHardwareId(frameGraph, texName),
-                        .texPassId => |texPassId| frameGraph.resourceAssigner.texAssigns.getByKey(texPassId.val()),
+                        .texPassId => |texPassId| frameGraph.assigner.texAssigns.getByKey(texPassId.val()),
                     };
 
                     const PayloadPtr = @FieldType(RendererQueue.RendererEvent, "updateTexture");

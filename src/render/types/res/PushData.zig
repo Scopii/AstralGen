@@ -1,12 +1,9 @@
-const TextureAssignments = @import("../../../frameBuild/6_resourceAssigner/ResourceAssignerData.zig").ResourceAssignerData.TextureAssignments;
-const BufferAssignments = @import("../../../frameBuild/6_resourceAssigner/ResourceAssignerData.zig").ResourceAssignerData.BufferAssignments;
 const TexPassId = @import("../../../frameBuild/components.zig").TexPassId;
 const BufPassId = @import("../../../frameBuild/components.zig").BufPassId;
 const ResourceMan = @import("../../sys/ResourceMan.zig").ResourceMan;
 const TextureFill = @import("../pass/TextureFill.zig").TextureFill;
 const BufferFill = @import("../pass/BufferFill.zig").BufferFill;
 const TexId = @import("../../../.configs/idConfig.zig").TexId;
-const BufId = @import("BufferMeta.zig").BufferMeta.BufId;
 const FrameData = @import("../../../App.zig").FrameData;
 const std = @import("std");
 

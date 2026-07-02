@@ -305,8 +305,8 @@ pub const App = struct {
                 const end = std.time.microTimestamp();
                 std.debug.print("Frame Graph Build: {d:.3} ms\n", .{@as(f64, @floatFromInt(end - start)) / 1_000.0});
 
-                const updateRequests = self.data.frameGraph.resourceAssigner.updateRequests.getConstItems();
-                const sortedRenderNodes = self.data.frameGraph.passSorter.sortedRenderNodes.constSlice();
+                const updateRequests = self.data.frameGraph.assigner.updateRequests.getConstItems();
+                const sortedRenderNodes = self.data.frameGraph.sorter.sortedNodes.constSlice();
 
                 for (updateRequests) |updateRequest| {
                     switch (updateRequest) {
