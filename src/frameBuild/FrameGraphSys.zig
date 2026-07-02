@@ -14,6 +14,7 @@ const TexId = ic.TexId;
 
 const ResourceRegistrySys = @import("0_resourceRegistry/ResourceRegistrySys.zig").ResourceRegistrySys;
 const PassExtractorSys = @import("1_passExtractor/PassExtractorSys.zig").PassExtractorSys;
+const AccessExtractorSys = @import("1.5_accessExtractor/AccessExtractorSys.zig").AccessExtractorSys;
 const ResourceExtractorSys = @import("2_resourceExtractor/ResourceExtractorSys.zig").ResourceExtractorSys;
 const DependancyExtractorSys = @import("3_dependancyExtractor/DependancyExtractorSys.zig").DependancyExtractorSys;
 const GraphExtractorSys = @import("4_graphExtractor/GraphExtractorSys.zig").GraphExtractorSys;
@@ -86,7 +87,7 @@ pub const FrameGraphSys = struct {
 
         try ResourceRegistrySys.addTextureDefinition(&graph.resourceRegistry, rc.DepthViewTex, "DepthViewTex", rc.depthViewTexDesc);
 
-        // try ResourceRegistrySys.addTextureDefinition(&graph.resourceRegistry, rc.TestTileTex, "TestTileTex", rc.testTilesTexDesc);
+        try ResourceRegistrySys.addTextureDefinition(&graph.resourceRegistry, rc.TestTileTex, "TestTileTex", rc.testTilesTexDesc);
         try ResourceRegistrySys.addTextureDefinition(&graph.resourceRegistry, rc.ImguiFontTex, "ImguiFontTex", rc.imguiFontTexDesc);
     }
 
@@ -97,17 +98,19 @@ pub const FrameGraphSys = struct {
     pub fn build(graph: *FrameGraphData, data: *const EngineData, rendererQueue: *RendererQueue, memoryMan: *MemoryManager) !void {
         try PassExtractorSys.newBuild(&graph.passExtractor, &graph.resourceRegistry, data);
 
-        try ResourceExtractorSys.buildAccesses(&graph.resourceExtractor, &graph.passExtractor, &graph.resourceRegistry);
+        try AccessExtractorSys.buildAccesses(&graph.accessExtractor, &graph.passExtractor, &graph.resourceRegistry);
 
-        try DependancyExtractorSys.buildDependencies(&graph.dependancyExtractor, &graph.resourceExtractor, &graph.resourceRegistry);
+        try ResourceExtractorSys.buildResources(&graph.resourceExtractor, &graph.accessExtractor, &graph.passExtractor, &graph.resourceRegistry);
+
+        try DependancyExtractorSys.buildDependencies(&graph.dependancyExtractor, &graph.accessExtractor, &graph.resourceRegistry);
 
         try GraphExtractorSys.buildGraph(&graph.graphExtractor, &graph.dependancyExtractor, &graph.passExtractor, &graph.resourceRegistry);
 
-        try GraphOptimizerSys.assignResourceLevels(&graph.graphOptimizer, &graph.graphExtractor, &graph.resourceExtractor, &graph.resourceRegistry);
+        try GraphOptimizerSys.assignResourceLevels(&graph.graphOptimizer, &graph.graphExtractor, &graph.accessExtractor, &graph.resourceExtractor, &graph.resourceRegistry);
 
-        try LifetimeExtractorSys.assignResourceLifetimes(&graph.lifetimeExtractor, &graph.graphOptimizer, &graph.resourceExtractor, &graph.resourceRegistry);
+        try LifetimeExtractorSys.assignResourceLifetimes(&graph.lifetimeExtractor, &graph.graphOptimizer, &graph.accessExtractor, &graph.resourceRegistry);
 
-        try ResourceMapperSys.buildMapping(&graph.resourceMapper, &graph.resourceExtractor, &graph.lifetimeExtractor, &graph.graphOptimizer, &graph.resourceRegistry);
+        try ResourceMapperSys.buildMapping(&graph.resourceMapper, &graph.accessExtractor, &graph.resourceExtractor, &graph.lifetimeExtractor, &graph.graphOptimizer, &graph.resourceRegistry);
 
         try LifetimeMergerSys.buildPassResources(&graph.lifetimeMerger, &graph.lifetimeExtractor, &graph.resourceMapper, &graph.resourceRegistry);
 
@@ -188,40 +191,46 @@ pub const FrameGraphSys = struct {
         for (frameGraphQueue.get()) |event| {
             switch (event) {
                 .updateBuffer => |updateBuffer| {
-                    const bufKey: u16 = updateBuffer.bufPassId.val();
-                    if (frameGraph.resourceAssigner.bufAssigns.isKeyUsed(bufKey) == false) return error.BufferEnumHasNoPhysicalID;
-                    const bufId = frameGraph.resourceAssigner.bufAssigns.getByKey(bufKey);
+                    const hardwareId: BufId = switch (updateBuffer.bufUnion) {
+                        .bufId => |bufId| bufId,
+                        .bufName => |bufName| try getBufHardwareId(frameGraph, bufName),
+                        .bufPassId => |bufPassId| frameGraph.resourceAssigner.bufAssigns.getByKey(bufPassId.val()),
+                    };
 
                     const PayloadPtr = @FieldType(RendererQueue.RendererEvent, "updateBuffer");
                     const Payload = std.meta.Child(PayloadPtr);
                     const updateBufferPtr = try arena.create(Payload);
-                    updateBufferPtr.* = .{ .bufId = bufId, .data = updateBuffer.data };
+                    updateBufferPtr.* = .{ .bufId = hardwareId, .data = updateBuffer.data };
 
                     rendererQueue.append(.{ .updateBuffer = updateBufferPtr });
                     // std.debug.print("FrameGraph: Update Buffer ({}) send to Renderer\n", .{updateBuffer.bufEnum});
                 },
                 .updateBufferSegment => |updateBufferSegment| {
-                    const bufKey: u16 = updateBufferSegment.bufPassId.val();
-                    if (frameGraph.resourceAssigner.bufAssigns.isKeyUsed(bufKey) == false) return error.BufferEnumHasNoPhysicalID;
-                    const bufId = frameGraph.resourceAssigner.bufAssigns.getByKey(bufKey);
+                    const hardwareId: BufId = switch (updateBufferSegment.bufUnion) {
+                        .bufId => |bufId| bufId,
+                        .bufName => |bufName| try getBufHardwareId(frameGraph, bufName),
+                        .bufPassId => |bufPassId| frameGraph.resourceAssigner.bufAssigns.getByKey(bufPassId.val()),
+                    };
 
                     const PayloadPtr = @FieldType(RendererQueue.RendererEvent, "updateBufferSegment");
                     const Payload = std.meta.Child(PayloadPtr);
                     const updateBufferSegmentPtr = try arena.create(Payload);
-                    updateBufferSegmentPtr.* = .{ .bufId = bufId, .data = updateBufferSegment.data, .elementOffset = updateBufferSegment.elementOffset };
+                    updateBufferSegmentPtr.* = .{ .bufId = hardwareId, .data = updateBufferSegment.data, .elementOffset = updateBufferSegment.elementOffset };
 
                     rendererQueue.append(.{ .updateBufferSegment = updateBufferSegmentPtr });
                     // std.debug.print("FrameGraph: Update Buffer Segment ({}) send to Renderer\n", .{updateBufferSegment.bufEnum});
                 },
                 .updateTexture => |updateTexture| {
-                    const texKey: u16 = updateTexture.texPassId.val();
-                    if (frameGraph.resourceAssigner.texAssigns.isKeyUsed(texKey) == false) return error.TextureEnumHasNoPhysicalID;
-                    const texId = frameGraph.resourceAssigner.texAssigns.getByKey(texKey);
+                    const hardwareId: TexId = switch (updateTexture.texUnion) {
+                        .texId => |texId| texId,
+                        .texName => |texName| try getTexHardwareId(frameGraph, texName),
+                        .texPassId => |texPassId| frameGraph.resourceAssigner.texAssigns.getByKey(texPassId.val()),
+                    };
 
                     const PayloadPtr = @FieldType(RendererQueue.RendererEvent, "updateTexture");
                     const Payload = std.meta.Child(PayloadPtr);
                     const updateTexturePtr = try arena.create(Payload);
-                    updateTexturePtr.* = .{ .texId = texId, .data = updateTexture.data, .newExtent = updateTexture.newExtent };
+                    updateTexturePtr.* = .{ .texId = hardwareId, .data = updateTexture.data, .newExtent = updateTexture.newExtent };
 
                     rendererQueue.append(.{ .updateTexture = updateTexturePtr });
                     // std.debug.print("FrameGraph: Update Texture ({}) send to Renderer\n", .{updateTexture.texEnum});

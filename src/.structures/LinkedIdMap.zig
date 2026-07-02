@@ -1,11 +1,12 @@
 const std = @import("std");
-const SimpleMap = @import("SimpleMap.zig").SimpleMap;
+const SimpleMap = @import("SimpleIdMap.zig").SimpleIdMap;
+const Id = @import("../globalHelper.zig").Id;
 
 fn FindSmallestIntType(number: usize) type {
     return std.math.IntFittingRange(0, number);
 }
 
-pub fn LinkedMap(comptime ItemType: type, comptime capacity: u32, comptime keyType: type, comptime keyMax: u32, comptime keyMin: u32) type {
+pub fn LinkedIdMap(comptime ItemType: type, comptime capacity: u32, comptime Keytype: type, comptime keyMax: u32, comptime keyMin: u32) type {
     const keyRange = keyMax - keyMin + 1;
     const sentinel = keyRange + 1;
     const smallKeyType = FindSmallestIntType(sentinel);
@@ -14,17 +15,17 @@ pub fn LinkedMap(comptime ItemType: type, comptime capacity: u32, comptime keyTy
         if (keyMax < capacity) @compileError("MapArray: keyMax must be >= size");
         if (keyMin > keyMax) @compileError("MapArray: keyMax must be > keyMin");
 
-        if (keyMax > std.math.maxInt(keyType)) @compileError("MapArray: keyMax must fit in keyType");
+        if (keyMax > std.math.maxInt(Keytype.typ())) @compileError("MapArray: keyMax must fit in keyType");
         if (keyRange < capacity) @compileError("LinkedMap: keyRange (keyMax-keyMin+1) must be >= capacity so smallKeyType can hold indices");
     }
 
     return struct {
         const Self = @This();
 
-        slotMap: SimpleMap(ItemType, capacity, keyType, keyMax, keyMin) = .{},
+        slotMap: SimpleMap(ItemType, capacity, Keytype, keyMax, keyMin) = .{},
         links: [capacity]smallKeyType = .{sentinel} ** capacity,
 
-        pub fn upsert(self: *Self, key: keyType, item: ItemType) void {
+        pub fn upsert(self: *Self, key: Keytype, item: ItemType) void {
             if (self.isKeyUsed(key) == false) {
                 self.insert(key, item);
             } else {
@@ -34,16 +35,16 @@ pub fn LinkedMap(comptime ItemType: type, comptime capacity: u32, comptime keyTy
 
         // Functions with Changed logic:
 
-        pub fn swap(self: *Self, key1: keyType, key2: keyType) void {
-            const castedKey1: smallKeyType = @truncate(key1 - keyMin);
-            const castedKey2: smallKeyType = @truncate(key2 - keyMin);
+        pub fn swap(self: *Self, key1: Keytype, key2: Keytype) void {
+            const castedKey1: smallKeyType = @truncate(key1.val() - keyMin);
+            const castedKey2: smallKeyType = @truncate(key2.val() - keyMin);
             std.debug.assert(self.slotMap.keys[castedKey1] != sentinel);
             std.debug.assert(self.slotMap.keys[castedKey2] != sentinel);
             self.swapIndices(@intCast(self.slotMap.keys[castedKey1]), @intCast(self.slotMap.keys[castedKey2]));
         }
 
-        pub fn link(self: *Self, index: u32, key: keyType) void {
-            const castedKey: smallKeyType = @truncate(key - keyMin);
+        pub fn link(self: *Self, index: u32, key: Keytype) void {
+            const castedKey: smallKeyType = @truncate(key.val() - keyMin);
             const oldKey = self.links[index];
 
             if (oldKey != sentinel) self.slotMap.keys[oldKey] = sentinel;
@@ -51,15 +52,15 @@ pub fn LinkedMap(comptime ItemType: type, comptime capacity: u32, comptime keyTy
             self.links[index] = castedKey;
         }
 
-        pub fn unlink(self: *Self, key: keyType) void {
-            const castedKey: smallKeyType = @truncate(key - keyMin);
+        pub fn unlink(self: *Self, key: Keytype) void {
+            const castedKey: smallKeyType = @truncate(key.val() - keyMin);
             const index = self.slotMap.keys[castedKey];
             if (index == sentinel) return;
             self.unlinkIndex(@intCast(index));
         }
 
-        pub fn remove(self: *Self, key: keyType) void {
-            self.removeIndex(@intCast(self.getIndexByKey(key)));
+        pub fn remove(self: *Self, key: Keytype) void {
+            self.removeIndex(@intCast(self.getIndexByKey(key.val())));
         }
 
         pub inline fn isLinked(self: *const Self, index: u32) bool {
@@ -68,10 +69,10 @@ pub fn LinkedMap(comptime ItemType: type, comptime capacity: u32, comptime keyTy
 
         // Additional Logic + SlotMap Functionality:
 
-        pub fn insert(self: *Self, key: keyType, item: ItemType) void {
+        pub fn insert(self: *Self, key: Keytype, item: ItemType) void {
             const index = self.slotMap.len;
             self.slotMap.insert(key, item);
-            self.links[index] = @truncate(key - keyMin);
+            self.links[index] = @truncate(key.val() - keyMin);
         }
 
         pub fn clear(self: *Self) void {
@@ -93,7 +94,7 @@ pub fn LinkedMap(comptime ItemType: type, comptime capacity: u32, comptime keyTy
             self.slotMap.len -= 1;
         }
 
-        pub inline fn getKeyByIndex(self: *const Self, index: u32) keyType {
+        pub inline fn getKeyByIndex(self: *const Self, index: u32) Keytype {
             std.debug.assert(self.isLinked(index));
             return @intCast(self.links[index] + keyMin);
         }
@@ -140,15 +141,15 @@ pub fn LinkedMap(comptime ItemType: type, comptime capacity: u32, comptime keyTy
 
         // Direct Function Mappings:
 
-        pub fn update(self: *Self, key: keyType, item: ItemType) void {
+        pub fn update(self: *Self, key: Keytype, item: ItemType) void {
             self.slotMap.update(key, item);
         }
 
-        pub fn isKeyUsed(self: *const Self, key: keyType) bool {
+        pub fn isKeyUsed(self: *const Self, key: Keytype) bool {
             return self.slotMap.isKeyUsed(key);
         }
 
-        pub inline fn isKeyValid(self: *const Self, key: keyType) bool {
+        pub inline fn isKeyValid(self: *const Self, key: Keytype) bool {
             return self.slotMap.isKeyValid(key);
         }
 
@@ -172,31 +173,31 @@ pub fn LinkedMap(comptime ItemType: type, comptime capacity: u32, comptime keyTy
             return self.slotMap.getConstItems();
         }
 
-        pub inline fn getKeyMax(self: *const Self) keyType {
-            return self.slotMap.getKeyMax();
+        pub inline fn getKeyMax(self: *const Self) Keytype {
+            return self.slotMap.getKeyMax().id();
         }
 
-        pub inline fn getKeyMin(self: *const Self) keyType {
-            return self.slotMap.getKeyMin();
+        pub inline fn getKeyMin(self: *const Self) Keytype {
+            return self.slotMap.getKeyMin().id();
         }
 
         pub inline fn getCapacity(self: *const Self) u32 {
             return self.slotMap.getCapacity();
         }
 
-        pub inline fn getByKey(self: *const Self, key: keyType) ItemType {
+        pub inline fn getByKey(self: *const Self, key: Keytype) ItemType {
             return self.slotMap.getByKey(key);
         }
 
-        pub inline fn getIndexByKey(self: *const Self, key: keyType) smallKeyType {
+        pub inline fn getIndexByKey(self: *const Self, key: Keytype) smallKeyType {
             return self.slotMap.getIndexByKey(key);
         }
 
-        pub inline fn getPtrByKey(self: *Self, key: keyType) *ItemType {
+        pub inline fn getPtrByKey(self: *Self, key: Keytype) *ItemType {
             return self.slotMap.getPtrByKey(key);
         }
 
-        pub inline fn getConstPtrByKey(self: *const Self, key: keyType) *const ItemType {
+        pub inline fn getConstPtrByKey(self: *const Self, key: Keytype) *const ItemType {
             return self.slotMap.getConstPtrByKey(key);
         }
 

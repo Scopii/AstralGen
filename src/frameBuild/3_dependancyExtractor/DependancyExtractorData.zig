@@ -8,8 +8,8 @@ const rc = @import("../../.configs/renderConfig.zig");
 // Step 3
 
 pub const DependancyExtractorData = struct {
-    texDependancies: FixedList(TextureDependancy, rc.PASS_MAX * rc.TEX_MAX) = .{}, 
-    bufDependancies: FixedList(BufferDependancy, rc.PASS_MAX * rc.BUF_MAX) = .{}, 
+    texDependancies: FixedList(TextureDependancy, rc.PASS_MAX * rc.TEX_MAX) = .{},
+    bufDependancies: FixedList(BufferDependancy, rc.PASS_MAX * rc.BUF_MAX) = .{},
 
     lastBufWriter: SimpleMap(PassId, rc.BUF_MAX, u16, rc.BUF_MAX, 0) = .{}, // key: bufOutput Enum
     lastTexWriter: SimpleMap(PassId, rc.TEX_MAX, u16, rc.TEX_MAX, 0) = .{}, // key: texOutput Enum

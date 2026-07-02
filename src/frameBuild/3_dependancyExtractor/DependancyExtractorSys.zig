@@ -7,15 +7,12 @@ const ResourceExtractorData = @import("../2_resourceExtractor/ResourceExtractorD
 const PassExtractorData = @import("../1_passExtractor/PassExtractorData.zig").PassExtractorData;
 const DependancyExtractorData = @import("DependancyExtractorData.zig").DependancyExtractorData;
 const ResourceRegistryData = @import("../0_resourceRegistry/ResourceRegistryData.zig").ResourceRegistryData;
+const AccessExtractorData = @import("../1.5_accessExtractor/AccessExtractorData.zig").AccessExtractorData;
 
 // Step 3
 
 pub const DependancyExtractorSys = struct {
-    pub fn buildDependencies(
-        dependancyExtractor: *DependancyExtractorData,
-        resourceExtractor: *const ResourceExtractorData,
-        resourceRegistry: *const ResourceRegistryData,
-    ) !void {
+    pub fn buildDependencies(dependancyExtractor: *DependancyExtractorData, accessExtractor: *const AccessExtractorData, resourceRegistry: *const ResourceRegistryData) !void {
         dependancyExtractor.bufDependancies.clear();
         dependancyExtractor.texDependancies.clear();
 
@@ -23,7 +20,7 @@ pub const DependancyExtractorSys = struct {
         dependancyExtractor.lastTexWriter.clear();
 
         // Register Buffer Producers
-        for (resourceExtractor.bufAccesses.constSlice()) |bufAccess| {
+        for (accessExtractor.bufAccesses.constSlice()) |bufAccess| {
             if (bufAccess.bufOutput) |bufOutput| {
                 const outputBufKey: u16 = bufOutput.val();
 
@@ -41,7 +38,7 @@ pub const DependancyExtractorSys = struct {
         }
 
         // Resolve Buffer Consumers
-        for (resourceExtractor.bufAccesses.constSlice()) |bufAccesses| {
+        for (accessExtractor.bufAccesses.constSlice()) |bufAccesses| {
             const inputBufKey: u16 = bufAccesses.bufInput.val();
 
             if (dependancyExtractor.lastBufWriter.isKeyUsed(inputBufKey) == true) {
@@ -53,10 +50,17 @@ pub const DependancyExtractorSys = struct {
                     dependancyExtractor.bufDependancies.append(bufDep) catch std.debug.print("ERROR: 3.DependancyExtractor: bufDependancies append failed\n", .{});
                 }
             }
+
+            // register AFTER the consumer check so this access sees the PRIOR writer not itself
+            const isWrite = (bufAccesses.access == .write or bufAccesses.bufOutput != null);
+            if (isWrite) {
+                const producedKey: u16 = if (bufAccesses.bufOutput) |out| out.val() else inputBufKey;
+                dependancyExtractor.lastBufWriter.upsert(producedKey, bufAccesses.pass);
+            }
         }
 
         // Register Texture Producers
-        for (resourceExtractor.texAccesses.constSlice()) |texAccess| {
+        for (accessExtractor.texAccesses.constSlice()) |texAccess| {
             if (texAccess.texOutput) |texOutput| {
                 const outputTexKey: u16 = texOutput.val();
 
@@ -74,17 +78,24 @@ pub const DependancyExtractorSys = struct {
         }
 
         // Resolve Texture Consumers
-        for (resourceExtractor.texAccesses.constSlice()) |texAccesses| {
-            const inputTexKey: u16 = texAccesses.texInput.val();
+        for (accessExtractor.texAccesses.constSlice()) |texAccess| {
+            const inputTexKey: u16 = texAccess.texInput.val();
 
             if (dependancyExtractor.lastTexWriter.isKeyUsed(inputTexKey) == true) {
                 // Graph Edge only if its a cross pass dependancy (Pass does not consume its own resourcve)
                 const inputPass = dependancyExtractor.lastTexWriter.getByKey(inputTexKey);
 
-                if (inputPass.val() != texAccesses.pass.val()) {
-                    const texDep = TextureDependancy{ .tex = texAccesses.texInput, .predecessor = inputPass, .successor = texAccesses.pass };
+                if (inputPass.val() != texAccess.pass.val()) {
+                    const texDep = TextureDependancy{ .tex = texAccess.texInput, .predecessor = inputPass, .successor = texAccess.pass };
                     dependancyExtractor.texDependancies.append(texDep) catch std.debug.print("ERROR: 3.DependancyExtractor: texDependancies append failed\n", .{});
                 }
+            }
+
+            // register AFTER the consumer check so this access sees the PRIOR writer not itself
+            const isWrite = (texAccess.access == .write or texAccess.texOutput != null);
+            if (isWrite) {
+                const producedKey: u16 = if (texAccess.texOutput) |out| out.val() else inputTexKey;
+                dependancyExtractor.lastTexWriter.upsert(producedKey, texAccess.pass);
             }
         }
 

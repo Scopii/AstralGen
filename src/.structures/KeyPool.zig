@@ -5,10 +5,7 @@ fn FindSmallestIntType(number: usize) type {
     return std.math.IntFittingRange(0, number);
 }
 
-pub fn KeyPool(
-    comptime keyType: type,
-    comptime capacity: u32,
-) type {
+pub fn KeyPool(comptime Keytyype: type, comptime capacity: u32) type {
     const smallKeyType = FindSmallestIntType(capacity);
     const indexType = FindSmallestIntType(capacity + 1);
 
@@ -17,7 +14,7 @@ pub fn KeyPool(
         nextId: indexType = 0,
         freeList: FixedList(smallKeyType, capacity) = .{},
 
-        pub fn reserveKey(self: *Self) keyType {
+        pub fn reserveKey(self: *Self) Keytyype {
             std.debug.assert(self.nextId < capacity or self.freeList.len > 0);
             if (self.freeList.pop()) |key| {
                 return @intCast(key);
@@ -31,12 +28,12 @@ pub fn KeyPool(
             return self.nextId >= capacity and self.freeList.len == 0;
         }
 
-        pub fn tryReserveKey(self: *Self) ?keyType {
+        pub fn tryReserveKey(self: *Self) ?Keytyype {
             if (self.isFull()) return null;
             return self.reserveKey();
         }
 
-        pub fn freeKey(self: *Self, key: keyType) void {
+        pub fn freeKey(self: *Self, key: Keytyype) void {
             std.debug.assert(@as(u32, @intCast(key)) < capacity);
             self.freeList.appendAssumeCapacity(@intCast(key));
         }

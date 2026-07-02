@@ -249,7 +249,7 @@ pub const App = struct {
 
         TimeSys.init(&self.data.time);
 
-        const US_PER_FRAME: u64 = std.time.us_per_s / 10;
+        const US_PER_FRAME: u64 = std.time.us_per_s / rc.FRAME_LIMIT;
         var LAST_FRAME: u64 = @intCast(std.time.microTimestamp());
         var US_WAITED: u64 = 0;
 
@@ -308,35 +308,32 @@ pub const App = struct {
                 const updateRequests = self.data.frameGraph.resourceAssigner.updateRequests.getConstItems();
                 const sortedRenderNodes = self.data.frameGraph.passSorter.sortedRenderNodes.constSlice();
 
-                // const bufAssigns = self.data.frameGraph.resourceAssigner.bufAssigns;
-                const texAssigns = self.data.frameGraph.resourceAssigner.texAssigns;
-
                 for (updateRequests) |updateRequest| {
                     switch (updateRequest) {
                         .EntityUpdate => {},
                         .CamMainUpdate => {},
-                        .CanDebugUpdate => {},
+                        .CamDebugUpdate => {},
                         .TestTileUpdate => {
-                            // // PROCEDURAL TEXTURE GENERATION
-                            // const AddTexPtr = @FieldType(FrameGraphQueue.FrameGraphEvent, "updateTexture");
-                            // const AddTex = std.meta.Child(AddTexPtr);
+                            // PROCEDURAL TEXTURE GENERATION
+                            const AddTexPtr = @FieldType(FrameGraphQueue.FrameGraphEvent, "updateTexture");
+                            const AddTex = std.meta.Child(AddTexPtr);
 
-                            // const arena = self.memoryMan.getGlobalArena();
+                            const arena = self.memoryMan.getGlobalArena();
 
-                            // const pixels = try arena.alloc([4]f16, 256 * 256);
-                            // for (0..256) |y| {
-                            //     for (0..256) |x| {
-                            //         const isWhite = ((x / 32) + (y / 32)) % 2 == 0;
-                            //         const val: f16 = if (isWhite) 1.0 else 0.2; // 1.0 (white) or 0.2 (dark)
+                            const pixels = try arena.alloc([4]f16, 256 * 256);
+                            for (0..256) |y| {
+                                for (0..256) |x| {
+                                    const isWhite = ((x / 32) + (y / 32)) % 2 == 0;
+                                    const val: f16 = if (isWhite) 1.0 else 0.2; // 1.0 (white) or 0.2 (dark)
 
-                            //         // RGBA -> Blue checkerboard
-                            //         pixels[y * 256 + x] = .{ val, val, 1.0, 1.0 };
-                            //     }
-                            // }
+                                    // RGBA -> Blue checkerboard
+                                    pixels[y * 256 + x] = .{ val, val, 1.0, 1.0 };
+                                }
+                            }
 
-                            // const addTextureDataPtr = try arena.create(AddTex);
-                            // addTextureDataPtr.* = .{ .texPassId = rc.TestTileTex, .data = std.mem.sliceAsBytes(pixels), .newExtent = null };
-                            // self.frameGraphQueue.append(.{ .updateTexture = addTextureDataPtr });
+                            const addTextureDataPtr = try arena.create(AddTex);
+                            addTextureDataPtr.* = .{ .texUnion = .{ .texPassId = rc.TestTileTex }, .data = std.mem.sliceAsBytes(pixels), .newExtent = null };
+                            self.frameGraphQueue.append(.{ .updateTexture = addTextureDataPtr });
                         },
                         .GuiUpdate => {},
                     }
@@ -344,7 +341,7 @@ pub const App = struct {
 
                 try FrameGraphSys.processQueue(&self.data.frameGraph, &self.frameGraphQueue, &self.rendererQueue, self.memoryMan);
 
-                try self.renderer.update(&self.rendererQueue, &texAssigns);
+                try self.renderer.update(&self.rendererQueue);
 
                 if (rc.EARLY_GPU_WAIT == false) try renderer.waitForGpu();
 

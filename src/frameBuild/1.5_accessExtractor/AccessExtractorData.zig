@@ -9,13 +9,11 @@ const LinkedMap = @import("../../.structures/LinkedMap.zig").LinkedMap;
 const PassId = @import("../../.configs/idConfig.zig").PassId;
 const rc = @import("../../.configs/renderConfig.zig");
 
-// Step 2
+// Step 1.5
 
-pub const ResourceExtractorData = struct {
-    bufDescriptions: LinkedMap(BufDesc, rc.BUF_MAX, u16, rc.BUF_MAX, 0) = .{},
-    texDescriptions: LinkedMap(TexDesc, rc.TEX_MAX, u16, rc.TEX_MAX, 0) = .{},
-
-    bufMemSize: LinkedMap(u64, rc.BUF_MAX, u16, rc.BUF_MAX, 0) = .{}, // Only used for transient Buffers
-    texMemSize: LinkedMap(u64, rc.TEX_MAX, u16, rc.TEX_MAX, 0) = .{}, // Only used for transient Textures
-
+pub const AccessExtractorData = struct {
+    bufAccesses: FixedList(BufferAccess, rc.PASS_MAX * rc.BUF_MAX) = .{},
+    texAccesses: FixedList(TextureAccess, rc.PASS_MAX * rc.TEX_MAX) = .{},
+    
+    passAccessRanges: LinkedMap(PassAccessRange, rc.PASS_MAX, u16, rc.PASS_MAX, 0) = .{},
 };

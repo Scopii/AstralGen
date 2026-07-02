@@ -20,8 +20,6 @@ const vk = @import("../.modules/vk.zig").c;
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 
-const TextureAssignments = @import("../frameBuild/6_resourceAssigner/ResourceAssignerData.zig").ResourceAssignerData.TextureAssignments;
-const TexPassId = @import("../.configs/idConfig.zig").TexPassId;
 const Window = @import("../window/Window.zig").Window;
 
 pub const Renderer = struct {
@@ -64,7 +62,7 @@ pub const Renderer = struct {
         self.renderNodes.deinit();
     }
 
-    pub fn update(self: *Renderer, rendererQueue: *RendererQueue, texAssigns: *const TextureAssignments) !void {
+    pub fn update(self: *Renderer, rendererQueue: *RendererQueue) !void {
         for (rendererQueue.get()) |rendererEvent| {
             // std.debug.print("Renderer Queue Event: {s}\n", .{@tagName(rendererEvent)});
             switch (rendererEvent) {
@@ -88,7 +86,7 @@ pub const Renderer = struct {
             switch (rendererEvent) {
                 .updateWindowState => |window| {
                     // std.debug.print("Renderer Queue Event: {}\n", .{window});
-                    try self.updateWindowStates(&[_]Window{window.*}, texAssigns);
+                    try self.updateWindowStates(&[_]Window{window.*});
                 },
                 else => {},
             }
@@ -96,7 +94,7 @@ pub const Renderer = struct {
         rendererQueue.clear();
     }
 
-    fn updateWindowStates(self: *Renderer, tempWindows: []const Window, _: *const TextureAssignments) !void {
+    fn updateWindowStates(self: *Renderer, tempWindows: []const Window) !void {
         for (tempWindows) |tempWindow| {
             if (tempWindow.state == .needDelete or tempWindow.state == .needUpdate) {
                 _ = vk.vkDeviceWaitIdle(self.context.gpi);
@@ -135,8 +133,6 @@ pub const Renderer = struct {
         const flightId = try self.scheduler.beginFrame();
         try self.resMan.update(flightId, self.scheduler.totalFrames);
         try self.swapMan.updateTargets(flightId, activeWindows);
-
-        // if (self.scheduler.totalFrames == 0) return error.STOP;
 
         const cmd = try self.renderGraph.recordFrame(
             self.renderNodes.items,

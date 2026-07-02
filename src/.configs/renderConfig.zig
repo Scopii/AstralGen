@@ -35,13 +35,16 @@ pub const GPU_READBACK = false;
 pub const CPU_PROFILING = false;
 pub const SWAPCHAIN_PROFILING = false;
 
+pub const FRAME_LIMIT = 15000;
+
 // Additional Debug Prints
 pub const BARRIER_DEBUG = false;
 pub const RESOURCE_DEBUG = true;
 pub const DESCRIPTOR_DEBUG = true;
 pub const PASS_EXTRACTION_DEBUG = false;
-pub const FRAME_GRAPH_DEBUG = true;
+pub const FRAME_GRAPH_DEBUG = false;
 pub const FRAME_BUILDS_TILL_TRANSIENT_DELETION = 2;
+pub const PASS_TEXTURE_RESIZE_INCLUDES_READ = false;
 pub const PASS_MAX = 128;
 pub const MAX_PASS_ATTRIBUTES = 80;
 
@@ -57,6 +60,7 @@ pub const RENDER_TEX_STRETCH = true; // Maybe ignored on AUTO_RESIZE
 pub const USE_MEM_BARRIERS_ON_BUFFERS = true;
 pub const USE_MEM_BARRIER_ON_IMAGES = true;
 pub const INITIAL_SWAPCHAIN_COLOR: ClearColor = .{ .R = 0.0, .G = 0.0, .B = 0.1, .A = 1.0 };
+pub const COMPOSITE_DEBUG = false;
 
 // Resource Information
 pub const BUF_MAX = 63;
@@ -110,7 +114,7 @@ pub const gridTexDesc = TexDesc{
 };
 
 pub const gridDepthTexDesc = TexDesc{
-    .share = .persistent,
+    .share = .transient, // WAS PERSISTENT
     .mem = .Gpu,
     .texUse = .{ .depthAtt = true, .sampled = true, .transferSrc = false },
     .descriptors = .SampledOnly,
@@ -136,7 +140,7 @@ pub const planeTexDesc = TexDesc{
 };
 
 pub const planeDepthTexDesc = TexDesc{
-    .share = .persistent,
+    .share = .transient, // WAS PERSISTENT
     .mem = .Gpu,
     .texUse = .{ .depthAtt = true, .sampled = true, .transferSrc = false },
     .descriptors = .SampledOnly,

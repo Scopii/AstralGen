@@ -552,7 +552,7 @@ pub const ResourceAssignerSys = struct {
     pub fn resolveBufferUpdateRequest(resourceAssigner: *ResourceAssignerData, bufPassId: BufPassId) void {
         const updateRequest: ?pe.UpdateRequestEnum = switch (bufPassId.val()) {
             rc.MainCamUB.val() => .CamMainUpdate,
-            rc.DebugCamUB.val() => .CanDebugUpdate,
+            rc.DebugCamUB.val() => .CamDebugUpdate,
             rc.ImguiIB.val() => .GuiUpdate,
             rc.ImguiVB.val() => .GuiUpdate,
             rc.EntitySB.val() => .EntityUpdate,

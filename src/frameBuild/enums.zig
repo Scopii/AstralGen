@@ -63,7 +63,7 @@
 pub const UpdateRequestEnum = enum {
     EntityUpdate,
     CamMainUpdate,
-    CanDebugUpdate,
+    CamDebugUpdate,
     TestTileUpdate,
     GuiUpdate,
 };

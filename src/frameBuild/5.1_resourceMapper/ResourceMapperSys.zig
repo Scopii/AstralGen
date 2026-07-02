@@ -14,12 +14,14 @@ const ResourceExtractorData = @import("../2_resourceExtractor/ResourceExtractorD
 const GraphOptimizerData = @import("../4.5_graphOptimizer/GraphOptimizerData.zig").GraphOptimizerData;
 const LifetimeExtractorData = @import("../5_lifetimeExtractor/LifetimeExtractorData.zig").LifetimeExtractorData;
 const ResourceMapperData = @import("ResourceMapperData.zig").ResourceMapperData;
+const AccessExtractorData = @import("../1.5_accessExtractor/AccessExtractorData.zig").AccessExtractorData;
 
 // Step 5.1
 
 pub const ResourceMapperSys = struct {
     pub fn buildMapping(
         resourceMapper: *ResourceMapperData,
+        accessExtractor: *const AccessExtractorData,
         resourceExtractor: *const ResourceExtractorData,
         lifetimeExtractor: *const LifetimeExtractorData,
         graphOptimizer: *const GraphOptimizerData,
@@ -43,7 +45,7 @@ pub const ResourceMapperSys = struct {
 
         // Buffer
 
-        for (resourceExtractor.bufAccesses.constSlice()) |bufAccess| {
+        for (accessExtractor.bufAccesses.constSlice()) |bufAccess| {
             const bufInputKey: u16 = bufAccess.bufInput.val();
             if (resourceMapper.bufPassIds.isKeyUsed(bufInputKey) == false) resourceMapper.bufPassIds.insert(bufInputKey, bufAccess.bufInput);
 
@@ -155,7 +157,7 @@ pub const ResourceMapperSys = struct {
         }
 
         // Textures
-        for (resourceExtractor.texAccesses.constSlice()) |texAccess| {
+        for (accessExtractor.texAccesses.constSlice()) |texAccess| {
             const texInputKey: u16 = texAccess.texInput.val();
             if (resourceMapper.texPassIds.isKeyUsed(texInputKey) == false) resourceMapper.texPassIds.insert(texInputKey, texAccess.texInput);
 

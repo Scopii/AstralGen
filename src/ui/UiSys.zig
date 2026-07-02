@@ -70,7 +70,7 @@ pub const UiSys = struct {
                 const PayloadPtr = @FieldType(FrameGraphQueue.FrameGraphEvent, "updateTexture");
                 const updateTexPtr = try arena.create(std.meta.Child(PayloadPtr));
                 updateTexPtr.* = .{
-                    .texPassId = rc.ImguiFontTex,
+                    .texUnion = .{ .texPassId = rc.ImguiFontTex },
                     .data = pixelBytes,
                     .newExtent = .{ .width = @intCast(width), .height = @intCast(height), .depth = 1 },
                 };
@@ -288,12 +288,12 @@ pub const UiSys = struct {
 
         const PayloadVtx = @FieldType(FrameGraphQueue.FrameGraphEvent, "updateBuffer");
         const updateVtxPtr = try arena.create(std.meta.Child(PayloadVtx));
-        updateVtxPtr.* = .{ .bufPassId = rc.ImguiVB, .data = vtxBuffer };
+        updateVtxPtr.* = .{ .bufUnion = .{ .bufPassId = rc.ImguiVB }, .data = vtxBuffer };
         frameGraphQueue.append(.{ .updateBuffer = updateVtxPtr });
 
         const PayloadIdx = @FieldType(FrameGraphQueue.FrameGraphEvent, "updateBuffer");
         const updateIdxPtr = try arena.create(std.meta.Child(PayloadIdx));
-        updateIdxPtr.* = .{ .bufPassId = rc.ImguiIB, .data = idxBuffer };
+        updateIdxPtr.* = .{ .bufUnion = .{ .bufPassId = rc.ImguiIB }, .data = idxBuffer }; 
         frameGraphQueue.append(.{ .updateBuffer = updateIdxPtr });
     }
 

@@ -1,6 +1,7 @@
 pub const FrameGraphData = struct {
     resourceRegistry: @import("0_resourceRegistry/ResourceRegistryData.zig").ResourceRegistryData = .{},
     passExtractor: @import("1_passExtractor/PassExtractorData.zig").PassExtractorData = .{},
+    accessExtractor: @import("1.5_accessExtractor/AccessExtractorData.zig").AccessExtractorData = .{},
     resourceExtractor: @import("2_resourceExtractor/ResourceExtractorData.zig").ResourceExtractorData = .{},
     dependancyExtractor: @import("3_dependancyExtractor/DependancyExtractorData.zig").DependancyExtractorData = .{},
     graphExtractor: @import("4_graphExtractor/GraphExtractorData.zig").GraphExtractorData = .{},

@@ -4,7 +4,7 @@ fn FindSmallestIntType(number: usize) type {
     return std.math.IntFittingRange(0, number);
 }
 
-pub fn SimpleMap(comptime ItemType: type, comptime capacity: u32, comptime keyType: type, comptime keyMax: u32, comptime keyMin: u32) type {
+pub fn SimpleIdMap(comptime ItemType: type, comptime capacity: u32, comptime keyType: type, comptime keyMax: u32, comptime keyMin: u32) type {
     const keyRange = keyMax - keyMin + 1;
     const sentinel = keyRange + 1;
     const smallKeyType = FindSmallestIntType(sentinel);
@@ -14,7 +14,7 @@ pub fn SimpleMap(comptime ItemType: type, comptime capacity: u32, comptime keyTy
         if (keyMax < capacity) @compileError("MapArray: keyMax must be >= size");
         if (keyMin > keyMax) @compileError("MapArray: keyMax must be > keyMin");
 
-        if (keyMax > std.math.maxInt(keyType)) @compileError("MapArray: keyMax must fit in keyType");
+        if (keyMax > std.math.maxInt(keyType.typ())) @compileError("MapArray: keyMax must fit in keyType");
         if (keyRange < capacity) @compileError("LinkedMap: keyRange (keyMax-keyMin+1) must be >= capacity so smallKeyType can hold indices");
     }
 
@@ -26,7 +26,7 @@ pub fn SimpleMap(comptime ItemType: type, comptime capacity: u32, comptime keyTy
         items: [capacity]ItemType = undefined,
 
         pub fn upsert(self: *Self, key: keyType, item: ItemType) void {
-            const castedKey: smallKeyType = @truncate(key - keyMin);
+            const castedKey: smallKeyType = @truncate(key.val() - keyMin);
 
             if (self.keys[castedKey] == sentinel) {
                 // Insert
@@ -44,8 +44,8 @@ pub fn SimpleMap(comptime ItemType: type, comptime capacity: u32, comptime keyTy
         // Slot Map Functions (Changed in LinkedMap):
 
         pub fn swap(self: *Self, key1: keyType, key2: keyType) void {
-            const castedKey1: smallKeyType = @truncate(key1 - keyMin);
-            const castedKey2: smallKeyType = @truncate(key2 - keyMin);
+            const castedKey1: smallKeyType = @truncate(key1.val() - keyMin);
+            const castedKey2: smallKeyType = @truncate(key2.val() - keyMin);
 
             const index1 = self.keys[castedKey1];
             self.keys[castedKey1] = self.keys[castedKey2];
@@ -53,18 +53,18 @@ pub fn SimpleMap(comptime ItemType: type, comptime capacity: u32, comptime keyTy
         }
 
         pub fn link(self: *Self, index: u32, key: keyType) void {
-            const castedKey: smallKeyType = @truncate(key - keyMin);
+            const castedKey: smallKeyType = @truncate(key.val() - keyMin);
             self.keys[castedKey] = @truncate(index);
         }
 
         pub fn unlink(self: *Self, key: keyType) void {
-            self.keys[@as(usize, @truncate(key - keyMin))] = sentinel;
+            self.keys[@as(usize, @truncate(key.val() - keyMin))] = sentinel;
         }
 
         // Slot Map Base Functionality:
 
         pub fn insert(self: *Self, key: keyType, item: ItemType) void {
-            const castedKey: smallKeyType = @truncate(key - keyMin);
+            const castedKey: smallKeyType = @truncate(key.val() - keyMin);
             std.debug.assert(self.keys[castedKey] == sentinel);
             const index = self.len;
 
@@ -86,19 +86,19 @@ pub fn SimpleMap(comptime ItemType: type, comptime capacity: u32, comptime keyTy
         // Direct Function Mappings:
 
         pub fn update(self: *Self, key: keyType, item: ItemType) void {
-            const castedKey: smallKeyType = @truncate(key - keyMin);
+            const castedKey: smallKeyType = @truncate(key.val() - keyMin);
             std.debug.assert(self.keys[castedKey] != sentinel);
             const index = self.keys[castedKey];
             self.items[index] = item;
         }
 
         pub fn isKeyUsed(self: *const Self, key: keyType) bool {
-            const castedKey: smallKeyType = @truncate(key - keyMin);
+            const castedKey: smallKeyType = @truncate(key.val() - keyMin);
             return self.keys[castedKey] != sentinel;
         }
 
         pub inline fn isKeyValid(_: *const Self, key: keyType) bool {
-            return key >= keyMin and (key - keyMin) < keyRange;
+            return key.val() >= keyMin and (key.val() - keyMin) < keyRange;
         }
 
         pub inline fn isIndexUsed(self: *const Self, index: u32) bool {
@@ -134,19 +134,19 @@ pub fn SimpleMap(comptime ItemType: type, comptime capacity: u32, comptime keyTy
         }
 
         pub inline fn getByKey(self: *const Self, key: keyType) ItemType {
-            return self.items[self.keys[(key - keyMin)]];
+            return self.items[self.keys[(key.val() - keyMin)]];
         }
 
         pub inline fn getIndexByKey(self: *const Self, key: keyType) smallKeyType {
-            return self.keys[(key - keyMin)];
+            return self.keys[(key.val() - keyMin)];
         }
 
         pub inline fn getPtrByKey(self: *Self, key: keyType) *ItemType {
-            return &self.items[self.keys[(key - keyMin)]];
+            return &self.items[self.keys[(key.val() - keyMin)]];
         }
 
         pub inline fn getConstPtrByKey(self: *const Self, key: keyType) *const ItemType {
-            return &self.items[self.keys[(key - keyMin)]];
+            return &self.items[self.keys[(key.val() - keyMin)]];
         }
 
         pub inline fn getByIndex(self: *const Self, index: u32) ItemType {

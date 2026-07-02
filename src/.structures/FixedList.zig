@@ -1,31 +1,31 @@
 const std = @import("std");
 
-pub fn FixedList(comptime T: type, comptime capacity: usize) type {
+pub fn FixedList(comptime ItemType: type, comptime capacity: usize) type {
     return struct {
         const Self = @This();
 
-        buffer: [capacity]T = undefined,
+        buffer: [capacity]ItemType = undefined,
         len: std.math.IntFittingRange(0, capacity) = 0,
 
-        pub fn appendSlice(self: *Self, items: []const T) !void {
+        pub fn appendSlice(self: *Self, items: []const ItemType) !void {
             if (self.len + items.len > capacity) return error.ListFull;
             @memcpy(self.buffer[self.len .. items.len + self.len], items);
             self.len += @intCast(items.len);
         }
 
-        pub fn appendSliceAssumeCapacity(self: *Self, items: []const T) void {
+        pub fn appendSliceAssumeCapacity(self: *Self, items: []const ItemType) void {
             std.debug.assert(self.len + items.len <= capacity);
             @memcpy(self.buffer[self.len .. self.len + items.len], items);
             self.len += @intCast(items.len);
         }
 
-        pub fn append(self: *Self, item: T) !void {
+        pub fn append(self: *Self, item: ItemType) !void {
             if (self.len >= capacity) return error.ListFull;
             self.buffer[self.len] = item;
             self.len += 1;
         }
 
-        pub fn appendReturnPtr(self: *Self, item: T) !*T {
+        pub fn appendReturnPtr(self: *Self, item: ItemType) !*ItemType {
             if (self.len >= capacity) return error.ListFull;
             const ptr = &self.buffer[self.len];
             ptr.* = item;
@@ -33,17 +33,17 @@ pub fn FixedList(comptime T: type, comptime capacity: usize) type {
             return ptr;
         }
 
-        pub fn appendAssumeCapacity(self: *Self, item: T) void {
+        pub fn appendAssumeCapacity(self: *Self, item: ItemType) void {
             std.debug.assert(self.len < capacity);
             self.buffer[self.len] = item;
             self.len += 1;
         }
 
-        pub fn slice(self: *Self) []T {
+        pub fn slice(self: *Self) []ItemType {
             return self.buffer[0..self.len];
         }
 
-        pub fn constSlice(self: *const Self) []const T {
+        pub fn constSlice(self: *const Self) []const ItemType {
             return self.buffer[0..self.len];
         }
 
@@ -57,7 +57,7 @@ pub fn FixedList(comptime T: type, comptime capacity: usize) type {
             if (index != self.len) self.buffer[index] = self.buffer[self.len];
         }
 
-        pub fn swapRemoveReturn(self: *Self, index: u32) T {
+        pub fn swapRemoveReturn(self: *Self, index: u32) ItemType {
             std.debug.assert(index < self.len);
             const removed = self.buffer[index];
             self.len -= 1;
@@ -84,7 +84,7 @@ pub fn FixedList(comptime T: type, comptime capacity: usize) type {
             self.buffer[index2] = copy1;
         }
 
-        pub fn pop(self: *Self) ?T {
+        pub fn pop(self: *Self) ?ItemType {
             if (self.len == 0) return null;
             self.len -= 1;
             return self.buffer[self.len];

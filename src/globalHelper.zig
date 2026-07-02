@@ -56,6 +56,10 @@ pub fn Id(comptime Int: type, comptime tag: anytype) type {
         pub fn val(self: IdSelf) Int {
             return @intFromEnum(self);
         }
+
+        pub fn typ() type {
+            return Int;
+        }
     };
 }
 
