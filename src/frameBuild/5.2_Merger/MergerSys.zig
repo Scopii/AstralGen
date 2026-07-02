@@ -20,7 +20,7 @@ pub const MergerSys = struct {
             var earliestLife: ?u16 = null;
             var latestLife: ?u16 = null;
 
-            for (group.startMapIndex..group.endMapIndex + 1) |mapIndex| {
+            for (group.firstMapIndex..group.lastMapIndex + 1) |mapIndex| {
                 const bufKey = mapperData.bufMapTransient.getKeyByIndex(@intCast(mapIndex));
                 const bufLifetime = lifetimeData.bufLifetimes.getByKey(bufKey);
 
@@ -38,7 +38,7 @@ pub const MergerSys = struct {
             var earliestLife: ?u16 = null;
             var latestLife: ?u16 = null;
 
-            for (group.startMapIndex..group.endMapIndex + 1) |mapIndex| {
+            for (group.firstMapIndex..group.lastMapIndex + 1) |mapIndex| {
                 const texKey = mapperData.texMapTransient.getKeyByIndex(@intCast(mapIndex));
                 const texLifetime = lifetimeData.texLifetimes.getByKey(texKey);
 

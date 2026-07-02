@@ -31,8 +31,9 @@ pub const ResourceSys = struct {
             }
 
             // For Output
-            const bufKey2: ?u16 = if (bufAccess.bufOutput) |bufOutput| bufOutput.val() else null;
-            if (bufKey2) |key2| {
+            if (bufAccess.bufOutput) |bufOutput| {
+                const key2 = bufOutput.val();
+
                 if (resourceData.bufDescs.isKeyUsed(key2) == false) {
                     const bufDesc2 = try registryData.getBufferDefinition(bufAccess.bufOutput.?);
                     resourceData.bufDescs.upsert(key2, bufDesc2);
@@ -47,7 +48,7 @@ pub const ResourceSys = struct {
 
         // Resolve and Save Texture Descriptions (+ Texture Resize Logic for Pass Size)
         for (accessData.texAccesses.constSlice()) |texAccess| {
-            const extent = passData.passExtents.getByKey(texAccess.pass.val());
+            const passExtent = passData.passExtents.getByKey(texAccess.pass.val());
             const isWrite = (texAccess.access == .write or texAccess.texOutput != null);
             const resize = isWrite or rc.PASS_TEXTURE_RESIZE_INCLUDES_READ;
 
@@ -64,13 +65,14 @@ pub const ResourceSys = struct {
 
             var texDesc1 = resourceData.texDescs.getPtrByKey(texKey1);
             if (texDesc1.fitPass == true and resize) {
-                texDesc1.width = @max(texDesc1.width, extent.width);
-                texDesc1.height = @max(texDesc1.height, extent.height);
+                texDesc1.width = @max(texDesc1.width, passExtent.width);
+                texDesc1.height = @max(texDesc1.height, passExtent.height);
             }
 
             // For Output
-            const texKey2: ?u16 = if (texAccess.texOutput) |texOutput| texOutput.val() else null;
-            if (texKey2) |key2| {
+            if (texAccess.texOutput) |texOutput| {
+                const key2 = texOutput.val();
+
                 if (resourceData.texDescs.isKeyUsed(key2) == false) {
                     var texDesc2 = try registryData.getTextureDefinition(texAccess.texOutput.?);
                     if (texDesc2.fitPass == true) {
@@ -82,8 +84,8 @@ pub const ResourceSys = struct {
 
                 var texDesc2 = resourceData.texDescs.getPtrByKey(key2);
                 if (texDesc2.fitPass == true and resize) {
-                    texDesc2.width = @max(texDesc2.width, extent.width);
-                    texDesc2.height = @max(texDesc2.height, extent.height);
+                    texDesc2.width = @max(texDesc2.width, passExtent.width);
+                    texDesc2.height = @max(texDesc2.height, passExtent.height);
                 }
             }
         }

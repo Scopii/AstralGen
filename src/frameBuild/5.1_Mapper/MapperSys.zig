@@ -137,8 +137,8 @@ pub const MapperSys = struct {
                         .rootPass = optimizerData.optimizedGraph.getConstItems()[lastLifetime.?.earliest].pass,
                         .rootBuf = root,
                         .bufDesc = lastBufDescription.?,
-                        .startMapIndex = @intCast(mapperData.bufMapTransient.getLength() - mapperData.sharedBuffers.getLength()),
-                        .endMapIndex = @intCast(mapperData.bufMapTransient.getLength() - 1),
+                        .firstMapIndex = @intCast(mapperData.bufMapTransient.getLength() - mapperData.sharedBuffers.getLength()),
+                        .lastMapIndex = @intCast(mapperData.bufMapTransient.getLength() - 1),
                     };
                     mapperData.bufGroupsTransient.upsert(root.val(), bufGroup);
                 },
@@ -147,8 +147,8 @@ pub const MapperSys = struct {
                         .rootPass = optimizerData.optimizedGraph.getConstItems()[lastLifetime.?.earliest].pass,
                         .rootBuf = root,
                         .bufDesc = lastBufDescription.?,
-                        .startMapIndex = @intCast(mapperData.bufMapPersistent.getLength() - mapperData.sharedBuffers.getLength()),
-                        .endMapIndex = @intCast(mapperData.bufMapPersistent.getLength() - 1),
+                        .firstMapIndex = @intCast(mapperData.bufMapPersistent.getLength() - mapperData.sharedBuffers.getLength()),
+                        .lastMapIndex = @intCast(mapperData.bufMapPersistent.getLength() - 1),
                     };
                     mapperData.bufGroupsPersistent.upsert(root.val(), bufGroup);
                 },
@@ -248,8 +248,8 @@ pub const MapperSys = struct {
                         .rootPass = optimizerData.optimizedGraph.getConstItems()[lastLifetime.?.earliest].pass,
                         .rootTex = root,
                         .texDesc = lastTexDescription.?,
-                        .startMapIndex = @intCast(mapperData.texMapTransient.getLength() - mapperData.sharedTextures.getLength()),
-                        .endMapIndex = @intCast(mapperData.texMapTransient.getLength() - 1),
+                        .firstMapIndex = @intCast(mapperData.texMapTransient.getLength() - mapperData.sharedTextures.getLength()),
+                        .lastMapIndex = @intCast(mapperData.texMapTransient.getLength() - 1),
                     };
                     mapperData.texGroupsTransient.upsert(root.val(), texGroup);
                 },
@@ -258,8 +258,8 @@ pub const MapperSys = struct {
                         .rootPass = optimizerData.optimizedGraph.getConstItems()[lastLifetime.?.earliest].pass,
                         .rootTex = root,
                         .texDesc = lastTexDescription.?,
-                        .startMapIndex = @intCast(mapperData.texMapPersistent.getLength() - mapperData.sharedTextures.getLength()),
-                        .endMapIndex = @intCast(mapperData.texMapPersistent.getLength() - 1),
+                        .firstMapIndex = @intCast(mapperData.texMapPersistent.getLength() - mapperData.sharedTextures.getLength()),
+                        .lastMapIndex = @intCast(mapperData.texMapPersistent.getLength() - 1),
                     };
                     mapperData.texGroupsPersistent.upsert(root.val(), texGroup);
                 },
@@ -277,26 +277,26 @@ pub const MapperSys = struct {
             for (mapperData.lastBufGroupsPersistent.getConstItems(), 0..) |group, i| {
                 const rootBuf = try registryData.getBufferName(group.rootBuf);
                 const rootPass = try registryData.getPassName(group.rootPass);
-                std.debug.print("BufGroup (Persistent {}) (RootRes {s}) (RootPass {s}) (mapIndex {} -> {})\n", .{ i, rootBuf, rootPass, group.startMapIndex, group.endMapIndex });
+                std.debug.print("BufGroup (Persistent {}) (RootRes {s}) (RootPass {s}) (mapIndex {} -> {})\n", .{ i, rootBuf, rootPass, group.firstMapIndex, group.lastMapIndex });
             }
 
             for (mapperData.lastBufGroupsTransient.getConstItems(), 0..) |group, i| {
                 const rootBuf = try registryData.getBufferName(group.rootBuf);
                 const rootPass = try registryData.getPassName(group.rootPass);
-                std.debug.print("BufGroup (Transient {}) (RootRes {s}) (RootPass {s}) (mapIndex {} -> {})\n", .{ i, rootBuf, rootPass, group.startMapIndex, group.endMapIndex });
+                std.debug.print("BufGroup (Transient {}) (RootRes {s}) (RootPass {s}) (mapIndex {} -> {})\n", .{ i, rootBuf, rootPass, group.firstMapIndex, group.lastMapIndex });
             }
 
             // Group Debug Textures
             for (mapperData.lastTexGroupsPersistent.getConstItems(), 0..) |group, i| {
                 const rootTex = try registryData.getTextureName(group.rootTex);
                 const rootPass = try registryData.getPassName(group.rootPass);
-                std.debug.print("TexGroup (Persistent {}) (RootRes {s}) (RootPass {s}) (mapIndex {} -> {})\n", .{ i, rootTex, rootPass, group.startMapIndex, group.endMapIndex });
+                std.debug.print("TexGroup (Persistent {}) (RootRes {s}) (RootPass {s}) (mapIndex {} -> {})\n", .{ i, rootTex, rootPass, group.firstMapIndex, group.lastMapIndex });
             }
 
             for (mapperData.lastTexGroupsTransient.getConstItems(), 0..) |group, i| {
                 const rootTex = try registryData.getTextureName(group.rootTex);
                 const rootPass = try registryData.getPassName(group.rootPass);
-                std.debug.print("TexGroup (Transient {}) (RootRes {s}) (RootPass {s}) (mapIndex {} -> {})\n", .{ i, rootTex, rootPass, group.startMapIndex, group.endMapIndex });
+                std.debug.print("TexGroup (Transient {}) (RootRes {s}) (RootPass {s}) (mapIndex {} -> {})\n", .{ i, rootTex, rootPass, group.firstMapIndex, group.lastMapIndex });
             }
 
             std.debug.print("\n", .{});
@@ -306,9 +306,9 @@ pub const MapperSys = struct {
             for (mapperData.bufGroupsPersistent.getConstItems(), 0..) |group, i| {
                 const rootBuf = try registryData.getBufferName(group.rootBuf);
                 const rootPass = try registryData.getPassName(group.rootPass);
-                std.debug.print("BufGroup (Persistent {}) (RootRes {s}) (RootPass {s}) (mapIndex {} -> {})\n", .{ i, rootBuf, rootPass, group.startMapIndex, group.endMapIndex });
+                std.debug.print("BufGroup (Persistent {}) (RootRes {s}) (RootPass {s}) (mapIndex {} -> {})\n", .{ i, rootBuf, rootPass, group.firstMapIndex, group.lastMapIndex });
 
-                for (group.startMapIndex..group.endMapIndex + 1, 0..) |mapIndex, counter| {
+                for (group.firstMapIndex..group.lastMapIndex + 1, 0..) |mapIndex, counter| {
                     const bufKey: u16 = mapperData.bufMapPersistent.getKeyByIndex(@intCast(mapIndex));
                     const bufName = try registryData.getBufferName(.id(bufKey));
                     std.debug.print("     -> {}. {s}\n", .{ counter, bufName });
@@ -318,9 +318,9 @@ pub const MapperSys = struct {
             for (mapperData.bufGroupsTransient.getConstItems(), 0..) |group, i| {
                 const rootBuf = try registryData.getBufferName(group.rootBuf);
                 const rootPass = try registryData.getPassName(group.rootPass);
-                std.debug.print("BufGroup (Transient {}) (RootRes {s}) (RootPass {s}) (mapIndex {} -> {})\n", .{ i, rootBuf, rootPass, group.startMapIndex, group.endMapIndex });
+                std.debug.print("BufGroup (Transient {}) (RootRes {s}) (RootPass {s}) (mapIndex {} -> {})\n", .{ i, rootBuf, rootPass, group.firstMapIndex, group.lastMapIndex });
 
-                for (group.startMapIndex..group.endMapIndex + 1, 0..) |mapIndex, counter| {
+                for (group.firstMapIndex..group.lastMapIndex + 1, 0..) |mapIndex, counter| {
                     const bufKey: u16 = mapperData.bufMapTransient.getKeyByIndex(@intCast(mapIndex));
                     const bufName = try registryData.getBufferName(.id(bufKey));
                     std.debug.print("     -> {}. {s}\n", .{ counter, bufName });
@@ -331,9 +331,9 @@ pub const MapperSys = struct {
             for (mapperData.texGroupsPersistent.getConstItems(), 0..) |group, i| {
                 const rootTex = try registryData.getTextureName(group.rootTex);
                 const rootPass = try registryData.getPassName(group.rootPass);
-                std.debug.print("TexGroup (Persistent {}) (RootRes {s}) (RootPass {s}) (mapIndex {} -> {})\n", .{ i, rootTex, rootPass, group.startMapIndex, group.endMapIndex });
+                std.debug.print("TexGroup (Persistent {}) (RootRes {s}) (RootPass {s}) (mapIndex {} -> {})\n", .{ i, rootTex, rootPass, group.firstMapIndex, group.lastMapIndex });
 
-                for (group.startMapIndex..group.endMapIndex + 1, 0..) |mapIndex, counter| {
+                for (group.firstMapIndex..group.lastMapIndex + 1, 0..) |mapIndex, counter| {
                     const texKey: u16 = mapperData.texMapPersistent.getKeyByIndex(@intCast(mapIndex));
                     const texName = try registryData.getTextureName(.id(texKey));
                     std.debug.print("     -> {}. {s}\n", .{ counter, texName });
@@ -343,9 +343,9 @@ pub const MapperSys = struct {
             for (mapperData.texGroupsTransient.getConstItems(), 0..) |group, i| {
                 const rootTex = try registryData.getTextureName(group.rootTex);
                 const rootPass = try registryData.getPassName(group.rootPass);
-                std.debug.print("TexGroup (Transient {}) (RootRes {s}) (RootPass {s}) (mapIndex {} -> {})\n", .{ i, rootTex, rootPass, group.startMapIndex, group.endMapIndex });
+                std.debug.print("TexGroup (Transient {}) (RootRes {s}) (RootPass {s}) (mapIndex {} -> {})\n", .{ i, rootTex, rootPass, group.firstMapIndex, group.lastMapIndex });
 
-                for (group.startMapIndex..group.endMapIndex + 1, 0..) |mapIndex, counter| {
+                for (group.firstMapIndex..group.lastMapIndex + 1, 0..) |mapIndex, counter| {
                     const texKey: u16 = mapperData.texMapTransient.getKeyByIndex(@intCast(mapIndex));
                     const texName = try registryData.getTextureName(.id(texKey));
                     std.debug.print("     -> {}. {s}\n", .{ counter, texName });

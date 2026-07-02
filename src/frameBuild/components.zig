@@ -98,16 +98,16 @@ pub const TexLevelLifetime = struct {
 pub const BufferGroup = struct {
     rootPass: PassId,
     rootBuf: BufPassId,
-    startMapIndex: u16,
-    endMapIndex: u16,
+    firstMapIndex: u16,
+    lastMapIndex: u16,
     bufDesc: BufDesc,
 };
 
 pub const TextureGroup = struct {
     rootPass: PassId,
     rootTex: TexPassId,
-    startMapIndex: u16,
-    endMapIndex: u16,
+    firstMapIndex: u16,
+    lastMapIndex: u16,
     texDesc: TexDesc,
 };
 

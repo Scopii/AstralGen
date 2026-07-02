@@ -99,7 +99,7 @@ pub const AssignerSys = struct {
 
             const bufGroup = mapperData.bufGroupsTransient.getByKey(bufRootKey);
             // Whole Group needs to be assigned
-            for (bufGroup.startMapIndex..bufGroup.endMapIndex + 1) |mapIndex| {
+            for (bufGroup.firstMapIndex..bufGroup.lastMapIndex + 1) |mapIndex| {
                 const memberKey = mapperData.bufMapTransient.getKeyByIndex(@intCast(mapIndex));
 
                 // Link Buffers Enum To Physical Buf ID
@@ -159,7 +159,7 @@ pub const AssignerSys = struct {
 
             const texGroup = mapperData.texGroupsTransient.getByKey(texRootKey);
             // Whole Group needs to be assigned
-            for (texGroup.startMapIndex..texGroup.endMapIndex + 1) |mapIndex| {
+            for (texGroup.firstMapIndex..texGroup.lastMapIndex + 1) |mapIndex| {
                 const memberKey = mapperData.texMapTransient.getKeyByIndex(@intCast(mapIndex));
 
                 // Link Textures Enum To Physical Tex ID
@@ -229,7 +229,7 @@ pub const AssignerSys = struct {
             const rootBufKey = bufGroup.rootBuf.val();
             const rootBufPhysicalId = assignerData.rootBufPhysicalMap.getByKey(rootBufKey);
 
-            for (bufGroup.startMapIndex..bufGroup.endMapIndex + 1) |mapIndex| {
+            for (bufGroup.firstMapIndex..bufGroup.lastMapIndex + 1) |mapIndex| {
                 const bufEnumKey = mapperData.bufMapPersistent.getKeyByIndex(@intCast(mapIndex));
 
                 // Link Buffer Pass ID To Physical Buf ID
@@ -253,7 +253,7 @@ pub const AssignerSys = struct {
             const rootTexKey = texGroup.rootTex;
             const rootTexPhysicalId = assignerData.rootTexPhysicalMap.getByKey(rootTexKey.val());
 
-            for (texGroup.startMapIndex..texGroup.endMapIndex + 1) |mapIndex| {
+            for (texGroup.firstMapIndex..texGroup.lastMapIndex + 1) |mapIndex| {
                 const texKey = mapperData.texMapPersistent.getKeyByIndex(@intCast(mapIndex));
 
                 // Link Texture Pass ID To Physical Tex ID

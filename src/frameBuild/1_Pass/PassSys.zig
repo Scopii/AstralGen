@@ -92,9 +92,9 @@ pub const PassSys = struct {
         if (rc.FRAME_GRAPH_DEBUG) {
             std.debug.print("1.PassExtractor: \n", .{});
             for (passData.activePasses.getConstItems(), 0..) |passId, i| {
-                const passCoreName = try registryData.getPassName(passId);
-                const passSize = passData.passExtents.getByKey(passId.val());
-                std.debug.print("- Pass {}. {s} (Size {} x {})\n", .{ i, passCoreName, passSize.width, passSize.height });
+                const passName = try registryData.getPassName(passId);
+                const passExtent = passData.passExtents.getByKey(passId.val());
+                std.debug.print("- Pass {}. {s} (Size {} x {})\n", .{ i, passName, passExtent.width, passExtent.height });
             }
             for (passData.composites.constSlice(), 0..) |composite, i| {
                 std.debug.print("- Composite {}. {s} (Pass {s}) [{}x{} @ {},{}]\n", .{ i, composite.name, try registryData.getPassName(composite.pass), composite.viewWidth, composite.viewHeight, composite.viewOffsetX, composite.viewOffsetY });

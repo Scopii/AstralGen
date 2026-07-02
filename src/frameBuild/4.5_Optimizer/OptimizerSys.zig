@@ -120,7 +120,6 @@ pub const OptimizerSys = struct {
             for (accessRange.firstBuf..accessRange.lastBuf) |bufIndex| {
                 const bufAccess = accessData.bufAccesses.buffer[bufIndex];
                 const bufKey1: u16 = bufAccess.bufInput.val();
-                const bufKey2: ?u16 = if (bufAccess.bufOutput) |bufOutput| bufOutput.val() else null;
 
                 // Check Input Buffer Bytes
                 if (resourceData.bufMemSizes.isKeyUsed(bufKey1) == true) { // Only Transient were filled!
@@ -130,7 +129,8 @@ pub const OptimizerSys = struct {
                 }
 
                 // Check Output Buffer Bytes
-                if (bufKey2) |key2| {
+                if (bufAccess.bufOutput) |bufOutput| {
+                    const key2 = bufOutput.val();
                     if (resourceData.bufMemSizes.isKeyUsed(key2) == true) { // Only Transient were filled!
                         const buf2LevelLifetime = optimizerData.bufLevelLifetimes.getByKey(key2);
                         if (buf2LevelLifetime.firstLevel == graphNode.level and buf2LevelLifetime.lastLevel != graphNode.level) bornBytes += resourceData.bufMemSizes.getByKey(key2);
@@ -143,7 +143,6 @@ pub const OptimizerSys = struct {
             for (accessRange.firstTex..accessRange.lastTex) |texIndex| {
                 const texAccess = accessData.texAccesses.buffer[texIndex];
                 const texKey1: u16 = texAccess.texInput.val();
-                const texKey2: ?u16 = if (texAccess.texOutput) |texOutput| texOutput.val() else null;
 
                 // Check Input Texture Bytes
                 if (resourceData.texMemSizeS.isKeyUsed(texKey1) == true) { // Only Transient were filled!
@@ -153,7 +152,8 @@ pub const OptimizerSys = struct {
                 }
 
                 // Check Output Buffer Bytes
-                if (texKey2) |key2| {
+                if (texAccess.texOutput) |texOutput| {
+                    const key2 = texOutput.val();
                     if (resourceData.texMemSizeS.isKeyUsed(key2) == true) { // Only Transient were filled!
                         const tex2LevelLifetime = optimizerData.texLevelLifetimes.getByKey(key2);
                         if (tex2LevelLifetime.firstLevel == graphNode.level and tex2LevelLifetime.lastLevel != graphNode.level) bornBytes += resourceData.texMemSizeS.getByKey(key2);
@@ -177,7 +177,7 @@ pub const OptimizerSys = struct {
             optimizerData.optimizedGraph.upsert(graphPassKey, graphMemNode);
         }
 
-        // Debug Output 3
+        // Debug Output 2
         if (rc.FRAME_GRAPH_DEBUG) {
             for (optimizerData.optimizedGraph.getConstItems(), 0..) |pass, i| {
                 const passName = try registryData.getPassName(pass.pass);
