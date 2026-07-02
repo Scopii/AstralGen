@@ -25,6 +25,37 @@ pub const TaskOrMeshIndirectExecSlot = struct { groupX: u32, groupY: u32, groupZ
 pub const ComputeIndirectExec = struct { indirectBuf: BufId, indirectBufOffset: u64 = 0 };
 pub const TaskOrMeshIndirectExec = struct { groupX: u32, groupY: u32, groupZ: u32, indirectBuf: BufId, indirectBufOffset: u64 = 0 };
 
+// pub const PassDesc = struct {
+//     name: String(30, "PASS_NAME_MISSING") = .{},
+//     execution: PassInstance.PassExecution,
+//     mainOutputTex: ?TexId,
+//     shaderIds: FixedList(ShaderId, 3) = .{},
+
+//     bufUseStart: u16,
+//     bufUseEnd: u8,
+
+//     texUseStart: u16,
+//     texEndStart: u8,
+
+//     colorAttsStart: u16,
+//     colorAttsEnd: u8,
+
+//     depthAtt: u16,
+
+//     stencilAtt: u16,
+
+//     indexBuf: u16,
+
+//     vertexBufStart: u16,
+//     vertexBufEnd: u8,
+
+//     vertexAttribStart: u16,
+//     vertexAttribEnd: u8,
+
+//     renderStateStart: u16,
+//     renderStateEnd: u8,
+// };
+
 pub const PassInstance = struct {
     name: String(30, "PASS_NAME_MISSING") = .{},
     execution: PassExecution,

@@ -184,14 +184,16 @@ pub const ResourceAssignerSys = struct {
             switch (bufChanges.change) {
                 .unchanged => {},
                 .deleted => {
-                    deleteBuffer(resourceAssigner, resourceRegistry, bufChanges.rootBuf, rendererQueue, .frameGraph);
+                    // deleteBuffer(resourceAssigner, resourceRegistry, bufChanges.rootBuf, rendererQueue, .frameGraph);
+                    try deferBufferDeletion(resourceAssigner, bufChanges.rootBuf);
                 },
                 .created => {
                     try createBuffer(resourceAssigner, resourceMapper, resourceRegistry, bufChanges.rootBuf, rendererQueue, memoryMan, .frameGraph);
                     resolveBufferUpdateRequest(resourceAssigner, bufChanges.rootBuf);
                 },
                 .newDesc, .newPass, .newPassAndDesc => {
-                    deleteBuffer(resourceAssigner, resourceRegistry, bufChanges.rootBuf, rendererQueue, .frameGraph);
+                    // deleteBuffer(resourceAssigner, resourceRegistry, bufChanges.rootBuf, rendererQueue, .frameGraph);
+                    try deferBufferDeletion(resourceAssigner, bufChanges.rootBuf);
                     try createBuffer(resourceAssigner, resourceMapper, resourceRegistry, bufChanges.rootBuf, rendererQueue, memoryMan, .frameGraph);
                     resolveBufferUpdateRequest(resourceAssigner, bufChanges.rootBuf);
                 },
@@ -203,14 +205,16 @@ pub const ResourceAssignerSys = struct {
             switch (texChanges.change) {
                 .unchanged => {},
                 .deleted => {
-                    deleteTexture(resourceAssigner, resourceRegistry, texChanges.rootTex, rendererQueue, .frameGraph);
+                    // deleteTexture(resourceAssigner, resourceRegistry, texChanges.rootTex, rendererQueue, .frameGraph);
+                    try deferTextureDeletion(resourceAssigner, texChanges.rootTex);
                 },
                 .created => {
                     try createTexture(resourceAssigner, resourceMapper, resourceRegistry, texChanges.rootTex, rendererQueue, memoryMan, .frameGraph);
                     resolveTextureUpdateRequest(resourceAssigner, texChanges.rootTex);
                 },
                 .newDesc, .newPass, .newPassAndDesc => {
-                    deleteTexture(resourceAssigner, resourceRegistry, texChanges.rootTex, rendererQueue, .frameGraph);
+                    // deleteTexture(resourceAssigner, resourceRegistry, texChanges.rootTex, rendererQueue, .frameGraph);
+                    try deferTextureDeletion(resourceAssigner, texChanges.rootTex);
                     try createTexture(resourceAssigner, resourceMapper, resourceRegistry, texChanges.rootTex, rendererQueue, memoryMan, .frameGraph);
                     resolveTextureUpdateRequest(resourceAssigner, texChanges.rootTex);
                 },
@@ -267,6 +271,32 @@ pub const ResourceAssignerSys = struct {
             }
         }
 
+        // Deferred Persistent Deletion on Textures
+        const pendingTexLen = resourceAssigner.pendingTexDeletions.len;
+        for (0..pendingTexLen) |i| {
+            const index = pendingTexLen - 1 - i;
+            const pending = &resourceAssigner.pendingTexDeletions.buffer[index];
+
+            if (pending.unusedCounter >= rc.FRAME_BUILDS_TILL_TRANSIENT_DELETION) {
+                rendererQueue.append(.{ .removeTexture = pending.id }); // actual delete, now safe
+                freeUpTexId(resourceAssigner, pending.id); // ID only becomes reusable now
+                resourceAssigner.pendingTexDeletions.swapRemove(@intCast(index));
+            } else pending.unusedCounter += 1;
+        }
+
+        // Deferred Persistent Deletion on Buffers
+        const pendingBufLen = resourceAssigner.pendingBufDeletions.len;
+        for (0..pendingBufLen) |i| {
+            const index = pendingBufLen - 1 - i;
+            const pending = &resourceAssigner.pendingBufDeletions.buffer[index];
+
+            if (pending.unusedCounter >= rc.FRAME_BUILDS_TILL_TRANSIENT_DELETION) {
+                rendererQueue.append(.{ .removeBuffer = pending.id }); // actual delete, now safe
+                freeUpBufId(resourceAssigner, pending.id); // ID only becomes reusable now
+                resourceAssigner.pendingBufDeletions.swapRemove(@intCast(index));
+            } else pending.unusedCounter += 1;
+        }
+
         // Debug
         if (rc.FRAME_GRAPH_DEBUG) {
             std.debug.print("6.ResourceAssigner\n", .{});
@@ -295,6 +325,20 @@ pub const ResourceAssignerSys = struct {
             }
             std.debug.print("\n", .{});
         }
+    }
+
+    pub fn deferTextureDeletion(resourceAssigner: *ResourceAssignerData, texPassId: TexPassId) !void {
+        const rootTexKey = texPassId.val();
+        const texInf = resourceAssigner.rootTexPhysicalMap.getByKey(rootTexKey);
+        resourceAssigner.rootTexPhysicalMap.remove(rootTexKey);
+        resourceAssigner.pendingTexDeletions.append(.{ .id = texInf.id }) catch std.debug.print("ERROR: 6.ResourceAssigner: pendingTexDeletions append failed\n", .{});
+    }
+
+    pub fn deferBufferDeletion(resourceAssigner: *ResourceAssignerData, bufPassId: BufPassId) !void {
+        const rootBufKey = bufPassId.val();
+        const bufInf = resourceAssigner.rootBufPhysicalMap.getByKey(rootBufKey);
+        resourceAssigner.rootBufPhysicalMap.remove(rootBufKey);
+        resourceAssigner.pendingBufDeletions.append(.{ .id = bufInf.id }) catch std.debug.print("ERROR: 6.ResourceAssigner: pendingBufDeletions append failed\n", .{});
     }
 
     pub fn createTransientBuffer(bufDesc: BufDesc, bufId: BufId, rendererQueue: *RendererQueue, memoryMan: *MemoryManager) !void {

@@ -1,3 +1,5 @@
+const PendingBufDeletion = @import("../../frameBuild/components.zig").PendingBufDeletion;
+const PendingTexDeletion = @import("../../frameBuild/components.zig").PendingTexDeletion;
 const TransientTexture = @import("../../frameBuild/components.zig").TransientTexture;
 const TransientBuffer = @import("../../frameBuild/components.zig").TransientBuffer;
 const TextureMeta = @import("../../render/types/res/TextureMeta.zig").TextureMeta;
@@ -29,18 +31,17 @@ pub const ResourceAssignerData = struct {
     // Persistent Storage
     rootBufPhysicalMap: LinkedMap(BufInf, rc.BUF_MAX, u16, rc.BUF_MAX, 0) = .{},
     rootTexPhysicalMap: LinkedMap(TexInf, rc.TEX_MAX, u16, rc.TEX_MAX, 0) = .{},
+    pendingTexDeletions: FixedList(PendingTexDeletion, rc.TEX_MAX) = .{},
+    pendingBufDeletions: FixedList(PendingBufDeletion, rc.BUF_MAX) = .{},
 
     // Manuel Storage
     manualBufs: LinkedMap(BufInf, rc.BUF_MAX, u16, rc.BUF_MAX, 0) = .{},
     manualTexes: LinkedMap(TexInf, rc.TEX_MAX, u16, rc.TEX_MAX, 0) = .{},
 
     // Collective Storage Assignments
-    bufAssigns: BufferAssignments = .{},
-    texAssigns: TextureAssignments = .{},
+    bufAssigns: LinkedMap(BufId, rc.BUF_MAX, u16, rc.BUF_MAX, 0) = .{},
+    texAssigns: LinkedMap(TexId, rc.TEX_MAX, u16, rc.TEX_MAX, 0) = .{},
 
     // Update Requests after Resource Recreations
     updateRequests: LinkedMap(UpdateRequestEnum, 64, u16, 64, 0) = .{},
-
-    pub const BufferAssignments = LinkedMap(BufId, rc.BUF_MAX, u16, rc.BUF_MAX, 0);
-    pub const TextureAssignments = LinkedMap(TexId, rc.TEX_MAX, u16, rc.TEX_MAX, 0);
 };

@@ -98,16 +98,7 @@ pub const CmdRecorder = struct {
         cmd.endTimer(.BotOfPipe, timeId);
 
         try self.recordTransfers(cmd, resMan);
-        try self.recordNodes(
-            cmd,
-            renderNodes,
-            frameData,
-            resMan,
-            shaderMan,
-            swapMan,
-            meshTaskSupport,
-            uiDraws,
-        );
+        try self.recordNodes(cmd, renderNodes, frameData, resMan, shaderMan, swapMan, meshTaskSupport, uiDraws);
         try self.recordPresentation(cmd, swapMan);
 
         try cmd.end();
@@ -209,12 +200,7 @@ pub const CmdRecorder = struct {
         }
     }
 
-    fn recordPassBarriers(
-        self: *CmdRecorder,
-        cmd: *const Cmd,
-        pass: *const PassInstance,
-        resMan: *ResourceMan,
-    ) !void {
+    fn recordPassBarriers(self: *CmdRecorder, cmd: *const Cmd, pass: *const PassInstance, resMan: *ResourceMan) !void {
         for (pass.getBufUses()) |bufUse| {
             const buffer = try resMan.get(bufUse.bufId, cmd.flightId);
             try self.checkBufferState(buffer, bufUse.getNeededState());
@@ -336,14 +322,7 @@ pub const CmdRecorder = struct {
         self.bufClears.clearRetainingCapacity();
     }
 
-    fn recordCompositeNode(
-        self: *CmdRecorder,
-        cmd: *Cmd,
-        composite: CompositeNode,
-        resMan: *ResourceMan,
-        shaderMan: *ShaderManager,
-        swapMan: *SwapchainMan,
-    ) !void {
+    fn recordCompositeNode(self: *CmdRecorder, cmd: *Cmd, composite: CompositeNode, resMan: *ResourceMan, shaderMan: *ShaderManager, swapMan: *SwapchainMan) !void {
         const timeId = cmd.startTimer(.TopOfPipe, composite.name, .Composite);
 
         const targetIndex = swapMan.getTargetIndex(composite.windowId) orelse return;
@@ -365,8 +344,8 @@ pub const CmdRecorder = struct {
         // Color attachment = swapchain current image
         const colorAtt = try targetTex.createAttachment(.Swapchain, if (isFirstUse) .{ .color = rc.INITIAL_SWAPCHAIN_COLOR } else null);
         if (rc.COMPOSITE_DEBUG == true) std.debug.print("SrcTex Extent: {}x{}, ", .{ srcTex.extent.width, srcTex.extent.height });
-        if (rc.COMPOSITE_DEBUG == true)std.debug.print("Composite {s}: windowId {} targetIndex {} -> swapchain {}x{} vs composite viewport {}x{}\n", .{ composite.name, composite.windowId.val(), targetIndex, swapchain.extent.width, swapchain.extent.height, composite.viewWidth, composite.viewHeight });
-        
+        if (rc.COMPOSITE_DEBUG == true) std.debug.print("Composite {s}: windowId {} targetIndex {} -> swapchain {}x{} vs composite viewport {}x{}\n", .{ composite.name, composite.windowId.val(), targetIndex, swapchain.extent.width, swapchain.extent.height, composite.viewWidth, composite.viewHeight });
+
         cmd.beginRendering(swapchain.extent.width, swapchain.extent.height, &[_]vk.VkRenderingAttachmentInfo{colorAtt}, null, null);
 
         const compositePass = Composite(.{ .string = "Composite" });
@@ -496,14 +475,7 @@ pub const CmdRecorder = struct {
         cmd.endTimer(.BotOfPipe, timeId);
     }
 
-    fn recordPass(
-        self: *CmdRecorder,
-        cmd: *Cmd,
-        pass: *const PassInstance,
-        frameData: FrameData,
-        resMan: *ResourceMan,
-        shaderMan: *ShaderManager,
-    ) !void {
+    fn recordPass(self: *CmdRecorder, cmd: *Cmd, pass: *const PassInstance, frameData: FrameData, resMan: *ResourceMan, shaderMan: *ShaderManager) !void {
         const timeId = cmd.startTimer(.TopOfPipe, pass.getName(), .Pass);
         cmd.startStatistics(pass.getName());
 
@@ -538,13 +510,7 @@ pub const CmdRecorder = struct {
         cmd.endStatistics();
     }
 
-    fn recordBlit(
-        self: *CmdRecorder,
-        cmd: *Cmd,
-        blit: ViewportBlit,
-        resMan: *ResourceMan,
-        swapMan: *SwapchainMan,
-    ) !void {
+    fn recordBlit(self: *CmdRecorder, cmd: *Cmd, blit: ViewportBlit, resMan: *ResourceMan, swapMan: *SwapchainMan) !void {
         const timeId = cmd.startTimer(.TopOfPipe, blit.name, .Blit);
 
         if (blit.srcTexUnion != .texId) return error.BlitSrcIdIsNoHardwareTexId;

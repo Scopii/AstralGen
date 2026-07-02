@@ -168,16 +168,12 @@ pub const GraphMemoryNode = struct {
     memWeight: i64, // bornBytes - dyingBytes,
 };
 
-// pub const BlitDesc = struct {
-//     passId: PassId,
-//     outputTexPassId: TexPassId,
-//     dstWindowId: WindowId,
-//     viewportId: ViewportId,
-// };
+pub const PendingTexDeletion = struct {
+    id: TexId,
+    unusedCounter: u8 = 0,
+};
 
-// pub const CompositeDesc = struct {
-//     passId: PassId,
-//     outputTexPassId: TexPassId,
-//     dstWindowId: WindowId,
-//     viewportId: ViewportId,
-// };
+pub const PendingBufDeletion = struct {
+    id: BufId,
+    unusedCounter: u8 = 0,
+};
