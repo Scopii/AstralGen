@@ -114,28 +114,17 @@ pub const FrameGraphSys = struct {
 
         try MergerSys.buildPassResources(&graph.merger, &graph.lifetime, &graph.mapper, &graph.registry);
 
+        // const start = std.time.nanoTimestamp();
+        // const end = std.time.nanoTimestamp();
+        // std.debug.print("Merger Build: {d:.3} ns\n", .{@as(f64, @floatFromInt(end - start)) / 1_000.0});
+
         try ComparatorSys.buildChanges(&graph.comparator, &graph.mapper, &graph.registry);
 
         try GroupSys.buildPassResources(&graph.group, &graph.merger, &graph.mapper, &graph.registry);
 
-        try AssignerSys.buildPersistentResources(
-            &graph.assigner,
-            &graph.mapper,
-            &graph.comparator,
-            &graph.group,
-            &graph.registry,
-            rendererQueue,
-            memoryMan,
-        );
+        try AssignerSys.buildPersistentResources(&graph.assigner, &graph.mapper, &graph.comparator, &graph.group, &graph.registry, rendererQueue, memoryMan);
 
-        try SorterSys.buildFrame(
-            &graph.sorter,
-            &graph.pass,
-            &graph.optimizer,
-            &graph.group,
-            &graph.assigner,
-            &graph.registry,
-        );
+        try SorterSys.buildFrame(&graph.sorter, &graph.pass, &graph.optimizer, &graph.group, &graph.assigner, &graph.registry);
     }
 
     pub fn createTextureManually(frameGraph: *FrameGraphData, texPassId: TexPassId, rendererQueue: *RendererQueue, memoryMan: *MemoryManager) !void {
@@ -156,13 +145,13 @@ pub const FrameGraphSys = struct {
 
     pub fn getBufHardwareId(frameGraph: *const FrameGraphData, name: []const u8) !BufId {
         const bufPassId = try frameGraph.registry.getBufferPassId(name);
-        const hardwareBufId = frameGraph.assigner.bufAssigns.getByKey(bufPassId.val());
+        const hardwareBufId = frameGraph.assigner.bufAssigns.getByKey(bufPassId);
         return hardwareBufId;
     }
 
     pub fn getTexHardwareId(frameGraph: *const FrameGraphData, name: []const u8) !TexId {
         const texPassId = try frameGraph.registry.getTexturePassId(name);
-        const hardwareTexId = frameGraph.assigner.texAssigns.getByKey(texPassId.val());
+        const hardwareTexId = frameGraph.assigner.texAssigns.getByKey(texPassId);
         return hardwareTexId;
     }
 
@@ -194,7 +183,7 @@ pub const FrameGraphSys = struct {
                     const hardwareId: BufId = switch (updateBuffer.bufUnion) {
                         .bufId => |bufId| bufId,
                         .bufName => |bufName| try getBufHardwareId(frameGraph, bufName),
-                        .bufPassId => |bufPassId| frameGraph.assigner.bufAssigns.getByKey(bufPassId.val()),
+                        .bufPassId => |bufPassId| frameGraph.assigner.bufAssigns.getByKey(bufPassId),
                     };
 
                     const PayloadPtr = @FieldType(RendererQueue.RendererEvent, "updateBuffer");
@@ -209,7 +198,7 @@ pub const FrameGraphSys = struct {
                     const hardwareId: BufId = switch (updateBufferSegment.bufUnion) {
                         .bufId => |bufId| bufId,
                         .bufName => |bufName| try getBufHardwareId(frameGraph, bufName),
-                        .bufPassId => |bufPassId| frameGraph.assigner.bufAssigns.getByKey(bufPassId.val()),
+                        .bufPassId => |bufPassId| frameGraph.assigner.bufAssigns.getByKey(bufPassId),
                     };
 
                     const PayloadPtr = @FieldType(RendererQueue.RendererEvent, "updateBufferSegment");
@@ -224,7 +213,7 @@ pub const FrameGraphSys = struct {
                     const hardwareId: TexId = switch (updateTexture.texUnion) {
                         .texId => |texId| texId,
                         .texName => |texName| try getTexHardwareId(frameGraph, texName),
-                        .texPassId => |texPassId| frameGraph.assigner.texAssigns.getByKey(texPassId.val()),
+                        .texPassId => |texPassId| frameGraph.assigner.texAssigns.getByKey(texPassId),
                     };
 
                     const PayloadPtr = @FieldType(RendererQueue.RendererEvent, "updateTexture");

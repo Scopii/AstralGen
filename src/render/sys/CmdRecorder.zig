@@ -264,20 +264,20 @@ pub const CmdRecorder = struct {
         for (renderNodes) |renderNode| {
             switch (renderNode) {
                 .passNode => |passNode| {
-                    const specialPass: bool = switch (passNode.pass.execution) {
+                    const specialPass: bool = switch (passNode.execution) {
                         .taskOrMesh, .taskOrMeshIndirect => true,
                         .compute, .computeIndirect, .graphics => false,
                     };
                     if (specialPass == true and meshTaskSupport == false) {
-                        std.debug.print("PassTyp {s} is not supported -> skipped \n", .{@tagName(passNode.pass.execution)});
+                        std.debug.print("PassTyp {s} is not supported -> skipped \n", .{@tagName(passNode.execution)});
                         self.lastPassTyp = null;
                         continue;
                     }
 
-                    try self.recordPass(cmd, &passNode.pass, frameData, resMan, shaderMan);
-                    self.lastPassTyp = passNode.pass.execution;
+                    try self.recordPass(cmd, &passNode, frameData, resMan, shaderMan);
+                    self.lastPassTyp = passNode.execution;
                 },
-                .viewportBlit => |blit| {
+                .blitNode => |blit| {
                     if (self.lastPassTyp != null) {
                         try self.recordBlit(cmd, blit, resMan, swapMan);
                     } else std.debug.print("Blit for unsupported Pass Skipped!\n", .{});

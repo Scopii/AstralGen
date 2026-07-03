@@ -77,6 +77,15 @@ pub fn FixedList(comptime ItemType: type, comptime capacity: usize) type {
             }
         }
 
+        pub fn defeatingQuicksort(self: *Self, comptime lessThan: fn (anytype, anytype) bool) void {
+            const Wrapper = struct {
+                fn innerLess(_: void, lhs: ItemType, rhs: ItemType) bool {
+                    return lessThan(lhs, rhs);
+                }
+            };
+            std.mem.sort(ItemType, self.slice(), {}, Wrapper.innerLess);
+        }
+
         pub fn swap(self: *Self, index1: u32, index2: u32) void {
             std.debug.assert(index1 < self.len and index2 < self.len);
             const copy1 = self.buffer[index1];

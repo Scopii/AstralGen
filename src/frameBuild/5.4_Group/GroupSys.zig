@@ -26,19 +26,18 @@ pub const GroupSys = struct {
 
         // Buffer Group Sharing
         for (mergerData.transientBufGroupLifetimes.constSlice()) |groupLifetime| {
-            const bufGroupKey: u16 = groupLifetime.rootBuf.val();
-            const bufGroup = mapperData.bufGroupsTransient.getByKey(bufGroupKey);
-            const bufGroupDesc = bufGroup.bufDesc;
+            const bufGroupId = groupLifetime.rootBuf;
+            const bufGroup = mapperData.bufGroupsTransient.getByKey(bufGroupId);
 
             var candidateIndex: ?u16 = null;
 
             for (groupData.sharedBufLifetimes.slice(), 0..) |*physLifetime, index| {
-                const physLifetimeDesc = mapperData.bufGroupsTransient.getByKey(physLifetime.bufDescId.val()).bufDesc;
+                const physLifetimeDesc = mapperData.bufGroupsTransient.getByKey(physLifetime.bufDescId).bufDesc;
 
                 // check if physLifetime could extend forwards
                 if (physLifetime.latest < groupLifetime.earliest) {
                     // If it can extend check if format fits
-                    if (bufDescEqual(&bufGroupDesc, &physLifetimeDesc) == true) {
+                    if (bufDescEqual(&bufGroup.bufDesc, &physLifetimeDesc) == true) {
                         physLifetime.latest = groupLifetime.latest;
                         candidateIndex = @intCast(index);
                         break;
@@ -52,7 +51,7 @@ pub const GroupSys = struct {
                     std.debug.print("ERROR: 5.4.GroupMerger: Could not Append to bufClears\n", .{});
                 };
 
-                groupData.bufShareIndexMap.upsert(bufGroupKey, candiate);
+                groupData.bufShareIndexMap.upsert(bufGroupId, candiate);
             } else {
                 const physBufLifetime = PhysicalBufLifetime{ .bufDescId = groupLifetime.rootBuf, .earliest = groupLifetime.earliest, .latest = groupLifetime.latest };
                 groupData.sharedBufLifetimes.append(physBufLifetime) catch std.debug.print("ERROR: 5.4.GroupMerger: Could not Append to sharedBufLifetimes\n", .{});
@@ -62,25 +61,24 @@ pub const GroupSys = struct {
                 groupData.bufClears.append(.{ .sharedBufIndex = newIndex, .passAfterClear = bufGroup.rootPass }) catch {
                     std.debug.print("ERROR: 5.4.GroupMerger: Could not Append to texClears\n", .{});
                 };
-                groupData.bufShareIndexMap.upsert(bufGroupKey, newIndex);
+                groupData.bufShareIndexMap.upsert(bufGroupId, newIndex);
             }
         }
 
         // Texture Group Sharing
         for (mergerData.transientTexGroupLifetimes.constSlice()) |groupLifetime| {
-            const texGroupKey: u16 = groupLifetime.rootTex.val();
-            const texGroup = mapperData.texGroupsTransient.getByKey(texGroupKey);
-            const texGroupDesc = texGroup.texDesc;
+            const texGroupId = groupLifetime.rootTex;
+            const texGroup = mapperData.texGroupsTransient.getByKey(texGroupId);
 
             var candidateIndex: ?u16 = null;
 
             for (groupData.sharedTexLifetimes.slice(), 0..) |*physLifetime, index| {
-                const physLifetimeDesc = mapperData.texGroupsTransient.getByKey(physLifetime.texDescId.val()).texDesc;
-
+                const physLifetimeDesc = mapperData.texGroupsTransient.getByKey(physLifetime.texDescId).texDesc;
+                
                 // check if physLifetime could extend forwards
                 if (physLifetime.latest < groupLifetime.earliest) {
                     // If it can extend check if format fits
-                    if (texDescEqual(&texGroupDesc, &physLifetimeDesc) == true) {
+                    if (texDescEqual(&texGroup.texDesc, &physLifetimeDesc) == true) {
                         physLifetime.latest = groupLifetime.latest;
                         candidateIndex = @intCast(index);
                         break;
@@ -93,7 +91,7 @@ pub const GroupSys = struct {
                 groupData.texClears.append(.{ .sharedTexIndex = candiate, .passAfterClear = texGroup.rootPass }) catch {
                     std.debug.print("ERROR: 5.4.GroupMerger: Could not Append to texClears\n", .{});
                 };
-                groupData.texShareIndexMap.upsert(texGroupKey, candiate);
+                groupData.texShareIndexMap.upsert(texGroupId, candiate);
             } else {
                 const physTexLifetime = PhysicalTexLifetime{ .texDescId = groupLifetime.rootTex, .earliest = groupLifetime.earliest, .latest = groupLifetime.latest };
                 groupData.sharedTexLifetimes.append(physTexLifetime) catch std.debug.print("ERROR: 5.4.GroupMerger: Could not Append to sharedTexLifetimes\n", .{});
@@ -103,7 +101,7 @@ pub const GroupSys = struct {
                 groupData.texClears.append(.{ .sharedTexIndex = newIndex, .passAfterClear = texGroup.rootPass }) catch {
                     std.debug.print("ERROR: 5.4.GroupMerger: Could not Append to texClears\n", .{});
                 };
-                groupData.texShareIndexMap.upsert(texGroupKey, newIndex);
+                groupData.texShareIndexMap.upsert(texGroupId, newIndex);
             }
         }
 
@@ -115,8 +113,8 @@ pub const GroupSys = struct {
             }
             std.debug.print("\n", .{});
             for (groupData.bufShareIndexMap.getConstItems(), 0..) |sharedIndex, i| {
-                const bufKey = groupData.bufShareIndexMap.getKeyByIndex(@intCast(i));
-                const bufName = try registryData.getBufferName(.id(bufKey));
+                const bufPassId = groupData.bufShareIndexMap.getKeyByIndex(@intCast(i));
+                const bufName = try registryData.getBufferName(bufPassId);
                 std.debug.print("- {}. Buf {s} -> Shared Index {}\n", .{ i, bufName, sharedIndex });
             }
             std.debug.print("\n", .{});
@@ -126,8 +124,8 @@ pub const GroupSys = struct {
             }
             std.debug.print("\n", .{});
             for (groupData.texShareIndexMap.getConstItems(), 0..) |sharedIndex, i| {
-                const texKey = groupData.texShareIndexMap.getKeyByIndex(@intCast(i));
-                const texName = try registryData.getTextureName(.id(texKey));
+                const texPassId = groupData.texShareIndexMap.getKeyByIndex(@intCast(i));
+                const texName = try registryData.getTextureName(texPassId);
                 std.debug.print("- {}. Tex {s} -> Shared Index {}\n", .{ i, texName, sharedIndex });
             }
             std.debug.print("\n", .{});

@@ -34,18 +34,18 @@ pub const RegistrySys = struct {
             std.debug.print("ERROR: Pass Definition ({s}) already Exists\n", .{passName});
             return error.PassNameAlreadyExists;
         }
-        registryData.passDefinitions.upsert(passId.val(), passDef);
-        registryData.passNames.upsert(passId.val(), try .string(passName));
+        registryData.passDefinitions.upsert(passId, passDef);
+        registryData.passNames.upsert(passId, try .string(passName));
 
-        const persistentName = registryData.passNames.getConstPtrByKey(passId.val()).get();
+        const persistentName = registryData.passNames.getConstPtrByKey(passId).get();
         registryData.passIdMap.putAssumeCapacity(persistentName, passId);
     }
 
     pub fn removePassDefinition(registryData: *RegistryData, name: []const u8) void {
         if (registryData.passIdMap.get(name)) |passId| {
             registryData.passIdMap.remove(name);
-            registryData.passDefinitions.remove(passId.val());
-            registryData.passNames.remove(passId.val());
+            registryData.passDefinitions.remove(passId);
+            registryData.passNames.remove(passId);
         }
     }
 
@@ -54,18 +54,18 @@ pub const RegistrySys = struct {
             std.debug.print("ERROR: Texture Definition ({s}) already Exists\n", .{newName});
             return error.TextureNameAlreadyExists;
         }
-        registryData.texDefinitions.upsert(texPassId.val(), newTexDesc);
-        registryData.texNames.upsert(texPassId.val(), try .string(newName));
+        registryData.texDefinitions.upsert(texPassId, newTexDesc);
+        registryData.texNames.upsert(texPassId, try .string(newName));
 
-        const persistentName = registryData.texNames.getConstPtrByKey(texPassId.val()).get();
+        const persistentName = registryData.texNames.getConstPtrByKey(texPassId).get();
         registryData.texPassIdMap.putAssumeCapacity(persistentName, texPassId);
     }
 
     pub fn removeTextureDefinitionByString(registryData: *RegistryData, name: []const u8) void {
         if (registryData.texPassIdMap.get(name)) |texPassId| {
             registryData.texPassIdMap.remove(name);
-            registryData.texDefinitions.remove(texPassId.val());
-            registryData.texNames.remove(texPassId.val());
+            registryData.texDefinitions.remove(texPassId);
+            registryData.texNames.remove(texPassId);
         }
     }
 
@@ -74,18 +74,18 @@ pub const RegistrySys = struct {
             std.debug.print("ERROR: Buffer Definition ({s}) already Exists\n", .{newName});
             return error.BufferNameAlreadyExists;
         }
-        registryData.bufDefinitions.upsert(bufPassId.val(), newBufDesc);
-        registryData.bufNames.upsert(bufPassId.val(), try .string(newName));
+        registryData.bufDefinitions.upsert(bufPassId, newBufDesc);
+        registryData.bufNames.upsert(bufPassId, try .string(newName));
 
-        const persistentName = registryData.bufNames.getConstPtrByKey(bufPassId.val()).get();
+        const persistentName = registryData.bufNames.getConstPtrByKey(bufPassId).get();
         registryData.bufPassIdMap.putAssumeCapacity(persistentName, bufPassId);
     }
 
     pub fn removeBufferDefinition(registryData: *RegistryData, name: []const u8) void {
         if (registryData.bufPassIdMap.get(name)) |bufPassId| {
             registryData.bufPassIdMap.remove(name);
-            registryData.bufDefinitions.remove(bufPassId.val());
-            registryData.bufNames.remove(bufPassId.val());
+            registryData.bufDefinitions.remove(bufPassId);
+            registryData.bufNames.remove(bufPassId);
         }
     }
 };

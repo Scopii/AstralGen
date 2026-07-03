@@ -4,8 +4,8 @@ const PassAccessRange = @import("../../frameBuild/components.zig").PassAccessRan
 const TextureAccess = @import("../../frameBuild/components.zig").TextureAccess;
 const BufferAccess = @import("../../frameBuild/components.zig").BufferAccess;
 const FixedList = @import("../../.structures/FixedList.zig").FixedList;
-const SimpleMap = @import("../../.structures/SimpleMap.zig").SimpleMap;
-const LinkedMap = @import("../../.structures/LinkedMap.zig").LinkedMap;
+const SimpleIdMap = @import("../../.structures/SimpleIdMap.zig").SimpleIdMap;
+const LinkedIdMap = @import("../../.structures/LinkedIdMap.zig").LinkedIdMap;
 const PassId = @import("../../.configs/idConfig.zig").PassId;
 const rc = @import("../../.configs/renderConfig.zig");
 
@@ -15,5 +15,5 @@ pub const AccessData = struct {
     bufAccesses: FixedList(BufferAccess, rc.PASS_MAX * rc.BUF_MAX) = .{},
     texAccesses: FixedList(TextureAccess, rc.PASS_MAX * rc.TEX_MAX) = .{},
     
-    passAccessRanges: LinkedMap(PassAccessRange, rc.PASS_MAX, u16, rc.PASS_MAX, 0) = .{},
+    passAccessRanges: LinkedIdMap(PassAccessRange, rc.PASS_MAX, PassId, rc.PASS_MAX, 0) = .{},
 };

@@ -31,7 +31,7 @@ pub const PassSys = struct {
                 const hasDefinition = registryData.passIdMap.contains(stringPass);
                 if (hasDefinition == true) {
                     const passId = try registryData.getPassId(stringPass);
-                    passData.activePasses.upsert(passId.val(), passId); // Map automatically filters duplicates
+                    passData.activePasses.upsert(passId, passId); // Map automatically filters duplicates
                 }
             }
         }
@@ -84,7 +84,7 @@ pub const PassSys = struct {
             }
 
             if (passData.passExtents.isFull() == true) return error.RenderNodesFull;
-            passData.passExtents.upsert(passId.val(), .{ .width = passWidth, .height = passHeight });
+            passData.passExtents.upsert(passId, .{ .width = passWidth, .height = passHeight });
             if (rc.PASS_EXTRACTION_DEBUG) std.debug.print("Pass {s} added (width {} height {})\n", .{ passString, passWidth, passHeight });
         }
 
@@ -93,11 +93,12 @@ pub const PassSys = struct {
             std.debug.print("1.PassExtractor: \n", .{});
             for (passData.activePasses.getConstItems(), 0..) |passId, i| {
                 const passName = try registryData.getPassName(passId);
-                const passExtent = passData.passExtents.getByKey(passId.val());
+                const passExtent = passData.passExtents.getByKey(passId);
                 std.debug.print("- Pass {}. {s} (Size {} x {})\n", .{ i, passName, passExtent.width, passExtent.height });
             }
-            for (passData.composites.constSlice(), 0..) |composite, i| {
-                std.debug.print("- Composite {}. {s} (Pass {s}) [{}x{} @ {},{}]\n", .{ i, composite.name, try registryData.getPassName(composite.pass), composite.viewWidth, composite.viewHeight, composite.viewOffsetX, composite.viewOffsetY });
+            for (passData.composites.constSlice(), 0..) |comp, i| {
+                const passName = try registryData.getPassName(comp.pass);
+                std.debug.print("- Composite {}. {s} (Pass {s}) [{}x{} @ {},{}]\n", .{ i, comp.name, passName, comp.viewWidth, comp.viewHeight, comp.viewOffsetX, comp.viewOffsetY });
             }
             for (passData.blits.constSlice(), 0..) |blit, i| {
                 std.debug.print("- Blit {}. {s} (Pass {s})\n", .{ i, blit.name, try registryData.getPassName(blit.pass) });

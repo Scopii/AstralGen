@@ -4,7 +4,7 @@ const WindowId = @import("../../../.configs/idConfig.zig").WindowId;
 const PassId = @import("../../../.configs/idConfig.zig").PassId;
 const TexId = @import("../../../.configs/idConfig.zig").TexId;
 const BufId = @import("../../../.configs/idConfig.zig").BufId;
-const PassNode = @import("PassInstance.zig").PassNode;
+const PassInstance = @import("PassInstance.zig").PassInstance;
 
 pub const TexUnion = union(enum) {
     texName: []const u8, // Should be String?
@@ -19,8 +19,8 @@ pub const BufUnion = union(enum) {
 };
 
 pub const RenderNode = union(enum) {
-    viewportBlit: ViewportBlit,
-    passNode: PassNode,
+    blitNode: ViewportBlit,
+    passNode: PassInstance,
     uiNode: UiNode,
     compositeNode: CompositeNode,
     clearBuffer: BufId,

@@ -32,9 +32,6 @@ pub const SorterSys = struct {
     ) !void {
         sorterData.sortedNodes.clear();
 
-        const composites = passData.composites.constSlice();
-        const blits = passData.blits.constSlice();
-
         // Check Buckets for Correct Pass
         for (optimizerData.optimizedGraph.getConstItems()) |graphNode| {
             const passId = graphNode.pass;
@@ -42,7 +39,7 @@ pub const SorterSys = struct {
             var neededClears = false;
             // Buffer Clears
             for (groupData.bufClears.constSlice()) |bufClear| {
-                if (bufClear.passAfterClear.val() == passId.val()) {
+                if (bufClear.passAfterClear == passId) {
                     // LOOKUP FOR bufClear.Index to ENUM!
                     const bufId = assignerData.usedTransientBufs.buffer[bufClear.sharedBufIndex].hardwareBuf;
                     try sorterData.sortedNodes.append(.{ .clearBuffer = bufId });
@@ -51,7 +48,7 @@ pub const SorterSys = struct {
             }
             // Texture Clears
             for (groupData.texClears.constSlice()) |texClear| {
-                if (texClear.passAfterClear.val() == passId.val()) {
+                if (texClear.passAfterClear == passId) {
                     // LOOKUP FOR texClear.Index to ENUM!
                     const texId = assignerData.usedTransientTexes.buffer[texClear.sharedTexIndex].hardwareTex;
                     try sorterData.sortedNodes.append(.{ .clearTexture = texId });
@@ -62,47 +59,43 @@ pub const SorterSys = struct {
             if (neededClears) try sorterData.sortedNodes.append(.barrierBakeClears);
 
             // Passes
-            const renderSize = passData.passExtents.getByKey(passId.val()); // DONE TWICE
             const passInstance = try fillPassHardwareIds(passId, assignerData, registryData);
-
-            sorterData.sortedNodes.append(.{ .passNode = .{ .pass = passInstance, .passWidth = renderSize.width, .passHeight = renderSize.height } }) catch {
-                std.debug.print("7.PassSorter: Pass Append to sortedRenderNodes failed", .{});
-            };
+            sorterData.sortedNodes.append(.{ .passNode = passInstance }) catch std.debug.print("7.PassSorter: Pass Append to sortedRenderNodes failed", .{});
 
             // Blits
-            for (blits) |blit| {
-                if (blit.pass.val() == passId.val()) {
+            for (passData.blits.constSlice()) |blit| {
+                if (blit.pass == passId) {
                     var blitCopy = blit;
 
                     switch (blit.srcTexUnion) {
                         .texName => |name| {
                             const texPassId = try registryData.getTexturePassId(name);
-                            const hardwareTexId = assignerData.texAssigns.getByKey(texPassId.val());
+                            const hardwareTexId = assignerData.texAssigns.getByKey(texPassId);
                             blitCopy.srcTexUnion = .{ .texId = hardwareTexId };
                         },
                         .texPassId => |texPassId| {
-                            const hardwareTexId = assignerData.texAssigns.getByKey(texPassId.val());
+                            const hardwareTexId = assignerData.texAssigns.getByKey(texPassId);
                             blitCopy.srcTexUnion = .{ .texId = hardwareTexId };
                         },
                         .texId => {},
                     }
-                    sorterData.sortedNodes.append(.{ .viewportBlit = blitCopy }) catch std.debug.print("7.PassSorter: Blit Append to sortedRenderNodes failed", .{});
+                    sorterData.sortedNodes.append(.{ .blitNode = blitCopy }) catch std.debug.print("7.PassSorter: Blit Append to sortedRenderNodes failed", .{});
                 }
             }
 
             // Composites
-            for (composites) |composite| {
-                if (composite.pass.val() == passId.val()) {
+            for (passData.composites.constSlice()) |composite| {
+                if (composite.pass == passId) {
                     var compositeCopy = composite;
 
                     switch (compositeCopy.srcTexUnion) {
                         .texName => |name| {
                             const texPassId = try registryData.getTexturePassId(name);
-                            const hardwareTexId = assignerData.texAssigns.getByKey(texPassId.val());
+                            const hardwareTexId = assignerData.texAssigns.getByKey(texPassId);
                             compositeCopy.srcTexUnion = .{ .texId = hardwareTexId };
                         },
                         .texPassId => |texPassId| {
-                            const hardwareTexId = assignerData.texAssigns.getByKey(texPassId.val());
+                            const hardwareTexId = assignerData.texAssigns.getByKey(texPassId);
                             compositeCopy.srcTexUnion = .{ .texId = hardwareTexId };
                         },
                         .texId => {},
@@ -117,9 +110,9 @@ pub const SorterSys = struct {
             std.debug.print("7.PassSorter:\n", .{});
             for (sorterData.sortedNodes.constSlice(), 0..) |*renderNode, index| {
                 switch (renderNode.*) {
-                    .passNode => |*passNode| std.debug.print("- {}. Pass: {s}\n", .{ index, passNode.pass.getName() }),
+                    .passNode => |*passNode| std.debug.print("- {}. Pass: {s}\n", .{ index, passNode.getName() }),
                     .compositeNode => |*composite| std.debug.print("- {}. Composite: {s} (Pass {s})\n", .{ index, composite.name, try registryData.getPassName(composite.pass) }),
-                    .viewportBlit => |*blit| std.debug.print("- {}. Blit: {s} (Pass {s})\n", .{ index, blit.name, try registryData.getPassName(blit.pass) }),
+                    .blitNode => |*blit| std.debug.print("- {}. Blit: {s} (Pass {s})\n", .{ index, blit.name, try registryData.getPassName(blit.pass) }),
                     .uiNode => |*ui| std.debug.print("- {}. UI: {s} (WindowID {})\n", .{ index, ui.name, ui.windowId }),
                     .clearBuffer => |*clearBuf| std.debug.print("- {}. ClearBuffer: BufId {}\n", .{ index, clearBuf.val() }),
                     .clearTexture => |*clearTex| std.debug.print("- {}. ClearTexture: TexId {}\n", .{ index, clearTex.val() }),
@@ -139,7 +132,7 @@ fn fillPassHardwareIds(passId: PassId, assignerData: *const AssignerData, regist
     var filledPass = PassInstance{
         .name = undefined,
         .execution = undefined,
-        .mainOutputTex = if (mainOutputTexId) |outputId| assignerData.texAssigns.getByKey(outputId.val()) else null,
+        .mainOutputTex = if (mainOutputTexId) |outputId| assignerData.texAssigns.getByKey(outputId) else null,
     };
 
     filledPass.name.fill(passDef.name.get());
@@ -148,29 +141,6 @@ fn fillPassHardwareIds(passId: PassId, assignerData: *const AssignerData, regist
         switch (attribute) {
             .execution => |exec| {
                 switch (exec) {
-                    .computeIndirect => |compIndirect| {
-                        const bufPassId = try registryData.getBufferPassId(compIndirect.indirectBuf);
-                        const hardwareBufId = assignerData.bufAssigns.getByKey(bufPassId.val());
-
-                        const compIndirectExec = ComputeIndirectExec{
-                            .indirectBuf = hardwareBufId,
-                            .indirectBufOffset = compIndirect.indirectBufOffset,
-                        };
-                        filledPass.execution = .{ .computeIndirect = compIndirectExec };
-                    },
-                    .taskOrMeshIndirect => |taskOrMeshIndirect| {
-                        const bufPassId = try registryData.getBufferPassId(taskOrMeshIndirect.indirectBuf);
-                        const hardwareBufId = assignerData.bufAssigns.getByKey(bufPassId.val());
-
-                        const taskMeshIndirectExec = TaskOrMeshIndirectExec{
-                            .groupX = taskOrMeshIndirect.groupX,
-                            .groupY = taskOrMeshIndirect.groupY,
-                            .groupZ = taskOrMeshIndirect.groupZ,
-                            .indirectBuf = hardwareBufId,
-                            .indirectBufOffset = taskOrMeshIndirect.indirectBufOffset,
-                        };
-                        filledPass.execution = .{ .taskOrMeshIndirect = taskMeshIndirectExec };
-                    },
                     .compute => |comp| {
                         filledPass.execution = .{ .compute = comp };
                     },
@@ -180,7 +150,25 @@ fn fillPassHardwareIds(passId: PassId, assignerData: *const AssignerData, regist
                     .graphics => |graphics| {
                         filledPass.execution = .{ .graphics = graphics };
                     },
-                    // inline else => |val, tag| @field(filledPass.execution, @tagName(tag)) = val,
+                    .computeIndirect => |compIndirect| {
+                        const bufPassId = try registryData.getBufferPassId(compIndirect.indirectBuf);
+                        const compIndirectExec = ComputeIndirectExec{
+                            .indirectBuf = assignerData.bufAssigns.getByKey(bufPassId),
+                            .indirectBufOffset = compIndirect.indirectBufOffset,
+                        };
+                        filledPass.execution = .{ .computeIndirect = compIndirectExec };
+                    },
+                    .taskOrMeshIndirect => |taskOrMeshIndirect| {
+                        const bufPassId = try registryData.getBufferPassId(taskOrMeshIndirect.indirectBuf);
+                        const taskMeshIndirectExec = TaskOrMeshIndirectExec{
+                            .groupX = taskOrMeshIndirect.groupX,
+                            .groupY = taskOrMeshIndirect.groupY,
+                            .groupZ = taskOrMeshIndirect.groupZ,
+                            .indirectBuf = assignerData.bufAssigns.getByKey(bufPassId),
+                            .indirectBufOffset = taskOrMeshIndirect.indirectBufOffset,
+                        };
+                        filledPass.execution = .{ .taskOrMeshIndirect = taskMeshIndirectExec };
+                    },
                 }
             },
             .shaderInf => |shaderInf| {
@@ -188,10 +176,8 @@ fn fillPassHardwareIds(passId: PassId, assignerData: *const AssignerData, regist
             },
             .bufSlot => |bufSlot| {
                 const bufPassId = try registryData.getBufferPassId(bufSlot.bufLink.in);
-                const hardwareBufId = assignerData.bufAssigns.getByKey(bufPassId.val());
-
                 const bufUse = BufferFill{
-                    .bufId = hardwareBufId,
+                    .bufId = assignerData.bufAssigns.getByKey(bufPassId),
                     .stage = bufSlot.stage,
                     .access = bufSlot.access,
                     .shaderSlot = bufSlot.shaderSlot,
@@ -200,10 +186,8 @@ fn fillPassHardwareIds(passId: PassId, assignerData: *const AssignerData, regist
             },
             .texSlot => |texSlot| {
                 const texPassId = try registryData.getTexturePassId(texSlot.texLink.in);
-                const hardwareTexId = assignerData.texAssigns.getByKey(texPassId.val());
-
                 const texUse = TextureFill{
-                    .texId = hardwareTexId,
+                    .texId = assignerData.texAssigns.getByKey(texPassId),
                     .stage = texSlot.stage,
                     .access = texSlot.access,
                     .layout = texSlot.layout,
@@ -212,13 +196,10 @@ fn fillPassHardwareIds(passId: PassId, assignerData: *const AssignerData, regist
                 };
                 filledPass.texUses.appendAssumeCapacity(texUse);
             },
-
             .colorAtt => |attSlot| {
                 const texPassId = try registryData.getTexturePassId(attSlot.texLink.in);
-                const hardwareTexId = assignerData.texAssigns.getByKey(texPassId.val());
-
                 const colorAttUse = AttachmentFill{
-                    .texId = hardwareTexId,
+                    .texId = assignerData.texAssigns.getByKey(texPassId),
                     .stage = attSlot.stage,
                     .access = attSlot.access,
                     .layout = attSlot.layout,
@@ -228,10 +209,8 @@ fn fillPassHardwareIds(passId: PassId, assignerData: *const AssignerData, regist
             },
             .depthAtt => |depthSlot| {
                 const texPassId = try registryData.getTexturePassId(depthSlot.texLink.in);
-                const hardwareTexId = assignerData.texAssigns.getByKey(texPassId.val());
-
                 filledPass.depthAtt = AttachmentFill{
-                    .texId = hardwareTexId,
+                    .texId = assignerData.texAssigns.getByKey(texPassId),
                     .stage = depthSlot.stage,
                     .access = depthSlot.access,
                     .layout = depthSlot.layout,
@@ -240,23 +219,18 @@ fn fillPassHardwareIds(passId: PassId, assignerData: *const AssignerData, regist
             },
             .stencilAtt => |stencilSlot| {
                 const texPassId = try registryData.getTexturePassId(stencilSlot.texLink.in);
-                const hardwareTexId = assignerData.texAssigns.getByKey(texPassId.val());
-
                 filledPass.stencilAtt = AttachmentFill{
-                    .texId = hardwareTexId,
+                    .texId = assignerData.texAssigns.getByKey(texPassId),
                     .stage = stencilSlot.stage,
                     .access = stencilSlot.access,
                     .layout = stencilSlot.layout,
                     .clear = stencilSlot.clear,
                 };
             },
-
             .vertexBuffer => |vertexBufSlot| {
                 const texPassId = try registryData.getBufferPassId(vertexBufSlot.bufInput);
-                const hardwareTexId = assignerData.bufAssigns.getByKey(texPassId.val());
-
                 const vertBufUse = VertexBufferFill{
-                    .bufId = hardwareTexId,
+                    .bufId = assignerData.bufAssigns.getByKey(texPassId),
                     .binding = vertexBufSlot.binding,
                     .stride = vertexBufSlot.stride,
                     .inputRate = vertexBufSlot.inputRate,
@@ -265,8 +239,7 @@ fn fillPassHardwareIds(passId: PassId, assignerData: *const AssignerData, regist
             },
             .indexBuffer => |indexBufSlot| {
                 const texPassId = try registryData.getBufferPassId(indexBufSlot.bufInput);
-                const hardwareTexId = assignerData.bufAssigns.getByKey(texPassId.val());
-                filledPass.indexBuffer = IndexBufferFill{ .bufId = hardwareTexId, .indexType = indexBufSlot.indexType };
+                filledPass.indexBuffer = IndexBufferFill{ .bufId = assignerData.bufAssigns.getByKey(texPassId), .indexType = indexBufSlot.indexType };
             },
             .vertexAttribute => |vertAttrib| {
                 filledPass.vertexAttributes.appendAssumeCapacity(vertAttrib);
@@ -276,6 +249,5 @@ fn fillPassHardwareIds(passId: PassId, assignerData: *const AssignerData, regist
             },
         }
     }
-
     return filledPass;
 }

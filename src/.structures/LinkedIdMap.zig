@@ -60,7 +60,7 @@ pub fn LinkedIdMap(comptime ItemType: type, comptime capacity: u32, comptime Key
         }
 
         pub fn remove(self: *Self, key: Keytype) void {
-            self.removeIndex(@intCast(self.getIndexByKey(key.val())));
+            self.removeIndex(@intCast(self.getIndexByKey(key)));
         }
 
         pub inline fn isLinked(self: *const Self, index: u32) bool {
@@ -96,7 +96,7 @@ pub fn LinkedIdMap(comptime ItemType: type, comptime capacity: u32, comptime Key
 
         pub inline fn getKeyByIndex(self: *const Self, index: u32) Keytype {
             std.debug.assert(self.isLinked(index));
-            return @intCast(self.links[index] + keyMin);
+            return .id(@intCast(self.links[index] + keyMin));
         }
 
         pub fn swapIndices(self: *Self, index1: u32, index2: u32) void {

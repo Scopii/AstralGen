@@ -1,11 +1,13 @@
-const TextureLifetime = @import("../../frameBuild/components.zig").TextureLifetime;
-const BufferLifetime = @import("../../frameBuild/components.zig").BufferLifetime;
-const SimpleMap = @import("../../.structures/SimpleMap.zig").SimpleMap;
+const PassLifetime = @import("../../frameBuild/components.zig").PassLifetime;
+const SimpleIdMap = @import("../../.structures/SimpleIdMap.zig").SimpleIdMap;
+const LinkedIdMap = @import("../../.structures/LinkedIdMap.zig").LinkedIdMap;
+const BufPassId = @import("../../.configs/idConfig.zig").BufPassId;
+const TexPassId = @import("../../.configs/idConfig.zig").TexPassId;
 const rc = @import("../../.configs/renderConfig.zig");
 
 // Step 5
 
 pub const LifetimeData = struct {
-    bufLifetimes: SimpleMap(BufferLifetime, rc.BUF_MAX, u16, rc.BUF_MAX, 0) = .{},
-    texLifetimes: SimpleMap(TextureLifetime, rc.TEX_MAX, u16, rc.TEX_MAX, 0) = .{},
+    bufLifetimes: LinkedIdMap(PassLifetime, rc.BUF_MAX, BufPassId, rc.BUF_MAX, 0) = .{},
+    texLifetimes: LinkedIdMap(PassLifetime, rc.TEX_MAX, TexPassId, rc.TEX_MAX, 0) = .{},
 };

@@ -1,9 +1,10 @@
 const BufDesc = @import("../../render/types/res/BufferMeta.zig").BufferMeta.BufDesc;
 const TexDesc = @import("../../render/types/res/TextureMeta.zig").TextureMeta.TexDesc;
-const TextureLifetime = @import("../../frameBuild/components.zig").TextureLifetime;
-const BufferLifetime = @import("../../frameBuild/components.zig").BufferLifetime;
+const PassLifetime = @import("../../frameBuild/components.zig").PassLifetime;
 const TextureGroup = @import("../../frameBuild/components.zig").TextureGroup;
 const BufferGroup = @import("../../frameBuild/components.zig").BufferGroup;
+const TextureLink = @import("../../frameBuild/components.zig").TextureLink;
+const BufferLink = @import("../../frameBuild/components.zig").BufferLink;
 const TexPassId = @import("../../.configs/idConfig.zig").TexPassId;
 const BufPassId = @import("../../.configs/idConfig.zig").BufPassId;
 const rc = @import("../../.configs/renderConfig.zig");
@@ -44,22 +45,19 @@ pub const MapperSys = struct {
         mapperData.texGroupsPersistent.clear();
 
         // Buffer
-
         for (accessData.bufAccesses.constSlice()) |bufAccess| {
-            const bufInputKey: u16 = bufAccess.bufInput.val();
-            if (mapperData.bufPassIds.isKeyUsed(bufInputKey) == false) mapperData.bufPassIds.insert(bufInputKey, bufAccess.bufInput);
+            if (mapperData.bufPassIds.isKeyUsed(bufAccess.input) == false) mapperData.bufPassIds.insert(bufAccess.input, bufAccess.input);
 
-            if (bufAccess.bufOutput) |bufOutput| {
-                const bufOutputKey: u16 = bufOutput.val();
-                if (mapperData.bufPassIds.isKeyUsed(bufOutputKey) == false) mapperData.bufPassIds.insert(bufOutputKey, bufOutput);
-                try mapperData.linkedBuffers.append(.{ .in = bufAccess.bufInput, .out = bufAccess.bufOutput }); // moved inside — only append when output exists
+            if (bufAccess.output) |bufOutput| {
+                if (mapperData.bufPassIds.isKeyUsed(bufOutput) == false) mapperData.bufPassIds.insert(bufOutput, bufOutput);
+                try mapperData.linkedBuffers.append(BufferLink{ .in = bufAccess.input, .out = bufAccess.output }); // moved inside, only append when output exists
             }
         }
 
         while (mapperData.bufPassIds.getLength() > 0) {
             const lastBuf = mapperData.bufPassIds.getLast();
             mapperData.bufPassIds.removeLast();
-            mapperData.sharedBuffers.upsert(lastBuf.val(), lastBuf); // seed directly into allSharedBuffers
+            mapperData.sharedBuffers.upsert(lastBuf, lastBuf); // seed directly into allSharedBuffers
 
             var readIndex: u32 = 0;
             while (readIndex < mapperData.sharedBuffers.getLength()) {
@@ -72,18 +70,18 @@ pub const MapperSys = struct {
                     const bufLink = mapperData.linkedBuffers.constSlice()[curIndex];
 
                     var isShared = false;
-                    if (bufLink.in.val() == sharedBuf.val()) isShared = true;
-                    if (bufLink.out != null and bufLink.out.?.val() == sharedBuf.val()) isShared = true;
+                    if (bufLink.in == sharedBuf) isShared = true;
+                    if (bufLink.out != null and bufLink.out.? == sharedBuf) isShared = true;
 
                     if (isShared) {
-                        if (mapperData.sharedBuffers.isKeyUsed(bufLink.in.val()) == false) {
-                            mapperData.sharedBuffers.upsert(bufLink.in.val(), bufLink.in); // directly into allSharedBuffers
-                            mapperData.bufPassIds.remove(bufLink.in.val());
+                        if (mapperData.sharedBuffers.isKeyUsed(bufLink.in) == false) {
+                            mapperData.sharedBuffers.upsert(bufLink.in, bufLink.in); // directly into allSharedBuffers
+                            mapperData.bufPassIds.remove(bufLink.in);
                         }
                         if (bufLink.out) |out| {
-                            if (mapperData.sharedBuffers.isKeyUsed(out.val()) == false) {
-                                mapperData.sharedBuffers.upsert(out.val(), out); // directly into allSharedBuffers
-                                mapperData.bufPassIds.remove(out.val());
+                            if (mapperData.sharedBuffers.isKeyUsed(out) == false) {
+                                mapperData.sharedBuffers.upsert(out, out); // directly into allSharedBuffers
+                                mapperData.bufPassIds.remove(out);
                             }
                         }
                         mapperData.linkedBuffers.swapRemove(@intCast(curIndex));
@@ -95,26 +93,26 @@ pub const MapperSys = struct {
             var lastBufPassId: BufPassId = undefined;
             var lastBufDescription: ?BufDesc = null;
 
-            var lastLifetime: ?BufferLifetime = null;
-            var root: BufPassId = undefined;
+            var lastLifetime: ?PassLifetime = null;
+            var rootBuf: BufPassId = undefined;
 
             for (mapperData.sharedBuffers.getConstItems()) |bufPassId| {
-                var newBufDesc = resourceData.bufDescs.getByKey(bufPassId.val());
+                var newBufDesc = resourceData.bufDescs.getByKey(bufPassId);
 
                 if (lastBufDescription) |lastBufDesc| {
                     newBufDesc = try compareBufDesc(lastBufPassId, &lastBufDesc, bufPassId, &newBufDesc, registryData);
                 }
 
                 // Check Root Lifetime
-                const newLifetime = lifetimeData.bufLifetimes.getByKey(bufPassId.val());
+                const newLifetime = lifetimeData.bufLifetimes.getByKey(bufPassId);
 
                 if (lastLifetime) |last| {
                     if (newLifetime.earliest < last.earliest or (newLifetime.earliest <= last.earliest and newLifetime.latest < last.latest)) {
                         lastLifetime = newLifetime;
-                        root = bufPassId;
+                        rootBuf = bufPassId;
                     }
                 } else {
-                    root = bufPassId;
+                    rootBuf = bufPassId;
                     lastLifetime = newLifetime;
                 }
 
@@ -125,8 +123,8 @@ pub const MapperSys = struct {
             // Create Root Mapping
             for (mapperData.sharedBuffers.getConstItems()) |bufPassId| {
                 switch (lastBufDescription.?.share) {
-                    .transient => mapperData.bufMapTransient.upsert(bufPassId.val(), root),
-                    .persistent => mapperData.bufMapPersistent.upsert(bufPassId.val(), root),
+                    .transient => mapperData.bufMapTransient.upsert(bufPassId, rootBuf),
+                    .persistent => mapperData.bufMapPersistent.upsert(bufPassId, rootBuf),
                 }
             }
 
@@ -135,22 +133,22 @@ pub const MapperSys = struct {
                 .transient => {
                     const bufGroup = BufferGroup{
                         .rootPass = optimizerData.optimizedGraph.getConstItems()[lastLifetime.?.earliest].pass,
-                        .rootBuf = root,
+                        .rootBuf = rootBuf,
                         .bufDesc = lastBufDescription.?,
                         .firstMapIndex = @intCast(mapperData.bufMapTransient.getLength() - mapperData.sharedBuffers.getLength()),
                         .lastMapIndex = @intCast(mapperData.bufMapTransient.getLength() - 1),
                     };
-                    mapperData.bufGroupsTransient.upsert(root.val(), bufGroup);
+                    mapperData.bufGroupsTransient.upsert(rootBuf, bufGroup);
                 },
                 .persistent => {
                     const bufGroup = BufferGroup{
                         .rootPass = optimizerData.optimizedGraph.getConstItems()[lastLifetime.?.earliest].pass,
-                        .rootBuf = root,
+                        .rootBuf = rootBuf,
                         .bufDesc = lastBufDescription.?,
                         .firstMapIndex = @intCast(mapperData.bufMapPersistent.getLength() - mapperData.sharedBuffers.getLength()),
                         .lastMapIndex = @intCast(mapperData.bufMapPersistent.getLength() - 1),
                     };
-                    mapperData.bufGroupsPersistent.upsert(root.val(), bufGroup);
+                    mapperData.bufGroupsPersistent.upsert(rootBuf, bufGroup);
                 },
             }
             mapperData.sharedBuffers.clear();
@@ -158,20 +156,18 @@ pub const MapperSys = struct {
 
         // Textures
         for (accessData.texAccesses.constSlice()) |texAccess| {
-            const texInputKey: u16 = texAccess.texInput.val();
-            if (mapperData.texPassIds.isKeyUsed(texInputKey) == false) mapperData.texPassIds.insert(texInputKey, texAccess.texInput);
+            if (mapperData.texPassIds.isKeyUsed(texAccess.input) == false) mapperData.texPassIds.insert(texAccess.input, texAccess.input);
 
-            if (texAccess.texOutput) |texOutput| {
-                const texOutputKey: u16 = texOutput.val();
-                if (mapperData.texPassIds.isKeyUsed(texOutputKey) == false) mapperData.texPassIds.insert(texOutputKey, texOutput);
-                try mapperData.linkedTextures.append(.{ .in = texAccess.texInput, .out = texAccess.texOutput }); // moved inside — only append when output exists
+            if (texAccess.output) |texOutput| {
+                if (mapperData.texPassIds.isKeyUsed(texOutput) == false) mapperData.texPassIds.insert(texOutput, texOutput);
+                try mapperData.linkedTextures.append(TextureLink{ .in = texAccess.input, .out = texAccess.output }); // moved inside, only append when output exists
             }
         }
 
         while (mapperData.texPassIds.getLength() > 0) {
             const lastTex = mapperData.texPassIds.getLast();
             mapperData.texPassIds.removeLast();
-            mapperData.sharedTextures.upsert(lastTex.val(), lastTex); // seed directly into allSharedTextures
+            mapperData.sharedTextures.upsert(lastTex, lastTex); // seed directly into allSharedTextures
 
             var readIndex: u32 = 0;
             while (readIndex < mapperData.sharedTextures.getLength()) {
@@ -184,18 +180,18 @@ pub const MapperSys = struct {
                     const texLink = mapperData.linkedTextures.constSlice()[curIndex];
 
                     var isShared = false;
-                    if (texLink.in.val() == sharedTex.val()) isShared = true;
-                    if (texLink.out != null and texLink.out.?.val() == sharedTex.val()) isShared = true;
+                    if (texLink.in == sharedTex) isShared = true;
+                    if (texLink.out != null and texLink.out.? == sharedTex) isShared = true;
 
                     if (isShared) {
-                        if (mapperData.sharedTextures.isKeyUsed(texLink.in.val()) == false) {
-                            mapperData.sharedTextures.upsert(texLink.in.val(), texLink.in); // directly into allSharedTextures
-                            mapperData.texPassIds.remove(texLink.in.val());
+                        if (mapperData.sharedTextures.isKeyUsed(texLink.in) == false) {
+                            mapperData.sharedTextures.upsert(texLink.in, texLink.in); // directly into allSharedTextures
+                            mapperData.texPassIds.remove(texLink.in);
                         }
                         if (texLink.out) |out| {
-                            if (mapperData.sharedTextures.isKeyUsed(out.val()) == false) {
-                                mapperData.sharedTextures.upsert(out.val(), out); // directly into allSharedTextures
-                                mapperData.texPassIds.remove(out.val());
+                            if (mapperData.sharedTextures.isKeyUsed(out) == false) {
+                                mapperData.sharedTextures.upsert(out, out); // directly into allSharedTextures
+                                mapperData.texPassIds.remove(out);
                             }
                         }
                         mapperData.linkedTextures.swapRemove(@intCast(curIndex));
@@ -206,26 +202,26 @@ pub const MapperSys = struct {
             var lastTexPassId: TexPassId = undefined;
             var lastTexDescription: ?TexDesc = null;
 
-            var lastLifetime: ?TextureLifetime = null;
-            var root: TexPassId = undefined;
+            var lastLifetime: ?PassLifetime = null;
+            var rootTex: TexPassId = undefined;
 
             for (mapperData.sharedTextures.getConstItems()) |texPassId| {
-                var newTexDesc = resourceData.texDescs.getByKey(texPassId.val());
+                var newTexDesc = resourceData.texDescs.getByKey(texPassId);
 
                 if (lastTexDescription) |lastTexDesc| {
                     newTexDesc = try compareTexDesc(lastTexPassId, &lastTexDesc, texPassId, &newTexDesc, registryData);
                 }
 
                 // Check Root Lifetime
-                const newLifetime = lifetimeData.texLifetimes.getByKey(texPassId.val());
+                const newLifetime = lifetimeData.texLifetimes.getByKey(texPassId);
 
                 if (lastLifetime) |last| {
                     if (newLifetime.earliest < last.earliest or (newLifetime.earliest <= last.earliest and newLifetime.latest < last.latest)) {
                         lastLifetime = newLifetime;
-                        root = texPassId;
+                        rootTex = texPassId;
                     }
                 } else {
-                    root = texPassId;
+                    rootTex = texPassId;
                     lastLifetime = newLifetime;
                 }
 
@@ -236,8 +232,8 @@ pub const MapperSys = struct {
             // Root Mappings
             for (mapperData.sharedTextures.getConstItems()) |texPassId| {
                 switch (lastTexDescription.?.share) {
-                    .transient => mapperData.texMapTransient.upsert(texPassId.val(), root),
-                    .persistent => mapperData.texMapPersistent.upsert(texPassId.val(), root),
+                    .transient => mapperData.texMapTransient.upsert(texPassId, rootTex),
+                    .persistent => mapperData.texMapPersistent.upsert(texPassId, rootTex),
                 }
             }
 
@@ -246,22 +242,22 @@ pub const MapperSys = struct {
                 .transient => {
                     const texGroup = TextureGroup{
                         .rootPass = optimizerData.optimizedGraph.getConstItems()[lastLifetime.?.earliest].pass,
-                        .rootTex = root,
+                        .rootTex = rootTex,
                         .texDesc = lastTexDescription.?,
                         .firstMapIndex = @intCast(mapperData.texMapTransient.getLength() - mapperData.sharedTextures.getLength()),
                         .lastMapIndex = @intCast(mapperData.texMapTransient.getLength() - 1),
                     };
-                    mapperData.texGroupsTransient.upsert(root.val(), texGroup);
+                    mapperData.texGroupsTransient.upsert(rootTex, texGroup);
                 },
                 .persistent => {
                     const texGroup = TextureGroup{
                         .rootPass = optimizerData.optimizedGraph.getConstItems()[lastLifetime.?.earliest].pass,
-                        .rootTex = root,
+                        .rootTex = rootTex,
                         .texDesc = lastTexDescription.?,
                         .firstMapIndex = @intCast(mapperData.texMapPersistent.getLength() - mapperData.sharedTextures.getLength()),
                         .lastMapIndex = @intCast(mapperData.texMapPersistent.getLength() - 1),
                     };
-                    mapperData.texGroupsPersistent.upsert(root.val(), texGroup);
+                    mapperData.texGroupsPersistent.upsert(rootTex, texGroup);
                 },
             }
 
@@ -309,8 +305,8 @@ pub const MapperSys = struct {
                 std.debug.print("BufGroup (Persistent {}) (RootRes {s}) (RootPass {s}) (mapIndex {} -> {})\n", .{ i, rootBuf, rootPass, group.firstMapIndex, group.lastMapIndex });
 
                 for (group.firstMapIndex..group.lastMapIndex + 1, 0..) |mapIndex, counter| {
-                    const bufKey: u16 = mapperData.bufMapPersistent.getKeyByIndex(@intCast(mapIndex));
-                    const bufName = try registryData.getBufferName(.id(bufKey));
+                    const bufPassId = mapperData.bufMapPersistent.getKeyByIndex(@intCast(mapIndex));
+                    const bufName = try registryData.getBufferName(bufPassId);
                     std.debug.print("     -> {}. {s}\n", .{ counter, bufName });
                 }
             }
@@ -321,8 +317,8 @@ pub const MapperSys = struct {
                 std.debug.print("BufGroup (Transient {}) (RootRes {s}) (RootPass {s}) (mapIndex {} -> {})\n", .{ i, rootBuf, rootPass, group.firstMapIndex, group.lastMapIndex });
 
                 for (group.firstMapIndex..group.lastMapIndex + 1, 0..) |mapIndex, counter| {
-                    const bufKey: u16 = mapperData.bufMapTransient.getKeyByIndex(@intCast(mapIndex));
-                    const bufName = try registryData.getBufferName(.id(bufKey));
+                    const bufPassId = mapperData.bufMapTransient.getKeyByIndex(@intCast(mapIndex));
+                    const bufName = try registryData.getBufferName(bufPassId);
                     std.debug.print("     -> {}. {s}\n", .{ counter, bufName });
                 }
             }
@@ -334,8 +330,8 @@ pub const MapperSys = struct {
                 std.debug.print("TexGroup (Persistent {}) (RootRes {s}) (RootPass {s}) (mapIndex {} -> {})\n", .{ i, rootTex, rootPass, group.firstMapIndex, group.lastMapIndex });
 
                 for (group.firstMapIndex..group.lastMapIndex + 1, 0..) |mapIndex, counter| {
-                    const texKey: u16 = mapperData.texMapPersistent.getKeyByIndex(@intCast(mapIndex));
-                    const texName = try registryData.getTextureName(.id(texKey));
+                    const texPassId = mapperData.texMapPersistent.getKeyByIndex(@intCast(mapIndex));
+                    const texName = try registryData.getTextureName(texPassId);
                     std.debug.print("     -> {}. {s}\n", .{ counter, texName });
                 }
             }
@@ -346,8 +342,8 @@ pub const MapperSys = struct {
                 std.debug.print("TexGroup (Transient {}) (RootRes {s}) (RootPass {s}) (mapIndex {} -> {})\n", .{ i, rootTex, rootPass, group.firstMapIndex, group.lastMapIndex });
 
                 for (group.firstMapIndex..group.lastMapIndex + 1, 0..) |mapIndex, counter| {
-                    const texKey: u16 = mapperData.texMapTransient.getKeyByIndex(@intCast(mapIndex));
-                    const texName = try registryData.getTextureName(.id(texKey));
+                    const texPassId = mapperData.texMapTransient.getKeyByIndex(@intCast(mapIndex));
+                    const texName = try registryData.getTextureName(texPassId);
                     std.debug.print("     -> {}. {s}\n", .{ counter, texName });
                 }
             }

@@ -30,15 +30,15 @@ pub const BufferStringLink = struct {
 
 pub const TextureAccess = struct {
     pass: PassId,
-    texInput: TexPassId,
-    texOutput: ?TexPassId,
+    input: TexPassId,
+    output: ?TexPassId,
     access: enum { write, read },
 };
 
 pub const BufferAccess = struct {
     pass: PassId,
-    bufInput: BufPassId,
-    bufOutput: ?BufPassId,
+    input: BufPassId,
+    output: ?BufPassId,
     access: enum { write, read },
 };
 
@@ -56,17 +56,10 @@ pub const BufferDependancy = struct {
 
 pub const GraphNode = struct {
     level: u16,
-    pass: PassId,
+    passId: PassId,
 };
 
-pub const TextureLifetime = struct {
-    tex: TexPassId,
-    earliest: u16,
-    latest: u16,
-};
-
-pub const BufferLifetime = struct {
-    buf: BufPassId,
+pub const PassLifetime = struct {
     earliest: u16,
     latest: u16,
 };
@@ -83,14 +76,7 @@ pub const TexGroupLifetime = struct {
     latest: u16,
 };
 
-pub const BufLevelLifetime = struct {
-    buf: BufPassId,
-    firstLevel: u16,
-    lastLevel: u16,
-};
-
-pub const TexLevelLifetime = struct {
-    tex: TexPassId,
+pub const GraphLifetime = struct {
     firstLevel: u16,
     lastLevel: u16,
 };
@@ -113,12 +99,14 @@ pub const TextureGroup = struct {
 
 pub const BufGroupChange = struct {
     rootBuf: BufPassId,
-    change: enum { created, deleted, newDesc, newPass, newPassAndDesc, unchanged },
+    change: GroupChange,
+    pub const GroupChange = enum { created, deleted, newDesc, newPass, newPassAndDesc, unchanged };
 };
 
 pub const TexGroupChange = struct {
     rootTex: TexPassId,
-    change: enum { created, deleted, newDesc, newPass, newPassAndDesc, unchanged },
+    change: GroupChange,
+    pub const GroupChange = enum { created, deleted, newDesc, newPass, newPassAndDesc, unchanged };
 };
 
 pub const PhysicalBufLifetime = struct {

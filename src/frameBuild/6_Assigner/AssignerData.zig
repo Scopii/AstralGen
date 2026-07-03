@@ -6,10 +6,14 @@ const TextureMeta = @import("../../render/types/res/TextureMeta.zig").TextureMet
 const UpdateRequestEnum = @import("../../frameBuild/enums.zig").UpdateRequestEnum;
 const BufferMeta = @import("../../render/types/res/BufferMeta.zig").BufferMeta;
 const LinkedMap = @import("../../.structures/LinkedMap.zig").LinkedMap;
+const LinkedIdMap = @import("../../.structures/LinkedIdMap.zig").LinkedIdMap;
 const FixedList = @import("../../.structures/FixedList.zig").FixedList;
+const TexPassId = @import("../../.configs/idConfig.zig").TexPassId;
+const BufPassId = @import("../../.configs/idConfig.zig").BufPassId;
 const KeyPool = @import("../../.structures/KeyPool.zig").KeyPool;
 const TexId = @import("../../.configs/idConfig.zig").TexId;
 const BufId = @import("../../.configs/idConfig.zig").BufId;
+
 const rc = @import("../../.configs/renderConfig.zig");
 
 const TexInf = TextureMeta.TexInf;
@@ -29,18 +33,18 @@ pub const AssignerData = struct {
     usedTransientTexes: FixedList(TransientTexture, rc.TEX_MAX) = .{},
 
     // Persistent Storage
-    rootBufPhysicalMap: LinkedMap(BufInf, rc.BUF_MAX, u16, rc.BUF_MAX, 0) = .{},
-    rootTexPhysicalMap: LinkedMap(TexInf, rc.TEX_MAX, u16, rc.TEX_MAX, 0) = .{},
+    rootBufPhysicalMap: LinkedIdMap(BufInf, rc.BUF_MAX, BufPassId, rc.BUF_MAX, 0) = .{},
+    rootTexPhysicalMap: LinkedIdMap(TexInf, rc.TEX_MAX, TexPassId, rc.TEX_MAX, 0) = .{},
     pendingTexDeletions: FixedList(PendingTexDeletion, rc.TEX_MAX) = .{},
     pendingBufDeletions: FixedList(PendingBufDeletion, rc.BUF_MAX) = .{},
 
     // Manuel Storage
-    manualBufs: LinkedMap(BufInf, rc.BUF_MAX, u16, rc.BUF_MAX, 0) = .{},
-    manualTexes: LinkedMap(TexInf, rc.TEX_MAX, u16, rc.TEX_MAX, 0) = .{},
+    manualBufs: LinkedIdMap(BufInf, rc.BUF_MAX, BufPassId, rc.BUF_MAX, 0) = .{},
+    manualTexes: LinkedIdMap(TexInf, rc.TEX_MAX, TexPassId, rc.TEX_MAX, 0) = .{},
 
     // Collective Storage Assignments
-    bufAssigns: LinkedMap(BufId, rc.BUF_MAX, u16, rc.BUF_MAX, 0) = .{},
-    texAssigns: LinkedMap(TexId, rc.TEX_MAX, u16, rc.TEX_MAX, 0) = .{},
+    bufAssigns: LinkedIdMap(BufId, rc.BUF_MAX, BufPassId, rc.BUF_MAX, 0) = .{},
+    texAssigns: LinkedIdMap(TexId, rc.TEX_MAX, TexPassId, rc.TEX_MAX, 0) = .{},
 
     // Update Requests after Resource Recreations
     updateRequests: LinkedMap(UpdateRequestEnum, 64, u16, 64, 0) = .{},

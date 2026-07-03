@@ -13,8 +13,6 @@ const String = @import("../../../globalHelper.zig").String;
 const BufferFill = @import("BufferFill.zig").BufferFill;
 const std = @import("std");
 
-pub const PassNode = struct { pass: PassInstance, passWidth: u32, passHeight: u32 };
-
 pub const ComputeExec = struct { groupX: u32, groupY: u32, groupZ: u32, outputTexDispatch: bool };
 pub const TaskOrMeshExec = struct { groupX: u32, groupY: u32, groupZ: u32 };
 pub const GraphicsExec = struct { vertices: u32, instances: u32, indexCount: u32 };
