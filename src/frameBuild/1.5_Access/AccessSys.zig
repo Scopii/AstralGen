@@ -48,6 +48,22 @@ pub const AccessSys = struct {
                             .access = .read,
                         }) catch return error.PassCoreLinksFull;
                     },
+                    .texLinking => |texLink| {
+                        accessData.texAccesses.append(.{
+                            .pass = passId,
+                            .input = try registryData.getTexturePassId(texLink.in),
+                            .output = if (texLink.out) |output| try registryData.getTexturePassId(output) else null,
+                            .access = .read,
+                        }) catch return error.PassCoreLinksFull;
+                    },
+                    .bufLinking => |bufLink| {
+                        accessData.bufAccesses.append(.{
+                            .pass = passId,
+                            .input = try registryData.getBufferPassId(bufLink.in),
+                            .output = if (bufLink.out) |output| try registryData.getBufferPassId(output) else null,
+                            .access = .read,
+                        }) catch return error.PassCoreLinksFull;
+                    },
                     .vertexAttribute, .renderState, .execution, .shaderInf => {},
                     inline else => |texSlotTypes| {
                         accessData.texAccesses.append(.{

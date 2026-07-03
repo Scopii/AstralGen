@@ -247,6 +247,7 @@ fn fillPassHardwareIds(passId: PassId, assignerData: *const AssignerData, regist
             .renderState => |stateChange| switch (stateChange) {
                 inline else => |val, tag| @field(filledPass.renderState, @tagName(tag)) = val,
             },
+            .bufLinking, .texLinking => {},
         }
     }
     return filledPass;

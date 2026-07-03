@@ -65,6 +65,9 @@ pub const PassDefinition = struct {
 
         renderState: RenderStateUnion,
 
+        texLinking: TextureStringLink,
+        bufLinking: BufferStringLink,
+
         pub fn execCompute(passExec: ComputeExec) PassAttribute {
             return .{ .execution = .{ .compute = passExec } };
         }
@@ -95,6 +98,14 @@ pub const PassDefinition = struct {
 
         pub fn tex(texLink: TextureStringLink, stage: vhE.PipeStage, texUseKind: TextureSlot.TextureUseKind, shaderSlot: ?u8) PassAttribute {
             return .{ .texSlot = TextureSlot.init(texLink, stage, texUseKind, shaderSlot) };
+        }
+
+        pub fn texDep(texLink: TextureStringLink) PassAttribute {
+            return .{ .texLinking = texLink };
+        }
+
+        pub fn bufDep(bufLink: BufferStringLink) PassAttribute {
+            return .{ .bufLinking = bufLink };
         }
 
         pub fn color(texLink: TextureStringLink, stage: vhE.PipeStage, access: vhE.PipeAccess, clearColor: ?ClearColor) PassAttribute {
@@ -142,6 +153,7 @@ pub const PassDefinition = struct {
 
         for (self.passAttribute.constSlice()) |attribute| {
             switch (attribute) {
+                .texLinking, .bufLinking => {},
                 .execution => |exec| {
                     if (execution == null) execution = exec else {
                         std.debug.print("Pass {s} ERROR \n", .{self.name.get()});
