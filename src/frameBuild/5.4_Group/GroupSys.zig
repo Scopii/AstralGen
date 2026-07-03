@@ -31,16 +31,18 @@ pub const GroupSys = struct {
 
             var candidateIndex: ?u16 = null;
 
-            for (groupData.sharedBufLifetimes.slice(), 0..) |*physLifetime, index| {
-                const physLifetimeDesc = mapperData.bufGroupsTransient.getByKey(physLifetime.bufDescId).bufDesc;
+            if (rc.FRAME_GRAPH_SKIP_SHARING == false) {
+                for (groupData.sharedBufLifetimes.slice(), 0..) |*physLifetime, index| {
+                    const physLifetimeDesc = mapperData.bufGroupsTransient.getByKey(physLifetime.bufDescId).bufDesc;
 
-                // check if physLifetime could extend forwards
-                if (physLifetime.latest < groupLifetime.earliest) {
-                    // If it can extend check if format fits
-                    if (bufDescEqual(&bufGroup.bufDesc, &physLifetimeDesc) == true) {
-                        physLifetime.latest = groupLifetime.latest;
-                        candidateIndex = @intCast(index);
-                        break;
+                    // check if physLifetime could extend forwards
+                    if (physLifetime.latest < groupLifetime.earliest) {
+                        // If it can extend check if format fits
+                        if (bufDescEqual(&bufGroup.bufDesc, &physLifetimeDesc) == true) {
+                            physLifetime.latest = groupLifetime.latest;
+                            candidateIndex = @intCast(index);
+                            break;
+                        }
                     }
                 }
             }
@@ -50,7 +52,6 @@ pub const GroupSys = struct {
                 groupData.bufClears.append(.{ .sharedBufIndex = candiate, .passAfterClear = bufGroup.rootPass }) catch {
                     std.debug.print("ERROR: 5.4.GroupMerger: Could not Append to bufClears\n", .{});
                 };
-
                 groupData.bufShareIndexMap.upsert(bufGroupId, candiate);
             } else {
                 const physBufLifetime = PhysicalBufLifetime{ .bufDescId = groupLifetime.rootBuf, .earliest = groupLifetime.earliest, .latest = groupLifetime.latest };
@@ -72,16 +73,18 @@ pub const GroupSys = struct {
 
             var candidateIndex: ?u16 = null;
 
-            for (groupData.sharedTexLifetimes.slice(), 0..) |*physLifetime, index| {
-                const physLifetimeDesc = mapperData.texGroupsTransient.getByKey(physLifetime.texDescId).texDesc;
-                
-                // check if physLifetime could extend forwards
-                if (physLifetime.latest < groupLifetime.earliest) {
-                    // If it can extend check if format fits
-                    if (texDescEqual(&texGroup.texDesc, &physLifetimeDesc) == true) {
-                        physLifetime.latest = groupLifetime.latest;
-                        candidateIndex = @intCast(index);
-                        break;
+            if (rc.FRAME_GRAPH_SKIP_SHARING == false) {
+                for (groupData.sharedTexLifetimes.slice(), 0..) |*physLifetime, index| {
+                    const physLifetimeDesc = mapperData.texGroupsTransient.getByKey(physLifetime.texDescId).texDesc;
+
+                    // check if physLifetime could extend forwards
+                    if (physLifetime.latest < groupLifetime.earliest) {
+                        // If it can extend check if format fits
+                        if (texDescEqual(&texGroup.texDesc, &physLifetimeDesc) == true) {
+                            physLifetime.latest = groupLifetime.latest;
+                            candidateIndex = @intCast(index);
+                            break;
+                        }
                     }
                 }
             }
