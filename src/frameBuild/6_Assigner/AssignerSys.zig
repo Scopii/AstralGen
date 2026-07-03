@@ -12,11 +12,11 @@ const rc = @import("../../.configs/renderConfig.zig");
 const pe = @import("../enums.zig");
 const std = @import("std");
 
-const GroupData = @import("../5.4_Group/GroupData.zig").GroupData;
-const AssignerData = @import("AssignerData.zig").AssignerData;
+const RegistryData = @import("../0_Registry/RegistryData.zig").RegistryData;
 const MapperData = @import("../5.1_Mapper/MapperData.zig").MapperData;
 const ComparatorData = @import("../5.3_Comparator/ComparatorData.zig").ComparatorData;
-const RegistryData = @import("../0_Registry/RegistryData.zig").RegistryData;
+const GroupData = @import("../5.4_Group/GroupData.zig").GroupData;
+const AssignerData = @import("AssignerData.zig").AssignerData;
 
 const TexPassId = @import("../../.configs/idConfig.zig").TexPassId;
 const BufPassId = @import("../../.configs/idConfig.zig").BufPassId;

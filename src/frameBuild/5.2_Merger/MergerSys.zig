@@ -15,7 +15,7 @@ pub const MergerSys = struct {
         mergerData.transientBufGroupLifetimes.clear();
         mergerData.transientTexGroupLifetimes.clear();
 
-        // NEW Transient Buffer Group Lifetime Merge
+        // Transient Buffer Group Lifetime Merge
         for (mapperData.bufGroupsTransient.getConstItems()) |group| {
             const firstBufPassId = mapperData.bufMapTransient.getKeyByIndex(@intCast(group.firstMapIndex));
             const firstLifetime = lifetimeData.bufLifetimes.getByKey(firstBufPassId);
@@ -37,7 +37,7 @@ pub const MergerSys = struct {
         // mergerData.transientBufGroupLifetimes.defeatingQuicksort(lessThanGroup);
         mergerData.transientBufGroupLifetimes.selectionSort(greaterGroup);
 
-        // NEW Transient Texture Group Lifetime Merge
+        // Transient Texture Group Lifetime Merge
         for (mapperData.texGroupsTransient.getConstItems()) |group| {
             const firstTexPassId = mapperData.texMapTransient.getKeyByIndex(@intCast(group.firstMapIndex));
             const firstLifetime = lifetimeData.texLifetimes.getByKey(firstTexPassId);

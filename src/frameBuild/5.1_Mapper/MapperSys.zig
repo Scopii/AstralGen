@@ -107,7 +107,7 @@ pub const MapperSys = struct {
                 const newLifetime = lifetimeData.bufLifetimes.getByKey(bufPassId);
 
                 if (lastLifetime) |last| {
-                    if (newLifetime.earliest < last.earliest or (newLifetime.earliest <= last.earliest and newLifetime.latest < last.latest)) {
+                    if (newLifetime.earliest < last.earliest or (newLifetime.earliest == last.earliest and newLifetime.latest < last.latest)) {
                         lastLifetime = newLifetime;
                         rootBuf = bufPassId;
                     }
@@ -216,7 +216,7 @@ pub const MapperSys = struct {
                 const newLifetime = lifetimeData.texLifetimes.getByKey(texPassId);
 
                 if (lastLifetime) |last| {
-                    if (newLifetime.earliest < last.earliest or (newLifetime.earliest <= last.earliest and newLifetime.latest < last.latest)) {
+                    if (newLifetime.earliest < last.earliest or (newLifetime.earliest == last.earliest and newLifetime.latest < last.latest)) {
                         lastLifetime = newLifetime;
                         rootTex = texPassId;
                     }
