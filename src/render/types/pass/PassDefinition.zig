@@ -45,6 +45,7 @@ const AttributeCounts = struct {
 
 pub const PassDefinition = struct {
     name: String(30, "PASS_NAME_MISSING") = .{},
+    renderScaling: f32 = 1.0,
     outputTex: ?[]const u8,
     passAttribute: FixedList(PassAttribute, rc.MAX_PASS_ATTRIBUTES) = .{},
 
@@ -137,9 +138,10 @@ pub const PassDefinition = struct {
         }
     };
 
-    pub fn init(def: struct { name: []const u8, outputTex: ?[]const u8, attributes: []const PassAttribute }) PassDefinition {
+    pub fn init(def: struct { name: []const u8, renderScaling: f32 = 1.0, outputTex: ?[]const u8, attributes: []const PassAttribute }) PassDefinition {
         var passDef = PassDefinition{
             .outputTex = def.outputTex,
+            .renderScaling = def.renderScaling,
         };
         passDef.name.fill(def.name);
         std.debug.assert(def.attributes.len <= rc.MAX_PASS_ATTRIBUTES);

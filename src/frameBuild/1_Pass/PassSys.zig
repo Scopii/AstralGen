@@ -37,12 +37,14 @@ pub const PassSys = struct {
         }
 
         for (passData.activePasses.getConstItems()) |passId| {
-            const passString = try registryData.getPassName(passId);
-            const outputTex = try getPassOutputTex(registryData, passString);
+            const passName = try registryData.getPassName(passId);
+            const passDef = try registryData.getPassDefinition(passName);
+            const passOutputTexDef = if (passDef.outputTex) |outputTex| try registryData.getTexturePassId(outputTex) else null;
+
             var passWidth: u32 = 0;
             var passHeight: u32 = 0;
 
-            if (outputTex) |outTexPassId| { // Skips logic if Pass has no Output
+            if (passOutputTexDef) |outTexPassId| { // Skips logic if Pass has no Output
                 // Active Windows
                 for (data.window.activeWindows.constSlice()) |*window| {
                     // Window Viewports
@@ -52,7 +54,7 @@ pub const PassSys = struct {
                             var usedPass: ?[]const u8 = null;
 
                             for (viewport.stringPasses) |stringPass| {
-                                if (std.mem.eql(u8, stringPass, passString)) {
+                                if (std.mem.eql(u8, stringPass, passName)) {
                                     usedPass = stringPass;
                                     break; // Found it, stop searching this slice (FORCES NON REPEATING PASSES)
                                 }
@@ -68,7 +70,7 @@ pub const PassSys = struct {
 
                                 // Check Blit or Composite
                                 if (viewport.blitPass) |usedBlit| {
-                                    if (std.mem.eql(u8, passString, usedBlit)) {
+                                    if (std.mem.eql(u8, passName, usedBlit)) {
                                         const blit = createBlit(&viewport, passId, outTexPassId, window.id, window.extent.width, window.extent.height);
                                         passData.blits.append(blit) catch std.debug.print("PassDef Could not Append Blit\n", .{});
                                         break;
@@ -84,8 +86,10 @@ pub const PassSys = struct {
             }
 
             if (passData.passExtents.isFull() == true) return error.RenderNodesFull;
-            passData.passExtents.upsert(passId, .{ .width = passWidth, .height = passHeight });
-            if (rc.PASS_EXTRACTION_DEBUG) std.debug.print("Pass {s} added (width {} height {})\n", .{ passString, passWidth, passHeight });
+            const scaledWidth = @as(f32, @floatFromInt(passWidth)) * passDef.renderScaling;
+            const scaledHeight = @as(f32, @floatFromInt(passHeight)) * passDef.renderScaling;
+            passData.passExtents.upsert(passId, .{ .width = @intFromFloat(scaledWidth), .height = @intFromFloat(scaledHeight) });
+            if (rc.PASS_EXTRACTION_DEBUG) std.debug.print("Pass {s} added (width {} height {})\n", .{ passName, passWidth, passHeight });
         }
 
         // Debug Output

@@ -44,7 +44,7 @@ pub const DESCRIPTOR_DEBUG = true;
 pub const PASS_EXTRACTION_DEBUG = false;
 pub const FRAME_GRAPH_DEBUG = true;
 pub const FRAME_BUILDS_TILL_TRANSIENT_DELETION = 0;
-pub const PASS_TEXTURE_RESIZE_INCLUDES_READ = false;
+pub const PASS_TEXTURE_RESIZE_INCLUDES_READ = true;
 pub const PASS_MAX = 128;
 pub const MAX_PASS_ATTRIBUTES = 80;
 
