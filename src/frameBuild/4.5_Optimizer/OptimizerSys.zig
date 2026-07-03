@@ -13,6 +13,15 @@ const OptimizerData = @import("../4.5_Optimizer/OptimizerData.zig").OptimizerDat
 
 pub const OptimizerSys = struct {
     pub fn assignResourceLevels(optimizerData: *OptimizerData, graphData: *const GraphData, accessData: *const AccessData, resourceData: *const ResourceData, registryData: *const RegistryData) !void {
+        // Skip Optimizer Stage
+        if (rc.FRAME_GRAPH_SKIP_OPTIMIZE == true) {
+            for (graphData.graph.getConstItems()) |graphNode| {
+                optimizerData.optimizedGraph.upsert(graphNode.passId, .{ .level = graphNode.level, .pass = graphNode.passId, .memWeight = 0 });
+            }
+            return;
+        }
+
+        // If not skipped:
         optimizerData.bufGraphLifetimes.clear();
         optimizerData.texGraphLifetimes.clear();
 
