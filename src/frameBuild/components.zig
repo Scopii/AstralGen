@@ -83,7 +83,6 @@ pub const GraphLifetime = struct {
 
 pub const BufferGroup = struct {
     rootPass: PassId,
-    rootBuf: BufPassId,
     firstMapIndex: u16,
     lastMapIndex: u16,
     bufDesc: BufDesc,
@@ -91,7 +90,6 @@ pub const BufferGroup = struct {
 
 pub const TextureGroup = struct {
     rootPass: PassId,
-    rootTex: TexPassId,
     firstMapIndex: u16,
     lastMapIndex: u16,
     texDesc: TexDesc,

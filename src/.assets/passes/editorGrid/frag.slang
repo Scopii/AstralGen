@@ -46,8 +46,8 @@ FragOut main(VertexOut pin) {
     float alpha = lineWeight * max(0.0, 1.0 - (dist / 150.0));
 
     // float alphaLerp = alpha; // Standard
-    // float alphaLerp = lerp(0, lineWeight, alpha);
-    float alphaLerp = lerp(0, alpha, 1.0 - (dist / 150.0));
+    float alphaLerp = lerp(0, lineWeight, alpha);
+    // float alphaLerp = lerp(0, alpha, 1.0 - (dist / 150.0));
 
     if (alphaLerp < 0.01) discard;
     float4 clipPos = mul(cam.viewProj, float4(hitPos, 1.0));

@@ -225,15 +225,16 @@ pub const AssignerSys = struct {
         }
 
         // Create Persistent Buffer Assignments
-        for (mapperData.bufGroupsPersistent.getConstItems()) |bufGroup| {
-            const rootBufPhysicalId = assignerData.rootBufPhysicalMap.getByKey(bufGroup.rootBuf);
+        for (mapperData.bufGroupsPersistent.getConstItems(), 0..) |bufGroup, i| {
+            const groupRootBuf = mapperData.bufGroupsPersistent.getKeyByIndex(@intCast(i));
+            const rootBufPhysicalId = assignerData.rootBufPhysicalMap.getByKey(groupRootBuf);
 
             for (bufGroup.firstMapIndex..bufGroup.lastMapIndex + 1) |mapIndex| {
                 const bufEnumKey = mapperData.bufMapPersistent.getKeyByIndex(@intCast(mapIndex));
 
                 // Link Buffer Pass ID To Physical Buf ID
                 if (assignerData.bufAssigns.isKeyUsed(bufEnumKey) == true) {
-                    const bufName = try registryData.getBufferName(bufGroup.rootBuf);
+                    const bufName = try registryData.getBufferName(groupRootBuf);
                     std.debug.print("ERROR: 6.ResourceAssigner: Buffer {s} already assigned!\n", .{bufName});
                     return error.BufEnumAlreadyAssigned;
                 }
@@ -248,16 +249,16 @@ pub const AssignerSys = struct {
         }
 
         // Create Persistent Texture Assignment
-        for (mapperData.texGroupsPersistent.getConstItems()) |texGroup| {
-            const rootTexKey = texGroup.rootTex;
-            const rootTexPhysicalId = assignerData.rootTexPhysicalMap.getByKey(rootTexKey);
+        for (mapperData.texGroupsPersistent.getConstItems(), 0..) |texGroup, i| {
+            const groupRootBuf = mapperData.texGroupsPersistent.getKeyByIndex(@intCast(i));
+            const rootTexPhysicalId = assignerData.rootTexPhysicalMap.getByKey(groupRootBuf);
 
             for (texGroup.firstMapIndex..texGroup.lastMapIndex + 1) |mapIndex| {
                 const texKey = mapperData.texMapPersistent.getKeyByIndex(@intCast(mapIndex));
 
                 // Link Texture Pass ID To Physical Tex ID
                 if (assignerData.texAssigns.isKeyUsed(texKey) == true) {
-                    const texName = try registryData.getTextureName(texGroup.rootTex);
+                    const texName = try registryData.getTextureName(groupRootBuf);
                     std.debug.print("ERROR: 6.ResourceAssigner: Texture {s} already assigned!\n", .{texName});
                     return error.BufEnumAlreadyAssigned;
                 }

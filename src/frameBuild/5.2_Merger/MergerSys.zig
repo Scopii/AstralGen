@@ -16,7 +16,7 @@ pub const MergerSys = struct {
         mergerData.transientTexGroupLifetimes.clear();
 
         // Transient Buffer Group Lifetime Merge
-        for (mapperData.bufGroupsTransient.getConstItems()) |group| {
+        for (mapperData.bufGroupsTransient.getConstItems(), 0..) |group, i| {
             const firstBufPassId = mapperData.bufMapTransient.getKeyByIndex(@intCast(group.firstMapIndex));
             const firstLifetime = lifetimeData.bufLifetimes.getByKey(firstBufPassId);
 
@@ -30,7 +30,8 @@ pub const MergerSys = struct {
                 if (bufLifetime.earliest < earliest) earliest = bufLifetime.earliest;
                 if (bufLifetime.latest > latest) latest = bufLifetime.latest;
             }
-            const groupLifetime = BufGroupLifetime{ .rootBuf = group.rootBuf, .earliest = earliest, .latest = latest };
+            const groupRootBuf = mapperData.bufGroupsTransient.getKeyByIndex(@intCast(i));
+            const groupLifetime = BufGroupLifetime{ .rootBuf = groupRootBuf, .earliest = earliest, .latest = latest };
             mergerData.transientBufGroupLifetimes.appendAssumeCapacity(groupLifetime);
         }
 
@@ -38,7 +39,7 @@ pub const MergerSys = struct {
         mergerData.transientBufGroupLifetimes.selectionSort(greaterGroup);
 
         // Transient Texture Group Lifetime Merge
-        for (mapperData.texGroupsTransient.getConstItems()) |group| {
+        for (mapperData.texGroupsTransient.getConstItems(), 0..) |group, i| {
             const firstTexPassId = mapperData.texMapTransient.getKeyByIndex(@intCast(group.firstMapIndex));
             const firstLifetime = lifetimeData.texLifetimes.getByKey(firstTexPassId);
 
@@ -52,7 +53,8 @@ pub const MergerSys = struct {
                 if (texLifetime.earliest < earliest) earliest = texLifetime.earliest;
                 if (texLifetime.latest > latest) latest = texLifetime.latest;
             }
-            const groupLifetime = TexGroupLifetime{ .rootTex = group.rootTex, .earliest = earliest, .latest = latest };
+            const groupRootTex = mapperData.texGroupsTransient.getKeyByIndex(@intCast(i));
+            const groupLifetime = TexGroupLifetime{ .rootTex = groupRootTex, .earliest = earliest, .latest = latest };
             mergerData.transientTexGroupLifetimes.appendAssumeCapacity(groupLifetime);
         }
 
