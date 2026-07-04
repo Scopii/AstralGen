@@ -21,7 +21,6 @@ const GraphSys = @import("4_Graph/GraphSys.zig").GraphSys;
 const OptimizerSys = @import("4.5_Optimizer/OptimizerSys.zig").OptimizerSys;
 const LifetimeSys = @import("5_Lifetime/LifetimeSys.zig").LifetimeSys;
 const MapperSys = @import("5.1_Mapper/MapperSys.zig").MapperSys;
-const MergerSys = @import("5.2_Merger/MergerSys.zig").MergerSys;
 const ComparatorSys = @import("5.3_Comparator/ComparatorSys.zig").ComparatorSys;
 const GroupSys = @import("5.4_Group/GroupSys.zig").GroupSys;
 const AssignerSys = @import("6_Assigner/AssignerSys.zig").AssignerSys;
@@ -96,35 +95,33 @@ pub const FrameGraphSys = struct {
     }
 
     pub fn build(graph: *FrameGraphData, data: *const EngineData, rendererQueue: *RendererQueue, memoryMan: *MemoryManager) !void {
-        try PassSys.newBuild(&graph.pass, &graph.registry, data);
+        try PassSys.build(&graph.pass, &graph.registry, data);
 
-        try AccessSys.buildAccesses(&graph.access, &graph.pass, &graph.registry);
+        try AccessSys.build(&graph.access, &graph.pass, &graph.registry);
 
-        try ResourceSys.buildResources(&graph.resource, &graph.access, &graph.pass, &graph.registry);
+        try ResourceSys.build(&graph.resource, &graph.access, &graph.pass, &graph.registry);
 
-        try DependancySys.buildDependencies(&graph.dependancy, &graph.access, &graph.registry);
+        try DependancySys.build(&graph.dependancy, &graph.access, &graph.registry);
 
-        try GraphSys.buildGraph(&graph.graph, &graph.dependancy, &graph.pass, &graph.registry);
+        try GraphSys.build(&graph.graph, &graph.dependancy, &graph.pass, &graph.registry);
 
-        try OptimizerSys.assignResourceLevels(&graph.optimizer, &graph.graph, &graph.access, &graph.resource, &graph.registry);
+        try OptimizerSys.build(&graph.optimizer, &graph.graph, &graph.access, &graph.resource, &graph.registry);
 
-        try LifetimeSys.assignResourceLifetimes(&graph.lifetime, &graph.optimizer, &graph.access, &graph.registry);
+        try LifetimeSys.assign(&graph.lifetime, &graph.optimizer, &graph.access, &graph.registry);
 
-        try MapperSys.buildMapping(&graph.mapper, &graph.access, &graph.resource, &graph.lifetime, &graph.optimizer, &graph.registry);
-
-        try MergerSys.buildPassResources(&graph.merger, &graph.lifetime, &graph.mapper, &graph.registry);
+        try MapperSys.build(&graph.mapper, &graph.access, &graph.resource, &graph.lifetime, &graph.optimizer, &graph.registry);
 
         // const start = std.time.nanoTimestamp();
         // const end = std.time.nanoTimestamp();
         // std.debug.print("Merger Build: {d:.3} ns\n", .{@as(f64, @floatFromInt(end - start)) / 1_000.0});
 
-        try ComparatorSys.buildChanges(&graph.comparator, &graph.mapper, &graph.registry);
+        try ComparatorSys.build(&graph.comparator, &graph.mapper, &graph.registry);
 
-        try GroupSys.buildPassResources(&graph.group, &graph.merger, &graph.mapper, &graph.registry);
+        try GroupSys.build(&graph.group, &graph.mapper, &graph.registry);
 
-        try AssignerSys.buildPersistentResources(&graph.assigner, &graph.mapper, &graph.comparator, &graph.group, &graph.registry, rendererQueue, memoryMan);
+        try AssignerSys.build(&graph.assigner, &graph.mapper, &graph.comparator, &graph.group, &graph.registry, rendererQueue, memoryMan);
 
-        try SorterSys.buildFrame(&graph.sorter, &graph.pass, &graph.optimizer, &graph.group, &graph.assigner, &graph.registry);
+        try SorterSys.build(&graph.sorter, &graph.pass, &graph.optimizer, &graph.group, &graph.assigner, &graph.registry);
     }
 
     pub fn createTextureManually(frameGraph: *FrameGraphData, texPassId: TexPassId, rendererQueue: *RendererQueue, memoryMan: *MemoryManager) !void {

@@ -15,7 +15,7 @@ const PassData = @import("PassData.zig").PassData;
 // Step 1
 
 pub const PassSys = struct {
-    pub fn newBuild(passData: *PassData, registryData: *const RegistryData, data: *const EngineData) !void {
+    pub fn build(passData: *PassData, registryData: *const RegistryData, data: *const EngineData) !void {
         // Cleanup
         passData.activePasses.clear();
         passData.passExtents.clear();

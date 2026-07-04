@@ -35,14 +35,14 @@ pub const GPU_READBACK = false;
 pub const CPU_PROFILING = false;
 pub const SWAPCHAIN_PROFILING = false;
 
-pub const FRAME_LIMIT = 15000;
+pub const FRAME_LIMIT = 10;
 
 // Additional Debug Prints
 pub const BARRIER_DEBUG = false;
 pub const RESOURCE_DEBUG = true;
 pub const DESCRIPTOR_DEBUG = true;
 pub const PASS_EXTRACTION_DEBUG = false;
-pub const FRAME_GRAPH_DEBUG = true;
+pub const FRAME_GRAPH_DEBUG = false;
 pub const FRAME_BUILDS_TILL_TRANSIENT_DELETION = 0;
 pub const FRAME_GRAPH_SKIP_OPTIMIZE = false;
 pub const FRAME_GRAPH_SKIP_SHARING = false;

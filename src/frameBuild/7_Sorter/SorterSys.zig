@@ -7,7 +7,6 @@ const AttachmentFill = @import("../../render/types/pass/AttachmentFill.zig").Att
 const PassInstance = @import("../../render/types/pass/PassInstance.zig").PassInstance;
 const TextureFill = @import("../../render/types/pass/TextureFill.zig").TextureFill;
 const BufferFill = @import("../../render/types/pass/BufferFill.zig").BufferFill;
-const RendererQueue = @import("../../render/RendererQueue.zig").RendererQueue;
 const PassId = @import("../../.configs/idConfig.zig").PassId;
 const rc = @import("../../.configs/renderConfig.zig");
 const std = @import("std");
@@ -22,7 +21,7 @@ const SorterData = @import("../7_Sorter/SorterData.zig").SorterData;
 // Step 7
 
 pub const SorterSys = struct {
-    pub fn buildFrame(
+    pub fn build(
         sorterData: *SorterData,
         passData: *const PassData,
         optimizerData: *const OptimizerData,
@@ -37,21 +36,13 @@ pub const SorterSys = struct {
             const passId = graphNode.pass;
 
             var neededClears = false;
-            // Buffer Clears
-            for (groupData.bufClears.constSlice()) |bufClear| {
-                if (bufClear.passAfterClear == passId) {
-                    // LOOKUP FOR bufClear.Index to ENUM!
-                    const bufId = assignerData.usedTransientBufs.buffer[bufClear.sharedBufIndex].hardwareBuf;
-                    try sorterData.sortedNodes.append(.{ .clearBuffer = bufId });
-                    neededClears = true;
-                }
-            }
-            // Texture Clears
-            for (groupData.texClears.constSlice()) |texClear| {
-                if (texClear.passAfterClear == passId) {
-                    // LOOKUP FOR texClear.Index to ENUM!
-                    const texId = assignerData.usedTransientTexes.buffer[texClear.sharedTexIndex].hardwareTex;
-                    try sorterData.sortedNodes.append(.{ .clearTexture = texId });
+            // Resource Clears
+            for (groupData.resourceClears.constSlice()) |resClear| {
+                if (resClear.passAfterClear == passId) {
+                    switch (assignerData.usedTransientSlots.buffer[resClear.sharedIndex]) { // slot index = shared index
+                        .buf => |slot| try sorterData.sortedNodes.append(.{ .clearBuffer = slot.hardwareBuf }),
+                        .tex => |slot| try sorterData.sortedNodes.append(.{ .clearTexture = slot.hardwareTex }),
+                    }
                     neededClears = true;
                 }
             }

@@ -10,7 +10,7 @@ const GraphData = @import("GraphData.zig").GraphData;
 // Step 4
 
 pub const GraphSys = struct {
-    pub fn buildGraph(graphData: *GraphData, dependancyData: *const DependancyData, passData: *const PassData, registryData: *const RegistryData) !void {
+    pub fn build(graphData: *GraphData, dependancyData: *const DependancyData, passData: *const PassData, registryData: *const RegistryData) !void {
         graphData.passDepCounters.clear();
         graphData.graph.clear();
         graphData.readyPasses.clear();
@@ -72,16 +72,14 @@ pub const GraphSys = struct {
             // Passes in unorderedPasses but not in orderedPasses
             for (passData.activePasses.getConstItems()) |passId| {
                 if (graphData.graph.isKeyUsed(passId) == false) {
-                    const remainingDeps = if (graphData.passDepCounters.isKeyUsed(passId)) graphData.passDepCounters.getByKey(passId) else 0;
+                    const openDeps = if (graphData.passDepCounters.isKeyUsed(passId)) graphData.passDepCounters.getByKey(passId) else 0;
                     const passString = try registryData.getPassName(passId);
-                    std.debug.print("  stuck: {s} (still waiting on {} deps)\n", .{ passString, remainingDeps });
+                    std.debug.print("  stuck: {s} (still waiting on {} deps)\n", .{ passString, openDeps });
                 }
             }
             for (dependancyData.deps.constSlice()) |dep| {
                 const predStuck = !graphData.graph.isKeyUsed(dep.predecessor);
                 const succStuck = !graphData.graph.isKeyUsed(dep.successor);
-                const predName = try registryData.getPassName(dep.predecessor);
-                const succName = try registryData.getPassName(dep.successor);
 
                 std.debug.print("  cycle {s} edges:\n", .{@tagName(dep.resource)});
                 if (predStuck and succStuck) {
@@ -89,13 +87,15 @@ pub const GraphSys = struct {
                         .bufPassId => |id| try registryData.getBufferName(id),
                         .texPassId => |id| try registryData.getTextureName(id),
                     };
+                    const predName = try registryData.getPassName(dep.predecessor);
+                    const succName = try registryData.getPassName(dep.successor);
                     std.debug.print("    {s} --[{s}]--> {s}\n", .{ predName, resName, succName });
                 }
             }
             return error.GraphHasCycle;
         }
 
-        // Debug Output
+        // Debug
         if (rc.FRAME_GRAPH_DEBUG) {
             for (graphData.graph.getConstItems(), 0..) |pass, i| {
                 const passName = try registryData.getPassName(pass.passId);

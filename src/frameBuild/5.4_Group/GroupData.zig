@@ -1,22 +1,15 @@
-const PhysicalBufLifetime = @import("../../frameBuild/components.zig").PhysicalBufLifetime;
-const PhysicalTexLifetime = @import("../../frameBuild/components.zig").PhysicalTexLifetime;
-const TextureClear = @import("../../frameBuild/components.zig").TextureClear;
-const BufferClear = @import("../../frameBuild/components.zig").BufferClear;
-const LinkedIdMap = @import("../../.structures/LinkedIdMap.zig").LinkedIdMap;
+const PhysicalResLifetime = @import("../../frameBuild/components.zig").PhysicalResLifetime;
+const ResourceClear = @import("../../frameBuild/components.zig").ResourceClear;
+const LinkedMap = @import("../../.structures/LinkedMap.zig").LinkedMap;
+const SimpleMap = @import("../../.structures/SimpleMap.zig").SimpleMap;
 const FixedList = @import("../../.structures/FixedList.zig").FixedList;
-const TexPassId = @import("../../.configs/idConfig.zig").TexPassId;
-const BufPassId = @import("../../.configs/idConfig.zig").BufPassId;
 const rc = @import("../../.configs/renderConfig.zig");
 
 // Step 5.4
 
 pub const GroupData = struct {
-    sharedBufLifetimes: FixedList(PhysicalBufLifetime, rc.BUF_MAX) = .{},
-    sharedTexLifetimes: FixedList(PhysicalTexLifetime, rc.TEX_MAX) = .{},
+    sharedResLifetimes: FixedList(PhysicalResLifetime, rc.RESOURCE_MAX) = .{},
+    shareIndexMap: LinkedMap(u16, rc.RESOURCE_MAX, u16, rc.RESOURCE_MAX, 0) = .{}, // key: Group Root ID, element: sharedBufLifetime Index
 
-    bufShareIndexMap: LinkedIdMap(u16, rc.BUF_MAX, BufPassId, rc.BUF_MAX, 0) = .{}, // key: Group Root ID, element: sharedBufLifetime Index
-    texShareIndexMap: LinkedIdMap(u16, rc.TEX_MAX, TexPassId, rc.TEX_MAX, 0) = .{}, // key: Group Root ID , element: sharedTexLifetime Index
-
-    bufClears: FixedList(BufferClear, rc.BUF_MAX * rc.PASS_MAX) = .{},
-    texClears: FixedList(TextureClear, rc.TEX_MAX * rc.PASS_MAX) = .{},
+    resourceClears: FixedList(ResourceClear, rc.RESOURCE_MAX * rc.PASS_MAX) = .{},
 };

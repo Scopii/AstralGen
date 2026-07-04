@@ -1,49 +1,31 @@
-const TextureGroup = @import("../../frameBuild/components.zig").TextureGroup;
-const TextureLink = @import("../../frameBuild/components.zig").TextureLink;
-const BufferGroup = @import("../../frameBuild/components.zig").BufferGroup;
-const BufferLink = @import("../../frameBuild/components.zig").BufferLink;
+const GroupLifetime = @import("../../frameBuild/components.zig").GroupLifetime;
 const LinkedMap = @import("../../.structures/LinkedMap.zig").LinkedMap;
-const LinkedIdMap = @import("../../.structures/LinkedIdMap.zig").LinkedIdMap;
 const SimpleMap = @import("../../.structures/SimpleMap.zig").SimpleMap;
-const SimpleIdMap = @import("../../.structures/SimpleIdMap.zig").SimpleIdMap;
 const FixedList = @import("../../.structures/FixedList.zig").FixedList;
-const TexPassId = @import("../../.configs/idConfig.zig").TexPassId;
-const BufPassId = @import("../../.configs/idConfig.zig").BufPassId;
+const ResLink = @import("../../frameBuild/components.zig").ResLink;
+const Group = @import("../../frameBuild/components.zig").Group;
 const rc = @import("../../.configs/renderConfig.zig");
 
 // Step 5.1
 
 pub const MapperData = struct {
+    pub const GroupMap = LinkedMap(Group, rc.RESOURCE_MAX, u16, rc.RESOURCE_MAX, 0);
     // Last Frame Build Results
-    lastBufGroupsTransient: BufGroupMap = .{},
-    lastBufGroupsPersistent: BufGroupMap = .{},
-    lastTexGroupsTransient: TexGroupMap = .{},
-    lastTexGroupsPersistent: TexGroupMap = .{},
+    prevTransientGroups: GroupMap = .{},
+    prevPersistentGroups: GroupMap = .{},
 
-    // Temporary (For Buffers)
-    bufPassIds: LinkedIdMap(BufPassId, rc.BUF_MAX, BufPassId, rc.BUF_MAX, 0) = .{},
-    linkedBuffers: FixedList(BufferLink, rc.BUF_MAX) = .{},
-    sharedBuffers: SimpleIdMap(BufPassId, rc.BUF_MAX, BufPassId, rc.BUF_MAX, 0) = .{},
+    // Build Results
+    persistentGroups: GroupMap = .{},
+    transientGroups: GroupMap = .{},
 
-    // Buffer Results
-    bufMapTransient: LinkedIdMap(BufPassId, rc.BUF_MAX, BufPassId, rc.BUF_MAX, 0) = .{},
-    bufGroupsTransient: BufGroupMap = .{},
+    // Temporary
+    resPassIds: LinkedMap(u16, rc.RESOURCE_MAX, u16, rc.RESOURCE_MAX, 0) = .{},
+    sharedResources: SimpleMap(u16, rc.RESOURCE_MAX, u16, rc.RESOURCE_MAX, 0) = .{},
+    linkedResources: FixedList(ResLink, rc.RESOURCE_MAX) = .{},
 
-    bufMapPersistent: LinkedIdMap(BufPassId, rc.BUF_MAX, BufPassId, rc.BUF_MAX, 0) = .{},
-    bufGroupsPersistent: BufGroupMap = .{},
+    // Results
+    transientMap: LinkedMap(u16, rc.RESOURCE_MAX, u16, rc.RESOURCE_MAX, 0) = .{},
+    persistentMap: LinkedMap(u16, rc.RESOURCE_MAX, u16, rc.RESOURCE_MAX, 0) = .{},
 
-    // Temporary (For Textures)
-    texPassIds: LinkedIdMap(TexPassId, rc.TEX_MAX, TexPassId, rc.TEX_MAX, 0) = .{},
-    linkedTextures: FixedList(TextureLink, rc.TEX_MAX) = .{},
-    sharedTextures: SimpleIdMap(TexPassId, rc.TEX_MAX, TexPassId, rc.TEX_MAX, 0) = .{},
-
-    // Texture Results
-    texMapTransient: LinkedIdMap(TexPassId, rc.TEX_MAX, TexPassId, rc.TEX_MAX, 0) = .{},
-    texGroupsTransient: TexGroupMap = .{},
-
-    texMapPersistent: LinkedIdMap(TexPassId, rc.TEX_MAX, TexPassId, rc.TEX_MAX, 0) = .{},
-    texGroupsPersistent: TexGroupMap = .{},
-
-    pub const BufGroupMap = LinkedIdMap(BufferGroup, rc.BUF_MAX, BufPassId, rc.BUF_MAX, 0);
-    pub const TexGroupMap = LinkedIdMap(TextureGroup, rc.TEX_MAX, TexPassId, rc.TEX_MAX, 0);
+    transientGroupLifetimes: FixedList(GroupLifetime, rc.RESOURCE_MAX) = .{},
 };

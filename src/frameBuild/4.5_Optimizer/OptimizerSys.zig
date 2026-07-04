@@ -3,6 +3,9 @@ const GraphLifetime = @import("../../frameBuild/components.zig").GraphLifetime;
 const rc = @import("../../.configs/renderConfig.zig");
 const std = @import("std");
 
+const getResKey = @import("../../frameBuild/components.zig").getResKey;
+const getResTyp = @import("../../frameBuild/components.zig").getResTyp;
+
 const RegistryData = @import("../0_Registry/RegistryData.zig").RegistryData;
 const AccessData = @import("../1.5_Access/AccessData.zig").AccessData;
 const ResourceData = @import("../2_Resource/ResourceData.zig").ResourceData;
@@ -12,74 +15,43 @@ const OptimizerData = @import("../4.5_Optimizer/OptimizerData.zig").OptimizerDat
 // Step 4.5
 
 pub const OptimizerSys = struct {
-    pub fn assignResourceLevels(optimizerData: *OptimizerData, graphData: *const GraphData, accessData: *const AccessData, resourceData: *const ResourceData, registryData: *const RegistryData) !void {
+    pub fn build(optimizerData: *OptimizerData, graphData: *const GraphData, accessData: *const AccessData, resourceData: *const ResourceData, registryData: *const RegistryData) !void {
         // Skip Optimizer Stage
         if (rc.FRAME_GRAPH_SKIP_OPTIMIZE == true) {
             for (graphData.graph.getConstItems()) |graphNode| {
-                optimizerData.optimizedGraph.upsert(graphNode.passId, .{ .level = graphNode.level, .pass = graphNode.passId, .memWeight = 0 });
+                optimizerData.optimizedGraph.upsert(graphNode.passId, GraphMemoryNode{ .level = graphNode.level, .pass = graphNode.passId, .memWeight = 0 });
             }
             return;
         }
 
         // If not skipped:
-        optimizerData.bufGraphLifetimes.clear();
-        optimizerData.texGraphLifetimes.clear();
-
+        optimizerData.graphLifetimes.clear();
         optimizerData.graphMemNodes.clear();
         optimizerData.optimizedGraph.clear();
 
-        // Assign Buffers Lifetime
-        for (accessData.bufAccesses.constSlice()) |bufAccess| {
-            const graphLevel = graphData.graph.getByKey(bufAccess.pass).level;
+        for (accessData.accesses.constSlice()) |access| {
+            const graphLevel = graphData.graph.getByKey(access.pass).level;
             // Input
-            const bufInput = bufAccess.input;
-            if (resourceData.bufMemSizes.isKeyUsed(bufInput) == true) { // Only Transient
+            const input = getResKey(access.input);
+            if (resourceData.memSizes.isKeyUsed(input) == true) { // Only Transient
 
-                if (optimizerData.bufGraphLifetimes.isKeyUsed(bufInput) == false) {
-                    optimizerData.bufGraphLifetimes.upsert(bufInput, GraphLifetime{ .firstLevel = graphLevel, .lastLevel = graphLevel });
+                if (optimizerData.graphLifetimes.isKeyUsed(input) == false) {
+                    optimizerData.graphLifetimes.upsert(input, GraphLifetime{ .firstLevel = graphLevel, .lastLevel = graphLevel });
                 } else {
-                    var graphLifetime = optimizerData.bufGraphLifetimes.getPtrByKey(bufInput);
+                    var graphLifetime = optimizerData.graphLifetimes.getPtrByKey(input);
                     if (graphLevel < graphLifetime.firstLevel) graphLifetime.firstLevel = graphLevel;
                     if (graphLevel > graphLifetime.lastLevel) graphLifetime.lastLevel = graphLevel;
                 }
             }
             // Output
-            const bufOutput = bufAccess.output orelse continue;
-            if (resourceData.bufMemSizes.isKeyUsed(bufOutput) == true) { // Only Transient
+            const outputKey = access.output orelse continue;
+            const output = getResKey(outputKey);
+            if (resourceData.memSizes.isKeyUsed(output) == true) { // Only Transient
 
-                if (optimizerData.bufGraphLifetimes.isKeyUsed(bufOutput) == false) {
-                    optimizerData.bufGraphLifetimes.upsert(bufOutput, GraphLifetime{ .firstLevel = graphLevel, .lastLevel = graphLevel });
+                if (optimizerData.graphLifetimes.isKeyUsed(output) == false) {
+                    optimizerData.graphLifetimes.upsert(output, GraphLifetime{ .firstLevel = graphLevel, .lastLevel = graphLevel });
                 } else {
-                    var graphLifetime = optimizerData.bufGraphLifetimes.getPtrByKey(bufOutput);
-                    if (graphLevel < graphLifetime.firstLevel) graphLifetime.firstLevel = graphLevel;
-                    if (graphLevel > graphLifetime.lastLevel) graphLifetime.lastLevel = graphLevel;
-                }
-            }
-        }
-
-        // Assign texture Lifetime
-        for (accessData.texAccesses.constSlice()) |texAccess| {
-            const graphLevel = graphData.graph.getByKey(texAccess.pass).level;
-            // Input
-            const texInput = texAccess.input;
-            if (resourceData.texMemSizeS.isKeyUsed(texInput) == true) { // Only Transient
-
-                if (optimizerData.texGraphLifetimes.isKeyUsed(texInput) == false) {
-                    optimizerData.texGraphLifetimes.upsert(texInput, GraphLifetime{ .firstLevel = graphLevel, .lastLevel = graphLevel });
-                } else {
-                    var graphLifetime = optimizerData.texGraphLifetimes.getPtrByKey(texInput);
-                    if (graphLevel < graphLifetime.firstLevel) graphLifetime.firstLevel = graphLevel;
-                    if (graphLevel > graphLifetime.lastLevel) graphLifetime.lastLevel = graphLevel;
-                }
-            }
-            // Output
-            const texOutput = texAccess.output orelse continue;
-            if (resourceData.texMemSizeS.isKeyUsed(texOutput) == true) { // Only Transient
-
-                if (optimizerData.texGraphLifetimes.isKeyUsed(texOutput) == false) {
-                    optimizerData.texGraphLifetimes.upsert(texOutput, GraphLifetime{ .firstLevel = graphLevel, .lastLevel = graphLevel });
-                } else {
-                    var graphLifetime = optimizerData.texGraphLifetimes.getPtrByKey(texOutput);
+                    var graphLifetime = optimizerData.graphLifetimes.getPtrByKey(output);
                     if (graphLevel < graphLifetime.firstLevel) graphLifetime.firstLevel = graphLevel;
                     if (graphLevel > graphLifetime.lastLevel) graphLifetime.lastLevel = graphLevel;
                 }
@@ -89,70 +61,43 @@ pub const OptimizerSys = struct {
         // Debug Output
         if (rc.FRAME_GRAPH_DEBUG) {
             std.debug.print("4.5.GraphOptimizer: \n", .{});
-            // Buffer Debug
-            for (0..optimizerData.bufGraphLifetimes.getLength()) |i| {
-                const bufGraphLifetime = optimizerData.bufGraphLifetimes.getByIndex(@intCast(i));
-                const bufPassId = optimizerData.bufGraphLifetimes.getKeyByIndex(@intCast(i));
-                const bufName = try registryData.getBufferName(bufPassId);
-                std.debug.print("- Buf Graph Lifetime: (Level {} -> {}) {s} \n", .{ bufGraphLifetime.firstLevel, bufGraphLifetime.lastLevel, bufName });
-            }
-            // Texture Debug
-            for (0..optimizerData.texGraphLifetimes.getLength()) |i| {
-                const texGraphLifetime = optimizerData.texGraphLifetimes.getByIndex(@intCast(i));
-                const texPassId = optimizerData.texGraphLifetimes.getKeyByIndex(@intCast(i));
-                const texName = try registryData.getTextureName(texPassId);
-                std.debug.print("- Tex Graph Lifetime: (Level {} -> {}) {s}\n", .{ texGraphLifetime.firstLevel, texGraphLifetime.lastLevel, texName });
+            for (0..optimizerData.graphLifetimes.getLength()) |i| {
+                const graphLifetime = optimizerData.graphLifetimes.getByIndex(@intCast(i));
+                const resKey = optimizerData.graphLifetimes.getKeyByIndex(@intCast(i));
+                const resTyp = getResTyp(resKey);
+                const resName = switch (resTyp) {
+                    .Buf => try registryData.getBufferName(.id(resKey)),
+                    .Tex => try registryData.getTextureName(.id(resKey - rc.BUF_MAX)),
+                };
+                std.debug.print("- {s} Graph Lifetime: (Level {} -> {}) {s} \n", .{ @tagName(resTyp), graphLifetime.firstLevel, graphLifetime.lastLevel, resName });
             }
             std.debug.print("\n", .{});
         }
 
         // Extend GraphNodes to GraphMemoryNodes
         for (graphData.graph.getConstItems()) |graphNode| {
-            const accessRange = accessData.passAccessRanges.getByKey(graphNode.passId);
+            const accessRange = accessData.accessRanges.getByKey(graphNode.passId);
 
             var bornBytes: u64 = 0;
             var dyingBytes: u64 = 0;
 
-            // Buffers
-            for (accessRange.firstBuf..accessRange.lastBuf) |bufIndex| {
-                const bufAccess = accessData.bufAccesses.buffer[bufIndex];
-                const bufInput = bufAccess.input;
+            for (accessData.accesses.buffer[accessRange.first..accessRange.last]) |access| {
+                const input = getResKey(access.input);
 
                 // Check Input Buffer Bytes
-                if (resourceData.bufMemSizes.isKeyUsed(bufInput) == true) { // Only Transient were filled!
-                    const graphLifetime = optimizerData.bufGraphLifetimes.getByKey(bufInput);
-                    if (graphLifetime.firstLevel == graphNode.level and graphLifetime.lastLevel != graphNode.level) bornBytes += resourceData.bufMemSizes.getByKey(bufInput);
-                    if (graphLifetime.lastLevel == graphNode.level and graphLifetime.firstLevel != graphNode.level) dyingBytes += resourceData.bufMemSizes.getByKey(bufInput);
+                if (resourceData.memSizes.isKeyUsed(input) == true) { // Only Transient were filled!
+                    const graphLifetime = optimizerData.graphLifetimes.getByKey(input);
+                    if (graphLifetime.firstLevel == graphNode.level and graphLifetime.lastLevel != graphNode.level) bornBytes += resourceData.memSizes.getByKey(input);
+                    if (graphLifetime.lastLevel == graphNode.level and graphLifetime.firstLevel != graphNode.level) dyingBytes += resourceData.memSizes.getByKey(input);
                 }
 
                 // Check Output Buffer Bytes
-                if (bufAccess.output) |bufOutput| {
-                    if (resourceData.bufMemSizes.isKeyUsed(bufOutput) == true) { // Only Transient were filled!
-                        const graphLifetime = optimizerData.bufGraphLifetimes.getByKey(bufOutput);
-                        if (graphLifetime.firstLevel == graphNode.level and graphLifetime.lastLevel != graphNode.level) bornBytes += resourceData.bufMemSizes.getByKey(bufOutput);
-                        if (graphLifetime.lastLevel == graphNode.level and graphLifetime.firstLevel != graphNode.level) dyingBytes += resourceData.bufMemSizes.getByKey(bufOutput);
-                    }
-                }
-            }
-
-            // Textures
-            for (accessRange.firstTex..accessRange.lastTex) |texIndex| {
-                const texAccess = accessData.texAccesses.buffer[texIndex];
-                const texInput = texAccess.input;
-
-                // Check Input Texture Bytes
-                if (resourceData.texMemSizeS.isKeyUsed(texInput) == true) { // Only Transient were filled!
-                    const graphLifetime = optimizerData.texGraphLifetimes.getByKey(texInput);
-                    if (graphLifetime.firstLevel == graphNode.level and graphLifetime.lastLevel != graphNode.level) bornBytes += resourceData.texMemSizeS.getByKey(texInput);
-                    if (graphLifetime.lastLevel == graphNode.level and graphLifetime.firstLevel != graphNode.level) dyingBytes += resourceData.texMemSizeS.getByKey(texInput);
-                }
-
-                // Check Output Buffer Bytes
-                if (texAccess.output) |texOutput| {
-                    if (resourceData.texMemSizeS.isKeyUsed(texOutput) == true) { // Only Transient were filled!
-                        const graphLifetime = optimizerData.texGraphLifetimes.getByKey(texOutput);
-                        if (graphLifetime.firstLevel == graphNode.level and graphLifetime.lastLevel != graphNode.level) bornBytes += resourceData.texMemSizeS.getByKey(texOutput);
-                        if (graphLifetime.lastLevel == graphNode.level and graphLifetime.firstLevel != graphNode.level) dyingBytes += resourceData.texMemSizeS.getByKey(texOutput);
+                if (access.output) |outputKey| {
+                    const output = getResKey(outputKey);
+                    if (resourceData.memSizes.isKeyUsed(output) == true) { // Only Transient were filled!
+                        const graphLifetime = optimizerData.graphLifetimes.getByKey(output);
+                        if (graphLifetime.firstLevel == graphNode.level and graphLifetime.lastLevel != graphNode.level) bornBytes += resourceData.memSizes.getByKey(output);
+                        if (graphLifetime.lastLevel == graphNode.level and graphLifetime.firstLevel != graphNode.level) dyingBytes += resourceData.memSizes.getByKey(output);
                     }
                 }
             }

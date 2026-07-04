@@ -1,24 +1,43 @@
 const TexDesc = @import("../render/types/res/TextureMeta.zig").TextureMeta.TexDesc;
 const BufDesc = @import("../render/types/res/BufferMeta.zig").BufferMeta.BufDesc;
-const ViewportId = @import("../.configs/idConfig.zig").ViewportId;
 const BufPassId = @import("../.configs/idConfig.zig").BufPassId;
 const TexPassId = @import("../.configs/idConfig.zig").TexPassId;
-const WindowId = @import("../.configs/idConfig.zig").WindowId;
 const PassId = @import("../.configs/idConfig.zig").PassId;
 const TexId = @import("../.configs/idConfig.zig").TexId;
 const BufId = @import("../.configs/idConfig.zig").BufId;
+const rc = @import("../.configs/renderConfig.zig");
 
 pub const ResPassId = union(enum) { texPassId: TexPassId, bufPassId: BufPassId };
 
-pub const TextureLink = struct {
-    in: TexPassId,
-    out: ?TexPassId = null,
-};
+pub const TransientSlot = union(enum) { buf: TransientBuffer, tex: TransientTexture };
 
-pub const BufferLink = struct {
-    in: BufPassId,
-    out: ?BufPassId = null,
-};
+pub const ResLink = struct { in: u16, out: u16 };
+
+pub fn getResKey(resId: anytype) u16 {
+    return switch (@TypeOf(resId)) {
+        BufPassId => resId.val(),
+        TexPassId => resId.val() + rc.BUF_MAX,
+        ResPassId => switch (resId) { // new: unwrap the union tag first
+            .bufPassId => |id| id.val(),
+            .texPassId => |id| id.val() + rc.BUF_MAX,
+        },
+        else => @compileError("Invalid Res Id"),
+    };
+}
+
+pub fn getResTyp(resKey: u16) enum { Buf, Tex } {
+    return if (resKey >= rc.BUF_MAX) .Tex else .Buf;
+}
+
+// pub const TextureLink = struct {
+//     in: TexPassId,
+//     out: ?TexPassId = null,
+// };
+
+// pub const BufferLink = struct {
+//     in: BufPassId,
+//     out: ?BufPassId = null,
+// };
 
 pub const TextureStringLink = struct {
     in: []const u8, // Should be String?
@@ -30,17 +49,10 @@ pub const BufferStringLink = struct {
     out: ?[]const u8 = null, // Should be String?
 };
 
-pub const TextureAccess = struct {
+pub const Access = struct {
     pass: PassId,
-    input: TexPassId,
-    output: ?TexPassId,
-    access: enum { write, read },
-};
-
-pub const BufferAccess = struct {
-    pass: PassId,
-    input: BufPassId,
-    output: ?BufPassId,
+    input: ResPassId,
+    output: ?ResPassId,
     access: enum { write, read },
 };
 
@@ -61,7 +73,7 @@ pub const PassLifetime = struct {
 };
 
 pub const GroupLifetime = struct {
-    rootResource: ResPassId,
+    rootResource: u16,
     earliestPass: u16,
     latestPass: u16,
 };
@@ -71,45 +83,46 @@ pub const GraphLifetime = struct {
     lastLevel: u16,
 };
 
-pub const BufferGroup = struct {
-    rootPass: PassId,
-    firstMapIndex: u16,
-    lastMapIndex: u16,
+pub const ResDesc = union(enum) {
+    texDesc: TexDesc,
     bufDesc: BufDesc,
+
+    pub fn isTransient(self: *const ResDesc) bool {
+        return switch (self.*) {
+            .bufDesc => |desc| desc.share == .transient,
+            .texDesc => |desc| desc.share == .transient,
+        };
+    }
 };
 
-pub const TextureGroup = struct {
+pub const Group = struct {
     rootPass: PassId,
     firstMapIndex: u16,
     lastMapIndex: u16,
-    texDesc: TexDesc,
+    desc: ResDesc,
 };
 
 pub const GroupChange = struct {
-    rootResource: ResPassId,
+    pub const ResUpdate = enum {
+        created,
+        deleted,
+        newDesc,
+        newPass,
+        newPassAndDesc,
+        unchanged,
+    };
+    rootResource: u16,
     change: ResUpdate,
-    pub const ResUpdate = enum { created, deleted, newDesc, newPass, newPassAndDesc, unchanged };
 };
 
-pub const PhysicalBufLifetime = struct {
-    bufDescId: BufPassId,
+pub const PhysicalResLifetime = struct {
+    resKey: u16,
     earliest: u16,
     latest: u16,
 };
 
-pub const PhysicalTexLifetime = struct {
-    texDescId: TexPassId,
-    earliest: u16,
-    latest: u16,
-};
-
-pub const BufferClear = struct {
-    sharedBufIndex: u16,
-    passAfterClear: PassId, // First Pass that happens Afterwards
-};
-
-pub const TextureClear = struct {
-    sharedTexIndex: u16,
+pub const ResourceClear = struct {
+    sharedIndex: u16,
     passAfterClear: PassId, // First Pass that happens Afterwards
 };
 
@@ -126,10 +139,8 @@ pub const TransientTexture = struct {
 };
 
 pub const PassAccessRange = struct {
-    firstBuf: u16,
-    lastBuf: u16,
-    firstTex: u16,
-    lastTex: u16,
+    first: u16,
+    last: u16,
 };
 
 pub const GraphMemoryNode = struct {

@@ -1,14 +1,15 @@
-const BufDesc = @import("../../render/types/res/BufferMeta.zig").BufferMeta.BufDesc;
 const TexDesc = @import("../../render/types/res/TextureMeta.zig").TextureMeta.TexDesc;
+const BufDesc = @import("../../render/types/res/BufferMeta.zig").BufferMeta.BufDesc;
 const PassLifetime = @import("../../frameBuild/components.zig").PassLifetime;
-const TextureGroup = @import("../../frameBuild/components.zig").TextureGroup;
-const BufferGroup = @import("../../frameBuild/components.zig").BufferGroup;
-const TextureLink = @import("../../frameBuild/components.zig").TextureLink;
-const BufferLink = @import("../../frameBuild/components.zig").BufferLink;
+const ResDesc = @import("../../frameBuild/components.zig").ResDesc;
 const TexPassId = @import("../../.configs/idConfig.zig").TexPassId;
 const BufPassId = @import("../../.configs/idConfig.zig").BufPassId;
+const Group = @import("../../frameBuild/components.zig").Group;
 const rc = @import("../../.configs/renderConfig.zig");
 const std = @import("std");
+
+const getResKey = @import("../../frameBuild/components.zig").getResKey;
+const getResTyp = @import("../../frameBuild/components.zig").getResTyp;
 
 const RegistryData = @import("../0_Registry/RegistryData.zig").RegistryData;
 const ResourceData = @import("../2_Resource/ResourceData.zig").ResourceData;
@@ -20,7 +21,7 @@ const AccessData = @import("../1.5_Access/AccessData.zig").AccessData;
 // Step 5.1
 
 pub const MapperSys = struct {
-    pub fn buildMapping(
+    pub fn build(
         mapperData: *MapperData,
         accessData: *const AccessData,
         resourceData: *const ResourceData,
@@ -28,334 +29,200 @@ pub const MapperSys = struct {
         optimizerData: *const OptimizerData,
         registryData: *const RegistryData,
     ) !void {
-        // Move Last Mapping and Clear current
-        mapperData.bufMapTransient.clear();
-        mapperData.bufMapPersistent.clear();
-        mapperData.texMapTransient.clear();
-        mapperData.texMapPersistent.clear();
+        mapperData.transientMap.clear();
+        mapperData.persistentMap.clear();
 
-        mapperData.lastBufGroupsTransient = mapperData.bufGroupsTransient;
-        mapperData.lastBufGroupsPersistent = mapperData.bufGroupsPersistent;
-        mapperData.lastTexGroupsTransient = mapperData.texGroupsTransient;
-        mapperData.lastTexGroupsPersistent = mapperData.texGroupsPersistent;
+        mapperData.prevTransientGroups = mapperData.transientGroups;
+        mapperData.prevPersistentGroups = mapperData.persistentGroups;
 
-        mapperData.bufGroupsTransient.clear();
-        mapperData.bufGroupsPersistent.clear();
-        mapperData.texGroupsTransient.clear();
-        mapperData.texGroupsPersistent.clear();
+        mapperData.transientGroups.clear();
+        mapperData.persistentGroups.clear();
 
-        // Buffer
-        for (accessData.bufAccesses.constSlice()) |bufAccess| {
-            if (mapperData.bufPassIds.isKeyUsed(bufAccess.input) == false) mapperData.bufPassIds.insert(bufAccess.input, bufAccess.input);
+        mapperData.transientGroupLifetimes.clear();
+        mapperData.linkedResources.clear();
+        mapperData.resPassIds.clear();
 
-            if (bufAccess.output) |bufOutput| {
-                if (mapperData.bufPassIds.isKeyUsed(bufOutput) == false) mapperData.bufPassIds.insert(bufOutput, bufOutput);
-                try mapperData.linkedBuffers.append(BufferLink{ .in = bufAccess.input, .out = bufAccess.output }); // moved inside, only append when output exists
+        for (accessData.accesses.constSlice()) |access| {
+            const inKey = getResKey(access.input);
+            if (mapperData.resPassIds.isKeyUsed(inKey) == false) mapperData.resPassIds.insert(inKey, inKey);
+
+            if (access.output) |output| {
+                const outKey = getResKey(output);
+                if (mapperData.resPassIds.isKeyUsed(outKey) == false) mapperData.resPassIds.insert(outKey, outKey);
+                try mapperData.linkedResources.append(.{ .in = inKey, .out = outKey });
             }
         }
 
-        while (mapperData.bufPassIds.getLength() > 0) {
-            const lastBuf = mapperData.bufPassIds.getLast();
-            mapperData.bufPassIds.removeLast();
-            mapperData.sharedBuffers.upsert(lastBuf, lastBuf); // seed directly into allSharedBuffers
+        // Mapping
+
+        while (mapperData.resPassIds.getLength() > 0) {
+            const seedKey = mapperData.resPassIds.getLast();
+            mapperData.resPassIds.removeLast();
+            mapperData.sharedResources.upsert(seedKey, seedKey);
 
             var readIndex: u32 = 0;
-            while (readIndex < mapperData.sharedBuffers.getLength()) {
-                const sharedBuf = mapperData.sharedBuffers.getByIndex(readIndex);
+            while (readIndex < mapperData.sharedResources.getLength()) {
+                const sharedKey = mapperData.sharedResources.getByIndex(readIndex);
                 readIndex += 1;
 
-                const linkedBufLen = mapperData.linkedBuffers.len;
-                for (0..linkedBufLen) |linkedIndex| {
-                    const curIndex = linkedBufLen - linkedIndex - 1;
-                    const bufLink = mapperData.linkedBuffers.constSlice()[curIndex];
+                const linkedLen = mapperData.linkedResources.len;
+                for (0..linkedLen) |li| {
+                    const cur = linkedLen - li - 1;
+                    const link = mapperData.linkedResources.constSlice()[cur];
 
-                    var isShared = false;
-                    if (bufLink.in == sharedBuf) isShared = true;
-                    if (bufLink.out != null and bufLink.out.? == sharedBuf) isShared = true;
-
-                    if (isShared) {
-                        if (mapperData.sharedBuffers.isKeyUsed(bufLink.in) == false) {
-                            mapperData.sharedBuffers.upsert(bufLink.in, bufLink.in); // directly into allSharedBuffers
-                            mapperData.bufPassIds.remove(bufLink.in);
+                    if (link.in == sharedKey or link.out == sharedKey) {
+                        if (mapperData.sharedResources.isKeyUsed(link.in) == false) {
+                            mapperData.sharedResources.upsert(link.in, link.in);
+                            mapperData.resPassIds.remove(link.in);
                         }
-                        if (bufLink.out) |out| {
-                            if (mapperData.sharedBuffers.isKeyUsed(out) == false) {
-                                mapperData.sharedBuffers.upsert(out, out); // directly into allSharedBuffers
-                                mapperData.bufPassIds.remove(out);
-                            }
+                        if (mapperData.sharedResources.isKeyUsed(link.out) == false) {
+                            mapperData.sharedResources.upsert(link.out, link.out);
+                            mapperData.resPassIds.remove(link.out);
                         }
-                        mapperData.linkedBuffers.swapRemove(@intCast(curIndex));
+                        mapperData.linkedResources.swapRemove(@intCast(cur));
                     }
                 }
             }
 
-            // Resolve All Buffers For Validation, Move all to correct Map
-            var lastBufPassId: BufPassId = undefined;
-            var lastBufDescription: ?BufDesc = null;
-
+            // Root selection
+            var lastKey: u16 = undefined;
+            var lastDesc: ?ResDesc = null;
             var lastLifetime: ?PassLifetime = null;
-            var rootBuf: BufPassId = undefined;
+            var rootKey: u16 = undefined;
 
-            for (mapperData.sharedBuffers.getConstItems()) |bufPassId| {
-                var newBufDesc = resourceData.bufDescs.getByKey(bufPassId);
+            var groupEarliest: u16 = std.math.maxInt(u16);
+            var groupLatest: u16 = 0;
 
-                if (lastBufDescription) |lastBufDesc| {
-                    newBufDesc = try compareBufDesc(lastBufPassId, &lastBufDesc, bufPassId, &newBufDesc, registryData);
-                }
+            for (mapperData.sharedResources.getConstItems()) |memberKey| {
+                var newDesc: ResDesc = switch (getResTyp(memberKey)) {
+                    .Buf => .{ .bufDesc = resourceData.bufDescs.getByKey(.id(memberKey)) },
+                    .Tex => .{ .texDesc = resourceData.texDescs.getByKey(.id(memberKey - rc.BUF_MAX)) },
+                };
+                if (lastDesc) |ld| newDesc = try compareResDesc(lastKey, &ld, memberKey, &newDesc, registryData);
 
-                // Check Root Lifetime
-                const newLifetime = lifetimeData.bufLifetimes.getByKey(bufPassId);
+                const newLifetime = lifetimeData.passLifetimes.getByKey(memberKey);
+
+                if (newLifetime.earliest < groupEarliest) groupEarliest = newLifetime.earliest;
+                if (newLifetime.latest > groupLatest) groupLatest = newLifetime.latest;
 
                 if (lastLifetime) |last| {
                     if (newLifetime.earliest < last.earliest or (newLifetime.earliest == last.earliest and newLifetime.latest < last.latest)) {
                         lastLifetime = newLifetime;
-                        rootBuf = bufPassId;
+                        rootKey = memberKey;
                     }
                 } else {
-                    rootBuf = bufPassId;
+                    rootKey = memberKey;
                     lastLifetime = newLifetime;
                 }
 
-                lastBufPassId = bufPassId;
-                lastBufDescription = newBufDesc;
+                lastKey = memberKey;
+                lastDesc = newDesc;
             }
 
-            // Create Root Mapping
-            for (mapperData.sharedBuffers.getConstItems()) |bufPassId| {
-                switch (lastBufDescription.?.share) {
-                    .transient => mapperData.bufMapTransient.upsert(bufPassId, rootBuf),
-                    .persistent => mapperData.bufMapPersistent.upsert(bufPassId, rootBuf),
-                }
+            const isTransient = lastDesc.?.isTransient();
+            if (isTransient) mapperData.transientGroupLifetimes.appendAssumeCapacity(.{ .rootResource = rootKey, .earliestPass = groupEarliest, .latestPass = groupLatest });
+            const map = if (isTransient) &mapperData.transientMap else &mapperData.persistentMap;
+            const groups = if (isTransient) &mapperData.transientGroups else &mapperData.persistentGroups;
+
+            for (mapperData.sharedResources.getConstItems()) |memberKey| {
+                map.upsert(memberKey, rootKey);
             }
 
-            // Create Group
-            switch (lastBufDescription.?.share) {
-                .transient => {
-                    const bufGroup = BufferGroup{
-                        .rootPass = optimizerData.optimizedGraph.getConstItems()[lastLifetime.?.earliest].pass,
-                        .bufDesc = lastBufDescription.?,
-                        .firstMapIndex = @intCast(mapperData.bufMapTransient.getLength() - mapperData.sharedBuffers.getLength()),
-                        .lastMapIndex = @intCast(mapperData.bufMapTransient.getLength() - 1),
-                    };
-                    mapperData.bufGroupsTransient.upsert(rootBuf, bufGroup);
-                },
-                .persistent => {
-                    const bufGroup = BufferGroup{
-                        .rootPass = optimizerData.optimizedGraph.getConstItems()[lastLifetime.?.earliest].pass,
-                        .bufDesc = lastBufDescription.?,
-                        .firstMapIndex = @intCast(mapperData.bufMapPersistent.getLength() - mapperData.sharedBuffers.getLength()),
-                        .lastMapIndex = @intCast(mapperData.bufMapPersistent.getLength() - 1),
-                    };
-                    mapperData.bufGroupsPersistent.upsert(rootBuf, bufGroup);
-                },
-            }
-            mapperData.sharedBuffers.clear();
+            groups.upsert(rootKey, Group{
+                .rootPass = optimizerData.optimizedGraph.getConstItems()[lastLifetime.?.earliest].pass,
+                .desc = lastDesc.?,
+                .firstMapIndex = @intCast(map.getLength() - mapperData.sharedResources.getLength()),
+                .lastMapIndex = @intCast(map.getLength() - 1),
+            });
+
+            mapperData.sharedResources.clear();
         }
 
-        // Textures
-        for (accessData.texAccesses.constSlice()) |texAccess| {
-            if (mapperData.texPassIds.isKeyUsed(texAccess.input) == false) mapperData.texPassIds.insert(texAccess.input, texAccess.input);
-
-            if (texAccess.output) |texOutput| {
-                if (mapperData.texPassIds.isKeyUsed(texOutput) == false) mapperData.texPassIds.insert(texOutput, texOutput);
-                try mapperData.linkedTextures.append(TextureLink{ .in = texAccess.input, .out = texAccess.output }); // moved inside, only append when output exists
-            }
-        }
-
-        while (mapperData.texPassIds.getLength() > 0) {
-            const lastTex = mapperData.texPassIds.getLast();
-            mapperData.texPassIds.removeLast();
-            mapperData.sharedTextures.upsert(lastTex, lastTex); // seed directly into allSharedTextures
-
-            var readIndex: u32 = 0;
-            while (readIndex < mapperData.sharedTextures.getLength()) {
-                const sharedTex = mapperData.sharedTextures.getByIndex(readIndex);
-                readIndex += 1;
-
-                const linkedTexLen = mapperData.linkedTextures.len;
-                for (0..linkedTexLen) |linkedIndex| {
-                    const curIndex = linkedTexLen - linkedIndex - 1;
-                    const texLink = mapperData.linkedTextures.constSlice()[curIndex];
-
-                    var isShared = false;
-                    if (texLink.in == sharedTex) isShared = true;
-                    if (texLink.out != null and texLink.out.? == sharedTex) isShared = true;
-
-                    if (isShared) {
-                        if (mapperData.sharedTextures.isKeyUsed(texLink.in) == false) {
-                            mapperData.sharedTextures.upsert(texLink.in, texLink.in); // directly into allSharedTextures
-                            mapperData.texPassIds.remove(texLink.in);
-                        }
-                        if (texLink.out) |out| {
-                            if (mapperData.sharedTextures.isKeyUsed(out) == false) {
-                                mapperData.sharedTextures.upsert(out, out); // directly into allSharedTextures
-                                mapperData.texPassIds.remove(out);
-                            }
-                        }
-                        mapperData.linkedTextures.swapRemove(@intCast(curIndex));
-                    }
-                }
-            }
-
-            var lastTexPassId: TexPassId = undefined;
-            var lastTexDescription: ?TexDesc = null;
-
-            var lastLifetime: ?PassLifetime = null;
-            var rootTex: TexPassId = undefined;
-
-            for (mapperData.sharedTextures.getConstItems()) |texPassId| {
-                var newTexDesc = resourceData.texDescs.getByKey(texPassId);
-
-                if (lastTexDescription) |lastTexDesc| {
-                    newTexDesc = try compareTexDesc(lastTexPassId, &lastTexDesc, texPassId, &newTexDesc, registryData);
-                }
-
-                // Check Root Lifetime
-                const newLifetime = lifetimeData.texLifetimes.getByKey(texPassId);
-
-                if (lastLifetime) |last| {
-                    if (newLifetime.earliest < last.earliest or (newLifetime.earliest == last.earliest and newLifetime.latest < last.latest)) {
-                        lastLifetime = newLifetime;
-                        rootTex = texPassId;
-                    }
-                } else {
-                    rootTex = texPassId;
-                    lastLifetime = newLifetime;
-                }
-
-                lastTexPassId = texPassId;
-                lastTexDescription = newTexDesc;
-            }
-
-            // Root Mappings
-            for (mapperData.sharedTextures.getConstItems()) |texPassId| {
-                switch (lastTexDescription.?.share) {
-                    .transient => mapperData.texMapTransient.upsert(texPassId, rootTex),
-                    .persistent => mapperData.texMapPersistent.upsert(texPassId, rootTex),
-                }
-            }
-
-            // Create Group
-            switch (lastTexDescription.?.share) {
-                .transient => {
-                    const texGroup = TextureGroup{
-                        .rootPass = optimizerData.optimizedGraph.getConstItems()[lastLifetime.?.earliest].pass,
-                        .texDesc = lastTexDescription.?,
-                        .firstMapIndex = @intCast(mapperData.texMapTransient.getLength() - mapperData.sharedTextures.getLength()),
-                        .lastMapIndex = @intCast(mapperData.texMapTransient.getLength() - 1),
-                    };
-                    mapperData.texGroupsTransient.upsert(rootTex, texGroup);
-                },
-                .persistent => {
-                    const texGroup = TextureGroup{
-                        .rootPass = optimizerData.optimizedGraph.getConstItems()[lastLifetime.?.earliest].pass,
-                        .texDesc = lastTexDescription.?,
-                        .firstMapIndex = @intCast(mapperData.texMapPersistent.getLength() - mapperData.sharedTextures.getLength()),
-                        .lastMapIndex = @intCast(mapperData.texMapPersistent.getLength() - 1),
-                    };
-                    mapperData.texGroupsPersistent.upsert(rootTex, texGroup);
-                },
-            }
-
-            mapperData.sharedTextures.clear();
-        }
+        // Sort Group Lifetimes
+        mapperData.transientGroupLifetimes.selectionSort(greaterGroup);
+        // mergerData.transientGroupLifetimes.defeatingQuicksort(lessThanGroup);
 
         // Debug Output
         if (rc.FRAME_GRAPH_DEBUG) {
             std.debug.print("5.1.ResourceMapper: \n", .{});
 
             std.debug.print("Previous: \n", .{});
-            // Buffer Debug
-            for (mapperData.lastBufGroupsPersistent.getConstItems(), 0..) |group, i| {
-                const rootBufPassId = mapperData.lastBufGroupsPersistent.getKeyByIndex(@intCast(i));
-                const rootBuf = try registryData.getBufferName(rootBufPassId);
-                const rootPass = try registryData.getPassName(group.rootPass);
-                std.debug.print("BufGroup (Persistent {}) (RootRes {s}) (RootPass {s}) (mapIndex {} -> {})\n", .{ i, rootBuf, rootPass, group.firstMapIndex, group.lastMapIndex });
+            inline for (.{ mapperData.prevPersistentGroups, mapperData.prevTransientGroups }, .{ "Persistent", "Transient" }) |groups, label| {
+                for (groups.getConstItems(), 0..) |group, i| {
+                    const rootKey = groups.getKeyByIndex(@intCast(i));
+                    const rootTyp = getResTyp(rootKey);
+                    const rootName = switch (rootTyp) {
+                        .Buf => try registryData.getBufferName(.id(rootKey)),
+                        .Tex => try registryData.getTextureName(.id(rootKey - rc.BUF_MAX)),
+                    };
+                    const rootPass = try registryData.getPassName(group.rootPass);
+                    std.debug.print("{s}Group ({s} {}) (RootRes {s}) (RootPass {s}) (mapIndex {} -> {})\n", .{ @tagName(rootTyp), label, i, rootName, rootPass, group.firstMapIndex, group.lastMapIndex });
+                }
             }
 
-            for (mapperData.lastBufGroupsTransient.getConstItems(), 0..) |group, i| {
-                const rootBufPassId = mapperData.lastBufGroupsTransient.getKeyByIndex(@intCast(i));
-                const rootBuf = try registryData.getBufferName(rootBufPassId);
+            std.debug.print("\nCurrent: \n", .{});
+            // Persistent Groups
+            for (mapperData.persistentGroups.getConstItems(), 0..) |group, i| {
+                const rootKey = mapperData.persistentGroups.getKeyByIndex(@intCast(i));
+                const rootTyp = getResTyp(rootKey);
+                const rootName = switch (rootTyp) {
+                    .Buf => try registryData.getBufferName(.id(rootKey)),
+                    .Tex => try registryData.getTextureName(.id(rootKey - rc.BUF_MAX)),
+                };
                 const rootPass = try registryData.getPassName(group.rootPass);
-                std.debug.print("BufGroup (Transient {}) (RootRes {s}) (RootPass {s}) (mapIndex {} -> {})\n", .{ i, rootBuf, rootPass, group.firstMapIndex, group.lastMapIndex });
-            }
+                std.debug.print("{s}Group (Persistent {}) (RootRes {s}) (RootPass {s}) (mapIndex {} -> {})\n", .{ @tagName(rootTyp), i, rootName, rootPass, group.firstMapIndex, group.lastMapIndex });
 
-            // Group Debug Textures
-            for (mapperData.lastTexGroupsPersistent.getConstItems(), 0..) |group, i| {
-                const rootTexPassId = mapperData.lastTexGroupsPersistent.getKeyByIndex(@intCast(i));
-                const rootTex = try registryData.getTextureName(rootTexPassId);
+                for (group.firstMapIndex..group.lastMapIndex + 1, 0..) |mapIndex, counter| {
+                    const memberKey = mapperData.persistentMap.getKeyByIndex(@intCast(mapIndex));
+                    const memberName = switch (getResTyp(memberKey)) {
+                        .Buf => try registryData.getBufferName(.id(memberKey)),
+                        .Tex => try registryData.getTextureName(.id(memberKey - rc.BUF_MAX)),
+                    };
+                    std.debug.print("     -> {}. {s}\n", .{ counter, memberName });
+                }
+            }
+            // Transient Groups
+            for (mapperData.transientGroups.getConstItems(), 0..) |group, i| {
+                const rootKey = mapperData.transientGroups.getKeyByIndex(@intCast(i));
+                const rootTyp = getResTyp(rootKey);
+                const rootName = switch (rootTyp) {
+                    .Buf => try registryData.getBufferName(.id(rootKey)),
+                    .Tex => try registryData.getTextureName(.id(rootKey - rc.BUF_MAX)),
+                };
                 const rootPass = try registryData.getPassName(group.rootPass);
-                std.debug.print("TexGroup (Persistent {}) (RootRes {s}) (RootPass {s}) (mapIndex {} -> {})\n", .{ i, rootTex, rootPass, group.firstMapIndex, group.lastMapIndex });
-            }
+                std.debug.print("{s}Group (Transient {}) (RootRes {s}) (RootPass {s}) (mapIndex {} -> {})\n", .{ @tagName(rootTyp), i, rootName, rootPass, group.firstMapIndex, group.lastMapIndex });
 
-            for (mapperData.lastTexGroupsTransient.getConstItems(), 0..) |group, i| {
-                const rootTexPassId = mapperData.lastTexGroupsTransient.getKeyByIndex(@intCast(i));
-                const rootTex = try registryData.getTextureName(rootTexPassId);
-                const rootPass = try registryData.getPassName(group.rootPass);
-                std.debug.print("TexGroup (Transient {}) (RootRes {s}) (RootPass {s}) (mapIndex {} -> {})\n", .{ i, rootTex, rootPass, group.firstMapIndex, group.lastMapIndex });
+                for (group.firstMapIndex..group.lastMapIndex + 1, 0..) |mapIndex, counter| {
+                    const memberKey = mapperData.transientMap.getKeyByIndex(@intCast(mapIndex));
+                    const memberName = switch (getResTyp(memberKey)) {
+                        .Buf => try registryData.getBufferName(.id(memberKey)),
+                        .Tex => try registryData.getTextureName(.id(memberKey - rc.BUF_MAX)),
+                    };
+                    std.debug.print("     -> {}. {s}\n", .{ counter, memberName });
+                }
             }
-
+            std.debug.print("Transient Group Lifetimes: \n", .{});
+            for (mapperData.transientGroupLifetimes.constSlice(), 0..) |groupLifetime, i| {
+                const resTyp = getResTyp(groupLifetime.rootResource);
+                const resName = switch (resTyp) {
+                    .Buf => try registryData.getBufferName(.id(groupLifetime.rootResource)),
+                    .Tex => try registryData.getTextureName(.id(groupLifetime.rootResource - rc.BUF_MAX)),
+                };
+                std.debug.print("- {}. Transient {s} Group (Root {s}) (Pass {} -> Pass {})\n", .{ i, @tagName(resTyp), resName, groupLifetime.earliestPass, groupLifetime.latestPass });
+            }
             std.debug.print("\n", .{});
-            std.debug.print("Current: \n", .{});
-
-            // Group Debug Buffers
-            for (mapperData.bufGroupsPersistent.getConstItems(), 0..) |group, i| {
-                const rootBufPassId = mapperData.bufGroupsPersistent.getKeyByIndex(@intCast(i));
-                const rootBuf = try registryData.getBufferName(rootBufPassId);
-                const rootPass = try registryData.getPassName(group.rootPass);
-                std.debug.print("BufGroup (Persistent {}) (RootRes {s}) (RootPass {s}) (mapIndex {} -> {})\n", .{ i, rootBuf, rootPass, group.firstMapIndex, group.lastMapIndex });
-
-                for (group.firstMapIndex..group.lastMapIndex + 1, 0..) |mapIndex, counter| {
-                    const bufPassId = mapperData.bufMapPersistent.getKeyByIndex(@intCast(mapIndex));
-                    const bufName = try registryData.getBufferName(bufPassId);
-                    std.debug.print("     -> {}. {s}\n", .{ counter, bufName });
-                }
-            }
-
-            for (mapperData.bufGroupsTransient.getConstItems(), 0..) |group, i| {
-                const rootBufPassId = mapperData.bufGroupsTransient.getKeyByIndex(@intCast(i));
-                const rootBuf = try registryData.getBufferName(rootBufPassId);
-                const rootPass = try registryData.getPassName(group.rootPass);
-                std.debug.print("BufGroup (Transient {}) (RootRes {s}) (RootPass {s}) (mapIndex {} -> {})\n", .{ i, rootBuf, rootPass, group.firstMapIndex, group.lastMapIndex });
-
-                for (group.firstMapIndex..group.lastMapIndex + 1, 0..) |mapIndex, counter| {
-                    const bufPassId = mapperData.bufMapTransient.getKeyByIndex(@intCast(mapIndex));
-                    const bufName = try registryData.getBufferName(bufPassId);
-                    std.debug.print("     -> {}. {s}\n", .{ counter, bufName });
-                }
-            }
-
-            // Group Debug Textures
-            for (mapperData.texGroupsPersistent.getConstItems(), 0..) |group, i| {
-                const rootTexPassId = mapperData.texGroupsPersistent.getKeyByIndex(@intCast(i));
-                const rootTex = try registryData.getTextureName(rootTexPassId);
-                const rootPass = try registryData.getPassName(group.rootPass);
-                std.debug.print("TexGroup (Persistent {}) (RootRes {s}) (RootPass {s}) (mapIndex {} -> {})\n", .{ i, rootTex, rootPass, group.firstMapIndex, group.lastMapIndex });
-
-                for (group.firstMapIndex..group.lastMapIndex + 1, 0..) |mapIndex, counter| {
-                    const texPassId = mapperData.texMapPersistent.getKeyByIndex(@intCast(mapIndex));
-                    const texName = try registryData.getTextureName(texPassId);
-                    std.debug.print("     -> {}. {s}\n", .{ counter, texName });
-                }
-            }
-
-            for (mapperData.texGroupsTransient.getConstItems(), 0..) |group, i| {
-                const rootTexPassId = mapperData.texGroupsTransient.getKeyByIndex(@intCast(i));
-                const rootTex = try registryData.getTextureName(rootTexPassId);
-                const rootPass = try registryData.getPassName(group.rootPass);
-                std.debug.print("TexGroup (Transient {}) (RootRes {s}) (RootPass {s}) (mapIndex {} -> {})\n", .{ i, rootTex, rootPass, group.firstMapIndex, group.lastMapIndex });
-
-                for (group.firstMapIndex..group.lastMapIndex + 1, 0..) |mapIndex, counter| {
-                    const texPassId = mapperData.texMapTransient.getKeyByIndex(@intCast(mapIndex));
-                    const texName = try registryData.getTextureName(texPassId);
-                    std.debug.print("     -> {}. {s}\n", .{ counter, texName });
-                }
-            }
-
             std.debug.print("\n", .{});
         }
     }
 };
+
+fn compareResDesc(key1: u16, desc1: *const ResDesc, key2: u16, desc2: *const ResDesc, registryData: *const RegistryData) !ResDesc {
+    if (std.meta.activeTag(desc1.*) != std.meta.activeTag(desc2.*)) return error.ResourceKindsMixedInGroup; // can't happen via valid links; catches bugs
+    return switch (desc1.*) {
+        .bufDesc => |d1| .{ .bufDesc = try compareBufDesc(.id(key1), &d1, .id(key2), &desc2.bufDesc, registryData) },
+        .texDesc => |d1| .{ .texDesc = try compareTexDesc(.id(key1 - rc.BUF_MAX), &d1, .id(key2 - rc.BUF_MAX), &desc2.texDesc, registryData) },
+    };
+}
 
 fn compareBufDesc(bufId1: BufPassId, bufDesc1: *const BufDesc, bufId2: BufPassId, bufDesc2: *const BufDesc, registryData: *const RegistryData) !BufDesc {
     const equal = if (std.meta.eql(bufDesc1.*, bufDesc2.*)) true else false;
@@ -411,4 +278,14 @@ fn compareTexDesc(texId1: TexPassId, texDesc1: *const TexDesc, texId2: TexPassId
         .resize = texDesc1.resize,
         .fitPass = texDesc1.fitPass,
     };
+}
+
+fn lessThanGroup(group1: anytype, group2: anytype) bool {
+    if (group1.earliestPass != group2.earliestPass) return group1.earliestPass < group2.earliestPass;
+    return group1.latestPass < group2.latestPass;
+}
+
+fn greaterGroup(group1: anytype, group2: anytype) bool {
+    if (group1.earliestPass != group2.earliestPass) return group1.earliestPass > group2.earliestPass;
+    return group1.latestPass > group2.latestPass;
 }
