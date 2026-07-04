@@ -1,5 +1,4 @@
-const BufGroupLifetime = @import("../../frameBuild/components.zig").BufGroupLifetime;
-const TexGroupLifetime = @import("../../frameBuild/components.zig").TexGroupLifetime;
+const GroupLifetime = @import("../../frameBuild/components.zig").GroupLifetime;
 const rc = @import("../../.configs/renderConfig.zig");
 const std = @import("std");
 
@@ -12,8 +11,7 @@ const MergerData = @import("MergerData.zig").MergerData;
 
 pub const MergerSys = struct {
     pub fn buildPassResources(mergerData: *MergerData, lifetimeData: *const LifetimeData, mapperData: *const MapperData, registryData: *const RegistryData) !void {
-        mergerData.transientBufGroupLifetimes.clear();
-        mergerData.transientTexGroupLifetimes.clear();
+        mergerData.transientGroupLifetimes.clear();
 
         // Transient Buffer Group Lifetime Merge
         for (mapperData.bufGroupsTransient.getConstItems(), 0..) |group, i| {
@@ -31,12 +29,9 @@ pub const MergerSys = struct {
                 if (bufLifetime.latest > latest) latest = bufLifetime.latest;
             }
             const groupRootBuf = mapperData.bufGroupsTransient.getKeyByIndex(@intCast(i));
-            const groupLifetime = BufGroupLifetime{ .rootBuf = groupRootBuf, .earliest = earliest, .latest = latest };
-            mergerData.transientBufGroupLifetimes.appendAssumeCapacity(groupLifetime);
+            const groupLifetime = GroupLifetime{ .rootResource = .{ .bufPassId = groupRootBuf }, .earliestPass = earliest, .latestPass = latest };
+            mergerData.transientGroupLifetimes.appendAssumeCapacity(groupLifetime);
         }
-
-        // mergerData.transientBufGroupLifetimes.defeatingQuicksort(lessThanGroup);
-        mergerData.transientBufGroupLifetimes.selectionSort(greaterGroup);
 
         // Transient Texture Group Lifetime Merge
         for (mapperData.texGroupsTransient.getConstItems(), 0..) |group, i| {
@@ -54,24 +49,23 @@ pub const MergerSys = struct {
                 if (texLifetime.latest > latest) latest = texLifetime.latest;
             }
             const groupRootTex = mapperData.texGroupsTransient.getKeyByIndex(@intCast(i));
-            const groupLifetime = TexGroupLifetime{ .rootTex = groupRootTex, .earliest = earliest, .latest = latest };
-            mergerData.transientTexGroupLifetimes.appendAssumeCapacity(groupLifetime);
+            const groupLifetime = GroupLifetime{ .rootResource = .{ .texPassId = groupRootTex }, .earliestPass = earliest, .latestPass = latest };
+            mergerData.transientGroupLifetimes.appendAssumeCapacity(groupLifetime);
         }
 
-        // mergerData.transientTexGroupLifetimes.defeatingQuicksort(lessThanGroup);
-        mergerData.transientTexGroupLifetimes.selectionSort(greaterGroup);
+        // mergerData.transientGroupLifetimes.defeatingQuicksort(lessThanGroup);
+        mergerData.transientGroupLifetimes.selectionSort(greaterGroup);
 
+        // Debug
         if (rc.FRAME_GRAPH_DEBUG) {
             std.debug.print("5.2.LifetimeMerger: \n", .{});
-            // Buffer Debug
-            for (mergerData.transientBufGroupLifetimes.constSlice(), 0..) |groupLifetime, i| {
-                const bufName = try registryData.getBufferName(groupLifetime.rootBuf);
-                std.debug.print("- {}. Transient Buf Group (Root {s}) ({} -> {})\n", .{ i, bufName, groupLifetime.earliest, groupLifetime.latest });
-            }
-            // Texture Debug
-            for (mergerData.transientTexGroupLifetimes.constSlice(), 0..) |groupLifetime, i| {
-                const texName = try registryData.getTextureName(groupLifetime.rootTex);
-                std.debug.print("- {}. Transient Tex Group (Root {s}) ({} -> {})\n", .{ i, texName, groupLifetime.earliest, groupLifetime.latest });
+            for (mergerData.transientGroupLifetimes.constSlice(), 0..) |groupLifetime, i| {
+                const resName = switch (groupLifetime.rootResource) {
+                    .bufPassId => |rootId| try registryData.getBufferName(rootId),
+                    .texPassId => |rootId| try registryData.getTextureName(rootId),
+                };
+                const resTag = @tagName(groupLifetime.rootResource);
+                std.debug.print("- {}. Transient {s} Group (Root {s}) (Pass {} -> Pass {})\n", .{ i, resTag, resName, groupLifetime.earliestPass, groupLifetime.latestPass });
             }
             std.debug.print("\n", .{});
         }
@@ -79,11 +73,11 @@ pub const MergerSys = struct {
 };
 
 fn lessThanGroup(group1: anytype, group2: anytype) bool {
-    if (group1.earliest != group2.earliest) return group1.earliest < group2.earliest;
-    return group1.latest < group2.latest;
+    if (group1.earliestPass != group2.earliestPass) return group1.earliestPass < group2.earliestPass;
+    return group1.latestPass < group2.latestPass;
 }
 
 fn greaterGroup(group1: anytype, group2: anytype) bool {
-    if (group1.earliest != group2.earliest) return group1.earliest > group2.earliest;
-    return group1.latest > group2.latest;
+    if (group1.earliestPass != group2.earliestPass) return group1.earliestPass > group2.earliestPass;
+    return group1.latestPass > group2.latestPass;
 }

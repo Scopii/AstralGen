@@ -8,6 +8,8 @@ const PassId = @import("../.configs/idConfig.zig").PassId;
 const TexId = @import("../.configs/idConfig.zig").TexId;
 const BufId = @import("../.configs/idConfig.zig").BufId;
 
+pub const ResPassId = union(enum) { texPassId: TexPassId, bufPassId: BufPassId };
+
 pub const TextureLink = struct {
     in: TexPassId,
     out: ?TexPassId = null,
@@ -42,14 +44,8 @@ pub const BufferAccess = struct {
     access: enum { write, read },
 };
 
-pub const TextureDependancy = struct {
-    tex: TexPassId,
-    predecessor: PassId,
-    successor: PassId,
-};
-
-pub const BufferDependancy = struct {
-    buf: BufPassId,
+pub const Dependancy = struct {
+    resource: ResPassId,
     predecessor: PassId,
     successor: PassId,
 };
@@ -64,16 +60,10 @@ pub const PassLifetime = struct {
     latest: u16,
 };
 
-pub const BufGroupLifetime = struct {
-    rootBuf: BufPassId,
-    earliest: u16,
-    latest: u16,
-};
-
-pub const TexGroupLifetime = struct {
-    rootTex: TexPassId,
-    earliest: u16,
-    latest: u16,
+pub const GroupLifetime = struct {
+    rootResource: ResPassId,
+    earliestPass: u16,
+    latestPass: u16,
 };
 
 pub const GraphLifetime = struct {
@@ -95,16 +85,10 @@ pub const TextureGroup = struct {
     texDesc: TexDesc,
 };
 
-pub const BufGroupChange = struct {
-    rootBuf: BufPassId,
-    change: GroupChange,
-    pub const GroupChange = enum { created, deleted, newDesc, newPass, newPassAndDesc, unchanged };
-};
-
-pub const TexGroupChange = struct {
-    rootTex: TexPassId,
-    change: GroupChange,
-    pub const GroupChange = enum { created, deleted, newDesc, newPass, newPassAndDesc, unchanged };
+pub const GroupChange = struct {
+    rootResource: ResPassId,
+    change: ResUpdate,
+    pub const ResUpdate = enum { created, deleted, newDesc, newPass, newPassAndDesc, unchanged };
 };
 
 pub const PhysicalBufLifetime = struct {

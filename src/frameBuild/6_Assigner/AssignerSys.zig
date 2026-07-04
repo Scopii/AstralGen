@@ -174,44 +174,48 @@ pub const AssignerSys = struct {
 
         // PERSISTENT RESOURCES //
 
-        // Creating, Deleting and Recreating Persistent Buffers
-        for (comparatorData.persistentBufChanges.constSlice()) |bufChanges| {
-            switch (bufChanges.change) {
-                .unchanged => {},
-                .deleted => {
-                    // deleteBuffer(resourceAssigner, resourceRegistry, bufChanges.rootBuf, rendererQueue, .frameGraph);
-                    try deferBufferDeletion(assignerData, bufChanges.rootBuf);
+        // Creating, Deleting and Recreating Persistent Resources
+        for (comparatorData.persistentChanges.constSlice()) |groupChange| {
+            switch (groupChange.rootResource) {
+                .bufPassId => |rootId| {
+                    // Buffers
+                    switch (groupChange.change) {
+                        .unchanged => {},
+                        .deleted => {
+                            // deleteBuffer(resourceAssigner, resourceRegistry, bufChanges.rootBuf, rendererQueue, .frameGraph);
+                            try deferBufferDeletion(assignerData, rootId);
+                        },
+                        .created => {
+                            try createBuffer(assignerData, mapperData, registryData, rootId, rendererQueue, memoryMan, .frameGraph);
+                            resolveBufferUpdateRequest(assignerData, rootId);
+                        },
+                        .newDesc, .newPass, .newPassAndDesc => {
+                            // deleteBuffer(resourceAssigner, resourceRegistry, bufChanges.rootBuf, rendererQueue, .frameGraph);
+                            try deferBufferDeletion(assignerData, rootId);
+                            try createBuffer(assignerData, mapperData, registryData, rootId, rendererQueue, memoryMan, .frameGraph);
+                            resolveBufferUpdateRequest(assignerData, rootId);
+                        },
+                    }
                 },
-                .created => {
-                    try createBuffer(assignerData, mapperData, registryData, bufChanges.rootBuf, rendererQueue, memoryMan, .frameGraph);
-                    resolveBufferUpdateRequest(assignerData, bufChanges.rootBuf);
-                },
-                .newDesc, .newPass, .newPassAndDesc => {
-                    // deleteBuffer(resourceAssigner, resourceRegistry, bufChanges.rootBuf, rendererQueue, .frameGraph);
-                    try deferBufferDeletion(assignerData, bufChanges.rootBuf);
-                    try createBuffer(assignerData, mapperData, registryData, bufChanges.rootBuf, rendererQueue, memoryMan, .frameGraph);
-                    resolveBufferUpdateRequest(assignerData, bufChanges.rootBuf);
-                },
-            }
-        }
-
-        // Creating, Deleting and Recreating Persistent Textures
-        for (comparatorData.persistentTexChanges.constSlice()) |texChanges| {
-            switch (texChanges.change) {
-                .unchanged => {},
-                .deleted => {
-                    // deleteTexture(resourceAssigner, resourceRegistry, texChanges.rootTex, rendererQueue, .frameGraph);
-                    try deferTextureDeletion(assignerData, texChanges.rootTex);
-                },
-                .created => {
-                    try createTexture(assignerData, mapperData, registryData, texChanges.rootTex, rendererQueue, memoryMan, .frameGraph);
-                    resolveTextureUpdateRequest(assignerData, texChanges.rootTex);
-                },
-                .newDesc, .newPass, .newPassAndDesc => {
-                    // deleteTexture(resourceAssigner, resourceRegistry, texChanges.rootTex, rendererQueue, .frameGraph);
-                    try deferTextureDeletion(assignerData, texChanges.rootTex);
-                    try createTexture(assignerData, mapperData, registryData, texChanges.rootTex, rendererQueue, memoryMan, .frameGraph);
-                    resolveTextureUpdateRequest(assignerData, texChanges.rootTex);
+                .texPassId => |rootId| {
+                    // Textures
+                    switch (groupChange.change) {
+                        .unchanged => {},
+                        .deleted => {
+                            // deleteTexture(resourceAssigner, resourceRegistry, texChanges.rootTex, rendererQueue, .frameGraph);
+                            try deferTextureDeletion(assignerData, rootId);
+                        },
+                        .created => {
+                            try createTexture(assignerData, mapperData, registryData, rootId, rendererQueue, memoryMan, .frameGraph);
+                            resolveTextureUpdateRequest(assignerData, rootId);
+                        },
+                        .newDesc, .newPass, .newPassAndDesc => {
+                            // deleteTexture(resourceAssigner, resourceRegistry, texChanges.rootTex, rendererQueue, .frameGraph);
+                            try deferTextureDeletion(assignerData, rootId);
+                            try createTexture(assignerData, mapperData, registryData, rootId, rendererQueue, memoryMan, .frameGraph);
+                            resolveTextureUpdateRequest(assignerData, rootId);
+                        },
+                    }
                 },
             }
         }

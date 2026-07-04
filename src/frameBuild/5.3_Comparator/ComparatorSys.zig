@@ -1,7 +1,6 @@
 const TexDesc = @import("../../render/types/res/TextureMeta.zig").TextureMeta.TexDesc;
 const BufDesc = @import("../../render/types/res/BufferMeta.zig").BufferMeta.BufDesc;
-const TexGroupChange = @import("../../frameBuild/components.zig").TexGroupChange;
-const BufGroupChange = @import("../../frameBuild/components.zig").BufGroupChange;
+const GroupChange = @import("../../frameBuild/components.zig").GroupChange;
 const TexPassId = @import("../../.configs/idConfig.zig").TexPassId;
 const BufPassId = @import("../../.configs/idConfig.zig").BufPassId;
 const rc = @import("../../.configs/renderConfig.zig");
@@ -15,8 +14,7 @@ const ComparatorData = @import("ComparatorData.zig").ComparatorData;
 
 pub const ComparatorSys = struct {
     pub fn buildChanges(comparatorData: *ComparatorData, mapperData: *const MapperData, registryData: *const RegistryData) !void {
-        comparatorData.persistentBufChanges.clear();
-        comparatorData.persistentTexChanges.clear();
+        comparatorData.persistentChanges.clear();
 
         // Buffer Changes
         for (mapperData.bufGroupsPersistent.getConstItems(), 0..) |newGroupInf, i| {
@@ -28,20 +26,20 @@ pub const ComparatorSys = struct {
                 const newDesc = !bufDescEqual(&lastGroupInf.bufDesc, &newGroupInf.bufDesc);
                 const newPass = lastGroupInf.rootPass != newGroupInf.rootPass;
 
-                const change: BufGroupChange.GroupChange = switch (newDesc) {
+                const change: GroupChange.ResUpdate = switch (newDesc) {
                     false => if (newPass == false) .unchanged else .newPass,
                     true => if (newPass == false) .newDesc else .newPassAndDesc,
                 };
-                comparatorData.persistentBufChanges.appendAssumeCapacity(BufGroupChange{ .rootBuf = groupRootId, .change = change });
+                comparatorData.persistentChanges.appendAssumeCapacity(GroupChange{ .rootResource = .{ .bufPassId = groupRootId }, .change = change });
             } else {
-                comparatorData.persistentBufChanges.appendAssumeCapacity(BufGroupChange{ .rootBuf = groupRootId, .change = .created });
+                comparatorData.persistentChanges.appendAssumeCapacity(GroupChange{ .rootResource = .{ .bufPassId = groupRootId }, .change = .created });
             }
         }
 
         for (0..mapperData.lastBufGroupsPersistent.getLength()) |i| {
             const groupRootId = mapperData.lastBufGroupsPersistent.getKeyByIndex(@intCast(i));
             const isGroupInNew = mapperData.bufGroupsPersistent.isKeyUsed(groupRootId);
-            if (isGroupInNew == false) comparatorData.persistentBufChanges.appendAssumeCapacity(BufGroupChange{ .rootBuf = groupRootId, .change = .deleted });
+            if (isGroupInNew == false) comparatorData.persistentChanges.appendAssumeCapacity(GroupChange{ .rootResource = .{ .bufPassId = groupRootId }, .change = .deleted });
         }
 
         // Texture Changes
@@ -54,32 +52,31 @@ pub const ComparatorSys = struct {
                 const newDesc = !texDescEqual(&lastGroupInf.texDesc, &newGroupInf.texDesc);
                 const newPass = lastGroupInf.rootPass != newGroupInf.rootPass;
 
-                const change: TexGroupChange.GroupChange = switch (newDesc) {
+                const change: GroupChange.ResUpdate = switch (newDesc) {
                     false => if (newPass == false) .unchanged else .newPass,
                     true => if (newPass == false) .newDesc else .newPassAndDesc,
                 };
-                comparatorData.persistentTexChanges.appendAssumeCapacity(TexGroupChange{ .rootTex = groupRootId, .change = change });
+                comparatorData.persistentChanges.appendAssumeCapacity(GroupChange{ .rootResource = .{ .texPassId = groupRootId }, .change = change });
             } else {
-                comparatorData.persistentTexChanges.appendAssumeCapacity(TexGroupChange{ .rootTex = groupRootId, .change = .created });
+                comparatorData.persistentChanges.appendAssumeCapacity(GroupChange{ .rootResource = .{ .texPassId = groupRootId }, .change = .created });
             }
         }
 
         for (0..mapperData.lastTexGroupsPersistent.getLength()) |i| {
             const groupRootId = mapperData.lastTexGroupsPersistent.getKeyByIndex(@intCast(i));
             const isGroupInNew = mapperData.texGroupsPersistent.isKeyUsed(groupRootId);
-            if (isGroupInNew == false) comparatorData.persistentTexChanges.appendAssumeCapacity(TexGroupChange{ .rootTex = groupRootId, .change = .deleted });
+            if (isGroupInNew == false) comparatorData.persistentChanges.appendAssumeCapacity(GroupChange{ .rootResource = .{ .texPassId = groupRootId }, .change = .deleted });
         }
 
         // Debug Output
         if (rc.FRAME_GRAPH_DEBUG) {
             std.debug.print("5.3.MappingComparator: \n", .{});
-            for (comparatorData.persistentBufChanges.constSlice()) |bufGroupChange| {
-                const rootBuf = try registryData.getBufferName(bufGroupChange.rootBuf);
-                std.debug.print("- Persistent BufGroup {s}: {s}\n", .{ rootBuf, @tagName(bufGroupChange.change) });
-            }
-            for (comparatorData.persistentTexChanges.constSlice()) |texGroupChange| {
-                const rootTex = try registryData.getTextureName(texGroupChange.rootTex);
-                std.debug.print("- Persistent TexGroup {s}: {s}\n", .{ rootTex, @tagName(texGroupChange.change) });
+            for (comparatorData.persistentChanges.constSlice()) |groupChange| {
+                const groupRootName = switch (groupChange.rootResource) {
+                    .bufPassId => |id| try registryData.getBufferName(id),
+                    .texPassId => |id| try registryData.getTextureName(id),
+                };
+                std.debug.print("- Persistent {s} {s}: {s}\n", .{ @tagName(groupChange.rootResource), groupRootName, @tagName(groupChange.change) });
             }
             std.debug.print("\n", .{});
         }

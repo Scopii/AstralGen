@@ -25,86 +25,88 @@ pub const GroupSys = struct {
         groupData.texClears.clear();
 
         // Buffer Group Sharing
-        for (mergerData.transientBufGroupLifetimes.constSlice()) |groupLifetime| {
-            const bufGroupId = groupLifetime.rootBuf;
-            const bufGroup = mapperData.bufGroupsTransient.getByKey(bufGroupId);
+        for (mergerData.transientGroupLifetimes.constSlice()) |groupLifetime| {
+            switch (groupLifetime.rootResource) {
+                .bufPassId => |id| {
+                    // Buffer Path
+                    const bufGroup = mapperData.bufGroupsTransient.getByKey(id);
 
-            var candidateIndex: ?u16 = null;
+                    var candidateIndex: ?u16 = null;
 
-            if (rc.FRAME_GRAPH_SKIP_SHARING == false) {
-                for (groupData.sharedBufLifetimes.slice(), 0..) |*physLifetime, index| {
-                    const physLifetimeDesc = mapperData.bufGroupsTransient.getByKey(physLifetime.bufDescId).bufDesc;
+                    if (rc.FRAME_GRAPH_SKIP_SHARING == false) {
+                        for (groupData.sharedBufLifetimes.slice(), 0..) |*physLifetime, index| {
+                            const physLifetimeDesc = mapperData.bufGroupsTransient.getByKey(physLifetime.bufDescId).bufDesc;
 
-                    // check if physLifetime could extend forwards
-                    if (physLifetime.latest < groupLifetime.earliest) {
-                        // If it can extend check if format fits
-                        if (bufDescEqual(&bufGroup.bufDesc, &physLifetimeDesc) == true) {
-                            physLifetime.latest = groupLifetime.latest;
-                            candidateIndex = @intCast(index);
-                            break;
+                            // check if physLifetime could extend forwards
+                            if (physLifetime.latest < groupLifetime.earliestPass) {
+                                // If it can extend check if format fits
+                                if (bufDescEqual(&bufGroup.bufDesc, &physLifetimeDesc) == true) {
+                                    physLifetime.latest = groupLifetime.latestPass;
+                                    candidateIndex = @intCast(index);
+                                    break;
+                                }
+                            }
                         }
                     }
-                }
-            }
 
-            if (candidateIndex) |candiate| {
-                // Append Clear (Might be different for backwards extension)
-                groupData.bufClears.append(.{ .sharedBufIndex = candiate, .passAfterClear = bufGroup.rootPass }) catch {
-                    std.debug.print("ERROR: 5.4.GroupMerger: Could not Append to bufClears\n", .{});
-                };
-                groupData.bufShareIndexMap.upsert(bufGroupId, candiate);
-            } else {
-                const physBufLifetime = PhysicalBufLifetime{ .bufDescId = groupLifetime.rootBuf, .earliest = groupLifetime.earliest, .latest = groupLifetime.latest };
-                groupData.sharedBufLifetimes.append(physBufLifetime) catch std.debug.print("ERROR: 5.4.GroupMerger: Could not Append to sharedBufLifetimes\n", .{});
-                const newIndex: u16 = @intCast(groupData.sharedBufLifetimes.len - 1);
+                    if (candidateIndex) |candiate| {
+                        // Append Clear (Might be different for backwards extension)
+                        groupData.bufClears.append(.{ .sharedBufIndex = candiate, .passAfterClear = bufGroup.rootPass }) catch {
+                            std.debug.print("ERROR: 5.4.GroupMerger: Could not Append to bufClears\n", .{});
+                        };
+                        groupData.bufShareIndexMap.upsert(id, candiate);
+                    } else {
+                        const physBufLifetime = PhysicalBufLifetime{ .bufDescId = id, .earliest = groupLifetime.earliestPass, .latest = groupLifetime.latestPass };
+                        groupData.sharedBufLifetimes.append(physBufLifetime) catch std.debug.print("ERROR: 5.4.GroupMerger: Could not Append to sharedBufLifetimes\n", .{});
+                        const newIndex: u16 = @intCast(groupData.sharedBufLifetimes.len - 1);
 
-                // Append first Clear
-                groupData.bufClears.append(.{ .sharedBufIndex = newIndex, .passAfterClear = bufGroup.rootPass }) catch {
-                    std.debug.print("ERROR: 5.4.GroupMerger: Could not Append to texClears\n", .{});
-                };
-                groupData.bufShareIndexMap.upsert(bufGroupId, newIndex);
-            }
-        }
+                        // Append first Clear
+                        groupData.bufClears.append(.{ .sharedBufIndex = newIndex, .passAfterClear = bufGroup.rootPass }) catch {
+                            std.debug.print("ERROR: 5.4.GroupMerger: Could not Append to texClears\n", .{});
+                        };
+                        groupData.bufShareIndexMap.upsert(id, newIndex);
+                    }
+                },
+                .texPassId => |id| {
+                    // Texture Path
+                    const texGroup = mapperData.texGroupsTransient.getByKey(id);
 
-        // Texture Group Sharing
-        for (mergerData.transientTexGroupLifetimes.constSlice()) |groupLifetime| {
-            const texGroupId = groupLifetime.rootTex;
-            const texGroup = mapperData.texGroupsTransient.getByKey(texGroupId);
+                    var candidateIndex: ?u16 = null;
 
-            var candidateIndex: ?u16 = null;
+                    if (rc.FRAME_GRAPH_SKIP_SHARING == false) {
+                        for (groupData.sharedTexLifetimes.slice(), 0..) |*physLifetime, index| {
+                            const physLifetimeDesc = mapperData.texGroupsTransient.getByKey(physLifetime.texDescId).texDesc;
 
-            if (rc.FRAME_GRAPH_SKIP_SHARING == false) {
-                for (groupData.sharedTexLifetimes.slice(), 0..) |*physLifetime, index| {
-                    const physLifetimeDesc = mapperData.texGroupsTransient.getByKey(physLifetime.texDescId).texDesc;
-
-                    // check if physLifetime could extend forwards
-                    if (physLifetime.latest < groupLifetime.earliest) {
-                        // If it can extend check if format fits
-                        if (texDescEqual(&texGroup.texDesc, &physLifetimeDesc) == true) {
-                            physLifetime.latest = groupLifetime.latest;
-                            candidateIndex = @intCast(index);
-                            break;
+                            // check if physLifetime could extend forwards
+                            if (physLifetime.latest < groupLifetime.earliestPass) {
+                                // If it can extend check if format fits
+                                if (texDescEqual(&texGroup.texDesc, &physLifetimeDesc) == true) {
+                                    physLifetime.latest = groupLifetime.latestPass;
+                                    candidateIndex = @intCast(index);
+                                    break;
+                                }
+                            }
                         }
                     }
-                }
-            }
 
-            if (candidateIndex) |candiate| {
-                // Append Clear (Might be different for backwards extension)
-                groupData.texClears.append(.{ .sharedTexIndex = candiate, .passAfterClear = texGroup.rootPass }) catch {
-                    std.debug.print("ERROR: 5.4.GroupMerger: Could not Append to texClears\n", .{});
-                };
-                groupData.texShareIndexMap.upsert(texGroupId, candiate);
-            } else {
-                const physTexLifetime = PhysicalTexLifetime{ .texDescId = groupLifetime.rootTex, .earliest = groupLifetime.earliest, .latest = groupLifetime.latest };
-                groupData.sharedTexLifetimes.append(physTexLifetime) catch std.debug.print("ERROR: 5.4.GroupMerger: Could not Append to sharedTexLifetimes\n", .{});
-                const newIndex: u16 = @intCast(groupData.sharedTexLifetimes.len - 1);
+                    if (candidateIndex) |candiate| {
+                        // Append Clear (Might be different for backwards extension)
+                        groupData.texClears.append(.{ .sharedTexIndex = candiate, .passAfterClear = texGroup.rootPass }) catch {
+                            std.debug.print("ERROR: 5.4.GroupMerger: Could not Append to texClears\n", .{});
+                        };
+                        groupData.texShareIndexMap.upsert(id, candiate);
+                    } else {
+                        const physTexLifetime = PhysicalTexLifetime{ .texDescId = id, .earliest = groupLifetime.earliestPass, .latest = groupLifetime.latestPass };
+                        groupData.sharedTexLifetimes.append(physTexLifetime) catch std.debug.print("ERROR: 5.4.GroupMerger: Could not Append to sharedTexLifetimes\n", .{});
+                        const newIndex: u16 = @intCast(groupData.sharedTexLifetimes.len - 1);
 
-                // Append first Clear
-                groupData.texClears.append(.{ .sharedTexIndex = newIndex, .passAfterClear = texGroup.rootPass }) catch {
-                    std.debug.print("ERROR: 5.4.GroupMerger: Could not Append to texClears\n", .{});
-                };
-                groupData.texShareIndexMap.upsert(texGroupId, newIndex);
+                        // Append first Clear
+                        groupData.texClears.append(.{ .sharedTexIndex = newIndex, .passAfterClear = texGroup.rootPass }) catch {
+                            std.debug.print("ERROR: 5.4.GroupMerger: Could not Append to texClears\n", .{});
+                        };
+                        groupData.texShareIndexMap.upsert(id, newIndex);
+                    }
+                },
             }
         }
 

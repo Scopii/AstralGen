@@ -16,15 +16,9 @@ pub const GraphSys = struct {
         graphData.readyPasses.clear();
 
         // Fill Passes with Buffer Dependancy Count
-        for (dependancyData.bufDeps.constSlice()) |bufDep| {
-            const curDepCount = if (graphData.passDepCounters.isKeyUsed(bufDep.successor)) graphData.passDepCounters.getByKey(bufDep.successor) else 0;
-            graphData.passDepCounters.upsert(bufDep.successor, curDepCount + 1);
-        }
-
-        // Fill Passes with Texture Dependancy Count
-        for (dependancyData.texDeps.constSlice()) |texDep| {
-            const curDepCount = if (graphData.passDepCounters.isKeyUsed(texDep.successor)) graphData.passDepCounters.getByKey(texDep.successor) else 0;
-            graphData.passDepCounters.upsert(texDep.successor, curDepCount + 1);
+        for (dependancyData.deps.constSlice()) |dep| {
+            const curDepCount = if (graphData.passDepCounters.isKeyUsed(dep.successor)) graphData.passDepCounters.getByKey(dep.successor) else 0;
+            graphData.passDepCounters.upsert(dep.successor, curDepCount + 1);
         }
 
         // Debug Output
@@ -59,21 +53,12 @@ pub const GraphSys = struct {
             const nextLevel = pass.level + 1;
 
             // Decrement Buffer Dependencies
-            for (dependancyData.bufDeps.constSlice()) |bufDep| {
+            for (dependancyData.deps.constSlice()) |bufDep| {
                 if (bufDep.predecessor == pass.passId) {
                     const ptr = graphData.passDepCounters.getPtrByKey(bufDep.successor);
                     ptr.* -= 1;
                     // Queue to END of current list if its 0
                     if (ptr.* == 0) graphData.readyPasses.appendAssumeCapacity(GraphNode{ .passId = bufDep.successor, .level = nextLevel });
-                }
-            }
-            // Decrement Texture Dependencies
-            for (dependancyData.texDeps.constSlice()) |texDep| {
-                if (texDep.predecessor == pass.passId) {
-                    const ptr = graphData.passDepCounters.getPtrByKey(texDep.successor);
-                    ptr.* -= 1;
-                    // Queue to END of current list if its 0
-                    if (ptr.* == 0) graphData.readyPasses.appendAssumeCapacity(GraphNode{ .passId = texDep.successor, .level = nextLevel });
                 }
             }
         }
@@ -92,28 +77,19 @@ pub const GraphSys = struct {
                     std.debug.print("  stuck: {s} (still waiting on {} deps)\n", .{ passString, remainingDeps });
                 }
             }
-            std.debug.print("  cycle Buffer edges:\n", .{});
-            for (dependancyData.bufDeps.constSlice()) |dep| {
+            for (dependancyData.deps.constSlice()) |dep| {
                 const predStuck = !graphData.graph.isKeyUsed(dep.predecessor);
                 const succStuck = !graphData.graph.isKeyUsed(dep.successor);
+                const predName = try registryData.getPassName(dep.predecessor);
+                const succName = try registryData.getPassName(dep.successor);
 
+                std.debug.print("  cycle {s} edges:\n", .{@tagName(dep.resource)});
                 if (predStuck and succStuck) {
-                    const predName = try registryData.getPassName(dep.predecessor);
-                    const succName = try registryData.getPassName(dep.successor);
-                    const bufName = try registryData.getBufferName(dep.buf);
-                    std.debug.print("    {s} --[{s}]--> {s}\n", .{ predName, bufName, succName });
-                }
-            }
-            std.debug.print("  cycle Texture edges:\n", .{});
-            for (dependancyData.texDeps.constSlice()) |dep| {
-                const predStuck = !graphData.graph.isKeyUsed(dep.predecessor);
-                const succStuck = !graphData.graph.isKeyUsed(dep.successor);
-
-                if (predStuck and succStuck) {
-                    const predName = try registryData.getPassName(dep.predecessor);
-                    const succName = try registryData.getPassName(dep.successor);
-                    const texName = try registryData.getTextureName(dep.tex);
-                    std.debug.print("    {s} --[{s}]--> {s}\n", .{ predName, texName, succName });
+                    const resName = switch (dep.resource) {
+                        .bufPassId => |id| try registryData.getBufferName(id),
+                        .texPassId => |id| try registryData.getTextureName(id),
+                    };
+                    std.debug.print("    {s} --[{s}]--> {s}\n", .{ predName, resName, succName });
                 }
             }
             return error.GraphHasCycle;
