@@ -16,7 +16,6 @@ const PassData = @import("PassData.zig").PassData;
 
 pub const PassSys = struct {
     pub fn build(passData: *PassData, registryData: *const RegistryData, data: *const EngineData) !void {
-        // Cleanup
         passData.activePasses.clear();
         passData.passExtents.clear();
         passData.composites.clear();
@@ -135,7 +134,7 @@ pub const PassSys = struct {
             .viewOffsetX = viewport.calcViewX(windowWidth),
             .viewOffsetY = viewport.calcViewY(windowHeight),
             .opacity = viewport.opacity,
-            .stretch = rc.RENDER_TEX_STRETCH,
+            .stretch = rc.BLIT_TEX_STRETCH,
         };
     }
 

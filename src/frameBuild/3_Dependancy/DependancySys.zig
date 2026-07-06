@@ -2,7 +2,7 @@ const Dependancy = @import("../../frameBuild/components.zig").Dependancy;
 const rc = @import("../../.configs/renderConfig.zig");
 const std = @import("std");
 
-const getResKey = @import("../../frameBuild/components.zig").getResKey;
+const getResTyp = @import("../../frameBuild/components.zig").getResTyp;
 
 const DependancyData = @import("DependancyData.zig").DependancyData;
 const RegistryData = @import("../0_Registry/RegistryData.zig").RegistryData;
@@ -17,25 +17,21 @@ pub const DependancySys = struct {
 
         for (accessData.accesses.constSlice()) |access| {
             if (access.output) |output| {
-                const resKey = getResKey(output);
+                const resKey = output;
                 // Double Write Check: Only allowed exactly one producer!
                 if (dependancyData.lastWriter.isKeyUsed(resKey) == true) {
                     const prevWriter = dependancyData.lastWriter.getByKey(resKey);
                     const prevName = try registryData.getPassName(prevWriter);
                     const newName = try registryData.getPassName(access.pass);
-
-                    const resName = switch (output) {
-                        .bufPassId => |id| try registryData.getBufferName(id),
-                        .texPassId => |id| try registryData.getTextureName(id),
-                    };
-                    std.debug.print("VALIDATION: {s} {s} produced by both {s} and {s}\n", .{ @tagName(output), resName, prevName, newName });
+                    const resName = try registryData.getResourceName(output);
+                    std.debug.print("VALIDATION: {s} {s} produced by both {s} and {s}\n", .{ @tagName(getResTyp(output)), resName, prevName, newName });
                 }
                 dependancyData.lastWriter.upsert(resKey, access.pass);
             }
         }
 
         for (accessData.accesses.constSlice()) |access| {
-            const resKey = getResKey(access.input);
+            const resKey = access.input;
             if (dependancyData.lastWriter.isKeyUsed(resKey) == true) {
                 // Graph Edge only if its a cross pass dependancy (Pass does not consume its own resourcve)
                 const inputPass = dependancyData.lastWriter.getByKey(resKey);
@@ -58,11 +54,9 @@ pub const DependancySys = struct {
             for (dependancyData.deps.constSlice()) |dep| {
                 const predName = try registryData.getPassName(dep.predecessor);
                 const succName = try registryData.getPassName(dep.successor);
-                const resName = switch (dep.resource) {
-                    .bufPassId => |id| try registryData.getBufferName(id),
-                    .texPassId => |id| try registryData.getTextureName(id),
-                };
-                std.debug.print("- Dep .( .{s} = {s}, .predecessor = {s}, .successor = {s})\n", .{ @tagName(dep.resource), resName, predName, succName });
+                const resTyp = getResTyp(dep.resource);
+                const resName = try registryData.getResourceName(dep.resource);
+                std.debug.print("- Dep .( .{s} = {s}, .predecessor = {s}, .successor = {s})\n", .{ @tagName(resTyp), resName, predName, succName });
             }
             std.debug.print("\n", .{});
         }

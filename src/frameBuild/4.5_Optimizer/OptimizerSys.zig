@@ -3,7 +3,6 @@ const GraphLifetime = @import("../../frameBuild/components.zig").GraphLifetime;
 const rc = @import("../../.configs/renderConfig.zig");
 const std = @import("std");
 
-const getResKey = @import("../../frameBuild/components.zig").getResKey;
 const getResTyp = @import("../../frameBuild/components.zig").getResTyp;
 
 const RegistryData = @import("../0_Registry/RegistryData.zig").RegistryData;
@@ -32,7 +31,7 @@ pub const OptimizerSys = struct {
         for (accessData.accesses.constSlice()) |access| {
             const graphLevel = graphData.graph.getByKey(access.pass).level;
             // Input
-            const input = getResKey(access.input);
+            const input = access.input;
             if (resourceData.memSizes.isKeyUsed(input) == true) { // Only Transient
 
                 if (optimizerData.graphLifetimes.isKeyUsed(input) == false) {
@@ -44,8 +43,7 @@ pub const OptimizerSys = struct {
                 }
             }
             // Output
-            const outputKey = access.output orelse continue;
-            const output = getResKey(outputKey);
+            const output = access.output orelse continue;
             if (resourceData.memSizes.isKeyUsed(output) == true) { // Only Transient
 
                 if (optimizerData.graphLifetimes.isKeyUsed(output) == false) {
@@ -65,10 +63,7 @@ pub const OptimizerSys = struct {
                 const graphLifetime = optimizerData.graphLifetimes.getByIndex(@intCast(i));
                 const resKey = optimizerData.graphLifetimes.getKeyByIndex(@intCast(i));
                 const resTyp = getResTyp(resKey);
-                const resName = switch (resTyp) {
-                    .Buf => try registryData.getBufferName(.id(resKey)),
-                    .Tex => try registryData.getTextureName(.id(resKey - rc.BUF_MAX)),
-                };
+                const resName = try registryData.getResourceName(resKey);
                 std.debug.print("- {s} Graph Lifetime: (Level {} -> {}) {s} \n", .{ @tagName(resTyp), graphLifetime.firstLevel, graphLifetime.lastLevel, resName });
             }
             std.debug.print("\n", .{});
@@ -82,9 +77,9 @@ pub const OptimizerSys = struct {
             var dyingBytes: u64 = 0;
 
             for (accessData.accesses.buffer[accessRange.first..accessRange.last]) |access| {
-                const input = getResKey(access.input);
 
                 // Check Input Buffer Bytes
+                const input = access.input;
                 if (resourceData.memSizes.isKeyUsed(input) == true) { // Only Transient were filled!
                     const graphLifetime = optimizerData.graphLifetimes.getByKey(input);
                     if (graphLifetime.firstLevel == graphNode.level and graphLifetime.lastLevel != graphNode.level) bornBytes += resourceData.memSizes.getByKey(input);
@@ -93,7 +88,7 @@ pub const OptimizerSys = struct {
 
                 // Check Output Buffer Bytes
                 if (access.output) |outputKey| {
-                    const output = getResKey(outputKey);
+                    const output = outputKey;
                     if (resourceData.memSizes.isKeyUsed(output) == true) { // Only Transient were filled!
                         const graphLifetime = optimizerData.graphLifetimes.getByKey(output);
                         if (graphLifetime.firstLevel == graphNode.level and graphLifetime.lastLevel != graphNode.level) bornBytes += resourceData.memSizes.getByKey(output);

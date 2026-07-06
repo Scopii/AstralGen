@@ -1,8 +1,11 @@
 const rc = @import("../../.configs/renderConfig.zig");
 const std = @import("std");
 
-const getResKey = @import("../../frameBuild/components.zig").getResKey;
 const getResTyp = @import("../../frameBuild/components.zig").getResTyp;
+const resToBuf = @import("../../frameBuild/components.zig").resToBuf;
+const resToTex = @import("../../frameBuild/components.zig").resToTex;
+const texToRes = @import("../../frameBuild/components.zig").texToRes;
+const bufToRes = @import("../../frameBuild/components.zig").bufToRes;
 
 const RegistryData = @import("../0_Registry/RegistryData.zig").RegistryData;
 const PassData = @import("../1_Pass/PassData.zig").PassData;
@@ -18,27 +21,29 @@ pub const ResourceSys = struct {
         resourceData.memSizes.clear();
 
         for (accessData.accesses.constSlice()) |access| {
-            switch (access.input) {
-                .bufPassId => |inputBuf| {
+            switch (getResTyp(access.input)) {
+                .Buf => {
+                    const inputBuf = resToBuf(access.input);
                     if (resourceData.bufDescs.isKeyUsed(inputBuf) == false) {
                         const desc1 = try registryData.getBufferDefinition(inputBuf);
                         resourceData.bufDescs.upsert(inputBuf, desc1);
                     }
 
                     if (access.output) |output| {
-                        const outputBuf = output.bufPassId;
+                        const outputBuf = resToBuf(output);
                         if (resourceData.bufDescs.isKeyUsed(outputBuf) == false) {
                             const desc2 = try registryData.getBufferDefinition(outputBuf);
                             resourceData.bufDescs.upsert(outputBuf, desc2);
                         }
                     }
                 },
-                .texPassId => |inputTex| {
+                .Tex => {
                     const passExtent = passData.passExtents.getByKey(access.pass);
                     const isWrite = (access.access == .write or access.output != null);
                     const resize = isWrite or rc.PASS_TEXTURE_RESIZE_INCLUDES_READ;
 
                     // For Input
+                    const inputTex = resToTex(access.input);
                     if (resourceData.texDescs.isKeyUsed(inputTex) == false) {
                         var desc1 = try registryData.getTextureDefinition(inputTex);
                         if (desc1.fitPass == true) { // no resize?
@@ -56,7 +61,7 @@ pub const ResourceSys = struct {
 
                     // For Output
                     if (access.output) |output| {
-                        const outputTex = output.texPassId;
+                        const outputTex = resToTex(output);
 
                         if (resourceData.texDescs.isKeyUsed(outputTex) == false) {
                             var desc2 = try registryData.getTextureDefinition(outputTex);
@@ -80,23 +85,20 @@ pub const ResourceSys = struct {
         // If Description is Share = Transient add memSize
         for (resourceData.bufDescs.getConstItems(), 0..) |bufDesc, i| {
             const bufKey = resourceData.bufDescs.getKeyByIndex(@intCast(i));
-            if (bufDesc.share == .transient) resourceData.memSizes.upsert(getResKey(bufKey), bufDesc.guessMemoryCost());
+            if (bufDesc.share == .transient) resourceData.memSizes.upsert(bufToRes(bufKey), bufDesc.guessMemoryCost());
         }
         for (resourceData.texDescs.getConstItems(), 0..) |texDesc, i| {
             const texKey = resourceData.texDescs.getKeyByIndex(@intCast(i));
-            if (texDesc.share == .transient) resourceData.memSizes.upsert(getResKey(texKey), texDesc.guessMemoryCost());
+            if (texDesc.share == .transient) resourceData.memSizes.upsert(texToRes(texKey), texDesc.guessMemoryCost());
         }
 
         // Debug Output
         if (rc.FRAME_GRAPH_DEBUG) {
             std.debug.print("2.ResourceExtractor: \n", .{});
             for (resourceData.memSizes.getConstItems(), 0..) |memSize, i| {
-                const resKey = resourceData.memSizes.getKeyByIndex(@intCast(i));
-                const resTyp = getResTyp(resKey);
-                const resName = switch (resTyp) {
-                    .Buf => try registryData.getBufferName(.id(resKey)),
-                    .Tex => try registryData.getTextureName(.id(resKey - rc.BUF_MAX)),
-                };
+                const resPassId = resourceData.memSizes.getKeyByIndex(@intCast(i));
+                const resTyp = getResTyp(resPassId);
+                const resName = try registryData.getResourceName(resPassId);
                 std.debug.print(" {}. {s} ({s}) -> Mem {} Bytes\n", .{ i, @tagName(resTyp), resName, memSize });
             }
             std.debug.print("\n", .{});

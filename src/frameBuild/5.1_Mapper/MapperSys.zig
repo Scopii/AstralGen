@@ -4,19 +4,21 @@ const PassLifetime = @import("../../frameBuild/components.zig").PassLifetime;
 const ResDesc = @import("../../frameBuild/components.zig").ResDesc;
 const TexPassId = @import("../../.configs/idConfig.zig").TexPassId;
 const BufPassId = @import("../../.configs/idConfig.zig").BufPassId;
+const ResPassId = @import("../../.configs/idConfig.zig").ResPassId;
 const Group = @import("../../frameBuild/components.zig").Group;
 const rc = @import("../../.configs/renderConfig.zig");
 const std = @import("std");
 
-const getResKey = @import("../../frameBuild/components.zig").getResKey;
 const getResTyp = @import("../../frameBuild/components.zig").getResTyp;
+const resToBuf = @import("../../frameBuild/components.zig").resToBuf;
+const resToTex = @import("../../frameBuild/components.zig").resToTex;
 
 const RegistryData = @import("../0_Registry/RegistryData.zig").RegistryData;
+const AccessData = @import("../1.5_Access/AccessData.zig").AccessData;
 const ResourceData = @import("../2_Resource/ResourceData.zig").ResourceData;
 const OptimizerData = @import("../4.5_Optimizer/OptimizerData.zig").OptimizerData;
 const LifetimeData = @import("../5_Lifetime/LifetimeData.zig").LifetimeData;
 const MapperData = @import("MapperData.zig").MapperData;
-const AccessData = @import("../1.5_Access/AccessData.zig").AccessData;
 
 // Step 5.1
 
@@ -43,13 +45,12 @@ pub const MapperSys = struct {
         mapperData.resPassIds.clear();
 
         for (accessData.accesses.constSlice()) |access| {
-            const inKey = getResKey(access.input);
-            if (mapperData.resPassIds.isKeyUsed(inKey) == false) mapperData.resPassIds.insert(inKey, inKey);
+            const input = access.input;
+            if (mapperData.resPassIds.isKeyUsed(input) == false) mapperData.resPassIds.insert(input, input);
 
             if (access.output) |output| {
-                const outKey = getResKey(output);
-                if (mapperData.resPassIds.isKeyUsed(outKey) == false) mapperData.resPassIds.insert(outKey, outKey);
-                try mapperData.linkedResources.append(.{ .in = inKey, .out = outKey });
+                if (mapperData.resPassIds.isKeyUsed(output) == false) mapperData.resPassIds.insert(output, output);
+                try mapperData.linkedResources.append(.{ .in = input, .out = output });
             }
         }
 
@@ -85,20 +86,20 @@ pub const MapperSys = struct {
             }
 
             // Root selection
-            var lastKey: u16 = undefined;
+            var lastRes: ResPassId = undefined;
             var lastDesc: ?ResDesc = null;
             var lastLifetime: ?PassLifetime = null;
-            var rootKey: u16 = undefined;
+            var rootRes: ResPassId = undefined;
 
             var groupEarliest: u16 = std.math.maxInt(u16);
             var groupLatest: u16 = 0;
 
             for (mapperData.sharedResources.getConstItems()) |memberKey| {
                 var newDesc: ResDesc = switch (getResTyp(memberKey)) {
-                    .Buf => .{ .bufDesc = resourceData.bufDescs.getByKey(.id(memberKey)) },
-                    .Tex => .{ .texDesc = resourceData.texDescs.getByKey(.id(memberKey - rc.BUF_MAX)) },
+                    .Buf => .{ .bufDesc = resourceData.bufDescs.getByKey(resToBuf(memberKey)) },
+                    .Tex => .{ .texDesc = resourceData.texDescs.getByKey(resToTex(memberKey)) },
                 };
-                if (lastDesc) |ld| newDesc = try compareResDesc(lastKey, &ld, memberKey, &newDesc, registryData);
+                if (lastDesc) |ld| newDesc = try compareResDesc(lastRes, &ld, memberKey, &newDesc, registryData);
 
                 const newLifetime = lifetimeData.passLifetimes.getByKey(memberKey);
 
@@ -108,27 +109,27 @@ pub const MapperSys = struct {
                 if (lastLifetime) |last| {
                     if (newLifetime.earliest < last.earliest or (newLifetime.earliest == last.earliest and newLifetime.latest < last.latest)) {
                         lastLifetime = newLifetime;
-                        rootKey = memberKey;
+                        rootRes = memberKey;
                     }
                 } else {
-                    rootKey = memberKey;
+                    rootRes = memberKey;
                     lastLifetime = newLifetime;
                 }
 
-                lastKey = memberKey;
+                lastRes = memberKey;
                 lastDesc = newDesc;
             }
 
             const isTransient = lastDesc.?.isTransient();
-            if (isTransient) mapperData.transientGroupLifetimes.appendAssumeCapacity(.{ .rootResource = rootKey, .earliestPass = groupEarliest, .latestPass = groupLatest });
+            if (isTransient) mapperData.transientGroupLifetimes.appendAssumeCapacity(.{ .rootResource = rootRes, .earliestPass = groupEarliest, .latestPass = groupLatest });
             const map = if (isTransient) &mapperData.transientMap else &mapperData.persistentMap;
             const groups = if (isTransient) &mapperData.transientGroups else &mapperData.persistentGroups;
 
             for (mapperData.sharedResources.getConstItems()) |memberKey| {
-                map.upsert(memberKey, rootKey);
+                map.upsert(memberKey, rootRes);
             }
 
-            groups.upsert(rootKey, Group{
+            groups.upsert(rootRes, Group{
                 .rootPass = optimizerData.optimizedGraph.getConstItems()[lastLifetime.?.earliest].pass,
                 .desc = lastDesc.?,
                 .firstMapIndex = @intCast(map.getLength() - mapperData.sharedResources.getLength()),
@@ -149,12 +150,9 @@ pub const MapperSys = struct {
             std.debug.print("Previous: \n", .{});
             inline for (.{ mapperData.prevPersistentGroups, mapperData.prevTransientGroups }, .{ "Persistent", "Transient" }) |groups, label| {
                 for (groups.getConstItems(), 0..) |group, i| {
-                    const rootKey = groups.getKeyByIndex(@intCast(i));
-                    const rootTyp = getResTyp(rootKey);
-                    const rootName = switch (rootTyp) {
-                        .Buf => try registryData.getBufferName(.id(rootKey)),
-                        .Tex => try registryData.getTextureName(.id(rootKey - rc.BUF_MAX)),
-                    };
+                    const rootRes = groups.getKeyByIndex(@intCast(i));
+                    const rootTyp = getResTyp(rootRes);
+                    const rootName = try registryData.getResourceName(rootRes);
                     const rootPass = try registryData.getPassName(group.rootPass);
                     std.debug.print("{s}Group ({s} {}) (RootRes {s}) (RootPass {s}) (mapIndex {} -> {})\n", .{ @tagName(rootTyp), label, i, rootName, rootPass, group.firstMapIndex, group.lastMapIndex });
                 }
@@ -163,51 +161,36 @@ pub const MapperSys = struct {
             std.debug.print("\nCurrent: \n", .{});
             // Persistent Groups
             for (mapperData.persistentGroups.getConstItems(), 0..) |group, i| {
-                const rootKey = mapperData.persistentGroups.getKeyByIndex(@intCast(i));
-                const rootTyp = getResTyp(rootKey);
-                const rootName = switch (rootTyp) {
-                    .Buf => try registryData.getBufferName(.id(rootKey)),
-                    .Tex => try registryData.getTextureName(.id(rootKey - rc.BUF_MAX)),
-                };
+                const rootRes = mapperData.persistentGroups.getKeyByIndex(@intCast(i));
+                const rootTyp = getResTyp(rootRes);
+                const rootName = try registryData.getResourceName(rootRes);
                 const rootPass = try registryData.getPassName(group.rootPass);
                 std.debug.print("{s}Group (Persistent {}) (RootRes {s}) (RootPass {s}) (mapIndex {} -> {})\n", .{ @tagName(rootTyp), i, rootName, rootPass, group.firstMapIndex, group.lastMapIndex });
 
                 for (group.firstMapIndex..group.lastMapIndex + 1, 0..) |mapIndex, counter| {
-                    const memberKey = mapperData.persistentMap.getKeyByIndex(@intCast(mapIndex));
-                    const memberName = switch (getResTyp(memberKey)) {
-                        .Buf => try registryData.getBufferName(.id(memberKey)),
-                        .Tex => try registryData.getTextureName(.id(memberKey - rc.BUF_MAX)),
-                    };
+                    const memberRes = mapperData.persistentMap.getKeyByIndex(@intCast(mapIndex));
+                    const memberName = try registryData.getResourceName(memberRes);
                     std.debug.print("     -> {}. {s}\n", .{ counter, memberName });
                 }
             }
             // Transient Groups
             for (mapperData.transientGroups.getConstItems(), 0..) |group, i| {
-                const rootKey = mapperData.transientGroups.getKeyByIndex(@intCast(i));
-                const rootTyp = getResTyp(rootKey);
-                const rootName = switch (rootTyp) {
-                    .Buf => try registryData.getBufferName(.id(rootKey)),
-                    .Tex => try registryData.getTextureName(.id(rootKey - rc.BUF_MAX)),
-                };
+                const rootRes = mapperData.transientGroups.getKeyByIndex(@intCast(i));
+                const rootTyp = getResTyp(rootRes);
+                const rootName = try registryData.getResourceName(rootRes);
                 const rootPass = try registryData.getPassName(group.rootPass);
                 std.debug.print("{s}Group (Transient {}) (RootRes {s}) (RootPass {s}) (mapIndex {} -> {})\n", .{ @tagName(rootTyp), i, rootName, rootPass, group.firstMapIndex, group.lastMapIndex });
 
                 for (group.firstMapIndex..group.lastMapIndex + 1, 0..) |mapIndex, counter| {
-                    const memberKey = mapperData.transientMap.getKeyByIndex(@intCast(mapIndex));
-                    const memberName = switch (getResTyp(memberKey)) {
-                        .Buf => try registryData.getBufferName(.id(memberKey)),
-                        .Tex => try registryData.getTextureName(.id(memberKey - rc.BUF_MAX)),
-                    };
+                    const memberRes = mapperData.transientMap.getKeyByIndex(@intCast(mapIndex));
+                    const memberName = try registryData.getResourceName(memberRes);
                     std.debug.print("     -> {}. {s}\n", .{ counter, memberName });
                 }
             }
             std.debug.print("Transient Group Lifetimes: \n", .{});
             for (mapperData.transientGroupLifetimes.constSlice(), 0..) |groupLifetime, i| {
                 const resTyp = getResTyp(groupLifetime.rootResource);
-                const resName = switch (resTyp) {
-                    .Buf => try registryData.getBufferName(.id(groupLifetime.rootResource)),
-                    .Tex => try registryData.getTextureName(.id(groupLifetime.rootResource - rc.BUF_MAX)),
-                };
+                const resName = try registryData.getResourceName(groupLifetime.rootResource);
                 std.debug.print("- {}. Transient {s} Group (Root {s}) (Pass {} -> Pass {})\n", .{ i, @tagName(resTyp), resName, groupLifetime.earliestPass, groupLifetime.latestPass });
             }
             std.debug.print("\n", .{});
@@ -216,11 +199,11 @@ pub const MapperSys = struct {
     }
 };
 
-fn compareResDesc(key1: u16, desc1: *const ResDesc, key2: u16, desc2: *const ResDesc, registryData: *const RegistryData) !ResDesc {
+fn compareResDesc(key1: ResPassId, desc1: *const ResDesc, key2: ResPassId, desc2: *const ResDesc, registryData: *const RegistryData) !ResDesc {
     if (std.meta.activeTag(desc1.*) != std.meta.activeTag(desc2.*)) return error.ResourceKindsMixedInGroup; // can't happen via valid links; catches bugs
     return switch (desc1.*) {
-        .bufDesc => |d1| .{ .bufDesc = try compareBufDesc(.id(key1), &d1, .id(key2), &desc2.bufDesc, registryData) },
-        .texDesc => |d1| .{ .texDesc = try compareTexDesc(.id(key1 - rc.BUF_MAX), &d1, .id(key2 - rc.BUF_MAX), &desc2.texDesc, registryData) },
+        .bufDesc => |d1| .{ .bufDesc = try compareBufDesc(resToBuf(key1), &d1, resToBuf(key2), &desc2.bufDesc, registryData) },
+        .texDesc => |d1| .{ .texDesc = try compareTexDesc(resToTex(key1), &d1, resToTex(key2), &desc2.texDesc, registryData) },
     };
 }
 

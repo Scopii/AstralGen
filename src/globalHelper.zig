@@ -41,7 +41,7 @@ pub fn String(comptime capacity: u32, comptime default: []const u8) type {
     };
 }
 
-pub fn Id(comptime Int: type, comptime tag: anytype) type {
+pub fn Id(comptime Int: type, comptime tag: anytype, comptime max: Int) type {
     return enum(Int) {
         _,
         const IdSelf = @This();
@@ -50,6 +50,7 @@ pub fn Id(comptime Int: type, comptime tag: anytype) type {
         }
 
         pub fn id(integer: Int) IdSelf {
+            std.debug.assert(integer < max); 
             return @enumFromInt(integer);
         }
 

@@ -47,10 +47,7 @@ pub const ComparatorSys = struct {
         if (rc.FRAME_GRAPH_DEBUG) {
             std.debug.print("5.3.MappingComparator: \n", .{});
             for (comparatorData.persistentChanges.constSlice()) |groupChange| {
-                const groupRootName = switch (getResTyp(groupChange.rootResource)) {
-                    .Buf => try registryData.getBufferName(.id(groupChange.rootResource)),
-                    .Tex => try registryData.getTextureName(.id(groupChange.rootResource - rc.BUF_MAX)),
-                };
+                const groupRootName = try registryData.getResourceName(groupChange.rootResource);
                 std.debug.print("- Persistent {s} {s}: {s}\n", .{ @tagName(getResTyp(groupChange.rootResource)), groupRootName, @tagName(groupChange.change) });
             }
             std.debug.print("\n", .{});

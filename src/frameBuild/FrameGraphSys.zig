@@ -95,49 +95,69 @@ pub const FrameGraphSys = struct {
     }
 
     pub fn build(graph: *FrameGraphData, data: *const EngineData, rendererQueue: *RendererQueue, memoryMan: *MemoryManager) !void {
+        const start1 = std.time.nanoTimestamp();
         try PassSys.build(&graph.pass, &graph.registry, data);
+        if (rc.FRAME_GRAPH_TIMERS) std.debug.print("{d:.3} us: PassSys\n", .{@as(f64, @floatFromInt(std.time.nanoTimestamp() - start1)) / 1_000.0});
 
+        const start2 = std.time.nanoTimestamp();
         try AccessSys.build(&graph.access, &graph.pass, &graph.registry);
+        if (rc.FRAME_GRAPH_TIMERS) std.debug.print("{d:.3} us: AccessSys\n", .{@as(f64, @floatFromInt(std.time.nanoTimestamp() - start2)) / 1_000.0});
 
+        const start3 = std.time.nanoTimestamp();
         try ResourceSys.build(&graph.resource, &graph.access, &graph.pass, &graph.registry);
+        if (rc.FRAME_GRAPH_TIMERS) std.debug.print("{d:.3} us: ResourceSys\n", .{@as(f64, @floatFromInt(std.time.nanoTimestamp() - start3)) / 1_000.0});
 
+        const start4 = std.time.nanoTimestamp();
         try DependancySys.build(&graph.dependancy, &graph.access, &graph.registry);
+        if (rc.FRAME_GRAPH_TIMERS) std.debug.print("{d:.3} us: DependancySys\n", .{@as(f64, @floatFromInt(std.time.nanoTimestamp() - start4)) / 1_000.0});
 
+        const start5 = std.time.nanoTimestamp();
         try GraphSys.build(&graph.graph, &graph.dependancy, &graph.pass, &graph.registry);
+        if (rc.FRAME_GRAPH_TIMERS) std.debug.print("{d:.3} us: GraphSys\n", .{@as(f64, @floatFromInt(std.time.nanoTimestamp() - start5)) / 1_000.0});
 
+        const start6 = std.time.nanoTimestamp();
         try OptimizerSys.build(&graph.optimizer, &graph.graph, &graph.access, &graph.resource, &graph.registry);
+        if (rc.FRAME_GRAPH_TIMERS) std.debug.print("{d:.3} us: OptimizerSys\n", .{@as(f64, @floatFromInt(std.time.nanoTimestamp() - start6)) / 1_000.0});
 
+        const start7 = std.time.nanoTimestamp();
         try LifetimeSys.assign(&graph.lifetime, &graph.optimizer, &graph.access, &graph.registry);
+        if (rc.FRAME_GRAPH_TIMERS) std.debug.print("{d:.3} us: LifetimeSys\n", .{@as(f64, @floatFromInt(std.time.nanoTimestamp() - start7)) / 1_000.0});
 
+        const start8 = std.time.nanoTimestamp();
         try MapperSys.build(&graph.mapper, &graph.access, &graph.resource, &graph.lifetime, &graph.optimizer, &graph.registry);
+        if (rc.FRAME_GRAPH_TIMERS) std.debug.print("{d:.3} us: MapperSys\n", .{@as(f64, @floatFromInt(std.time.nanoTimestamp() - start8)) / 1_000.0});
 
-        // const start = std.time.nanoTimestamp();
-        // const end = std.time.nanoTimestamp();
-        // std.debug.print("Merger Build: {d:.3} ns\n", .{@as(f64, @floatFromInt(end - start)) / 1_000.0});
-
+        const start9 = std.time.nanoTimestamp();
         try ComparatorSys.build(&graph.comparator, &graph.mapper, &graph.registry);
+        if (rc.FRAME_GRAPH_TIMERS) std.debug.print("{d:.3} us: ComparatorSys\n", .{@as(f64, @floatFromInt(std.time.nanoTimestamp() - start9)) / 1_000.0});
 
+        const start10 = std.time.nanoTimestamp();
         try GroupSys.build(&graph.group, &graph.mapper, &graph.registry);
+        if (rc.FRAME_GRAPH_TIMERS) std.debug.print("{d:.3} us: GroupSys\n", .{@as(f64, @floatFromInt(std.time.nanoTimestamp() - start10)) / 1_000.0});
 
+        const start11 = std.time.nanoTimestamp();
         try AssignerSys.build(&graph.assigner, &graph.mapper, &graph.comparator, &graph.group, &graph.registry, rendererQueue, memoryMan);
+        if (rc.FRAME_GRAPH_TIMERS) std.debug.print("{d:.3} us: AssignerSys\n", .{@as(f64, @floatFromInt(std.time.nanoTimestamp() - start11)) / 1_000.0});
 
+        const start12 = std.time.nanoTimestamp();
         try SorterSys.build(&graph.sorter, &graph.pass, &graph.optimizer, &graph.group, &graph.assigner, &graph.registry);
+        if (rc.FRAME_GRAPH_TIMERS) std.debug.print("{d:.3} us: SorterSys\n\n", .{@as(f64, @floatFromInt(std.time.nanoTimestamp() - start12)) / 1_000.0});
     }
 
     pub fn createTextureManually(frameGraph: *FrameGraphData, texPassId: TexPassId, rendererQueue: *RendererQueue, memoryMan: *MemoryManager) !void {
-        try AssignerSys.createTexture(&frameGraph.assigner, &frameGraph.mapper, &frameGraph.registry, texPassId, rendererQueue, memoryMan, .manuel);
+        try AssignerSys.createTextureManuel(&frameGraph.assigner, &frameGraph.registry, texPassId, rendererQueue, memoryMan);
     }
 
     pub fn deleteTextureManually(frameGraph: *FrameGraphData, texPassId: TexPassId, rendererQueue: *RendererQueue) void {
-        AssignerSys.deleteTexture(&frameGraph.assigner, &frameGraph.registry, texPassId, rendererQueue, .manuel);
+        AssignerSys.deleteTextureManuel(&frameGraph.assigner, &frameGraph.registry, texPassId, rendererQueue);
     }
 
     pub fn createBufferManually(frameGraph: *FrameGraphData, bufPassId: BufPassId, rendererQueue: *RendererQueue, memoryMan: *MemoryManager) !void {
-        try AssignerSys.createBuffer(&frameGraph.assigner, &frameGraph.mapper, &frameGraph.registry, bufPassId, rendererQueue, memoryMan, .manuel);
+        try AssignerSys.createBufferManuel(&frameGraph.assigner, &frameGraph.registry, bufPassId, rendererQueue, memoryMan);
     }
 
     pub fn deleteBufferManually(frameGraph: *FrameGraphData, bufPassId: BufPassId, rendererQueue: *RendererQueue) void {
-        AssignerSys.deleteBuffer(&frameGraph.assigner, &frameGraph.registry, bufPassId, rendererQueue, .manuel);
+        AssignerSys.deleteBufferManuel(&frameGraph.assigner, &frameGraph.registry, bufPassId, rendererQueue);
     }
 
     pub fn getBufHardwareId(frameGraph: *const FrameGraphData, name: []const u8) !BufId {

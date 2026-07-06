@@ -2,7 +2,6 @@ const PassLifetime = @import("../../frameBuild/components.zig").PassLifetime;
 const rc = @import("../../.configs/renderConfig.zig");
 const std = @import("std");
 
-const getResKey = @import("../../frameBuild/components.zig").getResKey;
 const getResTyp = @import("../../frameBuild/components.zig").getResTyp;
 
 const RegistryData = @import("../0_Registry/RegistryData.zig").RegistryData;
@@ -20,23 +19,22 @@ pub const LifetimeSys = struct {
         for (accessData.accesses.constSlice()) |access| {
             const passPosition = optimizerData.optimizedGraph.getIndexByKey(access.pass);
             // Input
-            const inputKey = getResKey(access.input);
+            const input = access.input;
 
-            if (lifetimeData.passLifetimes.isKeyUsed(inputKey) == false) {
-                lifetimeData.passLifetimes.upsert(inputKey, PassLifetime{ .earliest = passPosition, .latest = passPosition });
+            if (lifetimeData.passLifetimes.isKeyUsed(input) == false) {
+                lifetimeData.passLifetimes.upsert(input, PassLifetime{ .earliest = passPosition, .latest = passPosition });
             } else {
-                var lifetime = lifetimeData.passLifetimes.getPtrByKey(inputKey);
+                var lifetime = lifetimeData.passLifetimes.getPtrByKey(input);
                 if (passPosition < lifetime.earliest) lifetime.earliest = passPosition;
                 if (passPosition > lifetime.latest) lifetime.latest = passPosition;
             }
             // Output
-            const outputId = access.output orelse continue;
-            const outputKey = getResKey(outputId);
+            const output = access.output orelse continue;
 
-            if (lifetimeData.passLifetimes.isKeyUsed(outputKey) == false) {
-                lifetimeData.passLifetimes.upsert(outputKey, PassLifetime{ .earliest = passPosition, .latest = passPosition });
+            if (lifetimeData.passLifetimes.isKeyUsed(output) == false) {
+                lifetimeData.passLifetimes.upsert(output, PassLifetime{ .earliest = passPosition, .latest = passPosition });
             } else {
-                var lifetime = lifetimeData.passLifetimes.getPtrByKey(outputKey);
+                var lifetime = lifetimeData.passLifetimes.getPtrByKey(output);
                 if (passPosition < lifetime.earliest) lifetime.earliest = passPosition;
                 if (passPosition > lifetime.latest) lifetime.latest = passPosition;
             }
@@ -49,15 +47,13 @@ pub const LifetimeSys = struct {
             for (0..lifetimeData.passLifetimes.getLength()) |i| {
                 const lifetime = lifetimeData.passLifetimes.getByIndex(@intCast(i));
                 const resKey = lifetimeData.passLifetimes.getKeyByIndex(@intCast(i));
-                const resName = switch (getResTyp(resKey)) {
-                    .Buf => try registryData.getBufferName(.id(resKey)),
-                    .Tex => try registryData.getTextureName(.id(resKey - rc.BUF_MAX)),
-                };
+                const kindTag = @tagName(getResTyp(resKey));
+                const resName = try registryData.getResourceName(resKey);
+
                 const earliestPass = optimizerData.optimizedGraph.getConstItems()[lifetime.earliest].pass;
                 const latestPass = optimizerData.optimizedGraph.getConstItems()[lifetime.latest].pass;
                 const earliestName = try registryData.getPassName(earliestPass);
                 const latestName = try registryData.getPassName(latestPass);
-                const kindTag = @tagName(getResTyp(resKey));
                 std.debug.print("- {s} Lifetime: {s}: ({} -> {}) ({s} -> {s})\n", .{ kindTag, resName, lifetime.earliest, lifetime.latest, earliestName, latestName });
             }
 

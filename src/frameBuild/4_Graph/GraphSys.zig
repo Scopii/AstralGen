@@ -2,6 +2,8 @@ const GraphNode = @import("../components.zig").GraphNode;
 const rc = @import("../../.configs/renderConfig.zig");
 const std = @import("std");
 
+const getResTyp = @import("../../frameBuild/components.zig").getResTyp;
+
 const PassData = @import("../1_Pass/PassData.zig").PassData;
 const RegistryData = @import("../0_Registry/RegistryData.zig").RegistryData;
 const DependancyData = @import("../3_Dependancy/DependancyData.zig").DependancyData;
@@ -81,12 +83,10 @@ pub const GraphSys = struct {
                 const predStuck = !graphData.graph.isKeyUsed(dep.predecessor);
                 const succStuck = !graphData.graph.isKeyUsed(dep.successor);
 
-                std.debug.print("  cycle {s} edges:\n", .{@tagName(dep.resource)});
+                const resTyp = getResTyp(dep.resource);
+                std.debug.print("  cycle {s} edges:\n", .{@tagName(resTyp)});
                 if (predStuck and succStuck) {
-                    const resName = switch (dep.resource) {
-                        .bufPassId => |id| try registryData.getBufferName(id),
-                        .texPassId => |id| try registryData.getTextureName(id),
-                    };
+                    const resName = try registryData.getResourceName(dep.resource);
                     const predName = try registryData.getPassName(dep.predecessor);
                     const succName = try registryData.getPassName(dep.successor);
                     std.debug.print("    {s} --[{s}]--> {s}\n", .{ predName, resName, succName });

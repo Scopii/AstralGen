@@ -35,20 +35,24 @@ pub const GPU_READBACK = false;
 pub const CPU_PROFILING = false;
 pub const SWAPCHAIN_PROFILING = false;
 
-pub const FRAME_LIMIT = 10;
+pub const FRAME_LIMIT = 15000;
 
 // Additional Debug Prints
 pub const BARRIER_DEBUG = false;
 pub const RESOURCE_DEBUG = true;
 pub const DESCRIPTOR_DEBUG = true;
+pub const COMPOSITE_DEBUG = false;
+
+// Frame Graph and Pass System
+pub const PASS_MAX = 128;
+pub const MAX_PASS_ATTRIBUTES = 80;
 pub const PASS_EXTRACTION_DEBUG = false;
+pub const FRAME_GRAPH_TIMERS = false;
 pub const FRAME_GRAPH_DEBUG = false;
-pub const FRAME_BUILDS_TILL_TRANSIENT_DELETION = 0;
 pub const FRAME_GRAPH_SKIP_OPTIMIZE = false;
 pub const FRAME_GRAPH_SKIP_SHARING = false;
 pub const PASS_TEXTURE_RESIZE_INCLUDES_READ = true;
-pub const PASS_MAX = 128;
-pub const MAX_PASS_ATTRIBUTES = 80;
+pub const FRAME_BUILDS_TILL_TRANSIENT_DELETION = 0;
 
 // Rendering, Swapchains and Windows
 pub const EARLY_GPU_WAIT = true; // (Reflex Mode)
@@ -56,13 +60,10 @@ pub const MAX_IN_FLIGHT: u8 = 2; // (Frames)
 pub const DESIRED_SWAPCHAIN_IMAGES: u8 = 3;
 pub const DISPLAY_MODE = vk.VK_PRESENT_MODE_IMMEDIATE_KHR; //vk.VK_PRESENT_MODE_IMMEDIATE_KHR
 pub const MAX_WINDOWS: u8 = 8;
-pub const LINKED_TEX_MAX = 12;
-pub const RENDER_TEX_AUTO_RESIZE = true;
-pub const RENDER_TEX_STRETCH = true; // Maybe ignored on AUTO_RESIZE
+pub const BLIT_TEX_STRETCH = false;
 pub const USE_MEM_BARRIERS_ON_BUFFERS = true;
 pub const USE_MEM_BARRIER_ON_IMAGES = true;
 pub const INITIAL_SWAPCHAIN_COLOR: ClearColor = .{ .R = 0.0, .G = 0.0, .B = 0.1, .A = 1.0 };
-pub const COMPOSITE_DEBUG = false;
 
 // Resource Information
 pub const BUF_MAX = 63;

@@ -1,12 +1,8 @@
 const PassDefinition = @import("../../render/types/pass/PassDefinition.zig").PassDefinition;
 const TexDesc = @import("../../render/types/res/TextureMeta.zig").TextureMeta.TexDesc;
 const BufDesc = @import("../../render/types/res/BufferMeta.zig").BufferMeta.BufDesc;
-const LinkedMap = @import("../../.structures/LinkedMap.zig").LinkedMap;
-const FixedList = @import("../../.structures/FixedList.zig").FixedList;
-const SimpleMap = @import("../../.structures/SimpleMap.zig").SimpleMap;
 const LinkedIdMap = @import("../../.structures/LinkedIdMap.zig").LinkedIdMap;
-const SimpleIdMap = @import("../../.structures/SimpleIdMap.zig").SimpleIdMap;
-const KeyPool = @import("../../.structures/KeyPool.zig").KeyPool;
+const ResPassId = @import("../../.configs/idConfig.zig").ResPassId;
 const PassId = @import("../../.configs/idConfig.zig").PassId;
 const String = @import("../../globalHelper.zig").String;
 const rc = @import("../../.configs/renderConfig.zig");
@@ -14,6 +10,10 @@ const pe = @import("../../.configs/idConfig.zig");
 const std = @import("std");
 const TexPassId = pe.TexPassId;
 const BufPassId = pe.BufPassId;
+
+const getResTyp = @import("../components.zig").getResTyp;
+const resToBuf = @import("../components.zig").resToBuf;
+const resToTex = @import("../components.zig").resToTex;
 
 pub const RegistryData = struct {
     bufPassIdMap: std.StringHashMap(BufPassId) = undefined,
@@ -56,6 +56,13 @@ pub const RegistryData = struct {
 
     pub fn getBufferName(self: *const RegistryData, bufPassId: BufPassId) ![]const u8 {
         if (self.bufNames.isKeyUsed(bufPassId) == true) return self.bufNames.getConstPtrByKey(bufPassId).get() else return error.BufPassIdHasNoName;
+    }
+
+    pub fn getResourceName(self: *const RegistryData, resPassId: ResPassId) ![]const u8 {
+        return switch (getResTyp(resPassId)) {
+            .Buf => try getBufferName(self, resToBuf(resPassId)),
+            .Tex => try getTextureName(self, resToTex(resPassId)),
+        };
     }
 
     pub fn getTextureName(self: *const RegistryData, texPassId: TexPassId) ![]const u8 {

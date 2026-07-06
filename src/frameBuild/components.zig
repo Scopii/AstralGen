@@ -2,31 +2,31 @@ const TexDesc = @import("../render/types/res/TextureMeta.zig").TextureMeta.TexDe
 const BufDesc = @import("../render/types/res/BufferMeta.zig").BufferMeta.BufDesc;
 const BufPassId = @import("../.configs/idConfig.zig").BufPassId;
 const TexPassId = @import("../.configs/idConfig.zig").TexPassId;
+const ResPassId = @import("../.configs/idConfig.zig").ResPassId;
 const PassId = @import("../.configs/idConfig.zig").PassId;
 const TexId = @import("../.configs/idConfig.zig").TexId;
 const BufId = @import("../.configs/idConfig.zig").BufId;
 const rc = @import("../.configs/renderConfig.zig");
 
-pub const ResPassId = union(enum) { texPassId: TexPassId, bufPassId: BufPassId };
+pub const ResLink = struct { in: ResPassId, out: ResPassId };
 
-pub const TransientSlot = union(enum) { buf: TransientBuffer, tex: TransientTexture };
-
-pub const ResLink = struct { in: u16, out: u16 };
-
-pub fn getResKey(resId: anytype) u16 {
-    return switch (@TypeOf(resId)) {
-        BufPassId => resId.val(),
-        TexPassId => resId.val() + rc.BUF_MAX,
-        ResPassId => switch (resId) { // new: unwrap the union tag first
-            .bufPassId => |id| id.val(),
-            .texPassId => |id| id.val() + rc.BUF_MAX,
-        },
-        else => @compileError("Invalid Res Id"),
-    };
+pub fn bufToRes(bufPassId: BufPassId) ResPassId {
+    return .id(bufPassId.val());
 }
 
-pub fn getResTyp(resKey: u16) enum { Buf, Tex } {
-    return if (resKey >= rc.BUF_MAX) .Tex else .Buf;
+pub fn texToRes(texPassId: TexPassId) ResPassId {
+    return .id(texPassId.val() + rc.BUF_MAX);
+}
+
+pub fn resToBuf(resPassId: ResPassId) BufPassId {
+    return .id(resPassId.val());
+}
+pub fn resToTex(resPassId: ResPassId) TexPassId {
+    return .id(resPassId.val() - rc.BUF_MAX);
+}
+
+pub fn getResTyp(resPassId: ResPassId) enum { Tex, Buf } { // parameter type changed
+    return if (resPassId.val() >= rc.BUF_MAX) .Tex else .Buf;
 }
 
 // pub const TextureLink = struct {
@@ -73,7 +73,7 @@ pub const PassLifetime = struct {
 };
 
 pub const GroupLifetime = struct {
-    rootResource: u16,
+    rootResource: ResPassId,
     earliestPass: u16,
     latestPass: u16,
 };
@@ -111,12 +111,12 @@ pub const GroupChange = struct {
         newPassAndDesc,
         unchanged,
     };
-    rootResource: u16,
+    rootResource: ResPassId,
     change: ResUpdate,
 };
 
 pub const PhysicalResLifetime = struct {
-    resKey: u16,
+    resKey: ResPassId,
     earliest: u16,
     latest: u16,
 };

@@ -2,6 +2,10 @@ const PassAccessRange = @import("../../frameBuild/components.zig").PassAccessRan
 const rc = @import("../../.configs/renderConfig.zig");
 const std = @import("std");
 
+const getResTyp = @import("../components.zig").getResTyp;
+const bufToRes = @import("../components.zig").bufToRes;
+const texToRes = @import("../components.zig").texToRes;
+
 const RegistryData = @import("../0_Registry/RegistryData.zig").RegistryData;
 const PassData = @import("../1_Pass/PassData.zig").PassData;
 const AccessData = @import("AccessData.zig").AccessData;
@@ -24,15 +28,15 @@ pub const AccessSys = struct {
                     .bufSlot => |bufSlot| {
                         accessData.accesses.append(.{
                             .pass = passId,
-                            .input = .{ .bufPassId = try registryData.getBufferPassId(bufSlot.bufLink.in) },
-                            .output = if (bufSlot.bufLink.out) |output| .{ .bufPassId = try registryData.getBufferPassId(output) } else null,
+                            .input = bufToRes(try registryData.getBufferPassId(bufSlot.bufLink.in)),
+                            .output = if (bufSlot.bufLink.out) |output| bufToRes(try registryData.getBufferPassId(output)) else null,
                             .access = if (bufSlot.access.isReadOnly() == true) .read else .write,
                         }) catch return error.PassCoreLinksFull;
                     },
                     .vertexBuffer => |vertexBufSlot| {
                         accessData.accesses.append(.{
                             .pass = passId,
-                            .input = .{ .bufPassId = try registryData.getBufferPassId(vertexBufSlot.bufInput) },
+                            .input = bufToRes(try registryData.getBufferPassId(vertexBufSlot.bufInput)),
                             .output = null,
                             .access = .read,
                         }) catch return error.PassCoreLinksFull;
@@ -40,7 +44,7 @@ pub const AccessSys = struct {
                     .indexBuffer => |indexBufSlot| {
                         accessData.accesses.append(.{
                             .pass = passId,
-                            .input = .{ .bufPassId = try registryData.getBufferPassId(indexBufSlot.bufInput) },
+                            .input = bufToRes(try registryData.getBufferPassId(indexBufSlot.bufInput)),
                             .output = null,
                             .access = .read,
                         }) catch return error.PassCoreLinksFull;
@@ -48,16 +52,16 @@ pub const AccessSys = struct {
                     .texLinking => |texLink| {
                         accessData.accesses.append(.{
                             .pass = passId,
-                            .input = .{ .texPassId = try registryData.getTexturePassId(texLink.in) },
-                            .output = if (texLink.out) |output| .{ .texPassId = try registryData.getTexturePassId(output) } else null,
+                            .input = texToRes(try registryData.getTexturePassId(texLink.in)),
+                            .output = if (texLink.out) |output| texToRes(try registryData.getTexturePassId(output)) else null,
                             .access = .read,
                         }) catch return error.PassCoreLinksFull;
                     },
                     .bufLinking => |bufLink| {
                         accessData.accesses.append(.{
                             .pass = passId,
-                            .input = .{ .bufPassId = try registryData.getBufferPassId(bufLink.in) },
-                            .output = if (bufLink.out) |output| .{ .bufPassId = try registryData.getBufferPassId(output) } else null,
+                            .input = bufToRes(try registryData.getBufferPassId(bufLink.in)),
+                            .output = if (bufLink.out) |output| bufToRes(try registryData.getBufferPassId(output)) else null,
                             .access = .read,
                         }) catch return error.PassCoreLinksFull;
                     },
@@ -65,8 +69,8 @@ pub const AccessSys = struct {
                     inline else => |texSlotTypes| {
                         accessData.accesses.append(.{
                             .pass = passId,
-                            .input = .{ .texPassId = try registryData.getTexturePassId(texSlotTypes.texLink.in) },
-                            .output = if (texSlotTypes.texLink.out) |output| .{ .texPassId = try registryData.getTexturePassId(output) } else null,
+                            .input = texToRes(try registryData.getTexturePassId(texSlotTypes.texLink.in)),
+                            .output = if (texSlotTypes.texLink.out) |output| texToRes(try registryData.getTexturePassId(output)) else null,
                             .access = if (texSlotTypes.access.isReadOnly() == true) .read else .write,
                         }) catch return error.PassCoreLinksFull;
                     },
@@ -87,18 +91,13 @@ pub const AccessSys = struct {
 
                 for (range.first..range.last, 0..) |index, counter| {
                     const access = accessData.accesses.buffer[index];
-                    const inputName = switch (access.input) {
-                        .bufPassId => |id| try registryData.getBufferName(id),
-                        .texPassId => |id| try registryData.getTextureName(id),
-                    };
-                    const outputName = if (access.output) |output| switch (output) {
-                        .bufPassId => |id| try registryData.getBufferName(id),
-                        .texPassId => |id| try registryData.getTextureName(id),
-                    } else "null";
+
+                    const inputTyp = getResTyp(access.input);
+                    const inputName = try registryData.getResourceName(access.input);
+                    const outputName = if (access.output) |output| try registryData.getResourceName(output) else "null";
+
                     const passName = try registryData.getPassName(access.pass);
-                    const inputTag = @tagName(access.input);
-                    const accessTag = @tagName(access.access);
-                    std.debug.print("     -> {s} {}. ( .pass = {s}, .input = {s}, .output = {s}, .access = {s})\n", .{ inputTag, counter, passName, inputName, outputName, accessTag });
+                    std.debug.print("     -> {s} {}. ( .pass = {s}, .input = {s}, .output = {s}, .access = {s})\n", .{ @tagName(inputTyp), counter, passName, inputName, outputName, @tagName(access.access) });
                 }
             }
             std.debug.print("\n", .{});

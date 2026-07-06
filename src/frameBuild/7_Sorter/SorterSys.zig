@@ -37,12 +37,15 @@ pub const SorterSys = struct {
 
             var neededClears = false;
             // Resource Clears
-            for (groupData.resourceClears.constSlice()) |resClear| {
-                if (resClear.passAfterClear == passId) {
-                    switch (assignerData.usedTransientSlots.buffer[resClear.sharedIndex]) { // slot index = shared index
-                        .buf => |slot| try sorterData.sortedNodes.append(.{ .clearBuffer = slot.hardwareBuf }),
-                        .tex => |slot| try sorterData.sortedNodes.append(.{ .clearTexture = slot.hardwareTex }),
-                    }
+            for (groupData.bufClears.constSlice()) |bufClear| {
+                if (bufClear.passAfterClear == passId) {
+                    try sorterData.sortedNodes.append(.{ .clearBuffer = assignerData.usedTransientBufs.buffer[bufClear.sharedIndex].hardwareBuf });
+                    neededClears = true;
+                }
+            }
+            for (groupData.texClears.constSlice()) |texClear| {
+                if (texClear.passAfterClear == passId) {
+                    try sorterData.sortedNodes.append(.{ .clearTexture = assignerData.usedTransientTexes.buffer[texClear.sharedIndex].hardwareTex });
                     neededClears = true;
                 }
             }
