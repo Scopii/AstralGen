@@ -174,28 +174,52 @@ pub const AssignerSys = struct {
             const keyTyp = getResTyp(rootKey);
 
             switch (groupChange.change) {
-                .unchanged => {},
+                .unchanged, .newPass => {},
                 .deleted => switch (keyTyp) {
-                    .Buf => try deferBufferDeletion(assignerData, resToBuf(rootKey)), // or deleteBuffer
-                    .Tex => try deferTextureDeletion(assignerData, resToTex(rootKey)), // or deleteTexture
+                    .Buf => {
+                        if (assignerData.manualBufs.isKeyUsed(resToBuf(rootKey))) continue;
+
+                        try deferBufferDeletion(assignerData, resToBuf(rootKey)); // or deleteBuffer
+                    },
+                    .Tex => {
+                        if (assignerData.manualTexes.isKeyUsed(resToTex(rootKey))) continue;
+
+                        try deferTextureDeletion(assignerData, resToTex(rootKey)); // or deleteTexture
+                    },
                 },
                 .created => switch (keyTyp) {
                     .Buf => {
+                        if (assignerData.manualBufs.isKeyUsed(resToBuf(rootKey))) continue;
+
                         try createBuffer(assignerData, mapperData, registryData, resToBuf(rootKey), rendererQueue, memoryMan);
                         resolveBufferUpdateRequest(assignerData, resToBuf(rootKey));
                     },
                     .Tex => {
+                        if (assignerData.manualTexes.isKeyUsed(resToTex(rootKey))) continue;
+
                         try createTexture(assignerData, mapperData, registryData, resToTex(rootKey), rendererQueue, memoryMan);
                         resolveTextureUpdateRequest(assignerData, resToTex(rootKey));
                     },
                 },
-                .newDesc, .newPass, .newPassAndDesc => switch (keyTyp) {
+                .newDesc, .newPassAndDesc => switch (keyTyp) {
                     .Buf => {
+                        if (assignerData.manualBufs.isKeyUsed(resToBuf(rootKey))) {
+                            const bufName = try registryData.getBufferName(resToBuf(rootKey));
+                            std.debug.print("WARN: desc changed on manual Buffer! {s} -> graph wont recreate\n", .{bufName});
+                            continue;
+                        }
+
                         try deferBufferDeletion(assignerData, resToBuf(rootKey)); // or deleteBuffer
                         try createBuffer(assignerData, mapperData, registryData, resToBuf(rootKey), rendererQueue, memoryMan);
                         resolveBufferUpdateRequest(assignerData, resToBuf(rootKey));
                     },
                     .Tex => {
+                        if (assignerData.manualTexes.isKeyUsed(resToTex(rootKey))) {
+                            const texName = try registryData.getTextureName(resToTex(rootKey));
+                            std.debug.print("WARN: desc changed on manual Texture! {s} -> graph wont recreate\n", .{texName});
+                            continue;
+                        }
+
                         try deferTextureDeletion(assignerData, resToTex(rootKey)); // or deleteTexture
                         try createTexture(assignerData, mapperData, registryData, resToTex(rootKey), rendererQueue, memoryMan);
                         resolveTextureUpdateRequest(assignerData, resToTex(rootKey));
@@ -211,7 +235,8 @@ pub const AssignerSys = struct {
 
             switch (getResTyp(rootKey)) {
                 .Buf => {
-                    const bufId = assignerData.rootBufPhysicalMap.getByKey(resToBuf(rootKey));
+                    const isManual = assignerData.manualBufs.isKeyUsed(resToBuf(rootKey));
+                    const bufId = if (isManual) assignerData.manualBufs.getByKey(resToBuf(rootKey)).id else assignerData.rootBufPhysicalMap.getByKey(resToBuf(rootKey));
 
                     for (group.firstMapIndex..group.lastMapIndex + 1) |mapIndex| {
                         const memberKey = mapperData.persistentMap.getKeyByIndex(@intCast(mapIndex));
@@ -226,7 +251,8 @@ pub const AssignerSys = struct {
                     }
                 },
                 .Tex => {
-                    const texId = assignerData.rootTexPhysicalMap.getByKey(resToTex(rootKey));
+                    const isManual = assignerData.manualTexes.isKeyUsed(resToTex(rootKey));
+                    const texId = if (isManual) assignerData.manualTexes.getByKey(resToTex(rootKey)).id else assignerData.rootTexPhysicalMap.getByKey(resToTex(rootKey));
 
                     for (group.firstMapIndex..group.lastMapIndex + 1) |mapIndex| {
                         const memberKey = mapperData.persistentMap.getKeyByIndex(@intCast(mapIndex));
@@ -378,8 +404,12 @@ pub const AssignerSys = struct {
     }
 
     pub fn createBufferManuel(assignerData: *AssignerData, registryData: *const RegistryData, rootBuf: BufPassId, rendererQueue: *RendererQueue, memoryMan: *MemoryManager) !void {
+        if (assignerData.rootBufPhysicalMap.isKeyUsed(rootBuf)) return error.GraphAlreadyOwnsBuffer;
+
         const bufId = try getFreeBufId(assignerData);
         const bufDesc = try registryData.getBufferDefinition(rootBuf);
+        if (bufDesc.share == .transient) return error.ManualBufferCantBeTransient;
+        // if (bufDesc.fitPass == true) return error.ManualBufferCantResize;
 
         const bufInf = BufInf{
             .id = bufId,
@@ -472,20 +502,24 @@ pub const AssignerSys = struct {
     }
 
     pub fn createTextureManuel(assignerData: *AssignerData, registryData: *const RegistryData, rootTex: TexPassId, rendererQueue: *RendererQueue, memoryMan: *MemoryManager) !void {
+        if (assignerData.rootTexPhysicalMap.isKeyUsed(rootTex)) return error.GraphAlreadyOwnsTexture;
+
         const texId = try getFreeTexId(assignerData);
-        const desc = try registryData.getTextureDefinition(rootTex);
+        const texDesc = try registryData.getTextureDefinition(rootTex);
+        if (texDesc.share == .transient) return error.ManualTextureCantBeTransient;
+        if (texDesc.fitPass) return error.ManualTextureCantFitPass;
 
         const texInf = TexInf{
             .id = texId,
-            .mem = desc.mem,
-            .typ = desc.typ,
-            .texUse = desc.texUse,
-            .descriptors = desc.descriptors,
-            .width = desc.width,
-            .height = desc.height,
-            .depth = desc.depth,
-            .update = desc.update,
-            .resize = desc.resize,
+            .mem = texDesc.mem,
+            .typ = texDesc.typ,
+            .texUse = texDesc.texUse,
+            .descriptors = texDesc.descriptors,
+            .width = texDesc.width,
+            .height = texDesc.height,
+            .depth = texDesc.depth,
+            .update = texDesc.update,
+            .resize = texDesc.resize,
         };
         assignerData.manualTexes.upsert(rootTex, texInf);
         assignerData.texAssigns.upsert(rootTex, texId);

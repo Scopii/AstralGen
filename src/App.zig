@@ -240,6 +240,12 @@ pub const App = struct {
         try FrameGraphSys.createBufferManually(&self.data.frameGraph, rc.ImguiVB, &self.rendererQueue, self.memoryMan);
         try FrameGraphSys.createTextureManually(&self.data.frameGraph, rc.ImguiFontTex, &self.rendererQueue, self.memoryMan);
 
+        // try FrameGraphSys.createBufferManually(&self.data.frameGraph, rc.indirectSB, &self.rendererQueue, self.memoryMan);
+        // try FrameGraphSys.createBufferManually(&self.data.frameGraph, rc.ReadbackSB, &self.rendererQueue, self.memoryMan);
+        // try FrameGraphSys.createBufferManually(&self.data.frameGraph, rc.MainCamUB, &self.rendererQueue, self.memoryMan);
+        // try FrameGraphSys.createBufferManually(&self.data.frameGraph, rc.DebugCamUB, &self.rendererQueue, self.memoryMan);
+        // try FrameGraphSys.createBufferManually(&self.data.frameGraph, rc.EntitySB, &self.rendererQueue, self.memoryMan);
+
         try UiSys.init(&self.data.ui, self.memoryMan);
     }
 
@@ -300,10 +306,10 @@ pub const App = struct {
 
                 if (rc.CPU_PROFILING) std.debug.print("Cpu pre-Renderer Delta {d:.3} ms, ({d:.1} Real FPS)\n", .{ dt * 0.000001, 1.0 / (dt * 0.000000001) });
 
-                const start = std.time.microTimestamp();
+                // const start = std.time.microTimestamp();
                 try FrameGraphSys.build(&self.data.frameGraph, &self.data, &self.rendererQueue, self.memoryMan);
-                const end = std.time.microTimestamp();
-                std.debug.print("Frame Graph Build: {d:.3} ms\n", .{@as(f64, @floatFromInt(end - start)) / 1_000.0});
+                // const end = std.time.microTimestamp();
+                // std.debug.print("Frame Graph Build: {d:.3} ms\n", .{@as(f64, @floatFromInt(end - start)) / 1_000.0});
 
                 const updateRequests = self.data.frameGraph.assigner.updateRequests.getConstItems();
                 const sortedRenderNodes = self.data.frameGraph.sorter.sortedNodes.constSlice();

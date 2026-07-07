@@ -197,11 +197,16 @@ pub const FrameGraphSys = struct {
         for (frameGraphQueue.get()) |event| {
             switch (event) {
                 .updateBuffer => |updateBuffer| {
-                    const hardwareId: BufId = switch (updateBuffer.bufUnion) {
-                        .bufId => |bufId| bufId,
-                        .bufName => |bufName| try getBufHardwareId(frameGraph, bufName),
-                        .bufPassId => |bufPassId| frameGraph.assigner.bufAssigns.getByKey(bufPassId),
-                    };
+                    var hardwareId: BufId = undefined;
+
+                    switch (updateBuffer.bufUnion) {
+                        .bufId => |bufId| hardwareId = bufId,
+                        .bufName => |bufName| hardwareId = try getBufHardwareId(frameGraph, bufName),
+                        .bufPassId => |bufPassId| {
+                            if (frameGraph.assigner.bufAssigns.isKeyUsed(bufPassId) == false) return error.ProcessQueueUpdateBufferAssignemntEmpty;
+                            hardwareId = frameGraph.assigner.bufAssigns.getByKey(bufPassId);
+                        },
+                    }
 
                     const PayloadPtr = @FieldType(RendererQueue.RendererEvent, "updateBuffer");
                     const Payload = std.meta.Child(PayloadPtr);
@@ -212,11 +217,16 @@ pub const FrameGraphSys = struct {
                     // std.debug.print("FrameGraph: Update Buffer ({}) send to Renderer\n", .{updateBuffer.bufEnum});
                 },
                 .updateBufferSegment => |updateBufferSegment| {
-                    const hardwareId: BufId = switch (updateBufferSegment.bufUnion) {
-                        .bufId => |bufId| bufId,
-                        .bufName => |bufName| try getBufHardwareId(frameGraph, bufName),
-                        .bufPassId => |bufPassId| frameGraph.assigner.bufAssigns.getByKey(bufPassId),
-                    };
+                    var hardwareId: BufId = undefined;
+
+                    switch (updateBufferSegment.bufUnion) {
+                        .bufId => |bufId| hardwareId = bufId,
+                        .bufName => |bufName| hardwareId = try getBufHardwareId(frameGraph, bufName),
+                        .bufPassId => |bufPassId| {
+                            if (frameGraph.assigner.bufAssigns.isKeyUsed(bufPassId) == false) return error.ProcessQueueUpdateBufferAssignemntEmpty;
+                            hardwareId = frameGraph.assigner.bufAssigns.getByKey(bufPassId);
+                        },
+                    }
 
                     const PayloadPtr = @FieldType(RendererQueue.RendererEvent, "updateBufferSegment");
                     const Payload = std.meta.Child(PayloadPtr);
@@ -227,11 +237,16 @@ pub const FrameGraphSys = struct {
                     // std.debug.print("FrameGraph: Update Buffer Segment ({}) send to Renderer\n", .{updateBufferSegment.bufEnum});
                 },
                 .updateTexture => |updateTexture| {
-                    const hardwareId: TexId = switch (updateTexture.texUnion) {
-                        .texId => |texId| texId,
-                        .texName => |texName| try getTexHardwareId(frameGraph, texName),
-                        .texPassId => |texPassId| frameGraph.assigner.texAssigns.getByKey(texPassId),
-                    };
+                    var hardwareId: TexId = undefined;
+
+                    switch (updateTexture.texUnion) {
+                        .texId => |texId| hardwareId = texId,
+                        .texName => |texName| hardwareId = try getTexHardwareId(frameGraph, texName),
+                        .texPassId => |texPassId| {
+                            if (frameGraph.assigner.texAssigns.isKeyUsed(texPassId) == false) return error.ProcessQueueUpdateTextureAssignemntEmpty;
+                            hardwareId = frameGraph.assigner.texAssigns.getByKey(texPassId);
+                        },
+                    }
 
                     const PayloadPtr = @FieldType(RendererQueue.RendererEvent, "updateTexture");
                     const Payload = std.meta.Child(PayloadPtr);

@@ -15,6 +15,8 @@ const OptimizerData = @import("../4.5_Optimizer/OptimizerData.zig").OptimizerDat
 
 pub const OptimizerSys = struct {
     pub fn build(optimizerData: *OptimizerData, graphData: *const GraphData, accessData: *const AccessData, resourceData: *const ResourceData, registryData: *const RegistryData) !void {
+        optimizerData.optimizedGraph.clear();
+
         // Skip Optimizer Stage
         if (rc.FRAME_GRAPH_SKIP_OPTIMIZE == true) {
             for (graphData.graph.getConstItems()) |graphNode| {
@@ -22,11 +24,9 @@ pub const OptimizerSys = struct {
             }
             return;
         }
-
         // If not skipped:
         optimizerData.graphLifetimes.clear();
         optimizerData.graphMemNodes.clear();
-        optimizerData.optimizedGraph.clear();
 
         for (accessData.accesses.constSlice()) |access| {
             const graphLevel = graphData.graph.getByKey(access.pass).level;
