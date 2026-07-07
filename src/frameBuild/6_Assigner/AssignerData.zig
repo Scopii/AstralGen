@@ -45,7 +45,4 @@ pub const AssignerData = struct {
     // Collective Storage Assignments
     bufAssigns: LinkedIdMap(BufId, rc.BUF_MAX, BufPassId, rc.BUF_MAX, 0) = .{},
     texAssigns: LinkedIdMap(TexId, rc.TEX_MAX, TexPassId, rc.TEX_MAX, 0) = .{},
-
-    // Update Requests after Resource Recreations
-    updateRequests: LinkedMap(UpdateRequestEnum, 64, u16, 64, 0) = .{},
 };

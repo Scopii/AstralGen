@@ -246,6 +246,26 @@ pub const App = struct {
         // try FrameGraphSys.createBufferManually(&self.data.frameGraph, rc.DebugCamUB, &self.rendererQueue, self.memoryMan);
         // try FrameGraphSys.createBufferManually(&self.data.frameGraph, rc.EntitySB, &self.rendererQueue, self.memoryMan);
 
+        // PROCEDURAL TEXTURE GENERATION
+        const AddTexPtr = @FieldType(FrameGraphQueue.FrameGraphEvent, "updateTexture");
+        const AddTex = std.meta.Child(AddTexPtr);
+        const arena = self.memoryMan.getGlobalArena();
+
+        const pixels = try arena.alloc([4]f16, 256 * 256);
+        for (0..256) |y| {
+            for (0..256) |x| {
+                const isWhite = ((x / 32) + (y / 32)) % 2 == 0;
+                const val: f16 = if (isWhite) 1.0 else 0.2; // 1.0 (white) or 0.2 (dark)
+
+                // RGBA -> Blue checkerboard
+                pixels[y * 256 + x] = .{ val, val, 1.0, 1.0 };
+            }
+        }
+        const addTextureDataPtr = try arena.create(AddTex);
+        addTextureDataPtr.* = .{ .texUnion = .{ .texPassId = rc.TestTileTex }, .data = std.mem.sliceAsBytes(pixels), .newExtent = null };
+        self.frameGraphQueue.append(.{ .updateTexture = addTextureDataPtr });
+        // TEXTURE GEN END
+
         try UiSys.init(&self.data.ui, self.memoryMan);
     }
 
@@ -310,40 +330,8 @@ pub const App = struct {
                 try FrameGraphSys.build(&self.data.frameGraph, &self.data, &self.rendererQueue, self.memoryMan);
                 // const end = std.time.microTimestamp();
                 // std.debug.print("Frame Graph Build: {d:.3} ms\n", .{@as(f64, @floatFromInt(end - start)) / 1_000.0});
-
-                const updateRequests = self.data.frameGraph.assigner.updateRequests.getConstItems();
+                
                 const sortedRenderNodes = self.data.frameGraph.sorter.sortedNodes.constSlice();
-
-                for (updateRequests) |updateRequest| {
-                    switch (updateRequest) {
-                        .EntityUpdate => {},
-                        .CamMainUpdate => {},
-                        .CamDebugUpdate => {},
-                        .TestTileUpdate => {
-                            // PROCEDURAL TEXTURE GENERATION
-                            const AddTexPtr = @FieldType(FrameGraphQueue.FrameGraphEvent, "updateTexture");
-                            const AddTex = std.meta.Child(AddTexPtr);
-
-                            const arena = self.memoryMan.getGlobalArena();
-
-                            const pixels = try arena.alloc([4]f16, 256 * 256);
-                            for (0..256) |y| {
-                                for (0..256) |x| {
-                                    const isWhite = ((x / 32) + (y / 32)) % 2 == 0;
-                                    const val: f16 = if (isWhite) 1.0 else 0.2; // 1.0 (white) or 0.2 (dark)
-
-                                    // RGBA -> Blue checkerboard
-                                    pixels[y * 256 + x] = .{ val, val, 1.0, 1.0 };
-                                }
-                            }
-
-                            const addTextureDataPtr = try arena.create(AddTex);
-                            addTextureDataPtr.* = .{ .texUnion = .{ .texPassId = rc.TestTileTex }, .data = std.mem.sliceAsBytes(pixels), .newExtent = null };
-                            self.frameGraphQueue.append(.{ .updateTexture = addTextureDataPtr });
-                        },
-                        .GuiUpdate => {},
-                    }
-                }
 
                 try FrameGraphSys.processQueue(&self.data.frameGraph, &self.frameGraphQueue, &self.rendererQueue, self.memoryMan);
 

@@ -43,7 +43,6 @@ pub const AssignerSys = struct {
         memoryMan: *MemoryManager,
     ) !void {
         // Resets
-        assignerData.updateRequests.clear();
         assignerData.bufAssigns.clear();
         assignerData.texAssigns.clear();
 
@@ -192,13 +191,11 @@ pub const AssignerSys = struct {
                         if (assignerData.manualBufs.isKeyUsed(resToBuf(rootKey))) continue;
 
                         try createBuffer(assignerData, mapperData, registryData, resToBuf(rootKey), rendererQueue, memoryMan);
-                        resolveBufferUpdateRequest(assignerData, resToBuf(rootKey));
                     },
                     .Tex => {
                         if (assignerData.manualTexes.isKeyUsed(resToTex(rootKey))) continue;
 
                         try createTexture(assignerData, mapperData, registryData, resToTex(rootKey), rendererQueue, memoryMan);
-                        resolveTextureUpdateRequest(assignerData, resToTex(rootKey));
                     },
                 },
                 .newDesc, .newPassAndDesc => switch (keyTyp) {
@@ -211,7 +208,6 @@ pub const AssignerSys = struct {
 
                         try deferBufferDeletion(assignerData, resToBuf(rootKey)); // or deleteBuffer
                         try createBuffer(assignerData, mapperData, registryData, resToBuf(rootKey), rendererQueue, memoryMan);
-                        resolveBufferUpdateRequest(assignerData, resToBuf(rootKey));
                     },
                     .Tex => {
                         if (assignerData.manualTexes.isKeyUsed(resToTex(rootKey))) {
@@ -222,7 +218,6 @@ pub const AssignerSys = struct {
 
                         try deferTextureDeletion(assignerData, resToTex(rootKey)); // or deleteTexture
                         try createTexture(assignerData, mapperData, registryData, resToTex(rootKey), rendererQueue, memoryMan);
-                        resolveTextureUpdateRequest(assignerData, resToTex(rootKey));
                     },
                 },
             }
@@ -623,29 +618,6 @@ pub const AssignerSys = struct {
 
     pub fn freeUpTexId(assignerData: *AssignerData, texId: TexId) void {
         assignerData.texIdPool.freeKey(texId.val());
-    }
-
-    pub fn resolveBufferUpdateRequest(assignerData: *AssignerData, bufPassId: BufPassId) void {
-        const updateRequest: ?pe.UpdateRequestEnum = switch (bufPassId) {
-            rc.MainCamUB => .CamMainUpdate,
-            rc.DebugCamUB => .CamDebugUpdate,
-            rc.ImguiIB => .GuiUpdate,
-            rc.ImguiVB => .GuiUpdate,
-            rc.EntitySB => .EntityUpdate,
-            else => null,
-        };
-        if (updateRequest) |request| assignerData.updateRequests.upsert(@intFromEnum(request), request);
-    }
-
-    pub fn resolveTextureUpdateRequest(assignerData: *AssignerData, texPassId: TexPassId) void {
-        const updateRequest: ?pe.UpdateRequestEnum = switch (texPassId) {
-            rc.TestTileTex => .TestTileUpdate,
-            rc.ImguiFontTex => .GuiUpdate,
-            else => null,
-        };
-        if (updateRequest) |request| {
-            assignerData.updateRequests.upsert(@intFromEnum(request), request);
-        }
     }
 };
 
