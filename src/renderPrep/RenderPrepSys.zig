@@ -1,4 +1,4 @@
-const FrameGraphQueue = @import("../frameBuild/FrameGraphQueue.zig").FrameGraphQueue;
+const RenderAssignerQueue = @import("../renderAssigner/RenderAssignerQueue.zig").RenderAssignerQueue;
 const MemoryManager = @import("../core/MemoryManager.zig").MemoryManager;
 const GpuObjectData = @import("../render/help/Types.zig").GpuObjectData;
 const EntityData = @import("../ecs/EntityData.zig").EntityData;
@@ -6,7 +6,7 @@ const rc = @import("../.configs/renderConfig.zig");
 const std = @import("std");
 
 pub const RenderPrepSys = struct {
-    pub fn extractEntities(ecs: *EntityData, frameGraphQueue: *FrameGraphQueue, memoryMan: *MemoryManager) !void {
+    pub fn extractEntities(ecs: *EntityData, assignerQueue: *RenderAssignerQueue, memoryMan: *MemoryManager) !void {
         const entityCount = ecs.renderables.getLength();
         if (entityCount == 0) return;
 
@@ -36,12 +36,12 @@ pub const RenderPrepSys = struct {
         if (isDirty == false) return;
 
         // Send the packed, dense array to the Renderer Queue
-        const PayloadPtr = @FieldType(FrameGraphQueue.FrameGraphEvent, "updateBuffer");
+        const PayloadPtr = @FieldType(RenderAssignerQueue.RenderAssignerEvent, "updateBuffer");
         const Payload = std.meta.Child(PayloadPtr);
         const updateBufferPtr = try arena.create(Payload);
         updateBufferPtr.* = .{ .bufUnion = .{ .bufPassId = rc.EntitySB }, .data = std.mem.sliceAsBytes(gpuDataArray) };
 
-        frameGraphQueue.append(.{ .updateBuffer = updateBufferPtr });
+        assignerQueue.append(.{ .updateBuffer = updateBufferPtr });
     }
 
     // Only Updating Entitys as Buffer Segments

@@ -1,0 +1,64 @@
+const RenderRegistryData = @import("../../renderRegistry/RenderRegistryData.zig").RenderRegistryData;
+const Dependancy = @import("../../renderGraph/components.zig").Dependancy;
+const rc = @import("../../.configs/renderConfig.zig");
+const std = @import("std");
+
+const getResTyp = @import("../../renderGraph/components.zig").getResTyp;
+
+const DependancyData = @import("DependancyData.zig").DependancyData;
+const AccessData = @import("../1.5_Access/AccessData.zig").AccessData;
+
+// Step 3
+
+pub const DependancySys = struct {
+    pub fn build(dependancyData: *DependancyData, accessData: *const AccessData, registry: *const RenderRegistryData) !void {
+        dependancyData.deps.clear();
+        dependancyData.lastWriter.clear();
+
+        for (accessData.accesses.constSlice()) |access| {
+            if (access.output) |output| {
+                const resKey = output;
+                // Double Write Check: Only allowed exactly one producer!
+                if (dependancyData.lastWriter.isKeyUsed(resKey) == true) {
+                    const prevWriter = dependancyData.lastWriter.getByKey(resKey);
+                    const prevName = try registry.getPassName(prevWriter);
+                    const newName = try registry.getPassName(access.pass);
+                    const resName = try registry.getResourceName(output);
+                    std.debug.print("VALIDATION: {s} {s} produced by both {s} and {s}\n", .{ @tagName(getResTyp(output)), resName, prevName, newName });
+                }
+                dependancyData.lastWriter.upsert(resKey, access.pass);
+            }
+        }
+
+        for (accessData.accesses.constSlice()) |access| {
+            const resKey = access.input;
+            if (dependancyData.lastWriter.isKeyUsed(resKey) == true) {
+                // Graph Edge only if its a cross pass dependancy (Pass does not consume its own resourcve)
+                const inputPass = dependancyData.lastWriter.getByKey(resKey);
+                if (inputPass != access.pass) {
+                    const dep = Dependancy{ .resource = access.input, .predecessor = inputPass, .successor = access.pass };
+                    dependancyData.deps.append(dep) catch std.debug.print("ERROR: 3.DependancyExtractor: Dependancies append failed\n", .{});
+                }
+            }
+            // // register AFTER the consumer check so this access sees the PRIOR writer not itself
+            // const isWrite = (bufAccesses.access == .write or bufAccesses.bufOutput != null);
+            // if (isWrite) {
+            //     const producedKey: u16 = if (bufAccesses.bufOutput) |out| out.val() else inputBufKey;
+            //     dependancyData.lastBufWriter.upsert(producedKey, bufAccesses.pass);
+            // }
+        }
+
+        // Debug Output
+        if (rc.FRAME_GRAPH_DEBUG) {
+            std.debug.print("3.DependancyExtractor: \n", .{});
+            for (dependancyData.deps.constSlice()) |dep| {
+                const predName = try registry.getPassName(dep.predecessor);
+                const succName = try registry.getPassName(dep.successor);
+                const resTyp = getResTyp(dep.resource);
+                const resName = try registry.getResourceName(dep.resource);
+                std.debug.print("- Dep .( .{s} = {s}, .predecessor = {s}, .successor = {s})\n", .{ @tagName(resTyp), resName, predName, succName });
+            }
+            std.debug.print("\n", .{});
+        }
+    }
+};

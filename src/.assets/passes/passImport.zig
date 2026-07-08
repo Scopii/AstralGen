@@ -20,8 +20,8 @@ pub const AttachmentFill = @import("../../../src/render/types/pass/AttachmentFil
 pub const TextureFill = @import("../../../src/render/types/pass/TextureFill.zig").TextureFill;
 pub const BufferFill = @import("../../../src/render/types/pass/BufferFill.zig").BufferFill;
 
-pub const TextureStringLink = @import("../../../src/frameBuild/components.zig").TextureStringLink;
-pub const BufferStringLink = @import("../../../src/frameBuild/components.zig").BufferStringLink;
+pub const TextureStringLink = @import("../../../src/renderGraph/components.zig").TextureStringLink;
+pub const BufferStringLink = @import("../../../src/renderGraph/components.zig").BufferStringLink;
 
 pub const ShaderInf = @import("../../../src/shader/ShaderInf.zig").ShaderInf;
 

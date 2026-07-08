@@ -1,5 +1,5 @@
-const TextureStringLink = @import("../../../frameBuild/components.zig").TextureStringLink;
-const BufferStringLink = @import("../../../frameBuild/components.zig").BufferStringLink;
+const TextureStringLink = @import("../../../renderGraph/components.zig").TextureStringLink;
+const BufferStringLink = @import("../../../renderGraph/components.zig").BufferStringLink;
 const PassExecutionSlot = @import("PassInstance.zig").PassInstance.PassExecutionSlot;
 const RenderStateUnion = @import("../pass/RenderState.zig").RenderStateUnion;
 const FixedList = @import("../../../.structures/FixedList.zig").FixedList;

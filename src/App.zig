@@ -25,8 +25,14 @@ const RenderPrepSys = @import("renderPrep/RenderPrepSys.zig").RenderPrepSys;
 const ViewportSys = @import("viewport/ViewportSys.zig").ViewportSys;
 const Viewport = @import("viewport/Viewport.zig").Viewport;
 
-const FrameGraphSys = @import("frameBuild/FrameGraphSys.zig").FrameGraphSys;
-const FrameGraphQueue = @import("frameBuild/FrameGraphQueue.zig").FrameGraphQueue;
+const RenderRegistrySys = @import("renderRegistry/RenderRegistrySys.zig").RenderRegistrySys;
+
+const RenderAssignerSys = @import("renderAssigner/RenderAssignerSys.zig").RenderAssignerSys;
+const RenderAssignerQueue = @import("renderAssigner/RenderAssignerQueue.zig").RenderAssignerQueue;
+
+const RenderGraphSys = @import("renderGraph/RenderGraphSys.zig").RenderGraphSys;
+
+const RenderCompilerSys = @import("renderCompiler/RenderCompilerSys.zig").RenderCompilerSys;
 
 const RendererOutQueue = @import("render/RendererOutQueue.zig").RendererOutQueue;
 const RendererQueue = @import("render/RendererQueue.zig").RendererQueue;
@@ -48,7 +54,7 @@ pub const App = struct {
     inputQueue: InputQueue = .{},
     shaderQueue: ShaderQueue = .{},
     windowQueue: WindowQueue = .{},
-    frameGraphQueue: FrameGraphQueue = .{},
+    assignerQueue: RenderAssignerQueue = .{},
     rendererQueue: RendererQueue = .{},
     rendererOutQueue: RendererOutQueue = .{},
 
@@ -57,7 +63,8 @@ pub const App = struct {
     pub fn init(memoryMan: *MemoryManager) !App {
         var data: EngineData = .{};
 
-        try FrameGraphSys.init(&data.frameGraph, memoryMan.getAllocator());
+        try RenderRegistrySys.init(&data.renderRegistry, memoryMan.getAllocator());
+        try RenderRegistrySys.setupDefinitions(&data.renderRegistry);
 
         WindowSys.init(&data.window) catch |err| {
             std.debug.print("Astral App Error WindowManager could not launch, Err {}\n", .{err});
@@ -91,10 +98,10 @@ pub const App = struct {
 
     pub fn deinit(self: *App) void {
         UiSys.deinit(&self.data.ui);
-        FrameGraphSys.deleteBufferManually(&self.data.frameGraph, rc.ImguiIB, &self.rendererQueue);
-        FrameGraphSys.deleteBufferManually(&self.data.frameGraph, rc.ImguiVB, &self.rendererQueue);
-        FrameGraphSys.deleteTextureManually(&self.data.frameGraph, rc.ImguiFontTex, &self.rendererQueue);
-        FrameGraphSys.deinit(&self.data.frameGraph);
+        RenderAssignerSys.deleteBufferManually(&self.data.renderAssigner, &self.data.renderRegistry, rc.ImguiIB, &self.rendererQueue);
+        RenderAssignerSys.deleteBufferManually(&self.data.renderAssigner, &self.data.renderRegistry, rc.ImguiVB, &self.rendererQueue);
+        RenderAssignerSys.deleteTextureManually(&self.data.renderAssigner, &self.data.renderRegistry, rc.ImguiFontTex, &self.rendererQueue);
+        RenderRegistrySys.deinit(&self.data.renderRegistry);
         self.renderer.deinit();
         ShaderSys.deinit(&self.data.shader, self.memoryMan.getAllocator());
         WindowSys.deinit(&self.data.window);
@@ -236,18 +243,18 @@ pub const App = struct {
 
     pub fn setupResources(self: *App) !void {
         try ShaderSys.update(&self.data.shader, &self.shaderQueue, &self.rendererQueue, self.memoryMan);
-        try FrameGraphSys.createBufferManually(&self.data.frameGraph, rc.ImguiIB, &self.rendererQueue, self.memoryMan);
-        try FrameGraphSys.createBufferManually(&self.data.frameGraph, rc.ImguiVB, &self.rendererQueue, self.memoryMan);
-        try FrameGraphSys.createTextureManually(&self.data.frameGraph, rc.ImguiFontTex, &self.rendererQueue, self.memoryMan);
+        try RenderAssignerSys.createBufferManually(&self.data.renderAssigner, &self.data.renderRegistry, rc.ImguiIB, &self.rendererQueue, self.memoryMan);
+        try RenderAssignerSys.createBufferManually(&self.data.renderAssigner, &self.data.renderRegistry, rc.ImguiVB, &self.rendererQueue, self.memoryMan);
+        try RenderAssignerSys.createTextureManually(&self.data.renderAssigner, &self.data.renderRegistry, rc.ImguiFontTex, &self.rendererQueue, self.memoryMan);
 
-        // try FrameGraphSys.createBufferManually(&self.data.frameGraph, rc.indirectSB, &self.rendererQueue, self.memoryMan);
-        // try FrameGraphSys.createBufferManually(&self.data.frameGraph, rc.ReadbackSB, &self.rendererQueue, self.memoryMan);
-        // try FrameGraphSys.createBufferManually(&self.data.frameGraph, rc.MainCamUB, &self.rendererQueue, self.memoryMan);
-        // try FrameGraphSys.createBufferManually(&self.data.frameGraph, rc.DebugCamUB, &self.rendererQueue, self.memoryMan);
-        // try FrameGraphSys.createBufferManually(&self.data.frameGraph, rc.EntitySB, &self.rendererQueue, self.memoryMan);
+        // try PassResourceSys.createBufferManually(&self.data.passResource, rc.indirectSB, &self.rendererQueue, self.memoryMan);
+        // try PassResourceSys.createBufferManually(&self.data.passResource, rc.ReadbackSB, &self.rendererQueue, self.memoryMan);
+        // try PassResourceSys.createBufferManually(&self.data.passResource, rc.MainCamUB, &self.rendererQueue, self.memoryMan);
+        // try PassResourceSys.createBufferManually(&self.data.passResource, rc.DebugCamUB, &self.rendererQueue, self.memoryMan);
+        // try PassResourceSys.createBufferManually(&self.data.passResource, rc.EntitySB, &self.rendererQueue, self.memoryMan);
 
         // PROCEDURAL TEXTURE GENERATION
-        const AddTexPtr = @FieldType(FrameGraphQueue.FrameGraphEvent, "updateTexture");
+        const AddTexPtr = @FieldType(RenderAssignerQueue.RenderAssignerEvent, "updateTexture");
         const AddTex = std.meta.Child(AddTexPtr);
         const arena = self.memoryMan.getGlobalArena();
 
@@ -263,7 +270,7 @@ pub const App = struct {
         }
         const addTextureDataPtr = try arena.create(AddTex);
         addTextureDataPtr.* = .{ .texUnion = .{ .texPassId = rc.TestTileTex }, .data = std.mem.sliceAsBytes(pixels), .newExtent = null };
-        self.frameGraphQueue.append(.{ .updateTexture = addTextureDataPtr });
+        self.assignerQueue.append(.{ .updateTexture = addTextureDataPtr });
         // TEXTURE GEN END
 
         try UiSys.init(&self.data.ui, self.memoryMan);
@@ -318,28 +325,31 @@ pub const App = struct {
                 frameData.runTime = TimeSys.getRuntime(&self.data.time, .seconds, f32);
                 frameData.deltaTime = @floatCast(dt);
 
-                try CameraSys.update(&self.data.entityData, dt, &self.data, &self.frameGraphQueue, self.memoryMan);
+                try CameraSys.update(&self.data.entityData, dt, &self.data, &self.assignerQueue, self.memoryMan);
 
-                try RenderPrepSys.extractEntities(&self.data.entityData, &self.frameGraphQueue, self.memoryMan);
+                try RenderPrepSys.extractEntities(&self.data.entityData, &self.assignerQueue, self.memoryMan);
 
-                try UiSys.update(&self.data.ui, &self.data, &self.frameGraphQueue, self.memoryMan);
+                try UiSys.update(&self.data.ui, &self.data, &self.assignerQueue, self.memoryMan);
 
                 if (rc.CPU_PROFILING) std.debug.print("Cpu pre-Renderer Delta {d:.3} ms, ({d:.1} Real FPS)\n", .{ dt * 0.000001, 1.0 / (dt * 0.000000001) });
 
                 // const start = std.time.microTimestamp();
-                try FrameGraphSys.build(&self.data.frameGraph, &self.data, &self.rendererQueue, self.memoryMan);
+                try RenderGraphSys.build(&self.data.renderGraph, &self.data);
                 // const end = std.time.microTimestamp();
                 // std.debug.print("Frame Graph Build: {d:.3} ms\n", .{@as(f64, @floatFromInt(end - start)) / 1_000.0});
-                
-                const sortedRenderNodes = self.data.frameGraph.sorter.sortedNodes.constSlice();
 
-                try FrameGraphSys.processQueue(&self.data.frameGraph, &self.frameGraphQueue, &self.rendererQueue, self.memoryMan);
+                try RenderAssignerSys.assign(&self.data.renderAssigner, &self.data.renderGraph, &self.data.renderRegistry, &self.rendererQueue, self.memoryMan);
+                try RenderAssignerSys.processQueue(&self.data.renderAssigner, &self.data.renderRegistry, &self.assignerQueue, &self.rendererQueue, self.memoryMan);
+
+                try RenderCompilerSys.compileIR(&self.data.renderCompiler, &self.data.renderAssigner, &self.data.renderGraph, &self.data.renderRegistry);
+
+                const sortedRenderNodes = self.data.renderCompiler.sortedNodes.constSlice();
 
                 try self.renderer.update(&self.rendererQueue);
 
                 if (rc.EARLY_GPU_WAIT == false) try renderer.waitForGpu();
 
-                try FrameGraphSys.fillUiHardwareIds(&self.data.frameGraph, &self.data.ui);
+                try RenderAssignerSys.fillUiHardwareIds(&self.data.renderAssigner, &self.data.renderRegistry, &self.data.ui);
                 const uiNodes = self.data.ui.uiNodes.constSlice();
                 const uiDraws = self.data.ui.uiDraws.constSlice();
 

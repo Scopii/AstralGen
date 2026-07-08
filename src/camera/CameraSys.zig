@@ -1,4 +1,4 @@
-const FrameGraphQueue = @import("../frameBuild/FrameGraphQueue.zig").FrameGraphQueue;
+const RenderAssignerQueue = @import("../renderAssigner/RenderAssignerQueue.zig").RenderAssignerQueue;
 const MemoryManager = @import("../core/MemoryManager.zig").MemoryManager;
 const EntityData = @import("../ecs/EntityData.zig").EntityData;
 const EngineData = @import("../EngineData.zig").EngineData;
@@ -21,7 +21,7 @@ pub const CamData = struct {
 };
 
 pub const CameraSys = struct {
-    pub fn update(ecs: *EntityData, dt: f64, data: *const EngineData, frameGraphQueue: *FrameGraphQueue, memoryMan: *MemoryManager) !void {
+    pub fn update(ecs: *EntityData, dt: f64, data: *const EngineData, assignerQueue: *RenderAssignerQueue, memoryMan: *MemoryManager) !void {
 
         // PROCESS STATE (Movement)
         var activeCamId: ?u32 = null;
@@ -117,13 +117,13 @@ pub const CameraSys = struct {
                 const camDataPtr = try arena.create(CamData);
                 camDataPtr.* = camData;
 
-                const PayloadPtr = @FieldType(FrameGraphQueue.FrameGraphEvent, "updateBuffer");
+                const PayloadPtr = @FieldType(RenderAssignerQueue.RenderAssignerEvent, "updateBuffer");
                 const Payload = std.meta.Child(PayloadPtr);
 
                 const updateBufferPtr = try arena.create(Payload);
                 updateBufferPtr.* = .{ .bufUnion = .{ .bufPassId = camComp.bufPassId }, .data = std.mem.asBytes(camDataPtr) };
 
-                frameGraphQueue.append(.{ .updateBuffer = updateBufferPtr });
+                assignerQueue.append(.{ .updateBuffer = updateBufferPtr });
 
                 // Reset dirty flag
                 transform.isDirty = false;

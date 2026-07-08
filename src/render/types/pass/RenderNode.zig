@@ -6,6 +6,15 @@ const TexId = @import("../../../.configs/idConfig.zig").TexId;
 const BufId = @import("../../../.configs/idConfig.zig").BufId;
 const PassInstance = @import("PassInstance.zig").PassInstance;
 
+pub const RenderNodeIR = union(enum) {
+    blitIR: ViewportBlit, // Could be improved
+    compositeIR: CompositeNode, // Could be improved
+    passIR: PassId,
+    clearBufIR: BufPassId,
+    clearTexIR: TexPassId,
+    barrierBakeClears: void,
+};
+
 pub const TexUnion = union(enum) {
     texName: []const u8, // Should be String?
     texPassId: TexPassId,

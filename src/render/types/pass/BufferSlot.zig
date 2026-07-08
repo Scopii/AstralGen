@@ -1,4 +1,4 @@
-const BufferStringLink = @import("../../../frameBuild/components.zig").BufferStringLink;
+const BufferStringLink = @import("../../../renderGraph/components.zig").BufferStringLink;
 const Buffer = @import("../res/Buffer.zig").Buffer;
 const vhE = @import("../../help/Enums.zig");
 

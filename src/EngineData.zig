@@ -6,5 +6,8 @@ pub const EngineData = struct {
     shader: @import("shader/ShaderData.zig").ShaderData = .{},
     window: @import("window/WindowData.zig").WindowData = .{},
     viewport: @import("viewport/ViewportData.zig").ViewportData = .{},
-    frameGraph: @import("frameBuild/FrameGraphData.zig").FrameGraphData = .{},
+    renderRegistry: @import("renderRegistry/RenderRegistryData.zig").RenderRegistryData = .{},
+    renderGraph: @import("renderGraph/RenderGraphData.zig").RenderGraphData = .{},
+    renderAssigner: @import("renderAssigner/RenderAssignerData.zig").RenderAssignerData = .{},
+    renderCompiler: @import("renderCompiler/RenderCompilerData.zig").RenderCompilerData = .{},
 };

@@ -1,4 +1,4 @@
-const TextureStringLink = @import("../../../frameBuild/components.zig").TextureStringLink;
+const TextureStringLink = @import("../../../renderGraph/components.zig").TextureStringLink;
 const Texture = @import("../res/Texture.zig").Texture;
 const vhE = @import("../../help/Enums.zig");
 

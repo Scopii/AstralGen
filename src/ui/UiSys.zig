@@ -1,7 +1,7 @@
-const FrameGraphQueue = @import("../frameBuild/FrameGraphQueue.zig").FrameGraphQueue;
+const RenderAssignerQueue = @import("../renderAssigner/RenderAssignerQueue.zig").RenderAssignerQueue;
 const MemoryManager = @import("../core/MemoryManager.zig").MemoryManager;
 const UiNode = @import("../render/types/pass/RenderNode.zig").UiNode;
-const TexPassId = @import("../frameBuild/components.zig").TexPassId;
+const TexPassId = @import("../renderGraph/components.zig").TexPassId;
 const EngineData = @import("../EngineData.zig").EngineData;
 const Window = @import("../window/Window.zig").Window;
 const rc = @import("../.configs/renderConfig.zig");
@@ -25,18 +25,18 @@ pub const UiSys = struct {
         ui.initialized = true;
     }
 
-    pub fn update(ui: *UiData, data: *const EngineData, frameGraphQueue: *FrameGraphQueue, memoryMan: *MemoryManager) !void {
+    pub fn update(ui: *UiData, data: *const EngineData, assignerQueue: *RenderAssignerQueue, memoryMan: *MemoryManager) !void {
         ui.uiNodes.clear();
         ui.uiDraws.clear();
 
         if (data.window.uiActive) {
-            try processTextures(ui, frameGraphQueue, memoryMan);
+            try processTextures(ui, assignerQueue, memoryMan);
             for (data.window.activeWindows.constSlice()) |*window| buildWindowUi(window, ui, data, data.time.deltaTime);
-            try extractDrawData(ui, data, frameGraphQueue, memoryMan);
+            try extractDrawData(ui, data, assignerQueue, memoryMan);
         }
     }
 
-    fn processTextures(ui: *UiData, frameGraphQueue: *FrameGraphQueue, memoryMan: *MemoryManager) !void {
+    fn processTextures(ui: *UiData, assignerQueue: *RenderAssignerQueue, memoryMan: *MemoryManager) !void {
         if (!ui.initialized) return;
         if (ui.contexts.getLength() == 0) return; // at least one window context to access shared atlas
 
@@ -67,14 +67,14 @@ pub const UiSys = struct {
                     } else return;
                 };
 
-                const PayloadPtr = @FieldType(FrameGraphQueue.FrameGraphEvent, "updateTexture");
+                const PayloadPtr = @FieldType(RenderAssignerQueue.RenderAssignerEvent, "updateTexture");
                 const updateTexPtr = try arena.create(std.meta.Child(PayloadPtr));
                 updateTexPtr.* = .{
                     .texUnion = .{ .texPassId = rc.ImguiFontTex },
                     .data = pixelBytes,
                     .newExtent = .{ .width = @intCast(width), .height = @intCast(height), .depth = 1 },
                 };
-                frameGraphQueue.append(.{ .updateTexture = updateTexPtr });
+                assignerQueue.append(.{ .updateTexture = updateTexPtr });
 
                 texData.tex_id = @enumFromInt(@as(u64, rc.ImguiFontTex.val()));
 
@@ -211,7 +211,7 @@ pub const UiSys = struct {
         zgui.popStyleVar(.{ .count = 1 });
     }
 
-    fn extractDrawData(ui: *UiData, data: *const EngineData, frameGraphQueue: *FrameGraphQueue, memoryMan: *MemoryManager) !void {
+    fn extractDrawData(ui: *UiData, data: *const EngineData, assignerQueue: *RenderAssignerQueue, memoryMan: *MemoryManager) !void {
         const arena = memoryMan.getGlobalArena();
 
         var totalVtxBytes: u32 = 0;
@@ -286,15 +286,15 @@ pub const UiSys = struct {
             }) catch return error.UiNodesFUll;
         }
 
-        const PayloadVtx = @FieldType(FrameGraphQueue.FrameGraphEvent, "updateBuffer");
+        const PayloadVtx = @FieldType(RenderAssignerQueue.RenderAssignerEvent, "updateBuffer");
         const updateVtxPtr = try arena.create(std.meta.Child(PayloadVtx));
         updateVtxPtr.* = .{ .bufUnion = .{ .bufPassId = rc.ImguiVB }, .data = vtxBuffer };
-        frameGraphQueue.append(.{ .updateBuffer = updateVtxPtr });
+        assignerQueue.append(.{ .updateBuffer = updateVtxPtr });
 
-        const PayloadIdx = @FieldType(FrameGraphQueue.FrameGraphEvent, "updateBuffer");
+        const PayloadIdx = @FieldType(RenderAssignerQueue.RenderAssignerEvent, "updateBuffer");
         const updateIdxPtr = try arena.create(std.meta.Child(PayloadIdx));
-        updateIdxPtr.* = .{ .bufUnion = .{ .bufPassId = rc.ImguiIB }, .data = idxBuffer }; 
-        frameGraphQueue.append(.{ .updateBuffer = updateIdxPtr });
+        updateIdxPtr.* = .{ .bufUnion = .{ .bufPassId = rc.ImguiIB }, .data = idxBuffer };
+        assignerQueue.append(.{ .updateBuffer = updateIdxPtr });
     }
 
     pub fn deinit(ui: *UiData) void {
