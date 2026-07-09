@@ -33,9 +33,6 @@ pub const RenderAssignerData = struct {
     rootBufPhysicalMap: LinkedIdMap(BufId, rc.BUF_MAX, BufPassId, rc.BUF_MAX, 0) = .{},
     rootTexPhysicalMap: LinkedIdMap(TexId, rc.TEX_MAX, TexPassId, rc.TEX_MAX, 0) = .{},
 
-    pendingTexDeletions: FixedList(PendingTexDeletion, rc.TEX_MAX) = .{},
-    pendingBufDeletions: FixedList(PendingBufDeletion, rc.BUF_MAX) = .{},
-
     // Manuel Storage
     manualBufs: LinkedIdMap(BufInf, rc.BUF_MAX, BufPassId, rc.BUF_MAX, 0) = .{},
     manualTexes: LinkedIdMap(TexInf, rc.TEX_MAX, TexPassId, rc.TEX_MAX, 0) = .{},

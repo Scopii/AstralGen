@@ -1,6 +1,4 @@
-const EngineData = @import("../EngineData.zig").EngineData;
 const UiData = @import("../ui/UiData.zig").UiData;
-const ic = @import("../.configs/idConfig.zig");
 
 const TexDesc = @import("../render/types/res/TextureMeta.zig").TextureMeta.TexDesc;
 const TransientTexture = @import("../renderGraph/components.zig").TransientTexture;
@@ -19,15 +17,10 @@ const std = @import("std");
 const TexInf = TextureMeta.TexInf;
 const BufInf = BufferMeta.BufInf;
 
-const getResTyp = @import("../renderGraph/components.zig").getResTyp;
 const texToRes = @import("../renderGraph/components.zig").texToRes;
 const bufToRes = @import("../renderGraph/components.zig").bufToRes;
 const resToBuf = @import("../renderGraph/components.zig").resToBuf;
 const resToTex = @import("../renderGraph/components.zig").resToTex;
-
-const MapperData = @import("../renderGraph/5.1_Mapper/MapperData.zig").MapperData;
-const ComparatorData = @import("../renderGraph/5.3_Comparator/ComparatorData.zig").ComparatorData;
-const GroupData = @import("../renderGraph/5.4_Group/GroupData.zig").GroupData;
 
 const RenderRegistryData = @import("../renderRegistry/RenderRegistryData.zig").RenderRegistryData;
 const RenderAssignerData = @import("../renderAssigner/RenderAssignerData.zig").RenderAssignerData;
@@ -36,13 +29,57 @@ const RenderGraphData = @import("../renderGraph/RenderGraphData.zig").RenderGrap
 
 pub const RenderAssignerSys = struct {
     pub fn assign(self: *RenderAssignerData, renderGraph: *const RenderGraphData, registry: *const RenderRegistryData, rendererQueue: *RendererQueue, memoryMan: *MemoryManager) !void {
-        const mapper = &renderGraph.mapper;
-        const comparator = &renderGraph.comparator;
-        const groups = &renderGraph.group;
-
         // Resets
         self.bufAssigns.clear();
         self.texAssigns.clear();
+
+        try assignManuel(self, renderGraph, registry, rendererQueue, memoryMan);
+        try assignTransients(self, renderGraph, registry, rendererQueue, memoryMan);
+
+        // Debug
+        if (rc.FRAME_GRAPH_DEBUG) {
+            std.debug.print("6.ResourceAssigner\n", .{});
+            for (self.usedTransientBufs.constSlice(), 0..) |buf, i| {
+                std.debug.print(" - Transient Buf {} -> Buf (BufId {}) (unused for {} Builds)\n", .{ i, buf.hardwareBuf.val(), buf.unusedCounter });
+            }
+            for (self.usedTransientTexes.constSlice(), 0..) |tex, i| {
+                std.debug.print(" - Transient Tex {} -> Tex (TexId {}) (unused for {} Builds)\n", .{ i, tex.hardwareTex.val(), tex.unusedCounter });
+            }
+            std.debug.print("\n", .{});
+            // Buffers
+            for (self.bufAssigns.getConstItems(), 0..) |bufId, i| {
+                const bufPassId = self.bufAssigns.getKeyByIndex(@intCast(i));
+                const bufName = try registry.getBufferName(bufPassId);
+                std.debug.print(" - Buf {s} assigned -> BufId {}\n", .{ bufName, bufId.val() });
+            }
+            std.debug.print("\n", .{});
+            // Textures
+            for (self.texAssigns.getConstItems(), 0..) |texId, i| {
+                const texPassId = self.texAssigns.getKeyByIndex(@intCast(i));
+                const texName = try registry.getTextureName(texPassId);
+                std.debug.print(" - Tex {s} assigned -> TexId {}\n", .{ texName, texId.val() });
+            }
+            std.debug.print("\n", .{});
+        }
+    }
+
+    pub fn assignManuel(self: *RenderAssignerData, _: *const RenderGraphData, _: *const RenderRegistryData, _: *RendererQueue, _: *MemoryManager) !void {
+        // Create Manuel Texture Assignments
+        for (self.manualTexes.getConstItems(), 0..) |texInf, i| {
+            const texPassId = self.manualTexes.getKeyByIndex(@intCast(i));
+            self.texAssigns.upsert(texPassId, texInf.id);
+        }
+
+        // Create Manuel Buffer Assignments
+        for (self.manualBufs.getConstItems(), 0..) |bufInf, i| {
+            const enumKey = self.manualBufs.getKeyByIndex(@intCast(i));
+            self.bufAssigns.upsert(enumKey, bufInf.id);
+        }
+    }
+
+    pub fn assignTransients(self: *RenderAssignerData, renderGraph: *const RenderGraphData, registry: *const RenderRegistryData, rendererQueue: *RendererQueue, memoryMan: *MemoryManager) !void {
+        const mapper = &renderGraph.mapper;
+        const groups = &renderGraph.group;
 
         self.unusedTransientBufs.appendSliceAssumeCapacity(self.usedTransientBufs.constSlice());
         self.unusedTransientTexes.appendSliceAssumeCapacity(self.usedTransientTexes.constSlice());
@@ -140,7 +177,9 @@ pub const RenderAssignerSys = struct {
             const transientBuf = &self.unusedTransientBufs.buffer[index];
 
             if (transientBuf.unusedCounter >= rc.FRAME_BUILDS_TILL_TRANSIENT_DELETION) {
-                deleteTransientBuffer(transientBuf.hardwareBuf, rendererQueue);
+                rendererQueue.append(.{ .removeBuffer = transientBuf.hardwareBuf }); // (Stop Renderer missing?)
+                std.debug.print("6.Resource Assigner: Transient Buf (BufId {}) Deletion send to Renderer\n", .{transientBuf.hardwareBuf});
+
                 freeUpBufId(self, transientBuf.hardwareBuf);
                 self.unusedTransientBufs.swapRemove(@intCast(index));
             } else {
@@ -155,190 +194,15 @@ pub const RenderAssignerSys = struct {
             const transientTex = &self.unusedTransientTexes.buffer[index];
 
             if (transientTex.unusedCounter >= rc.FRAME_BUILDS_TILL_TRANSIENT_DELETION) {
-                deleteTransientTexture(transientTex.hardwareTex, rendererQueue);
+                rendererQueue.append(.{ .removeTexture = transientTex.hardwareTex }); // (Stop Renderer missing?)
+                std.debug.print("6.Resource Assigner: Transient Tex (TexId {}) Deletion send to Renderer\n", .{transientTex.hardwareTex});
+
                 freeUpTexId(self, transientTex.hardwareTex);
                 self.unusedTransientTexes.swapRemove(@intCast(index));
             } else {
                 transientTex.unusedCounter += 1;
             }
         }
-
-        // PERSISTENT RESOURCES //
-
-        // Creating, Deleting and Recreating Persistent Resources
-        for (comparator.persistentChanges.constSlice()) |groupChange| {
-            const rootKey = groupChange.rootResource;
-            const keyTyp = getResTyp(rootKey);
-
-            switch (groupChange.change) {
-                .unchanged, .newPass => {},
-                .deleted => switch (keyTyp) {
-                    .Buf => {
-                        if (self.manualBufs.isKeyUsed(resToBuf(rootKey))) continue;
-
-                        try deferBufferDeletion(self, resToBuf(rootKey)); // or deleteBuffer
-                    },
-                    .Tex => {
-                        if (self.manualTexes.isKeyUsed(resToTex(rootKey))) continue;
-
-                        try deferTextureDeletion(self, resToTex(rootKey)); // or deleteTexture
-                    },
-                },
-                .created => switch (keyTyp) {
-                    .Buf => {
-                        if (self.manualBufs.isKeyUsed(resToBuf(rootKey))) continue;
-
-                        try createBuffer(self, mapper, registry, resToBuf(rootKey), rendererQueue, memoryMan);
-                    },
-                    .Tex => {
-                        if (self.manualTexes.isKeyUsed(resToTex(rootKey))) continue;
-
-                        try createTexture(self, mapper, registry, resToTex(rootKey), rendererQueue, memoryMan);
-                    },
-                },
-                .newDesc, .newPassAndDesc => switch (keyTyp) {
-                    .Buf => {
-                        if (self.manualBufs.isKeyUsed(resToBuf(rootKey))) {
-                            const bufName = try registry.getBufferName(resToBuf(rootKey));
-                            std.debug.print("WARN: desc changed on manual Buffer! {s} -> graph wont recreate\n", .{bufName});
-                            continue;
-                        }
-
-                        try deferBufferDeletion(self, resToBuf(rootKey)); // or deleteBuffer
-                        try createBuffer(self, mapper, registry, resToBuf(rootKey), rendererQueue, memoryMan);
-                    },
-                    .Tex => {
-                        if (self.manualTexes.isKeyUsed(resToTex(rootKey))) {
-                            const texName = try registry.getTextureName(resToTex(rootKey));
-                            std.debug.print("WARN: desc changed on manual Texture! {s} -> graph wont recreate\n", .{texName});
-                            continue;
-                        }
-
-                        try deferTextureDeletion(self, resToTex(rootKey)); // or deleteTexture
-                        try createTexture(self, mapper, registry, resToTex(rootKey), rendererQueue, memoryMan);
-                    },
-                },
-            }
-        }
-
-        if (rc.FRAME_GRAPH_DEBUG) std.debug.print("\n", .{});
-
-        for (mapper.persistentGroups.getConstItems(), 0..) |group, i| {
-            const rootKey = mapper.persistentGroups.getKeyByIndex(@intCast(i));
-
-            switch (getResTyp(rootKey)) {
-                .Buf => {
-                    const isManual = self.manualBufs.isKeyUsed(resToBuf(rootKey));
-                    const bufId = if (isManual) self.manualBufs.getByKey(resToBuf(rootKey)).id else self.rootBufPhysicalMap.getByKey(resToBuf(rootKey));
-
-                    for (group.firstMapIndex..group.lastMapIndex + 1) |mapIndex| {
-                        const memberKey = mapper.persistentMap.getKeyByIndex(@intCast(mapIndex));
-                        const bufPassId = resToBuf(memberKey);
-
-                        if (self.bufAssigns.isKeyUsed(bufPassId)) {
-                            const bufName = try registry.getBufferName(bufPassId);
-                            std.debug.print("ERROR: 6.ResourceAssigner: Buffer {s} already assigned!\n", .{bufName});
-                            return error.BufEnumAlreadyAssigned;
-                        }
-                        self.bufAssigns.upsert(bufPassId, bufId);
-                    }
-                },
-                .Tex => {
-                    const isManual = self.manualTexes.isKeyUsed(resToTex(rootKey));
-                    const texId = if (isManual) self.manualTexes.getByKey(resToTex(rootKey)).id else self.rootTexPhysicalMap.getByKey(resToTex(rootKey));
-
-                    for (group.firstMapIndex..group.lastMapIndex + 1) |mapIndex| {
-                        const memberKey = mapper.persistentMap.getKeyByIndex(@intCast(mapIndex));
-                        const texPassId = resToTex(memberKey);
-
-                        if (self.texAssigns.isKeyUsed(texPassId)) {
-                            const texName = try registry.getTextureName(texPassId);
-                            std.debug.print("ERROR: 6.ResourceAssigner: Texture {s} already assigned!\n", .{texName});
-                            return error.TexEnumAlreadyAssigned;
-                        }
-                        self.texAssigns.upsert(texPassId, texId);
-                    }
-                },
-            }
-        }
-
-        // Create Manuel Texture Assignments
-        for (self.manualTexes.getConstItems(), 0..) |texInf, i| {
-            const texPassId = self.manualTexes.getKeyByIndex(@intCast(i));
-            self.texAssigns.upsert(texPassId, texInf.id);
-        }
-
-        // Create Manuel Buffer Assignments
-        for (self.manualBufs.getConstItems(), 0..) |bufInf, i| {
-            const enumKey = self.manualBufs.getKeyByIndex(@intCast(i));
-            self.bufAssigns.upsert(enumKey, bufInf.id);
-        }
-
-        // Deferred Persistent Textures Deletion
-        const pendingTexLen = self.pendingTexDeletions.len;
-        for (0..pendingTexLen) |i| {
-            const index = pendingTexLen - 1 - i;
-            const pending = &self.pendingTexDeletions.buffer[index];
-
-            if (pending.unusedCounter >= rc.FRAME_BUILDS_TILL_TRANSIENT_DELETION) {
-                rendererQueue.append(.{ .removeTexture = pending.id });
-                freeUpTexId(self, pending.id);
-                self.pendingTexDeletions.swapRemove(@intCast(index));
-            } else pending.unusedCounter += 1;
-        }
-
-        // Deferred Persistent Buffers Deletion
-        const pendingBufLen = self.pendingBufDeletions.len;
-        for (0..pendingBufLen) |i| {
-            const index = pendingBufLen - 1 - i;
-            const pending = &self.pendingBufDeletions.buffer[index];
-
-            if (pending.unusedCounter >= rc.FRAME_BUILDS_TILL_TRANSIENT_DELETION) {
-                rendererQueue.append(.{ .removeBuffer = pending.id });
-                freeUpBufId(self, pending.id);
-                self.pendingBufDeletions.swapRemove(@intCast(index));
-            } else pending.unusedCounter += 1;
-        }
-
-        // Debug
-        if (rc.FRAME_GRAPH_DEBUG) {
-            std.debug.print("6.ResourceAssigner\n", .{});
-            for (self.usedTransientBufs.constSlice(), 0..) |buf, i| {
-                std.debug.print(" - Transient Buf {} -> Buf (BufId {}) (unused for {} Builds)\n", .{ i, buf.hardwareBuf.val(), buf.unusedCounter });
-            }
-            for (self.usedTransientTexes.constSlice(), 0..) |tex, i| {
-                std.debug.print(" - Transient Tex {} -> Tex (TexId {}) (unused for {} Builds)\n", .{ i, tex.hardwareTex.val(), tex.unusedCounter });
-            }
-            std.debug.print("\n", .{});
-            // Buffers
-            for (self.bufAssigns.getConstItems(), 0..) |bufId, i| {
-                const bufPassId = self.bufAssigns.getKeyByIndex(@intCast(i));
-                const bufName = try registry.getBufferName(bufPassId);
-                std.debug.print(" - Buf {s} assigned -> BufId {}\n", .{ bufName, bufId.val() });
-            }
-            std.debug.print("\n", .{});
-            // Textures
-            for (self.texAssigns.getConstItems(), 0..) |texId, i| {
-                const texPassId = self.texAssigns.getKeyByIndex(@intCast(i));
-                const texName = try registry.getTextureName(texPassId);
-                std.debug.print(" - Tex {s} assigned -> TexId {}\n", .{ texName, texId.val() });
-            }
-            std.debug.print("\n", .{});
-        }
-    }
-
-    pub fn deferTextureDeletion(resourceAssigner: *RenderAssignerData, rootTexId: TexPassId) !void {
-        if (resourceAssigner.rootTexPhysicalMap.isKeyUsed(rootTexId) == false) return error.rootTexKeyNotUsed;
-        const texId = resourceAssigner.rootTexPhysicalMap.getByKey(rootTexId);
-        resourceAssigner.rootTexPhysicalMap.remove(rootTexId);
-        resourceAssigner.pendingTexDeletions.append(.{ .id = texId }) catch std.debug.print("ERROR: 6.ResourceAssigner: pendingTexDeletions append failed\n", .{});
-    }
-
-    pub fn deferBufferDeletion(resourceAssigner: *RenderAssignerData, rootBufId: BufPassId) !void {
-        if (resourceAssigner.rootBufPhysicalMap.isKeyUsed(rootBufId) == false) return error.rootBufKeyNotUsed;
-        const bufId = resourceAssigner.rootBufPhysicalMap.getByKey(rootBufId);
-        resourceAssigner.rootBufPhysicalMap.remove(rootBufId);
-        resourceAssigner.pendingBufDeletions.append(.{ .id = bufId }) catch std.debug.print("ERROR: 6.ResourceAssigner: pendingBufDeletions append failed\n", .{});
     }
 
     pub fn createTransientBuffer(bufDesc: BufDesc, bufId: BufId, rendererQueue: *RendererQueue, memoryMan: *MemoryManager) !void {
@@ -360,11 +224,6 @@ pub const RenderAssignerSys = struct {
         rendererQueue.append(.{ .addBuffer = bufferPtr });
 
         std.debug.print("6.Resource Assigner: Transient Buf (BufId {}) Creation send to Renderer\n", .{bufInf.id});
-    }
-
-    pub fn deleteTransientBuffer(bufId: BufId, rendererQueue: *RendererQueue) void {
-        rendererQueue.append(.{ .removeBuffer = bufId }); // (Stop Renderer missing?)
-        std.debug.print("6.Resource Assigner: Transient Buf (BufId {}) Deletion send to Renderer\n", .{bufId});
     }
 
     pub fn createTransientTexture(texDesc: TexDesc, texId: TexId, rendererQueue: *RendererQueue, memoryMan: *MemoryManager) !void {
@@ -389,11 +248,6 @@ pub const RenderAssignerSys = struct {
         rendererQueue.append(.{ .addTexture = addTextureDataPtr });
 
         std.debug.print("6.Resource Assigner: Transient Tex (TexId {}) Creation send to Renderer\n", .{texInf.id});
-    }
-
-    pub fn deleteTransientTexture(texId: TexId, rendererQueue: *RendererQueue) void {
-        rendererQueue.append(.{ .removeTexture = texId }); // (Stop Renderer missing?)
-        std.debug.print("6.Resource Assigner: Transient Tex (TexId {}) Deletion send to Renderer\n", .{texId});
     }
 
     pub fn createBufferManuel(assignerData: *RenderAssignerData, registry: *const RenderRegistryData, rootBuf: BufPassId, rendererQueue: *RendererQueue, memoryMan: *MemoryManager) !void {
@@ -428,40 +282,6 @@ pub const RenderAssignerSys = struct {
         std.debug.print("6.Resource Assigner: Root Buf {s} (BufId {}) Creation send to Renderer\n", .{ rootBufName, bufId });
     }
 
-    pub fn createBuffer(
-        assignerData: *RenderAssignerData,
-        mapperData: *const MapperData,
-        registry: *const RenderRegistryData,
-        rootBuf: BufPassId,
-        rendererQueue: *RendererQueue,
-        memoryMan: *MemoryManager,
-    ) !void {
-        const bufId = try getFreeBufId(assignerData);
-        const bufDesc = mapperData.persistentGroups.getByKey(bufToRes(rootBuf)).desc.bufDesc;
-
-        const bufInf = BufInf{
-            .id = bufId,
-            .mem = bufDesc.mem,
-            .elementSize = bufDesc.elementSize,
-            .len = bufDesc.len,
-            .typ = bufDesc.typ,
-            .update = bufDesc.update,
-            .resize = bufDesc.resize,
-        };
-        assignerData.rootBufPhysicalMap.upsert(rootBuf, bufId);
-
-        // RENDERER QUEUE SEND CREATE (AND UPDATE!) (Stop Renderer?)
-        const arena = memoryMan.getGlobalArena();
-        const AddBufPtr = @FieldType(RendererQueue.RendererEvent, "addBuffer");
-        const AddBuf = std.meta.Child(AddBufPtr);
-        const bufferPtr = try arena.create(AddBuf);
-        bufferPtr.* = .{ .bufInf = bufInf, .data = null };
-        rendererQueue.append(.{ .addBuffer = bufferPtr });
-
-        const rootBufName = try registry.getBufferName(rootBuf);
-        std.debug.print("6.Resource Assigner: Root Buf {s} (BufId {}) Creation send to Renderer\n", .{ rootBufName, bufId });
-    }
-
     pub fn deleteBufferManuel(assignerData: *RenderAssignerData, registry: *const RenderRegistryData, rootBufKey: BufPassId, rendererQueue: *RendererQueue) void {
         const isUsed = assignerData.manualBufs.isKeyUsed(rootBufKey);
         if (isUsed == false) {
@@ -472,22 +292,6 @@ pub const RenderAssignerSys = struct {
         const bufId = assignerData.manualBufs.getByKey(rootBufKey).id;
         freeUpBufId(assignerData, bufId);
         assignerData.manualBufs.remove(rootBufKey);
-        rendererQueue.append(.{ .removeBuffer = bufId }); // (Stop Renderer missing?)
-
-        const rootBufName = registry.getBufferName(rootBufKey) catch "UNKNOWN";
-        std.debug.print("6.Resource Assigner: Root Buf {s} (BufId {}) Deletion send to Renderer\n", .{ rootBufName, bufId.val() });
-    }
-
-    pub fn deleteBuffer(assignerData: *RenderAssignerData, registry: *const RenderRegistryData, rootBufKey: BufPassId, rendererQueue: *RendererQueue) void {
-        const isUsed = assignerData.rootBufPhysicalMap.isKeyUsed(rootBufKey);
-        if (isUsed == false) {
-            const bufName = registry.getBufferName(rootBufKey) catch undefined;
-            std.debug.print("ERROR: 6.ResourceAssigner: Buffer {s} no Physical ID -> cant be destroyed!\n", .{bufName});
-            return;
-        }
-        const bufId = assignerData.rootBufPhysicalMap.getByKey(rootBufKey).id;
-        freeUpBufId(assignerData, bufId);
-        assignerData.rootBufPhysicalMap.remove(rootBufKey);
         rendererQueue.append(.{ .removeBuffer = bufId }); // (Stop Renderer missing?)
 
         const rootBufName = registry.getBufferName(rootBufKey) catch "UNKNOWN";
@@ -529,43 +333,6 @@ pub const RenderAssignerSys = struct {
         std.debug.print("6.Resource Assigner: Root Tex {s} (TexId {}) Creation send to Renderer\n", .{ rootBufName, texId });
     }
 
-    pub fn createTexture(
-        assignerData: *RenderAssignerData,
-        mapperData: *const MapperData,
-        registry: *const RenderRegistryData,
-        rootTex: TexPassId,
-        rendererQueue: *RendererQueue,
-        memoryMan: *MemoryManager,
-    ) !void {
-        const texId = try getFreeTexId(assignerData);
-        const desc = mapperData.persistentGroups.getByKey(texToRes(rootTex)).desc.texDesc;
-
-        const texInf = TexInf{
-            .id = texId,
-            .mem = desc.mem,
-            .typ = desc.typ,
-            .texUse = desc.texUse,
-            .descriptors = desc.descriptors,
-            .width = desc.width,
-            .height = desc.height,
-            .depth = desc.depth,
-            .update = desc.update,
-            .resize = desc.resize,
-        };
-        assignerData.rootTexPhysicalMap.upsert(rootTex, texId);
-
-        // RENDERER QUEUE SEND CREATE (AND UPDATE!) (Stop Renderer?)
-        const arena = memoryMan.getGlobalArena();
-        const AddTexPtr = @FieldType(RendererQueue.RendererEvent, "addTexture");
-        const AddTex = std.meta.Child(AddTexPtr);
-        const addTextureDataPtr = try arena.create(AddTex);
-        addTextureDataPtr.* = .{ .texInf = texInf, .data = null };
-        rendererQueue.append(.{ .addTexture = addTextureDataPtr });
-
-        const rootBufName = try registry.getTextureName(rootTex);
-        std.debug.print("6.Resource Assigner: Root Tex {s} (TexId {}) Creation send to Renderer\n", .{ rootBufName, texId });
-    }
-
     pub fn deleteTextureManuel(assignerData: *RenderAssignerData, registry: *const RenderRegistryData, rootTexId: TexPassId, rendererQueue: *RendererQueue) void {
         const isUsed = assignerData.manualTexes.isKeyUsed(rootTexId);
         if (isUsed == false) {
@@ -577,23 +344,6 @@ pub const RenderAssignerSys = struct {
         freeUpTexId(assignerData, texInf.id);
 
         assignerData.manualTexes.remove(rootTexId);
-        rendererQueue.append(.{ .removeTexture = texInf.id }); // (Stop Renderer missing?)
-
-        const rootBufName = registry.getTextureName(rootTexId) catch "UNKNOWN";
-        std.debug.print("6.Resource Assigner: Root Tex {s} (TexId {}) Deletion send to Renderer\n", .{ rootBufName, texInf.id.val() });
-    }
-
-    pub fn deleteTexture(assignerData: *RenderAssignerData, registry: *const RenderRegistryData, rootTexId: TexPassId, rendererQueue: *RendererQueue) void {
-        const isUsed = assignerData.rootTexPhysicalMap.isKeyUsed(rootTexId);
-        if (isUsed == false) {
-            const texName = registry.getTextureName(rootTexId) catch undefined;
-            std.debug.print("ERROR: 6.ResourceAssigner: Texture {s} no Physical ID -> cant be destroyed!\n", .{texName});
-            return;
-        }
-        const texInf = assignerData.rootTexPhysicalMap.getByKey(rootTexId);
-        freeUpTexId(assignerData, texInf.id);
-
-        assignerData.rootTexPhysicalMap.remove(rootTexId);
         rendererQueue.append(.{ .removeTexture = texInf.id }); // (Stop Renderer missing?)
 
         const rootBufName = registry.getTextureName(rootTexId) catch "UNKNOWN";
@@ -616,24 +366,6 @@ pub const RenderAssignerSys = struct {
 
     pub fn freeUpTexId(assignerData: *RenderAssignerData, texId: TexId) void {
         assignerData.texIdPool.freeKey(texId.val());
-    }
-
-    // ASSIGNER FN END //
-
-    pub fn createTextureManually(frameGraph: *RenderAssignerData, registry: *const RenderRegistryData, texPassId: TexPassId, rendererQueue: *RendererQueue, memoryMan: *MemoryManager) !void {
-        try createTextureManuel(frameGraph, registry, texPassId, rendererQueue, memoryMan);
-    }
-
-    pub fn deleteTextureManually(frameGraph: *RenderAssignerData, registry: *const RenderRegistryData, texPassId: TexPassId, rendererQueue: *RendererQueue) void {
-        deleteTextureManuel(frameGraph, registry, texPassId, rendererQueue);
-    }
-
-    pub fn createBufferManually(frameGraph: *RenderAssignerData, registry: *const RenderRegistryData, bufPassId: BufPassId, rendererQueue: *RendererQueue, memoryMan: *MemoryManager) !void {
-        try createBufferManuel(frameGraph, registry, bufPassId, rendererQueue, memoryMan);
-    }
-
-    pub fn deleteBufferManually(frameGraph: *RenderAssignerData, registry: *const RenderRegistryData, bufPassId: BufPassId, rendererQueue: *RendererQueue) void {
-        deleteBufferManuel(frameGraph, registry, bufPassId, rendererQueue);
     }
 
     fn getBufHardwareId(frameGraph: *const RenderAssignerData, registry: *const RenderRegistryData, name: []const u8) !BufId {

@@ -79,7 +79,7 @@ pub const SAMPLER_MAX: u32 = 2;
 //////////////// RESOURCE DESCRIPTIONS ///////////////
 
 // Buffers
-pub const indirectSBDesc = BufDesc{ .share = .persistent, .mem = .Gpu, .typ = .Indirect, .len = 1, .elementSize = @sizeOf(vhT.IndirectData), .update = .PerFrame };
+pub const indirectSBDesc = BufDesc{ .share = .transient, .mem = .Gpu, .typ = .Indirect, .len = 1, .elementSize = @sizeOf(vhT.IndirectData), .update = .PerFrame };
 pub const readbackSBDesc = BufDesc{ .share = .persistent, .mem = .CpuRead, .typ = .Storage, .len = 1, .elementSize = @sizeOf(vhT.ReadbackData), .update = .PerFrame };
 
 pub const entitySBDesc = BufDesc{ .share = .persistent, .mem = .Gpu, .typ = .Storage, .len = ENTITY_COUNT, .elementSize = @sizeOf(GpuObjectData), .update = .Rarely, .resize = .Fit };

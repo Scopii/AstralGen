@@ -98,9 +98,9 @@ pub const App = struct {
 
     pub fn deinit(self: *App) void {
         UiSys.deinit(&self.data.ui);
-        RenderAssignerSys.deleteBufferManually(&self.data.renderAssigner, &self.data.renderRegistry, rc.ImguiIB, &self.rendererQueue);
-        RenderAssignerSys.deleteBufferManually(&self.data.renderAssigner, &self.data.renderRegistry, rc.ImguiVB, &self.rendererQueue);
-        RenderAssignerSys.deleteTextureManually(&self.data.renderAssigner, &self.data.renderRegistry, rc.ImguiFontTex, &self.rendererQueue);
+        RenderAssignerSys.deleteBufferManuel(&self.data.renderAssigner, &self.data.renderRegistry, rc.ImguiIB, &self.rendererQueue);
+        RenderAssignerSys.deleteBufferManuel(&self.data.renderAssigner, &self.data.renderRegistry, rc.ImguiVB, &self.rendererQueue);
+        RenderAssignerSys.deleteTextureManuel(&self.data.renderAssigner, &self.data.renderRegistry, rc.ImguiFontTex, &self.rendererQueue);
         RenderRegistrySys.deinit(&self.data.renderRegistry);
         self.renderer.deinit();
         ShaderSys.deinit(&self.data.shader, self.memoryMan.getAllocator());
@@ -243,17 +243,17 @@ pub const App = struct {
 
     pub fn setupResources(self: *App) !void {
         try ShaderSys.update(&self.data.shader, &self.shaderQueue, &self.rendererQueue, self.memoryMan);
-        try RenderAssignerSys.createBufferManually(&self.data.renderAssigner, &self.data.renderRegistry, rc.ImguiIB, &self.rendererQueue, self.memoryMan);
-        try RenderAssignerSys.createBufferManually(&self.data.renderAssigner, &self.data.renderRegistry, rc.ImguiVB, &self.rendererQueue, self.memoryMan);
-        try RenderAssignerSys.createTextureManually(&self.data.renderAssigner, &self.data.renderRegistry, rc.ImguiFontTex, &self.rendererQueue, self.memoryMan);
+        try RenderAssignerSys.createBufferManuel(&self.data.renderAssigner, &self.data.renderRegistry, rc.ImguiIB, &self.rendererQueue, self.memoryMan);
+        try RenderAssignerSys.createBufferManuel(&self.data.renderAssigner, &self.data.renderRegistry, rc.ImguiVB, &self.rendererQueue, self.memoryMan);
+        try RenderAssignerSys.createTextureManuel(&self.data.renderAssigner, &self.data.renderRegistry, rc.ImguiFontTex, &self.rendererQueue, self.memoryMan);
 
-        // try RenderAssignerSys.createTextureManually(&self.data.renderAssigner, &self.data.renderRegistry, rc.TestTileTex, &self.rendererQueue, self.memoryMan);
+        try RenderAssignerSys.createTextureManuel(&self.data.renderAssigner, &self.data.renderRegistry, rc.TestTileTex, &self.rendererQueue, self.memoryMan);
 
-        // try RenderAssignerSys.createBufferManually(&self.data.renderAssigner, rc.indirectSB, &self.rendererQueue, self.memoryMan);
-        // try RenderAssignerSys.createBufferManually(&self.data.renderAssigner, rc.ReadbackSB, &self.rendererQueue, self.memoryMan);
-        // try RenderAssignerSys.createBufferManually(&self.data.renderAssigner, &self.data.renderRegistry, rc.MainCamUB, &self.rendererQueue, self.memoryMan);
-        // try RenderAssignerSys.createBufferManually(&self.data.renderAssigner, &self.data.renderRegistry, rc.DebugCamUB, &self.rendererQueue, self.memoryMan);
-        // try RenderAssignerSys.createBufferManually(&self.data.renderAssigner, &self.data.renderRegistry, rc.EntitySB, &self.rendererQueue, self.memoryMan);
+        // try RenderAssignerSys.createBufferManuel(&self.data.renderAssigner, &self.data.renderRegistry, rc.QUANT, &self.rendererQueue, self.memoryMan);
+        try RenderAssignerSys.createBufferManuel(&self.data.renderAssigner, &self.data.renderRegistry, rc.ReadbackSB, &self.rendererQueue, self.memoryMan);
+        try RenderAssignerSys.createBufferManuel(&self.data.renderAssigner, &self.data.renderRegistry, rc.MainCamUB, &self.rendererQueue, self.memoryMan);
+        try RenderAssignerSys.createBufferManuel(&self.data.renderAssigner, &self.data.renderRegistry, rc.DebugCamUB, &self.rendererQueue, self.memoryMan);
+        try RenderAssignerSys.createBufferManuel(&self.data.renderAssigner, &self.data.renderRegistry, rc.EntitySB, &self.rendererQueue, self.memoryMan);
 
         // PROCEDURAL TEXTURE GENERATION
         const AddTexPtr = @FieldType(RenderAssignerQueue.RenderAssignerEvent, "updateTexture");

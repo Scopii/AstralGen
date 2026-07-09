@@ -8,6 +8,5 @@ pub const RenderGraphData = struct {
     lifetime: @import("5_Lifetime/LifetimeData.zig").LifetimeData = .{},
     mapper: @import("5.1_Mapper/MapperData.zig").MapperData = .{},
     group: @import("5.4_Group/GroupData.zig").GroupData = .{},
-    comparator: @import("5.3_Comparator/ComparatorData.zig").ComparatorData = .{},
     sorter: @import("7_Sorter/SorterData.zig").SorterData = .{},
 };

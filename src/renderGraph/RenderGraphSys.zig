@@ -21,7 +21,6 @@ const GraphSys = @import("4_Graph/GraphSys.zig").GraphSys;
 const OptimizerSys = @import("4.5_Optimizer/OptimizerSys.zig").OptimizerSys;
 const LifetimeSys = @import("5_Lifetime/LifetimeSys.zig").LifetimeSys;
 const MapperSys = @import("5.1_Mapper/MapperSys.zig").MapperSys;
-const ComparatorSys = @import("5.3_Comparator/ComparatorSys.zig").ComparatorSys;
 const GroupSys = @import("5.4_Group/GroupSys.zig").GroupSys;
 const SorterSys = @import("7_Sorter/SorterSys.zig").SorterSys;
 
@@ -58,10 +57,6 @@ pub const RenderGraphSys = struct {
         const start8 = std.time.nanoTimestamp();
         try MapperSys.build(&self.mapper, &self.access, &self.resource, &self.lifetime, &self.optimizer, &data.renderRegistry);
         if (rc.FRAME_GRAPH_TIMERS) std.debug.print("{d:.3} us: MapperSys\n", .{@as(f64, @floatFromInt(std.time.nanoTimestamp() - start8)) / 1_000.0});
-
-        const start9 = std.time.nanoTimestamp();
-        try ComparatorSys.build(&self.comparator, &self.mapper, &data.renderRegistry);
-        if (rc.FRAME_GRAPH_TIMERS) std.debug.print("{d:.3} us: ComparatorSys\n", .{@as(f64, @floatFromInt(std.time.nanoTimestamp() - start9)) / 1_000.0});
 
         const start10 = std.time.nanoTimestamp();
         try GroupSys.build(&self.group, &self.mapper, &data.renderRegistry);
