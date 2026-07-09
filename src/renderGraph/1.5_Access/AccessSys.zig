@@ -13,20 +13,20 @@ const AccessData = @import("AccessData.zig").AccessData;
 // Step 1.5
 
 pub const AccessSys = struct {
-    pub fn build(accessData: *AccessData, passData: *const PassData, registry: *const RenderRegistryData) !void {
-        accessData.accesses.clear();
+    pub fn build(self: *AccessData, passData: *const PassData, registry: *const RenderRegistryData) !void {
+        self.accesses.clear();
 
         for (0..passData.activePasses.getLength()) |index| {
             const passId = passData.activePasses.getByIndex(@intCast(index));
             const passDef = try registry.getPassDefinitionById(passId);
 
-            const start = accessData.accesses.len;
+            const start = self.accesses.len;
 
             // ONLY BUFFER ACCESSES
             for (passDef.passAttribute.constSlice()) |attribute| {
                 switch (attribute) {
                     .bufSlot => |bufSlot| {
-                        accessData.accesses.append(.{
+                        self.accesses.append(.{
                             .pass = passId,
                             .input = bufToRes(try registry.getBufferPassId(bufSlot.bufLink.in)),
                             .output = if (bufSlot.bufLink.out) |output| bufToRes(try registry.getBufferPassId(output)) else null,
@@ -34,7 +34,7 @@ pub const AccessSys = struct {
                         }) catch return error.PassCoreLinksFull;
                     },
                     .vertexBuffer => |vertexBufSlot| {
-                        accessData.accesses.append(.{
+                        self.accesses.append(.{
                             .pass = passId,
                             .input = bufToRes(try registry.getBufferPassId(vertexBufSlot.bufInput)),
                             .output = null,
@@ -42,7 +42,7 @@ pub const AccessSys = struct {
                         }) catch return error.PassCoreLinksFull;
                     },
                     .indexBuffer => |indexBufSlot| {
-                        accessData.accesses.append(.{
+                        self.accesses.append(.{
                             .pass = passId,
                             .input = bufToRes(try registry.getBufferPassId(indexBufSlot.bufInput)),
                             .output = null,
@@ -50,7 +50,7 @@ pub const AccessSys = struct {
                         }) catch return error.PassCoreLinksFull;
                     },
                     .texLinking => |texLink| {
-                        accessData.accesses.append(.{
+                        self.accesses.append(.{
                             .pass = passId,
                             .input = texToRes(try registry.getTexturePassId(texLink.in)),
                             .output = if (texLink.out) |output| texToRes(try registry.getTexturePassId(output)) else null,
@@ -58,7 +58,7 @@ pub const AccessSys = struct {
                         }) catch return error.PassCoreLinksFull;
                     },
                     .bufLinking => |bufLink| {
-                        accessData.accesses.append(.{
+                        self.accesses.append(.{
                             .pass = passId,
                             .input = bufToRes(try registry.getBufferPassId(bufLink.in)),
                             .output = if (bufLink.out) |output| bufToRes(try registry.getBufferPassId(output)) else null,
@@ -67,7 +67,7 @@ pub const AccessSys = struct {
                     },
                     .vertexAttribute, .renderState, .execution, .shaderInf => {},
                     inline else => |texSlotTypes| {
-                        accessData.accesses.append(.{
+                        self.accesses.append(.{
                             .pass = passId,
                             .input = texToRes(try registry.getTexturePassId(texSlotTypes.texLink.in)),
                             .output = if (texSlotTypes.texLink.out) |output| texToRes(try registry.getTexturePassId(output)) else null,
@@ -77,20 +77,20 @@ pub const AccessSys = struct {
                 }
             }
             // Pass Access Ranges
-            accessData.accessRanges.upsert(passId, PassAccessRange{ .first = @intCast(start), .last = @intCast(accessData.accesses.len) });
+            self.accessRanges.upsert(passId, PassAccessRange{ .first = @intCast(start), .last = @intCast(self.accesses.len) });
         }
 
         // Debug Output
         if (rc.FRAME_GRAPH_DEBUG) {
             std.debug.print("1.5.ResourceExtractor: \n", .{});
 
-            for (accessData.accessRanges.getConstItems(), 0..) |range, i| {
-                const passKey = accessData.accessRanges.getKeyByIndex(@intCast(i));
+            for (self.accessRanges.getConstItems(), 0..) |range, i| {
+                const passKey = self.accessRanges.getKeyByIndex(@intCast(i));
                 const pass = try registry.getPassName(passKey);
                 std.debug.print(" - Pass Accesses ({s}) (Access Index {} -> {})\n", .{ pass, range.first, range.last });
 
                 for (range.first..range.last, 0..) |index, counter| {
-                    const access = accessData.accesses.buffer[index];
+                    const access = self.accesses.buffer[index];
 
                     const inputTyp = getResTyp(access.input);
                     const inputName = try registry.getResourceName(access.input);

@@ -679,7 +679,10 @@ pub const RenderAssignerSys = struct {
                         .bufId => |bufId| hardwareId = bufId,
                         .bufName => |bufName| hardwareId = try getBufHardwareId(passResource, registry, bufName),
                         .bufPassId => |bufPassId| {
-                            if (passResource.bufAssigns.isKeyUsed(bufPassId) == false) return error.ProcessQueueUpdateBufferAssignemntEmpty;
+                            if (passResource.bufAssigns.isKeyUsed(bufPassId) == false) {
+                                std.debug.print("ERROR: RenderAssignerSys Processing Queue Update Buffer Assignment Empty ({s})\n", .{try registry.getBufferName(bufPassId)});
+                                return error.ProcessQueueUpdateBufferAssignemntEmpty;
+                            }
                             hardwareId = passResource.bufAssigns.getByKey(bufPassId);
                         },
                     }
@@ -699,7 +702,10 @@ pub const RenderAssignerSys = struct {
                         .bufId => |bufId| hardwareId = bufId,
                         .bufName => |bufName| hardwareId = try getBufHardwareId(passResource, registry, bufName),
                         .bufPassId => |bufPassId| {
-                            if (passResource.bufAssigns.isKeyUsed(bufPassId) == false) return error.ProcessQueueUpdateBufferAssignemntEmpty;
+                            if (passResource.bufAssigns.isKeyUsed(bufPassId) == false) {
+                                std.debug.print("ERROR: RenderAssignerSys Processing Queue Update Buffer Assignment Empty ({s})\n", .{try registry.getBufferName(bufPassId)});
+                                return error.ProcessQueueUpdateBufferAssignemntEmpty;
+                            }
                             hardwareId = passResource.bufAssigns.getByKey(bufPassId);
                         },
                     }
@@ -719,7 +725,10 @@ pub const RenderAssignerSys = struct {
                         .texId => |texId| hardwareId = texId,
                         .texName => |texName| hardwareId = try getTexHardwareId(passResource, registry, texName),
                         .texPassId => |texPassId| {
-                            if (passResource.texAssigns.isKeyUsed(texPassId) == false) return error.ProcessQueueUpdateTextureAssignemntEmpty;
+                            if (passResource.texAssigns.isKeyUsed(texPassId) == false) {
+                                std.debug.print("ERROR: RenderAssignerSys Processing Queue Update Texture Assignment Empty ({s})\n", .{try registry.getTextureName(texPassId)});
+                                return error.ProcessQueueUpdateTextureAssignemntEmpty;
+                            }
                             hardwareId = passResource.texAssigns.getByKey(texPassId);
                         },
                     }

@@ -247,11 +247,13 @@ pub const App = struct {
         try RenderAssignerSys.createBufferManually(&self.data.renderAssigner, &self.data.renderRegistry, rc.ImguiVB, &self.rendererQueue, self.memoryMan);
         try RenderAssignerSys.createTextureManually(&self.data.renderAssigner, &self.data.renderRegistry, rc.ImguiFontTex, &self.rendererQueue, self.memoryMan);
 
-        // try PassResourceSys.createBufferManually(&self.data.passResource, rc.indirectSB, &self.rendererQueue, self.memoryMan);
-        // try PassResourceSys.createBufferManually(&self.data.passResource, rc.ReadbackSB, &self.rendererQueue, self.memoryMan);
-        // try PassResourceSys.createBufferManually(&self.data.passResource, rc.MainCamUB, &self.rendererQueue, self.memoryMan);
-        // try PassResourceSys.createBufferManually(&self.data.passResource, rc.DebugCamUB, &self.rendererQueue, self.memoryMan);
-        // try PassResourceSys.createBufferManually(&self.data.passResource, rc.EntitySB, &self.rendererQueue, self.memoryMan);
+        // try RenderAssignerSys.createTextureManually(&self.data.renderAssigner, &self.data.renderRegistry, rc.TestTileTex, &self.rendererQueue, self.memoryMan);
+
+        // try RenderAssignerSys.createBufferManually(&self.data.renderAssigner, rc.indirectSB, &self.rendererQueue, self.memoryMan);
+        // try RenderAssignerSys.createBufferManually(&self.data.renderAssigner, rc.ReadbackSB, &self.rendererQueue, self.memoryMan);
+        // try RenderAssignerSys.createBufferManually(&self.data.renderAssigner, &self.data.renderRegistry, rc.MainCamUB, &self.rendererQueue, self.memoryMan);
+        // try RenderAssignerSys.createBufferManually(&self.data.renderAssigner, &self.data.renderRegistry, rc.DebugCamUB, &self.rendererQueue, self.memoryMan);
+        // try RenderAssignerSys.createBufferManually(&self.data.renderAssigner, &self.data.renderRegistry, rc.EntitySB, &self.rendererQueue, self.memoryMan);
 
         // PROCEDURAL TEXTURE GENERATION
         const AddTexPtr = @FieldType(RenderAssignerQueue.RenderAssignerEvent, "updateTexture");
