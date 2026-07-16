@@ -35,7 +35,7 @@ pub const GPU_READBACK = false;
 pub const CPU_PROFILING = false;
 pub const SWAPCHAIN_PROFILING = false;
 
-pub const FRAME_LIMIT = 15000;
+pub const FRAME_LIMIT = 15;
 
 // Additional Debug Prints
 pub const BARRIER_DEBUG = false;

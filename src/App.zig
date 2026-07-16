@@ -343,7 +343,20 @@ pub const App = struct {
                 try RenderAssignerSys.assign(&self.data.renderAssigner, &self.data.renderGraph, &self.data.renderRegistry, &self.rendererQueue, self.memoryMan);
                 try RenderAssignerSys.processQueue(&self.data.renderAssigner, &self.data.renderRegistry, &self.assignerQueue, &self.rendererQueue, self.memoryMan);
 
-                try RenderCompilerSys.compileIR(&self.data.renderCompiler, &self.data.renderAssigner, &self.data.renderGraph, &self.data.renderRegistry);
+                try RenderAssignerSys.fillUiHardwareIds(&self.data.renderAssigner, &self.data.renderRegistry, &self.data.ui);
+                // const uiNodes = self.data.ui.uiNodes.constSlice();
+                // const uiDraws = self.data.ui.uiDraws.constSlice();
+
+                try RenderCompilerSys.compileIR(
+                    &self.data.renderCompiler,
+                    &self.data.renderAssigner,
+                    &self.data.renderGraph,
+                    &self.data.renderRegistry,
+                    &self.data.ui,
+                    &self.data.window,
+                    frameData.runTime,
+                    frameData.deltaTime,
+                );
 
                 const sortedRenderNodes = self.data.renderCompiler.sortedNodes.constSlice();
 
@@ -351,11 +364,7 @@ pub const App = struct {
 
                 if (rc.EARLY_GPU_WAIT == false) try renderer.waitForGpu();
 
-                try RenderAssignerSys.fillUiHardwareIds(&self.data.renderAssigner, &self.data.renderRegistry, &self.data.ui);
-                const uiNodes = self.data.ui.uiNodes.constSlice();
-                const uiDraws = self.data.ui.uiDraws.constSlice();
-
-                renderer.draw(frameData, sortedRenderNodes, uiNodes, uiDraws, self.data.window.activeWindows.constSlice(), &self.rendererOutQueue) catch |err| {
+                renderer.draw(frameData, sortedRenderNodes, &.{}, &.{}, self.data.window.activeWindows.constSlice(), &self.rendererOutQueue) catch |err| {
                     std.log.err("Error in renderer.submitDraw(): {}", .{err});
                     break;
                 };

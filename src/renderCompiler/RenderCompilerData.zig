@@ -3,5 +3,6 @@ const FixedList = @import("../.structures/FixedList.zig").FixedList;
 const rc = @import("../.configs/renderConfig.zig");
 
 pub const RenderCompilerData = struct {
-    sortedNodes: FixedList(RenderNode, rc.PASS_MAX + rc.MAX_WINDOWS * 4) = .{},
+    sortedNodes: FixedList(RenderNode, 1024) = .{}, // rc.PASS_MAX + rc.MAX_WINDOWS * 4
+    usedQueries: u8 = 0,
 };

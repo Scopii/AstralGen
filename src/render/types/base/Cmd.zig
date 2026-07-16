@@ -13,9 +13,11 @@ const std = @import("std");
 
 pub const QueryPair = struct {
     name: FixedList(u8, 30) = .{},
-    typ: enum { Pass, Blit, Other, Composite, Ui },
+    typ: QueryTyp,
     startIndex: u8 = 0,
     endIndex: u8 = 0,
+
+    pub const QueryTyp = enum { Pass, Blit, Other, Composite, Ui };
 };
 
 pub const Cmd = struct {
@@ -110,6 +112,32 @@ pub const Cmd = struct {
 
     fn writeTimestamp(self: *const Cmd, pool: vk.VkQueryPool, stage: vk.VkPipelineStageFlagBits2, queryIndex: u32) void {
         vk.vkCmdWriteTimestamp2(self.handle, stage, pool, queryIndex);
+    }
+
+    pub fn startTimerWithId(self: *Cmd, pipeStage: vhE.PipeStage, name: []const u8, typ: @FieldType(QueryPair, "typ"), queryId: u8) !void {
+        if (self.timeQueryPool) |qPool| {
+            const queryPairs: u8 = queryId;
+            if (queryPairs >= rc.GPU_TIME_QUERYS) {
+                std.debug.print("GPU Querys Pairs full\n", .{});
+                return;
+            }
+
+            const index = self.timeQueryCounter;
+            if (index >= rc.GPU_TIME_QUERYS * 2) {
+                std.debug.print("GPU Querys full\n", .{});
+                return;
+            }
+
+            self.writeTimestamp(qPool, @intFromEnum(pipeStage), index);
+
+            var queryPair = QueryPair{ .typ = typ, .startIndex = index };
+            queryPair.name.appendSliceAssumeCapacity(name);
+
+            self.timeQueries.upsert(queryPairs, queryPair);
+            self.timeQueryCounter += 1;
+            return;
+        }
+        return;
     }
 
     pub fn startTimer(self: *Cmd, pipeStage: vhE.PipeStage, name: []const u8, typ: @FieldType(QueryPair, "typ")) ?u8 {
@@ -350,10 +378,6 @@ pub const Cmd = struct {
             .pMemoryBarriers = memBarriers.ptr,
         };
         vk.vkCmdPipelineBarrier2(self.handle, &depInf);
-    }
-
-    pub fn setPushConstants(self: *const Cmd, layout: vk.VkPipelineLayout, stageFlags: vk.VkShaderStageFlags, offset: u32, size: u32, pcs: ?*const anyopaque) void {
-        vk.vkCmdPushConstants(self.handle, layout, stageFlags, offset, size, pcs);
     }
 
     pub fn setPushData(self: *const Cmd, dataPtr: ?*const anyopaque, size: u32, offset: u32) void {

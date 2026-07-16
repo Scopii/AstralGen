@@ -23,8 +23,40 @@ const vhT = @import("../help/Types.zig");
 const Allocator = std.mem.Allocator;
 const std = @import("std");
 
+const FixedList = @import("../../.structures/FixedList.zig").FixedList;
+const VertexBufferFill = @import("../types/pass/VertexBufferFill.zig").VertexBufferFill;
+const VertexAttribute = @import("../types/pass/VertexAttribute.zig").VertexAttribute;
+const IndexBufferFill = @import("../types/pass/IndexBufferFill.zig").IndexBufferFill;
+// const ShaderInf = @import("../../../shader/ShaderInf.zig").ShaderInf;
+const ShaderId = @import("../../.configs/idConfig.zig").ShaderId;
+// const AttachmentFill = @import("AttachmentFill.zig").AttachmentFill;
+const RenderState = @import("../types/pass/RenderState.zig").RenderState;
+// const TextureFill = @import("TextureFill.zig").TextureFill;
+const String = @import("../../globalHelper.zig").String;
+// const BufferFill = @import("BufferFill.zig").BufferFill;
+
 const ImGuiPass = @import("../../.assets/passes/Imgui/Imgui.zig").ImGuiPass;
 const Composite = @import("../../.assets/passes/composite/Composite.zig").Composite;
+
+pub const CmdState = struct {
+    outputWidth: ?u32 = null,
+    outputHeight: ?u32 = null,
+    //
+    shaderIds: FixedList(ShaderId, 3) = .{},
+    //
+    pushDataLen: u32 = 0,
+    pushData: [128]u8 = .{0} ** 128,
+    //
+    renderState: RenderState = .{},
+    //
+    colorAtts: FixedList(vk.VkRenderingAttachmentInfo, 8) = .{},
+    depthAtt: ?vk.VkRenderingAttachmentInfo = null,
+    stencilAtt: ?vk.VkRenderingAttachmentInfo = null,
+    //
+    indexBuffer: ?IndexBufferFill = null,
+    vertexBuffers: FixedList(VertexBufferFill, 4) = .{},
+    vertexAttributes: FixedList(VertexAttribute, 16) = .{},
+};
 
 pub const CmdRecorder = struct {
     alloc: Allocator,
@@ -41,6 +73,9 @@ pub const CmdRecorder = struct {
     useGpuTimers: bool = false,
     useGpuStats: bool = false,
     lastPassTyp: ?PassInstance.PassExecution = null,
+
+    // Current State
+    state: CmdState = .{},
 
     pub fn init(alloc: Allocator, context: *const Context) !CmdRecorder {
         return .{
@@ -254,29 +289,29 @@ pub const CmdRecorder = struct {
         self: *CmdRecorder,
         cmd: *Cmd,
         renderNodes: []RenderNode,
-        frameData: FrameData,
+        _: FrameData,
         resMan: *ResourceMan,
         shaderMan: *ShaderManager,
         swapMan: *SwapchainMan,
-        meshTaskSupport: bool,
+        _: bool,
         uiDraws: []const UiNode.UiDraw,
     ) !void {
         for (renderNodes) |renderNode| {
             switch (renderNode) {
-                .passNode => |passNode| {
-                    const specialPass: bool = switch (passNode.execution) {
-                        .taskOrMesh, .taskOrMeshIndirect => true,
-                        .compute, .computeIndirect, .graphics => false,
-                    };
-                    if (specialPass == true and meshTaskSupport == false) {
-                        std.debug.print("PassTyp {s} is not supported -> skipped \n", .{@tagName(passNode.execution)});
-                        self.lastPassTyp = null;
-                        continue;
-                    }
+                // .passNode => |passNode| {
+                //     const specialPass: bool = switch (passNode.execution) {
+                //         .taskOrMesh, .taskOrMeshIndirect => true,
+                //         .compute, .computeIndirect, .graphics => false,
+                //     };
+                //     if (specialPass == true and meshTaskSupport == false) {
+                //         std.debug.print("PassTyp {s} is not supported -> skipped \n", .{@tagName(passNode.execution)});
+                //         self.lastPassTyp = null;
+                //         continue;
+                //     }
 
-                    try self.recordPass(cmd, &passNode, frameData, resMan, shaderMan);
-                    self.lastPassTyp = passNode.execution;
-                },
+                //     try self.recordPass(cmd, &passNode, frameData, resMan, shaderMan);
+                //     self.lastPassTyp = passNode.execution;
+                // },
                 .blitNode => |blit| {
                     if (self.lastPassTyp != null) {
                         try self.recordBlit(cmd, blit, resMan, swapMan);
@@ -284,9 +319,283 @@ pub const CmdRecorder = struct {
                 },
                 .uiNode => |uiNode| try self.recordUiNode(cmd, uiNode, resMan, shaderMan, swapMan, uiDraws),
                 .compositeNode => |composite| try self.recordCompositeNode(cmd, composite, resMan, shaderMan, swapMan),
+
+                // Graph Commands
                 .clearBuffer => |clearBuf| try self.recordBufferClear(cmd, clearBuf, resMan),
                 .clearTexture => |clearTex| try self.recordTextureClear(cmd, clearTex, resMan),
                 .barrierBakeClears => try self.bakeAndExecuteClears(cmd, resMan),
+
+                // Profiling Commands
+                .startTimer => |startTimer| {
+                    try cmd.startTimerWithId(.TopOfPipe, startTimer.name.get(), startTimer.typ, startTimer.queryId);
+                },
+                .endTimer => |endTimer| {
+                    cmd.endTimer(endTimer.pipeStage, endTimer.queryId);
+                },
+                .startStats => |startStats| {
+                    cmd.startStatistics(startStats.name.get());
+                },
+                .endStats => {
+                    cmd.endStatistics();
+                },
+
+                // Barrier Commands
+                .bufBarrier => |bufBarrier| {
+                    const buf = try resMan.get(bufBarrier.bufId, cmd.flightId);
+                    try self.checkBufferState(buf, .{ .stage = bufBarrier.stage, .access = bufBarrier.access });
+                },
+                .texBarrier => |texBarrier| {
+                    const tex = try resMan.get(texBarrier.texId, cmd.flightId);
+                    try self.checkImageState(tex, .{ .stage = texBarrier.stage, .access = texBarrier.access, .layout = texBarrier.layout });
+                },
+                .swapchainTargetBarrier => |swapchainTargetBarrier| {
+                    const targetIndex = swapMan.getTargetIndex(swapchainTargetBarrier.windowId) orelse {
+                        std.debug.print("swapchainTargetBarrier: no swapchain target for window {}\n", .{swapchainTargetBarrier.windowId.val()});
+                        return;
+                    };
+                    const swapchain = swapMan.getTargetByIndex(targetIndex);
+                    const targetTex = swapchain.getCurTexture();
+                    try self.checkImageState(targetTex, .{ .stage = .ColorAtt, .access = .ColorAttReadWrite, .layout = .Attachment });
+                },
+                .bakeBarriers => {
+                    self.bakeBarriers(cmd, "Bake Pass Barriers");
+                },
+
+                // Pass Commands
+                .setShader => |shaderId| { // This is bad! (Shaders should be bound in one call)
+                    // const shaders = shaderMan.getShaders(&.{shaderId});
+                    self.state.shaderIds.append(shaderId) catch return error.CmdStateShaderIdFull;
+                },
+                .bindShaders => {
+                    const shaders = shaderMan.getShaders(self.state.shaderIds.constSlice());
+                    cmd.bindShaders(shaders[0..self.state.shaderIds.constSlice().len]);
+                },
+                .setPushData => |push| {
+                    std.debug.assert(push.size <= 128);
+                    std.debug.assert(push.offset + push.size <= 128);
+
+                    const destSlice = self.state.pushData[push.offset .. push.offset + push.size];
+                    const srcSlice = push.data[0..push.size];
+
+                    @memcpy(destSlice, srcSlice);
+                    self.state.pushDataLen = @max(self.state.pushDataLen, push.size + push.offset);
+                },
+                .setPushDataBufDesc => |push| {
+                    std.debug.assert(push.size <= 128);
+                    std.debug.assert(push.offset + push.size <= 128);
+
+                    const bufDesc = try resMan.getBufferDescriptor(push.bufId, cmd.flightId);
+                    const src = std.mem.asBytes(&bufDesc)[0..push.size]; // desc is u32
+
+                    @memcpy(self.state.pushData[push.offset..][0..push.size], src);
+                    self.state.pushDataLen = @max(self.state.pushDataLen, push.size + push.offset);
+                },
+                .setPushDataTexDesc => |push| {
+                    std.debug.assert(push.size <= 128);
+                    std.debug.assert(push.offset + push.size <= 128);
+
+                    const texDesc = try resMan.getTextureDescriptor(push.texId, cmd.flightId, push.descTyp);
+                    const src = std.mem.asBytes(&texDesc)[0..push.size]; // desc is u32
+
+                    @memcpy(self.state.pushData[push.offset..][0..push.size], src);
+                    self.state.pushDataLen = @max(self.state.pushDataLen, push.size + push.offset);
+                },
+                .setPushDataOutputExtent => |push| {
+                    const width: u32 = self.state.outputWidth orelse 0;
+                    const height: u32 = self.state.outputHeight orelse 0;
+                    @memcpy(self.state.pushData[push.offset..][0..4], std.mem.asBytes(&width));
+                    @memcpy(self.state.pushData[push.offset + 4 ..][0..4], std.mem.asBytes(&height));
+                    self.state.pushDataLen = @max(self.state.pushDataLen, push.offset + 8);
+                },
+                .bindPushData => {
+                    // cmd.setPushData(&self.state.pushData, self.state.pushDataLen, 0);
+                    cmd.setPushData(&self.state.pushData, @sizeOf([128]u8), 0); // CURRENTLY USING FULL 128 BYTES!
+                },
+
+                .dispatch => |dispatch| {
+                    cmd.dispatch(dispatch.groupX, dispatch.groupY, dispatch.groupZ);
+                },
+                .dispatchImg => |dispatchImg| {
+                    const tex = try resMan.get(dispatchImg.img, cmd.flightId);
+                    const extent = tex.extent;
+                    cmd.dispatch(
+                        (extent.width + dispatchImg.groupX - 1) / dispatchImg.groupX,
+                        (extent.height + dispatchImg.groupY - 1) / dispatchImg.groupY,
+                        (extent.depth + dispatchImg.groupZ - 1) / dispatchImg.groupZ,
+                    );
+                },
+                .dispatchIndirect => |dispatchIndirect| {
+                    try recordComputeIndirect(cmd, dispatchIndirect.indirectBuf, dispatchIndirect.indirectBufOffset, resMan);
+                },
+
+                .setOutputExtentSwapchain => |output| {
+                    const targetIndex = swapMan.getTargetIndex(output.windowId) orelse {
+                        std.debug.print("beginRenderingSwapchain: no swapchain target for window {}\n", .{output.windowId.val()});
+                        return;
+                    };
+                    const swapchain = swapMan.getTargetByIndex(targetIndex);
+                    const targetTex = swapchain.getCurTexture();
+                    self.state.outputWidth = targetTex.extent.width;
+                    self.state.outputHeight = targetTex.extent.height;
+                },
+                .setOutputExtent => |output| {
+                    if (output.mainOutput) |outputTexId| {
+                        const tex = try resMan.get(outputTexId, cmd.flightId);
+                        self.state.outputWidth = tex.extent.width;
+                        self.state.outputHeight = tex.extent.height;
+                    } else {
+                        self.state.outputWidth = 0;
+                        self.state.outputHeight = 0;
+                    }
+                },
+
+                .beginRendering => {
+                    const outputWidth = self.state.outputWidth orelse return error.CmdStateOutputWidthMissing;
+                    const outputHeight = self.state.outputHeight orelse return error.CmdStateOutputHeightMissing;
+                    const depthAtt = if (self.state.depthAtt) |*depthAtt| depthAtt else null;
+                    const stencilAtt = if (self.state.stencilAtt) |*stencilAtt| stencilAtt else null;
+                    cmd.beginRendering(outputWidth, outputHeight, self.state.colorAtts.constSlice(), depthAtt, stencilAtt);
+                },
+
+                .setViewportFromOutput => {
+                    cmd.setViewport(0, 0, @floatFromInt(self.state.outputWidth orelse 0), @floatFromInt(self.state.outputHeight orelse 0));
+                },
+                .setScissorFromOutput => {
+                    cmd.setScissor(0, 0, @floatFromInt(self.state.outputWidth orelse 0), @floatFromInt(self.state.outputHeight orelse 0));
+                },
+                .setViewportFromTex => |texViewport| {
+                    const tex = try resMan.get(texViewport.texId, cmd.flightId);
+                    cmd.setViewport(0, 0, @floatFromInt(tex.extent.width), @floatFromInt(tex.extent.height));
+                },
+                .setScissorFromTex => |texScissor| {
+                    const tex = try resMan.get(texScissor.texId, cmd.flightId);
+                    cmd.setScissor(0, 0, @floatFromInt(tex.extent.width), @floatFromInt(tex.extent.height));
+                },
+                .setViewport => |viewport| {
+                    cmd.setViewport(viewport.x, viewport.y, viewport.width, viewport.height);
+                },
+                .setScissor => |scissor| {
+                    cmd.setScissor(scissor.x, scissor.y, scissor.width, scissor.height);
+                },
+                // .setRenderState => |state| {
+                //     self.state.renderState = state;
+                // },
+                .setRenderStateUnion => |state| {
+                    switch (state) {
+                        inline else => |val, tag| @field(self.state.renderState, @tagName(tag)) = val,
+                    }
+                },
+                .bindRenderState => {
+                    cmd.updateRenderState(self.state.renderState);
+                },
+
+                .setColorAttSwapchain => |swapchainAtt| {
+                    const targetIndex = swapMan.getTargetIndex(swapchainAtt.windowId) orelse {
+                        std.debug.print("beginRenderingSwapchain: no swapchain target for window {}\n", .{swapchainAtt.windowId.val()});
+                        return;
+                    };
+                    const swapchain = swapMan.getTargetByIndex(targetIndex);
+                    const targetTex = swapchain.getCurTexture();
+                    const isFirstUse = targetTex.state.layout == .Undefined;
+                    const colorAtt = try targetTex.createAttachment(.Swapchain, if (isFirstUse) .{ .color = rc.INITIAL_SWAPCHAIN_COLOR } else null);
+
+                    self.state.colorAtts.append(colorAtt) catch return error.CmdStateColorAttsFull;
+                },
+                .setColorAtt => |setColorAtt| {
+                    const texMeta = try resMan.getMeta(setColorAtt.texId);
+                    const tex = try resMan.get(setColorAtt.texId, cmd.flightId);
+                    const colorAtt = try tex.createAttachment(texMeta.typ, if (setColorAtt.clear) |clear| .{ .color = clear } else null);
+
+                    self.state.colorAtts.append(colorAtt) catch return error.CmdStateColorAttsFull;
+                },
+                .setDepthAtt => |depth| {
+                    const texMeta = try resMan.getMeta(depth.texId);
+                    const tex = try resMan.get(depth.texId, cmd.flightId);
+                    const depthAtt = try tex.createAttachment(texMeta.typ, if (depth.clear) |clear| .{ .depth = clear } else null);
+
+                    self.state.depthAtt = depthAtt;
+                },
+                .setStencilAtt => |stencil| {
+                    const texMeta = try resMan.getMeta(stencil.texId);
+                    const tex = try resMan.get(stencil.texId, cmd.flightId);
+                    const stencilAtt = try tex.createAttachment(texMeta.typ, if (stencil.clear) |clear| .{ .depth = clear } else null);
+
+                    self.state.stencilAtt = stencilAtt;
+                },
+
+                .setIndexBuf => |indexBuf| {
+                    // const buffer = try resMan.get(indexBuf.bufId, cmd.flightId);
+                    self.state.indexBuffer = indexBuf.indexBuffer;
+                },
+                .setVertexBuf => |vertBuf| {
+                    self.state.vertexBuffers.append(vertBuf.vertexBuffer) catch return error.CmdStateVertexBuffersFull;
+                },
+                .setVertexAttrib => |attrib| {
+                    self.state.vertexAttributes.append(attrib.vertexAttribute) catch return error.CmdStateVertexAttributesFull;
+                },
+                .bindIndexInput => {
+                    if (self.state.indexBuffer) |indexBuffer| {
+                        const buffer = try resMan.get(indexBuffer.bufId, cmd.flightId);
+                        cmd.bindIndexBuffer(buffer.handle, 0, indexBuffer.indexType);
+                    }
+                },
+                .bindVertexInput => {
+                    if (self.state.vertexBuffers.len == 0) {
+                        cmd.setVertexInput(null, null);
+                    } else {
+                        var bindingDescs: [4]vk.VkVertexInputBindingDescription2EXT = undefined;
+                        for (self.state.vertexBuffers.constSlice(), 0..) |vbUse, i| {
+                            bindingDescs[i] = .{
+                                .sType = vk.VK_STRUCTURE_TYPE_VERTEX_INPUT_BINDING_DESCRIPTION_2_EXT,
+                                .binding = vbUse.binding,
+                                .stride = vbUse.stride,
+                                .inputRate = vbUse.inputRate,
+                                .divisor = 1,
+                            };
+                        }
+                        var attrDescs: [16]vk.VkVertexInputAttributeDescription2EXT = undefined;
+                        for (self.state.vertexAttributes.constSlice(), 0..) |attr, i| {
+                            attrDescs[i] = .{
+                                .sType = vk.VK_STRUCTURE_TYPE_VERTEX_INPUT_ATTRIBUTE_DESCRIPTION_2_EXT,
+                                .location = attr.location,
+                                .binding = attr.binding,
+                                .format = attr.format,
+                                .offset = attr.offset,
+                            };
+                        }
+                        cmd.setVertexInput(bindingDescs[0..self.state.vertexBuffers.len], attrDescs[0..self.state.vertexAttributes.len]);
+
+                        var bufHandles: [4]vk.VkBuffer = undefined;
+                        var bufOffsets: [4]vk.VkDeviceSize = .{0} ** 4;
+
+                        for (self.state.vertexBuffers.constSlice(), 0..) |vbUse, i| {
+                            bufHandles[i] = (try resMan.get(vbUse.bufId, cmd.flightId)).handle;
+                        }
+                        cmd.bindVertexBuffers(0, bufHandles[0..self.state.vertexBuffers.len], bufOffsets[0..self.state.vertexBuffers.len]);
+                    }
+                },
+
+                .drawVertex => |drawVertex| {
+                    cmd.draw(drawVertex.vertexCount, drawVertex.instanceCount, drawVertex.firstVertex, drawVertex.firstInstance);
+                },
+                .drawVertexIndexed => |drawIndexed| {
+                    cmd.drawIndexed(drawIndexed.indexCount, drawIndexed.instanceCount, drawIndexed.firstIndex, drawIndexed.vertexOffset, drawIndexed.firstInstance);
+                },
+                .drawTaskOrMesh => |drawTaskOrMesh| {
+                    cmd.drawMeshTasks(drawTaskOrMesh.groupX, drawTaskOrMesh.groupY, drawTaskOrMesh.groupZ);
+                },
+                .drawTaskOrMeshIndirect => |drawTasksOrMeshIndirect| {
+                    const buffer = try resMan.get(drawTasksOrMeshIndirect.indirectBufId, cmd.flightId);
+                    cmd.drawMeshTasksIndirect(buffer.handle, drawTasksOrMeshIndirect.offset, drawTasksOrMeshIndirect.drawCount, drawTasksOrMeshIndirect.stride);
+                },
+
+                .endRendering => {
+                    cmd.endRendering();
+                },
+
+                .resetState => {
+                    self.state = .{};
+                },
             }
         }
     }
