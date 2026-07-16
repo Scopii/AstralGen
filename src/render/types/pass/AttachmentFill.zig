@@ -10,20 +10,4 @@ pub const AttachmentFill = struct {
     access: vhE.PipeAccess = .None,
     layout: vhE.ImageLayout,
     clear: ?ClearValue,
-
-    pub fn init(texId: TexId, stage: vhE.PipeStage, access: vhE.PipeAccess, clear: ?ClearValue) AttachmentFill {
-        const layout: vhE.ImageLayout = if (access.isReadOnly() == true) .ReadOnly else .Attachment;
-
-        return .{
-            .texId = texId,
-            .stage = stage,
-            .access = access,
-            .layout = layout,
-            .clear = clear,
-        };
-    }
-
-    pub fn getNeededState(self: *const AttachmentFill) Texture.TextureState {
-        return .{ .stage = self.stage, .access = self.access, .layout = self.layout };
-    }
 };

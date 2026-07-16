@@ -117,18 +117,9 @@ pub const Renderer = struct {
         try self.scheduler.waitForGPU();
     }
 
-    pub fn draw(
-        self: *Renderer,
-        frameData: FrameData,
-        renderNodes: []const RenderNode,
-        uiNodes: []const UiNode,
-        uiDraws: []const UiNode.UiDraw,
-        activeWindows: []const Window,
-        rendererOutQueue: *RendererOutQueue,
-    ) !void {
+    pub fn draw(self: *Renderer, renderNodes: []const RenderNode, pushData: []const u8, activeWindows: []const Window, rendererOutQueue: *RendererOutQueue) !void {
         self.renderNodes.clearRetainingCapacity();
         try self.renderNodes.appendSlice(renderNodes);
-        for (uiNodes) |uiNode| self.renderNodes.append(.{ .uiNode = uiNode }) catch std.debug.print("Failed to append UiNode\n", .{});
 
         const flightId = try self.scheduler.beginFrame();
         try self.resMan.update(flightId, self.scheduler.totalFrames);
@@ -138,12 +129,11 @@ pub const Renderer = struct {
             self.renderNodes.items,
             flightId,
             self.scheduler.totalFrames,
-            frameData,
             &self.swapMan,
             &self.resMan,
             &self.shaderMan,
             self.context.meshTaskSupp,
-            uiDraws,
+            pushData,
         );
 
         try self.scheduler.queueSubmit(cmd, &self.swapMan, self.context.graphicsQ);

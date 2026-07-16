@@ -18,7 +18,6 @@ const quantGridDebugPass = @import("../.assets/passes/quant/Quant.zig").quantGri
 const quantPlanePass = @import("../.assets/passes/quant/Quant.zig").quantPlanePass;
 const quantPlaneDebugPass = @import("../.assets/passes/quant/Quant.zig").quantPlaneDebugPass;
 const quantCompPass = @import("../.assets/passes/quant/QuantComp.zig").quantCompPass;
-const imguiPass = @import("../.assets/passes/Imgui/Imgui.zig").imguiPass;
 
 pub const RenderRegistrySys = struct {
     pub fn init(self: *RenderRegistryData, alloc: std.mem.Allocator) !void {
@@ -112,8 +111,6 @@ pub const RenderRegistrySys = struct {
         try RenderRegistrySys.addPassDefinition(self, .id(7), quantPlanePass);
         try RenderRegistrySys.addPassDefinition(self, .id(8), quantPlaneDebugPass);
         try RenderRegistrySys.addPassDefinition(self, .id(9), quantCompPass);
-
-        try RenderRegistrySys.addPassDefinition(self, .id(10), imguiPass);
 
         // Buffers
         try RenderRegistrySys.addBufferDefinition(self, rc.QuantIndirectInputSB, "QuantIndirectInputSB", rc.indirectSBDesc);

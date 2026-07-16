@@ -1,6 +1,6 @@
 const TextureStringLink = @import("../../../renderGraph/components.zig").TextureStringLink;
 const BufferStringLink = @import("../../../renderGraph/components.zig").BufferStringLink;
-const PassExecutionSlot = @import("PassInstance.zig").PassInstance.PassExecutionSlot;
+const PassExecutionSlot = @import("PassInstance.zig").PassExecutionSlot;
 const RenderStateUnion = @import("../pass/RenderState.zig").RenderStateUnion;
 const FixedList = @import("../../../.structures/FixedList.zig").FixedList;
 const VertexBufferSlot = @import("VertexBufferSlot.zig").VertexBufferSlot;
@@ -23,7 +23,8 @@ const ClearValue = AttachmentSlot.ClearValue;
 const TaskOrMeshIndirectExecSlot = @import("PassInstance.zig").TaskOrMeshIndirectExecSlot;
 const ComputeIndirectExecSlot = @import("PassInstance.zig").ComputeIndirectExecSlot;
 const TaskOrMeshExec = @import("PassInstance.zig").TaskOrMeshExec;
-const GraphicsExec = @import("PassInstance.zig").GraphicsExec;
+const VertexExec = @import("PassInstance.zig").VertexExec;
+const VertexIndexedExec = @import("PassInstance.zig").VertexIndexedExec;
 const ComputeExec = @import("PassInstance.zig").ComputeExec;
 
 const AttributeCounts = struct {
@@ -77,8 +78,12 @@ pub const PassDefinition = struct {
             return .{ .execution = .{ .computeIndirect = passExec } };
         }
 
-        pub fn execGraphics(passExec: GraphicsExec) PassAttribute {
-            return .{ .execution = .{ .graphics = passExec } };
+        pub fn execVertex(passExec: VertexExec) PassAttribute {
+            return .{ .execution = .{ .vertex = passExec } };
+        }
+
+        pub fn execVertexIndexed(passExec: VertexIndexedExec) PassAttribute {
+            return .{ .execution = .{ .vertexIndexed = passExec } };
         }
 
         pub fn execTaskOrMesh(passExec: TaskOrMeshExec) PassAttribute {
@@ -199,7 +204,7 @@ pub const PassDefinition = struct {
                 .computeIndirect => try isComputeValid(counts),
                 .taskOrMesh => try isTaskOrMeshValid(counts),
                 .taskOrMeshIndirect => try isTaskOrMeshValid(counts),
-                .graphics => try isGraphicsValid(counts),
+                .vertex, .vertexIndexed => try isGraphicsValid(counts),
             }
         } else {
             std.debug.print("ERROR: Pass {s} has no execution\n", .{self.name.get()});

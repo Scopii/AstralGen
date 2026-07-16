@@ -1,7 +1,5 @@
 const RenderRegistryData = @import("../../renderRegistry/RenderRegistryData.zig").RenderRegistryData;
 const CompositeNode = @import("../../render/types/pass/RenderNode.zig").CompositeNode;
-const PassInstance = @import("../../render/types/pass/PassInstance.zig").PassInstance;
-const ViewportBlit = @import("../../render/types/pass/RenderNode.zig").ViewportBlit;
 const TexPassId = @import("../../.configs/idConfig.zig").TexPassId;
 const WindowId = @import("../../.configs/idConfig.zig").WindowId;
 const Viewport = @import("../../viewport/Viewport.zig").Viewport;
@@ -19,7 +17,6 @@ pub const PassSys = struct {
         passData.activePasses.clear();
         passData.passExtents.clear();
         passData.composites.clear();
-        passData.blits.clear();
 
         // Extracting all Unique Passes
         for (data.viewport.activeViewportIds.getConstItems()) |viewportId| {
@@ -68,16 +65,8 @@ pub const PassSys = struct {
                                 if (viewHeight > passHeight) passHeight = viewHeight;
 
                                 // Check Blit or Composite
-                                if (viewport.blitPass) |usedBlit| {
-                                    if (std.mem.eql(u8, passName, usedBlit)) {
-                                        const blit = createBlit(&viewport, passId, outTexPassId, window.id, window.extent.width, window.extent.height);
-                                        passData.blits.append(blit) catch std.debug.print("PassDef Could not Append Blit\n", .{});
-                                        break;
-                                    }
-                                } else {
-                                    const composite = createComposite(&viewport, passId, outTexPassId, window.id, window.extent.width, window.extent.height);
-                                    passData.composites.append(composite) catch std.debug.print("PassDef Could not Append Composite\n", .{});
-                                }
+                                const composite = createComposite(&viewport, passId, outTexPassId, window.id, window.extent.width, window.extent.height);
+                                passData.composites.append(composite) catch std.debug.print("PassDef Could not Append Composite\n", .{});
                             }
                         }
                     }
@@ -108,19 +97,6 @@ pub const PassSys = struct {
             }
             std.debug.print("\n", .{});
         }
-    }
-
-    fn createBlit(viewport: *const Viewport, pass: PassId, outputTexPassId: TexPassId, windowId: WindowId, windowWidth: u32, windowHeight: u32) ViewportBlit {
-        return ViewportBlit{
-            .name = viewport.name,
-            .pass = pass,
-            .srcTexUnion = .{ .texPassId = outputTexPassId },
-            .dstWindowId = windowId,
-            .viewWidth = viewport.calcViewWidth(windowWidth),
-            .viewHeight = viewport.calcViewHeight(windowHeight),
-            .viewOffsetX = viewport.calcViewX(windowWidth),
-            .viewOffsetY = viewport.calcViewY(windowHeight),
-        };
     }
 
     fn createComposite(viewport: *const Viewport, pass: PassId, outputTexPassId: TexPassId, windowId: WindowId, windowWidth: u32, windowHeight: u32) CompositeNode {

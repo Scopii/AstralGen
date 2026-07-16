@@ -344,8 +344,6 @@ pub const App = struct {
                 try RenderAssignerSys.processQueue(&self.data.renderAssigner, &self.data.renderRegistry, &self.assignerQueue, &self.rendererQueue, self.memoryMan);
 
                 try RenderAssignerSys.fillUiHardwareIds(&self.data.renderAssigner, &self.data.renderRegistry, &self.data.ui);
-                // const uiNodes = self.data.ui.uiNodes.constSlice();
-                // const uiDraws = self.data.ui.uiDraws.constSlice();
 
                 try RenderCompilerSys.compileIR(
                     &self.data.renderCompiler,
@@ -359,12 +357,13 @@ pub const App = struct {
                 );
 
                 const sortedRenderNodes = self.data.renderCompiler.sortedNodes.constSlice();
+                const pushData = self.data.renderCompiler.pushData.constSlice();
 
                 try self.renderer.update(&self.rendererQueue);
 
                 if (rc.EARLY_GPU_WAIT == false) try renderer.waitForGpu();
 
-                renderer.draw(frameData, sortedRenderNodes, &.{}, &.{}, self.data.window.activeWindows.constSlice(), &self.rendererOutQueue) catch |err| {
+                renderer.draw(sortedRenderNodes, pushData, self.data.window.activeWindows.constSlice(), &self.rendererOutQueue) catch |err| {
                     std.log.err("Error in renderer.submitDraw(): {}", .{err});
                     break;
                 };

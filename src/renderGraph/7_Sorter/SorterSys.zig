@@ -37,13 +37,6 @@ pub const SorterSys = struct {
             // Passes
             sorterData.sortedRenderIR.append(.{ .passIR = passId }) catch std.debug.print("7.PassSorter: Pass Append to sortedRenderNodes failed", .{});
 
-            // Blits
-            for (passData.blits.constSlice()) |blit| {
-                if (blit.pass == passId) {
-                    sorterData.sortedRenderIR.append(.{ .blitIR = blit }) catch std.debug.print("7.PassSorter: Blit Append to sortedRenderNodes failed", .{});
-                }
-            }
-
             // Composites
             for (passData.composites.constSlice()) |composite| {
                 if (composite.pass == passId) {
@@ -53,13 +46,12 @@ pub const SorterSys = struct {
         }
 
         // Debug Prints
-        if (rc.FRAME_GRAPH_DEBUG or true) {
+        if (rc.FRAME_GRAPH_DEBUG or rc.FRAME_GRAPH_SORT_DEBUG) {
             std.debug.print("7.PassSorter:\n", .{});
             for (sorterData.sortedRenderIR.constSlice(), 0..) |renderNode, index| {
                 switch (renderNode) {
                     .passIR => |passId| std.debug.print("- {}. Pass: {}\n", .{ index, passId.val() }),
                     .compositeIR => |composite| std.debug.print("- {}. Composite: {s} (Pass {s})\n", .{ index, composite.name, try registry.getPassName(composite.pass) }),
-                    .blitIR => |blit| std.debug.print("- {}. Blit: {s} (Pass {s})\n", .{ index, blit.name, try registry.getPassName(blit.pass) }),
                     .clearBufIR => |clearBuf| std.debug.print("- {}. ClearBuffer: BufPassId {}\n", .{ index, clearBuf.val() }),
                     .clearTexIR => |clearTex| std.debug.print("- {}. ClearTexture: TexPassId {}\n", .{ index, clearTex.val() }),
                     .barrierBakeClears => std.debug.print("- {}. Bake Clears\n", .{index}),

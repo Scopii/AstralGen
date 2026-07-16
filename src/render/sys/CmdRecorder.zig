@@ -1,9 +1,7 @@
-const PassInstance = @import("../types/pass/PassInstance.zig").PassInstance;
+const PassExecution = @import("../types/pass/PassInstance.zig").PassExecution;
 const CompositeNode = @import("../types/pass/RenderNode.zig").CompositeNode;
-const ViewportBlit = @import("../types/pass/RenderNode.zig").ViewportBlit;
 const RenderNode = @import("../types/pass/RenderNode.zig").RenderNode;
 const Swapchain = @import("../types/base/Swapchain.zig").Swapchain;
-const PushData = @import("../types/res/PushData.zig").PushData;
 const UiNode = @import("../types/pass/RenderNode.zig").UiNode;
 const SwapchainMan = @import("SwapchainMan.zig").SwapchainMan;
 const Texture = @import("../types/res/Texture.zig").Texture;
@@ -27,16 +25,12 @@ const FixedList = @import("../../.structures/FixedList.zig").FixedList;
 const VertexBufferFill = @import("../types/pass/VertexBufferFill.zig").VertexBufferFill;
 const VertexAttribute = @import("../types/pass/VertexAttribute.zig").VertexAttribute;
 const IndexBufferFill = @import("../types/pass/IndexBufferFill.zig").IndexBufferFill;
-// const ShaderInf = @import("../../../shader/ShaderInf.zig").ShaderInf;
 const ShaderId = @import("../../.configs/idConfig.zig").ShaderId;
 // const AttachmentFill = @import("AttachmentFill.zig").AttachmentFill;
 const RenderState = @import("../types/pass/RenderState.zig").RenderState;
 // const TextureFill = @import("TextureFill.zig").TextureFill;
 const String = @import("../../globalHelper.zig").String;
 // const BufferFill = @import("BufferFill.zig").BufferFill;
-
-const ImGuiPass = @import("../../.assets/passes/Imgui/Imgui.zig").ImGuiPass;
-const Composite = @import("../../.assets/passes/composite/Composite.zig").Composite;
 
 pub const CmdState = struct {
     outputWidth: ?u32 = null,
@@ -72,20 +66,19 @@ pub const CmdRecorder = struct {
     memDstAccess: vk.VkAccessFlags2 = 0,
     useGpuTimers: bool = false,
     useGpuStats: bool = false,
-    lastPassTyp: ?PassInstance.PassExecution = null,
+    lastPassTyp: ?PassExecution = null,
 
-    // Current State
-    state: CmdState = .{},
+    state: CmdState = .{}, // Per Pass State
 
     pub fn init(alloc: Allocator, context: *const Context) !CmdRecorder {
         return .{
             .alloc = alloc,
             .gpi = context.gpi,
             .cmdMan = try CmdManager.init(alloc, context, rc.MAX_IN_FLIGHT),
-            .imgBarriers = try std.array_list.Managed(vk.VkImageMemoryBarrier2).initCapacity(alloc, 30),
-            .bufBarriers = try std.array_list.Managed(vk.VkBufferMemoryBarrier2).initCapacity(alloc, 30),
-            .imgClears = try std.array_list.Managed(TexId).initCapacity(alloc, 30),
-            .bufClears = try std.array_list.Managed(BufId).initCapacity(alloc, 30),
+            .imgBarriers = try std.array_list.Managed(vk.VkImageMemoryBarrier2).initCapacity(alloc, rc.PASS_MAX * rc.MAX_PASS_ATTRIBUTES),
+            .bufBarriers = try std.array_list.Managed(vk.VkBufferMemoryBarrier2).initCapacity(alloc, rc.PASS_MAX * rc.MAX_PASS_ATTRIBUTES),
+            .imgClears = try std.array_list.Managed(TexId).initCapacity(alloc, rc.PASS_MAX * rc.MAX_PASS_ATTRIBUTES),
+            .bufClears = try std.array_list.Managed(BufId).initCapacity(alloc, rc.PASS_MAX * rc.MAX_PASS_ATTRIBUTES),
         };
     }
 
@@ -111,12 +104,11 @@ pub const CmdRecorder = struct {
         renderNodes: []RenderNode,
         flightId: u8,
         frame: u64,
-        frameData: FrameData,
         swapMan: *SwapchainMan,
         resMan: *ResourceMan,
         shaderMan: *ShaderManager,
-        meshTaskSupport: bool,
-        uiDraws: []const UiNode.UiDraw,
+        _: bool,
+        pushData: []const u8,
     ) !*Cmd {
         var cmd = try self.cmdMan.getCmd(flightId);
         try cmd.begin(flightId, frame);
@@ -133,7 +125,7 @@ pub const CmdRecorder = struct {
         cmd.endTimer(.BotOfPipe, timeId);
 
         try self.recordTransfers(cmd, resMan);
-        try self.recordNodes(cmd, renderNodes, frameData, resMan, shaderMan, swapMan, meshTaskSupport, uiDraws);
+        try self.recordNodes(cmd, renderNodes, resMan, shaderMan, swapMan, pushData);
         try self.recordPresentation(cmd, swapMan);
 
         try cmd.end();
@@ -235,94 +227,24 @@ pub const CmdRecorder = struct {
         }
     }
 
-    fn recordPassBarriers(self: *CmdRecorder, cmd: *const Cmd, pass: *const PassInstance, resMan: *ResourceMan) !void {
-        for (pass.getBufUses()) |bufUse| {
-            const buffer = try resMan.get(bufUse.bufId, cmd.flightId);
-            try self.checkBufferState(buffer, bufUse.getNeededState());
-        }
-        for (pass.getTexUses()) |texUse| {
-            const tex = try resMan.get(texUse.texId, cmd.flightId);
-            try self.checkImageState(tex, texUse.getNeededState());
-        }
-        for (pass.getColorAtts()) |attachment| {
-            const tex = try resMan.get(attachment.texId, cmd.flightId);
-            try self.checkImageState(tex, attachment.getNeededState());
-        }
-        if (pass.depthAtt) |attachment| {
-            const tex = try resMan.get(attachment.texId, cmd.flightId);
-            try self.checkImageState(tex, attachment.getNeededState());
-        }
-        if (pass.stencilAtt) |attachment| {
-            const tex = try resMan.get(attachment.texId, cmd.flightId);
-            try self.checkImageState(tex, attachment.getNeededState());
-        }
-        for (pass.getVertexBufUse()) |vbUse| {
-            const buf = try resMan.get(vbUse.bufId, cmd.flightId);
-            try self.checkBufferState(buf, .{ .stage = .VertexInput, .access = .VertexAttributeRead });
-        }
-        if (pass.indexBuffer) |ibUse| {
-            const buf = try resMan.get(ibUse.bufId, cmd.flightId);
-            try self.checkBufferState(buf, .{ .stage = .VertexInput, .access = .IndexRead });
-        }
-        self.bakeBarriers(cmd, pass.getName());
-    }
-
-    fn recordCompute(cmd: *const Cmd, groupX: u32, groupY: u32, groupZ: u32, renderTexId: ?TexId, resMan: *ResourceMan) !void {
-        if (renderTexId) |texId| {
-            const tex = try resMan.get(texId, cmd.flightId);
-            const extent = tex.extent;
-
-            cmd.dispatch(
-                (extent.width + groupX - 1) / groupX,
-                (extent.height + groupY - 1) / groupY,
-                (extent.depth + groupZ - 1) / groupZ,
-            );
-        } else cmd.dispatch(groupX, groupY, groupZ);
-    }
-
-    fn recordComputeIndirect(cmd: *const Cmd, indirectBufId: BufId, indirectBufOffset: u64, resMan: *ResourceMan) !void {
-        const buffer = try resMan.get(indirectBufId, cmd.flightId);
-        cmd.dispatchIndirect(buffer.handle, indirectBufOffset);
-    }
-
-    fn recordNodes(
-        self: *CmdRecorder,
-        cmd: *Cmd,
-        renderNodes: []RenderNode,
-        _: FrameData,
-        resMan: *ResourceMan,
-        shaderMan: *ShaderManager,
-        swapMan: *SwapchainMan,
-        _: bool,
-        uiDraws: []const UiNode.UiDraw,
-    ) !void {
+    fn recordNodes(self: *CmdRecorder, cmd: *Cmd, renderNodes: []RenderNode, resMan: *ResourceMan, shaderMan: *ShaderManager, swapMan: *SwapchainMan, pushData: []const u8) !void {
         for (renderNodes) |renderNode| {
             switch (renderNode) {
-                // .passNode => |passNode| {
-                //     const specialPass: bool = switch (passNode.execution) {
-                //         .taskOrMesh, .taskOrMeshIndirect => true,
-                //         .compute, .computeIndirect, .graphics => false,
-                //     };
-                //     if (specialPass == true and meshTaskSupport == false) {
-                //         std.debug.print("PassTyp {s} is not supported -> skipped \n", .{@tagName(passNode.execution)});
-                //         self.lastPassTyp = null;
-                //         continue;
-                //     }
-
-                //     try self.recordPass(cmd, &passNode, frameData, resMan, shaderMan);
-                //     self.lastPassTyp = passNode.execution;
-                // },
-                .blitNode => |blit| {
-                    if (self.lastPassTyp != null) {
-                        try self.recordBlit(cmd, blit, resMan, swapMan);
-                    } else std.debug.print("Blit for unsupported Pass Skipped!\n", .{});
-                },
-                .uiNode => |uiNode| try self.recordUiNode(cmd, uiNode, resMan, shaderMan, swapMan, uiDraws),
-                .compositeNode => |composite| try self.recordCompositeNode(cmd, composite, resMan, shaderMan, swapMan),
+                .passPrint => {},
+                .compositePrint => {},
+                .uiPrint => {},
 
                 // Graph Commands
-                .clearBuffer => |clearBuf| try self.recordBufferClear(cmd, clearBuf, resMan),
-                .clearTexture => |clearTex| try self.recordTextureClear(cmd, clearTex, resMan),
+                .clearBuffer => |clearBufId| {
+                    const buffer: *Buffer = try resMan.get(clearBufId, cmd.flightId);
+                    try self.checkBufferState(buffer, .{ .stage = .Transfer, .access = .TransferWrite });
+                    try self.bufClears.append(clearBufId);
+                },
+                .clearTexture => |clearTexId| {
+                    const texture: *Texture = try resMan.get(clearTexId, cmd.flightId);
+                    try self.checkImageState(texture, .{ .stage = .Transfer, .access = .TransferWrite, .layout = .TransferDst });
+                    try self.imgClears.append(clearTexId);
+                },
                 .barrierBakeClears => try self.bakeAndExecuteClears(cmd, resMan),
 
                 // Profiling Commands
@@ -348,37 +270,36 @@ pub const CmdRecorder = struct {
                     const tex = try resMan.get(texBarrier.texId, cmd.flightId);
                     try self.checkImageState(tex, .{ .stage = texBarrier.stage, .access = texBarrier.access, .layout = texBarrier.layout });
                 },
-                .swapchainTargetBarrier => |swapchainTargetBarrier| {
-                    const targetIndex = swapMan.getTargetIndex(swapchainTargetBarrier.windowId) orelse {
-                        std.debug.print("swapchainTargetBarrier: no swapchain target for window {}\n", .{swapchainTargetBarrier.windowId.val()});
+                .swapchainTargetBarrier => |targetBarrier| {
+                    const targetIndex = swapMan.getTargetIndex(targetBarrier.windowId) orelse {
+                        std.debug.print("swapchainTargetBarrier: no swapchain target for window {}\n", .{targetBarrier.windowId.val()});
                         return;
                     };
                     const swapchain = swapMan.getTargetByIndex(targetIndex);
                     const targetTex = swapchain.getCurTexture();
-                    try self.checkImageState(targetTex, .{ .stage = .ColorAtt, .access = .ColorAttReadWrite, .layout = .Attachment });
+                    try self.checkImageState(targetTex, .{ .stage = targetBarrier.stage, .access = targetBarrier.access, .layout = targetBarrier.layout });
                 },
                 .bakeBarriers => {
                     self.bakeBarriers(cmd, "Bake Pass Barriers");
                 },
 
                 // Pass Commands
-                .setShader => |shaderId| { // This is bad! (Shaders should be bound in one call)
-                    // const shaders = shaderMan.getShaders(&.{shaderId});
+                .setShader => |shaderId| {
                     self.state.shaderIds.append(shaderId) catch return error.CmdStateShaderIdFull;
                 },
                 .bindShaders => {
                     const shaders = shaderMan.getShaders(self.state.shaderIds.constSlice());
                     cmd.bindShaders(shaders[0..self.state.shaderIds.constSlice().len]);
                 },
-                .setPushData => |push| {
-                    std.debug.assert(push.size <= 128);
-                    std.debug.assert(push.offset + push.size <= 128);
+                .setPushData => |pushInf| {
+                    std.debug.assert(pushInf.len <= 128);
+                    std.debug.assert(pushInf.offset + pushInf.len <= 128);
 
-                    const destSlice = self.state.pushData[push.offset .. push.offset + push.size];
-                    const srcSlice = push.data[0..push.size];
+                    const destSlice = self.state.pushData[pushInf.offset .. pushInf.offset + pushInf.len];
+                    const srcSlice = pushData[pushInf.startIndex .. pushInf.startIndex + pushInf.len];
 
                     @memcpy(destSlice, srcSlice);
-                    self.state.pushDataLen = @max(self.state.pushDataLen, push.size + push.offset);
+                    self.state.pushDataLen = @max(self.state.pushDataLen, pushInf.len + pushInf.offset);
                 },
                 .setPushDataBufDesc => |push| {
                     std.debug.assert(push.size <= 128);
@@ -425,7 +346,8 @@ pub const CmdRecorder = struct {
                     );
                 },
                 .dispatchIndirect => |dispatchIndirect| {
-                    try recordComputeIndirect(cmd, dispatchIndirect.indirectBuf, dispatchIndirect.indirectBufOffset, resMan);
+                    const buffer = try resMan.get(dispatchIndirect.indirectBufId, cmd.flightId);
+                    cmd.dispatchIndirect(buffer.handle, dispatchIndirect.indirectBufOffset);
                 },
 
                 .setOutputExtentSwapchain => |output| {
@@ -443,9 +365,6 @@ pub const CmdRecorder = struct {
                         const tex = try resMan.get(outputTexId, cmd.flightId);
                         self.state.outputWidth = tex.extent.width;
                         self.state.outputHeight = tex.extent.height;
-                    } else {
-                        self.state.outputWidth = 0;
-                        self.state.outputHeight = 0;
                     }
                 },
 
@@ -477,9 +396,6 @@ pub const CmdRecorder = struct {
                 .setScissor => |scissor| {
                     cmd.setScissor(scissor.x, scissor.y, scissor.width, scissor.height);
                 },
-                // .setRenderState => |state| {
-                //     self.state.renderState = state;
-                // },
                 .setRenderStateUnion => |state| {
                     switch (state) {
                         inline else => |val, tag| @field(self.state.renderState, @tagName(tag)) = val,
@@ -600,18 +516,6 @@ pub const CmdRecorder = struct {
         }
     }
 
-    fn recordBufferClear(self: *CmdRecorder, cmd: *Cmd, bufId: BufId, resMan: *ResourceMan) !void {
-        const buffer: *Buffer = try resMan.get(bufId, cmd.flightId);
-        try self.checkBufferState(buffer, .{ .stage = .Transfer, .access = .TransferWrite });
-        try self.bufClears.append(bufId);
-    }
-
-    fn recordTextureClear(self: *CmdRecorder, cmd: *Cmd, texId: TexId, resMan: *ResourceMan) !void {
-        const texture: *Texture = try resMan.get(texId, cmd.flightId);
-        try self.checkImageState(texture, .{ .stage = .Transfer, .access = .TransferWrite, .layout = .TransferDst });
-        try self.imgClears.append(texId);
-    }
-
     fn bakeAndExecuteClears(self: *CmdRecorder, cmd: *Cmd, resMan: *ResourceMan) !void {
         self.bakeBarriers(cmd, "Clear Barrier");
 
@@ -629,263 +533,6 @@ pub const CmdRecorder = struct {
             cmd.fillBuffer(buffer.handle, 0, vk.VK_WHOLE_SIZE, 0);
         }
         self.bufClears.clearRetainingCapacity();
-    }
-
-    fn recordCompositeNode(self: *CmdRecorder, cmd: *Cmd, composite: CompositeNode, resMan: *ResourceMan, shaderMan: *ShaderManager, swapMan: *SwapchainMan) !void {
-        const timeId = cmd.startTimer(.TopOfPipe, composite.name, .Composite);
-
-        const targetIndex = swapMan.getTargetIndex(composite.windowId) orelse return;
-        const swapchain = swapMan.getTargetByIndex(targetIndex);
-        const targetTex = swapchain.getCurTexture();
-
-        const isFirstUse = targetTex.state.layout == .Undefined;
-
-        if (composite.srcTexUnion != .texId) return error.CompositSrcTexIdIsNotHardwareId;
-
-        const srcTex = try resMan.get(composite.srcTexUnion.texId, cmd.flightId);
-        const srcDesc = try resMan.getTextureDescriptor(composite.srcTexUnion.texId, cmd.flightId, .Sampled);
-
-        // Barriers: src to SampledRead, swapchain to ColorAttWrite
-        try self.checkImageState(srcTex, .{ .stage = .Fragment, .access = .SampledRead, .layout = .General });
-        try self.checkImageState(targetTex, .{ .stage = .ColorAtt, .access = .ColorAttReadWrite, .layout = .Attachment });
-        self.bakeBarriers(cmd, "Composite Prep");
-
-        // Color attachment = swapchain current image
-        const colorAtt = try targetTex.createAttachment(.Swapchain, if (isFirstUse) .{ .color = rc.INITIAL_SWAPCHAIN_COLOR } else null);
-        if (rc.COMPOSITE_DEBUG == true) std.debug.print("SrcTex Extent: {}x{}, ", .{ srcTex.extent.width, srcTex.extent.height });
-        if (rc.COMPOSITE_DEBUG == true) std.debug.print("Composite {s}: windowId {} targetIndex {} -> swapchain {}x{} vs composite viewport {}x{}\n", .{ composite.name, composite.windowId.val(), targetIndex, swapchain.extent.width, swapchain.extent.height, composite.viewWidth, composite.viewHeight });
-
-        cmd.beginRendering(swapchain.extent.width, swapchain.extent.height, &[_]vk.VkRenderingAttachmentInfo{colorAtt}, null, null);
-
-        const compositePass = Composite(.{ .string = "Composite" });
-
-        const shaders = shaderMan.getShaders(compositePass.getShaderIds());
-        cmd.bindShaders(shaders[0..compositePass.getShaderIds().len]);
-        cmd.updateRenderState(compositePass.renderState);
-
-        // Viewport/scissor restricted to the target region
-        cmd.setViewport(@floatFromInt(composite.viewOffsetX), @floatFromInt(composite.viewOffsetY), @floatFromInt(composite.viewWidth), @floatFromInt(composite.viewHeight));
-        cmd.setScissor(@floatFromInt(composite.viewOffsetX), @floatFromInt(composite.viewOffsetY), @floatFromInt(composite.viewWidth), @floatFromInt(composite.viewHeight));
-
-        // Push data
-        const pushData = vhT.CompositePushData{
-            .srcDesc = srcDesc,
-            .samplerIndex = rc.SAMPLER_LINEAR_CLAMP_INDEX,
-            .stretch = if (composite.stretch) 1 else 0,
-            .opacity = composite.opacity,
-            .dstWidth = composite.viewWidth,
-            .dstHeight = composite.viewHeight,
-        };
-        cmd.setPushData(&pushData, @sizeOf(@TypeOf(pushData)), 0);
-
-        cmd.setVertexInput(null, null);
-        cmd.draw(3, 1, 0, 0);
-        cmd.endRendering();
-        cmd.endTimer(.BotOfPipe, timeId);
-    }
-
-    fn recordUiNode(self: *CmdRecorder, cmd: *Cmd, uiNode: UiNode, resMan: *ResourceMan, shaderMan: *ShaderManager, swapMan: *SwapchainMan, uiDraws: []const UiNode.UiDraw) !void {
-        const timeId = cmd.startTimer(.TopOfPipe, uiNode.name, .Ui);
-
-        const targetIndex = swapMan.getTargetIndex(uiNode.windowId) orelse {
-            std.debug.print("RecordUI: no swapchain target for window {}\n", .{uiNode.windowId.val()});
-            return;
-        };
-        const swapchain = swapMan.getTargetByIndex(targetIndex);
-        const targetTex = swapchain.getCurTexture();
-
-        const isFirstUse = targetTex.state.layout == .Undefined;
-
-        if (uiNode.imguiVB != .bufId) return error.UiNodeImguiVBIsNotHardwareId;
-        if (uiNode.imguiIB != .bufId) return error.UiNodeImguiVBIsNotHardwareId;
-
-        const pass = ImGuiPass(.{
-            .string = "Imgui",
-            .vertexBuf = uiNode.imguiVB.bufId,
-            .indexBuf = uiNode.imguiIB.bufId,
-        });
-
-        try self.checkImageState(targetTex, .{ .stage = .ColorAtt, .access = .ColorAttReadWrite, .layout = .Attachment });
-
-        // All other barriers driven by the PassDef: vertex buffers, index buffer, textures
-        for (pass.vertexBuffers.constSlice()) |vbUse| {
-            const buf = try resMan.get(vbUse.bufId, cmd.flightId);
-            try self.checkBufferState(buf, .{ .stage = .VertexInput, .access = .VertexAttributeRead });
-        }
-        if (pass.indexBuffer) |ibUse| {
-            const buf = try resMan.get(ibUse.bufId, cmd.flightId);
-            try self.checkBufferState(buf, .{ .stage = .VertexInput, .access = .IndexRead });
-        }
-
-        const uiDrawList = uiDraws[uiNode.firstDrawIndex..uiNode.lastDrawIndex];
-
-        for (uiDrawList) |draw| { // Suboptimal but needed for custom Textures later
-            if (draw.drawTex != .texId) return error.UiDrawTexIsNotAHardwareId;
-            if (resMan.get(draw.drawTex.texId, cmd.flightId)) |tex| {
-                try self.checkImageState(tex, .{ .stage = .Fragment, .access = .SampledRead, .layout = .General });
-            } else |_| {}
-        }
-
-        self.bakeBarriers(cmd, "UI Prep");
-
-        // Setup driven by PassDef same as recordGraphics for a vertex pass
-        const colorAtt = try targetTex.createAttachment(.Swapchain, if (isFirstUse) .{ .color = rc.INITIAL_SWAPCHAIN_COLOR } else null);
-        cmd.beginRendering(swapchain.extent.width, swapchain.extent.height, &[_]vk.VkRenderingAttachmentInfo{colorAtt}, null, null);
-
-        const shaders = shaderMan.getShaders(pass.getShaderIds());
-        cmd.bindShaders(shaders[0..pass.getShaderIds().len]);
-        cmd.updateRenderState(pass.renderState);
-        cmd.setViewport(0, 0, @floatFromInt(swapchain.extent.width), @floatFromInt(swapchain.extent.height));
-
-        try bindVertexInputFromPass(cmd, &pass, resMan, cmd.flightId);
-
-        if (pass.indexBuffer) |ibUse| {
-            const idxBuf = try resMan.get(ibUse.bufId, cmd.flightId);
-            cmd.bindIndexBuffer(idxBuf.handle, 0, ibUse.indexType);
-        }
-
-        const scaleX = 2.0 / uiNode.displaySize[0];
-        const scaleY = 2.0 / uiNode.displaySize[1];
-        const translateX = -1.0 - uiNode.displayPos[0] * scaleX;
-        const translateY = -1.0 - uiNode.displayPos[1] * scaleY;
-        const sw = @as(f32, @floatFromInt(swapchain.extent.width));
-        const sh = @as(f32, @floatFromInt(swapchain.extent.height));
-
-        var lastTexPassId: ?TexId = null;
-        var lastTexDesc: u32 = undefined;
-
-        for (uiDrawList) |draw| {
-            const x0 = @max(0.0, @min(draw.clipRect[0] - uiNode.displayPos[0], sw));
-            const y0 = @max(0.0, @min(draw.clipRect[1] - uiNode.displayPos[1], sh));
-            const x1 = @max(x0, @min(draw.clipRect[2] - uiNode.displayPos[0], sw));
-            const y1 = @max(y0, @min(draw.clipRect[3] - uiNode.displayPos[1], sh));
-            if (x1 - x0 <= 0 or y1 - y0 <= 0) continue;
-
-            cmd.setScissor(x0, y0, x1 - x0, y1 - y0);
-
-            if (draw.drawTex != .texId) return error.UiDrawTexIsNoHardwareId;
-
-            // fetch only when the id differs from the last one (null first iteration always misses)
-            if (lastTexPassId == null or draw.drawTex.texId != lastTexPassId.?) {
-                lastTexDesc = try resMan.getTextureDescriptor(draw.drawTex.texId, cmd.flightId, .Sampled);
-                lastTexPassId = draw.drawTex.texId;
-            }
-
-            const pushConstants = vhT.ImGuiPushConstants{
-                .scale = .{ scaleX, scaleY },
-                .translate = .{ translateX, translateY },
-                .texDesc = lastTexDesc,
-            };
-            cmd.setPushData(&pushConstants, @sizeOf(@TypeOf(pushConstants)), 0);
-            cmd.drawIndexed(draw.elemCount, 1, draw.idxOffset, draw.vtxOffset, 0);
-        }
-
-        cmd.endRendering();
-        cmd.endTimer(.BotOfPipe, timeId);
-    }
-
-    fn recordPass(self: *CmdRecorder, cmd: *Cmd, pass: *const PassInstance, frameData: FrameData, resMan: *ResourceMan, shaderMan: *ShaderManager) !void {
-        const timeId = cmd.startTimer(.TopOfPipe, pass.getName(), .Pass);
-        cmd.startStatistics(pass.getName());
-
-        const shaders = shaderMan.getShaders(pass.getShaderIds());
-        const shaderSlice = shaders[0..pass.getShaderIds().len];
-        cmd.bindShaders(shaderSlice);
-
-        const mainTexId: ?TexId = pass.getMainTexId();
-
-        const pushData = try PushData.init(resMan, pass.getBufUses(), pass.getTexUses(), mainTexId, frameData, cmd.flightId);
-        cmd.setPushData(&pushData, @sizeOf(PushData), 0);
-
-        try self.recordPassBarriers(cmd, pass, resMan);
-
-        switch (pass.execution) {
-            .taskOrMesh, .taskOrMeshIndirect, .graphics => {
-                try recordGraphics(cmd, pushData.width, pushData.height, pass, resMan);
-            },
-            .compute => |compute| {
-                if (compute.outputTexDispatch == true) {
-                    const outputTexId = pass.mainOutputTex orelse return error.ComputeOnImgOutputTexIsNull;
-                    try recordCompute(cmd, compute.groupX, compute.groupY, compute.groupZ, outputTexId, resMan);
-                } else {
-                    try recordCompute(cmd, compute.groupX, compute.groupY, compute.groupZ, null, resMan);
-                }
-            },
-            .computeIndirect => |computeIndirect| {
-                try recordComputeIndirect(cmd, computeIndirect.indirectBuf, computeIndirect.indirectBufOffset, resMan);
-            },
-        }
-        cmd.endTimer(.BotOfPipe, timeId);
-        cmd.endStatistics();
-    }
-
-    fn recordBlit(self: *CmdRecorder, cmd: *Cmd, blit: ViewportBlit, resMan: *ResourceMan, swapMan: *SwapchainMan) !void {
-        const timeId = cmd.startTimer(.TopOfPipe, blit.name, .Blit);
-
-        if (blit.srcTexUnion != .texId) return error.BlitSrcIdIsNoHardwareTexId;
-        const renderTex = try resMan.get(blit.srcTexUnion.texId, cmd.flightId);
-
-        const targetIndex = swapMan.getTargetIndex(blit.dstWindowId) orelse return;
-        const swapchain = swapMan.getTargetByIndex(targetIndex);
-
-        try self.checkImageState(renderTex, .{ .stage = .Transfer, .access = .TransferRead, .layout = .TransferSrc });
-        try self.checkImageState(&swapchain.textures[swapchain.curIndex], .{ .stage = .Transfer, .access = .TransferWrite, .layout = .TransferDst });
-        self.bakeBarriers(cmd, blit.name);
-
-        const viewArea = vk.VkExtent3D{ .width = blit.viewWidth, .height = blit.viewHeight, .depth = 1 };
-        const viewOffset = vk.VkOffset3D{ .x = blit.viewOffsetX, .y = blit.viewOffsetY, .z = 1 };
-        cmd.blit(renderTex.img, renderTex.extent, swapchain.getCurTexture().img, viewArea, viewOffset, rc.BLIT_TEX_STRETCH);
-
-        cmd.endTimer(.BotOfPipe, timeId);
-    }
-
-    fn recordGraphics(cmd: *Cmd, width: u32, height: u32, pass: *const PassInstance, resMan: *ResourceMan) !void {
-        const depthInf: ?vk.VkRenderingAttachmentInfo = if (pass.depthAtt) |depth| blk: {
-            const texMeta = try resMan.getMeta(depth.texId);
-            const tex = try resMan.get(depth.texId, cmd.flightId);
-            break :blk try tex.createAttachment(texMeta.typ, depth.clear);
-        } else null;
-
-        const stencilInf: ?vk.VkRenderingAttachmentInfo = if (pass.stencilAtt) |stencil| blk: {
-            const texMeta = try resMan.getMeta(stencil.texId);
-            const tex = try resMan.get(stencil.texId, cmd.flightId);
-            break :blk try tex.createAttachment(texMeta.typ, stencil.clear);
-        } else null;
-
-        var colorInfs: [8]vk.VkRenderingAttachmentInfo = undefined;
-        for (pass.getColorAtts(), 0..) |colorAtt, i| {
-            const texMeta = try resMan.getMeta(colorAtt.texId);
-            const tex = try resMan.get(colorAtt.texId, cmd.flightId);
-            colorInfs[i] = try tex.createAttachment(texMeta.typ, colorAtt.clear);
-        }
-
-        cmd.updateRenderState(pass.renderState);
-        cmd.setViewport(0, 0, @floatFromInt(width), @floatFromInt(height));
-        cmd.setScissor(0, 0, @floatFromInt(width), @floatFromInt(height));
-        cmd.beginRendering(width, height, colorInfs[0..pass.getColorAtts().len], if (depthInf) |*d| d else null, if (stencilInf) |*s| s else null);
-
-        switch (pass.execution) {
-            .taskOrMesh => |taskMesh| {
-                cmd.drawMeshTasks(taskMesh.groupX, taskMesh.groupY, taskMesh.groupZ);
-            },
-            .taskOrMeshIndirect => |taskOrMeshIndirect| {
-                const buffer = try resMan.get(taskOrMeshIndirect.indirectBuf, cmd.flightId);
-                cmd.drawMeshTasksIndirect(buffer.handle, taskOrMeshIndirect.indirectBufOffset, 1, @sizeOf(vhT.IndirectData));
-            },
-            .graphics => |graphics| {
-                try bindVertexInputFromPass(cmd, pass, resMan, cmd.flightId);
-
-                if (pass.indexBuffer) |ibUse| {
-                    const idxBuf = try resMan.get(ibUse.bufId, cmd.flightId);
-                    cmd.bindIndexBuffer(idxBuf.handle, 0, ibUse.indexType);
-                    cmd.drawIndexed(graphics.indexCount, 1, 0, 0, 0);
-                } else {
-                    cmd.draw(graphics.vertices, graphics.instances, 0, 0);
-                }
-            },
-            .compute, .computeIndirect => std.debug.print("ERROR: Compute or ComputeOnImg Pass ({s}) landed in Graphics Recording\n", .{pass.getName()}),
-        }
-        cmd.endRendering();
     }
 
     fn recordPresentation(self: *CmdRecorder, cmd: *Cmd, swapMan: *SwapchainMan) !void {
@@ -929,42 +576,5 @@ pub const CmdRecorder = struct {
             self.imgBarriers.clearRetainingCapacity();
             self.bufBarriers.clearRetainingCapacity();
         } else if (rc.BARRIER_DEBUG) std.debug.print("BakeBarriers: Skipped ({s})\n", .{name});
-    }
-
-    fn bindVertexInputFromPass(cmd: *Cmd, pass: *const PassInstance, resMan: *ResourceMan, flightId: u8) !void {
-        if (pass.vertexBuffers.len == 0) {
-            cmd.setVertexInput(null, null);
-            return;
-        }
-
-        var bindingDescs: [4]vk.VkVertexInputBindingDescription2EXT = undefined;
-        for (pass.vertexBuffers.constSlice(), 0..) |vbUse, i| {
-            bindingDescs[i] = .{
-                .sType = vk.VK_STRUCTURE_TYPE_VERTEX_INPUT_BINDING_DESCRIPTION_2_EXT,
-                .binding = vbUse.binding,
-                .stride = vbUse.stride,
-                .inputRate = vbUse.inputRate,
-                .divisor = 1,
-            };
-        }
-        var attrDescs: [16]vk.VkVertexInputAttributeDescription2EXT = undefined;
-        for (pass.vertexAttributes.constSlice(), 0..) |attr, i| {
-            attrDescs[i] = .{
-                .sType = vk.VK_STRUCTURE_TYPE_VERTEX_INPUT_ATTRIBUTE_DESCRIPTION_2_EXT,
-                .location = attr.location,
-                .binding = attr.binding,
-                .format = attr.format,
-                .offset = attr.offset,
-            };
-        }
-        cmd.setVertexInput(bindingDescs[0..pass.vertexBuffers.len], attrDescs[0..pass.vertexAttributes.len]);
-
-        var bufHandles: [4]vk.VkBuffer = undefined;
-        var bufOffsets: [4]vk.VkDeviceSize = .{0} ** 4;
-
-        for (pass.vertexBuffers.constSlice(), 0..) |vbUse, i| {
-            bufHandles[i] = (try resMan.get(vbUse.bufId, flightId)).handle;
-        }
-        cmd.bindVertexBuffers(0, bufHandles[0..pass.vertexBuffers.len], bufOffsets[0..pass.vertexBuffers.len]);
     }
 };

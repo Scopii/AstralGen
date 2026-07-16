@@ -35,7 +35,7 @@ pub const GPU_READBACK = false;
 pub const CPU_PROFILING = false;
 pub const SWAPCHAIN_PROFILING = false;
 
-pub const FRAME_LIMIT = 15;
+pub const FRAME_LIMIT = 10;
 
 // Additional Debug Prints
 pub const BARRIER_DEBUG = false;
@@ -47,12 +47,18 @@ pub const COMPOSITE_DEBUG = false;
 pub const PASS_MAX = 128;
 pub const MAX_PASS_ATTRIBUTES = 80;
 pub const PASS_EXTRACTION_DEBUG = false;
+
 pub const FRAME_GRAPH_TIMERS = false;
 pub const FRAME_GRAPH_DEBUG = false;
+pub const FRAME_GRAPH_SORT_DEBUG = false;
+
 pub const FRAME_GRAPH_SKIP_OPTIMIZE = false;
 pub const FRAME_GRAPH_SKIP_SHARING = false;
+
 pub const PASS_TEXTURE_RESIZE_INCLUDES_READ = true;
 pub const FRAME_BUILDS_TILL_TRANSIENT_DELETION = 0;
+
+pub const RENDER_COMPILER_DEBUG = false;
 
 // Rendering, Swapchains and Windows
 pub const EARLY_GPU_WAIT = true; // (Reflex Mode)

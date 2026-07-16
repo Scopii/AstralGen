@@ -29,7 +29,7 @@ pub const ImGuiPushConstants = extern struct {
 };
 
 pub const CompositePushData = extern struct {
-    srcDesc: u32,
+    SRC_DESC: u32,
     samplerIndex: u32,
     stretch: u32,
     opacity: f32,

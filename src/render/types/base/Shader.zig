@@ -1,6 +1,5 @@
 const LoadedShader = @import("../../../shader/LoadedShader.zig").LoadedShader;
 const ResourceMan = @import("../../sys/ResourceMan.zig").ResourceMan;
-const PushData = @import("../../types/res/PushData.zig").PushData;
 const SpecData = @import("../../help/Types.zig").SpecData;
 const vk = @import("../../../.modules/vk.zig").c;
 const vhF = @import("../../help/Functions.zig");

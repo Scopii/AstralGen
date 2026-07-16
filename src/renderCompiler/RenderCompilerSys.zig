@@ -2,12 +2,14 @@ const RenderAssignerData = @import("../renderAssigner/RenderAssignerData.zig").R
 const RenderRegistryData = @import("../renderRegistry/RenderRegistryData.zig").RenderRegistryData;
 const RenderGraphData = @import("../renderGraph/RenderGraphData.zig").RenderGraphData;
 const RenderCompilerData = @import("RenderCompilerData.zig").RenderCompilerData;
+const sc = @import("../.configs/shaderConfig.zig");
 const rc = @import("../.configs/renderConfig.zig");
 const std = @import("std");
 
 const vk = @import("../.modules/vk.zig").c;
 
-const ImGuiPass = @import("../.assets/passes/Imgui/Imgui.zig").ImGuiPass;
+const CompositePushData = @import("../render/help/Types.zig").CompositePushData;
+const ImGuiPushConstants = @import("../render/help/Types.zig").ImGuiPushConstants;
 
 const TaskOrMeshIndirectExec = @import("../render/types/pass/PassInstance.zig").TaskOrMeshIndirectExec;
 const ComputeIndirectExec = @import("../render/types/pass/PassInstance.zig").ComputeIndirectExec;
@@ -15,7 +17,6 @@ const VertexBufferFill = @import("../render/types/pass/VertexBufferFill.zig").Ve
 const IndexBufferFill = @import("../render/types/pass/IndexBufferFill.zig").IndexBufferFill;
 const VertexAttribute = @import("../render/types/pass/VertexAttribute.zig").VertexAttribute;
 const AttachmentFill = @import("../render/types/pass/AttachmentFill.zig").AttachmentFill;
-const PassInstance = @import("../render/types/pass/PassInstance.zig").PassInstance;
 const TextureFill = @import("../render/types/pass/TextureFill.zig").TextureFill;
 const RenderState = @import("../render/types/pass/RenderState.zig").RenderState;
 const BufferFill = @import("../render/types/pass/BufferFill.zig").BufferFill;
@@ -40,6 +41,14 @@ pub const RenderCompilerSys = struct {
         self.sortedNodes.appendAssumeCapacity(.{ .endTimer = .{ .pipeStage = .BotOfPipe, .queryId = timerId } });
     }
 
+    fn startStats(self: *RenderCompilerData, name: []const u8) !void {
+        self.sortedNodes.appendAssumeCapacity(.{ .startStats = .{ .name = try .string(name) } });
+    }
+
+    fn endStats(self: *RenderCompilerData) void {
+        self.sortedNodes.appendAssumeCapacity(.endStats);
+    }
+
     pub fn compileIR(
         self: *RenderCompilerData,
         assigner: *const RenderAssignerData,
@@ -51,27 +60,12 @@ pub const RenderCompilerSys = struct {
         deltaTime: f32,
     ) !void {
         self.sortedNodes.clear();
+        self.pushData.clear();
+        self.usedQueries = 0;
 
         for (renderGraph.sorter.sortedRenderIR.constSlice()) |IR| {
             switch (IR) {
                 // .uiIR => |uiIR| {},
-                .blitIR => |blitIR| {
-                    var blitCopy = blitIR;
-
-                    switch (blitIR.srcTexUnion) {
-                        .texName => |name| {
-                            const texPassId = try registry.getTexturePassId(name);
-                            const hardwareTexId = assigner.texAssigns.getByKey(texPassId);
-                            blitCopy.srcTexUnion = .{ .texId = hardwareTexId };
-                        },
-                        .texPassId => |texPassId| {
-                            const hardwareTexId = assigner.texAssigns.getByKey(texPassId);
-                            blitCopy.srcTexUnion = .{ .texId = hardwareTexId };
-                        },
-                        .texId => {},
-                    }
-                    self.sortedNodes.append(.{ .blitNode = blitCopy }) catch std.debug.print("7.PassSorter: Blit Append to sortedRenderNodes failed", .{});
-                },
                 .compositeIR => |compositeIR| {
                     var compositeCopy = compositeIR;
 
@@ -87,13 +81,10 @@ pub const RenderCompilerSys = struct {
                         },
                         .texId => {},
                     }
-                    // self.sortedNodes.append(.{ .compositeNode = compositeCopy }) catch std.debug.print("7.PassSorter: Composite Append to sortedRenderNodes failed", .{});
                     try fillCompositePassHardwareIdCmds(self, assigner, registry, compositeCopy);
                 },
                 .passIR => |passIR| {
                     try fillPassHardwareIdCmds(self, assigner, registry, renderGraph, passIR, runTime, deltaTime);
-                    // const passInstance = try fillPassHardwareIds(self, assigner, registry, passIR, runTime, deltaTime);
-                    // self.sortedNodes.append(.{ .passNode = passInstance }) catch std.debug.print("7.PassSorter: Pass Append to sortedRenderNodes failed", .{});
                 },
                 .clearBufIR => |clearBufIR| {
                     const hardwareTexId = assigner.bufAssigns.getByKey(clearBufIR);
@@ -112,24 +103,21 @@ pub const RenderCompilerSys = struct {
         // Build UI Passes
         try fillUiPassHardwareIdCmds(self, assigner, registry, uiData, windowData);
 
-        self.usedQueries = 0;
-
         // Debug Prints
-        if (rc.FRAME_GRAPH_DEBUG or true) {
+        if (rc.RENDER_COMPILER_DEBUG) {
             std.debug.print("Pass Resource Sys:\n", .{});
             for (self.sortedNodes.constSlice(), 0..) |*renderNode, index| {
                 switch (renderNode.*) {
-                    // .passNode => |*passNode| std.debug.print("- {}. Pass: {s}\n", .{ index, passNode.getName() }),
-                    .compositeNode => |*composite| std.debug.print("- {}. Composite: {s} (Pass {s})\n", .{ index, composite.name, try registry.getPassName(composite.pass) }),
-                    .blitNode => |*blit| std.debug.print("- {}. Blit: {s} (Pass {s})\n", .{ index, blit.name, try registry.getPassName(blit.pass) }),
-                    .uiNode => |*uiNode| std.debug.print("- {}. UI: {s} (WindowID {})\n", .{ index, uiNode.name, uiNode.windowId }),
+                    .passPrint => |*printSpacer| std.debug.print("\nPASS: {s}:\n", .{printSpacer.get()}),
+                    .compositePrint => |*printSpacer| std.debug.print("\nCOMPOSITE: {s}:\n", .{printSpacer.get()}),
+                    .uiPrint => |*printSpacer| std.debug.print("\nUI: {s}:\n", .{printSpacer.get()}),
 
                     .clearBuffer => |*clearBuf| std.debug.print("- {}. ClearBuffer: BufId {}\n", .{ index, clearBuf.val() }),
                     .clearTexture => |*clearTex| std.debug.print("- {}. ClearTexture: TexId {}\n", .{ index, clearTex.val() }),
                     .barrierBakeClears => std.debug.print("- {}. Bake Clears\n", .{index}),
 
                     // COMMAND STREAM
-                    else => {},
+                    inline else => |_, tag| std.debug.print("- {}. {s}\n", .{ index, @tagName(tag) }),
                 }
             }
             std.debug.print("\n", .{});
@@ -139,6 +127,7 @@ pub const RenderCompilerSys = struct {
     fn fillCompositePassHardwareIdCmds(self: *RenderCompilerData, _: *const RenderAssignerData, _: *const RenderRegistryData, composite: CompositeNode) !void {
         if (composite.srcTexUnion != .texId) return error.CompositSrcTexIdIsNotHardwareId;
 
+        self.sortedNodes.appendAssumeCapacity(.{ .compositePrint = try .string(composite.name) });
         const timerId = try startTimer(self, composite.name, .Composite);
 
         self.sortedNodes.appendAssumeCapacity(.{ .setColorAttSwapchain = .{ .windowId = composite.windowId } });
@@ -154,7 +143,6 @@ pub const RenderCompilerSys = struct {
         self.sortedNodes.appendAssumeCapacity(.{ .setShader = sc.compositeVert.id });
         self.sortedNodes.appendAssumeCapacity(.bindShaders);
 
-        // Push Constants
         const x: f32 = @floatFromInt(composite.viewOffsetX);
         const y: f32 = @floatFromInt(composite.viewOffsetY);
         const viewWidth: f32 = @floatFromInt(composite.viewWidth);
@@ -162,18 +150,18 @@ pub const RenderCompilerSys = struct {
         self.sortedNodes.appendAssumeCapacity(.{ .setScissor = .{ .x = x, .y = y, .width = viewWidth, .height = viewHeight } });
         self.sortedNodes.appendAssumeCapacity(.{ .setViewport = .{ .x = x, .y = y, .width = viewWidth, .height = viewHeight } });
 
+        // Push Constants
         // const texPassId = try registry.getTexturePassId(drawTex);
         // const texHardwareId = assigner.texAssigns.getByKey(drawTex.texId);
         self.sortedNodes.appendAssumeCapacity(.{ .setPushDataTexDesc = .{ .texId = composite.srcTexUnion.texId, .size = @sizeOf(u32), .offset = 0, .descTyp = .Sampled } });
-
-        var pushData: [128]u8 = undefined;
-        @memcpy(pushData[0..][0..4], std.mem.asBytes(&rc.SAMPLER_LINEAR_CLAMP_INDEX));
+        self.sortedNodes.appendAssumeCapacity(.{ .setPushData = .{ .startIndex = self.pushData.len, .len = (5 * @sizeOf(u32)), .offset = @sizeOf(u32) } });
+        self.pushData.appendSliceAssumeCapacity(std.mem.asBytes(&rc.SAMPLER_LINEAR_CLAMP_INDEX));
         const stretch: u32 = if (composite.stretch) 1 else 0;
-        @memcpy(pushData[4..][0..4], std.mem.asBytes(&stretch));
-        @memcpy(pushData[8..][0..4], std.mem.asBytes(&composite.opacity));
-        @memcpy(pushData[12..][0..4], std.mem.asBytes(&composite.viewWidth));
-        @memcpy(pushData[16..][0..4], std.mem.asBytes(&composite.viewHeight));
-        self.sortedNodes.appendAssumeCapacity(.{ .setPushData = .{ .data = pushData, .size = (5 * @sizeOf(u32)), .offset = @sizeOf(u32) } });
+        self.pushData.appendSliceAssumeCapacity(std.mem.asBytes(&stretch));
+        self.pushData.appendSliceAssumeCapacity(std.mem.asBytes(&composite.opacity));
+        self.pushData.appendSliceAssumeCapacity(std.mem.asBytes(&composite.viewWidth));
+        self.pushData.appendSliceAssumeCapacity(std.mem.asBytes(&composite.viewHeight));
+
         self.sortedNodes.appendAssumeCapacity(.bindPushData);
 
         // Render State
@@ -196,13 +184,11 @@ pub const RenderCompilerSys = struct {
 
         // Rendering
         self.sortedNodes.appendAssumeCapacity(.beginRendering);
-
         self.sortedNodes.appendAssumeCapacity(.bindVertexInput);
         self.sortedNodes.appendAssumeCapacity(.bindIndexInput); // Is this needed?
-
         self.sortedNodes.appendAssumeCapacity(.{ .drawVertex = .{ .vertexCount = 3, .instanceCount = 1, .firstVertex = 0, .firstInstance = 0 } });
-
         self.sortedNodes.appendAssumeCapacity(.endRendering);
+
         self.sortedNodes.appendAssumeCapacity(.resetState);
 
         endTimer(self, timerId);
@@ -214,6 +200,7 @@ pub const RenderCompilerSys = struct {
             if (uiNode.imguiVB != .bufId) return error.UiNodeImguiVBIsNotHardwareId;
             if (uiNode.imguiIB != .bufId) return error.UiNodeImguiVBIsNotHardwareId;
 
+            self.sortedNodes.appendAssumeCapacity(.{ .uiPrint = try .string(uiNode.name) });
             const timerId = try startTimer(self, uiNode.name, .Ui);
 
             const uiDrawList = uiData.uiDraws.constSlice()[uiNode.firstDrawIndex..uiNode.lastDrawIndex];
@@ -237,8 +224,6 @@ pub const RenderCompilerSys = struct {
             self.sortedNodes.appendAssumeCapacity(.{ .setShader = sc.imguiVert.id });
             self.sortedNodes.appendAssumeCapacity(.{ .setShader = sc.imguiFrag.id });
             self.sortedNodes.appendAssumeCapacity(.bindShaders);
-
-            // const pass = ImGuiPass(.{ .string = "Imgui", .vertexBuf = uiNode.imguiVB.bufId, .indexBuf = uiNode.imguiIB.bufId });
 
             // Render State
             self.sortedNodes.appendAssumeCapacity(.{ .setRenderStateUnion = .{ .cullMode = .None } });
@@ -297,18 +282,11 @@ pub const RenderCompilerSys = struct {
 
                 const drawTex = uiDraw.drawTex;
 
-                // const pushConstants = vhT.ImGuiPushConstants{
-                //     .scale = .{ scaleX, scaleY },
-                //     .translate = .{ translateX, translateY },
-                //     .texDesc = lastTexDesc,
-                // };
-
-                var imguiPushData: [128]u8 = undefined;
-                @memcpy(imguiPushData[0..][0..4], std.mem.asBytes(&scaleX));
-                @memcpy(imguiPushData[4..][0..4], std.mem.asBytes(&scaleY));
-                @memcpy(imguiPushData[8..][0..4], std.mem.asBytes(&translateX));
-                @memcpy(imguiPushData[12..][0..4], std.mem.asBytes(&translateY));
-                self.sortedNodes.appendAssumeCapacity(.{ .setPushData = .{ .data = imguiPushData, .size = (4 * @sizeOf(u32)), .offset = 0 } });
+                self.sortedNodes.appendAssumeCapacity(.{ .setPushData = .{ .startIndex = self.pushData.len, .len = (4 * @sizeOf(u32)), .offset = 0 } });
+                self.pushData.appendSliceAssumeCapacity(std.mem.asBytes(&scaleX));
+                self.pushData.appendSliceAssumeCapacity(std.mem.asBytes(&scaleY));
+                self.pushData.appendSliceAssumeCapacity(std.mem.asBytes(&translateX));
+                self.pushData.appendSliceAssumeCapacity(std.mem.asBytes(&translateY));
 
                 // const texPassId = try registry.getTexturePassId(drawTex);
                 // const texHardwareId = assigner.texAssigns.getByKey(drawTex.texId);
@@ -346,25 +324,24 @@ pub const RenderCompilerSys = struct {
         const mainOutputTexId = if (passDef.outputTex) |output| try registry.getTexturePassId(output) else null;
         const mainOutputTexHardwareId = if (mainOutputTexId) |outputId| assigner.texAssigns.getByKey(outputId) else null;
 
+        self.sortedNodes.appendAssumeCapacity(.{ .passPrint = try .string(passName) });
         const timerId = try startTimer(self, passName, .Pass);
+        try startStats(self, passName);
 
         self.sortedNodes.appendAssumeCapacity(.{ .setOutputExtent = .{ .mainOutput = mainOutputTexHardwareId } });
 
         var pushOffset: u32 = 0;
 
-        var data1: [128]u8 = undefined;
-        @memcpy(data1[0..][0..4], std.mem.asBytes(&runTime));
-        self.sortedNodes.appendAssumeCapacity(.{ .setPushData = .{ .data = data1, .size = @sizeOf(f32), .offset = pushOffset } });
-        pushOffset += @sizeOf(u32);
+        self.sortedNodes.appendAssumeCapacity(.{ .setPushData = .{ .startIndex = self.pushData.len, .len = (1 * @sizeOf(u32)), .offset = pushOffset } });
+        self.pushData.appendSliceAssumeCapacity(std.mem.asBytes(&runTime));
+        pushOffset += @sizeOf(f32);
 
-        var data2: [128]u8 = undefined;
-        @memcpy(data2[0..][0..4], std.mem.asBytes(&deltaTime));
-        self.sortedNodes.appendAssumeCapacity(.{ .setPushData = .{ .data = data2, .size = @sizeOf(f32), .offset = pushOffset } });
+        self.sortedNodes.appendAssumeCapacity(.{ .setPushData = .{ .startIndex = self.pushData.len, .len = (1 * @sizeOf(u32)), .offset = pushOffset } });
+        self.pushData.appendSliceAssumeCapacity(std.mem.asBytes(&deltaTime));
         pushOffset += @sizeOf(f32);
 
         self.sortedNodes.appendAssumeCapacity(.{ .setPushDataOutputExtent = .{ .offset = pushOffset } });
-        pushOffset += @sizeOf(f32);
-        pushOffset += @sizeOf(f32);
+        pushOffset += @sizeOf(f32) + @sizeOf(f32);
 
         var execution: RenderNode = undefined;
 
@@ -382,17 +359,22 @@ pub const RenderCompilerSys = struct {
                         .taskOrMesh => |taskOrMesh| {
                             execution = .{ .drawTaskOrMesh = .{ .groupX = taskOrMesh.groupX, .groupY = taskOrMesh.groupY, .groupZ = taskOrMesh.groupZ } };
                         },
-                        .graphics => |graphics| {
-                            // execution = .{ .graphics = graphics };
-                            execution = .{ .drawVertex = .{ .vertexCount = graphics.vertices, .instanceCount = graphics.instances, .firstVertex = 0, .firstInstance = 0 } };
-
-                            // DRAW INDEXED MISSING! PROBABLY NOT CORRECTLY IMPLEMENTED!
-                            // execution = .{ .drawVertexIndexed = .{ .indexCount = 0, .instanceCount = graphics.instances, .firstIndex = 0, .vertexOffset = 0, .firstInstance = 0 } };
+                        .vertex => |vertex| {
+                            execution = .{ .drawVertex = .{ .vertexCount = vertex.vertices, .instanceCount = vertex.instances, .firstVertex = 0, .firstInstance = 0 } };
+                        },
+                        .vertexIndexed => |vertexIndexed| {
+                            execution = .{ .drawVertexIndexed = .{
+                                .indexCount = vertexIndexed.indexCount,
+                                .instanceCount = vertexIndexed.instanceCount,
+                                .firstIndex = vertexIndexed.firstIndex,
+                                .vertexOffset = vertexIndexed.vertexOffset,
+                                .firstInstance = vertexIndexed.firstInstance,
+                            } };
                         },
                         .computeIndirect => |compIndirect| {
                             const bufPassId = try registry.getBufferPassId(compIndirect.indirectBuf);
                             const bufHardwareId = assigner.bufAssigns.getByKey(bufPassId);
-                            execution = .{ .dispatchIndirect = .{ .indirectBuf = bufHardwareId, .indirectBufOffset = compIndirect.indirectBufOffset } };
+                            execution = .{ .dispatchIndirect = .{ .indirectBufId = bufHardwareId, .indirectBufOffset = compIndirect.indirectBufOffset } };
                         },
                         .taskOrMeshIndirect => |taskOrMeshIndirect| {
                             const bufPassId = try registry.getBufferPassId(taskOrMeshIndirect.indirectBuf);
@@ -524,140 +506,6 @@ pub const RenderCompilerSys = struct {
         self.sortedNodes.appendAssumeCapacity(.resetState);
 
         endTimer(self, timerId);
+        endStats(self);
     }
 };
-
-// fn buildUiPasses(self: *RenderCompilerData, assigner: *const RenderAssignerData, renderGraph: *const RenderGraphData, registry: *const RenderRegistryData, uiData: *const UiData) void {
-//     self.sortedNodes.
-// }
-
-const sc = @import("../.configs/shaderConfig.zig");
-
-// fn fillPassHardwareIds(assigner: *const RenderAssignerData, registry: *const RenderRegistryData, passId: PassId) !PassInstance {
-//     const passName = try registry.getPassName(passId);
-//     const passDef = try registry.getPassDefinition(passName);
-//     const mainOutputTexId = if (passDef.outputTex) |output| try registry.getTexturePassId(output) else null;
-
-//     var filledPass = PassInstance{
-//         .name = undefined,
-//         .execution = undefined,
-//         .mainOutputTex = if (mainOutputTexId) |outputId| assigner.texAssigns.getByKey(outputId) else null,
-//     };
-
-//     filledPass.name.fill(passDef.name.get());
-
-//     for (passDef.passAttribute.constSlice()) |attribute| {
-//         switch (attribute) {
-//             .execution => |exec| {
-//                 switch (exec) {
-//                     .compute => |comp| {
-//                         filledPass.execution = .{ .compute = comp };
-//                     },
-//                     .taskOrMesh => |taskOrMesh| {
-//                         filledPass.execution = .{ .taskOrMesh = taskOrMesh };
-//                     },
-//                     .graphics => |graphics| {
-//                         filledPass.execution = .{ .graphics = graphics };
-//                     },
-//                     .computeIndirect => |compIndirect| {
-//                         const bufPassId = try registry.getBufferPassId(compIndirect.indirectBuf);
-//                         const compIndirectExec = ComputeIndirectExec{
-//                             .indirectBuf = assigner.bufAssigns.getByKey(bufPassId),
-//                             .indirectBufOffset = compIndirect.indirectBufOffset,
-//                         };
-//                         filledPass.execution = .{ .computeIndirect = compIndirectExec };
-//                     },
-//                     .taskOrMeshIndirect => |taskOrMeshIndirect| {
-//                         const bufPassId = try registry.getBufferPassId(taskOrMeshIndirect.indirectBuf);
-//                         const taskMeshIndirectExec = TaskOrMeshIndirectExec{
-//                             .groupX = taskOrMeshIndirect.groupX,
-//                             .groupY = taskOrMeshIndirect.groupY,
-//                             .groupZ = taskOrMeshIndirect.groupZ,
-//                             .indirectBuf = assigner.bufAssigns.getByKey(bufPassId),
-//                             .indirectBufOffset = taskOrMeshIndirect.indirectBufOffset,
-//                         };
-//                         filledPass.execution = .{ .taskOrMeshIndirect = taskMeshIndirectExec };
-//                     },
-//                 }
-//             },
-//             .shaderInf => |shaderInf| {
-//                 filledPass.shaderIds.appendAssumeCapacity(shaderInf.id);
-//             },
-//             .bufSlot => |bufSlot| {
-//                 const bufPassId = try registry.getBufferPassId(bufSlot.bufLink.in);
-//                 const bufUse = BufferFill{
-//                     .bufId = assigner.bufAssigns.getByKey(bufPassId),
-//                     .stage = bufSlot.stage,
-//                     .access = bufSlot.access,
-//                     .shaderSlot = bufSlot.shaderSlot,
-//                 };
-//                 filledPass.bufUses.appendAssumeCapacity(bufUse);
-//             },
-//             .texSlot => |texSlot| {
-//                 const texPassId = try registry.getTexturePassId(texSlot.texLink.in);
-//                 const texUse = TextureFill{
-//                     .texId = assigner.texAssigns.getByKey(texPassId),
-//                     .stage = texSlot.stage,
-//                     .access = texSlot.access,
-//                     .layout = texSlot.layout,
-//                     .descUse = texSlot.descUse,
-//                     .shaderSlot = texSlot.shaderSlot,
-//                 };
-//                 filledPass.texUses.appendAssumeCapacity(texUse);
-//             },
-//             .colorAtt => |attSlot| {
-//                 const texPassId = try registry.getTexturePassId(attSlot.texLink.in);
-//                 const colorAttUse = AttachmentFill{
-//                     .texId = assigner.texAssigns.getByKey(texPassId),
-//                     .stage = attSlot.stage,
-//                     .access = attSlot.access,
-//                     .layout = attSlot.layout,
-//                     .clear = if (attSlot.clear) |clear| clear else null,
-//                 };
-//                 filledPass.colorAtts.appendAssumeCapacity(colorAttUse);
-//             },
-//             .depthAtt => |depthSlot| {
-//                 const texPassId = try registry.getTexturePassId(depthSlot.texLink.in);
-//                 filledPass.depthAtt = AttachmentFill{
-//                     .texId = assigner.texAssigns.getByKey(texPassId),
-//                     .stage = depthSlot.stage,
-//                     .access = depthSlot.access,
-//                     .layout = depthSlot.layout,
-//                     .clear = depthSlot.clear,
-//                 };
-//             },
-//             .stencilAtt => |stencilSlot| {
-//                 const texPassId = try registry.getTexturePassId(stencilSlot.texLink.in);
-//                 filledPass.stencilAtt = AttachmentFill{
-//                     .texId = assigner.texAssigns.getByKey(texPassId),
-//                     .stage = stencilSlot.stage,
-//                     .access = stencilSlot.access,
-//                     .layout = stencilSlot.layout,
-//                     .clear = stencilSlot.clear,
-//                 };
-//             },
-//             .vertexBuffer => |vertexBufSlot| {
-//                 const texPassId = try registry.getBufferPassId(vertexBufSlot.bufInput);
-//                 const vertBufUse = VertexBufferFill{
-//                     .bufId = assigner.bufAssigns.getByKey(texPassId),
-//                     .binding = vertexBufSlot.binding,
-//                     .stride = vertexBufSlot.stride,
-//                     .inputRate = vertexBufSlot.inputRate,
-//                 };
-//                 filledPass.vertexBuffers.appendAssumeCapacity(vertBufUse);
-//             },
-//             .indexBuffer => |indexBufSlot| {
-//                 const texPassId = try registry.getBufferPassId(indexBufSlot.bufInput);
-//                 filledPass.indexBuffer = IndexBufferFill{ .bufId = assigner.bufAssigns.getByKey(texPassId), .indexType = indexBufSlot.indexType };
-//             },
-//             .vertexAttribute => |vertAttrib| {
-//                 filledPass.vertexAttributes.appendAssumeCapacity(vertAttrib);
-//             },
-//             .renderState => |stateChange| switch (stateChange) {
-//                 inline else => |val, tag| @field(filledPass.renderState, @tagName(tag)) = val,
-//             },
-//             .bufLinking, .texLinking => {},
-//         }
-//     }
-//     return filledPass;
-// }

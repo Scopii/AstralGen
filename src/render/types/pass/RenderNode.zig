@@ -1,3 +1,4 @@
+const RenderStateUnion = @import("RenderState.zig").RenderStateUnion;
 const TexPassId = @import("../../../.configs/idConfig.zig").TexPassId;
 const BufPassId = @import("../../../.configs/idConfig.zig").BufPassId;
 const WindowId = @import("../../../.configs/idConfig.zig").WindowId;
@@ -5,10 +6,7 @@ const ShaderId = @import("../../../.configs/idConfig.zig").ShaderId;
 const PassId = @import("../../../.configs/idConfig.zig").PassId;
 const TexId = @import("../../../.configs/idConfig.zig").TexId;
 const BufId = @import("../../../.configs/idConfig.zig").BufId;
-const PassInstance = @import("PassInstance.zig").PassInstance;
 const String = @import("../../../globalHelper.zig").String;
-const RenderState = @import("RenderState.zig").RenderState;
-const RenderStateUnion = @import("RenderState.zig").RenderStateUnion;
 const vhE = @import("../../help/Enums.zig");
 
 const QueryTyp = @import("../base/Cmd.zig").QueryPair.QueryTyp;
@@ -19,7 +17,6 @@ const VertexBufferFill = @import("VertexBufferFill.zig").VertexBufferFill;
 const IndexBufferFill = @import("IndexBufferFill.zig").IndexBufferFill;
 
 pub const RenderNodeIR = union(enum) {
-    blitIR: ViewportBlit, // Could be improved
     compositeIR: CompositeNode, // Could be improved
     passIR: PassId,
     clearBufIR: BufPassId,
@@ -39,29 +36,10 @@ pub const BufUnion = union(enum) {
     bufId: BufId,
 };
 
-// pub const UiPass = struct {
-//     scissorX: f32,
-//     scissorY: f32,
-//     scissorWidth: f32,
-//     scissorHeight: f32,
-
-//     indexCount: u32,
-//     instanceCount: u32,
-//     firstIndex: u32,
-//     vertexOffset: i32,
-//     firstInstance: u32,
-
-//     pushData: [128]u8,
-//     pushDataByteLen: u8,
-
-//     pass: PassInstance,
-// };
-
 pub const RenderNode = union(enum) {
-    blitNode: ViewportBlit,
-    // passNode: PassInstance,
-    uiNode: UiNode,
-    compositeNode: CompositeNode,
+    passPrint: String(30, "NO_PASS_NAME"),
+    compositePrint: String(30, "NO_COMPOSITE_NAME"),
+    uiPrint: String(30, "NO_UI_NAME"),
 
     // Graph Commands
     clearBuffer: BufId,
@@ -83,8 +61,9 @@ pub const RenderNode = union(enum) {
 
     // Pass Commands
     setShader: ShaderId,
+    bindShaders: void,
 
-    setPushData: struct { data: [128]u8, size: u32, offset: u32 },
+    setPushData: struct { startIndex: u32, len: u8, offset: u32 },
     setPushDataOutputExtent: struct { offset: u32 },
     setPushDataBufDesc: struct { bufId: BufId, size: u32, offset: u32 },
     setPushDataTexDesc: struct { texId: TexId, descTyp: vhE.TexDescriptor, size: u32, offset: u32 },
@@ -92,12 +71,10 @@ pub const RenderNode = union(enum) {
 
     dispatch: struct { groupX: u32, groupY: u32, groupZ: u32 },
     dispatchImg: struct { groupX: u32, groupY: u32, groupZ: u32, img: TexId },
-    dispatchIndirect: struct { indirectBuf: BufId, indirectBufOffset: u64 = 0 },
+    dispatchIndirect: struct { indirectBufId: BufId, indirectBufOffset: u64 = 0 },
 
     setOutputExtentSwapchain: struct { windowId: WindowId },
     setOutputExtent: struct { mainOutput: ?TexId },
-
-    bindShaders: void,
 
     // Draw Commands
     beginRendering: void,
@@ -109,7 +86,6 @@ pub const RenderNode = union(enum) {
     setScissorFromTex: struct { texId: TexId },
     setScissorFromOutput: void,
 
-    // setRenderState: RenderState,
     setRenderStateUnion: RenderStateUnion,
     bindRenderState: void,
 
@@ -166,15 +142,4 @@ pub const UiNode = struct {
         idxOffset: u32,
         elemCount: u32,
     };
-};
-
-pub const ViewportBlit = struct {
-    name: []const u8, // Should be String
-    pass: PassId,
-    srcTexUnion: TexUnion,
-    dstWindowId: WindowId,
-    viewWidth: u32,
-    viewHeight: u32,
-    viewOffsetX: i32,
-    viewOffsetY: i32,
 };

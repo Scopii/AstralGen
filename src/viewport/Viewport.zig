@@ -11,7 +11,6 @@ pub const Viewport = struct {
     opacity: f32 = 1.0,
 
     stringPasses: []const []const u8,
-    blitPass: ?[]const u8 = null,
 
     pub fn calcViewWidth(self: *const Viewport, swapchainWidth: u32) u32 {
         return @intFromFloat(@as(f32, @floatFromInt(swapchainWidth)) * self.areaWidth);
