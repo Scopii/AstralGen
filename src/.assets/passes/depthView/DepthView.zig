@@ -30,9 +30,8 @@ pub const depthViewPass = p.PassDefinition.init(.{
     .name = "DepthView",
     .outputTex = "DepthViewTex",
     .renderScaling = 2.0,
+    .execution = .execCompute(.{ .groupX = 8, .groupY = 8, .groupZ = 1, .outputTexDispatch = true }),
     .attributes = &.{
-        p.PassAttrib.execCompute(.{ .groupX = 8, .groupY = 8, .groupZ = 1, .outputTexDispatch = true }),
-        //
         p.PassAttrib.shader(sc.depthViewComp),
         //
         p.PassAttrib.buf(.{ .in = "MainCamUB" }, .Compute, .UniformRead, 3),

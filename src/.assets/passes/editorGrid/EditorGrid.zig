@@ -34,9 +34,8 @@ const p = @import("../passImport.zig");
 pub const editorGridGridDebugPass = p.PassDefinition.init(.{
     .name = "EditorGridGridDebug",
     .outputTex = "DebugGridOutputTex",
+    .execution = .execTaskOrMesh(.{ .groupX = 1, .groupY = 1, .groupZ = 1 }),
     .attributes = &.{
-        p.PassAttrib.execTaskOrMesh(.{ .groupX = 1, .groupY = 1, .groupZ = 1 }),
-        //
         p.PassAttrib.shader(sc.editorGridMesh),
         p.PassAttrib.shader(sc.editorGridFrag),
         //
@@ -55,11 +54,9 @@ pub const editorGridGridDebugPass = p.PassDefinition.init(.{
 
 pub const editorGridPlaneDebugPass = p.PassDefinition.init(.{
     .name = "EditorGridPlaneDebug",
-
     .outputTex = "DebugPlaneOutputFrustumViewTex",
+    .execution = .execTaskOrMesh(.{ .groupX = 1, .groupY = 1, .groupZ = 1 }),
     .attributes = &.{
-        p.PassAttrib.execTaskOrMesh(.{ .groupX = 1, .groupY = 1, .groupZ = 1 }),
-        //
         p.PassAttrib.shader(sc.editorGridMesh),
         p.PassAttrib.shader(sc.editorGridFrag),
         //

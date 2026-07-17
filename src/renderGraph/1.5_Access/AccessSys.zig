@@ -65,7 +65,7 @@ pub const AccessSys = struct {
                             .access = .read,
                         }) catch return error.PassCoreLinksFull;
                     },
-                    .vertexAttribute, .renderState, .execution, .shaderInf => {},
+                    .vertexAttribute, .renderState, .shaderInf => {},
                     inline else => |texSlotTypes| {
                         self.accesses.append(.{
                             .pass = passId,

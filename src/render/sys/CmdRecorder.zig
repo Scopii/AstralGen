@@ -1,4 +1,4 @@
-const PassExecution = @import("../types/pass/PassInstance.zig").PassExecution;
+// const PassExecution = @import("../types/pass/PassInstance.zig").PassExecution;
 const CompositeNode = @import("../types/pass/RenderNode.zig").CompositeNode;
 const RenderNode = @import("../types/pass/RenderNode.zig").RenderNode;
 const Swapchain = @import("../types/base/Swapchain.zig").Swapchain;
@@ -22,9 +22,9 @@ const Allocator = std.mem.Allocator;
 const std = @import("std");
 
 const FixedList = @import("../../.structures/FixedList.zig").FixedList;
-const VertexBufferFill = @import("../types/pass/VertexBufferFill.zig").VertexBufferFill;
+const VertexBufferFill = @import("../types/pass/VertexBufferUse.zig").VertexBufferFill;
 const VertexAttribute = @import("../types/pass/VertexAttribute.zig").VertexAttribute;
-const IndexBufferFill = @import("../types/pass/IndexBufferFill.zig").IndexBufferFill;
+const IndexBufferFill = @import("../types/pass/IndexBufferUse.zig").IndexBufferFill;
 const ShaderId = @import("../../.configs/idConfig.zig").ShaderId;
 // const AttachmentFill = @import("AttachmentFill.zig").AttachmentFill;
 const RenderState = @import("../types/pass/RenderState.zig").RenderState;
@@ -66,7 +66,6 @@ pub const CmdRecorder = struct {
     memDstAccess: vk.VkAccessFlags2 = 0,
     useGpuTimers: bool = false,
     useGpuStats: bool = false,
-    lastPassTyp: ?PassExecution = null,
 
     state: CmdState = .{}, // Per Pass State
 
@@ -75,10 +74,10 @@ pub const CmdRecorder = struct {
             .alloc = alloc,
             .gpi = context.gpi,
             .cmdMan = try CmdManager.init(alloc, context, rc.MAX_IN_FLIGHT),
-            .imgBarriers = try std.array_list.Managed(vk.VkImageMemoryBarrier2).initCapacity(alloc, rc.PASS_MAX * rc.MAX_PASS_ATTRIBUTES),
-            .bufBarriers = try std.array_list.Managed(vk.VkBufferMemoryBarrier2).initCapacity(alloc, rc.PASS_MAX * rc.MAX_PASS_ATTRIBUTES),
-            .imgClears = try std.array_list.Managed(TexId).initCapacity(alloc, rc.PASS_MAX * rc.MAX_PASS_ATTRIBUTES),
-            .bufClears = try std.array_list.Managed(BufId).initCapacity(alloc, rc.PASS_MAX * rc.MAX_PASS_ATTRIBUTES),
+            .imgBarriers = try std.array_list.Managed(vk.VkImageMemoryBarrier2).initCapacity(alloc, rc.MAX_PASS_ATTRIBUTES),
+            .bufBarriers = try std.array_list.Managed(vk.VkBufferMemoryBarrier2).initCapacity(alloc, rc.MAX_PASS_ATTRIBUTES),
+            .imgClears = try std.array_list.Managed(TexId).initCapacity(alloc, rc.MAX_PASS_ATTRIBUTES),
+            .bufClears = try std.array_list.Managed(BufId).initCapacity(alloc, rc.MAX_PASS_ATTRIBUTES),
         };
     }
 
@@ -255,7 +254,7 @@ pub const CmdRecorder = struct {
                     cmd.endTimer(endTimer.pipeStage, endTimer.queryId);
                 },
                 .startStats => |startStats| {
-                    cmd.startStatistics(startStats.name.get());
+                    cmd.startStatistics(startStats.get());
                 },
                 .endStats => {
                     cmd.endStatistics();
@@ -336,8 +335,8 @@ pub const CmdRecorder = struct {
                 .dispatch => |dispatch| {
                     cmd.dispatch(dispatch.groupX, dispatch.groupY, dispatch.groupZ);
                 },
-                .dispatchImg => |dispatchImg| {
-                    const tex = try resMan.get(dispatchImg.img, cmd.flightId);
+                .dispatchOutputTex => |dispatchImg| {
+                    const tex = try resMan.get(dispatchImg.texId, cmd.flightId);
                     const extent = tex.extent;
                     cmd.dispatch(
                         (extent.width + dispatchImg.groupX - 1) / dispatchImg.groupX,
@@ -351,8 +350,8 @@ pub const CmdRecorder = struct {
                 },
 
                 .setOutputExtentSwapchain => |output| {
-                    const targetIndex = swapMan.getTargetIndex(output.windowId) orelse {
-                        std.debug.print("beginRenderingSwapchain: no swapchain target for window {}\n", .{output.windowId.val()});
+                    const targetIndex = swapMan.getTargetIndex(output) orelse {
+                        std.debug.print("beginRenderingSwapchain: no swapchain target for window {}\n", .{output.val()});
                         return;
                     };
                     const swapchain = swapMan.getTargetByIndex(targetIndex);
@@ -361,7 +360,7 @@ pub const CmdRecorder = struct {
                     self.state.outputHeight = targetTex.extent.height;
                 },
                 .setOutputExtent => |output| {
-                    if (output.mainOutput) |outputTexId| {
+                    if (output) |outputTexId| {
                         const tex = try resMan.get(outputTexId, cmd.flightId);
                         self.state.outputWidth = tex.extent.width;
                         self.state.outputHeight = tex.extent.height;
@@ -383,11 +382,11 @@ pub const CmdRecorder = struct {
                     cmd.setScissor(0, 0, @floatFromInt(self.state.outputWidth orelse 0), @floatFromInt(self.state.outputHeight orelse 0));
                 },
                 .setViewportFromTex => |texViewport| {
-                    const tex = try resMan.get(texViewport.texId, cmd.flightId);
+                    const tex = try resMan.get(texViewport, cmd.flightId);
                     cmd.setViewport(0, 0, @floatFromInt(tex.extent.width), @floatFromInt(tex.extent.height));
                 },
                 .setScissorFromTex => |texScissor| {
-                    const tex = try resMan.get(texScissor.texId, cmd.flightId);
+                    const tex = try resMan.get(texScissor, cmd.flightId);
                     cmd.setScissor(0, 0, @floatFromInt(tex.extent.width), @floatFromInt(tex.extent.height));
                 },
                 .setViewport => |viewport| {
@@ -406,8 +405,8 @@ pub const CmdRecorder = struct {
                 },
 
                 .setColorAttSwapchain => |swapchainAtt| {
-                    const targetIndex = swapMan.getTargetIndex(swapchainAtt.windowId) orelse {
-                        std.debug.print("beginRenderingSwapchain: no swapchain target for window {}\n", .{swapchainAtt.windowId.val()});
+                    const targetIndex = swapMan.getTargetIndex(swapchainAtt) orelse {
+                        std.debug.print("beginRenderingSwapchain: no swapchain target for window {}\n", .{swapchainAtt.val()});
                         return;
                     };
                     const swapchain = swapMan.getTargetByIndex(targetIndex);
@@ -441,13 +440,13 @@ pub const CmdRecorder = struct {
 
                 .setIndexBuf => |indexBuf| {
                     // const buffer = try resMan.get(indexBuf.bufId, cmd.flightId);
-                    self.state.indexBuffer = indexBuf.indexBuffer;
+                    self.state.indexBuffer = indexBuf;
                 },
                 .setVertexBuf => |vertBuf| {
-                    self.state.vertexBuffers.append(vertBuf.vertexBuffer) catch return error.CmdStateVertexBuffersFull;
+                    self.state.vertexBuffers.append(vertBuf) catch return error.CmdStateVertexBuffersFull;
                 },
                 .setVertexAttrib => |attrib| {
-                    self.state.vertexAttributes.append(attrib.vertexAttribute) catch return error.CmdStateVertexAttributesFull;
+                    self.state.vertexAttributes.append(attrib) catch return error.CmdStateVertexAttributesFull;
                 },
                 .bindIndexInput => {
                     if (self.state.indexBuffer) |indexBuffer| {
@@ -502,7 +501,7 @@ pub const CmdRecorder = struct {
                 },
                 .drawTaskOrMeshIndirect => |drawTasksOrMeshIndirect| {
                     const buffer = try resMan.get(drawTasksOrMeshIndirect.indirectBufId, cmd.flightId);
-                    cmd.drawMeshTasksIndirect(buffer.handle, drawTasksOrMeshIndirect.offset, drawTasksOrMeshIndirect.drawCount, drawTasksOrMeshIndirect.stride);
+                    cmd.drawMeshTasksIndirect(buffer.handle, drawTasksOrMeshIndirect.bufOffset, drawTasksOrMeshIndirect.drawCount, drawTasksOrMeshIndirect.stride);
                 },
 
                 .endRendering => {

@@ -34,9 +34,8 @@ const p = @import("../passImport.zig");
 pub const frustumViewPass = p.PassDefinition.init(.{
     .name = "FrustumView",
     .outputTex = "DebugPlaneOutputTex",
+    .execution = .execTaskOrMesh(.{ .groupX = 1, .groupY = 1, .groupZ = 1 }),
     .attributes = &.{
-        p.PassAttrib.execTaskOrMesh(.{ .groupX = 1, .groupY = 1, .groupZ = 1 }),
-        //
         p.PassAttrib.shader(sc.frustumMesh),
         p.PassAttrib.shader(sc.quantFrag),
         //

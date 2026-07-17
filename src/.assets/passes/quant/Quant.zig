@@ -133,9 +133,8 @@ pub fn QuantTemplate(
     return p.PassDefinition.init(.{
         .name = def.string,
         .outputTex = def.colorAtt.in,
+        .execution = .execTaskOrMeshIndirect(.{ .indirectBuf = def.indirectBuf.in, .bufOffset = 0 }),
         .attributes = &.{
-            p.PassAttrib.execTaskOrMeshIndirect(.{ .groupX = 1, .groupY = 1, .groupZ = 1, .indirectBuf = def.indirectBuf.in, .indirectBufOffset = 0 }),
-            //
             p.PassAttrib.shader(def.meshShader),
             p.PassAttrib.shader(def.fragShader),
             //

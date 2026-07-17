@@ -1,4 +1,4 @@
-const ClearValue = @import("../pass/AttachmentSlot.zig").AttachmentSlot.ClearValue;
+const ClearValue = @import("../pass/AttachmentUse.zig").ClearValue;
 const vk = @import("../../../.modules/vk.zig").c;
 const vhF = @import("../../help/Functions.zig");
 const vhE = @import("../../help/Enums.zig");

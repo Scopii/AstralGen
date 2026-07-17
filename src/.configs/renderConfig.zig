@@ -1,6 +1,6 @@
-const ClearColor = @import("../render/types/pass/AttachmentSlot.zig").AttachmentSlot.ClearColor;
 const TexDesc = @import("../render/types/res/TextureMeta.zig").TextureMeta.TexDesc;
 const BufDesc = @import("../render/types/res/BufferMeta.zig").BufferMeta.BufDesc;
+const ClearColor = @import("../render/types/pass/AttachmentUse.zig").ClearColor;
 const CameraData = @import("../camera/CameraSys.zig").CamData;
 const vhT = @import("../render/help/Types.zig");
 const vk = @import("../.modules/vk.zig").c;
@@ -35,7 +35,7 @@ pub const GPU_READBACK = false;
 pub const CPU_PROFILING = false;
 pub const SWAPCHAIN_PROFILING = false;
 
-pub const FRAME_LIMIT = 10;
+pub const FRAME_LIMIT = 15000;
 
 // Additional Debug Prints
 pub const BARRIER_DEBUG = false;

@@ -35,9 +35,8 @@ const p = @import("../passImport.zig");
 pub const compRayMarchPass = p.PassDefinition.init(.{
     .name = "CompRayMarch",
     .outputTex = "RayMarchInputTex",
+    .execution = .execCompute(.{ .groupX = 8, .groupY = 8, .groupZ = 1, .outputTexDispatch = true }),
     .attributes = &.{
-        p.PassAttrib.execCompute(.{ .groupX = 8, .groupY = 8, .groupZ = 1, .outputTexDispatch = true }),
-        //
         p.PassAttrib.shader(sc.t1Comp),
         //
         p.PassAttrib.buf(.{ .in = "EntitySB" }, .Compute, .StorageRead, 0),

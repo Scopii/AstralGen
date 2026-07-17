@@ -1,12 +1,22 @@
 const BufferStringLink = @import("../../../renderGraph/components.zig").BufferStringLink;
+const BufId = @import("../../../.configs/idConfig.zig").BufId;
 const Buffer = @import("../res/Buffer.zig").Buffer;
 const vhE = @import("../../help/Enums.zig");
 
+pub const BufferFill = struct {
+    bufId: BufId,
+    stage: vhE.PipeStage,
+    access: vhE.PipeAccess,
+    shaderSlot: ?u32,
+
+    pub const BufUseKind = enum { UniformRead, StorageRead, StorageWrite, StorageReadWrite, IndirectRead };
+};
+
 pub const BufferSlot = struct {
     bufLink: BufferStringLink,
-    stage: vhE.PipeStage = .TopOfPipe,
-    access: vhE.PipeAccess = .None,
-    shaderSlot: ?u32 = null,
+    stage: vhE.PipeStage,
+    access: vhE.PipeAccess,
+    shaderSlot: ?u32,
 
     pub const BufUseKind = enum { UniformRead, StorageRead, StorageWrite, StorageReadWrite, IndirectRead };
 

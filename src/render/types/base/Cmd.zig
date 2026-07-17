@@ -1,4 +1,3 @@
-const PassInstance = @import("../../types/pass/PassInstance.zig").PassInstance;
 const FixedList = @import("../../../.structures/FixedList.zig").FixedList;
 const SimpleMap = @import("../../../.structures/SimpleMap.zig").SimpleMap;
 const BufTransfer = @import("../../sys/ResourceUpdater.zig").BufTransfer;

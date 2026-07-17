@@ -10,11 +10,48 @@ const String = @import("../../../globalHelper.zig").String;
 const vhE = @import("../../help/Enums.zig");
 
 const QueryTyp = @import("../base/Cmd.zig").QueryPair.QueryTyp;
-const ClearColor = @import("AttachmentSlot.zig").AttachmentSlot.ClearColor;
-const ClearDepth = @import("AttachmentSlot.zig").AttachmentSlot.ClearDepth;
+const ClearColor = @import("AttachmentUse.zig").ClearColor;
+const ClearDepth = @import("AttachmentUse.zig").ClearDepth;
 const VertexAttribute = @import("VertexAttribute.zig").VertexAttribute;
-const VertexBufferFill = @import("VertexBufferFill.zig").VertexBufferFill;
-const IndexBufferFill = @import("IndexBufferFill.zig").IndexBufferFill;
+const VertexBufferFill = @import("VertexBufferUse.zig").VertexBufferFill;
+const IndexBufferFill = @import("IndexBufferUse.zig").IndexBufferFill;
+
+const TaskOrMeshIndirectExec = @import("../pass/PassDefinition.zig").TaskOrMeshIndirectExec;
+const VertexIndexedExec = @import("../pass/PassDefinition.zig").VertexIndexedExec;
+const TaskOrMeshExec = @import("../pass/PassDefinition.zig").TaskOrMeshExec;
+const VertexExec = @import("../pass/PassDefinition.zig").VertexExec;
+
+pub const CompositeNode = struct {
+    name: []const u8, // Should be String
+    pass: PassId,
+    windowId: WindowId,
+    srcTexUnion: TexUnion,
+    viewWidth: u32,
+    viewHeight: u32,
+    viewOffsetX: i32,
+    viewOffsetY: i32,
+    opacity: f32,
+    stretch: bool,
+};
+
+pub const UiNode = struct {
+    name: []const u8, // Should be String
+    windowId: WindowId,
+    displayPos: [2]f32,
+    displaySize: [2]f32,
+    imguiVB: BufUnion,
+    imguiIB: BufUnion,
+    firstDrawIndex: u32,
+    lastDrawIndex: u32,
+
+    pub const UiDraw = struct {
+        drawTex: TexUnion,
+        clipRect: [4]f32,
+        vtxOffset: i32,
+        idxOffset: u32,
+        elemCount: u32,
+    };
+};
 
 pub const RenderNodeIR = union(enum) {
     compositeIR: CompositeNode, // Could be improved
@@ -53,10 +90,9 @@ pub const RenderNode = union(enum) {
     bakeBarriers: void,
 
     // Profiling Commands
-    startTimer: struct { pipeStage: vhE.PipeStage, queryId: u8, name: String(30, "CMD_START_TIMER_MISSING") = .{}, typ: QueryTyp },
+    startTimer: struct { pipeStage: vhE.PipeStage, queryId: u8, name: String(30, "START_TIMER_NAME_MISSING"), typ: QueryTyp },
     endTimer: struct { pipeStage: vhE.PipeStage, queryId: u8 },
-
-    startStats: struct { name: String(30, "CMD_START_STATS_MISSING") = .{} },
+    startStats: String(30, "NO_START_STAT_NAME"),
     endStats: void,
 
     // Pass Commands
@@ -70,76 +106,44 @@ pub const RenderNode = union(enum) {
     bindPushData: void,
 
     dispatch: struct { groupX: u32, groupY: u32, groupZ: u32 },
-    dispatchImg: struct { groupX: u32, groupY: u32, groupZ: u32, img: TexId },
+    dispatchOutputTex: struct { groupX: u32, groupY: u32, groupZ: u32, texId: TexId },
     dispatchIndirect: struct { indirectBufId: BufId, indirectBufOffset: u64 = 0 },
 
-    setOutputExtentSwapchain: struct { windowId: WindowId },
-    setOutputExtent: struct { mainOutput: ?TexId },
+    setOutputExtentSwapchain: WindowId,
+    setOutputExtent: ?TexId,
 
     // Draw Commands
     beginRendering: void,
 
     setViewport: struct { x: f32, y: f32, width: f32, height: f32 },
-    setViewportFromTex: struct { texId: TexId },
+    setViewportFromTex: TexId,
     setViewportFromOutput: void,
     setScissor: struct { x: f32, y: f32, width: f32, height: f32 },
-    setScissorFromTex: struct { texId: TexId },
+    setScissorFromTex: TexId,
     setScissorFromOutput: void,
 
     setRenderStateUnion: RenderStateUnion,
     bindRenderState: void,
 
-    setColorAttSwapchain: struct { windowId: WindowId },
+    setColorAttSwapchain: WindowId,
     setColorAtt: struct { texId: TexId, clear: ?ClearColor },
     setDepthAtt: struct { texId: TexId, clear: ?ClearDepth },
     setStencilAtt: struct { texId: TexId, clear: ?ClearDepth },
 
-    setIndexBuf: struct { indexBuffer: IndexBufferFill },
+    setIndexBuf: IndexBufferFill,
     bindIndexInput: void,
 
-    setVertexBuf: struct { vertexBuffer: VertexBufferFill },
-    setVertexAttrib: struct { vertexAttribute: VertexAttribute },
+    setVertexBuf: VertexBufferFill,
+    setVertexAttrib: VertexAttribute,
     bindVertexInput: void,
 
-    drawVertex: struct { vertexCount: u32, instanceCount: u32, firstVertex: u32, firstInstance: u32 },
-    drawVertexIndexed: struct { indexCount: u32, instanceCount: u32, firstIndex: u32, vertexOffset: i32, firstInstance: u32 },
+    drawVertex: VertexExec,
+    drawVertexIndexed: VertexIndexedExec,
 
-    drawTaskOrMesh: struct { groupX: u32, groupY: u32, groupZ: u32 },
-    drawTaskOrMeshIndirect: struct { indirectBufId: BufId, offset: u64, drawCount: u32, stride: u32 },
+    drawTaskOrMesh: TaskOrMeshExec,
+    drawTaskOrMeshIndirect: TaskOrMeshIndirectExec,
 
     endRendering: void,
 
     resetState: void,
-};
-
-pub const CompositeNode = struct {
-    name: []const u8, // Should be String
-    pass: PassId,
-    windowId: WindowId,
-    srcTexUnion: TexUnion,
-    viewWidth: u32,
-    viewHeight: u32,
-    viewOffsetX: i32,
-    viewOffsetY: i32,
-    opacity: f32,
-    stretch: bool,
-};
-
-pub const UiNode = struct {
-    name: []const u8, // Should be String
-    windowId: WindowId,
-    displayPos: [2]f32,
-    displaySize: [2]f32,
-    imguiVB: BufUnion,
-    imguiIB: BufUnion,
-    firstDrawIndex: u32,
-    lastDrawIndex: u32,
-
-    pub const UiDraw = struct {
-        drawTex: TexUnion,
-        clipRect: [4]f32,
-        vtxOffset: i32,
-        idxOffset: u32,
-        elemCount: u32,
-    };
 };
