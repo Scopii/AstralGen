@@ -42,7 +42,7 @@ pub const compRayMarchPass = p.PassDefinition.init(.{
         p.PassAttrib.buf(.{ .in = "EntitySB" }, .Compute, .StorageRead, 0),
         p.PassAttrib.buf(.{ .in = "MainCamUB" }, .Compute, .UniformRead, 1),
         p.PassAttrib.buf(.{ .in = "ReadbackSB" }, .Compute, .StorageWrite, 3),
-        p.PassAttrib.tex(.{ .in = "RayMarchInputTex" }, .Compute, .StorageWrite, 2),
+        p.PassAttrib.tex(.{ .in = "RayMarchInputTex", .out = "RayMarchOutputTex" }, .Compute, .StorageWrite, 2),
         p.PassAttrib.tex(.{ .in = "TestTileTex" }, .Compute, .StorageRead, 4),
     },
 });

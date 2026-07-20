@@ -38,7 +38,7 @@ pub const ResourceSys = struct {
                     }
                 },
                 .Tex => {
-                    const passExtent = passData.passExtents.getByKey(access.pass);
+                    const passExtent = passData.newPassExtents.getByKey(access.pass);
                     const isWrite = (access.access == .write or access.output != null);
                     const resize = isWrite or rc.PASS_TEXTURE_RESIZE_INCLUDES_READ;
 

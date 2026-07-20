@@ -10,7 +10,7 @@ pub const Viewport = struct {
     viewCamEntityId: ?EntityId,
     opacity: f32 = 1.0,
 
-    stringPasses: []const []const u8,
+    stringComposites: []const []const u8,
 
     pub fn calcViewWidth(self: *const Viewport, swapchainWidth: u32) u32 {
         return @intFromFloat(@as(f32, @floatFromInt(swapchainWidth)) * self.areaWidth);

@@ -126,25 +126,33 @@ pub const RenderRegistrySys = struct {
 
         // Textures
         try RenderRegistrySys.addTextureDefinition(self, rc.RayMarchInputTex, "RayMarchInputTex", rc.rayMarchTexDesc);
+        try RenderRegistrySys.addTextureDefinition(self, rc.RayMarchOutputTex, "RayMarchOutputTex", rc.rayMarchTexDesc);
 
         try RenderRegistrySys.addTextureDefinition(self, rc.GridTex, "GridTex", rc.gridTexDesc);
+        try RenderRegistrySys.addTextureDefinition(self, rc.GridTexOutput, "GridTexOutput", rc.gridTexDesc);
+
         try RenderRegistrySys.addTextureDefinition(self, rc.GridDepthTex, "GridDepthTex", rc.gridDepthTexDesc);
 
         try RenderRegistrySys.addTextureDefinition(self, rc.DebugGridInputTex, "DebugGridInputTex", rc.debugGridTexDesc);
         try RenderRegistrySys.addTextureDefinition(self, rc.DebugGridOutputTex, "DebugGridOutputTex", rc.debugGridTexDesc);
+        try RenderRegistrySys.addTextureDefinition(self, rc.DebugGridFinalOutputTex, "DebugGridFinalOutputTex", rc.debugGridTexDesc);
 
         try RenderRegistrySys.addTextureDefinition(self, rc.DebugGridDepthTex, "DebugGridDepthTex", rc.debugGridDepthTexDesc);
         try RenderRegistrySys.addTextureDefinition(self, rc.DebugGridDepthOutputTex, "DebugGridDepthOutputTex", rc.debugGridDepthTexDesc);
 
         try RenderRegistrySys.addTextureDefinition(self, rc.PlaneTex, "PlaneTex", rc.planeTexDesc);
+        try RenderRegistrySys.addTextureDefinition(self, rc.PlaneOutputTex, "PlaneOutputTex", rc.planeTexDesc);
+
         try RenderRegistrySys.addTextureDefinition(self, rc.PlaneDepthTex, "PlaneDepthTex", rc.planeDepthTexDesc);
 
         try RenderRegistrySys.addTextureDefinition(self, rc.DebugPlaneInputTex, "DebugPlaneInputTex", rc.debugPlaneTexDesc);
         try RenderRegistrySys.addTextureDefinition(self, rc.DebugPlaneOutputTex, "DebugPlaneOutputTex", rc.debugPlaneTexDesc);
         try RenderRegistrySys.addTextureDefinition(self, rc.DebugPlaneOutputFrustumViewTex, "DebugPlaneOutputFrustumViewTex", rc.debugPlaneTexDesc);
+        try RenderRegistrySys.addTextureDefinition(self, rc.DebugPlaneEditorGridOutputTex, "DebugPlaneEditorGridOutputTex", rc.debugPlaneTexDesc);
         try RenderRegistrySys.addTextureDefinition(self, rc.DebugPlaneDepthTex, "DebugPlaneDepthTex", rc.debugPlaneDepthTexDesc);
 
         try RenderRegistrySys.addTextureDefinition(self, rc.DepthViewTex, "DepthViewTex", rc.depthViewTexDesc);
+        try RenderRegistrySys.addTextureDefinition(self, rc.DepthViewOutputTex, "DepthViewOutputTex", rc.depthViewTexDesc);
 
         try RenderRegistrySys.addTextureDefinition(self, rc.TestTileTex, "TestTileTex", rc.testTilesTexDesc);
         try RenderRegistrySys.addTextureDefinition(self, rc.ImguiFontTex, "ImguiFontTex", rc.imguiFontTexDesc);

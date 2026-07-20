@@ -48,8 +48,8 @@ pub const PASS_MAX = 128;
 pub const MAX_PASS_ATTRIBUTES = 80;
 pub const PASS_EXTRACTION_DEBUG = false;
 
+pub const FRAME_GRAPH_DEBUG = true;
 pub const FRAME_GRAPH_TIMERS = false;
-pub const FRAME_GRAPH_DEBUG = false;
 pub const FRAME_GRAPH_SORT_DEBUG = false;
 
 pub const FRAME_GRAPH_SKIP_OPTIMIZE = false;
@@ -66,7 +66,7 @@ pub const MAX_IN_FLIGHT: u8 = 2; // (Frames)
 pub const DESIRED_SWAPCHAIN_IMAGES: u8 = 3;
 pub const DISPLAY_MODE = vk.VK_PRESENT_MODE_IMMEDIATE_KHR; //vk.VK_PRESENT_MODE_IMMEDIATE_KHR
 pub const MAX_WINDOWS: u8 = 8;
-pub const BLIT_TEX_STRETCH = false;
+pub const COMPOSITE_TEX_STRETCH = false;
 pub const USE_MEM_BARRIERS_ON_BUFFERS = true;
 pub const USE_MEM_BARRIER_ON_IMAGES = true;
 pub const INITIAL_SWAPCHAIN_COLOR: ClearColor = .{ .R = 0.0, .G = 0.0, .B = 0.1, .A = 1.0 };
@@ -264,19 +264,27 @@ pub const ImguiIB: BufPassId = .id(8);
 
 pub const TexPassId = @import("../.configs/idConfig.zig").TexPassId;
 pub const RayMarchInputTex: TexPassId = .id(1);
+pub const RayMarchOutputTex: TexPassId = .id(18);
 pub const GridTex: TexPassId = .id(2);
+pub const GridTexOutput: TexPassId = .id(20);
 pub const GridDepthTex: TexPassId = .id(3);
 pub const DebugGridInputTex: TexPassId = .id(4);
 pub const DebugGridOutputTex: TexPassId = .id(5);
+pub const DebugGridFinalOutputTex: TexPassId = .id(19);
 pub const DebugGridDepthTex: TexPassId = .id(6);
 pub const DebugGridDepthOutputTex: TexPassId = .id(7);
 pub const PlaneTex: TexPassId = .id(8);
+pub const PlaneOutputTex: TexPassId = .id(21);
 pub const PlaneDepthTex: TexPassId = .id(9);
 pub const DebugPlaneInputTex: TexPassId = .id(10);
 pub const DebugPlaneOutputTex: TexPassId = .id(11);
 pub const DebugPlaneOutputFrustumViewTex: TexPassId = .id(12);
+pub const DebugPlaneEditorGridOutputTex: TexPassId = .id(22);
 pub const DebugPlaneDepthTex: TexPassId = .id(13);
 pub const DepthViewTex: TexPassId = .id(14);
+pub const DepthViewOutputTex: TexPassId = .id(17);
 pub const TestTileTex: TexPassId = .id(15);
 pub const ImguiFontTex: TexPassId = .id(16);
 // pub const Swapchain: TexPassId = .id(17);
+
+

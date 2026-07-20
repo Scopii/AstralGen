@@ -123,10 +123,9 @@ pub const App = struct {
             .areaY = 0,
             .areaWidth = 1,
             .areaHeight = 1,
-            .stringPasses = &.{
-                "DepthView",
+            .stringComposites = &.{
+                "DepthViewOutputTex",
             },
-            // .blitPass = .DepthView,
         });
 
         self.windowQueue.append(.{
@@ -149,10 +148,9 @@ pub const App = struct {
             .areaY = 0.0,
             .areaWidth = 1.0,
             .areaHeight = 1.0,
-            .stringPasses = &.{
-                "CompRayMarch",
+            .stringComposites = &.{
+                "RayMarchOutputTex",
             },
-            // .blitPass = .CompTest,
         });
 
         self.windowQueue.append(.{
@@ -175,11 +173,9 @@ pub const App = struct {
             .areaY = 0.0,
             .areaWidth = 0.5,
             .areaHeight = 0.5,
-            .stringPasses = &.{
-                "QuantComp",
-                "QuantGridMain",
+            .stringComposites = &.{
+                "GridTexOutput",
             },
-            // .blitPass = .QuantGridMain,
         });
 
         self.data.viewport.viewports.upsert(3, Viewport{
@@ -190,13 +186,12 @@ pub const App = struct {
             .areaY = 0.0,
             .areaWidth = 0.5,
             .areaHeight = 0.5,
-            .stringPasses = &.{
-                "QuantComp",
-                "QuantGridDebug",
-                "EditorGridGridDebug",
+            .stringComposites = &.{
+                "DebugGridOutputTex",
+                "DebugGridFinalOutputTex",
             },
-            // .blitPass = .EditorGrid,
         });
+
         self.data.viewport.viewports.upsert(4, Viewport{
             .name = "Bot Left",
             .renderCamEntityId = mainCamId,
@@ -205,13 +200,11 @@ pub const App = struct {
             .areaY = 0.5,
             .areaWidth = 0.5,
             .areaHeight = 0.5,
-            .stringPasses = &.{
-                "QuantComp",
-                "QuantPlaneDebug",
-                "FrustumView",
-                "EditorGridPlaneDebug",
+            .stringComposites = &.{
+                "DebugPlaneOutputTex",
+                "DebugPlaneOutputFrustumViewTex",
+                "DebugPlaneEditorGridOutputTex",
             },
-            // .blitPass = .FrustumView,
         });
 
         self.data.viewport.viewports.upsert(5, Viewport{
@@ -222,10 +215,9 @@ pub const App = struct {
             .areaY = 0.5,
             .areaWidth = 0.5,
             .areaHeight = 0.5,
-            .stringPasses = &.{
-                "QuantPlaneMain",
+            .stringComposites = &.{
+                "PlaneOutputTex",
             },
-            // .blitPass = .QuantPlaneMain,
         });
 
         self.windowQueue.append(.{

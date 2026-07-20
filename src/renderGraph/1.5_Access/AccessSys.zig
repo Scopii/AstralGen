@@ -7,17 +7,18 @@ const getResTyp = @import("../components.zig").getResTyp;
 const bufToRes = @import("../components.zig").bufToRes;
 const texToRes = @import("../components.zig").texToRes;
 
+const OutputData = @import("../0.5_Output/OutputData.zig").OutputData;
 const PassData = @import("../1_Pass/PassData.zig").PassData;
 const AccessData = @import("AccessData.zig").AccessData;
 
 // Step 1.5
 
 pub const AccessSys = struct {
-    pub fn build(self: *AccessData, passData: *const PassData, registry: *const RenderRegistryData) !void {
+    pub fn build(self: *AccessData, outputData: *const OutputData, registry: *const RenderRegistryData) !void {
         self.accesses.clear();
 
-        for (0..passData.activePasses.getLength()) |index| {
-            const passId = passData.activePasses.getByIndex(@intCast(index));
+        for (0..outputData.activePasses.getLength()) |index| {
+            const passId = outputData.activePasses.getByIndex(@intCast(index));
             const passDef = try registry.getPassDefinitionById(passId);
 
             const start = self.accesses.len;

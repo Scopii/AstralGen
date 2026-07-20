@@ -9,7 +9,6 @@ const rc = @import("../../.configs/renderConfig.zig");
 // Step 1
 
 pub const PassData = struct {
-    activePasses: LinkedIdMap(PassId, rc.PASS_MAX, PassId, rc.PASS_MAX, 0) = .{},
-    passExtents: LinkedIdMap(struct { width: u32, height: u32 }, rc.PASS_MAX, PassId, rc.PASS_MAX, 0) = .{},
+    newPassExtents: LinkedIdMap(struct { width: u32, height: u32 }, rc.PASS_MAX, PassId, rc.PASS_MAX, 0) = .{},
     composites: FixedList(CompositeNode, rc.MAX_WINDOWS * 4) = .{},
 };

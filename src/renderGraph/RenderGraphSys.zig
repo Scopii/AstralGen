@@ -14,6 +14,7 @@ const TexId = ic.TexId;
 const RenderRegistryData = @import("../renderRegistry/RenderRegistryData.zig").RenderRegistryData;
 
 const PassSys = @import("1_Pass/PassSys.zig").PassSys;
+const OutputSys = @import("0.5_Output/OutputSys.zig").OutputSys;
 const AccessSys = @import("1.5_Access/AccessSys.zig").AccessSys;
 const ResourceSys = @import("2_Resource/ResourceSys.zig").ResourceSys;
 const DependancySys = @import("3_Dependancy/DependancySys.zig").DependancySys;
@@ -26,12 +27,16 @@ const SorterSys = @import("7_Sorter/SorterSys.zig").SorterSys;
 
 pub const RenderGraphSys = struct {
     pub fn build(self: *RenderGraphData, data: *const EngineData) !void {
+        const start0 = std.time.nanoTimestamp();
+        try OutputSys.build(&self.output, &data.renderRegistry, data);
+        if (rc.FRAME_GRAPH_TIMERS) std.debug.print("{d:.3} us: OutputSys\n", .{@as(f64, @floatFromInt(std.time.nanoTimestamp() - start0)) / 1_000.0});
+
         const start1 = std.time.nanoTimestamp();
-        try PassSys.build(&self.pass, &data.renderRegistry, data);
+        try PassSys.build(&self.pass, &self.output, &data.renderRegistry, data);
         if (rc.FRAME_GRAPH_TIMERS) std.debug.print("{d:.3} us: PassSys\n", .{@as(f64, @floatFromInt(std.time.nanoTimestamp() - start1)) / 1_000.0});
 
         const start2 = std.time.nanoTimestamp();
-        try AccessSys.build(&self.access, &self.pass, &data.renderRegistry);
+        try AccessSys.build(&self.access, &self.output, &data.renderRegistry);
         if (rc.FRAME_GRAPH_TIMERS) std.debug.print("{d:.3} us: AccessSys\n", .{@as(f64, @floatFromInt(std.time.nanoTimestamp() - start2)) / 1_000.0});
 
         const start3 = std.time.nanoTimestamp();
@@ -43,7 +48,7 @@ pub const RenderGraphSys = struct {
         if (rc.FRAME_GRAPH_TIMERS) std.debug.print("{d:.3} us: DependancySys\n", .{@as(f64, @floatFromInt(std.time.nanoTimestamp() - start4)) / 1_000.0});
 
         const start5 = std.time.nanoTimestamp();
-        try GraphSys.build(&self.graph, &self.dependancy, &self.pass, &data.renderRegistry);
+        try GraphSys.build(&self.graph, &self.dependancy, &self.output, &data.renderRegistry);
         if (rc.FRAME_GRAPH_TIMERS) std.debug.print("{d:.3} us: GraphSys\n", .{@as(f64, @floatFromInt(std.time.nanoTimestamp() - start5)) / 1_000.0});
 
         const start6 = std.time.nanoTimestamp();

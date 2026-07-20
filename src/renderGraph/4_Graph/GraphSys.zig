@@ -4,7 +4,9 @@ const std = @import("std");
 
 const getResTyp = @import("../../renderGraph/components.zig").getResTyp;
 
+const OutputData = @import("../0.5_Output/OutputData.zig").OutputData;
 const PassData = @import("../1_Pass/PassData.zig").PassData;
+
 const RenderRegistryData = @import("../../renderRegistry/RenderRegistryData.zig").RenderRegistryData;
 const DependancyData = @import("../3_Dependancy/DependancyData.zig").DependancyData;
 const GraphData = @import("GraphData.zig").GraphData;
@@ -12,7 +14,7 @@ const GraphData = @import("GraphData.zig").GraphData;
 // Step 4
 
 pub const GraphSys = struct {
-    pub fn build(graphData: *GraphData, dependancyData: *const DependancyData, passData: *const PassData, registry: *const RenderRegistryData) !void {
+    pub fn build(graphData: *GraphData, dependancyData: *const DependancyData, outputData: *const OutputData, registry: *const RenderRegistryData) !void {
         graphData.passDepCounters.clear();
         graphData.graph.clear();
         graphData.readyPasses.clear();
@@ -36,7 +38,7 @@ pub const GraphSys = struct {
         }
 
         // Add all Passes that do not have Dependancys
-        for (passData.activePasses.getConstItems()) |pass| {
+        for (outputData.activePasses.getConstItems()) |pass| {
             if (graphData.passDepCounters.isKeyUsed(pass) == false) {
                 graphData.readyPasses.appendAssumeCapacity(.{ .passId = pass, .level = 0 });
             }
@@ -67,12 +69,12 @@ pub const GraphSys = struct {
 
         // Graph Validation Check
         const orderedCount = graphData.graph.getLength();
-        const totalCount = passData.activePasses.getLength();
+        const totalCount = outputData.activePasses.getLength();
 
         if (orderedCount != totalCount) {
             std.debug.print("ERROR: 4.0.GraphExtractor: {} of {} passes scheduled! Graph has a cycle\n", .{ orderedCount, totalCount });
             // Passes in unorderedPasses but not in orderedPasses
-            for (passData.activePasses.getConstItems()) |passId| {
+            for (outputData.activePasses.getConstItems()) |passId| {
                 if (graphData.graph.isKeyUsed(passId) == false) {
                     const openDeps = if (graphData.passDepCounters.isKeyUsed(passId)) graphData.passDepCounters.getByKey(passId) else 0;
                     const passString = try registry.getPassName(passId);

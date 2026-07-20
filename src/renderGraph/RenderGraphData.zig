@@ -1,4 +1,5 @@
 pub const RenderGraphData = struct {
+    output: @import("0.5_Output/OutputData.zig").OutputData = .{},
     pass: @import("1_Pass/PassData.zig").PassData = .{},
     access: @import("1.5_Access/AccessData.zig").AccessData = .{},
     resource: @import("2_Resource/ResourceData.zig").ResourceData = .{},

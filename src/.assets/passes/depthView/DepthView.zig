@@ -35,7 +35,7 @@ pub const depthViewPass = p.PassDefinition.init(.{
         p.PassAttrib.shader(sc.depthViewComp),
         //
         p.PassAttrib.buf(.{ .in = "MainCamUB" }, .Compute, .UniformRead, 3),
-        p.PassAttrib.tex(.{ .in = "DepthViewTex" }, .Compute, .StorageWrite, 0),
+        p.PassAttrib.tex(.{ .in = "DepthViewTex", .out = "DepthViewOutputTex" }, .Compute, .StorageWrite, 0),
         p.PassAttrib.tex(.{ .in = "DebugGridDepthOutputTex" }, .Compute, .SampledRead, 1),
         //
         p.PassAttrib.texDep(.{ .in = "DebugGridOutputTex" }),
