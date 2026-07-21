@@ -24,7 +24,6 @@ pub const OutputSys = struct {
         self.bufProducer.clear();
 
         self.pendingPasses.clear();
-
         self.activePasses.clear();
 
         // Build: Fill All Resource Links
@@ -59,21 +58,10 @@ pub const OutputSys = struct {
                         const inputId = try registry.getBufferPassId(bufLink.in);
                         try self.bufInputs.append(inputId);
 
-                        // if (bufLink.out) |output| {
-                        //     const outputId = try registry.getBufferPassId(output);
-                        //     if (self.bufProducer.isKeyUsed(outputId) == true) return error.TwoProducersForSameTex; // one-producer rule
-                        //     self.bufProducer.upsert(outputId, passId); // producers only
-                        // }
                     },
                     .texLinking => |texLink| {
                         const inputId = try registry.getTexturePassId(texLink.in);
                         try self.texInputs.append(inputId);
-
-                        // if (texLink.out) |output| {
-                        //     const outputId = try registry.getTexturePassId(output);
-                        //     if (self.texProducer.isKeyUsed(outputId) == true) return error.TwoProducersForSameTex; // one-producer rule
-                        //     self.texProducer.upsert(outputId, passId); // producers only
-                        // }
                     },
                     //
                     .vertexBuffer, .indexBuffer, .vertexAttribute, .renderState, .shaderInf => {},

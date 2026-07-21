@@ -41,7 +41,7 @@ pub const PassSys = struct {
                         // Check for bigger Viewport Area:
                         const viewWidth = viewport.calcViewWidth(window.extent.width);
                         const scaledWidth = @as(f32, @floatFromInt(viewWidth)) * passDef.renderScaling;
-                        const scaledWidthInt: u32 = @intFromFloat(scaledWidth); 
+                        const scaledWidthInt: u32 = @intFromFloat(scaledWidth);
                         if (scaledWidthInt > passExtent.width) passExtent.width = scaledWidthInt;
 
                         const viewHeight = viewport.calcViewHeight(window.extent.height);
@@ -60,6 +60,14 @@ pub const PassSys = struct {
         // Debug Output
         if (rc.FRAME_GRAPH_DEBUG) {
             std.debug.print("1.PassExtractor: \n", .{});
+            for (output.activePasses.getConstItems(), 0..) |passId, i| {
+                const passName = try registry.getPassName(passId);
+                if (passData.newPassExtents.isKeyUsed(passId) == true) {
+                    const passExtent = passData.newPassExtents.getByKey(passId);
+                    std.debug.print("- Pass {}. {s} (Size {} x {})\n", .{ i, passName, passExtent.width, passExtent.height });
+                } else std.debug.print("- Pass {}. {s} (Size .NULL x .NULL)\n", .{ i, passName });
+            }
+            std.debug.print("\n", .{});
             for (passData.composites.constSlice(), 0..) |comp, i| {
                 const passName = try registry.getPassName(comp.pass);
                 std.debug.print("- Composite {}. {s} (Pass {s}) [{}x{} @ {},{}]\n", .{ i, comp.name, passName, comp.viewWidth, comp.viewHeight, comp.viewOffsetX, comp.viewOffsetY });
