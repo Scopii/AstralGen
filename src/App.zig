@@ -96,11 +96,11 @@ pub const App = struct {
         };
     }
 
-    pub fn deinit(self: *App) void {
+    pub fn deinit(self: *App) !void {
         UiSys.deinit(&self.data.ui);
-        RenderAssignerSys.deleteBufferManuel(&self.data.renderAssigner, &self.data.renderRegistry, rc.ImguiIB, &self.rendererQueue);
-        RenderAssignerSys.deleteBufferManuel(&self.data.renderAssigner, &self.data.renderRegistry, rc.ImguiVB, &self.rendererQueue);
-        RenderAssignerSys.deleteTextureManuel(&self.data.renderAssigner, &self.data.renderRegistry, rc.ImguiFontTex, &self.rendererQueue);
+        try RenderAssignerSys.deleteBufferManuel(&self.data.renderAssigner, &self.data.renderRegistry, "ImguiIB", &self.rendererQueue);
+        try RenderAssignerSys.deleteBufferManuel(&self.data.renderAssigner, &self.data.renderRegistry, "ImguiVB", &self.rendererQueue);
+        try RenderAssignerSys.deleteTextureManuel(&self.data.renderAssigner, &self.data.renderRegistry, "ImguiFontTex", &self.rendererQueue);
         RenderRegistrySys.deinit(&self.data.renderRegistry);
         self.renderer.deinit();
         ShaderSys.deinit(&self.data.shader, self.memoryMan.getAllocator());
@@ -112,8 +112,14 @@ pub const App = struct {
 
         for (0..rc.ENTITY_COUNT) |_| _ = try self.data.entityData.createRandomRenderEntity(&self.rng);
 
-        const mainCamId = try self.data.entityData.createCameraEntity(.{ .pos = zm.f32x4(0, 5, -20, 0), .yaw = 170 }, .{ .bufPassId = rc.MainCamUB, .near = 0.1, .far = 100, .fov = 60 });
-        const debugCamId = try self.data.entityData.createCameraEntity(.{ .pos = zm.f32x4(0, 20, -45, 0), .yaw = 170 }, .{ .bufPassId = rc.DebugCamUB, .near = 0.1, .far = 300, .fov = 110 });
+        const mainCamId = try self.data.entityData.createCameraEntity(
+            .{ .pos = zm.f32x4(0, 5, -20, 0), .yaw = 170 },
+            .{ .bufName = "MainCamUB", .near = 0.1, .far = 100, .fov = 60 },
+        );
+        const debugCamId = try self.data.entityData.createCameraEntity(
+            .{ .pos = zm.f32x4(0, 20, -45, 0), .yaw = 170 },
+            .{ .bufName = "DebugCamUB", .near = 0.1, .far = 300, .fov = 110 },
+        );
 
         self.data.viewport.viewports.upsert(10, Viewport{
             .name = "DeptView",
@@ -235,17 +241,17 @@ pub const App = struct {
 
     pub fn setupResources(self: *App) !void {
         try ShaderSys.update(&self.data.shader, &self.shaderQueue, &self.rendererQueue, self.memoryMan);
-        try RenderAssignerSys.createBufferManuel(&self.data.renderAssigner, &self.data.renderRegistry, rc.ImguiIB, &self.rendererQueue, self.memoryMan);
-        try RenderAssignerSys.createBufferManuel(&self.data.renderAssigner, &self.data.renderRegistry, rc.ImguiVB, &self.rendererQueue, self.memoryMan);
-        try RenderAssignerSys.createTextureManuel(&self.data.renderAssigner, &self.data.renderRegistry, rc.ImguiFontTex, &self.rendererQueue, self.memoryMan);
+        try RenderAssignerSys.createBufferManuel(&self.data.renderAssigner, &self.data.renderRegistry, "ImguiIB", &self.rendererQueue, self.memoryMan);
+        try RenderAssignerSys.createBufferManuel(&self.data.renderAssigner, &self.data.renderRegistry, "ImguiVB", &self.rendererQueue, self.memoryMan);
+        try RenderAssignerSys.createTextureManuel(&self.data.renderAssigner, &self.data.renderRegistry, "ImguiFontTex", &self.rendererQueue, self.memoryMan);
 
-        try RenderAssignerSys.createTextureManuel(&self.data.renderAssigner, &self.data.renderRegistry, rc.TestTileTex, &self.rendererQueue, self.memoryMan);
+        try RenderAssignerSys.createTextureManuel(&self.data.renderAssigner, &self.data.renderRegistry, "TestTileTex", &self.rendererQueue, self.memoryMan);
 
         // try RenderAssignerSys.createBufferManuel(&self.data.renderAssigner, &self.data.renderRegistry, rc.QUANT, &self.rendererQueue, self.memoryMan);
-        try RenderAssignerSys.createBufferManuel(&self.data.renderAssigner, &self.data.renderRegistry, rc.ReadbackSB, &self.rendererQueue, self.memoryMan);
-        try RenderAssignerSys.createBufferManuel(&self.data.renderAssigner, &self.data.renderRegistry, rc.MainCamUB, &self.rendererQueue, self.memoryMan);
-        try RenderAssignerSys.createBufferManuel(&self.data.renderAssigner, &self.data.renderRegistry, rc.DebugCamUB, &self.rendererQueue, self.memoryMan);
-        try RenderAssignerSys.createBufferManuel(&self.data.renderAssigner, &self.data.renderRegistry, rc.EntitySB, &self.rendererQueue, self.memoryMan);
+        try RenderAssignerSys.createBufferManuel(&self.data.renderAssigner, &self.data.renderRegistry, "ReadbackSB", &self.rendererQueue, self.memoryMan);
+        try RenderAssignerSys.createBufferManuel(&self.data.renderAssigner, &self.data.renderRegistry, "MainCamUB", &self.rendererQueue, self.memoryMan);
+        try RenderAssignerSys.createBufferManuel(&self.data.renderAssigner, &self.data.renderRegistry, "DebugCamUB", &self.rendererQueue, self.memoryMan);
+        try RenderAssignerSys.createBufferManuel(&self.data.renderAssigner, &self.data.renderRegistry, "EntitySB", &self.rendererQueue, self.memoryMan);
 
         // PROCEDURAL TEXTURE GENERATION
         const AddTexPtr = @FieldType(RenderAssignerQueue.RenderAssignerEvent, "updateTexture");
@@ -263,7 +269,7 @@ pub const App = struct {
             }
         }
         const addTextureDataPtr = try arena.create(AddTex);
-        addTextureDataPtr.* = .{ .texUnion = .{ .texPassId = rc.TestTileTex }, .data = std.mem.sliceAsBytes(pixels), .newExtent = null };
+        addTextureDataPtr.* = .{ .texUnion = .{ .texName = "TestTileTex" }, .data = std.mem.sliceAsBytes(pixels), .newExtent = null };
         self.assignerQueue.append(.{ .updateTexture = addTextureDataPtr });
         // TEXTURE GEN END
 

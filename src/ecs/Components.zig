@@ -15,7 +15,7 @@ pub const CameraComp = struct {
     aspectRatio: f32 = 16.0 / 9.0,
     near: f32 = 0.1,
     far: f32 = 1000.0,
-    bufPassId: BufPassId,
+    bufName: []const u8,
 };
 
 pub const RenderableComp = struct {

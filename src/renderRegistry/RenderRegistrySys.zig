@@ -37,7 +37,7 @@ pub const RenderRegistrySys = struct {
         self.texPassIdMap.deinit();
     }
 
-    pub fn addPassDefinition(registry: *RenderRegistryData, passId: PassId, passDef: PassDefinition) !void {
+    pub fn addPassDefinition(registry: *RenderRegistryData, passDef: PassDefinition) !void {
         try passDef.validate();
         const passName = passDef.name.get();
 
@@ -45,6 +45,8 @@ pub const RenderRegistrySys = struct {
             std.debug.print("ERROR: Pass Definition ({s}) already Exists\n", .{passName});
             return error.PassNameAlreadyExists;
         }
+        const passId: PassId = .id(registry.passPool.tryReserveKey() orelse return error.noFreePassId);
+
         registry.passDefinitions.upsert(passId, passDef);
         registry.passNames.upsert(passId, try .string(passName));
 
@@ -57,14 +59,17 @@ pub const RenderRegistrySys = struct {
             registry.passIdMap.remove(name);
             registry.passDefinitions.remove(passId);
             registry.passNames.remove(passId);
+            registry.passPool.freeKey(passId.val());
         }
     }
 
-    pub fn addTextureDefinition(registry: *RenderRegistryData, texPassId: TexPassId, newName: []const u8, newTexDesc: TexDesc) !void {
+    pub fn addTextureDefinition(registry: *RenderRegistryData, newName: []const u8, newTexDesc: TexDesc) !void {
         if (registry.texPassIdMap.contains(newName) == true) {
             std.debug.print("ERROR: Texture Definition ({s}) already Exists\n", .{newName});
             return error.TextureNameAlreadyExists;
         }
+        const texPassId: TexPassId = .id(registry.texPool.tryReserveKey() orelse return error.noFreeTexPassId);
+
         registry.texDefinitions.upsert(texPassId, newTexDesc);
         registry.texNames.upsert(texPassId, try .string(newName));
 
@@ -77,14 +82,17 @@ pub const RenderRegistrySys = struct {
             registry.texPassIdMap.remove(name);
             registry.texDefinitions.remove(texPassId);
             registry.texNames.remove(texPassId);
+            registry.texPool.freeKey(texPassId.val());
         }
     }
 
-    pub fn addBufferDefinition(registry: *RenderRegistryData, bufPassId: BufPassId, newName: []const u8, newBufDesc: BufDesc) !void {
+    pub fn addBufferDefinition(registry: *RenderRegistryData, newName: []const u8, newBufDesc: BufDesc) !void {
         if (registry.bufPassIdMap.contains(newName) == true) {
             std.debug.print("ERROR: Buffer Definition ({s}) already Exists\n", .{newName});
             return error.BufferNameAlreadyExists;
         }
+        const bufPassId: BufPassId = .id(registry.bufPool.tryReserveKey() orelse return error.noFreeBufPassId);
+
         registry.bufDefinitions.upsert(bufPassId, newBufDesc);
         registry.bufNames.upsert(bufPassId, try .string(newName));
 
@@ -97,64 +105,65 @@ pub const RenderRegistrySys = struct {
             registry.bufPassIdMap.remove(name);
             registry.bufDefinitions.remove(bufPassId);
             registry.bufNames.remove(bufPassId);
+            registry.bufPool.freeKey(bufPassId.val());
         }
     }
 
     pub fn setupDefinitions(self: *RenderRegistryData) !void {
-        try RenderRegistrySys.addPassDefinition(self, .id(0), depthViewPass);
-        try RenderRegistrySys.addPassDefinition(self, .id(1), compRayMarchPass);
-        try RenderRegistrySys.addPassDefinition(self, .id(2), editorGridGridDebugPass);
-        try RenderRegistrySys.addPassDefinition(self, .id(3), editorGridPlaneDebugPass);
-        try RenderRegistrySys.addPassDefinition(self, .id(4), frustumViewPass);
-        try RenderRegistrySys.addPassDefinition(self, .id(5), quantGridPass);
-        try RenderRegistrySys.addPassDefinition(self, .id(6), quantGridDebugPass);
-        try RenderRegistrySys.addPassDefinition(self, .id(7), quantPlanePass);
-        try RenderRegistrySys.addPassDefinition(self, .id(8), quantPlaneDebugPass);
-        try RenderRegistrySys.addPassDefinition(self, .id(9), quantCompPass);
+        try RenderRegistrySys.addPassDefinition(self, depthViewPass);
+        try RenderRegistrySys.addPassDefinition(self, compRayMarchPass);
+        try RenderRegistrySys.addPassDefinition(self, editorGridGridDebugPass);
+        try RenderRegistrySys.addPassDefinition(self, editorGridPlaneDebugPass);
+        try RenderRegistrySys.addPassDefinition(self, frustumViewPass);
+        try RenderRegistrySys.addPassDefinition(self, quantGridPass);
+        try RenderRegistrySys.addPassDefinition(self, quantGridDebugPass);
+        try RenderRegistrySys.addPassDefinition(self, quantPlanePass);
+        try RenderRegistrySys.addPassDefinition(self, quantPlaneDebugPass);
+        try RenderRegistrySys.addPassDefinition(self, quantCompPass);
 
         // Buffers
-        try RenderRegistrySys.addBufferDefinition(self, rc.QuantIndirectInputSB, "QuantIndirectInputSB", rc.indirectSBDesc);
-        try RenderRegistrySys.addBufferDefinition(self, rc.QuantIndirectOutputSB, "QuantIndirectOutputSB", rc.indirectSBDesc);
-        try RenderRegistrySys.addBufferDefinition(self, rc.ReadbackSB, "ReadbackSB", rc.readbackSBDesc);
+        try RenderRegistrySys.addBufferDefinition(self, "QuantIndirectInputSB", rc.INDIRECT_SB);
+        try RenderRegistrySys.addBufferDefinition(self, "QuantIndirectOutputSB", rc.INDIRECT_SB);
+        try RenderRegistrySys.addBufferDefinition(self, "ReadbackSB", rc.READBACK_SB);
 
-        try RenderRegistrySys.addBufferDefinition(self, rc.EntitySB, "EntitySB", rc.entitySBDesc);
-        try RenderRegistrySys.addBufferDefinition(self, rc.MainCamUB, "MainCamUB", rc.mainCamUBDesc);
-        try RenderRegistrySys.addBufferDefinition(self, rc.DebugCamUB, "DebugCamUB", rc.debugCamUBDesc);
+        try RenderRegistrySys.addBufferDefinition(self, "EntitySB", rc.ENTITY_SB);
+        try RenderRegistrySys.addBufferDefinition(self, "MainCamUB", rc.CAMERA_UB);
+        try RenderRegistrySys.addBufferDefinition(self, "DebugCamUB", rc.CAMERA_UB);
 
-        try RenderRegistrySys.addBufferDefinition(self, rc.ImguiVB, "ImguiVB", rc.imguiVBDesc);
-        try RenderRegistrySys.addBufferDefinition(self, rc.ImguiIB, "ImguiIB", rc.imguiIBDesc);
+        try RenderRegistrySys.addBufferDefinition(self, "ImguiVB", rc.IMGUI_VB);
+        try RenderRegistrySys.addBufferDefinition(self, "ImguiIB", rc.IMGUI_IB);
 
         // Textures
-        try RenderRegistrySys.addTextureDefinition(self, rc.RayMarchInputTex, "RayMarchInputTex", rc.rayMarchTexDesc);
-        try RenderRegistrySys.addTextureDefinition(self, rc.RayMarchOutputTex, "RayMarchOutputTex", rc.rayMarchTexDesc);
+        try RenderRegistrySys.addTextureDefinition(self, "RayMarchInputTex", rc.TRANSIENT_COLOR_TEX);
+        try RenderRegistrySys.addTextureDefinition(self, "RayMarchOutputTex", rc.TRANSIENT_COLOR_TEX);
 
-        try RenderRegistrySys.addTextureDefinition(self, rc.GridTex, "GridTex", rc.gridTexDesc);
-        try RenderRegistrySys.addTextureDefinition(self, rc.GridTexOutput, "GridTexOutput", rc.gridTexDesc);
+        try RenderRegistrySys.addTextureDefinition(self, "GridTex", rc.TRANSIENT_COLOR_TEX);
+        try RenderRegistrySys.addTextureDefinition(self, "GridTexOutput", rc.TRANSIENT_COLOR_TEX);
 
-        try RenderRegistrySys.addTextureDefinition(self, rc.GridDepthTex, "GridDepthTex", rc.gridDepthTexDesc);
+        try RenderRegistrySys.addTextureDefinition(self, "GridDepthTex", rc.TRANSIENT_DEPTH_TEX);
 
-        try RenderRegistrySys.addTextureDefinition(self, rc.DebugGridInputTex, "DebugGridInputTex", rc.debugGridTexDesc);
-        try RenderRegistrySys.addTextureDefinition(self, rc.DebugGridOutputTex, "DebugGridOutputTex", rc.debugGridTexDesc);
-        try RenderRegistrySys.addTextureDefinition(self, rc.DebugGridFinalOutputTex, "DebugGridFinalOutputTex", rc.debugGridTexDesc);
+        try RenderRegistrySys.addTextureDefinition(self, "DebugGridInputTex", rc.TRANSIENT_COLOR_TEX);
+        try RenderRegistrySys.addTextureDefinition(self, "DebugGridOutputTex", rc.TRANSIENT_COLOR_TEX);
+        try RenderRegistrySys.addTextureDefinition(self, "DebugGridFinalOutputTex", rc.TRANSIENT_COLOR_TEX);
 
-        try RenderRegistrySys.addTextureDefinition(self, rc.DebugGridDepthTex, "DebugGridDepthTex", rc.debugGridDepthTexDesc);
-        try RenderRegistrySys.addTextureDefinition(self, rc.DebugGridDepthOutputTex, "DebugGridDepthOutputTex", rc.debugGridDepthTexDesc);
+        try RenderRegistrySys.addTextureDefinition(self, "DebugGridDepthTex", rc.TRANSIENT_DEPTH_TEX);
+        try RenderRegistrySys.addTextureDefinition(self, "DebugGridDepthOutputTex", rc.TRANSIENT_DEPTH_TEX);
 
-        try RenderRegistrySys.addTextureDefinition(self, rc.PlaneTex, "PlaneTex", rc.planeTexDesc);
-        try RenderRegistrySys.addTextureDefinition(self, rc.PlaneOutputTex, "PlaneOutputTex", rc.planeTexDesc);
+        try RenderRegistrySys.addTextureDefinition(self, "PlaneTex", rc.TRANSIENT_COLOR_TEX);
+        try RenderRegistrySys.addTextureDefinition(self, "PlaneOutputTex", rc.TRANSIENT_COLOR_TEX);
 
-        try RenderRegistrySys.addTextureDefinition(self, rc.PlaneDepthTex, "PlaneDepthTex", rc.planeDepthTexDesc);
+        try RenderRegistrySys.addTextureDefinition(self, "PlaneDepthTex", rc.TRANSIENT_DEPTH_TEX);
 
-        try RenderRegistrySys.addTextureDefinition(self, rc.DebugPlaneInputTex, "DebugPlaneInputTex", rc.debugPlaneTexDesc);
-        try RenderRegistrySys.addTextureDefinition(self, rc.DebugPlaneOutputTex, "DebugPlaneOutputTex", rc.debugPlaneTexDesc);
-        try RenderRegistrySys.addTextureDefinition(self, rc.DebugPlaneOutputFrustumViewTex, "DebugPlaneOutputFrustumViewTex", rc.debugPlaneTexDesc);
-        try RenderRegistrySys.addTextureDefinition(self, rc.DebugPlaneEditorGridOutputTex, "DebugPlaneEditorGridOutputTex", rc.debugPlaneTexDesc);
-        try RenderRegistrySys.addTextureDefinition(self, rc.DebugPlaneDepthTex, "DebugPlaneDepthTex", rc.debugPlaneDepthTexDesc);
+        try RenderRegistrySys.addTextureDefinition(self, "DebugPlaneInputTex", rc.TRANSIENT_COLOR_TEX);
+        try RenderRegistrySys.addTextureDefinition(self, "DebugPlaneOutputTex", rc.TRANSIENT_COLOR_TEX);
+        try RenderRegistrySys.addTextureDefinition(self, "DebugPlaneOutputFrustumViewTex", rc.TRANSIENT_COLOR_TEX);
+        try RenderRegistrySys.addTextureDefinition(self, "DebugPlaneEditorGridOutputTex", rc.TRANSIENT_COLOR_TEX);
+        try RenderRegistrySys.addTextureDefinition(self, "DebugPlaneDepthTex", rc.TRANSIENT_DEPTH_TEX);
 
-        try RenderRegistrySys.addTextureDefinition(self, rc.DepthViewTex, "DepthViewTex", rc.depthViewTexDesc);
-        try RenderRegistrySys.addTextureDefinition(self, rc.DepthViewOutputTex, "DepthViewOutputTex", rc.depthViewTexDesc);
+        try RenderRegistrySys.addTextureDefinition(self, "DepthViewTex", rc.TRANSIENT_COLOR_TEX);
+        try RenderRegistrySys.addTextureDefinition(self, "DepthViewOutputTex", rc.TRANSIENT_COLOR_TEX);
 
-        try RenderRegistrySys.addTextureDefinition(self, rc.TestTileTex, "TestTileTex", rc.testTilesTexDesc);
-        try RenderRegistrySys.addTextureDefinition(self, rc.ImguiFontTex, "ImguiFontTex", rc.imguiFontTexDesc);
+        try RenderRegistrySys.addTextureDefinition(self, "TestTileTex", rc.PERSISTENT_COLOR_TEX);
+        try RenderRegistrySys.addTextureDefinition(self, "ImguiFontTex", rc.IMGUI_FONT_TEX);
     }
 };

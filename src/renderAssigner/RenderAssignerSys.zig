@@ -250,7 +250,9 @@ pub const RenderAssignerSys = struct {
         std.debug.print("6.Resource Assigner: Transient Tex (TexId {}) Creation send to Renderer\n", .{texInf.id});
     }
 
-    pub fn createBufferManuel(assignerData: *RenderAssignerData, registry: *const RenderRegistryData, rootBuf: BufPassId, rendererQueue: *RendererQueue, memoryMan: *MemoryManager) !void {
+    pub fn createBufferManuel(assignerData: *RenderAssignerData, registry: *const RenderRegistryData, rootBufName: []const u8, rendererQueue: *RendererQueue, memoryMan: *MemoryManager) !void {
+        const rootBuf = registry.getBufferPassId(rootBufName) catch return error.createBufferManuelNoBufPassId;
+        
         if (assignerData.rootBufPhysicalMap.isKeyUsed(rootBuf)) return error.GraphAlreadyOwnsBuffer;
 
         const bufId = try getFreeBufId(assignerData);
@@ -278,11 +280,12 @@ pub const RenderAssignerSys = struct {
         bufferPtr.* = .{ .bufInf = bufInf, .data = null };
         rendererQueue.append(.{ .addBuffer = bufferPtr });
 
-        const rootBufName = try registry.getBufferName(rootBuf);
         std.debug.print("6.Resource Assigner: Root Buf {s} (BufId {}) Creation send to Renderer\n", .{ rootBufName, bufId });
     }
 
-    pub fn deleteBufferManuel(assignerData: *RenderAssignerData, registry: *const RenderRegistryData, rootBufKey: BufPassId, rendererQueue: *RendererQueue) void {
+    pub fn deleteBufferManuel(assignerData: *RenderAssignerData, registry: *const RenderRegistryData, rootBufName: []const u8, rendererQueue: *RendererQueue) !void {
+        const rootBufKey = registry.getBufferPassId(rootBufName) catch return error.deleteBufferManualNoBufPassId;
+
         const isUsed = assignerData.manualBufs.isKeyUsed(rootBufKey);
         if (isUsed == false) {
             const bufName = registry.getBufferName(rootBufKey) catch undefined;
@@ -294,11 +297,12 @@ pub const RenderAssignerSys = struct {
         assignerData.manualBufs.remove(rootBufKey);
         rendererQueue.append(.{ .removeBuffer = bufId }); // (Stop Renderer missing?)
 
-        const rootBufName = registry.getBufferName(rootBufKey) catch "UNKNOWN";
         std.debug.print("6.Resource Assigner: Root Buf {s} (BufId {}) Deletion send to Renderer\n", .{ rootBufName, bufId.val() });
     }
 
-    pub fn createTextureManuel(assignerData: *RenderAssignerData, registry: *const RenderRegistryData, rootTex: TexPassId, rendererQueue: *RendererQueue, memoryMan: *MemoryManager) !void {
+    pub fn createTextureManuel(assignerData: *RenderAssignerData, registry: *const RenderRegistryData, rootTexName: []const u8, rendererQueue: *RendererQueue, memoryMan: *MemoryManager) !void {
+        const rootTex = registry.getTexturePassId(rootTexName) catch return error.createBufferManuelNoBufPassId;
+        
         if (assignerData.rootTexPhysicalMap.isKeyUsed(rootTex)) return error.GraphAlreadyOwnsTexture;
 
         const texId = try getFreeTexId(assignerData);
@@ -329,11 +333,12 @@ pub const RenderAssignerSys = struct {
         addTextureDataPtr.* = .{ .texInf = texInf, .data = null };
         rendererQueue.append(.{ .addTexture = addTextureDataPtr });
 
-        const rootBufName = try registry.getTextureName(rootTex);
-        std.debug.print("6.Resource Assigner: Root Tex {s} (TexId {}) Creation send to Renderer\n", .{ rootBufName, texId });
+        std.debug.print("6.Resource Assigner: Root Tex {s} (TexId {}) Creation send to Renderer\n", .{ rootTexName, texId });
     }
 
-    pub fn deleteTextureManuel(assignerData: *RenderAssignerData, registry: *const RenderRegistryData, rootTexId: TexPassId, rendererQueue: *RendererQueue) void {
+    pub fn deleteTextureManuel(assignerData: *RenderAssignerData, registry: *const RenderRegistryData, rootTexName: []const u8, rendererQueue: *RendererQueue) !void {
+        const rootTexId = registry.getTexturePassId(rootTexName) catch return error.deleteTextureManualNoTexPassId;
+
         const isUsed = assignerData.manualTexes.isKeyUsed(rootTexId);
         if (isUsed == false) {
             const texName = registry.getTextureName(rootTexId) catch undefined;
@@ -346,8 +351,7 @@ pub const RenderAssignerSys = struct {
         assignerData.manualTexes.remove(rootTexId);
         rendererQueue.append(.{ .removeTexture = texInf.id }); // (Stop Renderer missing?)
 
-        const rootBufName = registry.getTextureName(rootTexId) catch "UNKNOWN";
-        std.debug.print("6.Resource Assigner: Root Tex {s} (TexId {}) Deletion send to Renderer\n", .{ rootBufName, texInf.id.val() });
+        std.debug.print("6.Resource Assigner: Root Tex {s} (TexId {}) Deletion send to Renderer\n", .{ rootTexName, texInf.id.val() });
     }
 
     pub fn getFreeBufId(assignerData: *RenderAssignerData) !BufId {

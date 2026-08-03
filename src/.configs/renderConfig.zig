@@ -48,7 +48,7 @@ pub const PASS_MAX = 128;
 pub const MAX_PASS_ATTRIBUTES = 80;
 pub const PASS_EXTRACTION_DEBUG = false;
 
-pub const FRAME_GRAPH_DEBUG = true;
+pub const FRAME_GRAPH_DEBUG = false;
 pub const FRAME_GRAPH_TIMERS = false;
 pub const FRAME_GRAPH_SORT_DEBUG = false;
 
@@ -85,135 +85,43 @@ pub const SAMPLER_MAX: u32 = 2;
 //////////////// RESOURCE DESCRIPTIONS ///////////////
 
 // Buffers
-pub const indirectSBDesc = BufDesc{ .share = .transient, .mem = .Gpu, .typ = .Indirect, .len = 1, .elementSize = @sizeOf(vhT.IndirectData), .update = .PerFrame };
-pub const readbackSBDesc = BufDesc{ .share = .persistent, .mem = .CpuRead, .typ = .Storage, .len = 1, .elementSize = @sizeOf(vhT.ReadbackData), .update = .PerFrame };
+pub const INDIRECT_SB = BufDesc{ .share = .transient, .mem = .Gpu, .typ = .Indirect, .len = 1, .elementSize = @sizeOf(vhT.IndirectData), .update = .PerFrame };
+pub const READBACK_SB = BufDesc{ .share = .persistent, .mem = .CpuRead, .typ = .Storage, .len = 1, .elementSize = @sizeOf(vhT.ReadbackData), .update = .PerFrame };
 
-pub const entitySBDesc = BufDesc{ .share = .persistent, .mem = .Gpu, .typ = .Storage, .len = ENTITY_COUNT, .elementSize = @sizeOf(GpuObjectData), .update = .Rarely, .resize = .Fit };
-pub const mainCamUBDesc = BufDesc{ .share = .persistent, .mem = .Gpu, .typ = .Uniform, .len = 1, .elementSize = @sizeOf(CameraData), .update = .Often, .resize = .Fit };
-pub const debugCamUBDesc = BufDesc{ .share = .persistent, .mem = .Gpu, .typ = .Uniform, .len = 1, .elementSize = @sizeOf(CameraData), .update = .Often, .resize = .Fit };
+pub const ENTITY_SB = BufDesc{ .share = .persistent, .mem = .Gpu, .typ = .Storage, .len = ENTITY_COUNT, .elementSize = @sizeOf(GpuObjectData), .update = .Rarely, .resize = .Fit };
+pub const CAMERA_UB = BufDesc{ .share = .persistent, .mem = .Gpu, .typ = .Uniform, .len = 1, .elementSize = @sizeOf(CameraData), .update = .Often, .resize = .Fit };
 
-pub const imguiVBDesc = BufDesc{ .share = .persistent, .mem = .Gpu, .typ = .Vertex, .len = 1024 * 1024, .elementSize = 1, .update = .Often, .resize = .Grow };
-pub const imguiIBDesc = BufDesc{ .share = .persistent, .mem = .Gpu, .typ = .Index, .len = 1024 * 1024, .elementSize = 1, .update = .Often, .resize = .Grow };
+pub const IMGUI_VB = BufDesc{ .share = .persistent, .mem = .Gpu, .typ = .Vertex, .len = 1024 * 1024, .elementSize = 1, .update = .Often, .resize = .Grow };
+pub const IMGUI_IB = BufDesc{ .share = .persistent, .mem = .Gpu, .typ = .Index, .len = 1024 * 1024, .elementSize = 1, .update = .Often, .resize = .Grow };
 
 // Textures
-pub const rayMarchTexDesc = TexDesc{
-    .share = .transient, // transient
+pub const TRANSIENT_COLOR_TEX = TexDesc{
+    .share = .transient,
     .mem = .Gpu,
-    .descriptors = .StorageSampled,
-    .texUse = .{ .storage = true, .colorAtt = true, .sampled = true },
+    .descriptors = .StorageSampled, // Should be inferred
+    .texUse = .{ .storage = true, .colorAtt = true, .sampled = true }, // Should be inferred
     .typ = .Color16,
-    .width = 1920,
-    .height = 1080,
+    .width = 16,
+    .height = 9,
     .update = .Rarely,
     .resize = .Fit,
     .fitPass = true,
 };
 
-pub const gridTexDesc = TexDesc{
-    .share = .transient, // transient
-    .mem = .Gpu,
-    .descriptors = .StorageSampled,
-    .texUse = .{ .storage = true, .colorAtt = true, .sampled = true },
-    .typ = .Color16,
-    .width = 1920,
-    .height = 1080,
-    .update = .Rarely,
-    .resize = .Fit,
-    .fitPass = true,
-};
-
-pub const gridDepthTexDesc = TexDesc{
+pub const TRANSIENT_DEPTH_TEX = TexDesc{
     .share = .transient, // WAS PERSISTENT
     .mem = .Gpu,
     .texUse = .{ .depthAtt = true, .sampled = true, .transferSrc = false },
     .descriptors = .SampledOnly,
     .typ = .Depth32,
-    .width = 1920,
-    .height = 1080,
+    .width = 16,
+    .height = 9,
     .update = .Rarely,
     .resize = .Fit,
     .fitPass = true,
 };
 
-pub const planeTexDesc = TexDesc{
-    .share = .transient, // transient
-    .mem = .Gpu,
-    .descriptors = .StorageSampled,
-    .texUse = .{ .storage = true, .colorAtt = true, .sampled = true },
-    .typ = .Color16,
-    .width = 1920,
-    .height = 1080,
-    .update = .Rarely,
-    .resize = .Fit,
-    .fitPass = true,
-};
-
-pub const planeDepthTexDesc = TexDesc{
-    .share = .transient, // WAS PERSISTENT
-    .mem = .Gpu,
-    .texUse = .{ .depthAtt = true, .sampled = true, .transferSrc = false },
-    .descriptors = .SampledOnly,
-    .typ = .Depth32,
-    .width = 1920,
-    .height = 1080,
-    .update = .Rarely,
-    .resize = .Fit,
-    .fitPass = true,
-};
-
-pub const debugGridTexDesc = TexDesc{
-    .share = .transient, // transient
-    .mem = .Gpu,
-    .descriptors = .StorageSampled,
-    .texUse = .{ .storage = true, .colorAtt = true, .sampled = true },
-    .typ = .Color16,
-    .width = 1920,
-    .height = 1080,
-    .update = .Rarely,
-    .resize = .Fit,
-    .fitPass = true,
-};
-
-pub const debugPlaneTexDesc = TexDesc{
-    .share = .transient, // transient
-    .mem = .Gpu,
-    .descriptors = .StorageSampled,
-    .texUse = .{ .storage = true, .colorAtt = true, .sampled = true },
-    .typ = .Color16,
-    .width = 1920,
-    .height = 1080,
-    .update = .Rarely,
-    .resize = .Fit,
-    .fitPass = true,
-};
-
-pub const debugGridDepthTexDesc = TexDesc{
-    .share = .transient, // Transient??
-    .mem = .Gpu,
-    .texUse = .{ .depthAtt = true, .sampled = true, .transferSrc = false },
-    .descriptors = .SampledOnly,
-    .typ = .Depth32,
-    .width = 1920,
-    .height = 1080,
-    .update = .Rarely,
-    .resize = .Fit,
-    .fitPass = true,
-};
-
-pub const debugPlaneDepthTexDesc = TexDesc{
-    .share = .transient, // Transient??
-    .mem = .Gpu,
-    .texUse = .{ .depthAtt = true, .sampled = true, .transferSrc = false },
-    .descriptors = .SampledOnly,
-    .typ = .Depth32,
-    .width = 1920,
-    .height = 1080,
-    .update = .Rarely,
-    .resize = .Fit,
-    .fitPass = true,
-};
-
-pub const testTilesTexDesc = TexDesc{
+pub const PERSISTENT_COLOR_TEX = TexDesc{
     .share = .persistent,
     .mem = .Gpu,
     .texUse = .{ .storage = true, .colorAtt = true },
@@ -226,7 +134,7 @@ pub const testTilesTexDesc = TexDesc{
     .fitPass = false,
 };
 
-pub const imguiFontTexDesc = TexDesc{
+pub const IMGUI_FONT_TEX = TexDesc{
     .share = .persistent,
     .mem = .Gpu,
     .texUse = .{ .colorAtt = true, .sampled = true },
@@ -238,53 +146,3 @@ pub const imguiFontTexDesc = TexDesc{
     .resize = .Fit,
     .fitPass = false,
 };
-
-pub const depthViewTexDesc = TexDesc{
-    .share = .transient,
-    .mem = .Gpu,
-    .texUse = .{ .storage = true, .colorAtt = true, .sampled = true },
-    .descriptors = .StorageSampled,
-    .typ = .Color16,
-    .width = 1920,
-    .height = 1080,
-    .update = .Rarely,
-    .resize = .Fit,
-    .fitPass = true,
-};
-
-pub const BufPassId = @import("../.configs/idConfig.zig").BufPassId;
-pub const QuantIndirectInputSB: BufPassId = .id(1);
-pub const QuantIndirectOutputSB: BufPassId = .id(2);
-pub const ReadbackSB: BufPassId = .id(3);
-pub const EntitySB: BufPassId = .id(4);
-pub const MainCamUB: BufPassId = .id(5);
-pub const DebugCamUB: BufPassId = .id(6);
-pub const ImguiVB: BufPassId = .id(7);
-pub const ImguiIB: BufPassId = .id(8);
-
-pub const TexPassId = @import("../.configs/idConfig.zig").TexPassId;
-pub const RayMarchInputTex: TexPassId = .id(1);
-pub const RayMarchOutputTex: TexPassId = .id(18);
-pub const GridTex: TexPassId = .id(2);
-pub const GridTexOutput: TexPassId = .id(20);
-pub const GridDepthTex: TexPassId = .id(3);
-pub const DebugGridInputTex: TexPassId = .id(4);
-pub const DebugGridOutputTex: TexPassId = .id(5);
-pub const DebugGridFinalOutputTex: TexPassId = .id(19);
-pub const DebugGridDepthTex: TexPassId = .id(6);
-pub const DebugGridDepthOutputTex: TexPassId = .id(7);
-pub const PlaneTex: TexPassId = .id(8);
-pub const PlaneOutputTex: TexPassId = .id(21);
-pub const PlaneDepthTex: TexPassId = .id(9);
-pub const DebugPlaneInputTex: TexPassId = .id(10);
-pub const DebugPlaneOutputTex: TexPassId = .id(11);
-pub const DebugPlaneOutputFrustumViewTex: TexPassId = .id(12);
-pub const DebugPlaneEditorGridOutputTex: TexPassId = .id(22);
-pub const DebugPlaneDepthTex: TexPassId = .id(13);
-pub const DepthViewTex: TexPassId = .id(14);
-pub const DepthViewOutputTex: TexPassId = .id(17);
-pub const TestTileTex: TexPassId = .id(15);
-pub const ImguiFontTex: TexPassId = .id(16);
-// pub const Swapchain: TexPassId = .id(17);
-
-

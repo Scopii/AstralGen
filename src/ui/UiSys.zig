@@ -70,13 +70,13 @@ pub const UiSys = struct {
                 const PayloadPtr = @FieldType(RenderAssignerQueue.RenderAssignerEvent, "updateTexture");
                 const updateTexPtr = try arena.create(std.meta.Child(PayloadPtr));
                 updateTexPtr.* = .{
-                    .texUnion = .{ .texPassId = rc.ImguiFontTex },
+                    .texUnion = .{ .texName = "ImguiFontTex" },
                     .data = pixelBytes,
                     .newExtent = .{ .width = @intCast(width), .height = @intCast(height), .depth = 1 },
                 };
                 assignerQueue.append(.{ .updateTexture = updateTexPtr });
 
-                texData.tex_id = @enumFromInt(@as(u64, rc.ImguiFontTex.val()));
+                // texData.tex_id = @enumFromInt(@as(u64, rc.ImguiFontTex.val())); // Why was this needed before??
 
                 texData.status = .ok;
             },
@@ -288,12 +288,12 @@ pub const UiSys = struct {
 
         const PayloadVtx = @FieldType(RenderAssignerQueue.RenderAssignerEvent, "updateBuffer");
         const updateVtxPtr = try arena.create(std.meta.Child(PayloadVtx));
-        updateVtxPtr.* = .{ .bufUnion = .{ .bufPassId = rc.ImguiVB }, .data = vtxBuffer };
+        updateVtxPtr.* = .{ .bufUnion = .{ .bufName = "ImguiVB" }, .data = vtxBuffer };
         assignerQueue.append(.{ .updateBuffer = updateVtxPtr });
 
         const PayloadIdx = @FieldType(RenderAssignerQueue.RenderAssignerEvent, "updateBuffer");
         const updateIdxPtr = try arena.create(std.meta.Child(PayloadIdx));
-        updateIdxPtr.* = .{ .bufUnion = .{ .bufPassId = rc.ImguiIB }, .data = idxBuffer };
+        updateIdxPtr.* = .{ .bufUnion = .{ .bufName = "ImguiIB" }, .data = idxBuffer };
         assignerQueue.append(.{ .updateBuffer = updateIdxPtr });
     }
 

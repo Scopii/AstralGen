@@ -3,6 +3,7 @@ const TexDesc = @import("../render/types/res/TextureMeta.zig").TextureMeta.TexDe
 const BufDesc = @import("../render/types/res/BufferMeta.zig").BufferMeta.BufDesc;
 const LinkedIdMap = @import("../.structures/LinkedIdMap.zig").LinkedIdMap;
 const ResPassId = @import("../.configs/idConfig.zig").ResPassId;
+const KeyPool = @import("../.structures/KeyPool.zig").KeyPool;
 const PassId = @import("../.configs/idConfig.zig").PassId;
 const String = @import("../globalHelper.zig").String;
 const rc = @import("../.configs/renderConfig.zig");
@@ -16,6 +17,10 @@ const resToBuf = @import("../renderGraph/components.zig").resToBuf;
 const resToTex = @import("../renderGraph/components.zig").resToTex;
 
 pub const RenderRegistryData = struct {
+    bufPool: KeyPool(u16, rc.BUF_MAX) = .{},
+    texPool: KeyPool(u16, rc.TEX_MAX) = .{},
+    passPool: KeyPool(u16, rc.PASS_MAX) = .{},
+
     bufPassIdMap: std.StringHashMap(BufPassId) = undefined,
     texPassIdMap: std.StringHashMap(TexPassId) = undefined,
 
