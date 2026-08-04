@@ -23,6 +23,7 @@ pub fn main() void {
         std.debug.print("AstralGen failed to launch Err {}\n", .{err});
         return;
     };
+    defer astralGen.deinit();
 
     astralGen.setupEntitys() catch |err| {
         std.debug.print("AstralGen failed to setup Entitys Err {}\n", .{err});
@@ -39,9 +40,5 @@ pub fn main() void {
         return;
     };
 
-    astralGen.deinit() catch |err| {
-        std.debug.print("AstralGen failed while running Err {}\n", .{err});
-        return;
-    };
     std.debug.print("AstralGen Closed\n", .{});
 }

@@ -96,11 +96,11 @@ pub const App = struct {
         };
     }
 
-    pub fn deinit(self: *App) !void {
+    pub fn deinit(self: *App) void {
         UiSys.deinit(&self.data.ui);
-        try RenderAssignerSys.deleteBufferManuel(&self.data.renderAssigner, &self.data.renderRegistry, "ImguiIB", &self.rendererQueue);
-        try RenderAssignerSys.deleteBufferManuel(&self.data.renderAssigner, &self.data.renderRegistry, "ImguiVB", &self.rendererQueue);
-        try RenderAssignerSys.deleteTextureManuel(&self.data.renderAssigner, &self.data.renderRegistry, "ImguiFontTex", &self.rendererQueue);
+        RenderAssignerSys.deleteBufferManuel(&self.data.renderAssigner, &self.data.renderRegistry, "ImguiIB", &self.rendererQueue) catch {};
+        RenderAssignerSys.deleteBufferManuel(&self.data.renderAssigner, &self.data.renderRegistry, "ImguiVB", &self.rendererQueue) catch {};
+        RenderAssignerSys.deleteTextureManuel(&self.data.renderAssigner, &self.data.renderRegistry, "ImguiFontTex", &self.rendererQueue) catch {};
         RenderRegistrySys.deinit(&self.data.renderRegistry);
         self.renderer.deinit();
         ShaderSys.deinit(&self.data.shader, self.memoryMan.getAllocator());

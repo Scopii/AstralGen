@@ -32,6 +32,7 @@ pub const ShaderSys = struct {
         alloc.free(shaderData.rootPath);
         alloc.free(shaderData.shaderPath);
         alloc.free(shaderData.shaderOutputPath);
+        for (shaderData.freshShaders.items) |*loadedShader| alloc.free(loadedShader.data);
         shaderData.freshShaders.deinit();
         shaderData.allShaders.deinit();
     }
