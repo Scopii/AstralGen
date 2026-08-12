@@ -333,10 +333,10 @@ pub const App = struct {
 
                 if (rc.CPU_PROFILING) std.debug.print("Cpu pre-Renderer Delta {d:.3} ms, ({d:.1} Real FPS)\n", .{ dt * 0.000001, 1.0 / (dt * 0.000000001) });
 
-                const start = std.time.microTimestamp();
+                // const start = std.time.microTimestamp();
                 try RenderGraphSys.build(&self.data.renderGraph, &self.data);
-                const end = std.time.microTimestamp();
-                std.debug.print("Frame Graph Build: {d:.3} ms\n", .{@as(f64, @floatFromInt(end - start)) / 1_000.0});
+                // const end = std.time.microTimestamp();
+                // std.debug.print("Frame Graph Build: {d:.3} ms\n", .{@as(f64, @floatFromInt(end - start)) / 1_000.0});
 
                 try RenderAssignerSys.assign(&self.data.renderAssigner, &self.data.renderGraph, &self.data.renderRegistry, &self.rendererQueue, self.memoryMan);
                 try RenderAssignerSys.processQueue(&self.data.renderAssigner, &self.data.renderRegistry, &self.assignerQueue, &self.rendererQueue, self.memoryMan);

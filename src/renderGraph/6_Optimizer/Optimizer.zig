@@ -99,7 +99,7 @@ pub const OptimizerSys = struct {
             var bornBytes: u64 = 0;
             var dyingBytes: u64 = 0;
 
-            for (resource.activeBufInstances.constSlice()[bufRange.first..bufRange.last]) |bufInst| {
+            for (passLoad.bufInstances.getConstItems()[bufRange.first..bufRange.last]) |bufInst| {
                 const bufPassId = bufInst.bufPassId;
                 if (self.bufGraphLifetimes.isKeyUsed(bufPassId) == true) {
                     const graphLifetime = self.bufGraphLifetimes.getByKey(bufPassId);
@@ -109,7 +109,7 @@ pub const OptimizerSys = struct {
                 }
             }
 
-            for (resource.activeTexInstances.constSlice()[texRange.first..texRange.last]) |texInst| {
+            for (passLoad.texInstances.getConstItems()[texRange.first..texRange.last]) |texInst| {
                 const texPassId = texInst.texPassId;
                 if (self.texGraphLifetimes.isKeyUsed(texPassId) == true) {
                     const graphLifetime = self.texGraphLifetimes.getByKey(texPassId);
