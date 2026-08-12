@@ -39,7 +39,10 @@ pub const RenderRegistryData = struct {
     }
 
     pub fn getPassId(self: *const RenderRegistryData, passName: []const u8) !PassId {
-        return self.passIdMap.get(passName) orelse return error.PassStringHasNoPassId;
+        return self.passIdMap.get(passName) orelse {
+            std.debug.print("ERROR in RenderRegistry: {s} has no PassId\n", .{passName});
+            return error.PassStringHasNoPassId;
+        };
     }
 
     pub fn getPassDefinition(self: *const RenderRegistryData, passName: []const u8) !*const PassDefinition {
@@ -52,11 +55,17 @@ pub const RenderRegistryData = struct {
     }
 
     pub fn getBufferPassId(self: *const RenderRegistryData, name: []const u8) !BufPassId {
-        return self.bufPassIdMap.get(name) orelse return error.BufStringHasNoBufPassId;
+        return self.bufPassIdMap.get(name) orelse {
+            std.debug.print("ERROR in RenderRegistry: {s} has no BufPassId\n", .{name});
+            return error.BufStringHasNoBufPassId;
+        };
     }
 
     pub fn getTexturePassId(self: *const RenderRegistryData, name: []const u8) !TexPassId {
-        return self.texPassIdMap.get(name) orelse return error.TexStringHasNoTexPassId;
+        return self.texPassIdMap.get(name) orelse {
+            std.debug.print("ERROR in RenderRegistry: {s} has no TexPassId\n", .{name});
+            return error.TexStringHasNoTexPassId;
+        };
     }
 
     pub fn getBufferName(self: *const RenderRegistryData, bufPassId: BufPassId) ![]const u8 {

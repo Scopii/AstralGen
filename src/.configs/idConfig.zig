@@ -16,7 +16,9 @@ pub const BufId = Id(u16, .BufId, rc.BUF_MAX);
 pub const PassId = Id(u16, .PassId, rc.PASS_MAX);
 pub const BufPassId = Id(u16, .BufPassId, rc.BUF_MAX);
 pub const TexPassId = Id(u16, .TexPassId, rc.TEX_MAX);
-pub const ResPassId = Id(u16, .ResPassId, rc.RESOURCE_MAX);
+
+pub const BufInstanceId = Id(u16, .BufInstanceId, rc.BUF_MAX * rc.PASS_MAX);
+pub const TexInstanceId = Id(u16, .TexInstanceId, rc.TEX_MAX * rc.PASS_MAX);
 
 // pub const TexPassId = IdAdvanced(u16, .TexPassId, &.{
 //     .{ .RayMarchInputTex, null },

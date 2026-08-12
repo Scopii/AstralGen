@@ -28,7 +28,7 @@ pub const quantCompPass = p.PassDefinition.init(.{
     .attributes = &.{
         p.PassAttrib.shader(sc.quantComp),
         //
-        p.PassAttrib.buf(.{ .in = "QuantIndirectInputSB", .out = "QuantIndirectOutputSB" }, .Compute, .StorageReadWrite, 0),
+        p.PassAttrib.buf(.{ .in = "QuantIndirectSB" }, .Compute, .StorageReadWrite, 0),
         p.PassAttrib.buf(.{ .in = "EntitySB" }, .Compute, .StorageRead, 1),
     },
 });

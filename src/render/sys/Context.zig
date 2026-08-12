@@ -604,6 +604,7 @@ fn checkVulkan12Features(gpu: vk.VkPhysicalDevice) !?vk.VkPhysicalDeviceVulkan12
     fullSup &= checkFeature("Shader SampledImg Array-NonUniform-Indexing", sup.shaderSampledImageArrayNonUniformIndexing, &need.shaderSampledImageArrayNonUniformIndexing);
     fullSup &= checkFeature("Shader Float 16", sup.shaderFloat16, &need.shaderFloat16);
     fullSup &= checkFeature("Shader Buffer Int64 Atomics", sup.shaderBufferInt64Atomics, &need.shaderBufferInt64Atomics);
+    fullSup &= checkFeature("Scalar Block Layout", sup.scalarBlockLayout, &need.scalarBlockLayout);
 
     if (fullSup) {
         return need;

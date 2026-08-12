@@ -33,14 +33,14 @@ const p = @import("../passImport.zig");
 
 pub const editorGridGridDebugPass = p.PassDefinition.init(.{
     .name = "EditorGridGridDebug",
-    .outputTex = "DebugGridOutputTex",
+    .outputTex = "DebugGridTex",
     .execution = .execTaskOrMesh(.{ .groupX = 1, .groupY = 1, .groupZ = 1 }),
     .attributes = &.{
         p.PassAttrib.shader(sc.editorGridMesh),
         p.PassAttrib.shader(sc.editorGridFrag),
         //
-        p.PassAttrib.color(.{ .in = "DebugGridOutputTex", .out = "DebugGridFinalOutputTex" }, .ColorAtt, .ColorAttReadWrite, .{ .R = 0.0, .G = 0.0, .B = 0.0, .A = 0.0 }),
-        p.PassAttrib.depth(.{ .in = "DebugGridDepthTex", .out = "DebugGridDepthOutputTex" }, .EarlyAndLateFragTest, .DepthStencilReadWrite, null),
+        p.PassAttrib.color(.{ .in = "DebugGridTex", .from = "QuantGridDebug" }, .ColorAtt, .ColorAttReadWrite, .{ .R = 0.0, .G = 0.0, .B = 0.0, .A = 0.0 }),
+        p.PassAttrib.depth(.{ .in = "DebugGridDepthTex" }, .EarlyAndLateFragTest, .DepthStencilReadWrite, null),
         //
         p.PassAttrib.buf(.{ .in = "DebugCamUB" }, .Mesh, .UniformRead, 0),
         //
@@ -54,13 +54,13 @@ pub const editorGridGridDebugPass = p.PassDefinition.init(.{
 
 pub const editorGridPlaneDebugPass = p.PassDefinition.init(.{
     .name = "EditorGridPlaneDebug",
-    .outputTex = "DebugPlaneOutputFrustumViewTex",
+    .outputTex = "DebugPlaneTex",
     .execution = .execTaskOrMesh(.{ .groupX = 1, .groupY = 1, .groupZ = 1 }),
     .attributes = &.{
         p.PassAttrib.shader(sc.editorGridMesh),
         p.PassAttrib.shader(sc.editorGridFrag),
         //
-        p.PassAttrib.color(.{ .in = "DebugPlaneOutputFrustumViewTex", .out = "DebugPlaneEditorGridOutputTex" }, .ColorAtt, .ColorAttReadWrite, .{ .R = 0.0, .G = 0.0, .B = 0.0, .A = 0.0 }),
+        p.PassAttrib.color(.{ .in = "DebugPlaneTex", .from = "FrustumView" }, .ColorAtt, .ColorAttReadWrite, .{ .R = 0.0, .G = 0.0, .B = 0.0, .A = 0.0 }),
         p.PassAttrib.depth(.{ .in = "DebugPlaneDepthTex" }, .EarlyAndLateFragTest, .DepthStencilReadWrite, null),
         //
         p.PassAttrib.buf(.{ .in = "DebugCamUB" }, .Mesh, .UniformRead, 0),

@@ -122,15 +122,15 @@ pub const App = struct {
         );
 
         self.data.viewport.viewports.upsert(10, Viewport{
-            .name = "DeptView",
+            .name = "DepthView",
             .renderCamEntityId = mainCamId,
             .viewCamEntityId = debugCamId,
             .areaX = 0,
             .areaY = 0,
             .areaWidth = 1,
             .areaHeight = 1,
-            .stringComposites = &.{
-                "DepthViewOutputTex",
+            .outputTuples = &.{
+                .{ .texName = "DepthViewTex", .passName = "DepthView" },
             },
         });
 
@@ -154,8 +154,8 @@ pub const App = struct {
             .areaY = 0.0,
             .areaWidth = 1.0,
             .areaHeight = 1.0,
-            .stringComposites = &.{
-                "RayMarchOutputTex",
+            .outputTuples = &.{
+                .{ .texName = "RayMarchTex", .passName = "CompRayMarch" },
             },
         });
 
@@ -179,8 +179,8 @@ pub const App = struct {
             .areaY = 0.0,
             .areaWidth = 0.5,
             .areaHeight = 0.5,
-            .stringComposites = &.{
-                "GridTexOutput",
+            .outputTuples = &.{
+                .{ .texName = "GridTex", .passName = "QuantGridMain" },
             },
         });
 
@@ -192,9 +192,9 @@ pub const App = struct {
             .areaY = 0.0,
             .areaWidth = 0.5,
             .areaHeight = 0.5,
-            .stringComposites = &.{
-                "DebugGridOutputTex",
-                "DebugGridFinalOutputTex",
+            .outputTuples = &.{
+                .{ .texName = "DebugGridTex", .passName = "QuantGridDebug" },
+                .{ .texName = "DebugGridTex", .passName = "EditorGridGridDebug" },
             },
         });
 
@@ -206,10 +206,10 @@ pub const App = struct {
             .areaY = 0.5,
             .areaWidth = 0.5,
             .areaHeight = 0.5,
-            .stringComposites = &.{
-                "DebugPlaneOutputTex",
-                "DebugPlaneOutputFrustumViewTex",
-                "DebugPlaneEditorGridOutputTex",
+            .outputTuples = &.{
+                .{ .texName = "DebugPlaneTex", .passName = "QuantPlaneDebug" },
+                .{ .texName = "DebugPlaneTex", .passName = "FrustumView" },
+                .{ .texName = "DebugPlaneTex", .passName = "EditorGridPlaneDebug" },
             },
         });
 
@@ -221,8 +221,8 @@ pub const App = struct {
             .areaY = 0.5,
             .areaWidth = 0.5,
             .areaHeight = 0.5,
-            .stringComposites = &.{
-                "PlaneOutputTex",
+            .outputTuples = &.{
+                .{ .texName = "PlaneTex", .passName = "QuantPlaneMain" },
             },
         });
 
@@ -333,10 +333,10 @@ pub const App = struct {
 
                 if (rc.CPU_PROFILING) std.debug.print("Cpu pre-Renderer Delta {d:.3} ms, ({d:.1} Real FPS)\n", .{ dt * 0.000001, 1.0 / (dt * 0.000000001) });
 
-                // const start = std.time.microTimestamp();
+                const start = std.time.microTimestamp();
                 try RenderGraphSys.build(&self.data.renderGraph, &self.data);
-                // const end = std.time.microTimestamp();
-                // std.debug.print("Frame Graph Build: {d:.3} ms\n", .{@as(f64, @floatFromInt(end - start)) / 1_000.0});
+                const end = std.time.microTimestamp();
+                std.debug.print("Frame Graph Build: {d:.3} ms\n", .{@as(f64, @floatFromInt(end - start)) / 1_000.0});
 
                 try RenderAssignerSys.assign(&self.data.renderAssigner, &self.data.renderGraph, &self.data.renderRegistry, &self.rendererQueue, self.memoryMan);
                 try RenderAssignerSys.processQueue(&self.data.renderAssigner, &self.data.renderRegistry, &self.assignerQueue, &self.rendererQueue, self.memoryMan);

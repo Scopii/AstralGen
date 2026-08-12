@@ -1,22 +1,25 @@
 const RenderRegistryData = @import("../../renderRegistry/RenderRegistryData.zig").RenderRegistryData;
 const CompositeNode = @import("../../render/types/pass/RenderNode.zig").CompositeNode;
+const OutputLoadData = @import("../2_OutputLoad/OutputLoad.zig").OutputLoadData;
+const LinkedIdMap = @import("../../.structures/LinkedIdMap.zig").LinkedIdMap;
+const FixedList = @import("../../.structures/FixedList.zig").FixedList;
 const TexPassId = @import("../../.configs/idConfig.zig").TexPassId;
-const WindowId = @import("../../.configs/idConfig.zig").WindowId;
 const Viewport = @import("../../viewport/Viewport.zig").Viewport;
+const WindowId = @import("../../.configs/idConfig.zig").WindowId;
 const EngineData = @import("../../EngineData.zig").EngineData;
 const PassId = @import("../../.configs/idConfig.zig").PassId;
 const rc = @import("../../.configs/renderConfig.zig");
 const std = @import("std");
 
-const OutputData = @import("../0.5_Output/OutputData.zig").OutputData;
-const PassData = @import("PassData.zig").PassData;
+pub const CompositeData = struct {
+    newPassExtents: LinkedIdMap(struct { width: u32, height: u32 }, rc.PASS_MAX, PassId, rc.PASS_MAX, 0) = .{},
+    composites: FixedList(CompositeNode, rc.MAX_WINDOWS * 4) = .{},
+};
 
-// Step 1
-
-pub const PassSys = struct {
-    pub fn build(passData: *PassData, output: *const OutputData, registry: *const RenderRegistryData, data: *const EngineData) !void {
-        passData.composites.clear();
-        passData.newPassExtents.clear();
+pub const CompositeSys = struct {
+    pub fn build(self: *CompositeData, outputLoad: *const OutputLoadData, registry: *const RenderRegistryData, data: *const EngineData) !void {
+        self.composites.clear();
+        self.newPassExtents.clear();
 
         // Check every Window
         for (data.window.activeWindows.constSlice()) |window| {
@@ -26,17 +29,13 @@ pub const PassSys = struct {
                     const viewport = data.viewport.viewports.getByKey(viewportId.val());
 
                     // Check every Composite String
-                    for (viewport.stringComposites) |stringComposite| {
-                        const outTexPassId = try registry.getTexturePassId(stringComposite);
-                        if (output.texProducer.isKeyUsed(outTexPassId) == false) return error.viewportCompositeTexHasNoProducer;
-                        const producerPassId = output.texProducer.getByKey(outTexPassId);
-                        const passDef = try registry.getPassDefinitionById(producerPassId);
+                    for (viewport.outputTuples) |outputTuple| {
+                        const outTexPassId = try registry.getTexturePassId(outputTuple.texName);
+                        const outPassId = try registry.getPassId(outputTuple.passName);
+                        const passDef = try registry.getPassDefinitionById(outPassId);
 
-                        if (passData.newPassExtents.isKeyUsed(producerPassId) == false) {
-                            passData.newPassExtents.upsert(producerPassId, .{ .width = 0, .height = 0 });
-                        }
-
-                        const passExtent = passData.newPassExtents.getPtrByKey(producerPassId);
+                        if (self.newPassExtents.isKeyUsed(outPassId) == false) self.newPassExtents.insert(outPassId, .{ .width = 0, .height = 0 });
+                        const passExtent = self.newPassExtents.getPtrByKey(outPassId);
 
                         // Check for bigger Viewport Area:
                         const viewWidth = viewport.calcViewWidth(window.extent.width);
@@ -50,8 +49,8 @@ pub const PassSys = struct {
                         if (scaledHeightInt > passExtent.height) passExtent.height = scaledHeightInt;
 
                         // Check Blit or Composite
-                        const composite = createComposite(&viewport, producerPassId, outTexPassId, window.id, window.extent.width, window.extent.height);
-                        passData.composites.append(composite) catch std.debug.print("PassDef Could not Append Composite\n", .{});
+                        const composite = createComposite(&viewport, outPassId, outTexPassId, window.id, window.extent.width, window.extent.height);
+                        self.composites.append(composite) catch std.debug.print("PassDef Could not Append Composite\n", .{});
                     }
                 }
             }
@@ -59,16 +58,16 @@ pub const PassSys = struct {
 
         // Debug Output
         if (rc.FRAME_GRAPH_DEBUG) {
-            std.debug.print("1.PassExtractor: \n", .{});
-            for (output.activePasses.getConstItems(), 0..) |passId, i| {
+            std.debug.print("3.Composite: \n", .{});
+            for (outputLoad.activePasses.getConstItems(), 0..) |passId, i| {
                 const passName = try registry.getPassName(passId);
-                if (passData.newPassExtents.isKeyUsed(passId) == true) {
-                    const passExtent = passData.newPassExtents.getByKey(passId);
+                if (self.newPassExtents.isKeyUsed(passId) == true) {
+                    const passExtent = self.newPassExtents.getByKey(passId);
                     std.debug.print("- Pass {}. {s} (Size {} x {})\n", .{ i, passName, passExtent.width, passExtent.height });
                 } else std.debug.print("- Pass {}. {s} (Size .NULL x .NULL)\n", .{ i, passName });
             }
             std.debug.print("\n", .{});
-            for (passData.composites.constSlice(), 0..) |comp, i| {
+            for (self.composites.constSlice(), 0..) |comp, i| {
                 const passName = try registry.getPassName(comp.pass);
                 std.debug.print("- Composite {}. {s} (Pass {s}) [{}x{} @ {},{}]\n", .{ i, comp.name, passName, comp.viewWidth, comp.viewHeight, comp.viewOffsetX, comp.viewOffsetY });
             }
@@ -89,10 +88,5 @@ pub const PassSys = struct {
             .opacity = viewport.opacity,
             .stretch = rc.COMPOSITE_TEX_STRETCH,
         };
-    }
-
-    pub fn getPassOutputTex(registry: *const RenderRegistryData, passName: []const u8) !?TexPassId {
-        const passDef = try registry.getPassDefinition(passName);
-        return if (passDef.outputTex) |outputTex| try registry.getTexturePassId(outputTex) else return null;
     }
 };

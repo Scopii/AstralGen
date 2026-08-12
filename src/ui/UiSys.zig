@@ -187,14 +187,20 @@ pub const UiSys = struct {
                     .thickness = 1.0,
                 });
 
-                for (viewport.stringComposites, 0..) |stringComposite, i| {
+                for (viewport.outputTuples, 0..) |outputTuple, i| {
                     const passHeight = 100 + (i * 20);
                     const castedHeight: f32 = @floatFromInt(passHeight);
 
                     drawList.addTextUnformatted(
                         .{ viewX + 10, viewY + castedHeight },
-                        zgui.colorConvertFloat4ToU32(.{ 0.8, 0.8, 0.8, 1.0 }),
-                        stringComposite,
+                        zgui.colorConvertFloat4ToU32(.{ 0.9, 0.8, 0.7, 1.0 }),
+                        outputTuple.passName,
+                    );
+                    const passNameLen: f32 = @floatFromInt(outputTuple.passName.len);
+                    drawList.addTextUnformatted(
+                        .{ viewX + 10 + (passNameLen * 8), viewY + castedHeight },
+                        zgui.colorConvertFloat4ToU32(.{ 0.7, 0.8, 0.9, 1.0 }),
+                        outputTuple.texName,
                     );
                 }
 

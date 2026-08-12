@@ -122,8 +122,7 @@ pub const RenderRegistrySys = struct {
         try RenderRegistrySys.addPassDefinition(self, quantCompPass);
 
         // Buffers
-        try RenderRegistrySys.addBufferDefinition(self, "QuantIndirectInputSB", rc.INDIRECT_SB);
-        try RenderRegistrySys.addBufferDefinition(self, "QuantIndirectOutputSB", rc.INDIRECT_SB);
+        try RenderRegistrySys.addBufferDefinition(self, "QuantIndirectSB", rc.INDIRECT_SB);
         try RenderRegistrySys.addBufferDefinition(self, "ReadbackSB", rc.READBACK_SB);
 
         try RenderRegistrySys.addBufferDefinition(self, "EntitySB", rc.ENTITY_SB);
@@ -134,34 +133,21 @@ pub const RenderRegistrySys = struct {
         try RenderRegistrySys.addBufferDefinition(self, "ImguiIB", rc.IMGUI_IB);
 
         // Textures
-        try RenderRegistrySys.addTextureDefinition(self, "RayMarchInputTex", rc.TRANSIENT_COLOR_TEX);
-        try RenderRegistrySys.addTextureDefinition(self, "RayMarchOutputTex", rc.TRANSIENT_COLOR_TEX);
+        try RenderRegistrySys.addTextureDefinition(self, "RayMarchTex", rc.TRANSIENT_COLOR_TEX);
 
         try RenderRegistrySys.addTextureDefinition(self, "GridTex", rc.TRANSIENT_COLOR_TEX);
-        try RenderRegistrySys.addTextureDefinition(self, "GridTexOutput", rc.TRANSIENT_COLOR_TEX);
-
         try RenderRegistrySys.addTextureDefinition(self, "GridDepthTex", rc.TRANSIENT_DEPTH_TEX);
 
-        try RenderRegistrySys.addTextureDefinition(self, "DebugGridInputTex", rc.TRANSIENT_COLOR_TEX);
-        try RenderRegistrySys.addTextureDefinition(self, "DebugGridOutputTex", rc.TRANSIENT_COLOR_TEX);
-        try RenderRegistrySys.addTextureDefinition(self, "DebugGridFinalOutputTex", rc.TRANSIENT_COLOR_TEX);
-
+        try RenderRegistrySys.addTextureDefinition(self, "DebugGridTex", rc.TRANSIENT_COLOR_TEX);
         try RenderRegistrySys.addTextureDefinition(self, "DebugGridDepthTex", rc.TRANSIENT_DEPTH_TEX);
-        try RenderRegistrySys.addTextureDefinition(self, "DebugGridDepthOutputTex", rc.TRANSIENT_DEPTH_TEX);
 
         try RenderRegistrySys.addTextureDefinition(self, "PlaneTex", rc.TRANSIENT_COLOR_TEX);
-        try RenderRegistrySys.addTextureDefinition(self, "PlaneOutputTex", rc.TRANSIENT_COLOR_TEX);
-
         try RenderRegistrySys.addTextureDefinition(self, "PlaneDepthTex", rc.TRANSIENT_DEPTH_TEX);
 
-        try RenderRegistrySys.addTextureDefinition(self, "DebugPlaneInputTex", rc.TRANSIENT_COLOR_TEX);
-        try RenderRegistrySys.addTextureDefinition(self, "DebugPlaneOutputTex", rc.TRANSIENT_COLOR_TEX);
-        try RenderRegistrySys.addTextureDefinition(self, "DebugPlaneOutputFrustumViewTex", rc.TRANSIENT_COLOR_TEX);
-        try RenderRegistrySys.addTextureDefinition(self, "DebugPlaneEditorGridOutputTex", rc.TRANSIENT_COLOR_TEX);
+        try RenderRegistrySys.addTextureDefinition(self, "DebugPlaneTex", rc.TRANSIENT_COLOR_TEX);
         try RenderRegistrySys.addTextureDefinition(self, "DebugPlaneDepthTex", rc.TRANSIENT_DEPTH_TEX);
 
         try RenderRegistrySys.addTextureDefinition(self, "DepthViewTex", rc.TRANSIENT_COLOR_TEX);
-        try RenderRegistrySys.addTextureDefinition(self, "DepthViewOutputTex", rc.TRANSIENT_COLOR_TEX);
 
         try RenderRegistrySys.addTextureDefinition(self, "TestTileTex", rc.PERSISTENT_COLOR_TEX);
         try RenderRegistrySys.addTextureDefinition(self, "ImguiFontTex", rc.IMGUI_FONT_TEX);
