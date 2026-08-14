@@ -110,13 +110,13 @@ pub const TexLifetime = struct {
 };
 
 pub const PhysBufLifetime = struct {
-    bufPassId: BufPassId,
     earliest: u16,
     latest: u16,
+    bufDesc: BufDesc,
 };
 
 pub const PhysTexLifetime = struct {
-    texPassId: TexPassId,
     earliest: u16,
     latest: u16,
+    texDesc: TexDesc,
 };

@@ -45,11 +45,11 @@ pub const ResourceSys = struct {
             const bufRange = passLoad.bufRanges.getByKey(activePass);
             const bufInstances = passLoad.bufInstances.getConstItems()[bufRange.first..bufRange.last];
 
-            for (bufInstances) |bufInstance| {
-                try self.activeBufInstances.append(bufInstance);
-                if (bufInstance.rootPassId) |rootPassId| try self.dependencies.append(.{ .predecessor = rootPassId, .successor = bufInstance.passId });
+            for (bufInstances) |bufInst| {
+                try self.activeBufInstances.append(bufInst);
+                if (bufInst.rootPassId) |rootPassId| try self.dependencies.append(.{ .predecessor = rootPassId, .successor = bufInst.passId });
 
-                const bufPassId = bufInstance.bufPassId;
+                const bufPassId = bufInst.bufPassId;
 
                 if (self.activeBufPassIds.isKeyUsed(bufPassId) == false) {
                     self.activeBufPassIds.insert(bufPassId, bufPassId);

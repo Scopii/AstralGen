@@ -520,29 +520,29 @@ pub const Cmd = struct {
     }
 
     pub fn bindShaders(self: *const Cmd, shaders: []const Shader) void {
-        const allStages = [_]vk.VkShaderStageFlagBits{
+        const allStages = [5]vk.VkShaderStageFlagBits{
             vk.VK_SHADER_STAGE_VERTEX_BIT,
-            vk.VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT,
-            vk.VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT,
-            vk.VK_SHADER_STAGE_GEOMETRY_BIT,
+            // vk.VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT,
+            // vk.VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT,
+            // vk.VK_SHADER_STAGE_GEOMETRY_BIT,
             vk.VK_SHADER_STAGE_FRAGMENT_BIT,
             vk.VK_SHADER_STAGE_COMPUTE_BIT,
             vk.VK_SHADER_STAGE_TASK_BIT_EXT,
             vk.VK_SHADER_STAGE_MESH_BIT_EXT,
         };
-        var handles: [8]vk.VkShaderEXT = .{null} ** 8;
+        var handles: [allStages.len]vk.VkShaderEXT = .{null} ** 5;
 
         for (shaders) |shader| {
             const activeStageBit = vhF.getShaderBit(shader.stage);
 
-            for (0..8) |i| {
+            for (0..allStages.len) |i| {
                 if (allStages[i] == activeStageBit) {
                     handles[i] = shader.handle;
                     break;
                 }
             }
         }
-        vkFn.vkCmdBindShadersEXT.?(self.handle, 8, &allStages, &handles);
+        vkFn.vkCmdBindShadersEXT.?(self.handle, allStages.len, &allStages, &handles);
     }
 
     pub fn dispatch(self: *const Cmd, groupCountX: u32, groupCountY: u32, groupCountZ: u32) void {

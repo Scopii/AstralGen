@@ -236,12 +236,12 @@ pub const CmdRecorder = struct {
                 // Graph Commands
                 .clearBuffer => |clearBufId| {
                     const buffer: *Buffer = try resMan.get(clearBufId, cmd.flightId);
-                    try self.checkBufferState(buffer, .{ .stage = .Transfer, .access = .TransferWrite });
+                    try self.checkBufferState(buffer, .{ .stage = .Clear, .access = .TransferWrite });
                     try self.bufClears.append(clearBufId);
                 },
                 .clearTexture => |clearTexId| {
                     const texture: *Texture = try resMan.get(clearTexId, cmd.flightId);
-                    try self.checkImageState(texture, .{ .stage = .Transfer, .access = .TransferWrite, .layout = .TransferDst });
+                    try self.checkImageState(texture, .{ .stage = .Clear, .access = .TransferWrite, .layout = .TransferDst });
                     try self.imgClears.append(clearTexId);
                 },
                 .barrierBakeClears => try self.bakeAndExecuteClears(cmd, resMan),

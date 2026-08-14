@@ -54,6 +54,7 @@ pub const FRAME_GRAPH_SORT_DEBUG = false;
 
 pub const FRAME_GRAPH_SKIP_OPTIMIZE = false;
 pub const FRAME_GRAPH_SKIP_SHARING = false;
+pub const FRAME_GRAPH_AGGRESSIVE_TEXTURE_SHARE = true;
 
 pub const PASS_TEXTURE_RESIZE_INCLUDES_READ = true;
 pub const FRAME_BUILDS_TILL_TRANSIENT_DELETION = 0;
@@ -104,7 +105,7 @@ pub const TRANSIENT_COLOR_TEX = TexDesc{
     .width = 16,
     .height = 9,
     .update = .Rarely,
-    .resize = .Fit,
+    .resize = .Block,
     .fitPass = true,
 };
 
@@ -117,7 +118,7 @@ pub const TRANSIENT_DEPTH_TEX = TexDesc{
     .width = 16,
     .height = 9,
     .update = .Rarely,
-    .resize = .Fit,
+    .resize = .Block,
     .fitPass = true,
 };
 

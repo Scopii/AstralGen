@@ -68,6 +68,7 @@ pub const TexDescriptorUsage = enum {
     StorageOnly,
     SampledOnly,
     StorageSampled,
+    None,
 };
 
 pub const TexUsage = packed struct {
@@ -75,7 +76,7 @@ pub const TexUsage = packed struct {
     depthAtt: bool = false, // VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT
     storage: bool = false, // VK_IMAGE_USAGE_STORAGE_BIT
     sampled: bool = false, // VK_IMAGE_USAGE_SAMPLED_BIT
-    transferSrc: bool = true, // Always?
+    transferSrc: bool = false, // Always?
     transferDst: bool = true, // Always?
 
     pub fn getImageUse(self: *const TexUsage) vk.VkImageUsageFlags {

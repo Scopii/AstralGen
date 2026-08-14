@@ -79,9 +79,7 @@ pub const RenderAssignerSys = struct {
         rendererQueue: *RendererQueue,
         memoryMan: *MemoryManager,
     ) !void {
-        // const mapper = &renderGraph.mapper;
         const share = &renderGraph.share;
-        const resource = &renderGraph.resource;
 
         self.unusedTransientBufs.appendSliceAssumeCapacity(self.usedTransientBufs.constSlice());
         self.unusedTransientTexes.appendSliceAssumeCapacity(self.usedTransientTexes.constSlice());
@@ -91,8 +89,7 @@ pub const RenderAssignerSys = struct {
 
         // Buffer Pooling
         for (share.sharedBufLifetimes.constSlice()) |sharedBufLifetime| {
-            // const desc = mapper.transientGroups.getByKey(sharedBufLifetime.resKey).desc;
-            const bufDesc = resource.bufDescs.getByKey(sharedBufLifetime.bufPassId);
+            const bufDesc = sharedBufLifetime.bufDesc;
             var candidateIndex: ?u16 = null;
 
             for (self.unusedTransientBufs.constSlice(), 0..) |transientBuf, i| {
@@ -114,12 +111,11 @@ pub const RenderAssignerSys = struct {
 
         // Texture Pooling
         for (share.sharedTexLifetimes.constSlice()) |sharedTexLifetime| {
-            // const desc = mapper.transientGroups.getByKey(sharedTexLifetime.resKey).desc;
-            const texDesc = resource.texDescs.getByKey(sharedTexLifetime.texPassId);
+            const texDesc = sharedTexLifetime.texDesc;
             var candidateIndex: ?u16 = null;
 
             for (self.unusedTransientTexes.constSlice(), 0..) |transientTex, i| {
-                if (texDescEqual(&transientTex.texDesc, &texDesc)) {
+                if (texDescComptabile(&transientTex.texDesc, &texDesc)) {
                     candidateIndex = @intCast(i);
                     break;
                 }
@@ -518,6 +514,37 @@ fn bufDescEqual(bufDesc1: *const BufDesc, bufDesc2: *const BufDesc) bool {
     return std.meta.eql(bufDesc1.*, bufDesc2.*);
 }
 
-fn texDescEqual(texDesc1: *const TexDesc, texDesc2: *const TexDesc) bool {
-    return std.meta.eql(texDesc1.*, texDesc2.*);
+// fn texDescComptabile(texDesc1: *const TexDesc, texDesc2: *const TexDesc) bool {
+//     return std.meta.eql(texDesc1.*, texDesc2.*);
+// }
+
+fn texDescComptabile(texDesc1: *const TexDesc, texDesc2: *const TexDesc) bool {
+    const compatibleShare = texDesc1.share == texDesc2.share;
+    const compatibleMem = texDesc1.mem == texDesc2.mem;
+    const compatibleTyp = texDesc1.typ == texDesc2.typ;
+    const compatibleWidth = texDesc1.width == texDesc2.width;
+    const compatibleHeight = texDesc1.height == texDesc2.height;
+    const compatibleDepth = texDesc1.depth == texDesc2.depth;
+    const compatibleUpdate = texDesc1.update == texDesc2.update;
+    const compatibleResize = texDesc1.resize == .Block and texDesc2.resize == .Block;
+    const compatibleDescriptor = texDesc1.descriptors == texDesc2.descriptors or texDesc2.descriptors == .StorageSampled;
+
+    const compatibleUsage = rc.FRAME_GRAPH_AGGRESSIVE_TEXTURE_SHARE or
+        (texDesc1.texUse.colorAtt == texDesc2.texUse.colorAtt and
+            texDesc1.texUse.depthAtt == texDesc2.texUse.depthAtt and
+            texDesc1.texUse.storage == texDesc2.texUse.storage and
+            texDesc1.texUse.sampled == texDesc2.texUse.sampled and
+            texDesc1.texUse.transferSrc == texDesc2.texUse.transferSrc and
+            texDesc1.texUse.transferDst == texDesc2.texUse.transferDst);
+
+    return compatibleShare and
+        compatibleMem and
+        compatibleTyp and
+        compatibleWidth and
+        compatibleHeight and
+        compatibleDepth and
+        compatibleUpdate and
+        compatibleResize and
+        compatibleDescriptor and
+        compatibleUsage;
 }

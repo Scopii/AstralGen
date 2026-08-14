@@ -5,8 +5,10 @@ const BufInstance = @import("../../renderGraph/components.zig").BufInstance;
 const LinkedIdMap = @import("../../.structures/LinkedIdMap.zig").LinkedIdMap;
 const BufInstanceId = @import("../../.configs/idConfig.zig").BufInstanceId;
 const TexInstanceId = @import("../../.configs/idConfig.zig").TexInstanceId;
+const TexPassId = @import("../../.configs/idConfig.zig").TexPassId;
 const PassId = @import("../../.configs/idConfig.zig").PassId;
 const rc = @import("../../.configs/renderConfig.zig");
+const vhE = @import("../../render/help/Enums.zig");
 const std = @import("std");
 
 pub const PassLoadData = struct {
@@ -64,7 +66,23 @@ pub const PassLoadSys = struct {
                         self.bufInstances.insert(.id(curLength), bufInst);
                     }, // ? Should not create Physical
 
-                    inline else => |texSlotTypes| {
+                    .texSlot => |texSlotTypes| {
+                        const texPassId = try registry.getTexturePassId(texSlotTypes.texLink.in);
+                        const rootPassId = if (texSlotTypes.texLink.from) |rootPass| try registry.getPassId(rootPass) else null;
+                        const texInst = TexInstance{ .texPassId = texPassId, .passId = passId, .rootPassId = rootPassId, .access = if (texSlotTypes.access.isReadOnly() == true) .read else .write };
+                        const curLength: u16 = @intCast(self.texInstances.getLength());
+                        self.texInstances.insert(.id(curLength), texInst);
+                    },
+
+                    .colorAtt => |texSlotTypes| {
+                        const texPassId = try registry.getTexturePassId(texSlotTypes.texLink.in);
+                        const rootPassId = if (texSlotTypes.texLink.from) |rootPass| try registry.getPassId(rootPass) else null;
+                        const texInst = TexInstance{ .texPassId = texPassId, .passId = passId, .rootPassId = rootPassId, .access = if (texSlotTypes.access.isReadOnly() == true) .read else .write };
+                        const curLength: u16 = @intCast(self.texInstances.getLength());
+                        self.texInstances.insert(.id(curLength), texInst);
+                    },
+
+                    .depthAtt, .stencilAtt => |texSlotTypes| {
                         const texPassId = try registry.getTexturePassId(texSlotTypes.texLink.in);
                         const rootPassId = if (texSlotTypes.texLink.from) |rootPass| try registry.getPassId(rootPass) else null;
                         const texInst = TexInstance{ .texPassId = texPassId, .passId = passId, .rootPassId = rootPassId, .access = if (texSlotTypes.access.isReadOnly() == true) .read else .write };

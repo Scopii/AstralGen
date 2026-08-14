@@ -170,6 +170,7 @@ pub const DescriptorMan = struct {
         const subRange = vhF.createSubresourceRange(texMeta.typ.getImageAspectFlags(), 0, 1, 0, 1);
 
         switch (texMeta.descriptors) {
+            .None => {},
             .StorageOnly => {
                 try self.queueTextureDescriptorTyp(texMeta, texture, subRange, vk.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
             },
