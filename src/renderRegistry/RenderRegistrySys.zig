@@ -135,16 +135,16 @@ pub const RenderRegistrySys = struct {
         // Textures
         try RenderRegistrySys.addTextureDefinition(self, "RayMarchTex", rc.TRANSIENT_COLOR_TEX);
 
-        try RenderRegistrySys.addTextureDefinition(self, "GridTex", rc.TRANSIENT_COLOR_TEX);
+        try RenderRegistrySys.addTextureDefinition(self, "GridTex", rc.TRANSIENT_ATT_TEX);
         try RenderRegistrySys.addTextureDefinition(self, "GridDepthTex", rc.TRANSIENT_DEPTH_TEX);
 
-        try RenderRegistrySys.addTextureDefinition(self, "DebugGridTex", rc.TRANSIENT_COLOR_TEX);
+        try RenderRegistrySys.addTextureDefinition(self, "DebugGridTex", rc.TRANSIENT_ATT_TEX);
         try RenderRegistrySys.addTextureDefinition(self, "DebugGridDepthTex", rc.TRANSIENT_DEPTH_TEX);
 
-        try RenderRegistrySys.addTextureDefinition(self, "PlaneTex", rc.TRANSIENT_COLOR_TEX);
+        try RenderRegistrySys.addTextureDefinition(self, "PlaneTex", rc.TRANSIENT_ATT_TEX);
         try RenderRegistrySys.addTextureDefinition(self, "PlaneDepthTex", rc.TRANSIENT_DEPTH_TEX);
 
-        try RenderRegistrySys.addTextureDefinition(self, "DebugPlaneTex", rc.TRANSIENT_COLOR_TEX);
+        try RenderRegistrySys.addTextureDefinition(self, "DebugPlaneTex", rc.TRANSIENT_ATT_TEX);
         try RenderRegistrySys.addTextureDefinition(self, "DebugPlaneDepthTex", rc.TRANSIENT_DEPTH_TEX);
 
         try RenderRegistrySys.addTextureDefinition(self, "DepthViewTex", rc.TRANSIENT_COLOR_TEX);

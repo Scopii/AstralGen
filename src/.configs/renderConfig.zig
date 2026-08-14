@@ -54,7 +54,7 @@ pub const FRAME_GRAPH_SORT_DEBUG = false;
 
 pub const FRAME_GRAPH_SKIP_OPTIMIZE = false;
 pub const FRAME_GRAPH_SKIP_SHARING = false;
-pub const FRAME_GRAPH_AGGRESSIVE_TEXTURE_SHARE = true;
+pub const FRAME_GRAPH_AGGRESSIVE_TEXTURE_SHARE = false;
 
 pub const PASS_TEXTURE_RESIZE_INCLUDES_READ = true;
 pub const FRAME_BUILDS_TILL_TRANSIENT_DELETION = 0;
@@ -99,8 +99,21 @@ pub const IMGUI_IB = BufDesc{ .share = .persistent, .mem = .Gpu, .typ = .Index, 
 pub const TRANSIENT_COLOR_TEX = TexDesc{
     .share = .transient,
     .mem = .Gpu,
-    .descriptors = .StorageSampled, // Should be inferred
-    .texUse = .{ .storage = true, .colorAtt = true, .sampled = true }, // Should be inferred
+    .descriptors = .StorageSampled,
+    .texUse = .{ .storage = true, .colorAtt = true, .sampled = true },
+    .typ = .Color16,
+    .width = 16,
+    .height = 9,
+    .update = .Rarely,
+    .resize = .Block,
+    .fitPass = true,
+};
+
+pub const TRANSIENT_ATT_TEX = TexDesc{
+    .share = .transient,
+    .mem = .Gpu,
+    .descriptors = .SampledOnly,
+    .texUse = .{ .storage = false, .colorAtt = true, .sampled = true },
     .typ = .Color16,
     .width = 16,
     .height = 9,
@@ -110,9 +123,9 @@ pub const TRANSIENT_COLOR_TEX = TexDesc{
 };
 
 pub const TRANSIENT_DEPTH_TEX = TexDesc{
-    .share = .transient, // WAS PERSISTENT
+    .share = .transient,
     .mem = .Gpu,
-    .texUse = .{ .depthAtt = true, .sampled = true, .transferSrc = false },
+    .texUse = .{ .depthAtt = true, .sampled = true },
     .descriptors = .SampledOnly,
     .typ = .Depth32,
     .width = 16,
@@ -125,7 +138,7 @@ pub const TRANSIENT_DEPTH_TEX = TexDesc{
 pub const PERSISTENT_COLOR_TEX = TexDesc{
     .share = .persistent,
     .mem = .Gpu,
-    .texUse = .{ .storage = true, .colorAtt = true },
+    .texUse = .{ .storage = true },
     .descriptors = .StorageOnly,
     .typ = .Color16,
     .width = 256,
