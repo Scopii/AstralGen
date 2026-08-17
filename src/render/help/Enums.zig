@@ -120,6 +120,7 @@ pub const ImageLayout = enum(vk.VkImageLayout) {
 };
 
 pub const PipeStage = enum(vk.VkPipelineStageFlagBits2) { //( SHOULD BE CORRECT ORDER)
+    None = vk.VK_PIPELINE_STAGE_2_NONE,
     TopOfPipe = vk.VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
     Clear = vk.VK_PIPELINE_STAGE_2_CLEAR_BIT,
     Compute = vk.VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,

@@ -45,16 +45,20 @@ pub const Texture = struct {
         };
     }
 
-    pub fn createImageBarrier(self: *Texture, newState: TextureState) vk.VkImageMemoryBarrier2 {
+    pub fn createImageBarrier(self: *Texture, newState: TextureState, ignoreOld: bool) vk.VkImageMemoryBarrier2 {
         const subRange = vhF.createSubresourceRange(self.typ.getImageAspectFlags(), 0, 1, 0, 1);
+
+        const srcStage = if (ignoreOld == true) .None else self.state.stage;
+        const srcAccess = if (ignoreOld == true) .None else self.state.access;
+        const srcLayout = if (ignoreOld == true) .Undefined else self.state.layout;
 
         const barrier = vk.VkImageMemoryBarrier2{
             .sType = vk.VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-            .srcStageMask = @intFromEnum(self.state.stage),
-            .srcAccessMask = @intFromEnum(self.state.access),
+            .srcStageMask = @intFromEnum(srcStage),
+            .srcAccessMask = @intFromEnum(srcAccess),
             .dstStageMask = @intFromEnum(newState.stage),
             .dstAccessMask = @intFromEnum(newState.access),
-            .oldLayout = @intFromEnum(self.state.layout),
+            .oldLayout = @intFromEnum(srcLayout),
             .newLayout = @intFromEnum(newState.layout),
             .srcQueueFamilyIndex = vk.VK_QUEUE_FAMILY_IGNORED,
             .dstQueueFamilyIndex = vk.VK_QUEUE_FAMILY_IGNORED,

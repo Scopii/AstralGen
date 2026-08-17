@@ -178,7 +178,7 @@ pub const CmdRecorder = struct {
 
             for (texTransfers) |transfer| {
                 const tex = try resMan.get(transfer.dstTexId, cmd.flightId);
-                try self.checkImageState(tex, .{ .stage = .Transfer, .access = .TransferWrite, .layout = .TransferDst });
+                try self.checkImageState(tex, .{ .stage = .Transfer, .access = .TransferWrite, .layout = .TransferDst }, false);
             }
             self.bakeBarriers(cmd, "Tex Transfer Prep");
 
@@ -192,8 +192,14 @@ pub const CmdRecorder = struct {
         resUpdater.resetUpdates(cmd.flightId);
     }
 
-    fn checkImageState(self: *CmdRecorder, tex: *Texture, neededState: Texture.TextureState) !void {
-        const state = tex.state;
+    fn checkImageState(self: *CmdRecorder, tex: *Texture, neededState: Texture.TextureState, ignoreOld: bool) !void {
+        var state = tex.state;
+        if (ignoreOld == true) {
+            state.layout = .Undefined;
+            state.access = .None;
+            state.stage = .None;
+        }
+
         if (state.stage == neededState.stage and state.access == neededState.access and state.layout == neededState.layout) return;
         if (state.layout == neededState.layout and state.access.isReadOnly() and neededState.access.isReadOnly()) return; // same layout, both reads
 
@@ -206,7 +212,7 @@ pub const CmdRecorder = struct {
             self.memDstAccess |= memBarrier.dstAccessMask;
             self.memDstStage |= memBarrier.dstStageMask;
         } else {
-            try self.imgBarriers.append(tex.createImageBarrier(neededState));
+            try self.imgBarriers.append(tex.createImageBarrier(neededState, ignoreOld));
         }
     }
 
@@ -241,7 +247,7 @@ pub const CmdRecorder = struct {
                 },
                 .clearTexture => |clearTexId| {
                     const texture: *Texture = try resMan.get(clearTexId, cmd.flightId);
-                    try self.checkImageState(texture, .{ .stage = .Clear, .access = .TransferWrite, .layout = .TransferDst });
+                    try self.checkImageState(texture, .{ .stage = .Clear, .access = .TransferWrite, .layout = .TransferDst }, true);
                     try self.imgClears.append(clearTexId);
                 },
                 .barrierBakeClears => try self.bakeAndExecuteClears(cmd, resMan),
@@ -267,7 +273,7 @@ pub const CmdRecorder = struct {
                 },
                 .texBarrier => |texBarrier| {
                     const tex = try resMan.get(texBarrier.texId, cmd.flightId);
-                    try self.checkImageState(tex, .{ .stage = texBarrier.stage, .access = texBarrier.access, .layout = texBarrier.layout });
+                    try self.checkImageState(tex, .{ .stage = texBarrier.stage, .access = texBarrier.access, .layout = texBarrier.layout }, false);
                 },
                 .swapchainTargetBarrier => |targetBarrier| {
                     const targetIndex = swapMan.getTargetIndex(targetBarrier.windowId) orelse {
@@ -276,7 +282,7 @@ pub const CmdRecorder = struct {
                     };
                     const swapchain = swapMan.getTargetByIndex(targetIndex);
                     const targetTex = swapchain.getCurTexture();
-                    try self.checkImageState(targetTex, .{ .stage = targetBarrier.stage, .access = targetBarrier.access, .layout = targetBarrier.layout });
+                    try self.checkImageState(targetTex, .{ .stage = targetBarrier.stage, .access = targetBarrier.access, .layout = targetBarrier.layout }, false );
                 },
                 .bakeBarriers => {
                     self.bakeBarriers(cmd, "Bake Pass Barriers");
@@ -541,7 +547,7 @@ pub const CmdRecorder = struct {
         for (targetIndices) |index| {
             const swapchain = swapMan.getTargetByIndex(index);
             const target = swapchain.getCurTexture();
-            try self.checkImageState(target, .{ .stage = .BotOfPipe, .access = .None, .layout = .PresentSrc });
+            try self.checkImageState(target, .{ .stage = .BotOfPipe, .access = .None, .layout = .PresentSrc }, false);
         }
         self.bakeBarriers(cmd, "Present Transition");
         cmd.endTimer(.BotOfPipe, timeId);
