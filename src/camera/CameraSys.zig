@@ -1,7 +1,9 @@
 const RenderAssignerQueue = @import("../renderAssigner/RenderAssignerQueue.zig").RenderAssignerQueue;
+const ViewportData = @import("../viewport/ViewportData.zig").ViewportData;
 const MemoryManager = @import("../core/MemoryManager.zig").MemoryManager;
+const WindowData = @import("../window/WindowData.zig").WindowData;
 const EntityData = @import("../ecs/EntityData.zig").EntityData;
-const EngineData = @import("../EngineData.zig").EngineData;
+const InputData = @import("../input/InputData.zig").InputData;
 const ac = @import("../.configs/appConfig.zig");
 const comp = @import("../ecs/Components.zig");
 const zm = @import("zmath");
@@ -21,26 +23,34 @@ pub const CamData = struct {
 };
 
 pub const CameraSys = struct {
-    pub fn update(ecs: *EntityData, dt: f64, data: *const EngineData, assignerQueue: *RenderAssignerQueue, memoryMan: *MemoryManager) !void {
+    pub fn update(
+        ecs: *EntityData,
+        dt: f64,
+        viewportData: *const ViewportData,
+        windowData: *const WindowData,
+        inputData: *const InputData,
+        assignerQueue: *RenderAssignerQueue,
+        memoryMan: *MemoryManager,
+    ) !void {
 
         // PROCESS STATE (Movement)
         var activeCamId: ?u32 = null;
 
-        if (data.viewport.selectedViewportId) |viewId| {
-            if (data.viewport.viewports.isKeyUsed(viewId.val())) {
-                const viewport = data.viewport.viewports.getByKey(viewId.val());
+        if (viewportData.selectedViewportId) |viewId| {
+            if (viewportData.viewports.isKeyUsed(viewId.val())) {
+                const viewport = viewportData.viewports.getByKey(viewId.val());
                 if (viewport.viewCamEntityId) |entityId| activeCamId = entityId.val();
             }
         }
 
-        if (activeCamId != null and !data.window.uiActive) {
+        if (activeCamId != null and !windowData.uiActive) {
             const camId = activeCamId.?;
 
             // Check if this Entity actually has both required components
             if (ecs.transforms.isKeyUsed(camId) and ecs.cameras.isKeyUsed(camId)) {
                 var transform = ecs.transforms.getPtrByKey(camId);
                 var cam = ecs.cameras.getPtrByKey(camId);
-                const input = &data.input;
+                const input = inputData;
 
                 // Handle Rotation
                 if (input.mouseMoveX != 0 or input.mouseMoveY != 0) {
@@ -99,7 +109,7 @@ pub const CameraSys = struct {
 
         // EXTRACT STATE TO RENDERER
         // Iterate linearly over all cameras
-        for (data.viewport.viewports.getConstItems()) |viewport| {
+        for (viewportData.viewports.getConstItems()) |viewport| {
             const camEntityId = viewport.viewCamEntityId orelse continue;
 
             if (!ecs.cameras.isKeyUsed(camEntityId.val())) continue;

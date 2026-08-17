@@ -1,4 +1,10 @@
+const LinkedIdMap = @import("../.structures/LinkedIdMap.zig").LinkedIdMap;
+const PassId = @import("../.configs/idConfig.zig").PassId;
+const rc = @import("../.configs/renderConfig.zig");
+
 pub const RenderGraphData = struct {
+    manuelPasses: LinkedIdMap(PassId, rc.PASS_MAX, PassId, rc.PASS_MAX, 0) = .{},
+    
     passLoad: @import("1_PassLoad.zig").PassLoadData = .{},
     outputLoad: @import("2_OutputLoad.zig").OutputLoadData = .{},
     composite: @import("3_Composite.zig").CompositeData = .{},

@@ -240,6 +240,8 @@ pub const App = struct {
     }
 
     pub fn setupResources(self: *App) !void {
+        try RenderGraphSys.activateManuelPass(&self.data.renderGraph, &self.data.renderRegistry, "QuantComp");
+
         try ShaderSys.update(&self.data.shader, &self.shaderQueue, &self.rendererQueue, self.memoryMan);
         try RenderAssignerSys.createBufferManuel(&self.data.renderAssigner, &self.data.renderRegistry, "ImguiIB", &self.rendererQueue, self.memoryMan);
         try RenderAssignerSys.createBufferManuel(&self.data.renderAssigner, &self.data.renderRegistry, "ImguiVB", &self.rendererQueue, self.memoryMan);
@@ -247,7 +249,6 @@ pub const App = struct {
 
         try RenderAssignerSys.createTextureManuel(&self.data.renderAssigner, &self.data.renderRegistry, "TestTileTex", &self.rendererQueue, self.memoryMan);
 
-        // try RenderAssignerSys.createBufferManuel(&self.data.renderAssigner, &self.data.renderRegistry, rc.QUANT, &self.rendererQueue, self.memoryMan);
         try RenderAssignerSys.createBufferManuel(&self.data.renderAssigner, &self.data.renderRegistry, "ReadbackSB", &self.rendererQueue, self.memoryMan);
         try RenderAssignerSys.createBufferManuel(&self.data.renderAssigner, &self.data.renderRegistry, "MainCamUB", &self.rendererQueue, self.memoryMan);
         try RenderAssignerSys.createBufferManuel(&self.data.renderAssigner, &self.data.renderRegistry, "DebugCamUB", &self.rendererQueue, self.memoryMan);
@@ -300,7 +301,7 @@ pub const App = struct {
                 if (rc.EARLY_GPU_WAIT == true) try renderer.waitForGpu();
 
                 // Poll OS Events
-                WindowSys.pollEvents(&self.data, &self.data.window, &self.inputQueue) catch |err| {
+                WindowSys.pollEvents(&self.data.window, &self.data.ui, &self.inputQueue) catch |err| {
                     std.log.err("Error in pollEvents(): {}", .{err});
                     break;
                 };
@@ -309,11 +310,11 @@ pub const App = struct {
                 InputSys.update(&self.data.input, &self.inputQueue);
                 InputSys.convert(&self.data.input, &self.rendererQueue);
 
-                try WindowSys.update(&self.data.window, &self.data, &self.windowQueue, &self.rendererQueue, self.memoryMan);
+                try WindowSys.update(&self.data.window, &self.data.input, &self.windowQueue, &self.rendererQueue, self.memoryMan);
 
                 try WindowSys.updateActiveWindows(&self.data.window);
 
-                ViewportSys.update(&self.data.viewport, &self.data);
+                ViewportSys.update(&self.data.viewport, &self.data.window);
 
                 // Close Or Idle
                 if (self.data.input.closeApp or self.data.window.appExit) return;
@@ -325,7 +326,7 @@ pub const App = struct {
                 frameData.runTime = TimeSys.getRuntime(&self.data.time, .seconds, f32);
                 frameData.deltaTime = @floatCast(dt);
 
-                try CameraSys.update(&self.data.entityData, dt, &self.data, &self.assignerQueue, self.memoryMan);
+                try CameraSys.update(&self.data.entityData, dt, &self.data.viewport, &self.data.window, &self.data.input, &self.assignerQueue, self.memoryMan);
 
                 try RenderPrepSys.extractEntities(&self.data.entityData, &self.assignerQueue, self.memoryMan);
 
@@ -334,13 +335,12 @@ pub const App = struct {
                 if (rc.CPU_PROFILING) std.debug.print("Cpu pre-Renderer Delta {d:.3} ms, ({d:.1} Real FPS)\n", .{ dt * 0.000001, 1.0 / (dt * 0.000000001) });
 
                 // const start = std.time.microTimestamp();
-                try RenderGraphSys.build(&self.data.renderGraph, &self.data);
+                try RenderGraphSys.build(&self.data.renderGraph, &self.data.renderRegistry, &self.data.viewport, &self.data.window);
                 // const end = std.time.microTimestamp();
                 // std.debug.print("Frame Graph Build: {d:.3} ms\n", .{@as(f64, @floatFromInt(end - start)) / 1_000.0});
 
                 try RenderAssignerSys.assign(&self.data.renderAssigner, &self.data.renderGraph, &self.data.renderRegistry, &self.rendererQueue, self.memoryMan);
                 try RenderAssignerSys.processQueue(&self.data.renderAssigner, &self.data.renderRegistry, &self.assignerQueue, &self.rendererQueue, self.memoryMan);
-
                 try RenderAssignerSys.fillUiHardwareIds(&self.data.renderAssigner, &self.data.renderRegistry, &self.data.ui);
 
                 try RenderCompilerSys.compileIR(

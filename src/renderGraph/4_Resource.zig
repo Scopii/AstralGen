@@ -3,7 +3,7 @@ const TexDesc = @import("../render/types/res/TextureMeta.zig").TextureMeta.TexDe
 const BufDesc = @import("../render/types/res/BufferMeta.zig").BufferMeta.BufDesc;
 const TexReference = @import("../renderGraph/components.zig").TexReference;
 const BufReference = @import("../renderGraph/components.zig").BufReference;
-const LinkedIdMap = @import("../.structures/LinkedIdMap.zig").LinkedIdMap;
+const SimpleIdMap = @import("../.structures/SimpleIdMap.zig").SimpleIdMap;
 const Dependancy = @import("../renderGraph/components.zig").Dependancy;
 const FixedList = @import("../.structures/FixedList.zig").FixedList;
 const OutputLoadData = @import("2_OutputLoad.zig").OutputLoadData;
@@ -15,11 +15,11 @@ const rc = @import("../.configs/renderConfig.zig");
 const std = @import("std");
 
 pub const ResourceData = struct {
-    activeBufPassIds: LinkedIdMap(BufPassId, rc.PASS_MAX * rc.BUF_MAX, BufPassId, rc.PASS_MAX * rc.BUF_MAX, 0) = .{},
-    activeTexPassIds: LinkedIdMap(TexPassId, rc.PASS_MAX * rc.TEX_MAX, TexPassId, rc.PASS_MAX * rc.TEX_MAX, 0) = .{},
+    activeBufPassIds: SimpleIdMap(BufPassId, rc.PASS_MAX * rc.BUF_MAX, BufPassId, rc.PASS_MAX * rc.BUF_MAX, 0) = .{},
+    activeTexPassIds: SimpleIdMap(TexPassId, rc.PASS_MAX * rc.TEX_MAX, TexPassId, rc.PASS_MAX * rc.TEX_MAX, 0) = .{},
 
-    activeBufDescs: LinkedIdMap(BufDesc, rc.BUF_MAX, BufPassId, rc.BUF_MAX, 0) = .{},
-    activeTexDescs: LinkedIdMap(TexDesc, rc.TEX_MAX, TexPassId, rc.TEX_MAX, 0) = .{},
+    activeBufDescs: SimpleIdMap(BufDesc, rc.BUF_MAX, BufPassId, rc.BUF_MAX, 0) = .{},
+    activeTexDescs: SimpleIdMap(TexDesc, rc.TEX_MAX, TexPassId, rc.TEX_MAX, 0) = .{},
 
     activeTexRefs: FixedList(TexReference, rc.PASS_MAX * rc.TEX_MAX) = .{},
     activeBufRefs: FixedList(BufReference, rc.PASS_MAX * rc.BUF_MAX) = .{},
@@ -66,7 +66,8 @@ pub const ResourceSys = struct {
 
                 const texPassId = texRef.texPassId;
 
-                const passExtent = composite.passExtents.getByKey(texRef.passId);
+                const hasExtent = composite.passExtents.isKeyUsed(texRef.passId);
+
                 const isWrite = (texRef.access == .write); //  or texRef.output != null ??
                 // const isInPassChain = texRef.rootPassId == null or texRef.rootPassId == activePass;
                 const resize = (isWrite or rc.PASS_TEXTURE_RESIZE_INCLUDES_READ); //and isInPassChain;
@@ -77,7 +78,8 @@ pub const ResourceSys = struct {
                 }
 
                 const texDesc = self.activeTexDescs.getPtrByKey(texPassId);
-                if (texDesc.fitPass == true and resize) {
+                if (hasExtent and texDesc.fitPass == true and resize) {
+                    const passExtent = composite.passExtents.getByKey(texRef.passId);
                     texDesc.width = @max(texDesc.width, passExtent.width);
                     texDesc.height = @max(texDesc.height, passExtent.height);
                 }

@@ -100,13 +100,13 @@ pub const PassLoadSys = struct {
 
                 const texRange = self.texRanges.getByIndex(@intCast(index));
 
-                for (self.bufRefs.getConstItems()[bufRange.first..bufRange.last]) |bufRef| {
+                for (self.bufRefs.constSlice()[bufRange.first..bufRange.last]) |bufRef| {
                     const bufName = try registry.getBufferName(bufRef.bufPassId);
                     const rootPassName = if (bufRef.rootPassId) |rootPassId| try registry.getPassName(rootPassId) else "NULL";
                     std.debug.print("    -> Buf ( .name = {s}, .from = {s} )\n", .{ bufName, rootPassName });
                 }
 
-                for (self.texRefs.getConstItems()[texRange.first..texRange.last]) |texRef| {
+                for (self.texRefs.constSlice()[texRange.first..texRange.last]) |texRef| {
                     const texName = try registry.getTextureName(texRef.texPassId);
                     const rootPassName = if (texRef.rootPassId) |rootPassId| try registry.getPassName(rootPassId) else "NULL";
                     std.debug.print("    -> Tex ( .name = {s}, .from = {s} )\n", .{ texName, rootPassName });

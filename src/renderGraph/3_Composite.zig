@@ -1,32 +1,40 @@
 const RenderRegistryData = @import("../renderRegistry/RenderRegistryData.zig").RenderRegistryData;
 const CompositeNode = @import("../render/types/pass/RenderNode.zig").CompositeNode;
-const LinkedIdMap = @import("../.structures/LinkedIdMap.zig").LinkedIdMap;
+const SimpleIdMap = @import("../.structures/SimpleIdMap.zig").SimpleIdMap;
 const FixedList = @import("../.structures/FixedList.zig").FixedList;
 const OutputLoadData = @import("2_OutputLoad.zig").OutputLoadData;
 const TexPassId = @import("../.configs/idConfig.zig").TexPassId;
 const Viewport = @import("../viewport/Viewport.zig").Viewport;
 const WindowId = @import("../.configs/idConfig.zig").WindowId;
-const EngineData = @import("../EngineData.zig").EngineData;
 const PassId = @import("../.configs/idConfig.zig").PassId;
 const rc = @import("../.configs/renderConfig.zig");
 const std = @import("std");
 
+const ViewportData = @import("../viewport/ViewportData.zig").ViewportData;
+const WindowData = @import("../window/WindowData.zig").WindowData;
+
 pub const CompositeData = struct {
-    passExtents: LinkedIdMap(struct { width: u32, height: u32 }, rc.PASS_MAX, PassId, rc.PASS_MAX, 0) = .{},
+    passExtents: SimpleIdMap(struct { width: u32, height: u32 }, rc.PASS_MAX, PassId, rc.PASS_MAX, 0) = .{},
     composites: FixedList(CompositeNode, rc.MAX_WINDOWS * 4) = .{},
 };
 
 pub const CompositeSys = struct {
-    pub fn build(self: *CompositeData, outputLoad: *const OutputLoadData, registry: *const RenderRegistryData, data: *const EngineData) !void {
+    pub fn build(
+        self: *CompositeData,
+        outputLoad: *const OutputLoadData,
+        registry: *const RenderRegistryData,
+        viewportData: *const ViewportData,
+        windowData: *const WindowData,
+    ) !void {
         self.composites.clear();
         self.passExtents.clear();
 
         // Check every Window
-        for (data.window.activeWindows.constSlice()) |window| {
+        for (windowData.activeWindows.constSlice()) |window| {
             // Check every Viewport
             for (window.viewIds) |viewId| {
                 if (viewId) |viewportId| {
-                    const viewport = data.viewport.viewports.getByKey(viewportId.val());
+                    const viewport = viewportData.viewports.getByKey(viewportId.val());
 
                     // Check every Composite String
                     for (viewport.outputTuples) |outputTuple| {

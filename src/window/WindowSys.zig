@@ -5,7 +5,7 @@ const ViewportId = @import("../.configs/idConfig.zig").ViewportId;
 const InputQueue = @import("../input/InputQueue.zig").InputQueue;
 const TexPassId = @import("../.configs/idConfig.zig").TexPassId;
 const WindowId = @import("../.configs/idConfig.zig").WindowId;
-const EngineData = @import("../EngineData.zig").EngineData;
+const InputData = @import("../input/InputData.zig").InputData;
 const WindowQueue = @import("WindowQueue.zig").WindowQueue;
 const KeyEvent = @import("../input/InputSys.zig").KeyEvent;
 const InputSys = @import("../input/InputSys.zig").InputSys;
@@ -53,7 +53,7 @@ pub const WindowSys = struct {
         rendererOutQueue.clear();
     }
 
-    pub fn update(windowData: *WindowData, state: *const EngineData, windowQueue: *WindowQueue, rendererQueue: *RendererQueue, memoryMan: *MemoryManager) !void {
+    pub fn update(windowData: *WindowData, inputData: *const InputData, windowQueue: *WindowQueue, rendererQueue: *RendererQueue, memoryMan: *MemoryManager) !void {
         for (windowQueue.get()) |windowEvent| {
             switch (windowEvent) {
                 .addWindow => |inf| try addWindow(windowData, inf.title, inf.w, inf.h, inf.x, inf.y, inf.resize, inf.viewIds),
@@ -61,8 +61,8 @@ pub const WindowSys = struct {
         }
         windowQueue.clear();
 
-        try if (state.input.toggleFullscreen) toggleMainFullscreen(windowData);
-        if (state.input.toggleImgui) toogleUiMode(windowData);
+        try if (inputData.toggleFullscreen) toggleMainFullscreen(windowData);
+        if (inputData.toggleImgui) toogleUiMode(windowData);
 
         const changedWindows = getChangedWindows(windowData);
         for (changedWindows) |changedWindow| {
@@ -133,38 +133,40 @@ pub const WindowSys = struct {
         std.debug.print("WindowSys: UI Toggle {}\n", .{windowData.uiActive});
     }
 
-    pub fn pollEvents(data: *const EngineData, windowData: *WindowData, inputQueue: *InputQueue) !void {
+    pub fn pollEvents(windowData: *WindowData, uiData: *const UiData, inputQueue: *InputQueue) !void {
         var event: sdl.SDL_Event = undefined;
 
         if (windowData.openWindows == 0) {
             if (sdl.SDL_WaitEvent(&event)) { // On pause wait for an event and process
                 try processEvent(windowData, inputQueue, &event);
-                if (windowData.uiActive == true) processGuiEvent(getEventWindowId(&event), &event, data);
+                if (windowData.uiActive == true) processGuiEvent(windowData, uiData, getEventWindowId(&event), &event);
             }
             while (sdl.SDL_PollEvent(&event)) { // drain remaining events
                 try processEvent(windowData, inputQueue, &event);
-                if (windowData.uiActive == true) processGuiEvent(getEventWindowId(&event), &event, data);
+                if (windowData.uiActive == true) processGuiEvent(windowData, uiData, getEventWindowId(&event), &event);
             }
         } else {
             while (sdl.SDL_PollEvent(&event)) { // When active process all events in queue
                 try processEvent(windowData, inputQueue, &event);
-                if (windowData.uiActive == true) processGuiEvent(getEventWindowId(&event), &event, data);
+                if (windowData.uiActive == true) processGuiEvent(windowData, uiData, getEventWindowId(&event), &event);
             }
         }
     }
 
-    fn processGuiEvent(windowId: u32, event: *const sdl.SDL_Event, data: *const EngineData) void {
-        if (!data.ui.initialized or !data.ui.contexts.isKeyUsed(windowId)) return;
+    const UiData = @import("../ui/UiData.zig").UiData;
+
+    fn processGuiEvent(windowData: *const WindowData, uiData: *const UiData, windowId: u32, event: *const sdl.SDL_Event) void {
+        if (!uiData.initialized or !uiData.contexts.isKeyUsed(windowId)) return;
 
         // WHAT IS THIS FUNCTION BLOCK FOR? //
         var targetId = windowId;
         if (windowId == 0) { // Global Events pushed to main Window? (Are they actually?)
-            if (data.window.mainWindow) |mainWindow| {
+            if (windowData.mainWindow) |mainWindow| {
                 targetId = mainWindow.id.val();
             } else return;
         }
 
-        const ctx = data.ui.contexts.getByKey(windowId);
+        const ctx = uiData.contexts.getByKey(windowId);
         ig.igui_set_current_context(@ptrCast(ctx));
         _ = zgui.backend.processEvent(event);
     }

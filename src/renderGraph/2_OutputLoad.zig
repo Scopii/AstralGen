@@ -1,26 +1,26 @@
 const RenderRegistryData = @import("../renderRegistry/RenderRegistryData.zig").RenderRegistryData;
-const LinkedIdMap = @import("../.structures/LinkedIdMap.zig").LinkedIdMap;
+const SimpleIdMap = @import("../.structures/SimpleIdMap.zig").SimpleIdMap;
+const ViewportData = @import("../viewport/ViewportData.zig").ViewportData;
 const FixedList = @import("../.structures/FixedList.zig").FixedList;
 const TexPassId = @import("../.configs/idConfig.zig").TexPassId;
 const PassLoadData = @import("1_PassLoad.zig").PassLoadData;
-const EngineData = @import("../EngineData.zig").EngineData;
 const PassId = @import("../.configs/idConfig.zig").PassId;
 const rc = @import("../.configs/renderConfig.zig");
 const std = @import("std");
 
 pub const OutputLoadData = struct {
     pendingPasses: FixedList(PassId, rc.PASS_MAX) = .{},
-    activePasses: LinkedIdMap(PassId, rc.PASS_MAX, PassId, rc.PASS_MAX, 0) = .{},
+    activePasses: SimpleIdMap(PassId, rc.PASS_MAX, PassId, rc.PASS_MAX, 0) = .{},
 };
 
 pub const OutputLoadSys = struct {
-    pub fn build(self: *OutputLoadData, passLoad: *const PassLoadData, registry: *const RenderRegistryData, data: *const EngineData) !void {
+    pub fn build(self: *OutputLoadData, passLoad: *const PassLoadData, registry: *const RenderRegistryData, viewportData: *const ViewportData, manuelPasses: []const PassId) !void {
         self.pendingPasses.clear();
         self.activePasses.clear();
 
         // Load Producing Passes of Each Viewports Output
-        for (data.viewport.activeViewportIds.getConstItems()) |viewportId| {
-            const viewport = data.viewport.viewports.getByKey(viewportId.val());
+        for (viewportData.activeViewportIds.getConstItems()) |viewportId| {
+            const viewport = viewportData.viewports.getByKey(viewportId.val());
 
             for (viewport.outputTuples) |outputTuple| {
                 const passId = try registry.getPassId(outputTuple.passName);
@@ -52,6 +52,9 @@ pub const OutputLoadSys = struct {
                 }
             }
         }
+
+        // Manuel Passes (NO Outputs but still inserts dependencies)
+        for (manuelPasses) |manuelPass| self.activePasses.upsert(manuelPass, manuelPass);
 
         // Backwards Traversal to activate all required Passes
         while (self.pendingPasses.len != 0) {

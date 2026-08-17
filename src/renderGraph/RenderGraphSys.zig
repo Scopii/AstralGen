@@ -1,5 +1,7 @@
+const RenderRegistryData = @import("../renderRegistry/RenderRegistryData.zig").RenderRegistryData;
+const ViewportData = @import("../viewport/ViewportData.zig").ViewportData;
 const RenderGraphData = @import("RenderGraphData.zig").RenderGraphData;
-const EngineData = @import("../EngineData.zig").EngineData;
+const WindowData = @import("../window/WindowData.zig").WindowData;
 const rc = @import("../.configs/renderConfig.zig");
 const std = @import("std");
 
@@ -14,41 +16,51 @@ const ShareSys2 = @import("8_Share.zig").ShareSys;
 const SorterSys2 = @import("9_Sorter.zig").SorterSys;
 
 pub const RenderGraphSys = struct {
-    pub fn build(self: *RenderGraphData, data: *const EngineData) !void {
+    pub fn activateManuelPass(self: *RenderGraphData, renderRegistry: *const RenderRegistryData, name: []const u8) !void {
+        const passId = try renderRegistry.getPassId(name);
+        if (self.manuelPasses.isKeyUsed(passId) == false) self.manuelPasses.insert(passId, passId);
+    }
+
+    pub fn disableManuelPass(self: *RenderGraphData, renderRegistry: *const RenderRegistryData, name: []const u8) !void {
+        const passId = try renderRegistry.getPassId(name);
+        if (self.manuelPasses.isKeyUsed(passId) == true) self.manuelPasses.remove(passId);
+    }
+
+    pub fn build(self: *RenderGraphData, renderRegistry: *const RenderRegistryData, viewportData: *const ViewportData, windowData: *const WindowData) !void {
         const start0 = std.time.nanoTimestamp();
-        try PassLoadSys.build(&self.passLoad, &data.renderRegistry);
+        try PassLoadSys.build(&self.passLoad, renderRegistry);
         if (rc.FRAME_GRAPH_TIMERS) std.debug.print("{d:.3} us: PassLoadSys\n", .{@as(f64, @floatFromInt(std.time.nanoTimestamp() - start0)) / 1_000.0});
 
         const start1 = std.time.nanoTimestamp();
-        try OutputLoadSys.build(&self.outputLoad, &self.passLoad, &data.renderRegistry, data);
+        try OutputLoadSys.build(&self.outputLoad, &self.passLoad, renderRegistry, viewportData, self.manuelPasses.getConstItems());
         if (rc.FRAME_GRAPH_TIMERS) std.debug.print("{d:.3} us: OutputLoadSys\n", .{@as(f64, @floatFromInt(std.time.nanoTimestamp() - start1)) / 1_000.0});
 
         const start2 = std.time.nanoTimestamp();
-        try CompositeSys.build(&self.composite, &self.outputLoad, &data.renderRegistry, data);
+        try CompositeSys.build(&self.composite, &self.outputLoad, renderRegistry, viewportData, windowData);
         if (rc.FRAME_GRAPH_TIMERS) std.debug.print("{d:.3} us: CompositeSys\n", .{@as(f64, @floatFromInt(std.time.nanoTimestamp() - start2)) / 1_000.0});
 
         const start3 = std.time.nanoTimestamp();
-        try ResourceSys2.build(&self.resource, &self.passLoad, &self.outputLoad, &self.composite, &data.renderRegistry);
+        try ResourceSys2.build(&self.resource, &self.passLoad, &self.outputLoad, &self.composite, renderRegistry);
         if (rc.FRAME_GRAPH_TIMERS) std.debug.print("{d:.3} us: ResourceSys2\n", .{@as(f64, @floatFromInt(std.time.nanoTimestamp() - start3)) / 1_000.0});
 
         const start4 = std.time.nanoTimestamp();
-        try GraphSys2.build(&self.graph, &self.outputLoad, &self.resource, &data.renderRegistry);
+        try GraphSys2.build(&self.graph, &self.outputLoad, &self.resource, renderRegistry);
         if (rc.FRAME_GRAPH_TIMERS) std.debug.print("{d:.3} us: GraphSys2\n", .{@as(f64, @floatFromInt(std.time.nanoTimestamp() - start4)) / 1_000.0});
 
         const start5 = std.time.nanoTimestamp();
-        try OptimizerSys2.build(&self.optimizer, &self.passLoad, &self.graph, &self.resource, &data.renderRegistry);
+        try OptimizerSys2.build(&self.optimizer, &self.passLoad, &self.graph, &self.resource, renderRegistry);
         if (rc.FRAME_GRAPH_TIMERS) std.debug.print("{d:.3} us: OptimizerSys2\n", .{@as(f64, @floatFromInt(std.time.nanoTimestamp() - start5)) / 1_000.0});
 
         const start6 = std.time.nanoTimestamp();
-        try LifetimeSys2.build(&self.lifetime, &self.resource, &self.optimizer, &data.renderRegistry);
+        try LifetimeSys2.build(&self.lifetime, &self.resource, &self.optimizer, renderRegistry);
         if (rc.FRAME_GRAPH_TIMERS) std.debug.print("{d:.3} us: LifetimeSys2\n", .{@as(f64, @floatFromInt(std.time.nanoTimestamp() - start6)) / 1_000.0});
 
         const start7 = std.time.nanoTimestamp();
-        try ShareSys2.build(&self.share, &self.resource, &self.optimizer, &self.lifetime, &data.renderRegistry);
+        try ShareSys2.build(&self.share, &self.resource, &self.optimizer, &self.lifetime, renderRegistry);
         if (rc.FRAME_GRAPH_TIMERS) std.debug.print("{d:.3} us: ShareSys2\n", .{@as(f64, @floatFromInt(std.time.nanoTimestamp() - start7)) / 1_000.0});
 
         const start8 = std.time.nanoTimestamp();
-        try SorterSys2.build(&self.sorter, &self.composite, &self.optimizer, &data.renderRegistry, &self.share);
+        try SorterSys2.build(&self.sorter, &self.composite, &self.optimizer, renderRegistry, &self.share);
         if (rc.FRAME_GRAPH_TIMERS) std.debug.print("{d:.3} us: SorterSys2\n", .{@as(f64, @floatFromInt(std.time.nanoTimestamp() - start8)) / 1_000.0});
     }
 };
