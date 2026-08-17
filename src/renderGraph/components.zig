@@ -7,7 +7,6 @@ const TexId = @import("../.configs/idConfig.zig").TexId;
 const BufId = @import("../.configs/idConfig.zig").BufId;
 const rc = @import("../.configs/renderConfig.zig");
 
-
 pub const TextureStringLink = struct {
     in: []const u8, // Should be String?
     from: ?[]const u8 = null, // Should be String?
@@ -40,13 +39,13 @@ pub const GraphLifetime = struct {
 
 pub const BufferClear = struct {
     sharedIndex: u16,
-    rootResource: BufPassId,
+    bufPassId: BufPassId,
     passAfterClear: PassId, // First Pass that happens Afterwards
 };
 
 pub const TextureClear = struct {
     sharedIndex: u16,
-    rootResource: TexPassId,
+    texPassId: TexPassId,
     passAfterClear: PassId, // First Pass that happens Afterwards
 };
 
@@ -62,7 +61,7 @@ pub const TransientTexture = struct {
     texDesc: TexDesc,
 };
 
-pub const PassAccessRange = struct {
+pub const PassRefRange = struct {
     first: u16,
     last: u16,
 };
@@ -73,24 +72,14 @@ pub const GraphMemoryNode = struct {
     memWeight: i64, // bornBytes - dyingBytes,
 };
 
-pub const PendingTexDeletion = struct {
-    id: TexId,
-    unusedCounter: u8 = 0,
-};
-
-pub const PendingBufDeletion = struct {
-    id: BufId,
-    unusedCounter: u8 = 0,
-};
-
-pub const TexInstance = struct {
+pub const TexReference = struct {
     texPassId: TexPassId,
     passId: PassId,
     rootPassId: ?PassId,
     access: enum { write, read },
 };
 
-pub const BufInstance = struct {
+pub const BufReference = struct {
     bufPassId: BufPassId,
     passId: PassId,
     rootPassId: ?PassId,
@@ -109,13 +98,13 @@ pub const TexLifetime = struct {
     latestPass: u16,
 };
 
-pub const PhysBufLifetime = struct {
+pub const SharedBuffer = struct {
     earliest: u16,
     latest: u16,
     bufDesc: BufDesc,
 };
 
-pub const PhysTexLifetime = struct {
+pub const SharedTexture = struct {
     earliest: u16,
     latest: u16,
     texDesc: TexDesc,

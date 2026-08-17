@@ -1,5 +1,7 @@
-const UiData = @import("../ui/UiData.zig").UiData;
-
+const RenderRegistryData = @import("../renderRegistry/RenderRegistryData.zig").RenderRegistryData;
+const RenderAssignerData = @import("../renderAssigner/RenderAssignerData.zig").RenderAssignerData;
+const RenderAssignerQueue = @import("../renderAssigner/RenderAssignerQueue.zig").RenderAssignerQueue;
+const RenderGraphData = @import("../renderGraph/RenderGraphData.zig").RenderGraphData;
 const TexDesc = @import("../render/types/res/TextureMeta.zig").TextureMeta.TexDesc;
 const TransientTexture = @import("../renderGraph/components.zig").TransientTexture;
 const BufDesc = @import("../render/types/res/BufferMeta.zig").BufferMeta.BufDesc;
@@ -13,14 +15,10 @@ const BufPassId = @import("../.configs/idConfig.zig").BufPassId;
 const TexId = @import("../.configs/idConfig.zig").TexId;
 const BufId = @import("../.configs/idConfig.zig").BufId;
 const rc = @import("../.configs/renderConfig.zig");
+const UiData = @import("../ui/UiData.zig").UiData;
 const std = @import("std");
 const TexInf = TextureMeta.TexInf;
 const BufInf = BufferMeta.BufInf;
-
-const RenderRegistryData = @import("../renderRegistry/RenderRegistryData.zig").RenderRegistryData;
-const RenderAssignerData = @import("../renderAssigner/RenderAssignerData.zig").RenderAssignerData;
-const RenderAssignerQueue = @import("../renderAssigner/RenderAssignerQueue.zig").RenderAssignerQueue;
-const RenderGraphData = @import("../renderGraph/RenderGraphData.zig").RenderGraphData;
 
 pub const RenderAssignerSys = struct {
     pub fn assign(self: *RenderAssignerData, renderGraph: *const RenderGraphData, registry: *const RenderRegistryData, rendererQueue: *RendererQueue, memoryMan: *MemoryManager) !void {
@@ -88,7 +86,7 @@ pub const RenderAssignerSys = struct {
         self.usedTransientTexes.clear();
 
         // Buffer Pooling
-        for (share.sharedBufLifetimes.constSlice()) |sharedBufLifetime| {
+        for (share.sharedBuffers.constSlice()) |sharedBufLifetime| {
             const bufDesc = sharedBufLifetime.bufDesc;
             var candidateIndex: ?u16 = null;
 
@@ -110,7 +108,7 @@ pub const RenderAssignerSys = struct {
         }
 
         // Texture Pooling
-        for (share.sharedTexLifetimes.constSlice()) |sharedTexLifetime| {
+        for (share.sharedTextures.constSlice()) |sharedTexLifetime| {
             const texDesc = sharedTexLifetime.texDesc;
             var candidateIndex: ?u16 = null;
 
@@ -131,30 +129,9 @@ pub const RenderAssignerSys = struct {
             }
         }
 
-        // // Assignments
-        // for (share.bufShareIndexMap.getConstItems(), 0..) |sharedIndex, i| {
-        //     const rootRes = share.bufShareIndexMap.getKeyByIndex(@intCast(i));
-        //     // const group = mapper.transientGroups.getByKey(bufToRes(rootRes));
-        //     const f = share.sharedBufLifetimes;
-
-        //     const bufHardwareId = self.usedTransientBufs.buffer[sharedIndex].hardwareBuf;
-
-        //     for (group.firstMapIndex..group.lastMapIndex + 1) |mapIndex| {
-        //         const memeberRes = mapper.transientMap.getKeyByIndex(@intCast(mapIndex));
-        //         const bufPassId: BufPassId = resToBuf(memeberRes);
-
-        //         if (self.bufAssigns.isKeyUsed(bufPassId)) {
-        //             const bufName = try registry.getBufferName(bufPassId);
-        //             std.debug.print("ERROR: 6.ResourceAssigner: Buffer Name {s} already assigned!\n", .{bufName});
-        //             return error.BufEnumAlreadyAssigned;
-        //         }
-        //         self.bufAssigns.upsert(bufPassId, bufHardwareId);
-        //     }
-        // }
-
         // NEW Assignments
-        for (share.bufShareIndexMap.getConstItems(), 0..) |sharedIndex, index| {
-            const bufPassId = share.bufShareIndexMap.getKeyByIndex(@intCast(index));
+        for (share.bufShareIndices.getConstItems(), 0..) |sharedIndex, index| {
+            const bufPassId = share.bufShareIndices.getKeyByIndex(@intCast(index));
 
             if (self.bufAssigns.isKeyUsed(bufPassId) == true) {
                 const bufName = try registry.getBufferName(bufPassId);
@@ -165,27 +142,8 @@ pub const RenderAssignerSys = struct {
             self.bufAssigns.upsert(bufPassId, bufHardwareId);
         }
 
-        // for (share.texShareIndexMap.getConstItems(), 0..) |sharedIndex, i| {
-        //     const rootRes = share.texShareIndexMap.getKeyByIndex(@intCast(i));
-        //     const group = mapper.transientGroups.getByKey(texToRes(rootRes));
-
-        //     const texHardwareId = self.usedTransientTexes.buffer[sharedIndex].hardwareTex;
-
-        //     for (group.firstMapIndex..group.lastMapIndex + 1) |mapIndex| {
-        //         const memberRes = mapper.transientMap.getKeyByIndex(@intCast(mapIndex));
-        //         const texPassId: TexPassId = resToTex(memberRes);
-
-        //         if (self.texAssigns.isKeyUsed(texPassId)) {
-        //             const texName = try registry.getTextureName(texPassId);
-        //             std.debug.print("ERROR: 6.ResourceAssigner: Texture Name {s} already assigned!\n", .{texName});
-        //             return error.TexEnumAlreadyAssigned;
-        //         }
-        //         self.texAssigns.upsert(texPassId, texHardwareId);
-        //     }
-        // }
-
-        for (share.texShareIndexMap.getConstItems(), 0..) |sharedIndex, index| {
-            const texPassId = share.texShareIndexMap.getKeyByIndex(@intCast(index));
+        for (share.texShareIndices.getConstItems(), 0..) |sharedIndex, index| {
+            const texPassId = share.texShareIndices.getKeyByIndex(@intCast(index));
 
             const texHardwareId = self.usedTransientTexes.buffer[sharedIndex].hardwareTex;
 

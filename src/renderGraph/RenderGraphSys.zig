@@ -3,15 +3,15 @@ const EngineData = @import("../EngineData.zig").EngineData;
 const rc = @import("../.configs/renderConfig.zig");
 const std = @import("std");
 
-const PassLoadSys = @import("1_PassLoad/PassLoad.zig").PassLoadSys;
-const OutputLoadSys = @import("2_OutputLoad/OutputLoad.zig").OutputLoadSys;
-const CompositeSys = @import("3_Composite/Composite.zig").CompositeSys;
-const ResourceSys2 = @import("4_Resource/Resource.zig").ResourceSys;
-const GraphSys2 = @import("5_Graph/Graph.zig").GraphSys;
-const OptimizerSys2 = @import("6_Optimizer/Optimizer.zig").OptimizerSys;
-const LifetimeSys2 = @import("7_Lifetime/Lifetime.zig").LifetimeSys;
-const ShareSys2 = @import("8_Share/Share.zig").ShareSys;
-const SorterSys2 = @import("9_Sorter/Sorter.zig").SorterSys;
+const PassLoadSys = @import("1_PassLoad.zig").PassLoadSys;
+const OutputLoadSys = @import("2_OutputLoad.zig").OutputLoadSys;
+const CompositeSys = @import("3_Composite.zig").CompositeSys;
+const ResourceSys2 = @import("4_Resource.zig").ResourceSys;
+const GraphSys2 = @import("5_Graph.zig").GraphSys;
+const OptimizerSys2 = @import("6_Optimizer.zig").OptimizerSys;
+const LifetimeSys2 = @import("7_Lifetime.zig").LifetimeSys;
+const ShareSys2 = @import("8_Share.zig").ShareSys;
+const SorterSys2 = @import("9_Sorter.zig").SorterSys;
 
 pub const RenderGraphSys = struct {
     pub fn build(self: *RenderGraphData, data: *const EngineData) !void {

@@ -1,11 +1,11 @@
-const RenderRegistryData = @import("../../renderRegistry/RenderRegistryData.zig").RenderRegistryData;
-const LinkedIdMap = @import("../../.structures/LinkedIdMap.zig").LinkedIdMap;
-const PassLoadData = @import("../1_PassLoad/PassLoad.zig").PassLoadData;
-const FixedList = @import("../../.structures/FixedList.zig").FixedList;
-const TexPassId = @import("../../.configs/idConfig.zig").TexPassId;
-const EngineData = @import("../../EngineData.zig").EngineData;
-const PassId = @import("../../.configs/idConfig.zig").PassId;
-const rc = @import("../../.configs/renderConfig.zig");
+const RenderRegistryData = @import("../renderRegistry/RenderRegistryData.zig").RenderRegistryData;
+const LinkedIdMap = @import("../.structures/LinkedIdMap.zig").LinkedIdMap;
+const FixedList = @import("../.structures/FixedList.zig").FixedList;
+const TexPassId = @import("../.configs/idConfig.zig").TexPassId;
+const PassLoadData = @import("1_PassLoad.zig").PassLoadData;
+const EngineData = @import("../EngineData.zig").EngineData;
+const PassId = @import("../.configs/idConfig.zig").PassId;
+const rc = @import("../.configs/renderConfig.zig");
 const std = @import("std");
 
 pub const OutputLoadData = struct {
@@ -34,12 +34,12 @@ pub const OutputLoadSys = struct {
 
                 // Check if Pass Range Contains Texture
                 const texRange = passLoad.texRanges.getByKey(passId);
-                const instanceRange = passLoad.texInstances.getConstItems()[texRange.first..texRange.last];
+                const refRange = passLoad.texRefs.constSlice()[texRange.first..texRange.last];
 
                 var foundTex = false;
 
-                for (instanceRange) |texInstance| {
-                    if (texPassId == texInstance.texPassId) {
+                for (refRange) |texRef| {
+                    if (texPassId == texRef.texPassId) {
                         try self.pendingPasses.append(passId);
                         foundTex = true;
                         break;
@@ -62,18 +62,18 @@ pub const OutputLoadSys = struct {
 
             // Traverse Textures
             const texRange = passLoad.texRanges.getByKey(passId);
-            const texInstances = passLoad.texInstances.getConstItems()[texRange.first..texRange.last];
+            const texRefs = passLoad.texRefs.constSlice()[texRange.first..texRange.last];
 
-            for (texInstances) |texInstance| {
-                if (texInstance.rootPassId) |rootPassId| {
+            for (texRefs) |texRef| {
+                if (texRef.rootPassId) |rootPassId| {
                     if (true) { // REFERENCE VALIDATION
                         const rootTexRange = passLoad.texRanges.getByKey(rootPassId);
-                        const rootTexInstances = passLoad.texInstances.getConstItems()[rootTexRange.first..rootTexRange.last];
+                        const rootTexRefs = passLoad.texRefs.constSlice()[rootTexRange.first..rootTexRange.last];
 
                         var foundTex = false;
 
-                        for (rootTexInstances) |rootTexInstance| {
-                            if (texInstance.texPassId == rootTexInstance.texPassId) {
+                        for (rootTexRefs) |rootTexRef| {
+                            if (texRef.texPassId == rootTexRef.texPassId) {
                                 if (self.activePasses.isKeyUsed(rootPassId) == false) try self.pendingPasses.append(rootPassId);
                                 foundTex = true;
                                 break;
@@ -91,18 +91,18 @@ pub const OutputLoadSys = struct {
 
             // Traverse Buffers
             const bufRange = passLoad.bufRanges.getByKey(passId);
-            const bufInstances = passLoad.bufInstances.getConstItems()[bufRange.first..bufRange.last];
+            const bufRefs = passLoad.bufRefs.constSlice()[bufRange.first..bufRange.last];
 
-            for (bufInstances) |bufInstance| {
-                if (bufInstance.rootPassId) |rootPassId| {
+            for (bufRefs) |bufRef| {
+                if (bufRef.rootPassId) |rootPassId| {
                     if (true) { // REFERENCE VALIDATION
                         const rootBufRange = passLoad.bufRanges.getByKey(rootPassId);
-                        const rootBufInstances = passLoad.bufInstances.getConstItems()[rootBufRange.first..rootBufRange.last];
+                        const rootBufRefs = passLoad.bufRefs.constSlice()[rootBufRange.first..rootBufRange.last];
 
                         var foundBuf = false;
 
-                        for (rootBufInstances) |rootBufInstance| {
-                            if (bufInstance.bufPassId == rootBufInstance.bufPassId) {
+                        for (rootBufRefs) |rootBufRef| {
+                            if (bufRef.bufPassId == rootBufRef.bufPassId) {
                                 if (self.activePasses.isKeyUsed(rootPassId) == false) try self.pendingPasses.append(rootPassId);
                                 foundBuf = true;
                                 break;

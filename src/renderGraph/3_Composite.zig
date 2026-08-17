@@ -1,25 +1,25 @@
-const RenderRegistryData = @import("../../renderRegistry/RenderRegistryData.zig").RenderRegistryData;
-const CompositeNode = @import("../../render/types/pass/RenderNode.zig").CompositeNode;
-const OutputLoadData = @import("../2_OutputLoad/OutputLoad.zig").OutputLoadData;
-const LinkedIdMap = @import("../../.structures/LinkedIdMap.zig").LinkedIdMap;
-const FixedList = @import("../../.structures/FixedList.zig").FixedList;
-const TexPassId = @import("../../.configs/idConfig.zig").TexPassId;
-const Viewport = @import("../../viewport/Viewport.zig").Viewport;
-const WindowId = @import("../../.configs/idConfig.zig").WindowId;
-const EngineData = @import("../../EngineData.zig").EngineData;
-const PassId = @import("../../.configs/idConfig.zig").PassId;
-const rc = @import("../../.configs/renderConfig.zig");
+const RenderRegistryData = @import("../renderRegistry/RenderRegistryData.zig").RenderRegistryData;
+const CompositeNode = @import("../render/types/pass/RenderNode.zig").CompositeNode;
+const LinkedIdMap = @import("../.structures/LinkedIdMap.zig").LinkedIdMap;
+const FixedList = @import("../.structures/FixedList.zig").FixedList;
+const OutputLoadData = @import("2_OutputLoad.zig").OutputLoadData;
+const TexPassId = @import("../.configs/idConfig.zig").TexPassId;
+const Viewport = @import("../viewport/Viewport.zig").Viewport;
+const WindowId = @import("../.configs/idConfig.zig").WindowId;
+const EngineData = @import("../EngineData.zig").EngineData;
+const PassId = @import("../.configs/idConfig.zig").PassId;
+const rc = @import("../.configs/renderConfig.zig");
 const std = @import("std");
 
 pub const CompositeData = struct {
-    newPassExtents: LinkedIdMap(struct { width: u32, height: u32 }, rc.PASS_MAX, PassId, rc.PASS_MAX, 0) = .{},
+    passExtents: LinkedIdMap(struct { width: u32, height: u32 }, rc.PASS_MAX, PassId, rc.PASS_MAX, 0) = .{},
     composites: FixedList(CompositeNode, rc.MAX_WINDOWS * 4) = .{},
 };
 
 pub const CompositeSys = struct {
     pub fn build(self: *CompositeData, outputLoad: *const OutputLoadData, registry: *const RenderRegistryData, data: *const EngineData) !void {
         self.composites.clear();
-        self.newPassExtents.clear();
+        self.passExtents.clear();
 
         // Check every Window
         for (data.window.activeWindows.constSlice()) |window| {
@@ -34,8 +34,8 @@ pub const CompositeSys = struct {
                         const outPassId = try registry.getPassId(outputTuple.passName);
                         const passDef = try registry.getPassDefinitionById(outPassId);
 
-                        if (self.newPassExtents.isKeyUsed(outPassId) == false) self.newPassExtents.insert(outPassId, .{ .width = 0, .height = 0 });
-                        const passExtent = self.newPassExtents.getPtrByKey(outPassId);
+                        if (self.passExtents.isKeyUsed(outPassId) == false) self.passExtents.insert(outPassId, .{ .width = 0, .height = 0 });
+                        const passExtent = self.passExtents.getPtrByKey(outPassId);
 
                         // Check for bigger Viewport Area:
                         const viewWidth = viewport.calcViewWidth(window.extent.width);
@@ -61,8 +61,8 @@ pub const CompositeSys = struct {
             std.debug.print("3.Composite: \n", .{});
             for (outputLoad.activePasses.getConstItems(), 0..) |passId, i| {
                 const passName = try registry.getPassName(passId);
-                if (self.newPassExtents.isKeyUsed(passId) == true) {
-                    const passExtent = self.newPassExtents.getByKey(passId);
+                if (self.passExtents.isKeyUsed(passId) == true) {
+                    const passExtent = self.passExtents.getByKey(passId);
                     std.debug.print("- Pass {}. {s} (Size {} x {})\n", .{ i, passName, passExtent.width, passExtent.height });
                 } else std.debug.print("- Pass {}. {s} (Size .NULL x .NULL)\n", .{ i, passName });
             }

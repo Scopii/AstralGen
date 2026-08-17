@@ -1,16 +1,16 @@
-const RenderRegistryData = @import("../../renderRegistry/RenderRegistryData.zig").RenderRegistryData;
-const GraphMemoryNode = @import("../../renderGraph/components.zig").GraphMemoryNode;
-const GraphLifetime = @import("../../renderGraph/components.zig").GraphLifetime;
-const SimpleIdMap = @import("../../.structures/SimpleIdMap.zig").SimpleIdMap;
-const LinkedIdMap = @import("../../.structures/LinkedIdMap.zig").LinkedIdMap;
-const PassLoadData = @import("../1_PassLoad/PassLoad.zig").PassLoadData;
-const ResourceData = @import("../4_Resource/Resource.zig").ResourceData;
-const FixedList = @import("../../.structures/FixedList.zig").FixedList;
-const BufPassId = @import("../../.configs/idConfig.zig").BufPassId;
-const TexPassId = @import("../../.configs/idConfig.zig").TexPassId;
-const PassId = @import("../../.configs/idConfig.zig").PassId;
-const GraphData = @import("../5_Graph/Graph.zig").GraphData;
-const rc = @import("../../.configs/renderConfig.zig");
+const RenderRegistryData = @import("../renderRegistry/RenderRegistryData.zig").RenderRegistryData;
+const GraphMemoryNode = @import("../renderGraph/components.zig").GraphMemoryNode;
+const GraphLifetime = @import("../renderGraph/components.zig").GraphLifetime;
+const SimpleIdMap = @import("../.structures/SimpleIdMap.zig").SimpleIdMap;
+const LinkedIdMap = @import("../.structures/LinkedIdMap.zig").LinkedIdMap;
+const PassLoadData = @import("1_PassLoad.zig").PassLoadData;
+const ResourceData = @import("4_Resource.zig").ResourceData;
+const FixedList = @import("../.structures/FixedList.zig").FixedList;
+const BufPassId = @import("../.configs/idConfig.zig").BufPassId;
+const TexPassId = @import("../.configs/idConfig.zig").TexPassId;
+const PassId = @import("../.configs/idConfig.zig").PassId;
+const GraphData = @import("5_Graph.zig").GraphData;
+const rc = @import("../.configs/renderConfig.zig");
 const std = @import("std");
 
 pub const OptimizerData = struct {
@@ -43,11 +43,11 @@ pub const OptimizerSys = struct {
         self.texGraphLifetimes.clear();
         self.graphMemNodes.clear();
 
-        for (resource.activeBufInstances.constSlice()) |bufInst| {
-            const level = graph.graph.getByKey(bufInst.passId).level;
-            const bufPassId = bufInst.bufPassId;
+        for (resource.activeBufRefs.constSlice()) |bufRef| {
+            const level = graph.graph.getByKey(bufRef.passId).level;
+            const bufPassId = bufRef.bufPassId;
 
-            const bufDesc = resource.bufDescs.getByKey(bufPassId);
+            const bufDesc = resource.activeBufDescs.getByKey(bufPassId);
             if (bufDesc.share == .transient) {
                 if (self.bufGraphLifetimes.isKeyUsed(bufPassId) == false) {
                     self.bufGraphLifetimes.insert(bufPassId, GraphLifetime{ .firstLevel = level, .lastLevel = level });
@@ -59,11 +59,11 @@ pub const OptimizerSys = struct {
             }
         }
 
-        for (resource.activeTexInstances.constSlice()) |texInst| {
-            const level = graph.graph.getByKey(texInst.passId).level;
-            const texPassId = texInst.texPassId;
+        for (resource.activeTexRefs.constSlice()) |texRef| {
+            const level = graph.graph.getByKey(texRef.passId).level;
+            const texPassId = texRef.texPassId;
 
-            const texDesc = resource.texDescs.getByKey(texPassId);
+            const texDesc = resource.activeTexDescs.getByKey(texPassId);
             if (texDesc.share == .transient) {
                 if (self.texGraphLifetimes.isKeyUsed(texPassId) == false) {
                     self.texGraphLifetimes.insert(texPassId, GraphLifetime{ .firstLevel = level, .lastLevel = level });
@@ -99,21 +99,21 @@ pub const OptimizerSys = struct {
             var bornBytes: u64 = 0;
             var dyingBytes: u64 = 0;
 
-            for (passLoad.bufInstances.getConstItems()[bufRange.first..bufRange.last]) |bufInst| {
-                const bufPassId = bufInst.bufPassId;
+            for (passLoad.bufRefs.constSlice()[bufRange.first..bufRange.last]) |bufRef| {
+                const bufPassId = bufRef.bufPassId;
                 if (self.bufGraphLifetimes.isKeyUsed(bufPassId) == true) {
                     const graphLifetime = self.bufGraphLifetimes.getByKey(bufPassId);
-                    const bytes = resource.bufDescs.getByKey(bufPassId).guessMemoryCost();
+                    const bytes = resource.activeBufDescs.getByKey(bufPassId).guessMemoryCost();
                     if (graphLifetime.firstLevel == graphNode.level and graphLifetime.lastLevel != graphNode.level) bornBytes += bytes;
                     if (graphLifetime.lastLevel == graphNode.level and graphLifetime.firstLevel != graphNode.level) dyingBytes += bytes;
                 }
             }
 
-            for (passLoad.texInstances.getConstItems()[texRange.first..texRange.last]) |texInst| {
-                const texPassId = texInst.texPassId;
+            for (passLoad.texRefs.constSlice()[texRange.first..texRange.last]) |texRef| {
+                const texPassId = texRef.texPassId;
                 if (self.texGraphLifetimes.isKeyUsed(texPassId) == true) {
                     const graphLifetime = self.texGraphLifetimes.getByKey(texPassId);
-                    const bytes = resource.texDescs.getByKey(texPassId).guessMemoryCost();
+                    const bytes = resource.activeTexDescs.getByKey(texPassId).guessMemoryCost();
                     if (graphLifetime.firstLevel == graphNode.level and graphLifetime.lastLevel != graphNode.level) bornBytes += bytes;
                     if (graphLifetime.lastLevel == graphNode.level and graphLifetime.firstLevel != graphNode.level) dyingBytes += bytes;
                 }

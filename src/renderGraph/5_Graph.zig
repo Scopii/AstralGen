@@ -1,12 +1,12 @@
-const RenderRegistryData = @import("../../renderRegistry/RenderRegistryData.zig").RenderRegistryData;
-const OutputLoadData = @import("../2_OutputLoad/OutputLoad.zig").OutputLoadData;
-const SimpleIdMap = @import("../../.structures/SimpleIdMap.zig").SimpleIdMap;
-const LinkedIdMap = @import("../../.structures/LinkedIdMap.zig").LinkedIdMap;
-const ResourceData = @import("../4_Resource/Resource.zig").ResourceData;
-const GraphNode = @import("../../renderGraph/components.zig").GraphNode;
-const FixedList = @import("../../.structures/FixedList.zig").FixedList;
-const PassId = @import("../../.configs/idConfig.zig").PassId;
-const rc = @import("../../.configs/renderConfig.zig");
+const RenderRegistryData = @import("../renderRegistry/RenderRegistryData.zig").RenderRegistryData;
+const SimpleIdMap = @import("../.structures/SimpleIdMap.zig").SimpleIdMap;
+const LinkedIdMap = @import("../.structures/LinkedIdMap.zig").LinkedIdMap;
+const GraphNode = @import("../renderGraph/components.zig").GraphNode;
+const FixedList = @import("../.structures/FixedList.zig").FixedList;
+const OutputLoadData = @import("2_OutputLoad.zig").OutputLoadData;
+const ResourceData = @import("4_Resource.zig").ResourceData;
+const PassId = @import("../.configs/idConfig.zig").PassId;
+const rc = @import("../.configs/renderConfig.zig");
 const std = @import("std");
 
 pub const GraphData = struct {
@@ -59,12 +59,12 @@ pub const GraphSys = struct {
             const nextLevel = pass.level + 1;
 
             // Decrement Buffer Dependencies
-            for (resource.dependencies.constSlice()) |bufDep| {
-                if (bufDep.predecessor == pass.passId) {
-                    const ptr = self.passDepCounters.getPtrByKey(bufDep.successor);
+            for (resource.dependencies.constSlice()) |dependency| {
+                if (dependency.predecessor == pass.passId) {
+                    const ptr = self.passDepCounters.getPtrByKey(dependency.successor);
                     ptr.* -= 1;
                     // Queue to END of current list if its 0
-                    if (ptr.* == 0) self.readyPasses.appendAssumeCapacity(GraphNode{ .passId = bufDep.successor, .level = nextLevel });
+                    if (ptr.* == 0) self.readyPasses.appendAssumeCapacity(GraphNode{ .passId = dependency.successor, .level = nextLevel });
                 }
             }
         }

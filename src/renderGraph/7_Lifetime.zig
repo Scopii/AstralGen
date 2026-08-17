@@ -1,13 +1,13 @@
-const RenderRegistryData = @import("../../renderRegistry/RenderRegistryData.zig").RenderRegistryData;
-const LinkedIdMap = @import("../../.structures/LinkedIdMap.zig").LinkedIdMap;
-const BufLifetime = @import("../../renderGraph/components.zig").BufLifetime;
-const TexLifetime = @import("../../renderGraph/components.zig").TexLifetime;
-const OptimizerData = @import("../6_Optimizer/Optimizer.zig").OptimizerData;
-const ResourceData = @import("../4_Resource/Resource.zig").ResourceData;
-const FixedList = @import("../../.structures/FixedList.zig").FixedList;
-const BufPassId = @import("../../.configs/idConfig.zig").BufPassId;
-const TexPassId = @import("../../.configs/idConfig.zig").TexPassId;
-const rc = @import("../../.configs/renderConfig.zig");
+const RenderRegistryData = @import("../renderRegistry/RenderRegistryData.zig").RenderRegistryData;
+const LinkedIdMap = @import("../.structures/LinkedIdMap.zig").LinkedIdMap;
+const BufLifetime = @import("../renderGraph/components.zig").BufLifetime;
+const TexLifetime = @import("../renderGraph/components.zig").TexLifetime;
+const OptimizerData = @import("6_Optimizer.zig").OptimizerData;
+const ResourceData = @import("4_Resource.zig").ResourceData;
+const FixedList = @import("../.structures/FixedList.zig").FixedList;
+const BufPassId = @import("../.configs/idConfig.zig").BufPassId;
+const TexPassId = @import("../.configs/idConfig.zig").TexPassId;
+const rc = @import("../.configs/renderConfig.zig");
 const std = @import("std");
 
 pub const LifetimeData = struct {
@@ -26,9 +26,9 @@ pub const LifetimeSys = struct {
         self.texLifetimes.clear();
 
         // Buffer Lifetimes
-        for (resource.activeBufInstances.constSlice()) |bufInst| {
-            const bufPassId = bufInst.bufPassId;
-            const passPosition = optimizer.optimizedGraph.getIndexByKey(bufInst.passId);
+        for (resource.activeBufRefs.constSlice()) |bufRef| {
+            const bufPassId = bufRef.bufPassId;
+            const passPosition = optimizer.optimizedGraph.getIndexByKey(bufRef.passId);
 
             if (self.bufLifetimeMap.isKeyUsed(bufPassId) == false) {
                 self.bufLifetimeMap.upsert(bufPassId, BufLifetime{ .bufPassId = bufPassId, .earliestPass = passPosition, .latestPass = passPosition });
@@ -42,16 +42,16 @@ pub const LifetimeSys = struct {
         // Only Append Transient
         for (self.bufLifetimeMap.getConstItems(), 0..) |bufLifetime, index| {
             const bufPassId = self.bufLifetimeMap.getKeyByIndex(@intCast(index));
-            if (resource.bufDescs.getByKey(bufPassId).share == .transient) self.bufLifetimes.append(bufLifetime) catch {};
+            if (resource.activeBufDescs.getByKey(bufPassId).share == .transient) try self.bufLifetimes.append(bufLifetime);
         }
 
         self.bufLifetimes.selectionSort(greaterGroup);
         // self.bufLifetimes.defeatingQuicksort(lessThanGroup);
 
         // Texture Lifetimes
-        for (resource.activeTexInstances.constSlice()) |texInst| {
-            const texPassId = texInst.texPassId;
-            const passPosition = optimizer.optimizedGraph.getIndexByKey(texInst.passId);
+        for (resource.activeTexRefs.constSlice()) |texRef| {
+            const texPassId = texRef.texPassId;
+            const passPosition = optimizer.optimizedGraph.getIndexByKey(texRef.passId);
 
             if (self.texLifetimeMap.isKeyUsed(texPassId) == false) {
                 self.texLifetimeMap.upsert(texPassId, TexLifetime{ .texPassId = texPassId, .earliestPass = passPosition, .latestPass = passPosition });
@@ -65,7 +65,7 @@ pub const LifetimeSys = struct {
         // Only Append Transient
         for (self.texLifetimeMap.getConstItems(), 0..) |texLifetime, index| {
             const bufPassId = self.texLifetimeMap.getKeyByIndex(@intCast(index));
-            if (resource.texDescs.getByKey(bufPassId).share == .transient) self.texLifetimes.append(texLifetime) catch {};
+            if (resource.activeTexDescs.getByKey(bufPassId).share == .transient) try self.texLifetimes.append(texLifetime);
         }
 
         self.texLifetimes.selectionSort(greaterGroup);

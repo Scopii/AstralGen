@@ -1,26 +1,26 @@
-const RenderRegistryData = @import("../../renderRegistry/RenderRegistryData.zig").RenderRegistryData;
-const TexDesc = @import("../../render/types/res/TextureMeta.zig").TextureMeta.TexDesc;
-const BufDesc = @import("../../render/types/res/BufferMeta.zig").BufferMeta.BufDesc;
-const PhysBufLifetime = @import("../../renderGraph/components.zig").PhysBufLifetime;
-const PhysTexLifetime = @import("../../renderGraph/components.zig").PhysTexLifetime;
-const TextureClear = @import("../../renderGraph/components.zig").TextureClear;
-const LinkedIdMap = @import("../../.structures/LinkedIdMap.zig").LinkedIdMap;
-const BufferClear = @import("../../renderGraph/components.zig").BufferClear;
-const OptimizerData = @import("../6_Optimizer/Optimizer.zig").OptimizerData;
-const LifetimeData = @import("../7_Lifetime/Lifetime.zig").LifetimeData;
-const ResourceData = @import("../4_Resource/Resource.zig").ResourceData;
-const FixedList = @import("../../.structures/FixedList.zig").FixedList;
-const BufPassId = @import("../../.configs/idConfig.zig").BufPassId;
-const TexPassId = @import("../../.configs/idConfig.zig").TexPassId;
-const rc = @import("../../.configs/renderConfig.zig");
+const RenderRegistryData = @import("../renderRegistry/RenderRegistryData.zig").RenderRegistryData;
+const TexDesc = @import("../render/types/res/TextureMeta.zig").TextureMeta.TexDesc;
+const BufDesc = @import("../render/types/res/BufferMeta.zig").BufferMeta.BufDesc;
+const PhysBufLifetime = @import("../renderGraph/components.zig").SharedBuffer;
+const PhysTexLifetime = @import("../renderGraph/components.zig").SharedTexture;
+const TextureClear = @import("../renderGraph/components.zig").TextureClear;
+const LinkedIdMap = @import("../.structures/LinkedIdMap.zig").LinkedIdMap;
+const BufferClear = @import("../renderGraph/components.zig").BufferClear;
+const FixedList = @import("../.structures/FixedList.zig").FixedList;
+const BufPassId = @import("../.configs/idConfig.zig").BufPassId;
+const TexPassId = @import("../.configs/idConfig.zig").TexPassId;
+const OptimizerData = @import("6_Optimizer.zig").OptimizerData;
+const LifetimeData = @import("7_Lifetime.zig").LifetimeData;
+const ResourceData = @import("4_Resource.zig").ResourceData;
+const rc = @import("../.configs/renderConfig.zig");
 const std = @import("std");
 
 pub const ShareData = struct {
-    sharedBufLifetimes: FixedList(PhysBufLifetime, rc.BUF_MAX) = .{},
-    sharedTexLifetimes: FixedList(PhysTexLifetime, rc.TEX_MAX) = .{},
+    sharedBuffers: FixedList(PhysBufLifetime, rc.BUF_MAX) = .{},
+    sharedTextures: FixedList(PhysTexLifetime, rc.TEX_MAX) = .{},
 
-    bufShareIndexMap: LinkedIdMap(u16, rc.BUF_MAX, BufPassId, rc.BUF_MAX, 0) = .{},
-    texShareIndexMap: LinkedIdMap(u16, rc.TEX_MAX, TexPassId, rc.TEX_MAX, 0) = .{},
+    bufShareIndices: LinkedIdMap(u16, rc.BUF_MAX, BufPassId, rc.BUF_MAX, 0) = .{},
+    texShareIndices: LinkedIdMap(u16, rc.TEX_MAX, TexPassId, rc.TEX_MAX, 0) = .{},
 
     bufClears: FixedList(BufferClear, rc.BUF_MAX) = .{},
     texClears: FixedList(TextureClear, rc.TEX_MAX) = .{},
@@ -29,10 +29,10 @@ pub const ShareData = struct {
 pub const ShareSys = struct {
     pub fn build(self: *ShareData, resource: *const ResourceData, optimizer: *const OptimizerData, lifetime: *const LifetimeData, registry: *const RenderRegistryData) !void {
         // Cleanup and Prep
-        self.sharedTexLifetimes.clear();
-        self.sharedBufLifetimes.clear();
-        self.texShareIndexMap.clear();
-        self.bufShareIndexMap.clear();
+        self.sharedTextures.clear();
+        self.sharedBuffers.clear();
+        self.texShareIndices.clear();
+        self.bufShareIndices.clear();
         self.bufClears.clear();
         self.texClears.clear();
 
@@ -40,9 +40,9 @@ pub const ShareSys = struct {
         for (lifetime.bufLifetimes.constSlice()) |bufLifetime| {
             if (rc.FRAME_GRAPH_SKIP_SHARING == false) {
                 var candidateIndex: ?u16 = null;
-                const newDesc = resource.bufDescs.getByKey(bufLifetime.bufPassId);
+                const newDesc = resource.activeBufDescs.getByKey(bufLifetime.bufPassId);
 
-                for (self.sharedBufLifetimes.slice(), 0..) |*physLifetime, index| {
+                for (self.sharedBuffers.slice(), 0..) |*physLifetime, index| {
                     const candidateDesc = physLifetime.bufDesc;
 
                     if (physLifetime.latest < bufLifetime.earliestPass) {
@@ -55,19 +55,19 @@ pub const ShareSys = struct {
                 }
 
                 if (candidateIndex) |candidate| {
-                    self.bufShareIndexMap.upsert(bufLifetime.bufPassId, candidate);
+                    self.bufShareIndices.upsert(bufLifetime.bufPassId, candidate);
                     const passAfterClear = optimizer.optimizedGraph.getConstItems()[bufLifetime.earliestPass].passId;
-                    self.bufClears.append(.{ .sharedIndex = candidate, .passAfterClear = passAfterClear, .rootResource = bufLifetime.bufPassId }) catch {
+                    self.bufClears.append(.{ .sharedIndex = candidate, .passAfterClear = passAfterClear, .bufPassId = bufLifetime.bufPassId }) catch {
                         std.debug.print("ERROR: 5.4.GroupSys: Could not Append to bufClears\n", .{});
                     };
                 } else {
-                    const newIndex: u16 = @intCast(self.sharedBufLifetimes.len);
+                    const newIndex: u16 = @intCast(self.sharedBuffers.len);
 
-                    try self.sharedBufLifetimes.append(.{ .earliest = bufLifetime.earliestPass, .latest = bufLifetime.latestPass, .bufDesc = newDesc });
+                    try self.sharedBuffers.append(.{ .earliest = bufLifetime.earliestPass, .latest = bufLifetime.latestPass, .bufDesc = newDesc });
 
-                    self.bufShareIndexMap.upsert(bufLifetime.bufPassId, newIndex);
+                    self.bufShareIndices.upsert(bufLifetime.bufPassId, newIndex);
                     const passAfterClear = optimizer.optimizedGraph.getConstItems()[bufLifetime.earliestPass].passId;
-                    self.bufClears.append(.{ .sharedIndex = newIndex, .passAfterClear = passAfterClear, .rootResource = bufLifetime.bufPassId }) catch {
+                    self.bufClears.append(.{ .sharedIndex = newIndex, .passAfterClear = passAfterClear, .bufPassId = bufLifetime.bufPassId }) catch {
                         std.debug.print("ERROR: 5.4.GroupSys: Could not Append to bufClears\n", .{});
                     };
                 }
@@ -78,9 +78,9 @@ pub const ShareSys = struct {
         for (lifetime.texLifetimes.constSlice()) |texLifetime| {
             if (rc.FRAME_GRAPH_SKIP_SHARING == false) {
                 var candidateIndex: ?u16 = null;
-                const newDesc = resource.texDescs.getByKey(texLifetime.texPassId);
+                const newDesc = resource.activeTexDescs.getByKey(texLifetime.texPassId);
 
-                for (self.sharedTexLifetimes.slice(), 0..) |*physLifetime, index| {
+                for (self.sharedTextures.slice(), 0..) |*physLifetime, index| {
                     const candidateDesc = physLifetime.texDesc;
 
                     if (physLifetime.latest < texLifetime.earliestPass) {
@@ -94,19 +94,19 @@ pub const ShareSys = struct {
                 }
 
                 if (candidateIndex) |candidate| {
-                    self.texShareIndexMap.upsert(texLifetime.texPassId, candidate);
+                    self.texShareIndices.upsert(texLifetime.texPassId, candidate);
                     const passAfterClear = optimizer.optimizedGraph.getConstItems()[texLifetime.earliestPass].passId;
-                    self.texClears.append(.{ .sharedIndex = candidate, .passAfterClear = passAfterClear, .rootResource = texLifetime.texPassId }) catch {
+                    self.texClears.append(.{ .sharedIndex = candidate, .passAfterClear = passAfterClear, .texPassId = texLifetime.texPassId }) catch {
                         std.debug.print("ERROR: 5.4.GroupSys: Could not Append to bufClears\n", .{});
                     };
                 } else {
-                    const newIndex: u16 = @intCast(self.sharedTexLifetimes.len);
+                    const newIndex: u16 = @intCast(self.sharedTextures.len);
 
-                    try self.sharedTexLifetimes.append(.{ .earliest = texLifetime.earliestPass, .latest = texLifetime.latestPass, .texDesc = newDesc });
+                    try self.sharedTextures.append(.{ .earliest = texLifetime.earliestPass, .latest = texLifetime.latestPass, .texDesc = newDesc });
 
-                    self.texShareIndexMap.upsert(texLifetime.texPassId, newIndex);
+                    self.texShareIndices.upsert(texLifetime.texPassId, newIndex);
                     const passAfterClear = optimizer.optimizedGraph.getConstItems()[texLifetime.earliestPass].passId;
-                    self.texClears.append(.{ .sharedIndex = newIndex, .passAfterClear = passAfterClear, .rootResource = texLifetime.texPassId }) catch {
+                    self.texClears.append(.{ .sharedIndex = newIndex, .passAfterClear = passAfterClear, .texPassId = texLifetime.texPassId }) catch {
                         std.debug.print("ERROR: 5.4.GroupSys: Could not Append to bufClears\n", .{});
                     };
                 }
@@ -117,21 +117,21 @@ pub const ShareSys = struct {
         if (rc.FRAME_GRAPH_DEBUG) {
             std.debug.print("8.Share: \n", .{});
 
-            for (self.sharedBufLifetimes.constSlice(), 0..) |sharedLifetime, i| {
+            for (self.sharedBuffers.constSlice(), 0..) |sharedLifetime, i| {
                 std.debug.print("- {}. Shared Buf (Lifetime {} -> {})\n", .{ i, sharedLifetime.earliest, sharedLifetime.latest });
             }
-            for (self.sharedTexLifetimes.constSlice(), 0..) |sharedLifetime, i| {
+            for (self.sharedTextures.constSlice(), 0..) |sharedLifetime, i| {
                 std.debug.print("- {}. Shared Tex (Lifetime {} -> {})\n", .{ i, sharedLifetime.earliest, sharedLifetime.latest });
             }
             std.debug.print("\n", .{});
 
-            for (self.bufShareIndexMap.getConstItems(), 0..) |sharedIndex, i| {
-                const resKey = self.bufShareIndexMap.getKeyByIndex(@intCast(i));
+            for (self.bufShareIndices.getConstItems(), 0..) |sharedIndex, i| {
+                const resKey = self.bufShareIndices.getKeyByIndex(@intCast(i));
                 const resName = try registry.getBufferName(resKey);
                 std.debug.print("- {}. Buf {s} -> Shared Index {}\n", .{ i, resName, sharedIndex });
             }
-            for (self.texShareIndexMap.getConstItems(), 0..) |sharedIndex, i| {
-                const resKey = self.texShareIndexMap.getKeyByIndex(@intCast(i));
+            for (self.texShareIndices.getConstItems(), 0..) |sharedIndex, i| {
+                const resKey = self.texShareIndices.getKeyByIndex(@intCast(i));
                 const resName = try registry.getTextureName(resKey);
                 std.debug.print("- {}. Tex {s} -> Shared Index {}\n", .{ i, resName, sharedIndex });
             }

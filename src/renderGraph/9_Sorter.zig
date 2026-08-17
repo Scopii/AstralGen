@@ -1,12 +1,12 @@
-const RenderRegistryData = @import("../../renderRegistry/RenderRegistryData.zig").RenderRegistryData;
-const RenderNodeIR = @import("../../render/types/pass/RenderNode.zig").RenderNodeIR;
-const CompositeData = @import("../3_Composite/Composite.zig").CompositeData;
-const OptimizerData = @import("../6_Optimizer/Optimizer.zig").OptimizerData;
-const FixedList = @import("../../.structures/FixedList.zig").FixedList;
-const BufPassId = @import("../../.configs/idConfig.zig").BufPassId;
-const TexPassId = @import("../../.configs/idConfig.zig").TexPassId;
-const ShareData = @import("../8_Share/Share.zig").ShareData;
-const rc = @import("../../.configs/renderConfig.zig");
+const RenderRegistryData = @import("../renderRegistry/RenderRegistryData.zig").RenderRegistryData;
+const RenderNodeIR = @import("../render/types/pass/RenderNode.zig").RenderNodeIR;
+const FixedList = @import("../.structures/FixedList.zig").FixedList;
+const BufPassId = @import("../.configs/idConfig.zig").BufPassId;
+const TexPassId = @import("../.configs/idConfig.zig").TexPassId;
+const CompositeData = @import("3_Composite.zig").CompositeData;
+const OptimizerData = @import("6_Optimizer.zig").OptimizerData;
+const ShareData = @import("8_Share.zig").ShareData;
+const rc = @import("../.configs/renderConfig.zig");
 const std = @import("std");
 
 pub const SorterData = struct {
@@ -26,13 +26,13 @@ pub const SorterSys = struct {
 
             for (share.bufClears.constSlice()) |bufClear| {
                 if (bufClear.passAfterClear == passId) {
-                    try self.sortedRenderIR.append(.{ .clearBufIR = bufClear.rootResource });
+                    try self.sortedRenderIR.append(.{ .clearBufIR = bufClear.bufPassId });
                     neededClears = true;
                 }
             }
             for (share.texClears.constSlice()) |texClear| {
                 if (texClear.passAfterClear == passId) {
-                    try self.sortedRenderIR.append(.{ .clearTexIR = texClear.rootResource });
+                    try self.sortedRenderIR.append(.{ .clearTexIR = texClear.texPassId });
                     neededClears = true;
                 }
             }
