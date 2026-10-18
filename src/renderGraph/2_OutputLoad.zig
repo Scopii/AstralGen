@@ -55,7 +55,7 @@ pub const OutputLoadSys = struct {
 
         // Manuel Passes (NO Outputs but still inserts dependencies)
         for (manuelPasses) |manuelPass| {
-            if (rc.FRAME_GRAPH_INSERT_MANUAL_DEPENDENCY_PASSES) self.pendingPasses.append(manuelPass) else self.activePasses.upsert(manuelPass, manuelPass);
+            if (rc.FRAME_GRAPH_INSERT_MANUAL_DEPENDENCY_PASSES) try self.pendingPasses.append(manuelPass) else self.activePasses.upsert(manuelPass, manuelPass);
         }
 
         // Backwards Traversal to activate all required Passes
@@ -78,7 +78,7 @@ pub const OutputLoadSys = struct {
                         var foundTex = false;
 
                         for (rootTexRefs) |rootTexRef| {
-                            if (texRef.texPassId == rootTexRef.texPassId) {
+                            if (texRef.texPassId == rootTexRef.texPassId and rootTexRef.access == .write) {
                                 if (self.activePasses.isKeyUsed(rootPassId) == false) try self.pendingPasses.append(rootPassId);
                                 foundTex = true;
                                 break;
@@ -107,7 +107,7 @@ pub const OutputLoadSys = struct {
                         var foundBuf = false;
 
                         for (rootBufRefs) |rootBufRef| {
-                            if (bufRef.bufPassId == rootBufRef.bufPassId) {
+                            if (bufRef.bufPassId == rootBufRef.bufPassId and rootBufRef.access == .write) {
                                 if (self.activePasses.isKeyUsed(rootPassId) == false) try self.pendingPasses.append(rootPassId);
                                 foundBuf = true;
                                 break;

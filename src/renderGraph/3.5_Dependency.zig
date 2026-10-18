@@ -32,7 +32,10 @@ pub const DependencySys = struct {
             // All Dependency Orderings
             const depRange = passLoad.dependencyRanges.getByKey(activePass);
             const dependencys = passLoad.dependencys.constSlice()[depRange.first..depRange.last];
-            for (dependencys) |dep| try self.dependencies.append(dep);
+            for (dependencys) |dep| {
+                if (outputLoad.activePasses.isKeyUsed(dep.predecessor) == false) continue; // optional passes are filtered
+                try self.dependencies.append(dep);
+            }
 
             // Buffers
             const bufRange = passLoad.bufRanges.getByKey(activePass);
@@ -50,6 +53,8 @@ pub const DependencySys = struct {
                 try self.activeTexRefs.append(texRef);
             }
         }
+
+
 
         // Debug Output
         if (rc.FRAME_GRAPH_DEBUG) {

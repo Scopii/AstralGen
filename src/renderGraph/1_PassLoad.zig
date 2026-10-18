@@ -44,52 +44,30 @@ pub const PassLoadSys = struct {
                     .bufSlot => |bufSlot| {
                         const bufPassId = try registry.getBufferPassId(bufSlot.bufLink.in);
                         const rootPassId = if (bufSlot.bufLink.from) |rootPass| try registry.getPassId(rootPass) else null;
-                        const bufRef = BufReference{ .bufPassId = bufPassId, .passId = passId, .rootPassId = rootPassId, .access = if (bufSlot.access.isReadOnly() == true) .read else .write };
+                        const bufRef = BufReference{ .bufPassId = bufPassId, .passId = passId, .rootPassId = rootPassId, .access = if (bufSlot.access.isReadOnly()) .read else .write };
                         try self.bufRefs.append(bufRef);
                     },
-                    .vertexBuffer => |bufSlot| {
-                        const bufPassId = try registry.getBufferPassId(bufSlot.bufInput);
-                        const bufRef = BufReference{ .bufPassId = bufPassId, .passId = passId, .rootPassId = null, .access = .read }; // Read should be verified!
-                        try self.bufRefs.append(bufRef);
-                    },
-                    .indexBuffer => |bufSlot| {
+                    inline .vertexBuffer, .indexBuffer => |bufSlot| {
                         const bufPassId = try registry.getBufferPassId(bufSlot.bufInput);
                         const bufRef = BufReference{ .bufPassId = bufPassId, .passId = passId, .rootPassId = null, .access = .read }; // Read should be verified!
                         try self.bufRefs.append(bufRef);
                     },
 
-                    .texLink => |texLink| {
+                    inline .texLink, .bufLink => |texLink| {
                         if (texLink.from) |rootPass| {
                             const rootPassId = try registry.getPassId(rootPass);
-                            const texOrder = Dependency{ .successor = passId, .predecessor = rootPassId };
-                            try self.dependencys.append(texOrder);
-                        } else return error.TexLinkOrderingWithoutFrom;
+                            try self.dependencys.append(Dependency{ .predecessor = rootPassId, .successor = passId });
+                        } else return error.LinkOrderingWithoutFrom;
                     },
-                    .bufLink => |bufLink| {
-                        if (bufLink.from) |rootPass| {
-                            const rootPassId = try registry.getPassId(rootPass);
-                            const texOrder = Dependency{ .successor = passId, .predecessor = rootPassId };
-                            try self.dependencys.append(texOrder);
-                        } else return error.BufLinkOrderingWithoutFrom;
+                    .passLink => |passDep| {
+                        const rootPassId = try registry.getPassId(passDep.predecessor);
+                        try self.dependencys.append(Dependency{ .predecessor = rootPassId, .successor = passId });
                     },
-                    .passLink => |passDep| try self.dependencys.append(passDep),
 
-                    .texSlot => |texSlotTypes| {
+                    inline .texSlot, .colorAtt, .depthAtt, .stencilAtt => |texSlotTypes| {
                         const texPassId = try registry.getTexturePassId(texSlotTypes.texLink.in);
                         const rootPassId = if (texSlotTypes.texLink.from) |rootPass| try registry.getPassId(rootPass) else null;
-                        const texRef = TexReference{ .texPassId = texPassId, .passId = passId, .rootPassId = rootPassId, .access = if (texSlotTypes.access.isReadOnly() == true) .read else .write };
-                        try self.texRefs.append(texRef);
-                    },
-                    .colorAtt => |texSlotTypes| {
-                        const texPassId = try registry.getTexturePassId(texSlotTypes.texLink.in);
-                        const rootPassId = if (texSlotTypes.texLink.from) |rootPass| try registry.getPassId(rootPass) else null;
-                        const texRef = TexReference{ .texPassId = texPassId, .passId = passId, .rootPassId = rootPassId, .access = if (texSlotTypes.access.isReadOnly() == true) .read else .write };
-                        try self.texRefs.append(texRef);
-                    },
-                    .depthAtt, .stencilAtt => |texSlotTypes| {
-                        const texPassId = try registry.getTexturePassId(texSlotTypes.texLink.in);
-                        const rootPassId = if (texSlotTypes.texLink.from) |rootPass| try registry.getPassId(rootPass) else null;
-                        const texRef = TexReference{ .texPassId = texPassId, .passId = passId, .rootPassId = rootPassId, .access = if (texSlotTypes.access.isReadOnly() == true) .read else .write };
+                        const texRef = TexReference{ .texPassId = texPassId, .passId = passId, .rootPassId = rootPassId, .access = if (texSlotTypes.access.isReadOnly()) .read else .write };
                         try self.texRefs.append(texRef);
                     },
                 }

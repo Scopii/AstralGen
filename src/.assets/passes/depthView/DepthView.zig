@@ -37,9 +37,5 @@ pub const depthViewPass = p.PassDefinition.init(.{
         p.PassAttrib.buf(.{ .in = "MainCamUB", .from = null }, .Compute, .UniformRead, 3),
         p.PassAttrib.tex(.{ .in = "DepthViewTex", .from = null }, .Compute, .StorageWrite, 0),
         p.PassAttrib.tex(.{ .in = "DebugGridDepthTex", .from = "EditorGridGridDebug" }, .Compute, .SampledRead, 1),
-        //
-        // p.PassAttrib.texDep(.{ .in = "DebugGridTex", .from = "QuantGridDebug" }),
-        // p.PassAttrib.texDep(.{ .in = "DebugPlaneTex", .from = "FrustumView" }),
-        // p.PassAttrib.texDep(.{ .in = "DebugPlaneDepthTex" }),
     },
 });
