@@ -39,7 +39,7 @@ pub const editorGridGridDebugPass = p.PassDefinition.init(.{
         p.PassAttrib.shader(sc.editorGridMesh),
         p.PassAttrib.shader(sc.editorGridFrag),
         //
-        p.PassAttrib.color(.{ .in = "DebugGridTex", .from = "QuantGridDebug" }, .ColorAtt, .ColorAttReadWrite, .{ .R = 0.0, .G = 0.0, .B = 0.0, .A = 0.0 }),
+        p.PassAttrib.color(.{ .in = "DebugGridTex", .from = "QuantGridDebug" }, .ColorAtt, .ColorAttReadWrite, null), //.{ .R = 0.0, .G = 0.0, .B = 0.0, .A = 0.0 }
         p.PassAttrib.depth(.{ .in = "DebugGridDepthTex" }, .EarlyAndLateFragTest, .DepthStencilReadWrite, null),
         //
         p.PassAttrib.buf(.{ .in = "DebugCamUB" }, .Mesh, .UniformRead, 0),
@@ -60,7 +60,7 @@ pub const editorGridPlaneDebugPass = p.PassDefinition.init(.{
         p.PassAttrib.shader(sc.editorGridMesh),
         p.PassAttrib.shader(sc.editorGridFrag),
         //
-        p.PassAttrib.color(.{ .in = "DebugPlaneTex", .from = "FrustumView" }, .ColorAtt, .ColorAttReadWrite, .{ .R = 0.0, .G = 0.0, .B = 0.0, .A = 0.0 }),
+        p.PassAttrib.color(.{ .in = "DebugPlaneTex", .from = "FrustumView" }, .ColorAtt, .ColorAttReadWrite, null ), // .{ .R = 0.0, .G = 0.0, .B = 0.0, .A = 0.0 }
         p.PassAttrib.depth(.{ .in = "DebugPlaneDepthTex" }, .EarlyAndLateFragTest, .DepthStencilReadWrite, null),
         //
         p.PassAttrib.buf(.{ .in = "DebugCamUB" }, .Mesh, .UniformRead, 0),

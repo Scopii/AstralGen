@@ -3,9 +3,8 @@ const PassRefRange = @import("../renderGraph/components.zig").PassRefRange;
 const TexReference = @import("../renderGraph/components.zig").TexReference;
 const BufReference = @import("../renderGraph/components.zig").BufReference;
 const LinkedIdMap = @import("../.structures/LinkedIdMap.zig").LinkedIdMap;
+const Dependency = @import("../renderGraph/components.zig").Dependency;
 const FixedList = @import("../.structures/FixedList.zig").FixedList;
-const BufRefId = @import("../.configs/idConfig.zig").BufRefId;
-const TexRefId = @import("../.configs/idConfig.zig").TexRefId;
 const PassId = @import("../.configs/idConfig.zig").PassId;
 const rc = @import("../.configs/renderConfig.zig");
 const std = @import("std");
@@ -16,6 +15,9 @@ pub const PassLoadData = struct {
 
     texRanges: LinkedIdMap(PassRefRange, rc.PASS_MAX, PassId, rc.PASS_MAX, 0) = .{},
     texRefs: FixedList(TexReference, rc.PASS_MAX * rc.TEX_MAX) = .{},
+
+    dependencyRanges: LinkedIdMap(PassRefRange, rc.PASS_MAX, PassId, rc.PASS_MAX, 0) = .{},
+    dependencys: FixedList(Dependency, rc.PASS_MAX * 10) = .{}, // 10 is a reasonable guess!
 };
 
 pub const PassLoadSys = struct {
@@ -26,10 +28,14 @@ pub const PassLoadSys = struct {
         self.texRanges.clear();
         self.texRefs.clear();
 
+        self.dependencyRanges.clear();
+        self.dependencys.clear();
+
         for (registry.passDefinitions.getConstItems(), 0..) |passDef, i| {
             const passId = registry.passDefinitions.getKeyByIndex(@intCast(i));
             const texStart = self.texRefs.len;
             const bufStart = self.bufRefs.len;
+            const depStart = self.dependencys.len;
 
             for (passDef.passAttribute.constSlice()) |attribute| {
                 switch (attribute) {
@@ -52,24 +58,27 @@ pub const PassLoadSys = struct {
                         try self.bufRefs.append(bufRef);
                     },
 
-                    .texLinking => |texLink| {
-                        const texPassId = try registry.getTexturePassId(texLink.in);
-                        const rootPassId = if (texLink.from) |rootPass| try registry.getPassId(rootPass) else null;
-                        const texRef = TexReference{ .texPassId = texPassId, .passId = passId, .rootPassId = rootPassId, .access = .read };
-                        try self.texRefs.append(texRef);
-                    }, // ? Should not create Physical
-                    .bufLinking => |bufLink| {
-                        const bufPassId = try registry.getBufferPassId(bufLink.in);
-                        const rootPassId = if (bufLink.from) |rootPass| try registry.getPassId(rootPass) else null;
-                        const bufRef = BufReference{ .bufPassId = bufPassId, .passId = passId, .rootPassId = rootPassId, .access = .read };
-                        try self.bufRefs.append(bufRef);
-                    }, // ? Should not create Physical
+                    .texLink => |texLink| {
+                        if (texLink.from) |rootPass| {
+                            const rootPassId = try registry.getPassId(rootPass);
+                            const texOrder = Dependency{ .successor = passId, .predecessor = rootPassId };
+                            try self.dependencys.append(texOrder);
+                        } else return error.TexLinkOrderingWithoutFrom;
+                    },
+                    .bufLink => |bufLink| {
+                        if (bufLink.from) |rootPass| {
+                            const rootPassId = try registry.getPassId(rootPass);
+                            const texOrder = Dependency{ .successor = passId, .predecessor = rootPassId };
+                            try self.dependencys.append(texOrder);
+                        } else return error.BufLinkOrderingWithoutFrom;
+                    },
+                    .passLink => |passDep| try self.dependencys.append(passDep),
 
                     .texSlot => |texSlotTypes| {
                         const texPassId = try registry.getTexturePassId(texSlotTypes.texLink.in);
                         const rootPassId = if (texSlotTypes.texLink.from) |rootPass| try registry.getPassId(rootPass) else null;
                         const texRef = TexReference{ .texPassId = texPassId, .passId = passId, .rootPassId = rootPassId, .access = if (texSlotTypes.access.isReadOnly() == true) .read else .write };
-                        try self.texRefs.append( texRef);
+                        try self.texRefs.append(texRef);
                     },
                     .colorAtt => |texSlotTypes| {
                         const texPassId = try registry.getTexturePassId(texSlotTypes.texLink.in);
@@ -88,6 +97,8 @@ pub const PassLoadSys = struct {
 
             self.texRanges.upsert(passId, .{ .first = @intCast(texStart), .last = @intCast(self.texRefs.len) });
             self.bufRanges.upsert(passId, .{ .first = @intCast(bufStart), .last = @intCast(self.bufRefs.len) });
+
+            self.dependencyRanges.upsert(passId, .{ .first = @intCast(depStart), .last = @intCast(self.dependencys.len) });
         }
 
         // Debug Output
@@ -99,6 +110,7 @@ pub const PassLoadSys = struct {
                 std.debug.print(" - Pass {s}\n", .{passName});
 
                 const texRange = self.texRanges.getByIndex(@intCast(index));
+                const depRange = self.dependencyRanges.getByIndex(@intCast(index));
 
                 for (self.bufRefs.constSlice()[bufRange.first..bufRange.last]) |bufRef| {
                     const bufName = try registry.getBufferName(bufRef.bufPassId);
@@ -110,6 +122,12 @@ pub const PassLoadSys = struct {
                     const texName = try registry.getTextureName(texRef.texPassId);
                     const rootPassName = if (texRef.rootPassId) |rootPassId| try registry.getPassName(rootPassId) else "NULL";
                     std.debug.print("    -> Tex ( .name = {s}, .from = {s} )\n", .{ texName, rootPassName });
+                }
+
+                for (self.dependencys.constSlice()[depRange.first..depRange.last]) |dep| {
+                    const predName = try registry.getPassName(dep.predecessor);
+                    const succName = try registry.getPassName(dep.successor);
+                    std.debug.print("    -> ORDER ONLY ( .predecessor = {s}, .successor = {s} )\n", .{ predName, succName });
                 }
             }
             std.debug.print("\n", .{});

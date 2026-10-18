@@ -2,8 +2,9 @@ const RenderRegistryData = @import("../renderRegistry/RenderRegistryData.zig").R
 const LinkedIdMap = @import("../.structures/LinkedIdMap.zig").LinkedIdMap;
 const BufLifetime = @import("../renderGraph/components.zig").BufLifetime;
 const TexLifetime = @import("../renderGraph/components.zig").TexLifetime;
+const DependencyData = @import("3.5_Dependency.zig").DependencyData;
 const OptimizerData = @import("6_Optimizer.zig").OptimizerData;
-const ResourceData = @import("4_Resource.zig").ResourceData;
+const ResourceData = @import("5.5_Resource.zig").ResourceData;
 const FixedList = @import("../.structures/FixedList.zig").FixedList;
 const BufPassId = @import("../.configs/idConfig.zig").BufPassId;
 const TexPassId = @import("../.configs/idConfig.zig").TexPassId;
@@ -19,14 +20,14 @@ pub const LifetimeData = struct {
 };
 
 pub const LifetimeSys = struct {
-    pub fn build(self: *LifetimeData, resource: *const ResourceData, optimizer: *const OptimizerData, registry: *const RenderRegistryData) !void {
+    pub fn build(self: *LifetimeData, dependency: *const DependencyData, resource: *const ResourceData, optimizer: *const OptimizerData, registry: *const RenderRegistryData) !void {
         self.bufLifetimeMap.clear();
         self.texLifetimeMap.clear();
         self.bufLifetimes.clear();
         self.texLifetimes.clear();
 
         // Buffer Lifetimes
-        for (resource.activeBufRefs.constSlice()) |bufRef| {
+        for (dependency.activeBufRefs.constSlice()) |bufRef| {
             const bufPassId = bufRef.bufPassId;
             const passPosition = optimizer.optimizedGraph.getIndexByKey(bufRef.passId);
 
@@ -49,7 +50,7 @@ pub const LifetimeSys = struct {
         // self.bufLifetimes.defeatingQuicksort(lessThanGroup);
 
         // Texture Lifetimes
-        for (resource.activeTexRefs.constSlice()) |texRef| {
+        for (dependency.activeTexRefs.constSlice()) |texRef| {
             const texPassId = texRef.texPassId;
             const passPosition = optimizer.optimizedGraph.getIndexByKey(texRef.passId);
 

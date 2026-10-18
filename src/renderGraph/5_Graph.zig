@@ -3,8 +3,9 @@ const SimpleIdMap = @import("../.structures/SimpleIdMap.zig").SimpleIdMap;
 const LinkedIdMap = @import("../.structures/LinkedIdMap.zig").LinkedIdMap;
 const GraphNode = @import("../renderGraph/components.zig").GraphNode;
 const FixedList = @import("../.structures/FixedList.zig").FixedList;
+const DependencyData = @import("3.5_Dependency.zig").DependencyData;
 const OutputLoadData = @import("2_OutputLoad.zig").OutputLoadData;
-const ResourceData = @import("4_Resource.zig").ResourceData;
+const ResourceData = @import("5.5_Resource.zig").ResourceData;
 const PassId = @import("../.configs/idConfig.zig").PassId;
 const rc = @import("../.configs/renderConfig.zig");
 const std = @import("std");
@@ -16,13 +17,13 @@ pub const GraphData = struct {
 };
 
 pub const GraphSys = struct {
-    pub fn build(self: *GraphData, outputLoad: *const OutputLoadData, resource: *const ResourceData, registry: *const RenderRegistryData) !void {
+    pub fn build(self: *GraphData, outputLoad: *const OutputLoadData, dependency: *const DependencyData, registry: *const RenderRegistryData) !void {
         self.passDepCounters.clear();
         self.graph.clear();
         self.readyPasses.clear();
 
         // Fill Passes with Buffer Dependancy Count
-        for (resource.dependencies.constSlice()) |dep| {
+        for (dependency.dependencies.constSlice()) |dep| {
             const curDepCount = if (self.passDepCounters.isKeyUsed(dep.successor)) self.passDepCounters.getByKey(dep.successor) else 0;
             self.passDepCounters.upsert(dep.successor, curDepCount + 1);
         }
@@ -59,12 +60,12 @@ pub const GraphSys = struct {
             const nextLevel = pass.level + 1;
 
             // Decrement Buffer Dependencies
-            for (resource.dependencies.constSlice()) |dependency| {
-                if (dependency.predecessor == pass.passId) {
-                    const ptr = self.passDepCounters.getPtrByKey(dependency.successor);
+            for (dependency.dependencies.constSlice()) |dep| {
+                if (dep.predecessor == pass.passId) {
+                    const ptr = self.passDepCounters.getPtrByKey(dep.successor);
                     ptr.* -= 1;
                     // Queue to END of current list if its 0
-                    if (ptr.* == 0) self.readyPasses.appendAssumeCapacity(GraphNode{ .passId = dependency.successor, .level = nextLevel });
+                    if (ptr.* == 0) self.readyPasses.appendAssumeCapacity(GraphNode{ .passId = dep.successor, .level = nextLevel });
                 }
             }
         }
@@ -83,7 +84,7 @@ pub const GraphSys = struct {
                     std.debug.print("  stuck: {s} (still waiting on {} deps)\n", .{ passString, openDeps });
                 }
             }
-            for (resource.dependencies.constSlice()) |dep| {
+            for (dependency.dependencies.constSlice()) |dep| {
                 const predStuck = !self.graph.isKeyUsed(dep.predecessor);
                 const succStuck = !self.graph.isKeyUsed(dep.successor);
 

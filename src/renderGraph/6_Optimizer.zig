@@ -3,8 +3,9 @@ const GraphMemoryNode = @import("../renderGraph/components.zig").GraphMemoryNode
 const GraphLifetime = @import("../renderGraph/components.zig").GraphLifetime;
 const SimpleIdMap = @import("../.structures/SimpleIdMap.zig").SimpleIdMap;
 const LinkedIdMap = @import("../.structures/LinkedIdMap.zig").LinkedIdMap;
+const DependencyData = @import("3.5_Dependency.zig").DependencyData;
 const PassLoadData = @import("1_PassLoad.zig").PassLoadData;
-const ResourceData = @import("4_Resource.zig").ResourceData;
+const ResourceData = @import("5.5_Resource.zig").ResourceData;
 const FixedList = @import("../.structures/FixedList.zig").FixedList;
 const BufPassId = @import("../.configs/idConfig.zig").BufPassId;
 const TexPassId = @import("../.configs/idConfig.zig").TexPassId;
@@ -26,6 +27,7 @@ pub const OptimizerSys = struct {
         self: *OptimizerData,
         passLoad: *const PassLoadData,
         graph: *const GraphData,
+        dependency: *const DependencyData,
         resource: *const ResourceData,
         registry: *const RenderRegistryData,
     ) !void {
@@ -43,7 +45,7 @@ pub const OptimizerSys = struct {
         self.texGraphLifetimes.clear();
         self.graphMemNodes.clear();
 
-        for (resource.activeBufRefs.constSlice()) |bufRef| {
+        for (dependency.activeBufRefs.constSlice()) |bufRef| {
             const level = graph.graph.getByKey(bufRef.passId).level;
             const bufPassId = bufRef.bufPassId;
 
@@ -59,7 +61,7 @@ pub const OptimizerSys = struct {
             }
         }
 
-        for (resource.activeTexRefs.constSlice()) |texRef| {
+        for (dependency.activeTexRefs.constSlice()) |texRef| {
             const level = graph.graph.getByKey(texRef.passId).level;
             const texPassId = texRef.texPassId;
 

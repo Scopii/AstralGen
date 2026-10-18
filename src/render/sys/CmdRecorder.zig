@@ -98,17 +98,7 @@ pub const CmdRecorder = struct {
         }
     }
 
-    pub fn recordFrame(
-        self: *CmdRecorder,
-        renderNodes: []RenderNode,
-        flightId: u8,
-        frame: u64,
-        swapMan: *SwapchainMan,
-        resMan: *ResourceMan,
-        shaderMan: *ShaderManager,
-        _: bool,
-        pushData: []const u8,
-    ) !*Cmd {
+    pub fn recordFrame(self: *CmdRecorder, renderNodes: []RenderNode, flightId: u8, frame: u64, swapMan: *SwapchainMan, resMan: *ResourceMan, shaderMan: *ShaderManager, _: bool, pushData: []const u8) !*Cmd {
         var cmd = try self.cmdMan.getCmd(flightId);
         try cmd.begin(flightId, frame);
 
@@ -282,7 +272,7 @@ pub const CmdRecorder = struct {
                     };
                     const swapchain = swapMan.getTargetByIndex(targetIndex);
                     const targetTex = swapchain.getCurTexture();
-                    try self.checkImageState(targetTex, .{ .stage = targetBarrier.stage, .access = targetBarrier.access, .layout = targetBarrier.layout }, false );
+                    try self.checkImageState(targetTex, .{ .stage = targetBarrier.stage, .access = targetBarrier.access, .layout = targetBarrier.layout }, false);
                 },
                 .bakeBarriers => {
                     self.bakeBarriers(cmd, "Bake Pass Barriers");

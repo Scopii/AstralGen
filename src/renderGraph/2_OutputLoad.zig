@@ -54,7 +54,9 @@ pub const OutputLoadSys = struct {
         }
 
         // Manuel Passes (NO Outputs but still inserts dependencies)
-        for (manuelPasses) |manuelPass| self.activePasses.upsert(manuelPass, manuelPass);
+        for (manuelPasses) |manuelPass| {
+            if (rc.FRAME_GRAPH_INSERT_MANUAL_DEPENDENCY_PASSES) self.pendingPasses.append(manuelPass) else self.activePasses.upsert(manuelPass, manuelPass);
+        }
 
         // Backwards Traversal to activate all required Passes
         while (self.pendingPasses.len != 0) {
@@ -69,7 +71,7 @@ pub const OutputLoadSys = struct {
 
             for (texRefs) |texRef| {
                 if (texRef.rootPassId) |rootPassId| {
-                    if (true) { // REFERENCE VALIDATION
+                    if (rc.FRAME_GRAPH_REFERENCE_VALIDATION) {
                         const rootTexRange = passLoad.texRanges.getByKey(rootPassId);
                         const rootTexRefs = passLoad.texRefs.constSlice()[rootTexRange.first..rootTexRange.last];
 
@@ -84,7 +86,7 @@ pub const OutputLoadSys = struct {
                         }
                         if (foundTex == false) {
                             std.debug.print("ERROR in OutputLoadSys: Backwards Traversal could not find Texture!\n", .{});
-                            return error.OutputTupleNotFound;
+                            return error.FromPassDoesNotWriteResource;
                         }
                     } else {
                         if (self.activePasses.isKeyUsed(rootPassId) == false) try self.pendingPasses.append(rootPassId);
@@ -98,7 +100,7 @@ pub const OutputLoadSys = struct {
 
             for (bufRefs) |bufRef| {
                 if (bufRef.rootPassId) |rootPassId| {
-                    if (true) { // REFERENCE VALIDATION
+                    if (rc.FRAME_GRAPH_REFERENCE_VALIDATION) {
                         const rootBufRange = passLoad.bufRanges.getByKey(rootPassId);
                         const rootBufRefs = passLoad.bufRefs.constSlice()[rootBufRange.first..rootBufRange.last];
 
@@ -113,7 +115,7 @@ pub const OutputLoadSys = struct {
                         }
                         if (foundBuf == false) {
                             std.debug.print("ERROR in OutputLoadSys: Backwards Traversal could not find Buffer!\n", .{});
-                            return error.OutputTupleNotFound;
+                            return error.FromPassDoesNotWriteResource;
                         }
                     } else {
                         if (self.activePasses.isKeyUsed(rootPassId) == false) try self.pendingPasses.append(rootPassId);

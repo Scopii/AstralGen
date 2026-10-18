@@ -39,8 +39,8 @@ pub const frustumViewPass = p.PassDefinition.init(.{
         p.PassAttrib.shader(sc.frustumMesh),
         p.PassAttrib.shader(sc.quantFrag),
         //
-        p.PassAttrib.color(.{ .in = "DebugPlaneTex", .from = "QuantPlaneDebug" }, .ColorAtt, .ColorAttReadWrite, .{ .R = 0.0, .G = 0.0, .B = 0.0, .A = 0.0 }),
-        p.PassAttrib.depth(.{ .in = "DebugPlaneDepthTex" }, .EarlyAndLateFragTest, .DepthStencilReadWrite, null),
+        p.PassAttrib.color(.{ .in = "DebugPlaneTex", .from = "QuantPlaneDebug" }, .ColorAtt, .ColorAttReadWrite, null), // .{ .R = 0.0, .G = 0.0, .B = 0.0, .A = 0.0 }
+        p.PassAttrib.depth(.{ .in = "DebugPlaneDepthTex" }, .EarlyAndLateFragTest, .DepthStencilReadWrite, null), // Depth Barrier STILL in use!
         //
         p.PassAttrib.buf(.{ .in = "MainCamUB" }, .Mesh, .UniformRead, 0),
         p.PassAttrib.buf(.{ .in = "DebugCamUB" }, .Mesh, .UniformRead, 1),

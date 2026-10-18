@@ -48,8 +48,10 @@ pub const Texture = struct {
     pub fn createImageBarrier(self: *Texture, newState: TextureState, ignoreOld: bool) vk.VkImageMemoryBarrier2 {
         const subRange = vhF.createSubresourceRange(self.typ.getImageAspectFlags(), 0, 1, 0, 1);
 
-        const srcStage = if (ignoreOld == true) .None else self.state.stage;
-        const srcAccess = if (ignoreOld == true) .None else self.state.access;
+        // const srcStage = if (ignoreOld == true) .None else self.state.stage;
+        // const srcAccess = if (ignoreOld == true) .None else self.state.access;
+        const srcStage = self.state.stage; // CHANGED: always wait for the previous user of this memory
+        const srcAccess = self.state.access; // CHANGED: always flush its writes
         const srcLayout = if (ignoreOld == true) .Undefined else self.state.layout;
 
         const barrier = vk.VkImageMemoryBarrier2{

@@ -6,7 +6,9 @@ const OutputLoadData = @import("2_OutputLoad.zig").OutputLoadData;
 const TexPassId = @import("../.configs/idConfig.zig").TexPassId;
 const Viewport = @import("../viewport/Viewport.zig").Viewport;
 const WindowId = @import("../.configs/idConfig.zig").WindowId;
+const PassLoadData = @import("1_PassLoad.zig").PassLoadData;
 const PassId = @import("../.configs/idConfig.zig").PassId;
+const GraphData = @import("5_Graph.zig").GraphData;
 const rc = @import("../.configs/renderConfig.zig");
 const std = @import("std");
 
@@ -21,7 +23,9 @@ pub const CompositeData = struct {
 pub const CompositeSys = struct {
     pub fn build(
         self: *CompositeData,
+        passLoad: *const PassLoadData,
         outputLoad: *const OutputLoadData,
+        graph: *const GraphData,
         registry: *const RenderRegistryData,
         viewportData: *const ViewportData,
         windowData: *const WindowData,
@@ -56,7 +60,7 @@ pub const CompositeSys = struct {
                         const scaledHeightInt: u32 = @intFromFloat(scaledHeight);
                         if (scaledHeightInt > passExtent.height) passExtent.height = scaledHeightInt;
 
-                        // Check Blit or Composite
+                        // Create Composite
                         const composite = createComposite(&viewport, outPassId, outTexPassId, window.id, window.extent.width, window.extent.height);
                         self.composites.append(composite) catch std.debug.print("PassDef Could not Append Composite\n", .{});
                     }
@@ -64,9 +68,31 @@ pub const CompositeSys = struct {
             }
         }
 
+        if (rc.FRAME_GRAPH_TEXTURE_READS_RESIZE_PRODUCERS) {
+            // Backwards Walking Sorted Graph for Extend increases
+            const order = graph.graph.getConstItems(); // producers before their readers
+            var orderLen: usize = order.len;
+
+            while (orderLen > 0) {
+                orderLen -= 1;
+                const passId = order[orderLen].passId;
+                if (self.passExtents.isKeyUsed(passId) == false) continue; // no viewport and no reader needs pixels from it
+                const ext = self.passExtents.getByKey(passId); // viewport demand + everything its readers pushed
+
+                const range = passLoad.texRanges.getByKey(passId);
+                for (passLoad.texRefs.constSlice()[range.first..range.last]) |texRef| {
+                    const producer = texRef.rootPassId orelse continue; // base texture, no producer
+                    if (self.passExtents.isKeyUsed(producer) == false) self.passExtents.insert(producer, .{ .width = 0, .height = 0 });
+                    const p = self.passExtents.getPtrByKey(producer);
+                    p.width = @max(p.width, ext.width); // producer renders at least as big as its reader
+                    p.height = @max(p.height, ext.height);
+                }
+            }
+        }
+
         // Debug Output
         if (rc.FRAME_GRAPH_DEBUG) {
-            std.debug.print("3.Composite: \n", .{});
+            std.debug.print("5.2.Composite: \n", .{});
             for (outputLoad.activePasses.getConstItems(), 0..) |passId, i| {
                 const passName = try registry.getPassName(passId);
                 if (self.passExtents.isKeyUsed(passId) == true) {

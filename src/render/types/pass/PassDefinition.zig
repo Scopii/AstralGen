@@ -1,5 +1,6 @@
 const TextureStringLink = @import("../../../renderGraph/components.zig").TextureStringLink;
 const BufferStringLink = @import("../../../renderGraph/components.zig").BufferStringLink;
+const Dependancy = @import("../../../renderGraph/components.zig").Dependency;
 const RenderStateUnion = @import("../pass/RenderState.zig").RenderStateUnion;
 const FixedList = @import("../../../.structures/FixedList.zig").FixedList;
 const VertexBufferSlot = @import("VertexBufferUse.zig").VertexBufferSlot;
@@ -7,14 +8,14 @@ const IndexBufferSlot = @import("IndexBufferUse.zig").IndexBufferSlot;
 const VertexAttribute = @import("VertexAttribute.zig").VertexAttribute;
 const ShaderInf = @import("../../../shader/ShaderInf.zig").ShaderInf;
 const AttachmentSlot = @import("AttachmentUse.zig").AttachmentSlot;
-const ClearColor = @import("AttachmentUse.zig").ClearColor;
-const ClearDepth = @import("AttachmentUse.zig").ClearDepth;
-const ClearValue = @import("AttachmentUse.zig").ClearValue;
 const RenderState = @import("../pass/RenderState.zig").RenderState;
 const BufId = @import("../../../.configs/idConfig.zig").BufId;
 const TexId = @import("../../../.configs/idConfig.zig").TexId;
-const TextureSlot = @import("TextureUse.zig").TextureSlot;
+const ClearColor = @import("AttachmentUse.zig").ClearColor;
+const ClearDepth = @import("AttachmentUse.zig").ClearDepth;
+const ClearValue = @import("AttachmentUse.zig").ClearValue;
 const String = @import("../../../globalHelper.zig").String;
+const TextureSlot = @import("TextureUse.zig").TextureSlot;
 const rc = @import("../../../.configs/renderConfig.zig");
 const BufferSlot = @import("BufferUse.zig").BufferSlot;
 const vhE = @import("../../help/Enums.zig");
@@ -106,8 +107,9 @@ pub const PassDefinition = struct {
 
         renderState: RenderStateUnion,
 
-        texLinking: TextureStringLink,
-        bufLinking: BufferStringLink,
+        texLink: TextureStringLink,
+        bufLink: BufferStringLink,
+        passLink: Dependancy,
 
         pub fn shader(shaderInf: ShaderInf) PassAttribute {
             return .{ .shaderInf = shaderInf };
@@ -122,11 +124,15 @@ pub const PassDefinition = struct {
         }
 
         pub fn texDep(texLink: TextureStringLink) PassAttribute {
-            return .{ .texLinking = texLink };
+            return .{ .texLink = texLink };
         }
 
         pub fn bufDep(bufLink: BufferStringLink) PassAttribute {
-            return .{ .bufLinking = bufLink };
+            return .{ .bufLink = bufLink };
+        }
+
+        pub fn passDep(dep: Dependancy) PassAttribute {
+            return .{ .passLink = dep };
         }
 
         pub fn color(texLink: TextureStringLink, stage: vhE.PipeStage, access: vhE.PipeAccess, clearColor: ?ClearColor) PassAttribute {
@@ -175,7 +181,7 @@ pub const PassDefinition = struct {
 
         for (self.passAttribute.constSlice()) |attribute| {
             switch (attribute) {
-                .texLinking, .bufLinking => {},
+                .texLink, .bufLink, .passLink => {},
 
                 .shaderInf => |shaderInf| {
                     switch (shaderInf.typ) {

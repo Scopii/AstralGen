@@ -85,7 +85,7 @@ pub const RenderNode = union(enum) {
 
     // Barrier Commands
     bufBarrier: struct { bufId: BufId, stage: vhE.PipeStage, access: vhE.PipeAccess },
-    texBarrier: struct { texId: TexId, stage: vhE.PipeStage, access: vhE.PipeAccess, layout: vhE.ImageLayout },
+    texBarrier: struct { texId: TexId, stage: vhE.PipeStage, access: vhE.PipeAccess, layout: vhE.ImageLayout},
     swapchainTargetBarrier: struct { windowId: WindowId, stage: vhE.PipeStage, access: vhE.PipeAccess, layout: vhE.ImageLayout },
     bakeBarriers: void,
 

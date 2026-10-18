@@ -17,7 +17,7 @@ pub const BufferStringLink = struct {
     from: ?[]const u8 = null, // Should be String?
 };
 
-pub const Dependancy = struct {
+pub const Dependency = struct {
     predecessor: PassId,
     successor: PassId,
 };

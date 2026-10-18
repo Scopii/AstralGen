@@ -73,7 +73,7 @@ pub const RenderCompilerSys = struct {
                     try fillCompositePassHardwareIdCmds(self, assigner, registry, compositeCopy);
                 },
                 .passIR => |passIR| {
-                    try fillPassHardwareIdCmds(self, assigner, registry, renderGraph, passIR, runTime, deltaTime);
+                    try fillPassHardwareIdCmds(self, assigner, registry, passIR, runTime, deltaTime);
                 },
                 .clearBufIR => |clearBufIR| {
                     const hardwareTexId = assigner.bufAssigns.getByKey(clearBufIR);
@@ -285,15 +285,7 @@ pub const RenderCompilerSys = struct {
         }
     }
 
-    fn fillPassHardwareIdCmds(
-        self: *RenderCompilerData,
-        assigner: *const RenderAssignerData,
-        registry: *const RenderRegistryData,
-        _: *const RenderGraphData,
-        passId: PassId,
-        runTime: f32,
-        deltaTime: f32,
-    ) !void {
+    fn fillPassHardwareIdCmds(self: *RenderCompilerData, assigner: *const RenderAssignerData, registry: *const RenderRegistryData, passId: PassId, runTime: f32, deltaTime: f32) !void {
         const passName = try registry.getPassName(passId);
         const passDef = try registry.getPassDefinition(passName);
         const mainOutputTexId = if (passDef.outputTex) |output| try registry.getTexturePassId(output) else null;
@@ -377,7 +369,7 @@ pub const RenderCompilerSys = struct {
                 .renderState => |stateChange| {
                     setRenderStateUnion(self, stateChange);
                 },
-                .bufLinking, .texLinking => {},
+                .bufLink, .texLink, .passLink => {},
             }
         }
 

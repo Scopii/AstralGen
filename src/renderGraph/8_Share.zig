@@ -11,7 +11,7 @@ const BufPassId = @import("../.configs/idConfig.zig").BufPassId;
 const TexPassId = @import("../.configs/idConfig.zig").TexPassId;
 const OptimizerData = @import("6_Optimizer.zig").OptimizerData;
 const LifetimeData = @import("7_Lifetime.zig").LifetimeData;
-const ResourceData = @import("4_Resource.zig").ResourceData;
+const ResourceData = @import("5.5_Resource.zig").ResourceData;
 const rc = @import("../.configs/renderConfig.zig");
 const std = @import("std");
 
