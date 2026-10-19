@@ -41,7 +41,7 @@ pub const RenderGraphSys = struct {
         if (rc.FRAME_GRAPH_TIMERS) std.debug.print("{d:.3} us: DependencySys\n", .{@as(f64, @floatFromInt(std.time.nanoTimestamp() - start35)) / 1_000.0});
 
         const start4 = std.time.nanoTimestamp();
-        try GraphSys2.build(&self.graph, &self.outputLoad, &self.dependency, renderRegistry);
+        try GraphSys2.build(&self.graph, &self.passLoad, &self.outputLoad, &self.dependency, renderRegistry);
         if (rc.FRAME_GRAPH_TIMERS) std.debug.print("{d:.3} us: GraphSys2\n", .{@as(f64, @floatFromInt(std.time.nanoTimestamp() - start4)) / 1_000.0});
 
         const start2 = std.time.nanoTimestamp();

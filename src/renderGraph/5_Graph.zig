@@ -1,11 +1,15 @@
 const RenderRegistryData = @import("../renderRegistry/RenderRegistryData.zig").RenderRegistryData;
+const ResourceVersion = @import("../renderGraph/components.zig").ResourceVersion;
 const SimpleIdMap = @import("../.structures/SimpleIdMap.zig").SimpleIdMap;
 const LinkedIdMap = @import("../.structures/LinkedIdMap.zig").LinkedIdMap;
 const GraphNode = @import("../renderGraph/components.zig").GraphNode;
 const FixedList = @import("../.structures/FixedList.zig").FixedList;
 const DependencyData = @import("3.5_Dependency.zig").DependencyData;
 const OutputLoadData = @import("2_OutputLoad.zig").OutputLoadData;
+const TexPassId = @import("../.configs/idConfig.zig").TexPassId;
+const BufPassId = @import("../.configs/idConfig.zig").BufPassId;
 const ResourceData = @import("5.5_Resource.zig").ResourceData;
+const PassLoadData = @import("1_PassLoad.zig").PassLoadData;
 const PassId = @import("../.configs/idConfig.zig").PassId;
 const rc = @import("../.configs/renderConfig.zig");
 const std = @import("std");
@@ -14,13 +18,19 @@ pub const GraphData = struct {
     passDepCounters: LinkedIdMap(u16, rc.PASS_MAX, PassId, rc.PASS_MAX, 0) = .{},
     readyPasses: FixedList(GraphNode, rc.PASS_MAX) = .{},
     graph: SimpleIdMap(GraphNode, rc.PASS_MAX, PassId, rc.PASS_MAX, 0) = .{},
+
+    texVersions: SimpleIdMap(ResourceVersion, rc.TEX_MAX, TexPassId, rc.TEX_MAX, 0) = .{},
+    bufVersions: SimpleIdMap(ResourceVersion, rc.BUF_MAX, BufPassId, rc.BUF_MAX, 0) = .{},
 };
 
 pub const GraphSys = struct {
-    pub fn build(self: *GraphData, outputLoad: *const OutputLoadData, dependency: *const DependencyData, registry: *const RenderRegistryData) !void {
+    pub fn build(self: *GraphData, passLoad: *const PassLoadData, outputLoad: *const OutputLoadData, dependency: *const DependencyData, registry: *const RenderRegistryData) !void {
         self.passDepCounters.clear();
         self.graph.clear();
         self.readyPasses.clear();
+
+        self.texVersions.clear();
+        self.bufVersions.clear();
 
         // Fill Passes with Buffer Dependancy Count
         for (dependency.dependencies.constSlice()) |dep| {
@@ -95,6 +105,50 @@ pub const GraphSys = struct {
                 }
             }
             return error.GraphHasCycle;
+        }
+
+        // Texture Version Validation (every ref must use the latest version of its resource)
+        for (self.graph.getConstItems()) |graphNode| {
+            const texRange = passLoad.texRanges.getByKey(graphNode.passId);
+            for (passLoad.texRefs.constSlice()[texRange.first..texRange.last]) |texRef| {
+                if (self.texVersions.isKeyUsed(texRef.texPassId) == false) self.texVersions.insert(texRef.texPassId, .{});
+                const texVersion = self.texVersions.getPtrByKey(texRef.texPassId);
+
+                const usesLatest = texRef.rootPassId == texVersion.latestWriter;
+                if (usesLatest == false or (texRef.access == .write and texVersion.latestIsRead)) {
+                    const texName = try registry.getTextureName(texRef.texPassId);
+                    const passName = try registry.getPassName(texRef.passId);
+                    std.debug.print("ERROR: 5.Graph: {s} uses Tex ({s}) but was already written over, already read (for a write), or from-pass doesnt write it\n", .{ passName, texName });
+                    return error.TextureVersionConflict;
+                }
+
+                if (texRef.access == .write) {
+                    texVersion.latestWriter = texRef.passId; // pass now holds the newest version
+                    texVersion.latestIsRead = false;
+                } else texVersion.latestIsRead = true;
+            }
+        }
+
+        // Buffer Version Validation (every ref must use the latest version of its resource) 
+        for (self.graph.getConstItems()) |graphNode| {
+            const bufRange = passLoad.bufRanges.getByKey(graphNode.passId);
+            for (passLoad.bufRefs.constSlice()[bufRange.first..bufRange.last]) |bufRef| {
+                if (self.bufVersions.isKeyUsed(bufRef.bufPassId) == false) self.bufVersions.insert(bufRef.bufPassId, .{});
+                const bufVersion = self.bufVersions.getPtrByKey(bufRef.bufPassId);
+
+                const usesLatest = bufRef.rootPassId == bufVersion.latestWriter;
+                if (usesLatest == false or (bufRef.access == .write and bufVersion.latestIsRead)) {
+                    const bufName = try registry.getBufferName(bufRef.bufPassId);
+                    const passName = try registry.getPassName(bufRef.passId);
+                    std.debug.print("ERROR: 5.Graph: {s} uses Buf ({s}) but was already written over, already read (for a write), or from-pass doesnt write it\n", .{ passName, bufName });
+                    return error.BufferVersionConflict;
+                }
+
+                if (bufRef.access == .write) {
+                    bufVersion.latestWriter = bufRef.passId; // pass now holds the newest version
+                    bufVersion.latestIsRead = false;
+                } else bufVersion.latestIsRead = true;
+            }
         }
 
         // Debug

@@ -76,6 +76,11 @@ pub const GraphMemoryNode = struct {
     memWeight: i64, // bornBytes - dyingBytes,
 };
 
+pub const ResourceVersion = struct {
+    latestWriter: ?PassId = null, // pass that wrote the newest version, null = start version
+    latestIsRead: bool = false, // newest version already has readers
+};
+
 pub const TexReference = struct {
     texPassId: TexPassId,
     passId: PassId,
