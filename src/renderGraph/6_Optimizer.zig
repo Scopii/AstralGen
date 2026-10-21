@@ -18,19 +18,13 @@ pub const OptimizerData = struct {
     bufGraphLifetimes: LinkedIdMap(GraphLifetime, rc.BUF_MAX, BufPassId, rc.BUF_MAX, 0) = .{},
     texGraphLifetimes: LinkedIdMap(GraphLifetime, rc.TEX_MAX, TexPassId, rc.TEX_MAX, 0) = .{},
     graphMemNodes: FixedList(GraphMemoryNode, rc.PASS_MAX) = .{},
+    usedBytes: SimpleIdMap(i64, rc.PASS_MAX, PassId, rc.PASS_MAX, 0) = .{},
 
     optimizedGraph: SimpleIdMap(GraphMemoryNode, rc.PASS_MAX, PassId, rc.PASS_MAX, 0) = .{}, // Result
 };
 
 pub const OptimizerSys = struct {
-    pub fn build(
-        self: *OptimizerData,
-        passLoad: *const PassLoadData,
-        graph: *const GraphData,
-        dependency: *const DependencyData,
-        resource: *const ResourceData,
-        registry: *const RenderRegistryData,
-    ) !void {
+    pub fn build(self: *OptimizerData, passLoad: *const PassLoadData, graph: *const GraphData, dependency: *const DependencyData, resource: *const ResourceData, registry: *const RenderRegistryData) !void {
         self.optimizedGraph.clear();
 
         // Skip Optimizer Stage
@@ -44,6 +38,7 @@ pub const OptimizerSys = struct {
         self.bufGraphLifetimes.clear();
         self.texGraphLifetimes.clear();
         self.graphMemNodes.clear();
+        self.usedBytes.clear();
 
         for (dependency.activeBufRefs.constSlice()) |bufRef| {
             const level = graph.graph.getByKey(bufRef.passId).level;
@@ -98,6 +93,7 @@ pub const OptimizerSys = struct {
             const bufRange = passLoad.bufRanges.getByKey(graphNode.passId);
             const texRange = passLoad.texRanges.getByKey(graphNode.passId);
 
+            var usedBytes: u64 = 0;
             var bornBytes: u64 = 0;
             var dyingBytes: u64 = 0;
 
@@ -106,6 +102,7 @@ pub const OptimizerSys = struct {
                 if (self.bufGraphLifetimes.isKeyUsed(bufPassId) == true) {
                     const graphLifetime = self.bufGraphLifetimes.getByKey(bufPassId);
                     const bytes = resource.activeBufDescs.getByKey(bufPassId).guessMemoryCost();
+                    usedBytes += bytes;
                     if (graphLifetime.firstLevel == graphNode.level and graphLifetime.lastLevel != graphNode.level) bornBytes += bytes;
                     if (graphLifetime.lastLevel == graphNode.level and graphLifetime.firstLevel != graphNode.level) dyingBytes += bytes;
                 }
@@ -116,6 +113,7 @@ pub const OptimizerSys = struct {
                 if (self.texGraphLifetimes.isKeyUsed(texPassId) == true) {
                     const graphLifetime = self.texGraphLifetimes.getByKey(texPassId);
                     const bytes = resource.activeTexDescs.getByKey(texPassId).guessMemoryCost();
+                    usedBytes += bytes;
                     if (graphLifetime.firstLevel == graphNode.level and graphLifetime.lastLevel != graphNode.level) bornBytes += bytes;
                     if (graphLifetime.lastLevel == graphNode.level and graphLifetime.firstLevel != graphNode.level) dyingBytes += bytes;
                 }
@@ -123,9 +121,11 @@ pub const OptimizerSys = struct {
 
             const castedBornBytes: i64 = @intCast(bornBytes);
             const castedDyingBytes: i64 = @intCast(dyingBytes);
-
             const graphMemNode = GraphMemoryNode{ .level = graphNode.level, .passId = graphNode.passId, .memWeight = castedBornBytes - castedDyingBytes };
             self.graphMemNodes.append(graphMemNode) catch std.debug.print("ERROR: 4.5.PassOptimizer: Append to graphMemNodes failed!", .{});
+
+            const castedUsedBytes: i64 = @intCast(usedBytes);
+            self.usedBytes.insert(graphNode.passId, castedUsedBytes);
         }
 
         // Sort first by Level then by Memory Byte Weight
@@ -139,8 +139,13 @@ pub const OptimizerSys = struct {
         if (rc.FRAME_GRAPH_DEBUG) {
             for (self.optimizedGraph.getConstItems(), 0..) |pass, i| {
                 const passName = try registry.getPassName(pass.passId);
-                std.debug.print("- Nr. {}: .( .level = {}, .pass = {s}, .memWeight = {} )\n", .{ i, pass.level, passName, pass.memWeight });
+                std.debug.print("- Nr. {}: .( .level = {}, .pass = {s}, .memWeight = {} )", .{ i, pass.level, passName, pass.memWeight });
+                if (rc.FRAME_GRAPH_SKIP_OPTIMIZE == false) {
+                    const usedBytes = self.usedBytes.getByKey(pass.passId);
+                    std.debug.print(" (Used Bytes: {})\n", .{usedBytes});
+                } else std.debug.print("\n", .{});
             }
+            std.debug.print("", .{});
             std.debug.print("\n", .{});
         }
     }

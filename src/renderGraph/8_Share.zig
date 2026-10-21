@@ -38,10 +38,10 @@ pub const ShareSys = struct {
 
         // Buffer Share
         for (lifetime.bufLifetimes.constSlice()) |bufLifetime| {
-            if (rc.FRAME_GRAPH_SKIP_SHARING == false) {
-                var candidateIndex: ?u16 = null;
-                const newDesc = resource.activeBufDescs.getByKey(bufLifetime.bufPassId);
+            var candidateIndex: ?u16 = null;
+            const newDesc = resource.activeBufDescs.getByKey(bufLifetime.bufPassId);
 
+            if (rc.FRAME_GRAPH_SKIP_SHARING == false) {
                 for (self.sharedBuffers.slice(), 0..) |*physLifetime, index| {
                     const candidateDesc = physLifetime.bufDesc;
 
@@ -53,33 +53,33 @@ pub const ShareSys = struct {
                         }
                     }
                 }
+            }
 
-                if (candidateIndex) |candidate| {
-                    self.bufShareIndices.upsert(bufLifetime.bufPassId, candidate);
-                    const passAfterClear = optimizer.optimizedGraph.getConstItems()[bufLifetime.earliestPass].passId;
-                    self.bufClears.append(.{ .sharedIndex = candidate, .passAfterClear = passAfterClear, .bufPassId = bufLifetime.bufPassId }) catch {
-                        std.debug.print("ERROR: 5.4.GroupSys: Could not Append to bufClears\n", .{});
-                    };
-                } else {
-                    const newIndex: u16 = @intCast(self.sharedBuffers.len);
+            if (candidateIndex) |candidate| {
+                self.bufShareIndices.upsert(bufLifetime.bufPassId, candidate);
+                const passAfterClear = optimizer.optimizedGraph.getConstItems()[bufLifetime.earliestPass].passId;
+                self.bufClears.append(.{ .sharedIndex = candidate, .passAfterClear = passAfterClear, .bufPassId = bufLifetime.bufPassId }) catch {
+                    std.debug.print("ERROR: 5.4.GroupSys: Could not Append to bufClears\n", .{});
+                };
+            } else {
+                const newIndex: u16 = @intCast(self.sharedBuffers.len);
 
-                    try self.sharedBuffers.append(.{ .earliest = bufLifetime.earliestPass, .latest = bufLifetime.latestPass, .bufDesc = newDesc });
+                try self.sharedBuffers.append(.{ .earliest = bufLifetime.earliestPass, .latest = bufLifetime.latestPass, .bufDesc = newDesc });
 
-                    self.bufShareIndices.upsert(bufLifetime.bufPassId, newIndex);
-                    const passAfterClear = optimizer.optimizedGraph.getConstItems()[bufLifetime.earliestPass].passId;
-                    self.bufClears.append(.{ .sharedIndex = newIndex, .passAfterClear = passAfterClear, .bufPassId = bufLifetime.bufPassId }) catch {
-                        std.debug.print("ERROR: 5.4.GroupSys: Could not Append to bufClears\n", .{});
-                    };
-                }
+                self.bufShareIndices.upsert(bufLifetime.bufPassId, newIndex);
+                const passAfterClear = optimizer.optimizedGraph.getConstItems()[bufLifetime.earliestPass].passId;
+                self.bufClears.append(.{ .sharedIndex = newIndex, .passAfterClear = passAfterClear, .bufPassId = bufLifetime.bufPassId }) catch {
+                    std.debug.print("ERROR: 5.4.GroupSys: Could not Append to bufClears\n", .{});
+                };
             }
         }
 
         // Texture Share
         for (lifetime.texLifetimes.constSlice()) |texLifetime| {
-            if (rc.FRAME_GRAPH_SKIP_SHARING == false) {
-                var candidateIndex: ?u16 = null;
-                const newDesc = resource.activeTexDescs.getByKey(texLifetime.texPassId);
+            var candidateIndex: ?u16 = null;
+            const newDesc = resource.activeTexDescs.getByKey(texLifetime.texPassId);
 
+            if (rc.FRAME_GRAPH_SKIP_SHARING == false) {
                 for (self.sharedTextures.slice(), 0..) |*physLifetime, index| {
                     const candidateDesc = physLifetime.texDesc;
 
@@ -92,24 +92,24 @@ pub const ShareSys = struct {
                         }
                     }
                 }
+            }
 
-                if (candidateIndex) |candidate| {
-                    self.texShareIndices.upsert(texLifetime.texPassId, candidate);
-                    const passAfterClear = optimizer.optimizedGraph.getConstItems()[texLifetime.earliestPass].passId;
-                    self.texClears.append(.{ .sharedIndex = candidate, .passAfterClear = passAfterClear, .texPassId = texLifetime.texPassId }) catch {
-                        std.debug.print("ERROR: 5.4.GroupSys: Could not Append to bufClears\n", .{});
-                    };
-                } else {
-                    const newIndex: u16 = @intCast(self.sharedTextures.len);
+            if (candidateIndex) |candidate| {
+                self.texShareIndices.upsert(texLifetime.texPassId, candidate);
+                const passAfterClear = optimizer.optimizedGraph.getConstItems()[texLifetime.earliestPass].passId;
+                self.texClears.append(.{ .sharedIndex = candidate, .passAfterClear = passAfterClear, .texPassId = texLifetime.texPassId }) catch {
+                    std.debug.print("ERROR: 5.4.GroupSys: Could not Append to texClears\n", .{});
+                };
+            } else {
+                const newIndex: u16 = @intCast(self.sharedTextures.len);
 
-                    try self.sharedTextures.append(.{ .earliest = texLifetime.earliestPass, .latest = texLifetime.latestPass, .texDesc = newDesc });
+                try self.sharedTextures.append(.{ .earliest = texLifetime.earliestPass, .latest = texLifetime.latestPass, .texDesc = newDesc });
 
-                    self.texShareIndices.upsert(texLifetime.texPassId, newIndex);
-                    const passAfterClear = optimizer.optimizedGraph.getConstItems()[texLifetime.earliestPass].passId;
-                    self.texClears.append(.{ .sharedIndex = newIndex, .passAfterClear = passAfterClear, .texPassId = texLifetime.texPassId }) catch {
-                        std.debug.print("ERROR: 5.4.GroupSys: Could not Append to bufClears\n", .{});
-                    };
-                }
+                self.texShareIndices.upsert(texLifetime.texPassId, newIndex);
+                const passAfterClear = optimizer.optimizedGraph.getConstItems()[texLifetime.earliestPass].passId;
+                self.texClears.append(.{ .sharedIndex = newIndex, .passAfterClear = passAfterClear, .texPassId = texLifetime.texPassId }) catch {
+                    std.debug.print("ERROR: 5.4.GroupSys: Could not Append to texClears\n", .{});
+                };
             }
         }
 
@@ -117,12 +117,19 @@ pub const ShareSys = struct {
         if (rc.FRAME_GRAPH_DEBUG) {
             std.debug.print("8.Share: \n", .{});
 
+            var totalMemEstimate: u64 = 0;
+
             for (self.sharedBuffers.constSlice(), 0..) |sharedLifetime, i| {
-                std.debug.print("- {}. Shared Buf (Lifetime {} -> {})\n", .{ i, sharedLifetime.earliest, sharedLifetime.latest });
+                const memEstimate = sharedLifetime.bufDesc.guessMemoryCost();
+                totalMemEstimate += memEstimate;
+                std.debug.print("- {}. Shared Buf (Lifetime {} -> {}) (Memory: {} bytes)\n", .{ i, sharedLifetime.earliest, sharedLifetime.latest, memEstimate });
             }
             for (self.sharedTextures.constSlice(), 0..) |sharedLifetime, i| {
-                std.debug.print("- {}. Shared Tex (Lifetime {} -> {})\n", .{ i, sharedLifetime.earliest, sharedLifetime.latest });
+                const memEstimate = sharedLifetime.texDesc.guessMemoryCost();
+                totalMemEstimate += memEstimate;
+                std.debug.print("- {}. Shared Tex (Lifetime {} -> {}) (Memory: {} bytes)\n", .{ i, sharedLifetime.earliest, sharedLifetime.latest, memEstimate });
             }
+            std.debug.print("Total Memory Estimate: {} bytes\n", .{totalMemEstimate});
             std.debug.print("\n", .{});
 
             for (self.bufShareIndices.getConstItems(), 0..) |sharedIndex, i| {
