@@ -108,7 +108,7 @@ pub const CmdRecorder = struct {
         if (self.useGpuStats == true and frame % rc.GPU_QUERY_INTERVAL == 0) try cmd.enableStatsQuerys(self.gpi) else cmd.disableStatsQuerys(self.gpi);
         cmd.resetStatsQuerys();
 
-        const timeId = cmd.startTimer(.TopOfPipe, "Descriptor Heap Bind", .Other);
+        const timeId = cmd.startTimer(.AllCmds, "Descriptor Heap Bind", .Other);
         cmd.bindDescriptorHeap(resMan.descMan.descHeap.gpuAddress, resMan.descMan.descHeap.size, resMan.descMan.driverReservedSize);
         cmd.bindSamplerHeap(resMan.descMan.samplerHeap.gpuAddress, resMan.descMan.samplerHeap.size, resMan.descMan.samplerReservedSize);
         cmd.endTimer(.BotOfPipe, timeId);
@@ -127,7 +127,7 @@ pub const CmdRecorder = struct {
 
         const fullTransfers = resUpdater.getFullUpdates(cmd.flightId);
         if (fullTransfers.len != 0) {
-            const timeId = cmd.startTimer(.TopOfPipe, "Full Transfers", .Other);
+            const timeId = cmd.startTimer(.AllCmds, "Full Transfers", .Other);
 
             for (fullTransfers) |transfer| {
                 const buffer = try resMan.get(transfer.dstResId, cmd.flightId);
@@ -145,7 +145,7 @@ pub const CmdRecorder = struct {
 
         const partialTransfers = resUpdater.getSegmentUpdates(cmd.flightId);
         if (partialTransfers.len != 0) {
-            const timeId = cmd.startTimer(.TopOfPipe, "Partial Transfers", .Other);
+            const timeId = cmd.startTimer(.AllCmds, "Partial Transfers", .Other);
 
             for (partialTransfers) |transfer| {
                 const buffer = try resMan.get(transfer.dstResId, cmd.flightId);
@@ -164,7 +164,7 @@ pub const CmdRecorder = struct {
         // textures
         const texTransfers = resUpdater.getTexUpdates(cmd.flightId);
         if (texTransfers.len != 0) {
-            const timeId = cmd.startTimer(.TopOfPipe, "Texture Transfers", .Other);
+            const timeId = cmd.startTimer(.AllCmds, "Texture Transfers", .Other);
 
             for (texTransfers) |transfer| {
                 const tex = try resMan.get(transfer.dstTexId, cmd.flightId);
@@ -244,7 +244,7 @@ pub const CmdRecorder = struct {
 
                 // Profiling Commands
                 .startTimer => |startTimer| {
-                    try cmd.startTimerWithId(.TopOfPipe, startTimer.name.get(), startTimer.typ, startTimer.queryId);
+                    try cmd.startTimerWithId(.AllCmds, startTimer.name.get(), startTimer.typ, startTimer.queryId);
                 },
                 .endTimer => |endTimer| {
                     cmd.endTimer(endTimer.pipeStage, endTimer.queryId);
@@ -531,7 +531,7 @@ pub const CmdRecorder = struct {
     }
 
     fn recordPresentation(self: *CmdRecorder, cmd: *Cmd, swapMan: *SwapchainMan) !void {
-        const timeId = cmd.startTimer(.TopOfPipe, "Presentation", .Other);
+        const timeId = cmd.startTimer(.AllCmds, "Presentation", .Other);
 
         const targetIndices = swapMan.getTargetsIndices();
         for (targetIndices) |index| {

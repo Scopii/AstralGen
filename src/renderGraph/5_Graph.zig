@@ -122,6 +122,14 @@ pub const GraphSys = struct {
                     return error.TextureVersionConflict;
                 }
 
+                // Transient textures have no contents before the frame -> reading the start version reads nothing anyone wrote
+                if (texRef.access == .read and texRef.rootPassId == null and (try registry.getTextureDefinition(texRef.texPassId)).share == .transient) {
+                    const texName = try registry.getTextureName(texRef.texPassId);
+                    const passName = try registry.getPassName(texRef.passId);
+                    std.debug.print("ERROR: 5.Graph: {s} reads transient Texture {s} without a from (nothing wrote it this frame)\n", .{ passName, texName });
+                    return error.TransientReadBeforeWrite;
+                }
+
                 if (texRef.access == .write) {
                     texVersion.latestWriter = texRef.passId; // pass now holds the newest version
                     texVersion.latestIsRead = false;
@@ -129,7 +137,7 @@ pub const GraphSys = struct {
             }
         }
 
-        // Buffer Version Validation (every ref must use the latest version of its resource) 
+        // Buffer Version Validation (every ref must use the latest version of its resource)
         for (self.graph.getConstItems()) |graphNode| {
             const bufRange = passLoad.bufRanges.getByKey(graphNode.passId);
             for (passLoad.bufRefs.constSlice()[bufRange.first..bufRange.last]) |bufRef| {

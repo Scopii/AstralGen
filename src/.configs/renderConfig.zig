@@ -48,7 +48,7 @@ pub const PASS_MAX = 128;
 pub const MAX_PASS_ATTRIBUTES = 80;
 pub const PASS_EXTRACTION_DEBUG = false;
 
-pub const FRAME_GRAPH_DEBUG = true;
+pub const FRAME_GRAPH_DEBUG = false;
 pub const FRAME_GRAPH_TIMERS = false;
 pub const FRAME_GRAPH_SORT_DEBUG = false;
 
