@@ -73,18 +73,7 @@ pub const RenderCompilerSys = struct {
                     try fillCompositePassHardwareIdCmds(self, assigner, registry, compositeCopy);
                 },
                 .passIR => |passIR| {
-                    try fillPassHardwareIdCmds(self, assigner, registry, passIR, runTime, deltaTime);
-                },
-                .clearBufIR => |clearBufIR| {
-                    const hardwareTexId = assigner.bufAssigns.getByKey(clearBufIR);
-                    try self.sortedNodes.append(.{ .clearBuffer = hardwareTexId });
-                },
-                .clearTexIR => |clearTexIR| {
-                    const hardwareTexId = assigner.texAssigns.getByKey(clearTexIR);
-                    try self.sortedNodes.append(.{ .clearTexture = hardwareTexId });
-                },
-                .barrierBakeClears => |barrierBakeClears| {
-                    try self.sortedNodes.append(.{ .barrierBakeClears = barrierBakeClears });
+                    try fillPassHardwareIdCmds(self, assigner, registry, renderGraph, passIR, runTime, deltaTime);
                 },
             }
         }
@@ -124,7 +113,7 @@ pub const RenderCompilerSys = struct {
 
         // Barriers
         swapchainTargetBarrier(self, composite.windowId, .ColorAtt, .ColorAttReadWrite, .Attachment);
-        texBarrier(self, composite.srcTexUnion.texId, .Fragment, .SampledRead, .General);
+        texBarrier(self, composite.srcTexUnion.texId, .Fragment, .SampledRead, .General, false);
         bakeBarriers(self);
 
         // Shaders
@@ -205,7 +194,7 @@ pub const RenderCompilerSys = struct {
 
             for (uiDrawList) |uiDraw| {
                 if (uiDraw.drawTex != .texId) return error.UiDrawTexIsNoHardwareId;
-                texBarrier(self, uiDraw.drawTex.texId, .Fragment, .SampledRead, .General);
+                texBarrier(self, uiDraw.drawTex.texId, .Fragment, .SampledRead, .General, false);
                 break; // CURRENTLY ONLY DOING ONE TEXTURE FOR UI, HAS TO BE FIXED IF MORE TEXTURES ARE USED!!;
             }
             bakeBarriers(self);
@@ -285,7 +274,15 @@ pub const RenderCompilerSys = struct {
         }
     }
 
-    fn fillPassHardwareIdCmds(self: *RenderCompilerData, assigner: *const RenderAssignerData, registry: *const RenderRegistryData, passId: PassId, runTime: f32, deltaTime: f32) !void {
+    fn fillPassHardwareIdCmds(
+        self: *RenderCompilerData,
+        assigner: *const RenderAssignerData,
+        registry: *const RenderRegistryData,
+        renderGraph: *const RenderGraphData,
+        passId: PassId,
+        runTime: f32,
+        deltaTime: f32,
+    ) !void {
         const passName = try registry.getPassName(passId);
         const passDef = try registry.getPassDefinition(passName);
         const mainOutputTexId = if (passDef.outputTex) |output| try registry.getTexturePassId(output) else null;
@@ -308,6 +305,33 @@ pub const RenderCompilerSys = struct {
         setPushDataOutputExtent(self, pushOffset);
         pushOffset += @sizeOf(f32) + @sizeOf(f32);
 
+        var needsClearBarrier: bool = false;
+
+        for (passDef.passAttribute.constSlice()) |attribute| {
+            switch (attribute) {
+                .shaderInf, .colorAtt, .depthAtt, .stencilAtt, .vertexBuffer, .indexBuffer, .vertexAttribute, .bufLink, .texLink, .passLink, .renderState => {},
+
+                .bufSlot => |bufSlot| {
+                    const bufPassId = try registry.getBufferPassId(bufSlot.bufLink.in);
+                    if (renderGraph.share.bufClearPasses.isKeyUsed(bufPassId) and renderGraph.share.bufClearPasses.getByKey(bufPassId) == passId) {
+                        const hardwareBufId = assigner.bufAssigns.getByKey(bufPassId);
+                        try self.sortedNodes.append(.{ .clearBuffer = hardwareBufId });
+                        needsClearBarrier = true;
+                    }
+                },
+                .texSlot => |texSlot| {
+                    const texPassId = try registry.getTexturePassId(texSlot.texLink.in);
+                    if (renderGraph.share.texClearPasses.isKeyUsed(texPassId) and renderGraph.share.texClearPasses.getByKey(texPassId) == passId) {
+                        const hardwareTexId = assigner.texAssigns.getByKey(texPassId);
+                        try self.sortedNodes.append(.{ .clearTexture = hardwareTexId });
+                        needsClearBarrier = true;
+                    }
+                },
+            }
+        }
+
+        if (needsClearBarrier) try self.sortedNodes.append(.barrierBakeClears);
+
         for (passDef.passAttribute.constSlice()) |attribute| {
             switch (attribute) {
                 .shaderInf => |shaderInf| {
@@ -323,34 +347,84 @@ pub const RenderCompilerSys = struct {
                 .texSlot => |texSlot| {
                     const texPassId = try registry.getTexturePassId(texSlot.texLink.in);
                     const texHardwareId = assigner.texAssigns.getByKey(texPassId);
-                    texBarrier(self, texHardwareId, texSlot.stage, texSlot.access, texSlot.layout);
+                    texBarrier(self, texHardwareId, texSlot.stage, texSlot.access, texSlot.layout, false);
 
                     if (texSlot.shaderSlot) |slot| setPushDataTexDesc(self, pushOffset + (slot * @sizeOf(u32)), texHardwareId, texSlot.descUse);
                 },
+
                 .colorAtt => |attSlot| {
                     const texPassId = try registry.getTexturePassId(attSlot.texLink.in);
                     const texHardwareId = assigner.texAssigns.getByKey(texPassId);
-                    texBarrier(self, texHardwareId, attSlot.stage, attSlot.access, attSlot.layout);
 
-                    if (attSlot.clear != null and attSlot.clear.? != .color) return error.ColorAttNeedsColorClear;
-                    setColorAtt(self, texHardwareId, if (attSlot.clear) |clear| clear.color else null);
+                    if (attSlot.clear) |clear| {
+                        // Manually Set Clear
+                        switch (clear) {
+                            .color => |color| {
+                                texBarrier(self, texHardwareId, attSlot.stage, attSlot.access, attSlot.layout, true);
+                                setColorAtt(self, texHardwareId, color);
+                            },
+                            .depth => return error.ColorAttNeedsColorClear,
+                        }
+                    } else {
+                        // Graph Clear through Attachment
+                        if (renderGraph.share.texClearPasses.isKeyUsed(texPassId) and renderGraph.share.texClearPasses.getByKey(texPassId) == passId) {
+                            texBarrier(self, texHardwareId, attSlot.stage, attSlot.access, attSlot.layout, true);
+                            setColorAtt(self, texHardwareId, ClearColor{ .R = 0, .G = 0, .B = 0, .A = 0 });
+                        } else {
+                            texBarrier(self, texHardwareId, attSlot.stage, attSlot.access, attSlot.layout, false);
+                            setColorAtt(self, texHardwareId, null);
+                        }
+                    }
                 },
                 .depthAtt => |depthSlot| {
                     const texPassId = try registry.getTexturePassId(depthSlot.texLink.in);
                     const texHardwareId = assigner.texAssigns.getByKey(texPassId);
-                    texBarrier(self, texHardwareId, depthSlot.stage, depthSlot.access, depthSlot.layout);
 
-                    if (depthSlot.clear != null and depthSlot.clear.? != .depth) return error.DepthAttNeedsDepthClear;
-                    setDepthAtt(self, texHardwareId, if (depthSlot.clear) |clear| clear.depth else null);
+                    if (depthSlot.clear) |clear| {
+                        // Manually Set Clear
+                        switch (clear) {
+                            .depth => |depth| {
+                                texBarrier(self, texHardwareId, depthSlot.stage, depthSlot.access, depthSlot.layout, true);
+                                setDepthAtt(self, texHardwareId, depth);
+                            },
+                            .color => return error.DepthAttNeedsDepthClear,
+                        }
+                    } else {
+                        // Graph Clear through Attachment
+                        if (renderGraph.share.texClearPasses.isKeyUsed(texPassId) and renderGraph.share.texClearPasses.getByKey(texPassId) == passId) {
+                            texBarrier(self, texHardwareId, depthSlot.stage, depthSlot.access, depthSlot.layout, true);
+                            setDepthAtt(self, texHardwareId, ClearDepth{ .depthStencil = .{ .depth = 0, .stencil = 0 } });
+                        } else {
+                            texBarrier(self, texHardwareId, depthSlot.stage, depthSlot.access, depthSlot.layout, false);
+                            setDepthAtt(self, texHardwareId, null);
+                        }
+                    }
                 },
                 .stencilAtt => |stencilSlot| {
                     const texPassId = try registry.getTexturePassId(stencilSlot.texLink.in);
                     const texHardwareId = assigner.texAssigns.getByKey(texPassId);
-                    texBarrier(self, texHardwareId, stencilSlot.stage, stencilSlot.access, stencilSlot.layout);
 
-                    if (stencilSlot.clear != null and stencilSlot.clear.? != .depth) return error.StencilAttNeedsDepthClear;
-                    setStencilAtt(self, texHardwareId, if (stencilSlot.clear) |clear| clear.depth else null);
+                    if (stencilSlot.clear) |clear| {
+                        // Manually Set Clear
+                        switch (clear) {
+                            .depth => |depth| {
+                                texBarrier(self, texHardwareId, stencilSlot.stage, stencilSlot.access, stencilSlot.layout, true);
+                                setStencilAtt(self, texHardwareId, depth);
+                            },
+                            .color => return error.StencilAttNeedsDepthClear,
+                        }
+                    } else {
+                        // Graph Clear through Attachment
+                        if (renderGraph.share.texClearPasses.isKeyUsed(texPassId) and renderGraph.share.texClearPasses.getByKey(texPassId) == passId) {
+                            texBarrier(self, texHardwareId, stencilSlot.stage, stencilSlot.access, stencilSlot.layout, true);
+                            setStencilAtt(self, texHardwareId, ClearDepth{ .depthStencil = .{ .depth = 0, .stencil = 0 } });
+                        } else {
+                            texBarrier(self, texHardwareId, stencilSlot.stage, stencilSlot.access, stencilSlot.layout, false);
+                            setStencilAtt(self, texHardwareId, null);
+                        }
+                    }
                 },
+
                 .vertexBuffer => |vertBufSlot| {
                     const bufPassId = try registry.getBufferPassId(vertBufSlot.bufInput);
                     const bufHardwareId = assigner.bufAssigns.getByKey(bufPassId);
@@ -472,8 +546,8 @@ pub const RenderCompilerSys = struct {
         self.sortedNodes.appendAssumeCapacity(.{ .bufBarrier = .{ .bufId = bufId, .stage = stage, .access = access } });
     }
 
-    fn texBarrier(self: *RenderCompilerData, texId: TexId, stage: vhE.PipeStage, access: vhE.PipeAccess, layout: vhE.ImageLayout) void {
-        self.sortedNodes.appendAssumeCapacity(.{ .texBarrier = .{ .texId = texId, .stage = stage, .access = access, .layout = layout } });
+    fn texBarrier(self: *RenderCompilerData, texId: TexId, stage: vhE.PipeStage, access: vhE.PipeAccess, layout: vhE.ImageLayout, ignoreOld: bool) void {
+        self.sortedNodes.appendAssumeCapacity(.{ .texBarrier = .{ .texId = texId, .stage = stage, .access = access, .layout = layout, .ignoreOld = ignoreOld } });
     }
 
     fn swapchainTargetBarrier(self: *RenderCompilerData, windowId: WindowId, stage: vhE.PipeStage, access: vhE.PipeAccess, layout: vhE.ImageLayout) void {

@@ -263,7 +263,7 @@ pub const CmdRecorder = struct {
                 },
                 .texBarrier => |texBarrier| {
                     const tex = try resMan.get(texBarrier.texId, cmd.flightId);
-                    try self.checkImageState(tex, .{ .stage = texBarrier.stage, .access = texBarrier.access, .layout = texBarrier.layout }, false);
+                    try self.checkImageState(tex, .{ .stage = texBarrier.stage, .access = texBarrier.access, .layout = texBarrier.layout }, texBarrier.ignoreOld);
                 },
                 .swapchainTargetBarrier => |targetBarrier| {
                     const targetIndex = swapMan.getTargetIndex(targetBarrier.windowId) orelse {

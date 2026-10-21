@@ -76,9 +76,8 @@ pub const LifetimeSys = struct {
         if (rc.FRAME_GRAPH_DEBUG) {
             std.debug.print("7.Lifetime: \n", .{});
 
-            for (self.bufLifetimeMap.getConstItems(), 0..) |bufLifetime, index| {
-                const bufPassId = self.bufLifetimeMap.getKeyByIndex(@intCast(index));
-                const bufName = try registry.getBufferName(bufPassId);
+            for (self.bufLifetimes.constSlice()) |bufLifetime| {
+                const bufName = try registry.getBufferName(bufLifetime.bufPassId);
 
                 const earliestPass = optimizer.optimizedGraph.getConstItems()[bufLifetime.earliestPass].passId;
                 const latestPass = optimizer.optimizedGraph.getConstItems()[bufLifetime.latestPass].passId;
@@ -87,9 +86,8 @@ pub const LifetimeSys = struct {
                 std.debug.print("- Transient Buf Lifetime ({s}): ({} -> {}) ({s} -> {s})\n", .{ bufName, bufLifetime.earliestPass, bufLifetime.latestPass, earliestName, latestName });
             }
 
-            for (self.texLifetimeMap.getConstItems(), 0..) |texLifetime, index| {
-                const texPassId = self.texLifetimeMap.getKeyByIndex(@intCast(index));
-                const texName = try registry.getTextureName(texPassId);
+            for (self.texLifetimes.constSlice()) |texLifetime| {
+                const texName = try registry.getTextureName(texLifetime.texPassId);
 
                 const earliestPass = optimizer.optimizedGraph.getConstItems()[texLifetime.earliestPass].passId;
                 const latestPass = optimizer.optimizedGraph.getConstItems()[texLifetime.latestPass].passId;

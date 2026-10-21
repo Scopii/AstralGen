@@ -14,33 +14,15 @@ pub const SorterData = struct {
 };
 
 pub const SorterSys = struct {
-    pub fn build(self: *SorterData, compositeData: *const CompositeData, optimizer: *const OptimizerData, registry: *const RenderRegistryData, share: *const ShareData) !void {
+    pub fn build(self: *SorterData, compositeData: *const CompositeData, optimizer: *const OptimizerData, registry: *const RenderRegistryData) !void {
         self.sortedRenderIR.clear();
 
         // Check Buckets for Correct Pass
         for (optimizer.optimizedGraph.getConstItems()) |graphNode| {
             const passId = graphNode.passId;
-
-            // Resource Clears
-            var neededClears = false;
-
-            for (share.bufClears.constSlice()) |bufClear| {
-                if (bufClear.passAfterClear == passId) {
-                    try self.sortedRenderIR.append(.{ .clearBufIR = bufClear.bufPassId });
-                    neededClears = true;
-                }
-            }
-            for (share.texClears.constSlice()) |texClear| {
-                if (texClear.passAfterClear == passId) {
-                    try self.sortedRenderIR.append(.{ .clearTexIR = texClear.texPassId });
-                    neededClears = true;
-                }
-            }
-            if (neededClears) try self.sortedRenderIR.append(.barrierBakeClears); // Call for Clear Barrier baking if needed
-
             // Passes
             self.sortedRenderIR.append(.{ .passIR = passId }) catch std.debug.print("7.PassSorter: Pass Append to sortedRenderNodes failed", .{});
-
+            
             // Composites
             for (compositeData.composites.constSlice()) |composite| {
                 if (composite.pass == passId) {
@@ -56,9 +38,6 @@ pub const SorterSys = struct {
                 switch (renderNode) {
                     .passIR => |passId| std.debug.print("- {}. Pass: {}\n", .{ index, passId.val() }),
                     .compositeIR => |composite| std.debug.print("- {}. Composite: {s} (Pass {s})\n", .{ index, composite.name, try registry.getPassName(composite.pass) }),
-                    .clearBufIR => |clearBuf| std.debug.print("- {}. ClearBuffer: BufPassId {}\n", .{ index, clearBuf.val() }),
-                    .clearTexIR => |clearTex| std.debug.print("- {}. ClearTexture: TexPassId {}\n", .{ index, clearTex.val() }),
-                    .barrierBakeClears => std.debug.print("- {}. Bake Clears\n", .{index}),
                 }
             }
             std.debug.print("\n", .{});

@@ -65,7 +65,7 @@ pub const RenderGraphSys = struct {
         if (rc.FRAME_GRAPH_TIMERS) std.debug.print("{d:.3} us: ShareSys2\n", .{@as(f64, @floatFromInt(std.time.nanoTimestamp() - start7)) / 1_000.0});
 
         const start8 = std.time.nanoTimestamp();
-        try SorterSys2.build(&self.sorter, &self.composite, &self.optimizer, renderRegistry, &self.share);
+        try SorterSys2.build(&self.sorter, &self.composite, &self.optimizer, renderRegistry);
         if (rc.FRAME_GRAPH_TIMERS) std.debug.print("{d:.3} us: SorterSys2\n", .{@as(f64, @floatFromInt(std.time.nanoTimestamp() - start8)) / 1_000.0});
     }
 };

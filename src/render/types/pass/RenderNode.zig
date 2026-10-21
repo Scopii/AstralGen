@@ -56,9 +56,6 @@ pub const UiNode = struct {
 pub const RenderNodeIR = union(enum) {
     compositeIR: CompositeNode, // Could be improved
     passIR: PassId,
-    clearBufIR: BufPassId,
-    clearTexIR: TexPassId,
-    barrierBakeClears: void,
 };
 
 pub const TexUnion = union(enum) {
@@ -85,7 +82,7 @@ pub const RenderNode = union(enum) {
 
     // Barrier Commands
     bufBarrier: struct { bufId: BufId, stage: vhE.PipeStage, access: vhE.PipeAccess },
-    texBarrier: struct { texId: TexId, stage: vhE.PipeStage, access: vhE.PipeAccess, layout: vhE.ImageLayout},
+    texBarrier: struct { texId: TexId, stage: vhE.PipeStage, access: vhE.PipeAccess, layout: vhE.ImageLayout, ignoreOld: bool},
     swapchainTargetBarrier: struct { windowId: WindowId, stage: vhE.PipeStage, access: vhE.PipeAccess, layout: vhE.ImageLayout },
     bakeBarriers: void,
 
