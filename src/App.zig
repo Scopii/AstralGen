@@ -343,7 +343,7 @@ pub const App = struct {
                 try RenderAssignerSys.processQueue(&self.data.renderAssigner, &self.data.renderRegistry, &self.assignerQueue, &self.rendererQueue, self.memoryMan);
                 try RenderAssignerSys.fillUiHardwareIds(&self.data.renderAssigner, &self.data.renderRegistry, &self.data.ui);
 
-                const start = std.time.microTimestamp();
+                // const start = std.time.microTimestamp();
 
                 try RenderCompilerSys.compileIR(
                     &self.data.renderCompiler,
@@ -356,8 +356,8 @@ pub const App = struct {
                     frameData.deltaTime,
                 );
 
-                const end = std.time.microTimestamp();
-                std.debug.print("Render Compiler: {d:.3} ms\n", .{@as(f64, @floatFromInt(end - start)) / 1_000.0});
+                // const end = std.time.microTimestamp();
+                // std.debug.print("Render Compiler: {d:.3} ms\n", .{@as(f64, @floatFromInt(end - start)) / 1_000.0});
 
                 const sortedRenderNodes = self.data.renderCompiler.sortedNodes.constSlice();
                 const pushData = self.data.renderCompiler.pushData.constSlice();

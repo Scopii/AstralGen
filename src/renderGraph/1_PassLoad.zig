@@ -5,6 +5,8 @@ const BufReference = @import("../renderGraph/components.zig").BufReference;
 const LinkedIdMap = @import("../.structures/LinkedIdMap.zig").LinkedIdMap;
 const Dependency = @import("../renderGraph/components.zig").Dependency;
 const FixedList = @import("../.structures/FixedList.zig").FixedList;
+const TexPassId = @import("../.configs/idConfig.zig").TexPassId;
+const TexUsage = @import("../render/help/Enums.zig").TexUsage;
 const PassId = @import("../.configs/idConfig.zig").PassId;
 const rc = @import("../.configs/renderConfig.zig");
 const std = @import("std");
@@ -15,6 +17,8 @@ pub const PassLoadData = struct {
 
     texRanges: LinkedIdMap(PassRefRange, rc.PASS_MAX, PassId, rc.PASS_MAX, 0) = .{},
     texRefs: FixedList(TexReference, rc.PASS_MAX * rc.TEX_MAX) = .{},
+
+    texUsages: LinkedIdMap(TexUsage, rc.TEX_MAX, TexPassId, rc.TEX_MAX, 0) = .{},
 
     dependencyRanges: LinkedIdMap(PassRefRange, rc.PASS_MAX, PassId, rc.PASS_MAX, 0) = .{},
     dependencys: FixedList(Dependency, rc.PASS_MAX * 10) = .{}, // 10 is a reasonable guess!
@@ -27,6 +31,8 @@ pub const PassLoadSys = struct {
 
         self.texRanges.clear();
         self.texRefs.clear();
+
+        self.texUsages.clear();
 
         self.dependencyRanges.clear();
         self.dependencys.clear();
@@ -66,7 +72,9 @@ pub const PassLoadSys = struct {
                         try self.dependencys.append(Dependency{ .predecessor = passDep, .successor = passId });
                     },
 
-                    inline .texSlot, .colorAtt, .depthAtt, .stencilAtt => |texSlotTypes| {
+                    .colorAtt => |texSlotTypes| {
+                        const texPassId = texSlotTypes.texLink.in;
+
                         const texRef = TexReference{
                             .texPassId = texSlotTypes.texLink.in,
                             .passId = passId,
@@ -74,6 +82,54 @@ pub const PassLoadSys = struct {
                             .access = if (texSlotTypes.access.isReadOnly()) .read else .write,
                         };
                         try self.texRefs.append(texRef);
+
+                        if (self.texUsages.isKeyUsed(texPassId) == true) {
+                            const curUsage = self.texUsages.getPtrByKey(texPassId);
+                            curUsage.colorAtt = true;
+                            curUsage.sampled = true;
+                        } else {
+                            self.texUsages.insert(texPassId, .{ .colorAtt = true, .sampled = true });
+                        }
+                    },
+
+                    .texSlot => |texSlotTypes| {
+                        const texPassId = texSlotTypes.texLink.in;
+
+                        const texRef = TexReference{
+                            .texPassId = texSlotTypes.texLink.in,
+                            .passId = passId,
+                            .rootPassId = texSlotTypes.texLink.from,
+                            .access = if (texSlotTypes.access.isReadOnly()) .read else .write,
+                        };
+                        try self.texRefs.append(texRef);
+
+                        if (self.texUsages.isKeyUsed(texPassId) == true) {
+                            const curUsage = self.texUsages.getPtrByKey(texPassId);
+                            curUsage.sampled = true;
+                            if (texSlotTypes.descUse == .Storage) curUsage.storage = true;
+                        } else {
+                            if (texSlotTypes.descUse == .Storage) self.texUsages.insert(texPassId, .{ .storage = true, .sampled = true }) else self.texUsages.insert(texPassId, .{ .sampled = true });
+                        }
+                    },
+
+                    inline .depthAtt, .stencilAtt => |texSlotTypes| {
+                        const texPassId = texSlotTypes.texLink.in;
+
+                        const texRef = TexReference{
+                            .texPassId = texSlotTypes.texLink.in,
+                            .passId = passId,
+                            .rootPassId = texSlotTypes.texLink.from,
+                            .access = if (texSlotTypes.access.isReadOnly()) .read else .write,
+                        };
+                        try self.texRefs.append(texRef);
+
+                        if (self.texUsages.isKeyUsed(texPassId) == true) {
+                            const curUsage = self.texUsages.getPtrByKey(texPassId);
+                            curUsage.sampled = true;
+                            curUsage.depthAtt = true;
+                        } else {
+                            self.texUsages.insert(texPassId, .{ .depthAtt = true, .sampled = true });
+                        }
                     },
                 }
             }

@@ -97,67 +97,10 @@ pub const IMGUI_VB = BufDesc{ .share = .persistent, .mem = .Gpu, .typ = .Vertex,
 pub const IMGUI_IB = BufDesc{ .share = .persistent, .mem = .Gpu, .typ = .Index, .len = 1024 * 1024, .elementSize = 1, .update = .Often, .resize = .Grow };
 
 // Textures
-pub const TRANSIENT_COLOR_TEX = TexDesc{
-    .share = .transient,
-    .mem = .Gpu,
-    .descriptors = .StorageSampled,
-    .texUse = .{ .storage = true, .colorAtt = true, .sampled = true },
-    .typ = .Color16,
-    .width = 16,
-    .height = 9,
-    .update = .Rarely,
-    .resize = .Block,
-    .fitPass = true,
-};
 
-pub const TRANSIENT_ATT_TEX = TexDesc{
-    .share = .transient,
-    .mem = .Gpu,
-    .descriptors = .SampledOnly,
-    .texUse = .{ .storage = false, .colorAtt = true, .sampled = true },
-    .typ = .Color16,
-    .width = 16,
-    .height = 9,
-    .update = .Rarely,
-    .resize = .Block,
-    .fitPass = true,
-};
+pub const TRANSIENT_COLOR_TEX = TexDesc.makeTransient(.Gpu, .Color16, 16, 9, 1);
+pub const TRANSIENT_ATT_TEX = TexDesc.makeTransient(.Gpu, .Color16, 16, 9, 1);
+pub const TRANSIENT_DEPTH_TEX = TexDesc.makeTransient(.Gpu, .Depth32, 16, 9, 1);
 
-pub const TRANSIENT_DEPTH_TEX = TexDesc{
-    .share = .transient,
-    .mem = .Gpu,
-    .texUse = .{ .depthAtt = true, .sampled = true },
-    .descriptors = .SampledOnly,
-    .typ = .Depth32,
-    .width = 16,
-    .height = 9,
-    .update = .Rarely,
-    .resize = .Block,
-    .fitPass = true,
-};
-
-pub const PERSISTENT_COLOR_TEX = TexDesc{
-    .share = .persistent,
-    .mem = .Gpu,
-    .texUse = .{ .storage = true },
-    .descriptors = .StorageOnly,
-    .typ = .Color16,
-    .width = 256,
-    .height = 256,
-    .update = .Rarely,
-    .resize = .Fit,
-    .fitPass = false,
-};
-
-pub const IMGUI_FONT_TEX = TexDesc{
-    .share = .persistent,
-    .mem = .Gpu,
-    .texUse = .{ .colorAtt = true, .sampled = true },
-    .typ = .Color8,
-    .descriptors = .SampledOnly,
-    .width = 1,
-    .height = 1,
-    .update = .Rarely,
-    .resize = .Fit,
-    .fitPass = false,
-};
+pub const PERSISTENT_COLOR_TEX = TexDesc.makePersistent(.Gpu, .Color16, 256, 256, 1, .{ .storage = true });
+pub const IMGUI_FONT_TEX = TexDesc.makePersistent(.Gpu, .Color8, 1, 1, 1, .{ .colorAtt = true, .sampled = true });

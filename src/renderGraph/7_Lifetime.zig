@@ -2,12 +2,12 @@ const RenderRegistryData = @import("../renderRegistry/RenderRegistryData.zig").R
 const LinkedIdMap = @import("../.structures/LinkedIdMap.zig").LinkedIdMap;
 const BufLifetime = @import("../renderGraph/components.zig").BufLifetime;
 const TexLifetime = @import("../renderGraph/components.zig").TexLifetime;
-const DependencyData = @import("3.5_Dependency.zig").DependencyData;
-const OptimizerData = @import("6_Optimizer.zig").OptimizerData;
-const ResourceData = @import("5.5_Resource.zig").ResourceData;
 const FixedList = @import("../.structures/FixedList.zig").FixedList;
+const DependencyData = @import("3.5_Dependency.zig").DependencyData;
 const BufPassId = @import("../.configs/idConfig.zig").BufPassId;
 const TexPassId = @import("../.configs/idConfig.zig").TexPassId;
+const OptimizerData = @import("6_Optimizer.zig").OptimizerData;
+const ResourceData = @import("5.5_Resource.zig").ResourceData;
 const rc = @import("../.configs/renderConfig.zig");
 const std = @import("std");
 

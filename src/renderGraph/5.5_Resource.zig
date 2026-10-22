@@ -22,7 +22,7 @@ pub const ResourceData = struct {
 };
 
 pub const ResourceSys = struct {
-    pub fn build(self: *ResourceData, composite: *const CompositeData, dependency: *const DependencyData, registry: *const RenderRegistryData) !void {
+    pub fn build(self: *ResourceData, passLoad: *const PassLoadData, composite: *const CompositeData, dependency: *const DependencyData, registry: *const RenderRegistryData) !void {
         self.activeBufDescs.clear();
         self.activeTexDescs.clear();
 
@@ -36,7 +36,19 @@ pub const ResourceSys = struct {
         // Textures including Resize
         for (dependency.activeTexRefs.constSlice()) |texRef| {
             if (self.activeTexDescs.isKeyUsed(texRef.texPassId) == false) {
-                self.activeTexDescs.insert(texRef.texPassId, try registry.getTextureDefinition(texRef.texPassId));
+                var texDef = try registry.getTextureDefinition(texRef.texPassId);
+
+                const neededUsage = passLoad.texUsages.getByKey(texRef.texPassId);
+                texDef.texUse = neededUsage;
+
+                const needsSampled: bool =  neededUsage.sampled or neededUsage.colorAtt or neededUsage.depthAtt;
+                const needsStorage: bool = neededUsage.storage;
+
+                if (needsSampled == true and needsStorage == true) texDef.descriptors = .StorageSampled;
+                if (needsSampled == false and needsStorage == true) texDef.descriptors = .StorageOnly;
+                if (needsSampled == true and needsStorage == false) texDef.descriptors = .SampledOnly;
+
+                self.activeTexDescs.insert(texRef.texPassId, texDef);
             }
 
             if (texRef.access != .write) continue;

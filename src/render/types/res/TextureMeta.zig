@@ -28,6 +28,47 @@ pub const TextureMeta = struct {
         resize: vhE.ResizeType = .Block,
         fitPass: bool,
 
+        pub fn makeTransient(mem: vhE.MemUsage, typ: vhE.TexTyp, width: u32, height: u32, depth: u32) TexDesc {
+            return .{
+                .share = .transient,
+                .mem = mem,
+                .typ = typ,
+                .texUse = .{},
+                .descriptors = .None,
+                .width = width,
+                .height = height,
+                .depth = depth,
+                .update = .Rarely,
+                .resize = .Block,
+                .fitPass = true,
+            };
+        }
+
+        pub fn makePersistent(mem: vhE.MemUsage, typ: vhE.TexTyp, width: u32, height: u32, depth: u32, texUse: vhE.TexUsage) TexDesc {
+            var descriptors: vhE.TexDescriptorUsage = .None;
+
+            const needsSampled: bool = texUse.sampled or texUse.colorAtt or texUse.depthAtt;
+            const needsStorage: bool = texUse.storage;
+
+            if (needsSampled == true and needsStorage == true) descriptors = .StorageSampled;
+            if (needsSampled == false and needsStorage == true) descriptors = .StorageOnly;
+            if (needsSampled == true and needsStorage == false) descriptors = .SampledOnly;
+
+            return .{
+                .share = .persistent,
+                .mem = mem,
+                .typ = typ,
+                .texUse = texUse,
+                .descriptors = descriptors,
+                .width = width,
+                .height = height,
+                .depth = depth,
+                .update = .Rarely,
+                .resize = .Fit,
+                .fitPass = false,
+            };
+        }
+
         pub fn guessMemoryCost(self: *const TexDesc) u64 {
             const bytesPerPixel = self.typ.bytesPerPixel();
             const rawMemory = @as(u64, self.width) * @as(u64, self.height) * @as(u64, self.depth) * bytesPerPixel;

@@ -49,7 +49,7 @@ pub const RenderGraphSys = struct {
         if (rc.FRAME_GRAPH_TIMERS) std.debug.print("{d:.3} us: CompositeSys\n", .{@as(f64, @floatFromInt(std.time.nanoTimestamp() - start2)) / 1_000.0});
 
         const start3 = std.time.nanoTimestamp();
-        try ResourceSys2.build(&self.resource, &self.composite, &self.dependency, renderRegistry);
+        try ResourceSys2.build(&self.resource, &self.passLoad, &self.composite, &self.dependency, renderRegistry);
         if (rc.FRAME_GRAPH_TIMERS) std.debug.print("{d:.3} us: ResourceSys2\n", .{@as(f64, @floatFromInt(std.time.nanoTimestamp() - start3)) / 1_000.0});
 
         const start5 = std.time.nanoTimestamp();
