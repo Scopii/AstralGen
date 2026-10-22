@@ -52,8 +52,6 @@ pub const CmdRecorder = struct {
     cmdMan: CmdManager,
     imgBarriers: std.array_list.Managed(vk.VkImageMemoryBarrier2),
     bufBarriers: std.array_list.Managed(vk.VkBufferMemoryBarrier2),
-    imgClears: std.array_list.Managed(TexId),
-    bufClears: std.array_list.Managed(BufId),
     memSrcStage: vk.VkPipelineStageFlags2 = 0,
     memSrcAccess: vk.VkAccessFlags2 = 0,
     memDstStage: vk.VkPipelineStageFlags2 = 0,
@@ -70,16 +68,12 @@ pub const CmdRecorder = struct {
             .cmdMan = try CmdManager.init(alloc, context, rc.MAX_IN_FLIGHT),
             .imgBarriers = try std.array_list.Managed(vk.VkImageMemoryBarrier2).initCapacity(alloc, rc.MAX_PASS_ATTRIBUTES),
             .bufBarriers = try std.array_list.Managed(vk.VkBufferMemoryBarrier2).initCapacity(alloc, rc.MAX_PASS_ATTRIBUTES),
-            .imgClears = try std.array_list.Managed(TexId).initCapacity(alloc, rc.MAX_PASS_ATTRIBUTES),
-            .bufClears = try std.array_list.Managed(BufId).initCapacity(alloc, rc.MAX_PASS_ATTRIBUTES),
         };
     }
 
     pub fn deinit(self: *CmdRecorder) void {
         self.imgBarriers.deinit();
         self.bufBarriers.deinit();
-        self.imgClears.deinit();
-        self.bufClears.deinit();
         self.cmdMan.deinit();
     }
 
@@ -226,19 +220,19 @@ pub const CmdRecorder = struct {
                 // Graph Commands
                 .clearBuffer => |clearBufId| {
                     const buffer: *Buffer = try resMan.get(clearBufId, cmd.flightId);
-                    try self.checkBufferState(buffer, .{ .stage = .Clear, .access = .TransferWrite });
-                    try self.bufClears.append(clearBufId);
+                    cmd.fillBuffer(buffer.handle, 0, vk.VK_WHOLE_SIZE, 0);
                 },
                 .clearTexture => |clearTexId| {
                     const texture: *Texture = try resMan.get(clearTexId, cmd.flightId);
-                    try self.checkImageState(texture, .{ .stage = .Clear, .access = .TransferWrite, .layout = .TransferDst }, true);
-                    try self.imgClears.append(clearTexId);
+                    switch (texture.typ) {
+                        .Color16, .Color8, .Swapchain => cmd.clearColorImage(texture.img, 0.0, 0.0, 0.0, 0.0), // Maybe alpha should be 1 ??
+                        .Depth32, .Stencil8 => cmd.clearDepthImage(texture.img, 0.0, 0.0),
+                    }
                 },
-                .barrierBakeClears => try self.bakeAndExecuteClears(cmd, resMan),
 
                 // Profiling Commands
                 .startTimer => |startTimer| {
-                    try cmd.startTimerWithId(.AllCmds, startTimer.name.get(), startTimer.typ, startTimer.queryId);
+                    try cmd.startTimerWithId(startTimer.pipeStage, startTimer.name.get(), startTimer.typ, startTimer.queryId);
                 },
                 .endTimer => |endTimer| {
                     cmd.endTimer(endTimer.pipeStage, endTimer.queryId);
@@ -503,25 +497,6 @@ pub const CmdRecorder = struct {
                 },
             }
         }
-    }
-
-    fn bakeAndExecuteClears(self: *CmdRecorder, cmd: *Cmd, resMan: *ResourceMan) !void {
-        self.bakeBarriers(cmd, "Clear Barrier");
-
-        for (self.imgClears.items) |texId| {
-            const texture: *Texture = try resMan.get(texId, cmd.flightId);
-            switch (texture.typ) {
-                .Color16, .Color8, .Swapchain => cmd.clearColorImage(texture.img, 0.0, 0.0, 0.0, 0.0), // Maybe alpha should be 1 ??
-                .Depth32, .Stencil8 => cmd.clearDepthImage(texture.img, 0.0, 0.0),
-            }
-        }
-        self.imgClears.clearRetainingCapacity();
-
-        for (self.bufClears.items) |bufId| {
-            const buffer: *Buffer = try resMan.get(bufId, cmd.flightId);
-            cmd.fillBuffer(buffer.handle, 0, vk.VK_WHOLE_SIZE, 0);
-        }
-        self.bufClears.clearRetainingCapacity();
     }
 
     fn recordPresentation(self: *CmdRecorder, cmd: *Cmd, swapMan: *SwapchainMan) !void {

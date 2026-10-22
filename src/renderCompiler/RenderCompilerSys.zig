@@ -93,7 +93,6 @@ pub const RenderCompilerSys = struct {
 
                     .clearBuffer => |*clearBuf| std.debug.print("- {}. ClearBuffer: BufId {}\n", .{ index, clearBuf.val() }),
                     .clearTexture => |*clearTex| std.debug.print("- {}. ClearTexture: TexId {}\n", .{ index, clearTex.val() }),
-                    .barrierBakeClears => std.debug.print("- {}. Bake Clears\n", .{index}),
 
                     // OTHER COMMAND IN STREAM
                     inline else => |_, tag| std.debug.print("- {}. {s}\n", .{ index, @tagName(tag) }),
@@ -316,7 +315,7 @@ pub const RenderCompilerSys = struct {
                     const bufPassId = bufSlot.bufLink.in;
                     if (renderGraph.share.bufClearPasses.isKeyUsed(bufPassId) and renderGraph.share.bufClearPasses.getByKey(bufPassId) == passId) {
                         const hardwareBufId = assigner.bufAssigns.getByKey(bufPassId);
-                        try self.sortedNodes.append(.{ .clearBuffer = hardwareBufId });
+                        bufBarrier(self, hardwareBufId, .Clear, .TransferWrite);
                         needsClearBarrier = true;
                     }
                 },
@@ -324,14 +323,35 @@ pub const RenderCompilerSys = struct {
                     const texPassId = texSlot.texLink.in;
                     if (renderGraph.share.texClearPasses.isKeyUsed(texPassId) and renderGraph.share.texClearPasses.getByKey(texPassId) == passId) {
                         const hardwareTexId = assigner.texAssigns.getByKey(texPassId);
-                        try self.sortedNodes.append(.{ .clearTexture = hardwareTexId });
+                        texBarrier(self, hardwareTexId, .Clear, .TransferWrite, .TransferDst, true); // Undefined Layout?
                         needsClearBarrier = true;
                     }
                 },
             }
         }
 
-        if (needsClearBarrier) try self.sortedNodes.append(.barrierBakeClears);
+        if (needsClearBarrier) try self.sortedNodes.append(.bakeBarriers);
+
+        for (pass.passProperties.constSlice()) |attribute| {
+            switch (attribute) {
+                .shaderInf, .colorAtt, .depthAtt, .stencilAtt, .vertexBuffer, .indexBuffer, .vertexAttribute, .bufLink, .texLink, .passLink, .renderState => {},
+
+                .bufSlot => |bufSlot| {
+                    const bufPassId = bufSlot.bufLink.in;
+                    if (renderGraph.share.bufClearPasses.isKeyUsed(bufPassId) and renderGraph.share.bufClearPasses.getByKey(bufPassId) == passId) {
+                        const hardwareBufId = assigner.bufAssigns.getByKey(bufPassId);
+                        clearBuffer(self, hardwareBufId);
+                    }
+                },
+                .texSlot => |texSlot| {
+                    const texPassId = texSlot.texLink.in;
+                    if (renderGraph.share.texClearPasses.isKeyUsed(texPassId) and renderGraph.share.texClearPasses.getByKey(texPassId) == passId) {
+                        const hardwareTexId = assigner.texAssigns.getByKey(texPassId);
+                        clearTexture(self, hardwareTexId);
+                    }
+                },
+            }
+        }
 
         for (pass.passProperties.constSlice()) |attribute| {
             switch (attribute) {
@@ -531,10 +551,6 @@ pub const RenderCompilerSys = struct {
         self.sortedNodes.appendAssumeCapacity(.{ .clearTexture = texId });
     }
 
-    fn bakeClearBarriers(self: *RenderCompilerData) void {
-        self.sortedNodes.appendAssumeCapacity(.barrierBakeClears);
-    }
-
     // Barrier Commands
 
     fn bufBarrier(self: *RenderCompilerData, bufId: BufId, stage: vhE.PipeStage, access: vhE.PipeAccess) void {
@@ -557,7 +573,7 @@ pub const RenderCompilerSys = struct {
 
     fn startTimer(self: *RenderCompilerData, name: []const u8, typ: QueryTyp) !u8 {
         const timerId = self.usedQueries;
-        self.sortedNodes.appendAssumeCapacity(.{ .startTimer = .{ .name = try .string(name), .typ = typ, .pipeStage = .TopOfPipe, .queryId = timerId } });
+        self.sortedNodes.appendAssumeCapacity(.{ .startTimer = .{ .name = try .string(name), .typ = typ, .pipeStage = .AllCmds, .queryId = timerId } });
         self.usedQueries += 1;
         return timerId;
     }

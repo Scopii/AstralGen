@@ -76,7 +76,6 @@ pub const RenderNode = union(enum) {
     // Graph Commands
     clearBuffer: BufId,
     clearTexture: TexId,
-    barrierBakeClears: void,
 
     // Barrier Commands
     bufBarrier: struct { bufId: BufId, stage: vhE.PipeStage, access: vhE.PipeAccess },
