@@ -71,26 +71,7 @@ pub const OutputLoadSys = struct {
 
             for (texRefs) |texRef| {
                 if (texRef.rootPassId) |rootPassId| {
-                    if (rc.FRAME_GRAPH_REFERENCE_VALIDATION) {
-                        const rootTexRange = passLoad.texRanges.getByKey(rootPassId);
-                        const rootTexRefs = passLoad.texRefs.constSlice()[rootTexRange.first..rootTexRange.last];
-
-                        var foundTex = false;
-
-                        for (rootTexRefs) |rootTexRef| {
-                            if (texRef.texPassId == rootTexRef.texPassId and rootTexRef.access == .write) {
-                                if (self.activePasses.isKeyUsed(rootPassId) == false) try self.pendingPasses.append(rootPassId);
-                                foundTex = true;
-                                break;
-                            }
-                        }
-                        if (foundTex == false) {
-                            std.debug.print("ERROR in OutputLoadSys: Backwards Traversal could not find Texture!\n", .{});
-                            return error.FromPassDoesNotWriteResource;
-                        }
-                    } else {
-                        if (self.activePasses.isKeyUsed(rootPassId) == false) try self.pendingPasses.append(rootPassId);
-                    }
+                    if (self.activePasses.isKeyUsed(rootPassId) == false) try self.pendingPasses.append(rootPassId);
                 }
             }
 
@@ -100,26 +81,7 @@ pub const OutputLoadSys = struct {
 
             for (bufRefs) |bufRef| {
                 if (bufRef.rootPassId) |rootPassId| {
-                    if (rc.FRAME_GRAPH_REFERENCE_VALIDATION) {
-                        const rootBufRange = passLoad.bufRanges.getByKey(rootPassId);
-                        const rootBufRefs = passLoad.bufRefs.constSlice()[rootBufRange.first..rootBufRange.last];
-
-                        var foundBuf = false;
-
-                        for (rootBufRefs) |rootBufRef| {
-                            if (bufRef.bufPassId == rootBufRef.bufPassId and rootBufRef.access == .write) {
-                                if (self.activePasses.isKeyUsed(rootPassId) == false) try self.pendingPasses.append(rootPassId);
-                                foundBuf = true;
-                                break;
-                            }
-                        }
-                        if (foundBuf == false) {
-                            std.debug.print("ERROR in OutputLoadSys: Backwards Traversal could not find Buffer!\n", .{});
-                            return error.FromPassDoesNotWriteResource;
-                        }
-                    } else {
-                        if (self.activePasses.isKeyUsed(rootPassId) == false) try self.pendingPasses.append(rootPassId);
-                    }
+                    if (self.activePasses.isKeyUsed(rootPassId) == false) try self.pendingPasses.append(rootPassId);
                 }
             }
         }

@@ -2,7 +2,7 @@ const PassDefinition = @import("../render/types/pass/PassDefinition.zig").PassDe
 const TexDesc = @import("../render/types/res/TextureMeta.zig").TextureMeta.TexDesc;
 const BufDesc = @import("../render/types/res/BufferMeta.zig").BufferMeta.BufDesc;
 const LinkedIdMap = @import("../.structures/LinkedIdMap.zig").LinkedIdMap;
-const ResPassId = @import("../.configs/idConfig.zig").ResPassId;
+const Pass = @import("../render/types/pass/PassDefinition.zig").Pass;
 const KeyPool = @import("../.structures/KeyPool.zig").KeyPool;
 const PassId = @import("../.configs/idConfig.zig").PassId;
 const String = @import("../globalHelper.zig").String;
@@ -11,10 +11,6 @@ const pe = @import("../.configs/idConfig.zig");
 const std = @import("std");
 const TexPassId = pe.TexPassId;
 const BufPassId = pe.BufPassId;
-
-const getResTyp = @import("../renderGraph/components.zig").getResTyp;
-const resToBuf = @import("../renderGraph/components.zig").resToBuf;
-const resToTex = @import("../renderGraph/components.zig").resToTex;
 
 pub const RenderRegistryData = struct {
     bufPool: KeyPool(u16, rc.BUF_MAX) = .{},
@@ -31,7 +27,7 @@ pub const RenderRegistryData = struct {
     texDefinitions: LinkedIdMap(TexDesc, rc.TEX_MAX, TexPassId, rc.TEX_MAX, 0) = .{},
 
     passIdMap: std.StringHashMap(PassId) = undefined, // How should do it correctly ??
-    passDefinitions: LinkedIdMap(PassDefinition, rc.PASS_MAX, PassId, rc.PASS_MAX, 0) = .{},
+    passes: LinkedIdMap(Pass, rc.PASS_MAX, PassId, rc.PASS_MAX, 0) = .{},
     passNames: LinkedIdMap(String(30, "PASS_NAME_EMPTY"), rc.PASS_MAX, PassId, rc.PASS_MAX, 0) = .{},
 
     pub fn getPassName(self: *const RenderRegistryData, passId: PassId) ![]const u8 {
@@ -45,13 +41,13 @@ pub const RenderRegistryData = struct {
         };
     }
 
-    pub fn getPassDefinition(self: *const RenderRegistryData, passName: []const u8) !*const PassDefinition {
+    pub fn getPass(self: *const RenderRegistryData, passName: []const u8) !*const Pass {
         const passId = self.passIdMap.get(passName) orelse return error.PassStringHasNoPassId;
-        return self.passDefinitions.getConstPtrByKey(passId);
+        return self.passes.getConstPtrByKey(passId);
     }
 
-    pub fn getPassDefinitionById(self: *const RenderRegistryData, passId: PassId) !*const PassDefinition {
-        if (self.passDefinitions.isKeyUsed(passId) == true) return self.passDefinitions.getConstPtrByKey(passId) else return error.PassIdHasNoDefinition;
+    pub fn getPassById(self: *const RenderRegistryData, passId: PassId) !*const Pass {
+        if (self.passes.isKeyUsed(passId) == true) return self.passes.getConstPtrByKey(passId) else return error.PassIdHasNoDefinition;
     }
 
     pub fn getBufferPassId(self: *const RenderRegistryData, name: []const u8) !BufPassId {
@@ -70,13 +66,6 @@ pub const RenderRegistryData = struct {
 
     pub fn getBufferName(self: *const RenderRegistryData, bufPassId: BufPassId) ![]const u8 {
         if (self.bufNames.isKeyUsed(bufPassId) == true) return self.bufNames.getConstPtrByKey(bufPassId).get() else return error.BufPassIdHasNoName;
-    }
-
-    pub fn getResourceName(self: *const RenderRegistryData, resPassId: ResPassId) ![]const u8 {
-        return switch (getResTyp(resPassId)) {
-            .Buf => try getBufferName(self, resToBuf(resPassId)),
-            .Tex => try getTextureName(self, resToTex(resPassId)),
-        };
     }
 
     pub fn getTextureName(self: *const RenderRegistryData, texPassId: TexPassId) ![]const u8 {

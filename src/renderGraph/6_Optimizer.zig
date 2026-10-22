@@ -145,7 +145,6 @@ pub const OptimizerSys = struct {
                     std.debug.print(" (Used Bytes: {})\n", .{usedBytes});
                 } else std.debug.print("\n", .{});
             }
-            std.debug.print("", .{});
             std.debug.print("\n", .{});
         }
     }

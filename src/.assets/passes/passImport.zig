@@ -1,4 +1,4 @@
-pub const PassAttrib = @import("../../../src/render/types/pass/PassDefinition.zig").PassDefinition.PassAttribute;
+pub const PassAttrib = @import("../../../src/render/types/pass/PassDefinition.zig").PassAttribute;
 pub const VertexAttribute = @import("../../../src/render/types/pass/VertexAttribute.zig").VertexAttribute;
 pub const PassDefinition = @import("../../../src/render/types/pass/PassDefinition.zig").PassDefinition;
 

@@ -152,6 +152,14 @@ pub const GraphSys = struct {
                     return error.BufferVersionConflict;
                 }
 
+                // Transient buffers have no contents before the frame -> reading the start version reads nothing anyone wrote
+                if (bufRef.access == .read and bufRef.rootPassId == null and (try registry.getBufferDefinition(bufRef.bufPassId)).share == .transient) {
+                    const bufName = try registry.getBufferName(bufRef.bufPassId);
+                    const passName = try registry.getPassName(bufRef.passId);
+                    std.debug.print("ERROR: 5.Graph: {s} reads transient Buffer {s} without a from (nothing wrote it this frame)\n", .{ passName, bufName });
+                    return error.TransientReadBeforeWrite;
+                }
+
                 if (bufRef.access == .write) {
                     bufVersion.latestWriter = bufRef.passId; // pass now holds the newest version
                     bufVersion.latestIsRead = false;

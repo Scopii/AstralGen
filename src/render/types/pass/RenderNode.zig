@@ -1,25 +1,23 @@
-const RenderStateUnion = @import("RenderState.zig").RenderStateUnion;
-const TexPassId = @import("../../../.configs/idConfig.zig").TexPassId;
-const BufPassId = @import("../../../.configs/idConfig.zig").BufPassId;
-const WindowId = @import("../../../.configs/idConfig.zig").WindowId;
-const ShaderId = @import("../../../.configs/idConfig.zig").ShaderId;
-const PassId = @import("../../../.configs/idConfig.zig").PassId;
-const TexId = @import("../../../.configs/idConfig.zig").TexId;
-const BufId = @import("../../../.configs/idConfig.zig").BufId;
-const String = @import("../../../globalHelper.zig").String;
-const vhE = @import("../../help/Enums.zig");
-
-const QueryTyp = @import("../base/Cmd.zig").QueryPair.QueryTyp;
-const ClearColor = @import("AttachmentUse.zig").ClearColor;
-const ClearDepth = @import("AttachmentUse.zig").ClearDepth;
-const VertexAttribute = @import("VertexAttribute.zig").VertexAttribute;
-const VertexBufferFill = @import("VertexBufferUse.zig").VertexBufferFill;
-const IndexBufferFill = @import("IndexBufferUse.zig").IndexBufferFill;
-
 const TaskOrMeshIndirectExec = @import("../pass/PassDefinition.zig").TaskOrMeshIndirectExec;
 const VertexIndexedExec = @import("../pass/PassDefinition.zig").VertexIndexedExec;
 const TaskOrMeshExec = @import("../pass/PassDefinition.zig").TaskOrMeshExec;
+const VertexAttribute = @import("VertexAttribute.zig").VertexAttribute;
+const VertexBufferUse = @import("VertexBufferUse.zig").VertexBufferUse;
+const TexPassId = @import("../../../.configs/idConfig.zig").TexPassId;
+const BufPassId = @import("../../../.configs/idConfig.zig").BufPassId;
+const RenderStateUnion = @import("RenderState.zig").RenderStateUnion;
+const WindowId = @import("../../../.configs/idConfig.zig").WindowId;
+const ShaderId = @import("../../../.configs/idConfig.zig").ShaderId;
 const VertexExec = @import("../pass/PassDefinition.zig").VertexExec;
+const IndexBufferUse = @import("IndexBufferUse.zig").IndexBufferUse;
+const PassId = @import("../../../.configs/idConfig.zig").PassId;
+const TexId = @import("../../../.configs/idConfig.zig").TexId;
+const BufId = @import("../../../.configs/idConfig.zig").BufId;
+const QueryTyp = @import("../base/Cmd.zig").QueryPair.QueryTyp;
+const ClearColor = @import("AttachmentUse.zig").ClearColor;
+const ClearDepth = @import("AttachmentUse.zig").ClearDepth;
+const String = @import("../../../globalHelper.zig").String;
+const vhE = @import("../../help/Enums.zig");
 
 pub const CompositeNode = struct {
     name: []const u8, // Should be String
@@ -82,7 +80,7 @@ pub const RenderNode = union(enum) {
 
     // Barrier Commands
     bufBarrier: struct { bufId: BufId, stage: vhE.PipeStage, access: vhE.PipeAccess },
-    texBarrier: struct { texId: TexId, stage: vhE.PipeStage, access: vhE.PipeAccess, layout: vhE.ImageLayout, ignoreOld: bool},
+    texBarrier: struct { texId: TexId, stage: vhE.PipeStage, access: vhE.PipeAccess, layout: vhE.ImageLayout, ignoreOld: bool },
     swapchainTargetBarrier: struct { windowId: WindowId, stage: vhE.PipeStage, access: vhE.PipeAccess, layout: vhE.ImageLayout },
     bakeBarriers: void,
 
@@ -127,10 +125,10 @@ pub const RenderNode = union(enum) {
     setDepthAtt: struct { texId: TexId, clear: ?ClearDepth },
     setStencilAtt: struct { texId: TexId, clear: ?ClearDepth },
 
-    setIndexBuf: IndexBufferFill,
+    setIndexBuf: IndexBufferUse,
     bindIndexInput: void,
 
-    setVertexBuf: VertexBufferFill,
+    setVertexBuf: VertexBufferUse,
     setVertexAttrib: VertexAttribute,
     bindVertexInput: void,
 

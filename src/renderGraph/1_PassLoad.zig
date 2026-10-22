@@ -31,43 +31,48 @@ pub const PassLoadSys = struct {
         self.dependencyRanges.clear();
         self.dependencys.clear();
 
-        for (registry.passDefinitions.getConstItems(), 0..) |passDef, i| {
-            const passId = registry.passDefinitions.getKeyByIndex(@intCast(i));
+        for (registry.passes.getConstItems(), 0..) |passDef, i| {
+            const passId = registry.passes.getKeyByIndex(@intCast(i));
             const texStart = self.texRefs.len;
             const bufStart = self.bufRefs.len;
             const depStart = self.dependencys.len;
 
-            for (passDef.passAttribute.constSlice()) |attribute| {
+            for (passDef.passProperties.constSlice()) |attribute| {
                 switch (attribute) {
                     .vertexAttribute, .renderState, .shaderInf => {},
 
                     .bufSlot => |bufSlot| {
-                        const bufPassId = try registry.getBufferPassId(bufSlot.bufLink.in);
-                        const rootPassId = if (bufSlot.bufLink.from) |rootPass| try registry.getPassId(rootPass) else null;
-                        const bufRef = BufReference{ .bufPassId = bufPassId, .passId = passId, .rootPassId = rootPassId, .access = if (bufSlot.access.isReadOnly()) .read else .write };
+                        const rootPassId = bufSlot.bufLink.from orelse null;
+                        const bufRef = BufReference{ .bufPassId = bufSlot.bufLink.in, .passId = passId, .rootPassId = rootPassId, .access = if (bufSlot.access.isReadOnly()) .read else .write };
                         try self.bufRefs.append(bufRef);
                     },
-                    inline .vertexBuffer, .indexBuffer => |bufSlot| {
-                        const bufPassId = try registry.getBufferPassId(bufSlot.bufInput);
-                        const bufRef = BufReference{ .bufPassId = bufPassId, .passId = passId, .rootPassId = null, .access = .read }; // Read should be verified!
+
+                    .vertexBuffer => |vertSlot| {
+                        const bufRef = BufReference{ .bufPassId = vertSlot.bufPassId, .passId = passId, .rootPassId = null, .access = .read }; // Read should be verified!
+                        try self.bufRefs.append(bufRef);
+                    },
+
+                    .indexBuffer => |indexSlot| {
+                        const bufRef = BufReference{ .bufPassId = indexSlot.bufPassId, .passId = passId, .rootPassId = null, .access = .read }; // Read should be verified!
                         try self.bufRefs.append(bufRef);
                     },
 
                     inline .texLink, .bufLink => |texLink| {
                         if (texLink.from) |rootPass| {
-                            const rootPassId = try registry.getPassId(rootPass);
-                            try self.dependencys.append(Dependency{ .predecessor = rootPassId, .successor = passId });
+                            try self.dependencys.append(Dependency{ .predecessor = rootPass, .successor = passId });
                         } else return error.LinkOrderingWithoutFrom;
                     },
                     .passLink => |passDep| {
-                        const rootPassId = try registry.getPassId(passDep.predecessor);
-                        try self.dependencys.append(Dependency{ .predecessor = rootPassId, .successor = passId });
+                        try self.dependencys.append(Dependency{ .predecessor = passDep, .successor = passId });
                     },
 
                     inline .texSlot, .colorAtt, .depthAtt, .stencilAtt => |texSlotTypes| {
-                        const texPassId = try registry.getTexturePassId(texSlotTypes.texLink.in);
-                        const rootPassId = if (texSlotTypes.texLink.from) |rootPass| try registry.getPassId(rootPass) else null;
-                        const texRef = TexReference{ .texPassId = texPassId, .passId = passId, .rootPassId = rootPassId, .access = if (texSlotTypes.access.isReadOnly()) .read else .write };
+                        const texRef = TexReference{
+                            .texPassId = texSlotTypes.texLink.in,
+                            .passId = passId,
+                            .rootPassId = texSlotTypes.texLink.from,
+                            .access = if (texSlotTypes.access.isReadOnly()) .read else .write,
+                        };
                         try self.texRefs.append(texRef);
                     },
                 }

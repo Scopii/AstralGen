@@ -1,7 +1,21 @@
+const TaskOrMeshIndirectExecFill = @import("../render/types/pass/PassDefinition.zig").TaskOrMeshIndirectExecFill;
+const ComputeIndirectExecFill = @import("../render/types/pass/PassDefinition.zig").ComputeIndirectExecFill;
+const VertexIndexedExec = @import("../render/types/pass/PassDefinition.zig").VertexIndexedExec;
+const PassExecutionFill = @import("../render/types/pass/PassDefinition.zig").PassExecutionFill;
+const VertexBufferFill = @import("../render/types/pass/VertexBufferUse.zig").VertexBufferFill;
+const IndexBufferFill = @import("../render/types/pass/IndexBufferUse.zig").IndexBufferFill;
+const TaskOrMeshExec = @import("../render/types/pass/PassDefinition.zig").TaskOrMeshExec;
 const PassDefinition = @import("../render/types/pass/PassDefinition.zig").PassDefinition;
+const AttachmentFill = @import("../render/types/pass/AttachmentUse.zig").AttachmentFill;
+const PassProperty = @import("../render/types/pass/PassDefinition.zig").PassProperty;
 const TexDesc = @import("../render/types/res/TextureMeta.zig").TextureMeta.TexDesc;
+const ComputeExec = @import("../render/types/pass/PassDefinition.zig").ComputeExec;
+const VertexExec = @import("../render/types/pass/PassDefinition.zig").VertexExec;
 const BufDesc = @import("../render/types/res/BufferMeta.zig").BufferMeta.BufDesc;
 const RenderRegistryData = @import("RenderRegistryData.zig").RenderRegistryData;
+const TextureFill = @import("../render/types/pass/TextureUse.zig").TextureFill;
+const BufferFill = @import("../render/types/pass/BufferUse.zig").BufferFill;
+const Pass = @import("../render/types/pass/PassDefinition.zig").Pass;
 const BufPassId = @import("../.configs/idConfig.zig").BufPassId;
 const TexPassId = @import("../.configs/idConfig.zig").TexPassId;
 const PassId = @import("../.configs/idConfig.zig").PassId;
@@ -47,7 +61,104 @@ pub const RenderRegistrySys = struct {
         }
         const passId: PassId = .id(registry.passPool.tryReserveKey() orelse return error.noFreePassId);
 
-        registry.passDefinitions.upsert(passId, passDef);
+        var pass: Pass = .{
+            .name = passDef.name,
+            .renderScaling = passDef.renderScaling,
+            .outputTex = if (passDef.outputTex) |outputTex| try registry.getTexturePassId(outputTex) else null,
+            .execution = switch (passDef.execution) {
+                .compute => |comp| PassExecutionFill{ .compute = comp },
+                .computeIndirect => |compIndirect| PassExecutionFill{
+                    .computeIndirect = .{ .indirectBuf = try registry.getBufferPassId(compIndirect.indirectBuf), .indirectBufOffset = compIndirect.indirectBufOffset },
+                },
+                .taskOrMesh => |taskOrMesh| PassExecutionFill{ .taskOrMesh = taskOrMesh },
+                .taskOrMeshIndirect => |taskOrMeshExec| PassExecutionFill{
+                    .taskOrMeshIndirect = .{ .indirectBufId = try registry.getBufferPassId(taskOrMeshExec.indirectBuf), .bufOffset = taskOrMeshExec.bufOffset },
+                },
+                .vertex => |vertex| PassExecutionFill{ .vertex = vertex },
+                .vertexIndexed => |vertexIndexed| PassExecutionFill{ .vertexIndexed = vertexIndexed },
+            },
+        };
+
+        for (passDef.passAttributes.constSlice()) |passAttrib| {
+            const newProperty = switch (passAttrib) {
+                .shaderInf => |shaderInf| PassProperty{ .shaderInf = shaderInf },
+
+                .vertexAttribute => |vertexAttribute| PassProperty{ .vertexAttribute = vertexAttribute },
+                
+                .renderState => |renderState| PassProperty{ .renderState = renderState },
+
+                .passLink => |passLink| PassProperty{ .passLink = try registry.getPassId(passLink.predecessor) },
+
+                .bufLink => |bufLink| PassProperty{ .bufLink = .{ .in = try registry.getBufferPassId(bufLink.in), .from = if (bufLink.from) |from| try registry.getPassId(from) else null } },
+
+                .texLink => |texLink| PassProperty{ .texLink = .{ .in = try registry.getTexturePassId(texLink.in), .from = if (texLink.from) |from| try registry.getPassId(from) else null } },
+
+                .indexBuffer => |indexBuffer| PassProperty{ .indexBuffer = IndexBufferFill{ .bufPassId = try registry.getBufferPassId(indexBuffer.bufInput), .indexType = indexBuffer.indexType } },
+
+                .vertexBuffer => |vertexBuffer| PassProperty{
+                    .vertexBuffer = VertexBufferFill{
+                        .bufPassId = try registry.getBufferPassId(vertexBuffer.bufInput),
+                        .binding = vertexBuffer.binding,
+                        .stride = vertexBuffer.stride,
+                        .inputRate = vertexBuffer.inputRate,
+                    },
+                },
+
+                .bufSlot => |bufSlot| PassProperty{
+                    .bufSlot = BufferFill{
+                        .bufLink = .{ .in = try registry.getBufferPassId(bufSlot.bufLink.in), .from = if (bufSlot.bufLink.from) |from| try registry.getPassId(from) else null },
+                        .stage = bufSlot.stage,
+                        .access = bufSlot.access,
+                        .shaderSlot = bufSlot.shaderSlot,
+                    },
+                },
+
+                .texSlot => |texSlot| PassProperty{
+                    .texSlot = TextureFill{
+                        .texLink = .{ .in = try registry.getTexturePassId(texSlot.texLink.in), .from = if (texSlot.texLink.from) |from| try registry.getPassId(from) else null },
+                        .stage = texSlot.stage,
+                        .access = texSlot.access,
+                        .layout = texSlot.layout,
+                        .descUse = texSlot.descUse,
+                        .shaderSlot = texSlot.shaderSlot,
+                    },
+                },
+
+                .colorAtt => |colorAtt| PassProperty{
+                    .colorAtt = AttachmentFill{
+                        .texLink = .{ .in = try registry.getTexturePassId(colorAtt.texLink.in), .from = if (colorAtt.texLink.from) |from| try registry.getPassId(from) else null },
+                        .stage = colorAtt.stage,
+                        .access = colorAtt.access,
+                        .layout = colorAtt.layout,
+                        .clear = colorAtt.clear,
+                    },
+                },
+
+                .depthAtt => |depthAtt| PassProperty{
+                    .depthAtt = AttachmentFill{
+                        .texLink = .{ .in = try registry.getTexturePassId(depthAtt.texLink.in), .from = if (depthAtt.texLink.from) |from| try registry.getPassId(from) else null },
+                        .stage = depthAtt.stage,
+                        .access = depthAtt.access,
+                        .layout = depthAtt.layout,
+                        .clear = depthAtt.clear,
+                    },
+                },
+
+                .stencilAtt => |stencilAtt| PassProperty{
+                    .stencilAtt = AttachmentFill{
+                        .texLink = .{ .in = try registry.getTexturePassId(stencilAtt.texLink.in), .from = if (stencilAtt.texLink.from) |from| try registry.getPassId(from) else null },
+                        .stage = stencilAtt.stage,
+                        .access = stencilAtt.access,
+                        .layout = stencilAtt.layout,
+                        .clear = stencilAtt.clear,
+                    },
+                },
+            };
+
+            try pass.passProperties.append(newProperty);
+        }
+
+        registry.passes.upsert(passId, pass);
         registry.passNames.upsert(passId, try .string(passName));
 
         const persistentName = registry.passNames.getConstPtrByKey(passId).get();
@@ -57,7 +168,7 @@ pub const RenderRegistrySys = struct {
     pub fn removePassDefinition(registry: *RenderRegistryData, name: []const u8) void {
         if (registry.passIdMap.get(name)) |passId| {
             registry.passIdMap.remove(name);
-            registry.passDefinitions.remove(passId);
+            registry.passes.remove(passId);
             registry.passNames.remove(passId);
             registry.passPool.freeKey(passId.val());
         }
@@ -110,17 +221,6 @@ pub const RenderRegistrySys = struct {
     }
 
     pub fn setupDefinitions(self: *RenderRegistryData) !void {
-        try RenderRegistrySys.addPassDefinition(self, depthViewPass);
-        try RenderRegistrySys.addPassDefinition(self, compRayMarchPass);
-        try RenderRegistrySys.addPassDefinition(self, editorGridGridDebugPass);
-        try RenderRegistrySys.addPassDefinition(self, editorGridPlaneDebugPass);
-        try RenderRegistrySys.addPassDefinition(self, frustumViewPass);
-        try RenderRegistrySys.addPassDefinition(self, quantGridPass);
-        try RenderRegistrySys.addPassDefinition(self, quantGridDebugPass);
-        try RenderRegistrySys.addPassDefinition(self, quantPlanePass);
-        try RenderRegistrySys.addPassDefinition(self, quantPlaneDebugPass);
-        try RenderRegistrySys.addPassDefinition(self, quantCompPass);
-
         // Buffers
         try RenderRegistrySys.addBufferDefinition(self, "QuantIndirectSB", rc.INDIRECT_SB);
         try RenderRegistrySys.addBufferDefinition(self, "ReadbackSB", rc.READBACK_SB);
@@ -151,5 +251,20 @@ pub const RenderRegistrySys = struct {
 
         try RenderRegistrySys.addTextureDefinition(self, "TestTileTex", rc.PERSISTENT_COLOR_TEX);
         try RenderRegistrySys.addTextureDefinition(self, "ImguiFontTex", rc.IMGUI_FONT_TEX);
+
+        try RenderRegistrySys.addPassDefinition(self, quantCompPass);
+
+        try RenderRegistrySys.addPassDefinition(self, quantGridPass);
+        try RenderRegistrySys.addPassDefinition(self, quantGridDebugPass);
+        try RenderRegistrySys.addPassDefinition(self, quantPlanePass);
+        try RenderRegistrySys.addPassDefinition(self, quantPlaneDebugPass);
+
+        try RenderRegistrySys.addPassDefinition(self, frustumViewPass);
+
+        try RenderRegistrySys.addPassDefinition(self, editorGridPlaneDebugPass);
+        try RenderRegistrySys.addPassDefinition(self, editorGridGridDebugPass);
+
+        try RenderRegistrySys.addPassDefinition(self, depthViewPass);
+        try RenderRegistrySys.addPassDefinition(self, compRayMarchPass);
     }
 };

@@ -12,19 +12,23 @@ const vhE = @import("../render/help/Enums.zig");
 const TaskOrMeshIndirectExec = @import("../render/types/pass/PassDefinition.zig").TaskOrMeshIndirectExec;
 const ComputeIndirectExec = @import("../render/types/pass/PassDefinition.zig").ComputeIndirectExec;
 const VertexIndexedExec = @import("../render/types/pass/PassDefinition.zig").VertexIndexedExec;
-const TaskOrMeshExec = @import("../render/types/pass/PassDefinition.zig").TaskOrMeshExec;
-const VertexExec = @import("../render/types/pass/PassDefinition.zig").VertexExec;
 const VertexBufferFill = @import("../render/types/pass/VertexBufferUse.zig").VertexBufferFill;
-const IndexBufferFill = @import("../render/types/pass/IndexBufferUse.zig").IndexBufferFill;
+const VertexBufferUse = @import("../render/types/pass/VertexBufferUse.zig").VertexBufferUse;
 const VertexAttribute = @import("../render/types/pass/VertexAttribute.zig").VertexAttribute;
+const IndexBufferFill = @import("../render/types/pass/IndexBufferUse.zig").IndexBufferFill;
+const RenderStateUnion = @import("../render/types/pass/RenderState.zig").RenderStateUnion;
+const TaskOrMeshExec = @import("../render/types/pass/PassDefinition.zig").TaskOrMeshExec;
+const IndexBufferUse = @import("../render/types/pass/IndexBufferUse.zig").IndexBufferUse;
 const AttachmentFill = @import("../render/types/pass/AttachmentUse.zig").AttachmentFill;
+const CompositeNode = @import("../render/types/pass/RenderNode.zig").CompositeNode;
+const VertexExec = @import("../render/types/pass/PassDefinition.zig").VertexExec;
 const ClearColor = @import("../render/types/pass/AttachmentUse.zig").ClearColor;
 const ClearDepth = @import("../render/types/pass/AttachmentUse.zig").ClearDepth;
 const RenderState = @import("../render/types/pass/RenderState.zig").RenderState;
-const RenderStateUnion = @import("../render/types/pass/RenderState.zig").RenderStateUnion;
 const TextureFill = @import("../render/types/pass/TextureUse.zig").TextureFill;
 const RenderNode = @import("../render/types/pass/RenderNode.zig").RenderNode;
 const BufferFill = @import("../render/types/pass/BufferUse.zig").BufferFill;
+const QueryTyp = @import("../render/types/base/Cmd.zig").QueryPair.QueryTyp;
 const WindowData = @import("../window/WindowData.zig").WindowData;
 const WindowId = @import("../.configs/idConfig.zig").WindowId;
 const ShaderId = @import("../.configs/idConfig.zig").ShaderId;
@@ -32,9 +36,6 @@ const PassId = @import("../.configs/idConfig.zig").PassId;
 const BufId = @import("../.configs/idConfig.zig").BufId;
 const TexId = @import("../.configs/idConfig.zig").TexId;
 const UiData = @import("../ui/UiData.zig").UiData;
-
-const QueryTyp = @import("../render/types/base/Cmd.zig").QueryPair.QueryTyp;
-const CompositeNode = @import("../render/types/pass/RenderNode.zig").CompositeNode;
 const vhT = @import("../render/help/Types.zig");
 
 pub const RenderCompilerSys = struct {
@@ -284,8 +285,8 @@ pub const RenderCompilerSys = struct {
         deltaTime: f32,
     ) !void {
         const passName = try registry.getPassName(passId);
-        const passDef = try registry.getPassDefinition(passName);
-        const mainOutputTexId = if (passDef.outputTex) |output| try registry.getTexturePassId(output) else null;
+        const pass = try registry.getPass(passName);
+        const mainOutputTexId = pass.outputTex;
         const mainOutputTexHardwareId = if (mainOutputTexId) |outputId| assigner.texAssigns.getByKey(outputId) else null;
 
         try passPrint(self, passName);
@@ -307,12 +308,12 @@ pub const RenderCompilerSys = struct {
 
         var needsClearBarrier: bool = false;
 
-        for (passDef.passAttribute.constSlice()) |attribute| {
+        for (pass.passProperties.constSlice()) |attribute| {
             switch (attribute) {
                 .shaderInf, .colorAtt, .depthAtt, .stencilAtt, .vertexBuffer, .indexBuffer, .vertexAttribute, .bufLink, .texLink, .passLink, .renderState => {},
 
                 .bufSlot => |bufSlot| {
-                    const bufPassId = try registry.getBufferPassId(bufSlot.bufLink.in);
+                    const bufPassId = bufSlot.bufLink.in;
                     if (renderGraph.share.bufClearPasses.isKeyUsed(bufPassId) and renderGraph.share.bufClearPasses.getByKey(bufPassId) == passId) {
                         const hardwareBufId = assigner.bufAssigns.getByKey(bufPassId);
                         try self.sortedNodes.append(.{ .clearBuffer = hardwareBufId });
@@ -320,7 +321,7 @@ pub const RenderCompilerSys = struct {
                     }
                 },
                 .texSlot => |texSlot| {
-                    const texPassId = try registry.getTexturePassId(texSlot.texLink.in);
+                    const texPassId = texSlot.texLink.in;
                     if (renderGraph.share.texClearPasses.isKeyUsed(texPassId) and renderGraph.share.texClearPasses.getByKey(texPassId) == passId) {
                         const hardwareTexId = assigner.texAssigns.getByKey(texPassId);
                         try self.sortedNodes.append(.{ .clearTexture = hardwareTexId });
@@ -332,28 +333,26 @@ pub const RenderCompilerSys = struct {
 
         if (needsClearBarrier) try self.sortedNodes.append(.barrierBakeClears);
 
-        for (passDef.passAttribute.constSlice()) |attribute| {
+        for (pass.passProperties.constSlice()) |attribute| {
             switch (attribute) {
                 .shaderInf => |shaderInf| {
                     setShader(self, shaderInf.id);
                 },
                 .bufSlot => |bufSlot| {
-                    const bufPassId = try registry.getBufferPassId(bufSlot.bufLink.in);
-                    const bufHardwareId = assigner.bufAssigns.getByKey(bufPassId);
+                    const bufHardwareId = assigner.bufAssigns.getByKey(bufSlot.bufLink.in);
                     bufBarrier(self, bufHardwareId, bufSlot.stage, bufSlot.access);
 
                     if (bufSlot.shaderSlot) |slot| setPushDataBufDesc(self, pushOffset + (slot * @sizeOf(u32)), bufHardwareId);
                 },
                 .texSlot => |texSlot| {
-                    const texPassId = try registry.getTexturePassId(texSlot.texLink.in);
-                    const texHardwareId = assigner.texAssigns.getByKey(texPassId);
+                    const texHardwareId = assigner.texAssigns.getByKey(texSlot.texLink.in);
                     texBarrier(self, texHardwareId, texSlot.stage, texSlot.access, texSlot.layout, false);
 
                     if (texSlot.shaderSlot) |slot| setPushDataTexDesc(self, pushOffset + (slot * @sizeOf(u32)), texHardwareId, texSlot.descUse);
                 },
 
                 .colorAtt => |attSlot| {
-                    const texPassId = try registry.getTexturePassId(attSlot.texLink.in);
+                    const texPassId = attSlot.texLink.in;
                     const texHardwareId = assigner.texAssigns.getByKey(texPassId);
 
                     if (attSlot.clear) |clear| {
@@ -377,7 +376,7 @@ pub const RenderCompilerSys = struct {
                     }
                 },
                 .depthAtt => |depthSlot| {
-                    const texPassId = try registry.getTexturePassId(depthSlot.texLink.in);
+                    const texPassId = depthSlot.texLink.in;
                     const texHardwareId = assigner.texAssigns.getByKey(texPassId);
 
                     if (depthSlot.clear) |clear| {
@@ -401,7 +400,7 @@ pub const RenderCompilerSys = struct {
                     }
                 },
                 .stencilAtt => |stencilSlot| {
-                    const texPassId = try registry.getTexturePassId(stencilSlot.texLink.in);
+                    const texPassId = stencilSlot.texLink.in;
                     const texHardwareId = assigner.texAssigns.getByKey(texPassId);
 
                     if (stencilSlot.clear) |clear| {
@@ -426,14 +425,12 @@ pub const RenderCompilerSys = struct {
                 },
 
                 .vertexBuffer => |vertBufSlot| {
-                    const bufPassId = try registry.getBufferPassId(vertBufSlot.bufInput);
-                    const bufHardwareId = assigner.bufAssigns.getByKey(bufPassId);
+                    const bufHardwareId = assigner.bufAssigns.getByKey(vertBufSlot.bufPassId);
                     bufBarrier(self, bufHardwareId, .VertexInput, .VertexAttributeRead);
                     setVertexBuf(self, .{ .bufId = bufHardwareId, .binding = vertBufSlot.binding, .stride = vertBufSlot.stride, .inputRate = vertBufSlot.inputRate });
                 },
                 .indexBuffer => |indexBufSlot| {
-                    const bufPassId = try registry.getBufferPassId(indexBufSlot.bufInput);
-                    const bufHardwareId = assigner.bufAssigns.getByKey(bufPassId);
+                    const bufHardwareId = assigner.bufAssigns.getByKey(indexBufSlot.bufPassId);
                     bufBarrier(self, bufHardwareId, .VertexInput, .IndexRead);
                     setIndexBuf(self, .{ .bufId = bufHardwareId, .indexType = indexBufSlot.indexType });
                 },
@@ -451,7 +448,7 @@ pub const RenderCompilerSys = struct {
         bindShaders(self);
         bindPushData(self);
 
-        switch (passDef.execution) {
+        switch (pass.execution) {
             .compute => |comp| {
                 if (comp.outputTexDispatch == true) {
                     if (mainOutputTexHardwareId) |outputTexId| {
@@ -460,8 +457,7 @@ pub const RenderCompilerSys = struct {
                 } else dispatch(self, comp.groupX, comp.groupY, comp.groupZ);
             },
             .computeIndirect => |compIndirect| {
-                const bufPassId = try registry.getBufferPassId(compIndirect.indirectBuf);
-                const bufHardwareId = assigner.bufAssigns.getByKey(bufPassId);
+                const bufHardwareId = assigner.bufAssigns.getByKey(compIndirect.indirectBuf);
                 dispatchIndirect(self, bufHardwareId, compIndirect.indirectBufOffset);
             },
             .vertex => |vertex| {
@@ -498,8 +494,7 @@ pub const RenderCompilerSys = struct {
                 setViewportFromOutput(self);
                 setScissorFromOutput(self);
 
-                const bufPassId = try registry.getBufferPassId(taskOrMeshIndirect.indirectBuf);
-                const bufHardwareId = assigner.bufAssigns.getByKey(bufPassId);
+                const bufHardwareId = assigner.bufAssigns.getByKey(taskOrMeshIndirect.indirectBufId);
                 drawTaskOrMeshIndirect(self, .{ .indirectBufId = bufHardwareId, .drawCount = 1, .bufOffset = taskOrMeshIndirect.bufOffset, .stride = @sizeOf(vhT.IndirectData) });
 
                 endRendering(self);
@@ -684,16 +679,16 @@ pub const RenderCompilerSys = struct {
         self.sortedNodes.appendAssumeCapacity(.{ .setStencilAtt = .{ .texId = texId, .clear = clear } });
     }
 
-    fn setIndexBuf(self: *RenderCompilerData, indexBufferFill: IndexBufferFill) void {
-        self.sortedNodes.appendAssumeCapacity(.{ .setIndexBuf = indexBufferFill });
+    fn setIndexBuf(self: *RenderCompilerData, indexBufferUse: IndexBufferUse) void {
+        self.sortedNodes.appendAssumeCapacity(.{ .setIndexBuf = indexBufferUse });
     }
 
     fn bindIndexInput(self: *RenderCompilerData) void {
         self.sortedNodes.appendAssumeCapacity(.bindIndexInput);
     }
 
-    fn setVertexBuf(self: *RenderCompilerData, vertexBufferFill: VertexBufferFill) void {
-        self.sortedNodes.appendAssumeCapacity(.{ .setVertexBuf = vertexBufferFill });
+    fn setVertexBuf(self: *RenderCompilerData, vertexBufferUse: VertexBufferUse) void {
+        self.sortedNodes.appendAssumeCapacity(.{ .setVertexBuf = vertexBufferUse });
     }
 
     fn setVertexAttrib(self: *RenderCompilerData, vertexAttribute: VertexAttribute) void {

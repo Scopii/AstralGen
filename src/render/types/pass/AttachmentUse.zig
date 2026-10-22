@@ -1,4 +1,5 @@
 const TextureStringLink = @import("../../../renderGraph/components.zig").TextureStringLink;
+const TextureLink = @import("../../../renderGraph/components.zig").TextureLink;
 const TexId = @import("../../../.configs/idConfig.zig").TexId;
 const Texture = @import("../res/Texture.zig").Texture;
 const vk = @import("../../../.modules/vk.zig").c;
@@ -9,7 +10,7 @@ pub const ClearDepth = struct { depthStencil: vk.VkClearDepthStencilValue };
 pub const ClearValue = union(enum) { color: ClearColor, depth: ClearDepth };
 
 pub const AttachmentFill = struct {
-    texId: TexId,
+    texLink: TextureLink,
     stage: vhE.PipeStage,
     access: vhE.PipeAccess,
     layout: vhE.ImageLayout,

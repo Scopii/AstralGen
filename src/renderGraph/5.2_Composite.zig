@@ -44,7 +44,7 @@ pub const CompositeSys = struct {
                     for (viewport.outputTuples) |outputTuple| {
                         const outTexPassId = try registry.getTexturePassId(outputTuple.texName);
                         const outPassId = try registry.getPassId(outputTuple.passName);
-                        const passDef = try registry.getPassDefinitionById(outPassId);
+                        const passDef = try registry.getPassById(outPassId);
 
                         if (self.passExtents.isKeyUsed(outPassId) == false) self.passExtents.insert(outPassId, .{ .width = 0, .height = 0 });
                         const passExtent = self.passExtents.getPtrByKey(outPassId);

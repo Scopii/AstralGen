@@ -1,17 +1,17 @@
 const TextureStringLink = @import("../../../renderGraph/components.zig").TextureStringLink;
+const TextureLink = @import("../../../renderGraph/components.zig").TextureLink;
 const TexId = @import("../../../.configs/idConfig.zig").TexId;
 const Texture = @import("../res/Texture.zig").Texture;
 const vhE = @import("../../help/Enums.zig");
 
 pub const TextureFill = struct {
-    texId: TexId,
+    texLink: TextureLink,
     stage: vhE.PipeStage = .TopOfPipe,
     access: vhE.PipeAccess = .None,
     layout: vhE.ImageLayout,
     descUse: vhE.TexDescriptor,
     shaderSlot: ?u32 = null,
 };
-
 
 pub const TextureSlot = struct {
     texLink: TextureStringLink,

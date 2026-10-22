@@ -1,10 +1,11 @@
 const BufferStringLink = @import("../../../renderGraph/components.zig").BufferStringLink;
+const BufferLink = @import("../../../renderGraph/components.zig").BufferLink;
 const BufId = @import("../../../.configs/idConfig.zig").BufId;
 const Buffer = @import("../res/Buffer.zig").Buffer;
 const vhE = @import("../../help/Enums.zig");
 
 pub const BufferFill = struct {
-    bufId: BufId,
+    bufLink: BufferLink,
     stage: vhE.PipeStage,
     access: vhE.PipeAccess,
     shaderSlot: ?u32,

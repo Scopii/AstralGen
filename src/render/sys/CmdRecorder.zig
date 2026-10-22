@@ -1,7 +1,12 @@
-// const PassExecution = @import("../types/pass/PassInstance.zig").PassExecution;
+const VertexBufferUse = @import("../types/pass/VertexBufferUse.zig").VertexBufferUse;
+const VertexAttribute = @import("../types/pass/VertexAttribute.zig").VertexAttribute;
+const IndexBufferUse = @import("../types/pass/IndexBufferUse.zig").IndexBufferUse;
 const CompositeNode = @import("../types/pass/RenderNode.zig").CompositeNode;
+const RenderState = @import("../types/pass/RenderState.zig").RenderState;
+const FixedList = @import("../../.structures/FixedList.zig").FixedList;
 const RenderNode = @import("../types/pass/RenderNode.zig").RenderNode;
 const Swapchain = @import("../types/base/Swapchain.zig").Swapchain;
+const ShaderId = @import("../../.configs/idConfig.zig").ShaderId;
 const UiNode = @import("../types/pass/RenderNode.zig").UiNode;
 const SwapchainMan = @import("SwapchainMan.zig").SwapchainMan;
 const Texture = @import("../types/res/Texture.zig").Texture;
@@ -21,17 +26,6 @@ const vhT = @import("../help/Types.zig");
 const Allocator = std.mem.Allocator;
 const std = @import("std");
 
-const FixedList = @import("../../.structures/FixedList.zig").FixedList;
-const VertexBufferFill = @import("../types/pass/VertexBufferUse.zig").VertexBufferFill;
-const VertexAttribute = @import("../types/pass/VertexAttribute.zig").VertexAttribute;
-const IndexBufferFill = @import("../types/pass/IndexBufferUse.zig").IndexBufferFill;
-const ShaderId = @import("../../.configs/idConfig.zig").ShaderId;
-// const AttachmentFill = @import("AttachmentFill.zig").AttachmentFill;
-const RenderState = @import("../types/pass/RenderState.zig").RenderState;
-// const TextureFill = @import("TextureFill.zig").TextureFill;
-const String = @import("../../globalHelper.zig").String;
-// const BufferFill = @import("BufferFill.zig").BufferFill;
-
 pub const CmdState = struct {
     outputWidth: ?u32 = null,
     outputHeight: ?u32 = null,
@@ -47,8 +41,8 @@ pub const CmdState = struct {
     depthAtt: ?vk.VkRenderingAttachmentInfo = null,
     stencilAtt: ?vk.VkRenderingAttachmentInfo = null,
     //
-    indexBuffer: ?IndexBufferFill = null,
-    vertexBuffers: FixedList(VertexBufferFill, 4) = .{},
+    indexBuffer: ?IndexBufferUse = null,
+    vertexBuffers: FixedList(VertexBufferUse, 4) = .{},
     vertexAttributes: FixedList(VertexAttribute, 16) = .{},
 };
 

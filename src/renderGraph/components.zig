@@ -12,9 +12,19 @@ pub const TextureStringLink = struct {
     from: ?[]const u8 = null, // Should be String?
 };
 
+pub const TextureLink = struct {
+    in: TexPassId,
+    from: ?PassId,
+};
+
 pub const BufferStringLink = struct {
     in: []const u8, // Should be String?
     from: ?[]const u8 = null, // Should be String?
+};
+
+pub const BufferLink = struct {
+    in: BufPassId,
+    from: ?PassId,
 };
 
 pub const PassLink = struct {
@@ -39,18 +49,6 @@ pub const PassLifetime = struct {
 pub const GraphLifetime = struct {
     firstLevel: u16,
     lastLevel: u16,
-};
-
-pub const BufferClear = struct {
-    sharedIndex: u16,
-    bufPassId: BufPassId,
-    passAfterClear: PassId, // First Pass that happens Afterwards
-};
-
-pub const TextureClear = struct {
-    sharedIndex: u16,
-    texPassId: TexPassId,
-    passAfterClear: PassId, // First Pass that happens Afterwards
 };
 
 pub const TransientBuffer = struct {
