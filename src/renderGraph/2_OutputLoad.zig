@@ -40,7 +40,10 @@ pub const OutputLoadSys = struct {
 
                 for (refRange) |texRef| {
                     if (texPassId == texRef.texPassId) {
-                        try self.pendingPasses.append(passId);
+                        if (self.activePasses.isKeyUsed(passId) == false) {
+                            self.activePasses.upsert(passId, passId);
+                            try self.pendingPasses.append(passId);
+                        }
                         foundTex = true;
                         break;
                     }
@@ -55,15 +58,14 @@ pub const OutputLoadSys = struct {
 
         // Manuel Passes (NO Outputs but still inserts dependencies)
         for (manuelPasses) |manuelPass| {
-            if (rc.FRAME_GRAPH_INSERT_MANUAL_DEPENDENCY_PASSES) try self.pendingPasses.append(manuelPass) else self.activePasses.upsert(manuelPass, manuelPass);
+            if (self.activePasses.isKeyUsed(manuelPass)) continue; // already found
+            self.activePasses.upsert(manuelPass, manuelPass); // always mark
+            if (rc.FRAME_GRAPH_INSERT_MANUAL_DEPENDENCY_PASSES) try self.pendingPasses.append(manuelPass);
         }
 
         // Backwards Traversal to activate all required Passes
         while (self.pendingPasses.len != 0) {
             const passId = self.pendingPasses.pop().?;
-
-            if (self.activePasses.isKeyUsed(passId)) continue; // dedupe + cycle guard
-            self.activePasses.upsert(passId, passId);
 
             // Traverse Textures
             const texRange = passLoad.texRanges.getByKey(passId);
@@ -71,7 +73,10 @@ pub const OutputLoadSys = struct {
 
             for (texRefs) |texRef| {
                 if (texRef.rootPassId) |rootPassId| {
-                    if (self.activePasses.isKeyUsed(rootPassId) == false) try self.pendingPasses.append(rootPassId);
+                    if (self.activePasses.isKeyUsed(rootPassId) == false) {
+                        self.activePasses.upsert(rootPassId, rootPassId);
+                        try self.pendingPasses.append(rootPassId);
+                    }
                 }
             }
 
@@ -81,7 +86,10 @@ pub const OutputLoadSys = struct {
 
             for (bufRefs) |bufRef| {
                 if (bufRef.rootPassId) |rootPassId| {
-                    if (self.activePasses.isKeyUsed(rootPassId) == false) try self.pendingPasses.append(rootPassId);
+                    if (self.activePasses.isKeyUsed(rootPassId) == false) {
+                        self.activePasses.upsert(rootPassId, rootPassId);
+                        try self.pendingPasses.append(rootPassId);
+                    }
                 }
             }
         }
