@@ -77,15 +77,15 @@ pub const CompositeSys = struct {
                 orderLen -= 1;
                 const passId = order[orderLen].passId;
                 if (self.passExtents.isKeyUsed(passId) == false) continue; // no viewport and no reader needs pixels from it
-                const ext = self.passExtents.getByKey(passId); // viewport demand + everything its readers pushed
+                const extent = self.passExtents.getByKey(passId); // viewport demand + everything its readers pushed
 
                 const range = passLoad.texRanges.getByKey(passId);
                 for (passLoad.texRefs.constSlice()[range.first..range.last]) |texRef| {
                     const producer = texRef.rootPassId orelse continue; // base texture, no producer
                     if (self.passExtents.isKeyUsed(producer) == false) self.passExtents.insert(producer, .{ .width = 0, .height = 0 });
-                    const p = self.passExtents.getPtrByKey(producer);
-                    p.width = @max(p.width, ext.width); // producer renders at least as big as its reader
-                    p.height = @max(p.height, ext.height);
+                    const pass = self.passExtents.getPtrByKey(producer);
+                    pass.width = @max(pass.width, extent.width); // producer renders at least as big as its reader
+                    pass.height = @max(pass.height, extent.height);
                 }
             }
         }

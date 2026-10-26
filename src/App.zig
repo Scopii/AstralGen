@@ -334,16 +334,15 @@ pub const App = struct {
 
                 if (rc.CPU_PROFILING) std.debug.print("Cpu pre-Renderer Delta {d:.3} ms, ({d:.1} Real FPS)\n", .{ dt * 0.000001, 1.0 / (dt * 0.000000001) });
 
-                const start = std.time.microTimestamp();
+                // const start = std.time.microTimestamp();
                 try RenderGraphSys.build(&self.data.renderGraph, &self.data.renderRegistry, &self.data.viewport, &self.data.window);
-                const end = std.time.microTimestamp();
-                std.debug.print("Frame Graph Build: {d:.3} ms\n", .{@as(f64, @floatFromInt(end - start)) / 1_000.0});
+                // std.debug.print("Frame Graph Build: {d:.3} ms\n", .{@as(f64, @floatFromInt(std.time.microTimestamp() - start)) / 1_000.0});
 
                 try RenderAssignerSys.assign(&self.data.renderAssigner, &self.data.renderGraph, &self.data.renderRegistry, &self.rendererQueue, self.memoryMan);
                 try RenderAssignerSys.processQueue(&self.data.renderAssigner, &self.data.renderRegistry, &self.assignerQueue, &self.rendererQueue, self.memoryMan);
                 try RenderAssignerSys.fillUiHardwareIds(&self.data.renderAssigner, &self.data.renderRegistry, &self.data.ui);
 
-                const start2 = std.time.microTimestamp();
+                // const start2 = std.time.microTimestamp();
 
                 try RenderCompilerSys.compileIR(
                     &self.data.renderCompiler,
@@ -355,9 +354,8 @@ pub const App = struct {
                     frameData.runTime,
                     frameData.deltaTime,
                 );
-
-                const end2 = std.time.microTimestamp();
-                std.debug.print("Render Compiler: {d:.3} ms\n", .{@as(f64, @floatFromInt(end2 - start2)) / 1_000.0});
+                
+                // std.debug.print("Render Compiler: {d:.3} ms\n", .{@as(f64, @floatFromInt(std.time.microTimestamp() - start2)) / 1_000.0});
 
                 const sortedRenderNodes = self.data.renderCompiler.sortedNodes.constSlice();
                 const pushData = self.data.renderCompiler.pushData.constSlice();

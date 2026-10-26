@@ -12,8 +12,8 @@ const std = @import("std");
 const M_PI = 3.14159;
 const TWO_PI = 2 * M_PI;
 
-// This is the memory layout expected by the Vulkan Uniform Buffer
-pub const CamData = struct {
+// The memory layout of the Shader Buffer
+pub const CamData = extern struct {
     viewProj: [4][4]f32,
     camPosAndFov: [4]f32,
     camDirAndAspectRatio: [4]f32,

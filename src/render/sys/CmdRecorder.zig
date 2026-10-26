@@ -178,8 +178,8 @@ pub const CmdRecorder = struct {
             state.stage = .None;
         }
 
-        if (state.stage == neededState.stage and state.access == neededState.access and state.layout == neededState.layout) return;
-        if (state.layout == neededState.layout and state.access.isReadOnly() and neededState.access.isReadOnly()) return; // same layout, both reads
+        const sameState = state.stage == neededState.stage and state.access == neededState.access and state.layout == neededState.layout;
+        if (sameState and neededState.access.isReadOnly()) return;
 
         const layoutTransition = if (state.layout != neededState.layout) true else false;
 
@@ -196,8 +196,9 @@ pub const CmdRecorder = struct {
 
     fn checkBufferState(self: *CmdRecorder, buffer: *Buffer, neededState: Buffer.BufferState) !void {
         const state = buffer.state;
-        if (state.stage == neededState.stage and state.access == neededState.access) return;
-        if (state.access.isReadOnly() and neededState.access.isReadOnly()) return;
+
+        const sameState = state.stage == neededState.stage and state.access == neededState.access;
+        if (sameState and neededState.access.isReadOnly()) return;
 
         if (rc.USE_MEM_BARRIERS_ON_BUFFERS) {
             const memBarrier = buffer.createMemoryBarrier(neededState);

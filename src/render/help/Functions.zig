@@ -24,7 +24,7 @@ pub fn getBufferUsageFlags(bufTyp: vhE.BufferType) vk.VkBufferUsageFlags {
         .Indirect => vk.VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | vk.VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
     };
     if (bufTyp != .Staging) bufUsageFlags |= vk.VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-    if (bufTyp != .Index or bufTyp != .Vertex) bufUsageFlags |= vk.VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+    if (bufTyp != .Index and bufTyp != .Vertex) bufUsageFlags |= vk.VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
     return bufUsageFlags;
 }
 

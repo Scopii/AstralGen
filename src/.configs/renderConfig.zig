@@ -12,7 +12,7 @@ pub const ENTITY_MAX = 512;
 
 // Vulkan Validation Layers
 pub const VALIDATION = true;
-pub const GPU_VALIDATION = false;
+pub const GPU_VALIDATION = true;
 pub const BEST_PRACTICES = false;
 pub const ROBUST_VALIDATION = false;
 
@@ -48,7 +48,7 @@ pub const PASS_MAX = 128;
 pub const MAX_PASS_ATTRIBUTES = 80;
 pub const PASS_EXTRACTION_DEBUG = false;
 
-pub const FRAME_GRAPH_DEBUG = false;
+pub const FRAME_GRAPH_DEBUG = true;
 pub const FRAME_GRAPH_TIMERS = false;
 pub const FRAME_GRAPH_SORT_DEBUG = false;
 
@@ -102,5 +102,5 @@ pub const TRANSIENT_COLOR_TEX = TexDesc.makeTransient(.Gpu, .Color16, 16, 9, 1);
 pub const TRANSIENT_ATT_TEX = TexDesc.makeTransient(.Gpu, .Color16, 16, 9, 1);
 pub const TRANSIENT_DEPTH_TEX = TexDesc.makeTransient(.Gpu, .Depth32, 16, 9, 1);
 
-pub const PERSISTENT_COLOR_TEX = TexDesc.makePersistent(.Gpu, .Color16, 256, 256, 1, .{ .storage = true });
+pub const PERSISTENT_COLOR_TEX = TexDesc.makePersistent(.Gpu, .Color16, 256, 256, 1, .{ .storage = true, .sampled = true });
 pub const IMGUI_FONT_TEX = TexDesc.makePersistent(.Gpu, .Color8, 1, 1, 1, .{ .colorAtt = true, .sampled = true });

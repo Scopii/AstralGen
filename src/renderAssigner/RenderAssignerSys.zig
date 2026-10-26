@@ -113,7 +113,7 @@ pub const RenderAssignerSys = struct {
             var candidateIndex: ?u16 = null;
 
             for (self.unusedTransientTexes.constSlice(), 0..) |transientTex, i| {
-                if (texDescComptabile(&transientTex.texDesc, &texDesc)) {
+                if (texDescCompatibale(&transientTex.texDesc, &texDesc)) {
                     candidateIndex = @intCast(i);
                     break;
                 }
@@ -476,7 +476,7 @@ fn bufDescEqual(bufDesc1: *const BufDesc, bufDesc2: *const BufDesc) bool {
 //     return std.meta.eql(texDesc1.*, texDesc2.*);
 // }
 
-fn texDescComptabile(texDesc1: *const TexDesc, texDesc2: *const TexDesc) bool {
+fn texDescCompatibale(texDesc1: *const TexDesc, texDesc2: *const TexDesc) bool {
     const compatibleShare = texDesc1.share == texDesc2.share;
     const compatibleMem = texDesc1.mem == texDesc2.mem;
     const compatibleTyp = texDesc1.typ == texDesc2.typ;
@@ -485,15 +485,28 @@ fn texDescComptabile(texDesc1: *const TexDesc, texDesc2: *const TexDesc) bool {
     const compatibleDepth = texDesc1.depth == texDesc2.depth;
     const compatibleUpdate = texDesc1.update == texDesc2.update;
     const compatibleResize = texDesc1.resize == .Block and texDesc2.resize == .Block;
-    const compatibleDescriptor = texDesc1.descriptors == texDesc2.descriptors or texDesc2.descriptors == .StorageSampled;
 
-    const compatibleUsage = rc.FRAME_GRAPH_AGGRESSIVE_TEXTURE_SHARE or
-        (texDesc1.texUse.colorAtt == texDesc2.texUse.colorAtt and
-            texDesc1.texUse.depthAtt == texDesc2.texUse.depthAtt and
-            texDesc1.texUse.storage == texDesc2.texUse.storage and
-            texDesc1.texUse.sampled == texDesc2.texUse.sampled and
-            texDesc1.texUse.transferSrc == texDesc2.texUse.transferSrc and
-            texDesc1.texUse.transferDst == texDesc2.texUse.transferDst);
+    const compatibleDescriptor = texDesc1.descriptors == texDesc2.descriptors or
+        texDesc1.descriptors == .StorageSampled or
+        texDesc2.descriptors == .None; // Needing no descriptor fits any pooled texture
+
+    const usageEqual = // non aggressive share with no extra flags
+        texDesc1.texUse.colorAtt == texDesc2.texUse.colorAtt and
+        texDesc1.texUse.depthAtt == texDesc2.texUse.depthAtt and
+        texDesc1.texUse.storage == texDesc2.texUse.storage and
+        texDesc1.texUse.sampled == texDesc2.texUse.sampled and
+        texDesc1.texUse.transferSrc == texDesc2.texUse.transferSrc and
+        texDesc1.texUse.transferDst == texDesc2.texUse.transferDst;
+
+    const usageCovers = // pooled texture has every usage the needed one has
+        (!texDesc2.texUse.colorAtt or texDesc1.texUse.colorAtt) and
+        (!texDesc2.texUse.depthAtt or texDesc1.texUse.depthAtt) and
+        (!texDesc2.texUse.storage or texDesc1.texUse.storage) and
+        (!texDesc2.texUse.sampled or texDesc1.texUse.sampled) and
+        (!texDesc2.texUse.transferSrc or texDesc1.texUse.transferSrc) and
+        (!texDesc2.texUse.transferDst or texDesc1.texUse.transferDst);
+
+    const compatibleUsage = if (rc.FRAME_GRAPH_AGGRESSIVE_TEXTURE_SHARE) usageCovers else usageEqual;
 
     return compatibleShare and
         compatibleMem and

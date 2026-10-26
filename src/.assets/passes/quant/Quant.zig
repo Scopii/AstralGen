@@ -142,8 +142,8 @@ pub fn QuantTemplate(
             p.PassAttrib.depth(def.depthAtt, .EarlyAndLateFragTest, .DepthStencilReadWrite, .{ .depthStencil = .{ .depth = 0.0, .stencil = 0 } }),
             //
             p.PassAttrib.buf(def.indirectBuf, .DrawIndirect, .IndirectRead, null),
-            p.PassAttrib.buf(def.viewCam, .Fragment, .UniformRead, 0),
-            p.PassAttrib.buf(def.renderCam, .Fragment, .UniformRead, 1),
+            p.PassAttrib.buf(def.viewCam, .Mesh, .UniformRead, 0),
+            p.PassAttrib.buf(def.renderCam, .Mesh, .UniformRead, 1),
             //
             p.PassAttrib.state(.{ .depthTest = .True }),
             p.PassAttrib.state(.{ .depthWrite = .True }),
