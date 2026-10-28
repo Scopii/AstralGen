@@ -110,14 +110,24 @@ pub const RenderAssignerSys = struct {
         // Texture Pooling
         for (share.sharedTextures.constSlice()) |sharedTexLifetime| {
             const texDesc = sharedTexLifetime.texDesc;
-            var candidateIndex: ?u16 = null;
+
+            var exactMatch: ?u16 = null;
+            var compatibleMatch: ?u16 = null;
 
             for (self.unusedTransientTexes.constSlice(), 0..) |transientTex, i| {
-                if (texDescCompatibale(&transientTex.texDesc, &texDesc)) {
-                    candidateIndex = @intCast(i);
+                // Try searching exact match first
+                if (std.meta.eql(transientTex.texDesc, texDesc) == true) {
+                    exactMatch = @intCast(i);
                     break;
                 }
+                // Try searching superset
+                if (texDescCompatibale(&transientTex.texDesc, &texDesc)) {
+                    compatibleMatch = @intCast(i);
+                }
             }
+
+            const candidateIndex = exactMatch orelse compatibleMatch orelse null;
+
             if (candidateIndex) |index| {
                 var candidate = self.unusedTransientTexes.swapRemoveReturn(index);
                 candidate.unusedCounter = 0;
