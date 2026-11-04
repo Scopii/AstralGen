@@ -9,7 +9,6 @@ pub const Buffer = struct {
     allocation: vk.VmaAllocation,
     gpuAddress: u64,
     size: vk.VkDeviceSize,
-    state: BufferState = .{},
     mappedPtr: ?*anyopaque,
 
     pub const BufferState = struct {
@@ -17,11 +16,11 @@ pub const Buffer = struct {
         access: vhE.PipeAccess = .None,
     };
 
-    pub fn createBufferBarrier(self: *Buffer, newState: BufferState) vk.VkBufferMemoryBarrier2 {
+    pub fn makeBarrier(self: *const Buffer, oldState: BufferState, newState: BufferState) vk.VkBufferMemoryBarrier2 {
         const barrier = vk.VkBufferMemoryBarrier2{
             .sType = vk.VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2,
-            .srcStageMask = @intFromEnum(self.state.stage),
-            .srcAccessMask = @intFromEnum(self.state.access),
+            .srcStageMask = @intFromEnum(oldState.stage),
+            .srcAccessMask = @intFromEnum(oldState.access),
             .dstStageMask = @intFromEnum(newState.stage),
             .dstAccessMask = @intFromEnum(newState.access),
             .srcQueueFamilyIndex = vk.VK_QUEUE_FAMILY_IGNORED,
@@ -30,19 +29,17 @@ pub const Buffer = struct {
             .offset = 0,
             .size = vk.VK_WHOLE_SIZE, // whole Buffer
         };
-        self.state = newState;
         return barrier;
     }
 
-    pub fn createMemoryBarrier(self: *Buffer, newState: BufferState) vk.VkMemoryBarrier2 {
+    pub fn makeMemBarrier(_: *const Buffer, oldState: BufferState, newState: BufferState) vk.VkMemoryBarrier2 {
         const barrier = vk.VkMemoryBarrier2{
             .sType = vk.VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
-            .srcStageMask = @intFromEnum(self.state.stage),
-            .srcAccessMask = @intFromEnum(self.state.access),
+            .srcStageMask = @intFromEnum(oldState.stage),
+            .srcAccessMask = @intFromEnum(oldState.access),
             .dstStageMask = @intFromEnum(newState.stage),
             .dstAccessMask = @intFromEnum(newState.access),
         };
-        self.state = newState;
         return barrier;
     }
 };

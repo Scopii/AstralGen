@@ -8,7 +8,6 @@ pub const Texture = struct {
     img: vk.VkImage,
     view: vk.VkImageView,
     allocation: vk.VmaAllocation,
-    state: TextureState = .{},
     extent: vk.VkExtent3D,
     descIndex: ?u31 = null,
     sampledDescIndex: ?u31 = null,
@@ -45,14 +44,14 @@ pub const Texture = struct {
         };
     }
 
-    pub fn createImageBarrier(self: *Texture, newState: TextureState, ignoreOld: bool) vk.VkImageMemoryBarrier2 {
+    pub fn makeImageBarrier(self: *const Texture, oldState: TextureState, newState: TextureState, ignoreOld: bool) vk.VkImageMemoryBarrier2 {
         const subRange = vhF.createSubresourceRange(self.typ.getImageAspectFlags(), 0, 1, 0, 1);
 
         // const srcStage = if (ignoreOld == true) .None else self.state.stage;
         // const srcAccess = if (ignoreOld == true) .None else self.state.access;
-        const srcStage = self.state.stage; // CHANGED: always wait for the previous user of this memory
-        const srcAccess = self.state.access; // CHANGED: always flush its writes
-        const srcLayout = if (ignoreOld == true) .Undefined else self.state.layout;
+        const srcStage = oldState.stage; // CHANGED: always wait for the previous user of this memory
+        const srcAccess = oldState.access; // CHANGED: always flush its writes
+        const srcLayout = if (ignoreOld == true) .Undefined else oldState.layout;
 
         const barrier = vk.VkImageMemoryBarrier2{
             .sType = vk.VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
@@ -67,19 +66,17 @@ pub const Texture = struct {
             .image = self.img,
             .subresourceRange = subRange,
         };
-        self.state = newState;
         return barrier;
     }
 
-    pub fn createMemoryBarrier(self: *Texture, newState: TextureState) vk.VkMemoryBarrier2 {
+    pub fn makeMemoryBarrier(_: *const Texture, oldState: TextureState, newState: TextureState) vk.VkMemoryBarrier2 {
         const barrier = vk.VkMemoryBarrier2{
             .sType = vk.VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
-            .srcStageMask = @intFromEnum(self.state.stage),
-            .srcAccessMask = @intFromEnum(self.state.access),
+            .srcStageMask = @intFromEnum(oldState.stage),
+            .srcAccessMask = @intFromEnum(oldState.access),
             .dstStageMask = @intFromEnum(newState.stage),
             .dstAccessMask = @intFromEnum(newState.access),
         };
-        self.state = newState;
         return barrier;
     }
 };

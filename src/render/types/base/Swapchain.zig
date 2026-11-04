@@ -79,7 +79,6 @@ pub const Swapchain = struct {
                 .view = view,
                 .allocation = undefined, // MANAGED BY OS!
                 .extent = .{ .width = realExtent.width, .height = realExtent.height, .depth = 1 },
-                .state = .{ .layout = .Undefined, .stage = .ColorAtt, .access = .None },
             };
         }
 

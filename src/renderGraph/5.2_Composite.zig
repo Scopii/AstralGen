@@ -113,7 +113,7 @@ pub const CompositeSys = struct {
         return CompositeNode{
             .name = viewport.name,
             .pass = pass,
-            .srcTexUnion = .{ .texPassId = outputTexPassId },
+            .srcTexPassId = outputTexPassId,
             .windowId = windowId,
             .viewWidth = viewport.calcViewWidth(windowWidth),
             .viewHeight = viewport.calcViewHeight(windowHeight),

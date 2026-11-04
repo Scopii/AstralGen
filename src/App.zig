@@ -98,9 +98,9 @@ pub const App = struct {
 
     pub fn deinit(self: *App) void {
         UiSys.deinit(&self.data.ui);
-        RenderAssignerSys.deleteBufferManuel(&self.data.renderAssigner, &self.data.renderRegistry, "ImguiIB", &self.rendererQueue) catch {};
-        RenderAssignerSys.deleteBufferManuel(&self.data.renderAssigner, &self.data.renderRegistry, "ImguiVB", &self.rendererQueue) catch {};
-        RenderAssignerSys.deleteTextureManuel(&self.data.renderAssigner, &self.data.renderRegistry, "ImguiFontTex", &self.rendererQueue) catch {};
+        self.assignerQueue.append(.{ .deleteManualBuffer = "ImguiIB" });
+        self.assignerQueue.append(.{ .deleteManualBuffer = "ImguiVB" });
+        self.assignerQueue.append(.{ .deleteManualTexture = "ImguiFontTex" });
         RenderRegistrySys.deinit(&self.data.renderRegistry);
         self.renderer.deinit();
         ShaderSys.deinit(&self.data.shader, self.memoryMan.getAllocator());
@@ -243,16 +243,17 @@ pub const App = struct {
         try RenderGraphSys.activateManuelPass(&self.data.renderGraph, &self.data.renderRegistry, "QuantComp");
 
         try ShaderSys.update(&self.data.shader, &self.shaderQueue, &self.rendererQueue, self.memoryMan);
-        try RenderAssignerSys.createBufferManuel(&self.data.renderAssigner, &self.data.renderRegistry, "ImguiIB", &self.rendererQueue, self.memoryMan);
-        try RenderAssignerSys.createBufferManuel(&self.data.renderAssigner, &self.data.renderRegistry, "ImguiVB", &self.rendererQueue, self.memoryMan);
-        try RenderAssignerSys.createTextureManuel(&self.data.renderAssigner, &self.data.renderRegistry, "ImguiFontTex", &self.rendererQueue, self.memoryMan);
 
-        try RenderAssignerSys.createTextureManuel(&self.data.renderAssigner, &self.data.renderRegistry, "TestTileTex", &self.rendererQueue, self.memoryMan);
+        self.assignerQueue.append(.{ .createManualBuffer = "ImguiIB" });
+        self.assignerQueue.append(.{ .createManualBuffer = "ImguiVB" });
+        self.assignerQueue.append(.{ .createManualTexture = "ImguiFontTex" });
 
-        try RenderAssignerSys.createBufferManuel(&self.data.renderAssigner, &self.data.renderRegistry, "ReadbackSB", &self.rendererQueue, self.memoryMan);
-        try RenderAssignerSys.createBufferManuel(&self.data.renderAssigner, &self.data.renderRegistry, "MainCamUB", &self.rendererQueue, self.memoryMan);
-        try RenderAssignerSys.createBufferManuel(&self.data.renderAssigner, &self.data.renderRegistry, "DebugCamUB", &self.rendererQueue, self.memoryMan);
-        try RenderAssignerSys.createBufferManuel(&self.data.renderAssigner, &self.data.renderRegistry, "EntitySB", &self.rendererQueue, self.memoryMan);
+        self.assignerQueue.append(.{ .createManualTexture = "TestTileTex" });
+
+        self.assignerQueue.append(.{ .createManualBuffer = "ReadbackSB" });
+        self.assignerQueue.append(.{ .createManualBuffer = "MainCamUB" });
+        self.assignerQueue.append(.{ .createManualBuffer = "DebugCamUB" });
+        self.assignerQueue.append(.{ .createManualBuffer = "EntitySB" });
 
         // PROCEDURAL TEXTURE GENERATION
         const AddTexPtr = @FieldType(RenderAssignerQueue.RenderAssignerEvent, "updateTexture");
@@ -270,7 +271,7 @@ pub const App = struct {
             }
         }
         const addTextureDataPtr = try arena.create(AddTex);
-        addTextureDataPtr.* = .{ .texUnion = .{ .texName = "TestTileTex" }, .data = std.mem.sliceAsBytes(pixels), .newExtent = null };
+        addTextureDataPtr.* = .{ .texName = "TestTileTex", .data = std.mem.sliceAsBytes(pixels), .newExtent = null };
         self.assignerQueue.append(.{ .updateTexture = addTextureDataPtr });
         // TEXTURE GEN END
 
@@ -338,9 +339,7 @@ pub const App = struct {
                 try RenderGraphSys.build(&self.data.renderGraph, &self.data.renderRegistry, &self.data.viewport, &self.data.window);
                 // std.debug.print("Frame Graph Build: {d:.3} ms\n", .{@as(f64, @floatFromInt(std.time.microTimestamp() - start)) / 1_000.0});
 
-                try RenderAssignerSys.assign(&self.data.renderAssigner, &self.data.renderGraph, &self.data.renderRegistry, &self.rendererQueue, self.memoryMan);
-                try RenderAssignerSys.processQueue(&self.data.renderAssigner, &self.data.renderRegistry, &self.assignerQueue, &self.rendererQueue, self.memoryMan);
-                try RenderAssignerSys.fillUiHardwareIds(&self.data.renderAssigner, &self.data.renderRegistry, &self.data.ui);
+                try RenderAssignerSys.assign(&self.data.renderAssigner, &self.data.renderGraph, &self.data.renderRegistry, &self.assignerQueue, &self.rendererQueue, self.memoryMan);
 
                 // const start2 = std.time.microTimestamp();
 
@@ -354,17 +353,18 @@ pub const App = struct {
                     frameData.runTime,
                     frameData.deltaTime,
                 );
-                
+
                 // std.debug.print("Render Compiler: {d:.3} ms\n", .{@as(f64, @floatFromInt(std.time.microTimestamp() - start2)) / 1_000.0});
 
                 const sortedRenderNodes = self.data.renderCompiler.sortedNodes.constSlice();
+                const renderedSwapchains = self.data.renderCompiler.renderedSwapchains.constSlice();
                 const pushData = self.data.renderCompiler.pushData.constSlice();
 
                 try self.renderer.update(&self.rendererQueue);
 
                 if (rc.EARLY_GPU_WAIT == false) try renderer.waitForGpu();
 
-                renderer.draw(sortedRenderNodes, pushData, self.data.window.activeWindows.constSlice(), &self.rendererOutQueue) catch |err| {
+                renderer.draw(sortedRenderNodes, pushData, renderedSwapchains, &self.rendererOutQueue) catch |err| {
                     std.log.err("Error in renderer.submitDraw(): {}", .{err});
                     break;
                 };

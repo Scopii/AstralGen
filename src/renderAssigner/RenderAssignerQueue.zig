@@ -1,7 +1,7 @@
 const TexInf = @import("../render/types/res/TextureMeta.zig").TextureMeta.TexInf;
 const BufInf = @import("../render/types/res/BufferMeta.zig").BufferMeta.BufInf;
-const TexUnion = @import("../render/types/pass/RenderNode.zig").TexUnion;
-const BufUnion = @import("../render/types/pass/RenderNode.zig").BufUnion;
+// const TexUnion = @import("../render/types/pass/RenderNode.zig").TexUnion;
+// const BufUnion = @import("../render/types/pass/RenderNode.zig").BufUnion;
 const FixedList = @import("../.structures/FixedList.zig").FixedList;
 const TexPassId = @import("../.configs/idConfig.zig").TexPassId;
 const BufPassId = @import("../.configs/idConfig.zig").BufPassId;
@@ -24,13 +24,17 @@ pub const RenderAssignerQueue = struct {
     }
 
     pub const RenderAssignerEvent = union(enum) {
+        createManualBuffer: []const u8, // Should Be String
+        deleteManualBuffer: []const u8, // Should Be String
+        createManualTexture: []const u8, // Should Be String
+        deleteManualTexture: []const u8, // Should Be String
         updateBuffer: *const PassBufferUpdate,
         updateBufferSegment: *const PassBufferUpdateSegment,
         updateTexture: *const PassTextureUpdate,
 
-        pub const PassBufferUpdate = struct { bufUnion: BufUnion, data: []const u8 };
-        pub const PassBufferUpdateSegment = struct { bufUnion: BufUnion, data: []const u8, elementOffset: u32 };
-        pub const PassTextureUpdate = struct { texUnion: TexUnion, data: []const u8, newExtent: ?vk.VkExtent3D };
+        pub const PassBufferUpdate = struct { bufName: []const u8, data: []const u8 };
+        pub const PassBufferUpdateSegment = struct { bufName: []const u8, data: []const u8, elementOffset: u32 };
+        pub const PassTextureUpdate = struct { texName: []const u8, data: []const u8, newExtent: ?vk.VkExtent3D };
 
         // addTexture: *const struct { texInf: TexInf, data: ?[]const u8 }, ??
         // addBuffer: *const struct { bufInf: BufInf, data: ?[]const u8 }, ??

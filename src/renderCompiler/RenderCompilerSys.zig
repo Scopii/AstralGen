@@ -1,16 +1,7 @@
-const RenderAssignerData = @import("../renderAssigner/RenderAssignerData.zig").RenderAssignerData;
-const RenderRegistryData = @import("../renderRegistry/RenderRegistryData.zig").RenderRegistryData;
-const RenderGraphData = @import("../renderGraph/RenderGraphData.zig").RenderGraphData;
-const RenderCompilerData = @import("RenderCompilerData.zig").RenderCompilerData;
-const sc = @import("../.configs/shaderConfig.zig");
-const rc = @import("../.configs/renderConfig.zig");
-const std = @import("std");
-
-const vk = @import("../.modules/vk.zig").c;
-const vhE = @import("../render/help/Enums.zig");
-
 const TaskOrMeshIndirectExec = @import("../render/types/pass/PassDefinition.zig").TaskOrMeshIndirectExec;
 const ComputeIndirectExec = @import("../render/types/pass/PassDefinition.zig").ComputeIndirectExec;
+const RenderAssignerData = @import("../renderAssigner/RenderAssignerData.zig").RenderAssignerData;
+const RenderRegistryData = @import("../renderRegistry/RenderRegistryData.zig").RenderRegistryData;
 const VertexIndexedExec = @import("../render/types/pass/PassDefinition.zig").VertexIndexedExec;
 const VertexBufferFill = @import("../render/types/pass/VertexBufferUse.zig").VertexBufferFill;
 const VertexBufferUse = @import("../render/types/pass/VertexBufferUse.zig").VertexBufferUse;
@@ -20,8 +11,13 @@ const RenderStateUnion = @import("../render/types/pass/RenderState.zig").RenderS
 const TaskOrMeshExec = @import("../render/types/pass/PassDefinition.zig").TaskOrMeshExec;
 const IndexBufferUse = @import("../render/types/pass/IndexBufferUse.zig").IndexBufferUse;
 const AttachmentFill = @import("../render/types/pass/AttachmentUse.zig").AttachmentFill;
+const RenderGraphData = @import("../renderGraph/RenderGraphData.zig").RenderGraphData;
+const TextureState = @import("../render/types/res/Texture.zig").Texture.TextureState;
+const CompositeFill = @import("../render/types/pass/RenderNode.zig").CompositeFill;
 const CompositeNode = @import("../render/types/pass/RenderNode.zig").CompositeNode;
+const BufferState = @import("../render/types/res/Buffer.zig").Buffer.BufferState;
 const VertexExec = @import("../render/types/pass/PassDefinition.zig").VertexExec;
+const RenderCompilerData = @import("RenderCompilerData.zig").RenderCompilerData;
 const ClearColor = @import("../render/types/pass/AttachmentUse.zig").ClearColor;
 const ClearDepth = @import("../render/types/pass/AttachmentUse.zig").ClearDepth;
 const RenderState = @import("../render/types/pass/RenderState.zig").RenderState;
@@ -35,8 +31,13 @@ const ShaderId = @import("../.configs/idConfig.zig").ShaderId;
 const PassId = @import("../.configs/idConfig.zig").PassId;
 const BufId = @import("../.configs/idConfig.zig").BufId;
 const TexId = @import("../.configs/idConfig.zig").TexId;
+const sc = @import("../.configs/shaderConfig.zig");
+const rc = @import("../.configs/renderConfig.zig");
 const UiData = @import("../ui/UiData.zig").UiData;
 const vhT = @import("../render/help/Types.zig");
+const vhE = @import("../render/help/Enums.zig");
+const vk = @import("../.modules/vk.zig").c;
+const std = @import("std");
 
 pub const RenderCompilerSys = struct {
     pub fn compileIR(
@@ -49,38 +50,28 @@ pub const RenderCompilerSys = struct {
         runTime: f32,
         deltaTime: f32,
     ) !void {
+        self.swapchainStates.clear();
+        self.renderedSwapchains.clear();
         self.sortedNodes.clear();
         self.pushData.clear();
         self.usedQueries = 0;
 
+        updateResourceStates(self, assigner);
+
+        recordTransfers(self);
+
         for (renderGraph.sorter.sortedRenderIR.constSlice()) |IR| {
             switch (IR) {
                 // .uiIR => |uiIR| {},
-                .compositeIR => |compositeIR| {
-                    var compositeCopy = compositeIR;
-
-                    switch (compositeCopy.srcTexUnion) {
-                        .texName => |name| {
-                            const texPassId = try registry.getTexturePassId(name);
-                            const hardwareTexId = assigner.texAssigns.getByKey(texPassId);
-                            compositeCopy.srcTexUnion = .{ .texId = hardwareTexId };
-                        },
-                        .texPassId => |texPassId| {
-                            const hardwareTexId = assigner.texAssigns.getByKey(texPassId);
-                            compositeCopy.srcTexUnion = .{ .texId = hardwareTexId };
-                        },
-                        .texId => {},
-                    }
-                    try fillCompositePassHardwareIdCmds(self, assigner, registry, compositeCopy);
-                },
-                .passIR => |passIR| {
-                    try fillPassHardwareIdCmds(self, assigner, registry, renderGraph, passIR, runTime, deltaTime);
-                },
+                .compositeIR => |*compositeIR| try fillCompositePassHardwareIdCmds(self, assigner, registry, compositeIR),
+                .passIR => |passIR| try fillPassHardwareIdCmds(self, assigner, registry, renderGraph, passIR, runTime, deltaTime),
             }
         }
 
         // Build UI Passes
         try fillUiPassHardwareIdCmds(self, assigner, registry, uiData, windowData);
+
+        try present(self);
 
         // Debug Prints
         if (rc.RENDER_COMPILER_DEBUG) {
@@ -102,18 +93,57 @@ pub const RenderCompilerSys = struct {
         }
     }
 
-    fn fillCompositePassHardwareIdCmds(self: *RenderCompilerData, _: *const RenderAssignerData, _: *const RenderRegistryData, composite: CompositeNode) !void {
-        if (composite.srcTexUnion != .texId) return error.CompositSrcTexIdIsNotHardwareId;
+    fn updateResourceStates(self: *RenderCompilerData, assigner: *const RenderAssignerData) void {
+        for (assigner.requests.constSlice()) |request| {
+            // std.debug.print("{}\n", .{request});
+            switch (request) {
+                .createBuf => |bufId| self.bufStates.upsert(bufId, .{}),
+                .createTex => |texId| self.texStates.upsert(texId, .{}),
+                .destroyBuf => |bufId| self.bufStates.remove(bufId),
+                .destroyTex => |texId| self.texStates.remove(texId),
+                .updateBuf => |bufId| bufBarrier(self, bufId, .Transfer, .TransferWrite),
+                .updateTex => |texId| texBarrier(self, texId, .Transfer, .TransferWrite, .TransferDst, false),
+            }
+        }
+        bakeBarriers(self);
+    }
+
+    fn present(self: *RenderCompilerData) !void {
+        const timerId = try startTimer(self, "Presentation", .Other);
+
+        for (0..self.swapchainStates.getLength()) |i| {
+            const windowId = self.swapchainStates.getKeyByIndex(@intCast(i));
+            try self.renderedSwapchains.append(windowId);
+            _ = swapchainTargetBarrier(self, windowId, .BotOfPipe, .None, .PresentSrc);
+        }
+        bakeBarriers(self);
+        endTimer(self, timerId);
+    }
+
+    fn fillCompositePassHardwareIdCmds(self: *RenderCompilerData, assigner: *const RenderAssignerData, _: *const RenderRegistryData, compositeIR: *const CompositeNode) !void {
+        const hardwareTexId = assigner.texAssigns.getByKey(compositeIR.srcTexPassId);
+
+        const composite = CompositeFill{
+            .name = compositeIR.name,
+            .pass = compositeIR.pass,
+            .windowId = compositeIR.windowId,
+            .srcTexId = hardwareTexId,
+            .viewWidth = compositeIR.viewWidth,
+            .viewHeight = compositeIR.viewHeight,
+            .viewOffsetX = compositeIR.viewOffsetX,
+            .viewOffsetY = compositeIR.viewOffsetY,
+            .opacity = compositeIR.opacity,
+            .stretch = compositeIR.stretch,
+        };
 
         try compositePrint(self, composite.name);
         const timerId = try startTimer(self, composite.name, .Composite);
 
-        setColorAttSwapchain(self, composite.windowId);
-        setOutputExtentSwapchain(self, composite.windowId);
-
         // Barriers
-        swapchainTargetBarrier(self, composite.windowId, .ColorAtt, .ColorAttReadWrite, .Attachment);
-        texBarrier(self, composite.srcTexUnion.texId, .Fragment, .SampledRead, .General, false);
+        const swapchainFirstUse = swapchainTargetBarrier(self, composite.windowId, .ColorAtt, .ColorAttReadWrite, .Attachment);
+        setColorAttSwapchain(self, composite.windowId, swapchainFirstUse);
+        setOutputExtentSwapchain(self, composite.windowId);
+        texBarrier(self, composite.srcTexId, .Fragment, .SampledRead, .General, false);
         bakeBarriers(self);
 
         // Shaders
@@ -133,7 +163,7 @@ pub const RenderCompilerSys = struct {
         // const texPassId = try registry.getTexturePassId(drawTex);
         // const texHardwareId = assigner.texAssigns.getByKey(drawTex.texId);
         const stretch: u32 = if (composite.stretch) 1 else 0;
-        setPushDataTexDesc(self, 0 * @sizeOf(u32), composite.srcTexUnion.texId, .Sampled);
+        setPushDataTexDesc(self, 0 * @sizeOf(u32), composite.srcTexId, .Sampled);
         setPushData(self, @sizeOf(u32), 1 * @sizeOf(u32), std.mem.asBytes(&rc.SAMPLER_LINEAR_CLAMP_INDEX));
         setPushData(self, @sizeOf(u32), 2 * @sizeOf(u32), std.mem.asBytes(&stretch));
         setPushData(self, @sizeOf(u32), 3 * @sizeOf(u32), std.mem.asBytes(&composite.opacity));
@@ -172,11 +202,15 @@ pub const RenderCompilerSys = struct {
         endTimer(self, timerId);
     }
 
-    fn fillUiPassHardwareIdCmds(self: *RenderCompilerData, _: *const RenderAssignerData, _: *const RenderRegistryData, uiData: *const UiData, windowData: *const WindowData) !void {
+    fn fillUiPassHardwareIdCmds(self: *RenderCompilerData, assigner: *const RenderAssignerData, registry: *const RenderRegistryData, uiData: *const UiData, windowData: *const WindowData) !void {
         for (uiData.uiNodes.constSlice()) |uiNode| {
             if (windowData.windows.isKeyUsed(uiNode.windowId.val()) == false) return error.UiRenderCompileCantFindWindowId;
-            if (uiNode.imguiVB != .bufId) return error.UiNodeImguiVBIsNotHardwareId;
-            if (uiNode.imguiIB != .bufId) return error.UiNodeImguiVBIsNotHardwareId;
+
+            const imguiVBPassId = try registry.getBufferPassId(uiNode.imguiVB);
+            const imguiIBPassId = try registry.getBufferPassId(uiNode.imguiIB);
+
+            const imguiVB = assigner.bufAssigns.getByKey(imguiVBPassId);
+            const imguiIB = assigner.bufAssigns.getByKey(imguiIBPassId);
 
             try uiPrint(self, uiNode.name);
 
@@ -184,18 +218,17 @@ pub const RenderCompilerSys = struct {
 
             const uiDrawList = uiData.uiDraws.constSlice()[uiNode.firstDrawIndex..uiNode.lastDrawIndex];
 
-            setColorAttSwapchain(self, uiNode.windowId);
-            setOutputExtentSwapchain(self, uiNode.windowId);
-
             // Barriers:
-            swapchainTargetBarrier(self, uiNode.windowId, .ColorAtt, .ColorAttReadWrite, .Attachment);
-            bufBarrier(self, uiNode.imguiVB.bufId, .VertexInput, .VertexAttributeRead);
-            bufBarrier(self, uiNode.imguiIB.bufId, .VertexInput, .IndexRead);
+            const firstUse = swapchainTargetBarrier(self, uiNode.windowId, .ColorAtt, .ColorAttReadWrite, .Attachment);
+            setColorAttSwapchain(self, uiNode.windowId, firstUse);
+            setOutputExtentSwapchain(self, uiNode.windowId);
+            bufBarrier(self, imguiVB, .VertexInput, .VertexAttributeRead);
+            bufBarrier(self, imguiIB, .VertexInput, .IndexRead);
 
             for (uiDrawList) |uiDraw| {
-                if (uiDraw.drawTex != .texId) return error.UiDrawTexIsNoHardwareId;
-                texBarrier(self, uiDraw.drawTex.texId, .Fragment, .SampledRead, .General, false);
-                break; // CURRENTLY ONLY DOING ONE TEXTURE FOR UI, HAS TO BE FIXED IF MORE TEXTURES ARE USED!!;
+                const texPassId = try registry.getTexturePassId(uiDraw.drawTex);
+                const drawTex = assigner.texAssigns.getByKey(texPassId);
+                texBarrier(self, drawTex, .Fragment, .SampledRead, .General, false);
             }
             bakeBarriers(self);
 
@@ -226,14 +259,14 @@ pub const RenderCompilerSys = struct {
 
             setViewportFromOutput(self);
 
-            setVertexBuf(self, .{ .bufId = uiNode.imguiVB.bufId, .binding = 0, .stride = 20, .inputRate = vk.VK_VERTEX_INPUT_RATE_VERTEX });
+            setVertexBuf(self, .{ .bufId = imguiVB, .binding = 0, .stride = 20, .inputRate = vk.VK_VERTEX_INPUT_RATE_VERTEX });
 
             setVertexAttrib(self, .{ .location = 0, .binding = 0, .format = vk.VK_FORMAT_R32G32_SFLOAT, .offset = 0 });
             setVertexAttrib(self, .{ .location = 1, .binding = 0, .format = vk.VK_FORMAT_R32G32_SFLOAT, .offset = 8 });
             setVertexAttrib(self, .{ .location = 2, .binding = 0, .format = vk.VK_FORMAT_R8G8B8A8_UNORM, .offset = 16 });
             bindVertexInput(self);
 
-            setIndexBuf(self, .{ .bufId = uiNode.imguiIB.bufId, .indexType = vk.VK_INDEX_TYPE_UINT16 });
+            setIndexBuf(self, .{ .bufId = imguiIB, .indexType = vk.VK_INDEX_TYPE_UINT16 });
             bindIndexInput(self);
 
             const window = windowData.windows.getConstPtrByKey(uiNode.windowId.val());
@@ -259,9 +292,9 @@ pub const RenderCompilerSys = struct {
                 setPushData(self, @sizeOf(u32), 2 * @sizeOf(u32), std.mem.asBytes(&translateX));
                 setPushData(self, @sizeOf(u32), 3 * @sizeOf(u32), std.mem.asBytes(&translateY));
 
-                // const texPassId = try registry.getTexturePassId(uiDraw.drawTex);
-                // const texHardwareId = assigner.texAssigns.getByKey(uiDraw.drawTex.texId);
-                setPushDataTexDesc(self, (4 * @sizeOf(u32)), uiDraw.drawTex.texId, .Sampled);
+                const texPassId = try registry.getTexturePassId(uiDraw.drawTex);
+                const drawTex = assigner.texAssigns.getByKey(texPassId);
+                setPushDataTexDesc(self, (4 * @sizeOf(u32)), drawTex, .Sampled);
 
                 bindPushData(self);
                 drawVertexIndexed(self, .{ .indexCount = uiDraw.elemCount, .instanceCount = 1, .firstIndex = uiDraw.idxOffset, .vertexOffset = uiDraw.vtxOffset, .firstInstance = 0 });
@@ -552,17 +585,38 @@ pub const RenderCompilerSys = struct {
     }
 
     // Barrier Commands
+    fn recordTransfers(self: *RenderCompilerData) void {
+        self.sortedNodes.appendAssumeCapacity(.recordTransfers);
+    }
 
     fn bufBarrier(self: *RenderCompilerData, bufId: BufId, stage: vhE.PipeStage, access: vhE.PipeAccess) void {
-        self.sortedNodes.appendAssumeCapacity(.{ .bufBarrier = .{ .bufId = bufId, .stage = stage, .access = access } });
+        const state = self.bufStates.getPtrByKey(bufId);
+        const newState: BufferState = .{ .stage = stage, .access = access };
+        self.sortedNodes.appendAssumeCapacity(.{ .bufBarrier = .{ .bufId = bufId, .oldState = state.*, .newState = newState } });
+        state.* = newState;
     }
 
     fn texBarrier(self: *RenderCompilerData, texId: TexId, stage: vhE.PipeStage, access: vhE.PipeAccess, layout: vhE.ImageLayout, ignoreOld: bool) void {
-        self.sortedNodes.appendAssumeCapacity(.{ .texBarrier = .{ .texId = texId, .stage = stage, .access = access, .layout = layout, .ignoreOld = ignoreOld } });
+        const state = self.texStates.getPtrByKey(texId);
+        const newState: TextureState = .{ .stage = stage, .access = access, .layout = layout };
+        self.sortedNodes.appendAssumeCapacity(.{ .texBarrier = .{ .texId = texId, .oldState = state.*, .newState = newState, .ignoreOld = ignoreOld } });
+        state.* = newState;
     }
 
-    fn swapchainTargetBarrier(self: *RenderCompilerData, windowId: WindowId, stage: vhE.PipeStage, access: vhE.PipeAccess, layout: vhE.ImageLayout) void {
-        self.sortedNodes.appendAssumeCapacity(.{ .swapchainTargetBarrier = .{ .windowId = windowId, .stage = stage, .access = access, .layout = layout } });
+    fn swapchainTargetBarrier(self: *RenderCompilerData, windowId: WindowId, stage: vhE.PipeStage, access: vhE.PipeAccess, layout: vhE.ImageLayout) bool {
+        const newState = TextureState{ .stage = stage, .access = access, .layout = layout };
+
+        if (self.swapchainStates.isKeyUsed(windowId) == false) {
+            const oldState = TextureState{ .layout = .Undefined, .stage = .ColorAtt, .access = .None };
+            self.sortedNodes.appendAssumeCapacity(.{ .swapchainTargetBarrier = .{ .windowId = windowId, .oldState = oldState, .newState = newState, .ignoreOld = true } });
+            self.swapchainStates.insert(windowId, newState);
+            return true;
+        } else {
+            const state = self.swapchainStates.getPtrByKey(windowId);
+            self.sortedNodes.appendAssumeCapacity(.{ .swapchainTargetBarrier = .{ .windowId = windowId, .oldState = state.*, .newState = newState, .ignoreOld = false } });
+            state.* = newState;
+            return false;
+        }
     }
 
     fn bakeBarriers(self: *RenderCompilerData) void {
@@ -679,8 +733,8 @@ pub const RenderCompilerSys = struct {
         self.sortedNodes.appendAssumeCapacity(.bindRenderState);
     }
 
-    fn setColorAttSwapchain(self: *RenderCompilerData, windowId: WindowId) void {
-        self.sortedNodes.appendAssumeCapacity(.{ .setColorAttSwapchain = windowId });
+    fn setColorAttSwapchain(self: *RenderCompilerData, windowId: WindowId, firstUse: bool) void {
+        self.sortedNodes.appendAssumeCapacity(.{ .setColorAttSwapchain = .{ .windowId = windowId, .firstUse = firstUse } });
     }
 
     fn setColorAtt(self: *RenderCompilerData, texId: TexId, clear: ?ClearColor) void {

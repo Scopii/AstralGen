@@ -52,13 +52,13 @@ pub const GraphLifetime = struct {
 };
 
 pub const TransientBuffer = struct {
-    unusedCounter: u8 = 0,
+    inUseCounter: i8,
     hardwareBuf: BufId,
     bufDesc: BufDesc,
 };
 
 pub const TransientTexture = struct {
-    unusedCounter: u8 = 0,
+    inUseCounter: i8,
     hardwareTex: TexId,
     texDesc: TexDesc,
 };
@@ -115,4 +115,13 @@ pub const SharedTexture = struct {
     earliest: u16,
     latest: u16,
     texDesc: TexDesc,
+};
+
+pub const ResRequest = union(enum) {
+    createBuf: BufId,
+    createTex: TexId,
+    destroyBuf: BufId,
+    destroyTex: TexId,
+    updateBuf: BufId,
+    updateTex: TexId,
 };

@@ -2,10 +2,12 @@ const TaskOrMeshIndirectExec = @import("../pass/PassDefinition.zig").TaskOrMeshI
 const VertexIndexedExec = @import("../pass/PassDefinition.zig").VertexIndexedExec;
 const TaskOrMeshExec = @import("../pass/PassDefinition.zig").TaskOrMeshExec;
 const VertexAttribute = @import("VertexAttribute.zig").VertexAttribute;
+const TextureState = @import("../res/Texture.zig").Texture.TextureState;
 const VertexBufferUse = @import("VertexBufferUse.zig").VertexBufferUse;
 const TexPassId = @import("../../../.configs/idConfig.zig").TexPassId;
 const BufPassId = @import("../../../.configs/idConfig.zig").BufPassId;
 const RenderStateUnion = @import("RenderState.zig").RenderStateUnion;
+const BufferState = @import("../res/Buffer.zig").Buffer.BufferState;
 const WindowId = @import("../../../.configs/idConfig.zig").WindowId;
 const ShaderId = @import("../../../.configs/idConfig.zig").ShaderId;
 const VertexExec = @import("../pass/PassDefinition.zig").VertexExec;
@@ -23,7 +25,20 @@ pub const CompositeNode = struct {
     name: []const u8, // Should be String
     pass: PassId,
     windowId: WindowId,
-    srcTexUnion: TexUnion,
+    srcTexPassId: TexPassId,
+    viewWidth: u32,
+    viewHeight: u32,
+    viewOffsetX: i32,
+    viewOffsetY: i32,
+    opacity: f32,
+    stretch: bool,
+};
+
+pub const CompositeFill = struct {
+    name: []const u8, // Should be String
+    pass: PassId,
+    windowId: WindowId,
+    srcTexId: TexId,
     viewWidth: u32,
     viewHeight: u32,
     viewOffsetX: i32,
@@ -37,13 +52,34 @@ pub const UiNode = struct {
     windowId: WindowId,
     displayPos: [2]f32,
     displaySize: [2]f32,
-    imguiVB: BufUnion,
-    imguiIB: BufUnion,
+    imguiVB: []const u8,
+    imguiIB: []const u8,
+
     firstDrawIndex: u32,
     lastDrawIndex: u32,
 
     pub const UiDraw = struct {
-        drawTex: TexUnion,
+        drawTex: []const u8,
+        clipRect: [4]f32,
+        vtxOffset: i32,
+        idxOffset: u32,
+        elemCount: u32,
+    };
+};
+
+pub const UiNodeFill = struct {
+    name: []const u8, // Should be String
+    windowId: WindowId,
+    displayPos: [2]f32,
+    displaySize: [2]f32,
+    imguiVB: BufId,
+    imguiIB: BufId,
+
+    firstDrawIndex: u32,
+    lastDrawIndex: u32,
+
+    pub const UiDrawFill = struct {
+        drawTex: TexId,
         clipRect: [4]f32,
         vtxOffset: i32,
         idxOffset: u32,
@@ -56,31 +92,21 @@ pub const RenderNodeIR = union(enum) {
     passIR: PassId,
 };
 
-pub const TexUnion = union(enum) {
-    texName: []const u8, // Should be String?
-    texPassId: TexPassId,
-    texId: TexId,
-};
-
-pub const BufUnion = union(enum) {
-    bufName: []const u8, // Should be String?
-    bufPassId: BufPassId,
-    bufId: BufId,
-};
-
 pub const RenderNode = union(enum) {
     passPrint: String(30, "NO_PASS_NAME"),
     compositePrint: String(30, "NO_COMPOSITE_NAME"),
     uiPrint: String(30, "NO_UI_NAME"),
+
+    recordTransfers: void,
 
     // Graph Commands
     clearBuffer: BufId,
     clearTexture: TexId,
 
     // Barrier Commands
-    bufBarrier: struct { bufId: BufId, stage: vhE.PipeStage, access: vhE.PipeAccess },
-    texBarrier: struct { texId: TexId, stage: vhE.PipeStage, access: vhE.PipeAccess, layout: vhE.ImageLayout, ignoreOld: bool },
-    swapchainTargetBarrier: struct { windowId: WindowId, stage: vhE.PipeStage, access: vhE.PipeAccess, layout: vhE.ImageLayout },
+    bufBarrier: struct { bufId: BufId, oldState: BufferState, newState: BufferState },
+    texBarrier: struct { texId: TexId, oldState: TextureState, newState: TextureState, ignoreOld: bool },
+    swapchainTargetBarrier: struct { windowId: WindowId, oldState: TextureState, newState: TextureState, ignoreOld: bool },
     bakeBarriers: void,
 
     // Profiling Commands
@@ -119,7 +145,7 @@ pub const RenderNode = union(enum) {
     setRenderStateUnion: RenderStateUnion,
     bindRenderState: void,
 
-    setColorAttSwapchain: WindowId,
+    setColorAttSwapchain: struct { windowId: WindowId, firstUse: bool },
     setColorAtt: struct { texId: TexId, clear: ?ClearColor },
     setDepthAtt: struct { texId: TexId, clear: ?ClearDepth },
     setStencilAtt: struct { texId: TexId, clear: ?ClearDepth },

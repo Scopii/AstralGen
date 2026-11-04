@@ -23,6 +23,8 @@ const CmdManager = @import("CmdMan.zig").CmdMan;
 const Context = @import("Context.zig").Context;
 const vk = @import("../../.modules/vk.zig").c;
 const vhT = @import("../help/Types.zig");
+const TextureState = Texture.TextureState;
+const BufferState = Buffer.BufferState;
 const Allocator = std.mem.Allocator;
 const std = @import("std");
 
@@ -101,28 +103,19 @@ pub const CmdRecorder = struct {
         cmd.bindSamplerHeap(resMan.descMan.samplerHeap.gpuAddress, resMan.descMan.samplerHeap.size, resMan.descMan.samplerReservedSize);
         cmd.endTimer(.BotOfPipe, timeId);
 
-        try self.recordTransfers(cmd, resMan);
         try self.recordNodes(cmd, renderNodes, resMan, shaderMan, swapMan, pushData);
-        try self.recordPresentation(cmd, swapMan);
 
         try cmd.end();
         return cmd;
     }
 
-    fn recordTransfers(self: *CmdRecorder, cmd: *Cmd, resMan: *ResourceMan) !void {
+    fn recordTransfers(_: *CmdRecorder, cmd: *Cmd, resMan: *ResourceMan) !void {
         var resUpdater = &resMan.updater;
         const stagingBuf = resUpdater.getStagingBuffer(cmd.flightId);
 
         const fullTransfers = resUpdater.getFullUpdates(cmd.flightId);
         if (fullTransfers.len != 0) {
             const timeId = cmd.startTimer(.AllCmds, "Full Transfers", .Other);
-
-            for (fullTransfers) |transfer| {
-                const buffer = try resMan.get(transfer.dstResId, cmd.flightId);
-                try self.checkBufferState(buffer, .{ .stage = .Transfer, .access = .TransferWrite });
-            }
-
-            self.bakeBarriers(cmd, "Full Transfers Prep");
 
             for (fullTransfers) |transfer| {
                 const buffer = try resMan.get(transfer.dstResId, cmd.flightId);
@@ -134,13 +127,6 @@ pub const CmdRecorder = struct {
         const partialTransfers = resUpdater.getSegmentUpdates(cmd.flightId);
         if (partialTransfers.len != 0) {
             const timeId = cmd.startTimer(.AllCmds, "Partial Transfers", .Other);
-
-            for (partialTransfers) |transfer| {
-                const buffer = try resMan.get(transfer.dstResId, cmd.flightId);
-                try self.checkBufferState(buffer, .{ .stage = .Transfer, .access = .TransferWrite });
-            }
-
-            self.bakeBarriers(cmd, "Segment Transfers Prep");
 
             for (partialTransfers) |transfer| {
                 const buffer = try resMan.get(transfer.dstResId, cmd.flightId);
@@ -156,12 +142,6 @@ pub const CmdRecorder = struct {
 
             for (texTransfers) |transfer| {
                 const tex = try resMan.get(transfer.dstTexId, cmd.flightId);
-                try self.checkImageState(tex, .{ .stage = .Transfer, .access = .TransferWrite, .layout = .TransferDst }, false);
-            }
-            self.bakeBarriers(cmd, "Tex Transfer Prep");
-
-            for (texTransfers) |transfer| {
-                const tex = try resMan.get(transfer.dstTexId, cmd.flightId);
                 cmd.copyBufferToImage(stagingBuf, tex.img, vk.VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, transfer.width, transfer.height, transfer.srcOffset);
             }
             cmd.endTimer(.BotOfPipe, timeId);
@@ -170,44 +150,42 @@ pub const CmdRecorder = struct {
         resUpdater.resetUpdates(cmd.flightId);
     }
 
-    fn checkImageState(self: *CmdRecorder, tex: *Texture, neededState: Texture.TextureState, ignoreOld: bool) !void {
-        var state = tex.state;
+    fn stageTextureBarrier(self: *CmdRecorder, tex: *const Texture, srcState: TextureState, dstState: TextureState, ignoreOld: bool) !void {
+        var state = srcState;
         if (ignoreOld == true) {
             state.layout = .Undefined;
             state.access = .None;
             state.stage = .None;
         }
 
-        const sameState = state.stage == neededState.stage and state.access == neededState.access and state.layout == neededState.layout;
-        if (sameState and neededState.access.isReadOnly()) return;
+        const sameState = state.stage == dstState.stage and state.access == dstState.access and state.layout == dstState.layout;
+        if (sameState and dstState.access.isReadOnly()) return;
 
-        const layoutTransition = if (state.layout != neededState.layout) true else false;
+        const layoutTransition = if (state.layout != dstState.layout) true else false;
 
         if (rc.USE_MEM_BARRIER_ON_IMAGES == true and layoutTransition == false) {
-            const memBarrier = tex.createMemoryBarrier(neededState);
+            const memBarrier = tex.makeMemoryBarrier(srcState, dstState);
             self.memSrcAccess |= memBarrier.srcAccessMask;
             self.memSrcStage |= memBarrier.srcStageMask;
             self.memDstAccess |= memBarrier.dstAccessMask;
             self.memDstStage |= memBarrier.dstStageMask;
         } else {
-            try self.imgBarriers.append(tex.createImageBarrier(neededState, ignoreOld));
+            try self.imgBarriers.append(tex.makeImageBarrier(srcState, dstState, ignoreOld));
         }
     }
 
-    fn checkBufferState(self: *CmdRecorder, buffer: *Buffer, neededState: Buffer.BufferState) !void {
-        const state = buffer.state;
-
-        const sameState = state.stage == neededState.stage and state.access == neededState.access;
-        if (sameState and neededState.access.isReadOnly()) return;
+    fn stageBufferBarrier(self: *CmdRecorder, buffer: *const Buffer, srcState: BufferState, dstState: BufferState) !void {
+        const sameState = srcState.stage == dstState.stage and srcState.access == dstState.access;
+        if (sameState and dstState.access.isReadOnly()) return;
 
         if (rc.USE_MEM_BARRIERS_ON_BUFFERS) {
-            const memBarrier = buffer.createMemoryBarrier(neededState);
+            const memBarrier = buffer.makeMemBarrier(srcState, dstState);
             self.memSrcAccess |= memBarrier.srcAccessMask;
             self.memSrcStage |= memBarrier.srcStageMask;
             self.memDstAccess |= memBarrier.dstAccessMask;
             self.memDstStage |= memBarrier.dstStageMask;
         } else {
-            try self.bufBarriers.append(buffer.createBufferBarrier(neededState));
+            try self.bufBarriers.append(buffer.makeBarrier(srcState, dstState));
         }
     }
 
@@ -217,6 +195,8 @@ pub const CmdRecorder = struct {
                 .passPrint => {},
                 .compositePrint => {},
                 .uiPrint => {},
+
+                .recordTransfers => try self.recordTransfers(cmd, resMan),
 
                 // Graph Commands
                 .clearBuffer => |clearBufId| {
@@ -247,24 +227,25 @@ pub const CmdRecorder = struct {
 
                 // Barrier Commands
                 .bufBarrier => |bufBarrier| {
-                    const buf = try resMan.get(bufBarrier.bufId, cmd.flightId);
-                    try self.checkBufferState(buf, .{ .stage = bufBarrier.stage, .access = bufBarrier.access });
+                    const buf = try resMan.get(bufBarrier.bufId, cmd.flightId); // FLIGHT SHOULD BE UNUSED
+                    try self.stageBufferBarrier(buf, bufBarrier.oldState, bufBarrier.newState);
                 },
                 .texBarrier => |texBarrier| {
-                    const tex = try resMan.get(texBarrier.texId, cmd.flightId);
-                    try self.checkImageState(tex, .{ .stage = texBarrier.stage, .access = texBarrier.access, .layout = texBarrier.layout }, texBarrier.ignoreOld);
+                    const tex = try resMan.get(texBarrier.texId, cmd.flightId); // FLIGHT SHOULD BE UNUSED
+                    try self.stageTextureBarrier(tex, texBarrier.oldState, texBarrier.newState, texBarrier.ignoreOld);
                 },
+
                 .swapchainTargetBarrier => |targetBarrier| {
                     const targetIndex = swapMan.getTargetIndex(targetBarrier.windowId) orelse {
                         std.debug.print("swapchainTargetBarrier: no swapchain target for window {}\n", .{targetBarrier.windowId.val()});
-                        return;
+                        return error.NoSwapchainTarget;
                     };
                     const swapchain = swapMan.getTargetByIndex(targetIndex);
                     const targetTex = swapchain.getCurTexture();
-                    try self.checkImageState(targetTex, .{ .stage = targetBarrier.stage, .access = targetBarrier.access, .layout = targetBarrier.layout }, false);
+                    try self.stageTextureBarrier(targetTex, targetBarrier.oldState, targetBarrier.newState, targetBarrier.ignoreOld);
                 },
                 .bakeBarriers => {
-                    self.bakeBarriers(cmd, "Bake Pass Barriers");
+                    self.bakeBarriers(cmd, "Bake Barriers");
                 },
 
                 // Pass Commands
@@ -337,7 +318,7 @@ pub const CmdRecorder = struct {
                 .setOutputExtentSwapchain => |output| {
                     const targetIndex = swapMan.getTargetIndex(output) orelse {
                         std.debug.print("beginRenderingSwapchain: no swapchain target for window {}\n", .{output.val()});
-                        return;
+                        return error.NoSwapchainTarget;
                     };
                     const swapchain = swapMan.getTargetByIndex(targetIndex);
                     const targetTex = swapchain.getCurTexture();
@@ -390,14 +371,13 @@ pub const CmdRecorder = struct {
                 },
 
                 .setColorAttSwapchain => |swapchainAtt| {
-                    const targetIndex = swapMan.getTargetIndex(swapchainAtt) orelse {
-                        std.debug.print("beginRenderingSwapchain: no swapchain target for window {}\n", .{swapchainAtt.val()});
-                        return;
+                    const targetIndex = swapMan.getTargetIndex(swapchainAtt.windowId) orelse {
+                        std.debug.print("beginRenderingSwapchain: no swapchain target for window {}\n", .{swapchainAtt.windowId.val()});
+                        return error.NoSwapchainTarget;
                     };
                     const swapchain = swapMan.getTargetByIndex(targetIndex);
                     const targetTex = swapchain.getCurTexture();
-                    const isFirstUse = targetTex.state.layout == .Undefined;
-                    const colorAtt = try targetTex.createAttachment(.Swapchain, if (isFirstUse) .{ .color = rc.INITIAL_SWAPCHAIN_COLOR } else null);
+                    const colorAtt = try targetTex.createAttachment(.Swapchain, if (swapchainAtt.firstUse) .{ .color = rc.INITIAL_SWAPCHAIN_COLOR } else null);
 
                     self.state.colorAtts.append(colorAtt) catch return error.CmdStateColorAttsFull;
                 },
@@ -498,19 +478,6 @@ pub const CmdRecorder = struct {
                 },
             }
         }
-    }
-
-    fn recordPresentation(self: *CmdRecorder, cmd: *Cmd, swapMan: *SwapchainMan) !void {
-        const timeId = cmd.startTimer(.AllCmds, "Presentation", .Other);
-
-        const targetIndices = swapMan.getTargetsIndices();
-        for (targetIndices) |index| {
-            const swapchain = swapMan.getTargetByIndex(index);
-            const target = swapchain.getCurTexture();
-            try self.checkImageState(target, .{ .stage = .BotOfPipe, .access = .None, .layout = .PresentSrc }, false);
-        }
-        self.bakeBarriers(cmd, "Present Transition");
-        cmd.endTimer(.BotOfPipe, timeId);
     }
 
     fn bakeBarriers(self: *CmdRecorder, cmd: *const Cmd, name: []const u8) void {

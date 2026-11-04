@@ -39,21 +39,19 @@ pub const SwapchainMan = struct {
         }
     }
 
-    pub fn updateTargets(self: *SwapchainMan, flightId: u8, activeWindows: []const Window) !void {
+    pub fn updateTargets(self: *SwapchainMan, flightId: u8, activeWindows: []const WindowId) !void {
         self.targetIndices.clear();
 
-        for (activeWindows) |*window| {
-            const swapchain = self.swapchains.getPtrByKey(window.id.val());
+        for (activeWindows) |windowId| {
+            const swapchain = self.swapchains.getPtrByKey(windowId.val());
 
             const start = if (rc.SWAPCHAIN_PROFILING == true) std.time.microTimestamp() else 0;
             const result1 = swapchain.acquireNextImage(self.gpi, flightId);
 
-            const windowIdVal = window.id.val();
-
             switch (result1) {
                 vk.VK_SUCCESS => {},
                 vk.VK_TIMEOUT, vk.VK_NOT_READY => {
-                    std.debug.print("OS could not provide Swapchain Image in Time \n", .{});
+                    std.debug.print("ERROR: OS could not provide Swapchain Image in Time \n", .{});
                     continue;
                 },
                 vk.VK_ERROR_OUT_OF_DATE_KHR, vk.VK_SUBOPTIMAL_KHR => {
@@ -61,20 +59,19 @@ pub const SwapchainMan = struct {
                     const result2 = swapchain.acquireNextImage(self.gpi, flightId);
 
                     if (result2 != vk.VK_SUCCESS) {
-                        std.debug.print("Could not Resolve Swapchain Error {} (ID {}) {}", .{ result2, windowIdVal, swapchain.* });
+                        std.debug.print("ERROR: Could not Resolve Swapchain Error {} (ID {}) {}", .{ result2, windowId.val(), swapchain.* });
                         continue;
-                    } else std.debug.print("Resolved Error for Swapchain {} (ID {}) {}", .{ result2, windowIdVal, swapchain.* });
+                    } else std.debug.print("Resolved Error for Swapchain {} (ID {}) {}", .{ result2, windowId.val(), swapchain.* });
                 },
-                else => try vhF.check(result1, "Could not acquire swapchain image with unknown error"),
+                else => try vhF.check(result1, "ERROR: Could not acquire swapchain image with unknown error"),
             }
 
-            swapchain.getCurTexture().state = .{ .layout = .Undefined, .stage = .ColorAtt, .access = .None }; // Transfer -> TopOfPipe or ColorAttachmentOutput?
-            const mapIndex = self.swapchains.getIndexByKey(windowIdVal);
-            self.targetIndices.upsert(windowIdVal, mapIndex);
+            const mapIndex = self.swapchains.getIndexByKey(windowId.val());
+            self.targetIndices.upsert(windowId.val(), mapIndex);
 
             if (rc.SWAPCHAIN_PROFILING == true) {
                 const end = std.time.microTimestamp();
-                std.debug.print("Swapchain (ID {}) Acquire {d:.3} ms\n", .{ windowIdVal, @as(f64, @floatFromInt(end - start)) / 1_000.0 });
+                std.debug.print("Swapchain (ID {}) Acquire {d:.3} ms\n", .{ windowId.val(), @as(f64, @floatFromInt(end - start)) / 1_000.0 });
             }
         }
     }

@@ -39,7 +39,7 @@ pub const RenderPrepSys = struct {
         const PayloadPtr = @FieldType(RenderAssignerQueue.RenderAssignerEvent, "updateBuffer");
         const Payload = std.meta.Child(PayloadPtr);
         const updateBufferPtr = try arena.create(Payload);
-        updateBufferPtr.* = .{ .bufUnion = .{ .bufName = "EntitySB" }, .data = std.mem.sliceAsBytes(gpuDataArray) };
+        updateBufferPtr.* = .{ .bufName = "EntitySB" , .data = std.mem.sliceAsBytes(gpuDataArray) };
 
         assignerQueue.append(.{ .updateBuffer = updateBufferPtr });
     }

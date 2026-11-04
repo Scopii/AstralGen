@@ -8,6 +8,7 @@ const SwapchainMan = @import("sys/SwapchainMan.zig").SwapchainMan;
 const RendererQueue = @import("RendererQueue.zig").RendererQueue;
 const ResourceMan = @import("sys/ResourceMan.zig").ResourceMan;
 const CmdRecorder = @import("sys/CmdRecorder.zig").CmdRecorder;
+const WindowId = @import("../.configs/idConfig.zig").WindowId;
 const UiNode = @import("types/pass/RenderNode.zig").UiNode;
 const ShaderMan = @import("sys/ShaderMan.zig").ShaderMan;
 const Scheduler = @import("sys/Scheduler.zig").Scheduler;
@@ -117,7 +118,7 @@ pub const Renderer = struct {
         try self.scheduler.waitForGPU();
     }
 
-    pub fn draw(self: *Renderer, renderNodes: []const RenderNode, pushData: []const u8, activeWindows: []const Window, rendererOutQueue: *RendererOutQueue) !void {
+    pub fn draw(self: *Renderer, renderNodes: []const RenderNode, pushData: []const u8, activeWindows: []const WindowId, rendererOutQueue: *RendererOutQueue) !void {
         self.renderNodes.clearRetainingCapacity();
         try self.renderNodes.appendSlice(renderNodes);
 
