@@ -23,4 +23,10 @@ pub const RenderCompilerData = struct {
 
     swapchainStates: LinkedIdMap(TextureState, rc.MAX_WINDOWS, WindowId, 32 + rc.MAX_WINDOWS, 0) = .{},
     renderedSwapchains: FixedList(WindowId, rc.MAX_WINDOWS) = .{},
+
+    memSrcStage: u64 = 0,
+    memSrcAccess: u64 = 0,
+    memDstStage: u64 = 0,
+    memDstAccess: u64 = 0,
+    memBarrierPending: bool = false,
 };

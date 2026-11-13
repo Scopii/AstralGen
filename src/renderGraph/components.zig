@@ -80,13 +80,13 @@ pub const SubResBuffer = struct {
 };
 
 pub const TransientBuffer = struct {
-    inUseCounter: i8,
+    lastUsedFrame: u64,
     hardwareBuf: BufId,
     bufDesc: BufDesc,
 };
 
 pub const TransientTexture = struct {
-    inUseCounter: i8,
+    lastUsedFrame: u64,
     hardwareTex: TexId,
     texDesc: TexDesc,
 };

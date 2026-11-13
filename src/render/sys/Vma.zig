@@ -87,7 +87,6 @@ pub const Vma = struct {
             .elementSize = bufInf.elementSize,
 
             .descIndex = simpleBuf.descIndex,
-            .curCount = simpleBuf.curCount,
             .handle = simpleBuf.handle,
             .allocation = simpleBuf.allocation,
             .gpuAddress = simpleBuf.gpuAddress,

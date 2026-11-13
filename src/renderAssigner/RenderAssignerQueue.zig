@@ -20,5 +20,5 @@ pub const RenderAssignerEvent = union(enum) {
 
     pub const PassBufferUpdate = struct { bufName: []const u8, data: []const u8 };
     pub const PassBufferUpdateSegment = struct { bufName: []const u8, data: []const u8, elementOffset: u32 };
-    pub const PassTextureUpdate = struct { texName: []const u8, data: []const u8, newExtent: ?vk.VkExtent3D };
+    pub const PassTextureUpdate = struct { texName: []const u8, data: []const u8, newExtent: vk.VkExtent3D };
 };

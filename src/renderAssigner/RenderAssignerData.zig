@@ -22,9 +22,6 @@ const BufId = @import("../.configs/idConfig.zig").BufId;
 const UiDrawFill = UiNodeFill.UiDrawFill;
 const rc = @import("../.configs/renderConfig.zig");
 
-pub const MANUAL_STORAGE_COUNT = rc.MAX_IN_FLIGHT + 1;
-
-
 pub const RenderAssignerData = struct {
     assignedFrames: u64 = 0,
 

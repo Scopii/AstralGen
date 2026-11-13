@@ -59,10 +59,7 @@ pub const CmdRecorder = struct {
     cmdMan: CmdManager,
     imgBarriers: std.array_list.Managed(vk.VkImageMemoryBarrier2),
     bufBarriers: std.array_list.Managed(vk.VkBufferMemoryBarrier2),
-    memSrcStage: vk.VkPipelineStageFlags2 = 0,
-    memSrcAccess: vk.VkAccessFlags2 = 0,
-    memDstStage: vk.VkPipelineStageFlags2 = 0,
-    memDstAccess: vk.VkAccessFlags2 = 0,
+    memBarrier: ?vk.VkMemoryBarrier2 = null,
     useGpuTimers: bool = false,
     useGpuStats: bool = false,
 
@@ -156,32 +153,21 @@ pub const CmdRecorder = struct {
     }
 
     fn stageTextureBarrier(self: *CmdRecorder, img: vk.VkImage, typ: vhE.TexTyp, srcState: TextureState, dstState: TextureState) !void {
-        const layoutTransition = if (srcState.layout != dstState.layout) true else false;
+        try self.imgBarriers.append(makeImageBarrier(img, typ, srcState, dstState));
+    }
 
-        if (rc.USE_MEM_BARRIER_ON_IMAGES == true and layoutTransition == false) {
-            const memBarrier = makeMemBarrier(srcState.stage, srcState.access, dstState.stage, dstState.access);
-            self.memSrcAccess |= memBarrier.srcAccessMask;
-            self.memSrcStage |= memBarrier.srcStageMask;
-            self.memDstAccess |= memBarrier.dstAccessMask;
-            self.memDstStage |= memBarrier.dstStageMask;
-        } else {
-            try self.imgBarriers.append(makeImageBarrier(img, typ, srcState, dstState));
-        }
+    fn stageMemBarrier(self: *CmdRecorder, oldStage: u64, oldAccess: u64, newStage: u64, newAccess: u64) !void {
+        self.memBarrier = vk.VkMemoryBarrier2{
+            .sType = vk.VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
+            .srcStageMask = oldStage,
+            .srcAccessMask = oldAccess,
+            .dstStageMask = newStage,
+            .dstAccessMask = newAccess,
+        };
     }
 
     fn stageBufferBarrier(self: *CmdRecorder, buf: *const Buffer, srcState: BufferState, dstState: BufferState) !void {
-        // const sameState = srcState.stage == dstState.stage and srcState.access == dstState.access;
-        // if (sameState and dstState.access.isReadOnly()) return;
-
-        if (rc.USE_MEM_BARRIERS_ON_BUFFERS) {
-            const memBarrier = makeMemBarrier(srcState.stage, srcState.access, dstState.stage, dstState.access);
-            self.memSrcAccess |= memBarrier.srcAccessMask;
-            self.memSrcStage |= memBarrier.srcStageMask;
-            self.memDstAccess |= memBarrier.dstAccessMask;
-            self.memDstStage |= memBarrier.dstStageMask;
-        } else {
-            try self.bufBarriers.append(makeBarrier(buf.handle, srcState, dstState));
-        }
+        try self.bufBarriers.append(makeBarrier(buf.handle, srcState, dstState));
     }
 
     fn recordNodes(self: *CmdRecorder, cmd: *Cmd, renderNodes: *const RenderNodeRing, resMan: *ResourceMan, shaderMan: *ShaderManager, swapMan: *SwapchainMan, pushData: []const u8) !void {
@@ -222,6 +208,9 @@ pub const CmdRecorder = struct {
                 },
 
                 // Barrier Commands
+                .memBarrier => |memBarrier| {
+                    try self.stageMemBarrier(memBarrier.oldStage, memBarrier.oldAccess, memBarrier.newStage, memBarrier.newAccess);
+                },
                 .bufBarrier => |bufBarrier| {
                     const buf = try resMan.getBuf(bufBarrier.bufId);
                     try self.stageBufferBarrier(buf, bufBarrier.oldState, bufBarrier.newState);
@@ -475,31 +464,21 @@ pub const CmdRecorder = struct {
     fn bakeBarriers(self: *CmdRecorder, cmd: *const Cmd, name: []const u8) void {
         const imgBarrierCount = self.imgBarriers.items.len;
         const bufBarrierCount = self.bufBarriers.items.len;
-        const hasMemBarrier = self.memSrcStage != 0;
+        const hasMemBarrier = self.memBarrier != null;
 
         if (imgBarrierCount != 0 or bufBarrierCount != 0 or hasMemBarrier) {
-            if (rc.BARRIER_DEBUG) std.debug.print("BakeBarriers: {} Img, {} Buf ({s})\n", .{ imgBarrierCount, bufBarrierCount, name });
+            if (rc.BARRIER_DEBUG) std.debug.print("BakeBarriers: {} Img, {} Buf, {} Mem {s}\n", .{ imgBarrierCount, bufBarrierCount, self.memBarrier, name });
 
-            if (hasMemBarrier) {
-                const memBarrier = vk.VkMemoryBarrier2{
-                    .sType = vk.VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
-                    .srcStageMask = self.memSrcStage,
-                    .srcAccessMask = self.memSrcAccess,
-                    .dstStageMask = self.memDstStage,
-                    .dstAccessMask = self.memDstAccess,
-                };
+            if (self.memBarrier) |memBarrier| {
                 cmd.bakeBarriers(self.imgBarriers.items, self.bufBarriers.items, &.{memBarrier});
-                self.memSrcStage = 0;
-                self.memSrcAccess = 0;
-                self.memDstStage = 0;
-                self.memDstAccess = 0;
+                self.memBarrier = null;
             } else {
                 cmd.bakeBarriers(self.imgBarriers.items, self.bufBarriers.items, &.{});
             }
 
             self.imgBarriers.clearRetainingCapacity();
             self.bufBarriers.clearRetainingCapacity();
-        } else if (rc.BARRIER_DEBUG) std.debug.print("BakeBarriers: Skipped ({s})\n", .{name});
+        } else if (rc.BARRIER_DEBUG) std.debug.print("BakeBarriers: Skipped because none are staged! ({s})\n", .{name});
     }
 };
 
@@ -560,17 +539,6 @@ pub fn makeBarrier(buf: vk.VkBuffer, oldState: BufferState, newState: BufferStat
         .buffer = buf,
         .offset = 0,
         .size = vk.VK_WHOLE_SIZE, // whole Buffer
-    };
-    return barrier;
-}
-
-fn makeMemBarrier(oldStage: vhE.PipeStage, oldAccess: vhE.PipeAccess, newStage: vhE.PipeStage, newAccess: vhE.PipeAccess) vk.VkMemoryBarrier2 {
-    const barrier = vk.VkMemoryBarrier2{
-        .sType = vk.VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
-        .srcStageMask = @intFromEnum(oldStage),
-        .srcAccessMask = @intFromEnum(oldAccess),
-        .dstStageMask = @intFromEnum(newStage),
-        .dstAccessMask = @intFromEnum(newAccess),
     };
     return barrier;
 }

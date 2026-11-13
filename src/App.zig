@@ -353,9 +353,8 @@ pub const App = struct {
                 const renderedSwapchains = self.data.renderCompiler.renderedSwapchains.constSlice();
                 const pushData = self.data.renderCompiler.pushData.constSlice();
 
-                try self.renderer.update(&self.rendererQueue);
-
                 if (rc.EARLY_GPU_WAIT == false) try renderer.waitForGpu();
+                try self.renderer.update(&self.rendererQueue);
 
                 renderer.draw(sortedRenderNodes, pushData, renderedSwapchains, &self.rendererOutQueue) catch |err| {
                     std.log.err("Error in renderer.submitDraw(): {}", .{err});

@@ -47,7 +47,7 @@ pub const ResourceMan = struct {
     }
 
     pub fn update(self: *ResourceMan, flightId: u8, curFrame: u64) !void {
-        if (rc.GPU_READBACK == true) try self.printReadbackBuf(rc.readbackSB.id, vhT.ReadbackData);
+        // if (rc.GPU_READBACK == true) try self.printReadbackBuf(rc.readbackSB.id, vhT.ReadbackData);
         try self.descMan.updateDescriptors(self.vma.gpi, flightId);
         if (false) std.debug.print("ResMan Updated (Frame {}) (Flight {})\n", .{ curFrame, flightId });
     }
@@ -95,9 +95,8 @@ pub const ResourceMan = struct {
 
     pub fn addBuf(self: *ResourceMan, inf: BufInf, curFrame: u64, flightId: u8, data: anytype) !void {
         var buf = try self.vma.allocDefinedBuffer(&inf);
-        buf.curCount = inf.len;
 
-        try self.descMan.queueBufferDescriptor(buf.gpuAddress, buf.curCount * inf.elementSize, inf.typ, &buf);
+        try self.descMan.queueBufferDescriptor(buf.gpuAddress, inf.len * inf.elementSize, inf.typ, &buf);
         self.buffers.upsert(inf.id, buf);
 
         if (rc.RESOURCE_DEBUG == true) {
@@ -158,10 +157,10 @@ pub const ResourceMan = struct {
         return error.BufferNotHostVisible;
     }
 
-    fn printReadbackBuf(self: *ResourceMan, bufId: BufId, comptime T: type) !void {
-        const readbackPtr = try self.getBufDataPtr(bufId, T);
-        std.debug.print("Readback: {}\n", .{readbackPtr.*});
-    }
+    // fn printReadbackBuf(self: *ResourceMan, bufId: BufId, comptime T: type) !void {
+    //     const readbackPtr = try self.getBufDataPtr(bufId, T);
+    //     std.debug.print("Readback: {}\n", .{readbackPtr.*});
+    // }
 };
 
 pub fn convertToByteSlice(data: anytype) ![]const u8 {

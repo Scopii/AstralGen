@@ -104,6 +104,7 @@ pub const RenderNode = union(enum) {
     clearTexture: TexId,
 
     // Barrier Commands
+    memBarrier: struct { oldStage: u64, oldAccess: u64, newStage: u64, newAccess: u64 },
     bufBarrier: struct { bufId: BufId, oldState: BufferState, newState: BufferState },
     texBarrier: struct { texId: TexId, oldState: TextureState, newState: TextureState },
     swapchainTargetBarrier: struct { windowId: WindowId, oldState: TextureState, newState: TextureState },

@@ -210,7 +210,7 @@ pub const RenderAssignerSys = struct {
 
             for (self.unusedTransientBufs.constSlice(), 0..) |transientBuf, i| {
                 // Continue if resource is still in use!
-                if (transientBuf.inUseCounter > 0) continue;
+                if (self.assignedFrames < transientBuf.lastUsedFrame + rc.MAX_IN_FLIGHT and rc.FRAME_GRAPH_TRANSIENTS_PER_FRAME_IN_FLIGHT) continue; // is this needed?
 
                 if (bufDescEqual(&transientBuf.bufDesc, &bufDesc)) {
                     candidateIndex = @intCast(i);
@@ -218,20 +218,15 @@ pub const RenderAssignerSys = struct {
                 }
             }
 
-            const inUseCounter: i8 = switch (bufDesc.update) {
-                .PerFrame => 0,
-                .Often, .Rarely => 0,
-            };
-
             if (candidateIndex) |index| {
                 var candidate = self.unusedTransientBufs.swapRemoveReturn(index);
-                candidate.inUseCounter = inUseCounter;
+                candidate.lastUsedFrame = self.assignedFrames;
                 self.usedTransientBufs.append(candidate) catch {
                     std.debug.print("ERROR: 6.ResourceAssigner: Could not Append to usedTransientBufs\n", .{});
                     return error.CouldNotAppend;
                 };
             } else {
-                const candidate = TransientBuffer{ .bufDesc = bufDesc, .hardwareBuf = try getFreeBufId(self), .inUseCounter = inUseCounter };
+                const candidate = TransientBuffer{ .bufDesc = bufDesc, .hardwareBuf = try getFreeBufId(self), .lastUsedFrame = self.assignedFrames };
                 try createTransientBuffer(self, bufDesc, candidate.hardwareBuf, rendererQueue, memoryMan);
                 self.usedTransientBufs.append(candidate) catch {
                     std.debug.print("ERROR: 6.ResourceAssigner: Could not Append to usedTransientBufs\n", .{});
@@ -249,7 +244,7 @@ pub const RenderAssignerSys = struct {
 
             for (self.unusedTransientTexes.constSlice(), 0..) |transientTex, i| {
                 // Continue if resource is still in use!
-                if (transientTex.inUseCounter > 0) continue;
+                if (self.assignedFrames < transientTex.lastUsedFrame + rc.MAX_IN_FLIGHT and rc.FRAME_GRAPH_TRANSIENTS_PER_FRAME_IN_FLIGHT) continue;
 
                 // Try searching exact match first
                 if (std.meta.eql(transientTex.texDesc, texDesc) == true) {
@@ -264,20 +259,15 @@ pub const RenderAssignerSys = struct {
 
             const candidateIndex = exactMatch orelse compatibleMatch orelse null;
 
-            const inUseCounter: i8 = switch (texDesc.update) {
-                .PerFrame => 0,
-                .Often, .Rarely => 0,
-            };
-
             if (candidateIndex) |index| {
                 var candidate = self.unusedTransientTexes.swapRemoveReturn(index);
-                candidate.inUseCounter = inUseCounter;
+                candidate.lastUsedFrame = self.assignedFrames;
                 self.usedTransientTexes.append(candidate) catch {
                     std.debug.print("ERROR: 6.ResourceAssigner: Could not Append to usedTransientTexes\n", .{});
                     return error.CouldNotAppend;
                 };
             } else {
-                const candidate = TransientTexture{ .texDesc = texDesc, .hardwareTex = try getFreeTexId(self), .inUseCounter = inUseCounter };
+                const candidate = TransientTexture{ .texDesc = texDesc, .hardwareTex = try getFreeTexId(self), .lastUsedFrame = self.assignedFrames };
                 try createTransientTexture(self, texDesc, candidate.hardwareTex, rendererQueue, memoryMan);
                 self.usedTransientTexes.append(candidate) catch {
                     std.debug.print("ERROR: 6.ResourceAssigner: Could not Append to usedTransientTexes\n", .{});
@@ -319,7 +309,7 @@ pub const RenderAssignerSys = struct {
             const index = unusedBufsLen - 1 - i;
             const transientBuf = &self.unusedTransientBufs.buffer[index];
 
-            if (transientBuf.inUseCounter + rc.FRAME_BUILDS_TILL_TRANSIENT_DELETION <= 0) {
+            if (self.assignedFrames >= transientBuf.lastUsedFrame + rc.MAX_IN_FLIGHT + rc.FRAME_BUILDS_TILL_TRANSIENT_DELETION) {
                 try rendererQueue.append(.{ .removeBuffer = transientBuf.hardwareBuf }); // (Stop Renderer missing?)
 
                 self.requests.append(.{ .destroyBuf = transientBuf.hardwareBuf }) catch return error.RenderAssignerRequestsFull;
@@ -327,8 +317,6 @@ pub const RenderAssignerSys = struct {
 
                 freeUpBufId(self, transientBuf.hardwareBuf);
                 self.unusedTransientBufs.swapRemove(@intCast(index));
-            } else {
-                transientBuf.inUseCounter -= 1;
             }
         }
 
@@ -338,7 +326,7 @@ pub const RenderAssignerSys = struct {
             const index = unusedTexesLen - 1 - i;
             const transientTex = &self.unusedTransientTexes.buffer[index];
 
-            if (transientTex.inUseCounter + rc.FRAME_BUILDS_TILL_TRANSIENT_DELETION <= 0) {
+            if (self.assignedFrames >= transientTex.lastUsedFrame + rc.MAX_IN_FLIGHT + rc.FRAME_BUILDS_TILL_TRANSIENT_DELETION) {
                 try rendererQueue.append(.{ .removeTexture = transientTex.hardwareTex }); // (Stop Renderer missing?)
 
                 self.requests.append(.{ .destroyTex = transientTex.hardwareTex }) catch return error.RenderAssignerRequestsFull;
@@ -346,8 +334,6 @@ pub const RenderAssignerSys = struct {
 
                 freeUpTexId(self, transientTex.hardwareTex);
                 self.unusedTransientTexes.swapRemove(@intCast(index));
-            } else {
-                transientTex.inUseCounter -= 1;
             }
         }
     }
@@ -501,22 +487,21 @@ pub const RenderAssignerSys = struct {
         const texInf = &self.manualSubTexes.getPtrByKey(subId).texInf;
 
         if (self.texUpdates.isKeyUsed(texPassId)) {
-            if (self.texUpdates.getPtrByKey(texPassId).newExtent) |newExtent| {
-                const oldExtent = vk.VkExtent3D{ .width = texInf.width, .height = texInf.height, .depth = texInf.depth };
+            const oldExtent = vk.VkExtent3D{ .width = texInf.width, .height = texInf.height, .depth = texInf.depth };
+            const newExtent = self.texUpdates.getPtrByKey(texPassId).newExtent;
 
-                if (try checkTextureResize(texDesc.resize, oldExtent, newExtent) == true) {
-                    texInf.width = newExtent.width;
-                    texInf.height = newExtent.height;
-                    texInf.depth = newExtent.depth;
-                    std.debug.print("6.Resource Assigner: Tex SubRes (TexId {}) ADJUSTED ({}x{} to {}x{})\n", .{ subId.val(), oldExtent.width, oldExtent.height, texInf.width, texInf.height });
+            if (try checkTextureResize(texDesc.resize, oldExtent, newExtent) == true) {
+                texInf.width = newExtent.width;
+                texInf.height = newExtent.height;
+                texInf.depth = newExtent.depth;
+                std.debug.print("6.Resource Assigner: Tex SubRes (TexId {}) ADJUSTED ({}x{} to {}x{})\n", .{ subId.val(), oldExtent.width, oldExtent.height, texInf.width, texInf.height });
 
-                    if (subTexExists) {
-                        try rendererQueue.append(.{ .removeTexture = subId });
-                        self.requests.append(.{ .destroyTex = subId }) catch return error.RenderAssignerRequestsFull;
-                        try rendererQueue.append(.{ .addTexture = .{ .texInf = texInf.*, .data = null } });
-                        self.requests.append(.{ .createTex = subId }) catch return error.RenderAssignerRequestsFull;
-                        std.debug.print("6.Resource Assigner: Tex SubRes (TexId {}) RECREATED\n", .{subId.val()});
-                    }
+                if (subTexExists) {
+                    try rendererQueue.append(.{ .removeTexture = subId });
+                    self.requests.append(.{ .destroyTex = subId }) catch return error.RenderAssignerRequestsFull;
+                    try rendererQueue.append(.{ .addTexture = .{ .texInf = texInf.*, .data = null } });
+                    self.requests.append(.{ .createTex = subId }) catch return error.RenderAssignerRequestsFull;
+                    std.debug.print("6.Resource Assigner: Tex SubRes (TexId {}) RECREATED\n", .{subId.val()});
                 }
             }
         }
@@ -608,7 +593,7 @@ pub const RenderAssignerSys = struct {
 
             const subTexId = self.texAssigns.getByKey(texPassId);
             self.requests.append(.{ .updateTex = subTexId }) catch return error.RenderAssignerRequestsFull;
-            try rendererQueue.append(.{ .updateTexture = .{ .texId = subTexId, .data = texUpdate.data, .newExtent = texUpdate.newExtent } });
+            try rendererQueue.append(.{ .updateTexture = .{ .texId = subTexId, .data = texUpdate.data } });
         }
     }
 

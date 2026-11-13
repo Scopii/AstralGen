@@ -17,7 +17,7 @@ pub const RendererEvent2 = union(enum) {
     addBuffer: struct { bufInf: BufInf, data: ?[]const u8 },
     updateBuffer: struct { bufId: BufId, data: []const u8 },
     updateBufferSegment: struct { bufId: BufId, data: []const u8, elementOffset: u32 },
-    updateTexture: struct { texId: TexId, data: []const u8, newExtent: ?vk.VkExtent3D },
+    updateTexture: struct { texId: TexId, data: []const u8 },
     removeTexture: TexId,
     removeBuffer: BufId,
     updateWindowState: Window,

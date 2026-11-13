@@ -364,7 +364,7 @@ pub const RenderCompilerSys = struct {
             }
         }
 
-        if (needsClearBarrier) try self.sortedNodes.append(.bakeBarriers);
+        if (needsClearBarrier) try bakeBarriers(self);
 
         for (pass.passProperties.constSlice()) |attribute| {
             switch (attribute) {
@@ -596,7 +596,17 @@ pub const RenderCompilerSys = struct {
         if (sameState and newAccess.isReadOnly()) return;
 
         const newState: BufferState = .{ .stage = newStage, .access = newAccess };
-        try self.sortedNodes.append(.{ .bufBarrier = .{ .bufId = bufId, .oldState = state.*, .newState = newState } });
+
+        if (rc.USE_MEM_BARRIERS_ON_BUFFERS) {
+            self.memSrcAccess |= @intFromEnum(state.access);
+            self.memSrcStage |= @intFromEnum(state.stage);
+            self.memDstAccess |= @intFromEnum(newState.access);
+            self.memDstStage |= @intFromEnum(newState.stage);
+            self.memBarrierPending = true;
+        } else {
+            try self.sortedNodes.append(.{ .bufBarrier = .{ .bufId = bufId, .oldState = state.*, .newState = newState } });
+        }
+
         state.* = newState;
     }
 
@@ -607,7 +617,19 @@ pub const RenderCompilerSys = struct {
         if (sameState and newAccess.isReadOnly()) return;
 
         const newState: TextureState = .{ .stage = newStage, .access = newAccess, .layout = newLayout };
-        try self.sortedNodes.append(.{ .texBarrier = .{ .texId = texId, .oldState = state.*, .newState = newState } });
+
+        const layoutTransition = if (state.layout != newState.layout) true else false;
+
+        if (rc.USE_MEM_BARRIER_ON_IMAGES == true and layoutTransition == false) {
+            self.memSrcAccess |= @intFromEnum(state.access);
+            self.memSrcStage |= @intFromEnum(state.stage);
+            self.memDstAccess |= @intFromEnum(newState.access);
+            self.memDstStage |= @intFromEnum(newState.stage);
+            self.memBarrierPending = true;
+        } else {
+            try self.sortedNodes.append(.{ .texBarrier = .{ .texId = texId, .oldState = state.*, .newState = newState } });
+        }
+
         state.* = newState;
     }
 
@@ -615,20 +637,40 @@ pub const RenderCompilerSys = struct {
         const newState = TextureState{ .stage = newStage, .access = newAccess, .layout = newLayout };
 
         if (self.swapchainStates.isKeyUsed(windowId) == false) {
+            // First Swapchain Barrier this Frame
             const oldState = TextureState{ .layout = .Undefined, .stage = .ColorAtt, .access = .None };
             try self.sortedNodes.append(.{ .swapchainTargetBarrier = .{ .windowId = windowId, .oldState = oldState, .newState = newState } });
             self.swapchainStates.insert(windowId, newState);
             return true;
         } else {
+            // New Swapchain Barrier
             const state = self.swapchainStates.getPtrByKey(windowId);
-            try self.sortedNodes.append(.{ .swapchainTargetBarrier = .{ .windowId = windowId, .oldState = state.*, .newState = newState } });
+
+            if (rc.USE_MEM_BARRIER_ON_IMAGES and state.layout == newLayout) {
+                self.memSrcAccess |= @intFromEnum(state.access);
+                self.memSrcStage |= @intFromEnum(state.stage);
+                self.memDstAccess |= @intFromEnum(newAccess);
+                self.memDstStage |= @intFromEnum(newStage);
+                self.memBarrierPending = true;
+            } else try self.sortedNodes.append(.{ .swapchainTargetBarrier = .{ .windowId = windowId, .oldState = state.*, .newState = newState } });
+
             state.* = newState;
             return false;
         }
     }
 
     fn bakeBarriers(self: *RenderCompilerData) !void {
+        if (self.memBarrierPending) {
+            try self.sortedNodes.append(.{ .memBarrier = .{ .oldStage = self.memSrcStage, .oldAccess = self.memSrcAccess, .newStage = self.memDstStage, .newAccess = self.memDstAccess } });
+        }
+
         try self.sortedNodes.append(.bakeBarriers);
+
+        self.memSrcStage = 0;
+        self.memSrcAccess = 0;
+        self.memDstStage = 0;
+        self.memDstAccess = 0;
+        self.memBarrierPending = false;
     }
 
     // Profiling Commands

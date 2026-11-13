@@ -29,10 +29,10 @@ pub const ResourceUpdater = struct {
     stagingBuffers: [rc.MAX_IN_FLIGHT]SimpleBuffer,
     stagingOffsets: [rc.MAX_IN_FLIGHT]u64 = @splat(0),
 
-    fullUpdateLists: [rc.MAX_IN_FLIGHT]SimpleIdMap(BufTransfer, rc.BUF_MAX, BufId, rc.BUF_MAX, 0) = @splat(.{}), // Could be slot map?
+    fullUpdateLists: [rc.MAX_IN_FLIGHT]SimpleIdMap(BufTransfer, rc.BUF_MAX, BufId, rc.BUF_MAX * rc.MAX_IN_FLIGHT, 0) = @splat(.{}), // Could be slot map?
     segmentUpdatesLists: [rc.MAX_IN_FLIGHT]std.ArrayList(BufTransfer),
 
-    fullTexUpdateLists: [rc.MAX_IN_FLIGHT]SimpleIdMap(TexTransfer, rc.TEX_MAX, TexId, rc.TEX_MAX, 0) = @splat(.{}),
+    fullTexUpdateLists: [rc.MAX_IN_FLIGHT]SimpleIdMap(TexTransfer, rc.TEX_MAX, TexId, rc.TEX_MAX * rc.MAX_IN_FLIGHT, 0) = @splat(.{}),
 
     pub fn init(alloc: Allocator, vma: *const Vma) !ResourceUpdater {
         var stagingBuffers: [rc.MAX_IN_FLIGHT]SimpleBuffer = undefined;
