@@ -54,11 +54,7 @@ pub const ShaderSys = struct {
         try checkShaderUpdates(shaderData, memoryMan.getAllocator());
 
         for (shaderData.freshShaders.items) |freshShader| {
-            // const PayloadPtr = @FieldType(RendererQueue.RendererEvent, "compileShader");
-            // const Payload = std.meta.Child(PayloadPtr);
-            const loadedShaderPtr = try memoryMan.getGlobalArena().create(LoadedShader);
-            loadedShaderPtr.* = freshShader;
-            rendererQueue.append(.{ .addShader = loadedShaderPtr });
+            try rendererQueue.append(.{ .addShader = freshShader });
         }
     }
 

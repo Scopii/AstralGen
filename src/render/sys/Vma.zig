@@ -1,6 +1,8 @@
-const TextureMeta = @import("../types/res/TextureMeta.zig").TextureMeta;
-const BufferMeta = @import("../types/res/BufferMeta.zig").BufferMeta;
+const SimpleTexture = @import("../types/res/Texture.zig").SimpleTexture;
+const SimpleBuffer = @import("../types/res/Buffer.zig").SimpleBuffer;
 const Texture = @import("../types/res/Texture.zig").Texture;
+const TexInf = @import("../types/res/Texture.zig").TexInf;
+const BufInf = @import("../types/res/Buffer.zig").BufInf;
 const Buffer = @import("../types/res/Buffer.zig").Buffer;
 const rc = @import("../../.configs/renderConfig.zig");
 const vk = @import("../../.modules/vk.zig").c;
@@ -40,7 +42,7 @@ pub const Vma = struct {
         vk.vmaDestroyAllocator(self.handle);
     }
 
-    pub fn allocDescriptorHeap(self: *const Vma, size: vk.VkDeviceSize) !Buffer {
+    pub fn allocDescriptorHeap(self: *const Vma, size: vk.VkDeviceSize) !SimpleBuffer {
         const bufUse = vk.VK_BUFFER_USAGE_DESCRIPTOR_HEAP_BIT_EXT | vk.VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
         const allocFlags = vk.VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | vk.VMA_ALLOCATION_CREATE_MAPPED_BIT;
         const buf = try self.allocBuffer(size, bufUse, vk.VMA_MEMORY_USAGE_CPU_TO_GPU, allocFlags);
@@ -48,7 +50,7 @@ pub const Vma = struct {
         return buf;
     }
 
-    pub fn allocStagingBuffer(self: *const Vma, size: vk.VkDeviceSize) !Buffer {
+    pub fn allocStagingBuffer(self: *const Vma, size: vk.VkDeviceSize) !SimpleBuffer {
         const allocFlags = vk.VMA_ALLOCATION_CREATE_MAPPED_BIT | vk.VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
         const buf = try self.allocBuffer(size, vk.VK_BUFFER_USAGE_TRANSFER_SRC_BIT, vk.VMA_MEMORY_USAGE_CPU_ONLY, allocFlags); // TEST CPU_TO_GPU and AUTO
         std.debug.print("Created Staging Buffer\n", .{});
@@ -67,17 +69,7 @@ pub const Vma = struct {
         std.debug.print("(CPU {s} in {s})\n", .{ visible, memory });
     }
 
-    pub fn createBufferMeta(_: *const Vma, bufInf: *const BufferMeta.BufInf) BufferMeta {
-        return .{
-            .typ = bufInf.typ,
-            .update = bufInf.update,
-            .elementSize = bufInf.elementSize,
-            .resize = bufInf.resize,
-            .mem = bufInf.mem,
-        };
-    }
-
-    pub fn allocDefinedBuffer(self: *const Vma, bufInf: *const BufferMeta.BufInf) !Buffer {
+    pub fn allocDefinedBuffer(self: *const Vma, bufInf: *const BufInf) !Buffer {
         const bufByteSize = @as(vk.VkDeviceSize, bufInf.len) * bufInf.elementSize;
         if (bufByteSize == 0) return error.BufferByteSizeIsZero;
 
@@ -85,10 +77,26 @@ pub const Vma = struct {
         const memUse = vhF.getMemUsage(bufInf.mem);
         const allocFlags = vhF.getBufferAllocationFlags(bufInf.mem, bufInf.typ);
 
-        return try self.allocBuffer(bufByteSize, bufUse, memUse, allocFlags);
+        const simpleBuf = try self.allocBuffer(bufByteSize, bufUse, memUse, allocFlags);
+
+        return Buffer{
+            .typ = bufInf.typ,
+            .update = bufInf.update,
+            .resize = bufInf.resize,
+            .mem = bufInf.mem,
+            .elementSize = bufInf.elementSize,
+
+            .descIndex = simpleBuf.descIndex,
+            .curCount = simpleBuf.curCount,
+            .handle = simpleBuf.handle,
+            .allocation = simpleBuf.allocation,
+            .gpuAddress = simpleBuf.gpuAddress,
+            .size = simpleBuf.size,
+            .mappedPtr = simpleBuf.mappedPtr,
+        };
     }
 
-    pub fn allocBuffer(self: *const Vma, size: vk.VkDeviceSize, bufUse: vk.VkBufferUsageFlags, memUse: vk.VmaMemoryUsage, memFlags: vk.VmaAllocationCreateFlags) !Buffer {
+    pub fn allocBuffer(self: *const Vma, size: vk.VkDeviceSize, bufUse: vk.VkBufferUsageFlags, memUse: vk.VmaMemoryUsage, memFlags: vk.VmaAllocationCreateFlags) !SimpleBuffer {
         const bufCreateInf = vk.VkBufferCreateInfo{
             .sType = vk.VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
             .size = size,
@@ -123,19 +131,7 @@ pub const Vma = struct {
         };
     }
 
-    pub fn createTextureMeta(_: *const Vma, texInf: *const TextureMeta.TexInf) TextureMeta {
-        return .{
-            .typ = texInf.typ,
-            .update = texInf.update,
-            .mem = texInf.mem,
-            .resize = texInf.resize,
-            .viewType = vk.VK_IMAGE_VIEW_TYPE_2D,
-            .descriptors = texInf.descriptors,
-            .texUse = texInf.texUse,
-        };
-    }
-
-    pub fn allocDefinedTexture(self: *Vma, texInf: *const TextureMeta.TexInf) !Texture {
+    pub fn allocDefinedTexture(self: *Vma, texInf: *const TexInf) !Texture {
         const memUsage = vhF.getMemUsage(texInf.mem);
         const texUse = texInf.texUse.getImageUse();
         const format = texInf.typ.getFormat();
@@ -143,7 +139,24 @@ pub const Vma = struct {
         const subRange = vhF.createSubresourceRange(aspectFlags, 0, 1, 0, 1);
         const extent = vk.VkExtent3D{ .width = texInf.width, .height = texInf.height, .depth = texInf.depth };
 
-        return try self.allocTexture(memUsage, texUse, format, extent, subRange, vk.VK_IMAGE_VIEW_TYPE_2D, texInf.typ);
+        const simpleTex = try self.allocTexture(memUsage, texUse, format, extent, subRange, vk.VK_IMAGE_VIEW_TYPE_2D, texInf.typ);
+
+        return Texture{
+            .typ = texInf.typ,
+            .texUse = texInf.texUse,
+            .descriptors = texInf.descriptors,
+            .update = texInf.update,
+            .resize = texInf.resize,
+            .mem = texInf.mem,
+            .viewType = vk.VK_IMAGE_VIEW_TYPE_2D,
+
+            .img = simpleTex.img,
+            .view = simpleTex.view,
+            .allocation = simpleTex.allocation,
+            .extent = simpleTex.extent,
+            .descIndex = simpleTex.descIndex,
+            .sampledDescIndex = simpleTex.sampledDescIndex,
+        };
     }
 
     fn allocTexture(
@@ -155,7 +168,7 @@ pub const Vma = struct {
         subRange: vk.VkImageSubresourceRange,
         viewType: vk.VkImageViewType,
         typ: vhE.TexTyp,
-    ) !Texture {
+    ) !SimpleTexture {
         var img: vk.VkImage = undefined;
         var allocation: vk.VmaAllocation = undefined;
         const imgInf = createImageInf(format, imgUse, extent, subRange, vk.VK_IMAGE_TYPE_2D);

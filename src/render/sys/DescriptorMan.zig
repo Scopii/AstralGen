@@ -1,6 +1,6 @@
-const TextureMeta = @import("../types/res/TextureMeta.zig").TextureMeta;
 const FixedList = @import("../../.structures/FixedList.zig").FixedList;
 const SimpleMap = @import("../../.structures/SimpleMap.zig").SimpleMap;
+const SimpleBuffer = @import("../types/res/Buffer.zig").SimpleBuffer;
 const KeyPool = @import("../../.structures/KeyPool.zig").KeyPool;
 const Texture = @import("../types/res/Texture.zig").Texture;
 const Buffer = @import("../types/res/Buffer.zig").Buffer;
@@ -23,12 +23,12 @@ const MAX_IN_FLIGHT = @as(u32, rc.MAX_IN_FLIGHT);
 const DESC_POOL_MAX = DESC_MAX * MAX_IN_FLIGHT;
 
 pub const DescriptorMan = struct {
-    descHeap: Buffer,
+    descHeap: SimpleBuffer,
     descStride: u64,
     startOffset: u64,
     driverReservedSize: u64,
 
-    samplerHeap: Buffer,
+    samplerHeap: SimpleBuffer,
     samplerStride: u64,
     samplerStartOffset: u64,
     samplerReservedSize: u64,
@@ -166,25 +166,25 @@ pub const DescriptorMan = struct {
         };
     }
 
-    pub fn queueTextureDescriptor(self: *DescriptorMan, texMeta: *const TextureMeta, texture: *Texture) !void {
-        const subRange = vhF.createSubresourceRange(texMeta.typ.getImageAspectFlags(), 0, 1, 0, 1);
+    pub fn queueTextureDescriptor(self: *DescriptorMan, texture: *Texture) !void {
+        const subRange = vhF.createSubresourceRange(texture.typ.getImageAspectFlags(), 0, 1, 0, 1);
 
-        switch (texMeta.descriptors) {
+        switch (texture.descriptors) {
             .None => {},
             .StorageOnly => {
-                try self.queueTextureDescriptorTyp(texMeta, texture, subRange, vk.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+                try self.queueTextureDescriptorTyp(texture, subRange, vk.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
             },
             .SampledOnly => {
-                try self.queueTextureDescriptorTyp(texMeta, texture, subRange, vk.VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE);
+                try self.queueTextureDescriptorTyp(texture, subRange, vk.VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE);
             },
             .StorageSampled => {
-                try self.queueTextureDescriptorTyp(texMeta, texture, subRange, vk.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
-                try self.queueTextureDescriptorTyp(texMeta, texture, subRange, vk.VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE);
+                try self.queueTextureDescriptorTyp(texture, subRange, vk.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+                try self.queueTextureDescriptorTyp(texture, subRange, vk.VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE);
             },
         }
     }
 
-    pub fn queueTextureDescriptorTyp(self: *DescriptorMan, texMeta: *const TextureMeta, texture: *Texture, subRange: vk.VkImageSubresourceRange, descTyp: vk.VkDescriptorType) !void {
+    pub fn queueTextureDescriptorTyp(self: *DescriptorMan, texture: *Texture, subRange: vk.VkImageSubresourceRange, descTyp: vk.VkDescriptorType) !void {
         var descUpdate: DescUpdate = undefined;
 
         switch (descTyp) {
@@ -199,7 +199,7 @@ pub const DescriptorMan = struct {
             else => return error.DescTypeInvalid,
         }
 
-        self.imgViews[descUpdate.specificIndex] = vhF.getViewCreateInfo(texture.img, texMeta.viewType, texMeta.typ.getFormat(), subRange);
+        self.imgViews[descUpdate.specificIndex] = vhF.getViewCreateInfo(texture.img, texture.viewType, texture.typ.getFormat(), subRange);
 
         self.imgDescs[descUpdate.specificIndex] = vk.VkImageDescriptorInfoEXT{
             .sType = vk.VK_STRUCTURE_TYPE_IMAGE_DESCRIPTOR_INFO_EXT,

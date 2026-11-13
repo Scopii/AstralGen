@@ -8,14 +8,14 @@ const TaskOrMeshExec = @import("../render/types/pass/PassDefinition.zig").TaskOr
 const PassDefinition = @import("../render/types/pass/PassDefinition.zig").PassDefinition;
 const AttachmentFill = @import("../render/types/pass/AttachmentUse.zig").AttachmentFill;
 const PassProperty = @import("../render/types/pass/PassDefinition.zig").PassProperty;
-const TexDesc = @import("../render/types/res/TextureMeta.zig").TextureMeta.TexDesc;
 const ComputeExec = @import("../render/types/pass/PassDefinition.zig").ComputeExec;
 const VertexExec = @import("../render/types/pass/PassDefinition.zig").VertexExec;
-const BufDesc = @import("../render/types/res/BufferMeta.zig").BufferMeta.BufDesc;
 const RenderRegistryData = @import("RenderRegistryData.zig").RenderRegistryData;
 const TextureFill = @import("../render/types/pass/TextureUse.zig").TextureFill;
 const BufferFill = @import("../render/types/pass/BufferUse.zig").BufferFill;
 const Pass = @import("../render/types/pass/PassDefinition.zig").Pass;
+const TexDesc = @import("../render/types/res/Texture.zig").TexDesc;
+const BufDesc = @import("../render/types/res/Buffer.zig").BufDesc;
 const BufPassId = @import("../.configs/idConfig.zig").BufPassId;
 const TexPassId = @import("../.configs/idConfig.zig").TexPassId;
 const PassId = @import("../.configs/idConfig.zig").PassId;
@@ -84,7 +84,7 @@ pub const RenderRegistrySys = struct {
                 .shaderInf => |shaderInf| PassProperty{ .shaderInf = shaderInf },
 
                 .vertexAttribute => |vertexAttribute| PassProperty{ .vertexAttribute = vertexAttribute },
-                
+
                 .renderState => |renderState| PassProperty{ .renderState = renderState },
 
                 .passLink => |passLink| PassProperty{ .passLink = try registry.getPassId(passLink.predecessor) },

@@ -127,13 +127,7 @@ pub const CameraSys = struct {
                 const camDataPtr = try arena.create(CamData);
                 camDataPtr.* = camData;
 
-                const PayloadPtr = @FieldType(RenderAssignerQueue.RenderAssignerEvent, "updateBuffer");
-                const Payload = std.meta.Child(PayloadPtr);
-
-                const updateBufferPtr = try arena.create(Payload);
-                updateBufferPtr.* = .{ .bufName = camComp.bufName , .data = std.mem.asBytes(camDataPtr) };
-
-                assignerQueue.append(.{ .updateBuffer = updateBufferPtr });
+                try assignerQueue.append(.{ .updateBuffer = .{ .bufName = camComp.bufName, .data = std.mem.asBytes(camDataPtr) } });
 
                 // Reset dirty flag
                 transform.isDirty = false;
@@ -141,7 +135,7 @@ pub const CameraSys = struct {
         }
     }
 
-    // --- PURE MATH HELPERS ---
+    // PURE MATH HELPERS
 
     inline fn getForward(pitch: f32, yaw: f32) zm.Vec {
         return zm.normalize3(zm.f32x4(

@@ -1,6 +1,4 @@
 const RenderRegistryData = @import("../renderRegistry/RenderRegistryData.zig").RenderRegistryData;
-const TexDesc = @import("../render/types/res/TextureMeta.zig").TextureMeta.TexDesc;
-const BufDesc = @import("../render/types/res/BufferMeta.zig").BufferMeta.BufDesc;
 const TexReference = @import("../renderGraph/components.zig").TexReference;
 const BufReference = @import("../renderGraph/components.zig").BufReference;
 const SimpleIdMap = @import("../.structures/SimpleIdMap.zig").SimpleIdMap;
@@ -8,7 +6,9 @@ const LinkedIdMap = @import("../.structures/LinkedIdMap.zig").LinkedIdMap;
 const Dependancy = @import("../renderGraph/components.zig").Dependency;
 const DependencyData = @import("3.5_Dependency.zig").DependencyData;
 const FixedList = @import("../.structures/FixedList.zig").FixedList;
+const TexDesc = @import("../render/types/res/Texture.zig").TexDesc;
 const OutputLoadData = @import("2_OutputLoad.zig").OutputLoadData;
+const BufDesc = @import("../render/types/res/Buffer.zig").BufDesc;
 const CompositeData = @import("5.2_Composite.zig").CompositeData;
 const BufPassId = @import("../.configs/idConfig.zig").BufPassId;
 const TexPassId = @import("../.configs/idConfig.zig").TexPassId;

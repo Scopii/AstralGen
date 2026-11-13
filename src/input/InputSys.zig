@@ -51,7 +51,7 @@ pub const InputSys = struct {
         if (ac.KEY_EVENT_INFO == true) std.debug.print("KeyStates {}\n", .{inputData.keyStates.len});
     }
 
-    pub fn convert(inputData: *InputData, rendererQueue: *RendererQueue) void {
+    pub fn convert(inputData: *InputData, rendererQueue: *RendererQueue) !void {
         inputData.resetState();
 
         for (ac.keyMap) |assignment| {
@@ -82,7 +82,7 @@ pub const InputSys = struct {
                             inputData.toggleImgui = true;
                         },
                         .toggleGpuProfiling => {
-                            rendererQueue.append(.toggleGpuProfiling);
+                            try rendererQueue.append(.toggleGpuProfiling);
                         },
                         .speedMode => inputData.speedMode = true,
                     }

@@ -67,14 +67,11 @@ pub const UiSys = struct {
                     } else return;
                 };
 
-                const PayloadPtr = @FieldType(RenderAssignerQueue.RenderAssignerEvent, "updateTexture");
-                const updateTexPtr = try arena.create(std.meta.Child(PayloadPtr));
-                updateTexPtr.* = .{
-                    .texName = "ImguiFontTex" ,
+                try assignerQueue.append(.{ .updateTexture = .{
+                    .texName = "ImguiFontTex",
                     .data = pixelBytes,
                     .newExtent = .{ .width = @intCast(width), .height = @intCast(height), .depth = 1 },
-                };
-                assignerQueue.append(.{ .updateTexture = updateTexPtr });
+                } });
 
                 // texData.tex_id = @enumFromInt(@as(u64, rc.ImguiFontTex.val())); // Why was this needed before??
 
@@ -263,7 +260,7 @@ pub const UiSys = struct {
                     // const texPassId: TexPassId = if (rawId == 0) rc.ImguiFontTex else TexPassId.id(@as(u16, @intCast(rawId)));
 
                     const uiDraw = UiNode.UiDraw{
-                        .drawTex =  "ImguiFontTex" , // texPassId
+                        .drawTex = "ImguiFontTex", // texPassId
                         .clipRect = pcmd.clip_rect,
                         .vtxOffset = globalVtxOffset + @as(i32, @intCast(pcmd.vtx_offset)),
                         .idxOffset = globalIdxOffset + pcmd.idx_offset,
@@ -285,22 +282,15 @@ pub const UiSys = struct {
                 .windowId = window.id,
                 .displayPos = drawData.display_pos,
                 .displaySize = drawData.display_size,
-                .imguiVB =  "ImguiVB" ,
-                .imguiIB =  "ImguiIB" ,
+                .imguiVB = "ImguiVB",
+                .imguiIB = "ImguiIB",
                 .firstDrawIndex = @intCast(firstDrawIndex),
                 .lastDrawIndex = @intCast(lastDrawIndex),
             }) catch return error.UiNodesFUll;
         }
 
-        const PayloadVtx = @FieldType(RenderAssignerQueue.RenderAssignerEvent, "updateBuffer");
-        const updateVtxPtr = try arena.create(std.meta.Child(PayloadVtx));
-        updateVtxPtr.* = .{ .bufName = "ImguiVB" , .data = vtxBuffer };
-        assignerQueue.append(.{ .updateBuffer = updateVtxPtr });
-
-        const PayloadIdx = @FieldType(RenderAssignerQueue.RenderAssignerEvent, "updateBuffer");
-        const updateIdxPtr = try arena.create(std.meta.Child(PayloadIdx));
-        updateIdxPtr.* = .{ .bufName = "ImguiIB" , .data = idxBuffer };
-        assignerQueue.append(.{ .updateBuffer = updateIdxPtr });
+        try assignerQueue.append(.{ .updateBuffer = .{ .bufName = "ImguiVB", .data = vtxBuffer } });
+        try assignerQueue.append(.{ .updateBuffer = .{ .bufName = "ImguiIB", .data = idxBuffer } });
     }
 
     pub fn deinit(ui: *UiData) void {

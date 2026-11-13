@@ -1,11 +1,10 @@
-const TexDesc = @import("../render/types/res/TextureMeta.zig").TextureMeta.TexDesc;
-const BufDesc = @import("../render/types/res/BufferMeta.zig").BufferMeta.BufDesc;
 const ClearColor = @import("../render/types/pass/AttachmentUse.zig").ClearColor;
+const GpuObjectData = @import("../render/help/Types.zig").GpuObjectData;
+const TexDesc = @import("../render/types/res/Texture.zig").TexDesc;
+const BufDesc = @import("../render/types/res/Buffer.zig").BufDesc;
 const CameraData = @import("../camera/CameraSys.zig").CamData;
 const vhT = @import("../render/help/Types.zig");
 const vk = @import("../.modules/vk.zig").c;
-
-const GpuObjectData = @import("../render/help/Types.zig").GpuObjectData;
 
 pub const ENTITY_COUNT = 30;
 pub const ENTITY_MAX = 512;
@@ -102,5 +101,5 @@ pub const TRANSIENT_COLOR_TEX = TexDesc.makeTransient(.Gpu, .Color16, 16, 9, 1);
 pub const TRANSIENT_ATT_TEX = TexDesc.makeTransient(.Gpu, .Color16, 16, 9, 1);
 pub const TRANSIENT_DEPTH_TEX = TexDesc.makeTransient(.Gpu, .Depth32, 16, 9, 1);
 
-pub const PERSISTENT_COLOR_TEX = TexDesc.makePersistent(.Gpu, .Color16, 256, 256, 1, .{ .storage = true, .sampled = true });
+pub const PERSISTENT_COLOR_TEX = TexDesc.makePersistent(.Gpu, .Color16, 1, 1, 1, .{ .storage = true, .sampled = true });
 pub const IMGUI_FONT_TEX = TexDesc.makePersistent(.Gpu, .Color8, 1, 1, 1, .{ .colorAtt = true, .sampled = true });

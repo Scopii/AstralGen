@@ -1,11 +1,17 @@
-const TexDesc = @import("../render/types/res/TextureMeta.zig").TextureMeta.TexDesc;
-const BufDesc = @import("../render/types/res/BufferMeta.zig").BufferMeta.BufDesc;
+const PassTextureUpdate = @import("../renderAssigner/RenderAssignerQueue.zig").RenderAssignerEvent.PassTextureUpdate;
+const PassBufferUpdate = @import("../renderAssigner/RenderAssignerQueue.zig").RenderAssignerEvent.PassBufferUpdate;
+const TexDesc = @import("../render/types/res/Texture.zig").TexDesc;
+const BufDesc = @import("../render/types/res/Buffer.zig").BufDesc;
+const RingList = @import("../.structures/RingList.zig").RingList;
+const TexInf = @import("../render/types/res/Texture.zig").TexInf;
+const BufInf = @import("../render/types/res/Buffer.zig").BufInf;
 const BufPassId = @import("../.configs/idConfig.zig").BufPassId;
 const TexPassId = @import("../.configs/idConfig.zig").TexPassId;
 const PassId = @import("../.configs/idConfig.zig").PassId;
 const TexId = @import("../.configs/idConfig.zig").TexId;
 const BufId = @import("../.configs/idConfig.zig").BufId;
 const rc = @import("../.configs/renderConfig.zig");
+const vhE = @import("../render/help/Enums.zig");
 
 pub const TextureStringLink = struct {
     in: []const u8, // Should be String?
@@ -49,6 +55,28 @@ pub const PassLifetime = struct {
 pub const GraphLifetime = struct {
     firstLevel: u16,
     lastLevel: u16,
+};
+
+pub const ManualBuf = struct {
+    updateTyp: vhE.UpdateType,
+    subBufs: RingList(BufId, rc.MAX_IN_FLIGHT) = .{},
+};
+
+pub const SubResTexture = struct {
+    lastUsedFrame: u64 = 0,
+    texId: TexId,
+    texInf: TexInf,
+};
+
+pub const ManualTex = struct {
+    updateTyp: vhE.UpdateType,
+    subTexes: RingList(TexId, rc.MAX_IN_FLIGHT) = .{},
+};
+
+pub const SubResBuffer = struct {
+    lastUsedFrame: u64 = 0,
+    bufId: BufId,
+    bufInf: BufInf,
 };
 
 pub const TransientBuffer = struct {

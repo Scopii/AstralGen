@@ -53,7 +53,7 @@ pub const WindowSys = struct {
         rendererOutQueue.clear();
     }
 
-    pub fn update(windowData: *WindowData, inputData: *const InputData, windowQueue: *WindowQueue, rendererQueue: *RendererQueue, memoryMan: *MemoryManager) !void {
+    pub fn update(windowData: *WindowData, inputData: *const InputData, windowQueue: *WindowQueue, rendererQueue: *RendererQueue, _: *MemoryManager) !void {
         for (windowQueue.get()) |windowEvent| {
             switch (windowEvent) {
                 .addWindow => |inf| try addWindow(windowData, inf.title, inf.w, inf.h, inf.x, inf.y, inf.resize, inf.viewIds),
@@ -66,9 +66,7 @@ pub const WindowSys = struct {
 
         const changedWindows = getChangedWindows(windowData);
         for (changedWindows) |changedWindow| {
-            const updatedWindowPtr = try memoryMan.arena.allocator().create(Window);
-            updatedWindowPtr.* = changedWindow;
-            rendererQueue.append(.{ .updateWindowState = updatedWindowPtr });
+            try rendererQueue.append(.{ .updateWindowState = changedWindow });
         }
 
         cleanupChangesWindows(windowData);

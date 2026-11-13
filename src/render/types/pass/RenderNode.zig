@@ -2,20 +2,20 @@ const TaskOrMeshIndirectExec = @import("../pass/PassDefinition.zig").TaskOrMeshI
 const VertexIndexedExec = @import("../pass/PassDefinition.zig").VertexIndexedExec;
 const TaskOrMeshExec = @import("../pass/PassDefinition.zig").TaskOrMeshExec;
 const VertexAttribute = @import("VertexAttribute.zig").VertexAttribute;
-const TextureState = @import("../res/Texture.zig").Texture.TextureState;
 const VertexBufferUse = @import("VertexBufferUse.zig").VertexBufferUse;
 const TexPassId = @import("../../../.configs/idConfig.zig").TexPassId;
 const BufPassId = @import("../../../.configs/idConfig.zig").BufPassId;
 const RenderStateUnion = @import("RenderState.zig").RenderStateUnion;
-const BufferState = @import("../res/Buffer.zig").Buffer.BufferState;
 const WindowId = @import("../../../.configs/idConfig.zig").WindowId;
 const ShaderId = @import("../../../.configs/idConfig.zig").ShaderId;
 const VertexExec = @import("../pass/PassDefinition.zig").VertexExec;
 const IndexBufferUse = @import("IndexBufferUse.zig").IndexBufferUse;
 const PassId = @import("../../../.configs/idConfig.zig").PassId;
+const TextureState = @import("../res/Texture.zig").TextureState;
+const QueryTyp = @import("../base/Cmd.zig").QueryPair.QueryTyp;
 const TexId = @import("../../../.configs/idConfig.zig").TexId;
 const BufId = @import("../../../.configs/idConfig.zig").BufId;
-const QueryTyp = @import("../base/Cmd.zig").QueryPair.QueryTyp;
+const BufferState = @import("../res/Buffer.zig").BufferState;
 const ClearColor = @import("AttachmentUse.zig").ClearColor;
 const ClearDepth = @import("AttachmentUse.zig").ClearDepth;
 const String = @import("../../../globalHelper.zig").String;
@@ -105,8 +105,8 @@ pub const RenderNode = union(enum) {
 
     // Barrier Commands
     bufBarrier: struct { bufId: BufId, oldState: BufferState, newState: BufferState },
-    texBarrier: struct { texId: TexId, oldState: TextureState, newState: TextureState, ignoreOld: bool },
-    swapchainTargetBarrier: struct { windowId: WindowId, oldState: TextureState, newState: TextureState, ignoreOld: bool },
+    texBarrier: struct { texId: TexId, oldState: TextureState, newState: TextureState },
+    swapchainTargetBarrier: struct { windowId: WindowId, oldState: TextureState, newState: TextureState },
     bakeBarriers: void,
 
     // Profiling Commands

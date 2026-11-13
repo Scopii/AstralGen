@@ -1,7 +1,7 @@
 const TexPassId = @import("../../../.configs/idConfig.zig").TexPassId;
 const WindowId = @import("../../../.configs/idConfig.zig").WindowId;
+const SimpleTexture = @import("../res/Texture.zig").SimpleTexture;
 const rc = @import("../../../.configs/renderConfig.zig");
-const Texture = @import("../res/Texture.zig").Texture;
 const vk = @import("../../../.modules/vk.zig").c;
 const vhF = @import("../../help/Functions.zig");
 const vhE = @import("../../help/Enums.zig");
@@ -14,7 +14,7 @@ pub const Swapchain = struct {
     curIndex: u32 = 0,
     acquireSems: []vk.VkSemaphore, // indexed by max-in-flight.
     renderSems: []vk.VkSemaphore, // indexed by swapchain images
-    textures: []Texture, // indexed by swapchain images
+    textures: []SimpleTexture, // indexed by swapchain images
     extent: vk.VkExtent2D,
     inUse: bool = true,
     windowId: WindowId,
@@ -62,7 +62,7 @@ pub const Swapchain = struct {
         defer alloc.free(images);
         try vhF.check(vk.vkGetSwapchainImagesKHR(gpi, handle, &realImgCount, images.ptr), "Could not get Swapchain Images");
 
-        const baseTextures = try alloc.alloc(Texture, realImgCount);
+        const baseTextures = try alloc.alloc(SimpleTexture, realImgCount);
         errdefer alloc.free(baseTextures);
 
         const subRange = vhF.createSubresourceRange(vk.VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1);
@@ -73,7 +73,7 @@ pub const Swapchain = struct {
             var view: vk.VkImageView = undefined;
             try vhF.check(vk.vkCreateImageView(gpi, &viewInf, null, &view), "Failed to create image view");
 
-            baseTextures[i] = Texture{
+            baseTextures[i] = SimpleTexture{
                 .typ = .Swapchain,
                 .img = images[i],
                 .view = view,
@@ -123,7 +123,7 @@ pub const Swapchain = struct {
         return vk.vkAcquireNextImageKHR(gpi, self.handle, std.math.maxInt(u64), self.acquireSems[flightId], null, &self.curIndex);
     }
 
-    pub fn getCurTexture(self: *Swapchain) *Texture {
+    pub fn getCurTexture(self: *Swapchain) *SimpleTexture {
         return &self.textures[self.curIndex];
     }
 

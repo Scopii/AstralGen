@@ -1,9 +1,33 @@
-const ClearValue = @import("../pass/AttachmentUse.zig").ClearValue;
+const TexId = @import("../../../.configs/idConfig.zig").TexId;
+const rc = @import("../../../.configs/renderConfig.zig");
 const vk = @import("../../../.modules/vk.zig").c;
-const vhF = @import("../../help/Functions.zig");
 const vhE = @import("../../help/Enums.zig");
+const std = @import("std");
 
-pub const Texture = struct {
+pub const TextureState = struct {
+    stage: vhE.PipeStage = .TopOfPipe,
+    access: vhE.PipeAccess = .None,
+    layout: vhE.ImageLayout = .Undefined,
+};
+
+pub const TexInf = struct {
+    id: TexId,
+    mem: vhE.MemUsage,
+    typ: vhE.TexTyp,
+    texUse: vhE.TexUsage,
+    descriptors: vhE.TexDescriptorUsage,
+    width: u32,
+    height: u32,
+    depth: u32 = 1,
+    update: vhE.UpdateType,
+    resize: vhE.ResizeType = .Block,
+
+    pub fn create(texInf: TexInf) TexInf {
+        return texInf;
+    }
+};
+
+pub const SimpleTexture = struct {
     typ: vhE.TexTyp,
     img: vk.VkImage,
     view: vk.VkImageView,
@@ -11,72 +35,88 @@ pub const Texture = struct {
     extent: vk.VkExtent3D,
     descIndex: ?u31 = null,
     sampledDescIndex: ?u31 = null,
+};
 
-    pub const TextureState = struct {
-        stage: vhE.PipeStage = .TopOfPipe,
-        access: vhE.PipeAccess = .None,
-        layout: vhE.ImageLayout = .Undefined,
-    };
+pub const Texture = struct {
+    typ: vhE.TexTyp,
+    texUse: vhE.TexUsage,
+    descriptors: vhE.TexDescriptorUsage,
+    update: vhE.UpdateType,
+    resize: vhE.ResizeType,
+    mem: vhE.MemUsage,
+    viewType: vk.VkImageViewType,
 
-    pub fn createAttachment(self: *const Texture, format: vhE.TexTyp, clear: ?ClearValue) !vk.VkRenderingAttachmentInfo {
-        var clearValue: vk.VkClearValue = undefined;
+    img: vk.VkImage,
+    view: vk.VkImageView,
+    allocation: vk.VmaAllocation,
+    extent: vk.VkExtent3D,
+    descIndex: ?u31 = null,
+    sampledDescIndex: ?u31 = null,
+};
 
-        if (clear) |clearColor| {
-            switch (clearColor) {
-                .color => |color| switch (format) {
-                    .Color16, .Color8, .Swapchain => clearValue = vk.VkClearValue{ .color = .{ .float32 = .{ color.R, color.G, color.B, color.A } } },
-                    else => return error.ColorFormatHasDepthColor,
-                },
-                .depth => |depthStencil| switch (format) {
-                    .Depth32, .Stencil8 => clearValue = vk.VkClearValue{ .depthStencil = .{ .depth = depthStencil.depthStencil.depth, .stencil = depthStencil.depthStencil.stencil } },
-                    else => return error.DepthFormatHasDepthColor,
-                },
-            }
-        }
+pub const TexDesc = struct {
+    share: enum { persistent, transient },
+    mem: vhE.MemUsage,
+    typ: vhE.TexTyp,
+    texUse: vhE.TexUsage,
+    descriptors: vhE.TexDescriptorUsage,
+    width: u32,
+    height: u32,
+    depth: u32 = 1,
+    update: vhE.UpdateType,
+    resize: vhE.ResizeType = .Block,
+    fitPass: bool,
 
-        return vk.VkRenderingAttachmentInfo{
-            .sType = vk.VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-            .imageView = self.view,
-            .imageLayout = vk.VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
-            .loadOp = if (clear != null) vk.VK_ATTACHMENT_LOAD_OP_CLEAR else vk.VK_ATTACHMENT_LOAD_OP_LOAD,
-            .storeOp = vk.VK_ATTACHMENT_STORE_OP_STORE,
-            .clearValue = clearValue,
+    pub fn makeTransient(mem: vhE.MemUsage, typ: vhE.TexTyp, width: u32, height: u32, depth: u32) TexDesc {
+        return .{
+            .share = .transient,
+            .mem = mem,
+            .typ = typ,
+            .texUse = .{},
+            .descriptors = .None,
+            .width = width,
+            .height = height,
+            .depth = depth,
+            .update = .Rarely,
+            .resize = .Block,
+            .fitPass = true,
         };
     }
 
-    pub fn makeImageBarrier(self: *const Texture, oldState: TextureState, newState: TextureState, ignoreOld: bool) vk.VkImageMemoryBarrier2 {
-        const subRange = vhF.createSubresourceRange(self.typ.getImageAspectFlags(), 0, 1, 0, 1);
+    pub fn makePersistent(mem: vhE.MemUsage, typ: vhE.TexTyp, width: u32, height: u32, depth: u32, texUse: vhE.TexUsage) TexDesc {
+        var descriptors: vhE.TexDescriptorUsage = .None;
 
-        // const srcStage = if (ignoreOld == true) .None else self.state.stage;
-        // const srcAccess = if (ignoreOld == true) .None else self.state.access;
-        const srcStage = oldState.stage; // CHANGED: always wait for the previous user of this memory
-        const srcAccess = oldState.access; // CHANGED: always flush its writes
-        const srcLayout = if (ignoreOld == true) .Undefined else oldState.layout;
+        const needsSampled: bool = texUse.sampled or texUse.colorAtt or texUse.depthAtt;
+        const needsStorage: bool = texUse.storage;
 
-        const barrier = vk.VkImageMemoryBarrier2{
-            .sType = vk.VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-            .srcStageMask = @intFromEnum(srcStage),
-            .srcAccessMask = @intFromEnum(srcAccess),
-            .dstStageMask = @intFromEnum(newState.stage),
-            .dstAccessMask = @intFromEnum(newState.access),
-            .oldLayout = @intFromEnum(srcLayout),
-            .newLayout = @intFromEnum(newState.layout),
-            .srcQueueFamilyIndex = vk.VK_QUEUE_FAMILY_IGNORED,
-            .dstQueueFamilyIndex = vk.VK_QUEUE_FAMILY_IGNORED,
-            .image = self.img,
-            .subresourceRange = subRange,
+        if (needsSampled == true and needsStorage == true) descriptors = .StorageSampled;
+        if (needsSampled == false and needsStorage == true) descriptors = .StorageOnly;
+        if (needsSampled == true and needsStorage == false) descriptors = .SampledOnly;
+
+        return .{
+            .share = .persistent,
+            .mem = mem,
+            .typ = typ,
+            .texUse = texUse,
+            .descriptors = descriptors,
+            .width = width,
+            .height = height,
+            .depth = depth,
+            .update = .Rarely,
+            .resize = .Fit,
+            .fitPass = false,
         };
-        return barrier;
     }
 
-    pub fn makeMemoryBarrier(_: *const Texture, oldState: TextureState, newState: TextureState) vk.VkMemoryBarrier2 {
-        const barrier = vk.VkMemoryBarrier2{
-            .sType = vk.VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
-            .srcStageMask = @intFromEnum(oldState.stage),
-            .srcAccessMask = @intFromEnum(oldState.access),
-            .dstStageMask = @intFromEnum(newState.stage),
-            .dstAccessMask = @intFromEnum(newState.access),
+    pub fn guessMemoryCost(self: *const TexDesc) u64 {
+        const bytesPerPixel = self.typ.bytesPerPixel();
+        const rawMemory = @as(u64, self.width) * @as(u64, self.height) * @as(u64, self.depth) * bytesPerPixel;
+
+        return switch (self.update) {
+            .Rarely => rawMemory,
+            .Often, .PerFrame => rawMemory * rc.MAX_IN_FLIGHT,
+
+            // .Rarely, .Often, .PerFrame => rawMemory,
         };
-        return barrier;
     }
 };

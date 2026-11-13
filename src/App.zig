@@ -98,9 +98,6 @@ pub const App = struct {
 
     pub fn deinit(self: *App) void {
         UiSys.deinit(&self.data.ui);
-        self.assignerQueue.append(.{ .deleteManualBuffer = "ImguiIB" });
-        self.assignerQueue.append(.{ .deleteManualBuffer = "ImguiVB" });
-        self.assignerQueue.append(.{ .deleteManualTexture = "ImguiFontTex" });
         RenderRegistrySys.deinit(&self.data.renderRegistry);
         self.renderer.deinit();
         ShaderSys.deinit(&self.data.shader, self.memoryMan.getAllocator());
@@ -244,20 +241,18 @@ pub const App = struct {
 
         try ShaderSys.update(&self.data.shader, &self.shaderQueue, &self.rendererQueue, self.memoryMan);
 
-        self.assignerQueue.append(.{ .createManualBuffer = "ImguiIB" });
-        self.assignerQueue.append(.{ .createManualBuffer = "ImguiVB" });
-        self.assignerQueue.append(.{ .createManualTexture = "ImguiFontTex" });
+        try self.assignerQueue.append(.{ .createManualBuffer = "ImguiIB" });
+        try self.assignerQueue.append(.{ .createManualBuffer = "ImguiVB" });
+        try self.assignerQueue.append(.{ .createManualTexture = "ImguiFontTex" });
 
-        self.assignerQueue.append(.{ .createManualTexture = "TestTileTex" });
+        try self.assignerQueue.append(.{ .createManualTexture = "TestTileTex" });
 
-        self.assignerQueue.append(.{ .createManualBuffer = "ReadbackSB" });
-        self.assignerQueue.append(.{ .createManualBuffer = "MainCamUB" });
-        self.assignerQueue.append(.{ .createManualBuffer = "DebugCamUB" });
-        self.assignerQueue.append(.{ .createManualBuffer = "EntitySB" });
+        try self.assignerQueue.append(.{ .createManualBuffer = "ReadbackSB" });
+        try self.assignerQueue.append(.{ .createManualBuffer = "MainCamUB" });
+        try self.assignerQueue.append(.{ .createManualBuffer = "DebugCamUB" });
+        try self.assignerQueue.append(.{ .createManualBuffer = "EntitySB" });
 
         // PROCEDURAL TEXTURE GENERATION
-        const AddTexPtr = @FieldType(RenderAssignerQueue.RenderAssignerEvent, "updateTexture");
-        const AddTex = std.meta.Child(AddTexPtr);
         const arena = self.memoryMan.getGlobalArena();
 
         const pixels = try arena.alloc([4]f16, 256 * 256);
@@ -270,9 +265,7 @@ pub const App = struct {
                 pixels[y * 256 + x] = .{ val, val, 1.0, 1.0 };
             }
         }
-        const addTextureDataPtr = try arena.create(AddTex);
-        addTextureDataPtr.* = .{ .texName = "TestTileTex", .data = std.mem.sliceAsBytes(pixels), .newExtent = null };
-        self.assignerQueue.append(.{ .updateTexture = addTextureDataPtr });
+        try self.assignerQueue.append(.{ .updateTexture = .{ .texName = "TestTileTex", .data = std.mem.sliceAsBytes(pixels), .newExtent = .{ .width = 256, .height = 256, .depth = 1 } } });
         // TEXTURE GEN END
 
         try UiSys.init(&self.data.ui, self.memoryMan);
@@ -309,7 +302,7 @@ pub const App = struct {
 
                 // Handle Inputs
                 InputSys.update(&self.data.input, &self.inputQueue);
-                InputSys.convert(&self.data.input, &self.rendererQueue);
+                try InputSys.convert(&self.data.input, &self.rendererQueue);
 
                 try WindowSys.update(&self.data.window, &self.data.input, &self.windowQueue, &self.rendererQueue, self.memoryMan);
 
@@ -356,7 +349,7 @@ pub const App = struct {
 
                 // std.debug.print("Render Compiler: {d:.3} ms\n", .{@as(f64, @floatFromInt(std.time.microTimestamp() - start2)) / 1_000.0});
 
-                const sortedRenderNodes = self.data.renderCompiler.sortedNodes.constSlice();
+                const sortedRenderNodes = self.data.renderCompiler.sortedNodes;
                 const renderedSwapchains = self.data.renderCompiler.renderedSwapchains.constSlice();
                 const pushData = self.data.renderCompiler.pushData.constSlice();
 

@@ -1,6 +1,5 @@
-const TextureMeta = @import("../types/res/TextureMeta.zig").TextureMeta;
-const SimpleMap = @import("../../.structures/SimpleMap.zig").SimpleMap;
-const BufferMeta = @import("../types/res/BufferMeta.zig").BufferMeta;
+const SimpleIdMap = @import("../../.structures/SimpleIdMap.zig").SimpleIdMap;
+const SimpleBuffer = @import("../types/res/Buffer.zig").SimpleBuffer;
 const Texture = @import("../types/res/Texture.zig").Texture;
 const TexId = @import("../../.configs/idConfig.zig").TexId;
 const BufId = @import("../../.configs/idConfig.zig").BufId;
@@ -27,33 +26,27 @@ pub const TexTransfer = struct {
 
 pub const ResourceUpdater = struct {
     alloc: Allocator,
-    stagingBuffers: [rc.MAX_IN_FLIGHT]Buffer,
-    stagingOffsets: [rc.MAX_IN_FLIGHT]u64 = .{0} ** rc.MAX_IN_FLIGHT,
+    stagingBuffers: [rc.MAX_IN_FLIGHT]SimpleBuffer,
+    stagingOffsets: [rc.MAX_IN_FLIGHT]u64 = @splat(0),
 
-    fullUpdateLists: [rc.MAX_IN_FLIGHT]SimpleMap(BufTransfer, rc.BUF_MAX, u32, rc.BUF_MAX, 0), // Could be slot map?
+    fullUpdateLists: [rc.MAX_IN_FLIGHT]SimpleIdMap(BufTransfer, rc.BUF_MAX, BufId, rc.BUF_MAX, 0) = @splat(.{}), // Could be slot map?
     segmentUpdatesLists: [rc.MAX_IN_FLIGHT]std.ArrayList(BufTransfer),
 
-    fullTexUpdateLists: [rc.MAX_IN_FLIGHT]SimpleMap(TexTransfer, rc.TEX_MAX, u32, rc.TEX_MAX, 0),
+    fullTexUpdateLists: [rc.MAX_IN_FLIGHT]SimpleIdMap(TexTransfer, rc.TEX_MAX, TexId, rc.TEX_MAX, 0) = @splat(.{}),
 
     pub fn init(alloc: Allocator, vma: *const Vma) !ResourceUpdater {
-        var stagingBuffers: [rc.MAX_IN_FLIGHT]Buffer = undefined;
-        var fullUpdateLists: [rc.MAX_IN_FLIGHT]SimpleMap(BufTransfer, rc.BUF_MAX, u32, rc.BUF_MAX, 0) = undefined;
+        var stagingBuffers: [rc.MAX_IN_FLIGHT]SimpleBuffer = undefined;
         var segmentUpdatesLists: [rc.MAX_IN_FLIGHT]std.ArrayList(BufTransfer) = undefined;
-        var fullTexUpdateLists: [rc.MAX_IN_FLIGHT]SimpleMap(TexTransfer, rc.TEX_MAX, u32, rc.TEX_MAX, 0) = undefined;
 
         for (0..rc.MAX_IN_FLIGHT) |i| {
             stagingBuffers[i] = try vma.allocStagingBuffer(rc.STAGING_BUF_SIZE);
-            fullUpdateLists[i] = .{};
             segmentUpdatesLists[i] = try std.ArrayList(BufTransfer).initCapacity(alloc, 512);
-            fullTexUpdateLists[i] = .{};
         }
 
         return .{
             .alloc = alloc,
             .stagingBuffers = stagingBuffers,
-            .fullUpdateLists = fullUpdateLists,
             .segmentUpdatesLists = segmentUpdatesLists,
-            .fullTexUpdateLists = fullTexUpdateLists,
         };
     }
 
@@ -71,7 +64,7 @@ pub const ResourceUpdater = struct {
         if (stagingOffset + bytes.len > rc.STAGING_BUF_SIZE) return error.StagingBufferFull;
 
         const texTransfer = TexTransfer{ .srcOffset = stagingOffset, .dstTexId = texId, .width = width, .height = height };
-        self.fullTexUpdateLists[flightId].upsert(texId.val(), texTransfer);
+        self.fullTexUpdateLists[flightId].upsert(texId, texTransfer);
         self.stagingOffsets[flightId] += (bytes.len + 15) & ~@as(u64, 15);
 
         const stagingPtr: [*]u8 = @ptrCast(self.stagingBuffers[flightId].mappedPtr);
@@ -102,7 +95,7 @@ pub const ResourceUpdater = struct {
         if (stagingOffset + bytes.len > rc.STAGING_BUF_SIZE) return error.StagingBufferFull;
 
         const transfer = BufTransfer{ .srcOffset = stagingOffset, .dstResId = bufId, .dstOffset = 0, .size = bytes.len };
-        self.fullUpdateLists[flightId].upsert(bufId.val(), transfer);
+        self.fullUpdateLists[flightId].upsert(bufId, transfer);
         self.stagingOffsets[flightId] += (bytes.len + 15) & ~@as(u64, 15);
 
         const stagingPtr: [*]u8 = @ptrCast(self.stagingBuffers[flightId].mappedPtr);

@@ -1,10 +1,15 @@
+const RenderNodeRing = @import("../../renderCompiler/RenderCompilerData.zig").RenderCompilerData.RenderNodeRing;
 const VertexBufferUse = @import("../types/pass/VertexBufferUse.zig").VertexBufferUse;
 const VertexAttribute = @import("../types/pass/VertexAttribute.zig").VertexAttribute;
 const IndexBufferUse = @import("../types/pass/IndexBufferUse.zig").IndexBufferUse;
 const CompositeNode = @import("../types/pass/RenderNode.zig").CompositeNode;
+const ClearValue = @import("../types/pass/AttachmentUse.zig").ClearValue;
 const RenderState = @import("../types/pass/RenderState.zig").RenderState;
+const SimpleTexture = @import("../types/res/Texture.zig").SimpleTexture;
 const FixedList = @import("../../.structures/FixedList.zig").FixedList;
 const RenderNode = @import("../types/pass/RenderNode.zig").RenderNode;
+const TextureState = @import("../types/res/Texture.zig").TextureState;
+const BufferState = @import("../types/res/Buffer.zig").BufferState;
 const Swapchain = @import("../types/base/Swapchain.zig").Swapchain;
 const ShaderId = @import("../../.configs/idConfig.zig").ShaderId;
 const UiNode = @import("../types/pass/RenderNode.zig").UiNode;
@@ -22,9 +27,9 @@ const Cmd = @import("../types/base/Cmd.zig").Cmd;
 const CmdManager = @import("CmdMan.zig").CmdMan;
 const Context = @import("Context.zig").Context;
 const vk = @import("../../.modules/vk.zig").c;
+const vhF = @import("../help/Functions.zig");
+const vhE = @import("../help/Enums.zig");
 const vhT = @import("../help/Types.zig");
-const TextureState = Texture.TextureState;
-const BufferState = Buffer.BufferState;
 const Allocator = std.mem.Allocator;
 const std = @import("std");
 
@@ -88,7 +93,7 @@ pub const CmdRecorder = struct {
         }
     }
 
-    pub fn recordFrame(self: *CmdRecorder, renderNodes: []RenderNode, flightId: u8, frame: u64, swapMan: *SwapchainMan, resMan: *ResourceMan, shaderMan: *ShaderManager, _: bool, pushData: []const u8) !*Cmd {
+    pub fn recordFrame(self: *CmdRecorder, renderNodes: *const RenderNodeRing, flightId: u8, frame: u64, swapMan: *SwapchainMan, resMan: *ResourceMan, shaderMan: *ShaderManager, _: bool, pushData: []const u8) !*Cmd {
         var cmd = try self.cmdMan.getCmd(flightId);
         try cmd.begin(flightId, frame);
 
@@ -118,7 +123,7 @@ pub const CmdRecorder = struct {
             const timeId = cmd.startTimer(.AllCmds, "Full Transfers", .Other);
 
             for (fullTransfers) |transfer| {
-                const buffer = try resMan.get(transfer.dstResId, cmd.flightId);
+                const buffer = try resMan.getBuf(transfer.dstResId);
                 cmd.copyBuffer(stagingBuf, transfer, buffer.handle);
             }
             cmd.endTimer(.BotOfPipe, timeId);
@@ -129,7 +134,7 @@ pub const CmdRecorder = struct {
             const timeId = cmd.startTimer(.AllCmds, "Partial Transfers", .Other);
 
             for (partialTransfers) |transfer| {
-                const buffer = try resMan.get(transfer.dstResId, cmd.flightId);
+                const buffer = try resMan.getBuf(transfer.dstResId);
                 cmd.copyBuffer(stagingBuf, transfer, buffer.handle);
             }
             cmd.endTimer(.BotOfPipe, timeId);
@@ -141,7 +146,7 @@ pub const CmdRecorder = struct {
             const timeId = cmd.startTimer(.AllCmds, "Texture Transfers", .Other);
 
             for (texTransfers) |transfer| {
-                const tex = try resMan.get(transfer.dstTexId, cmd.flightId);
+                const tex = try resMan.getTex(transfer.dstTexId);
                 cmd.copyBufferToImage(stagingBuf, tex.img, vk.VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, transfer.width, transfer.height, transfer.srcOffset);
             }
             cmd.endTimer(.BotOfPipe, timeId);
@@ -150,47 +155,38 @@ pub const CmdRecorder = struct {
         resUpdater.resetUpdates(cmd.flightId);
     }
 
-    fn stageTextureBarrier(self: *CmdRecorder, tex: *const Texture, srcState: TextureState, dstState: TextureState, ignoreOld: bool) !void {
-        var state = srcState;
-        if (ignoreOld == true) {
-            state.layout = .Undefined;
-            state.access = .None;
-            state.stage = .None;
-        }
-
-        const sameState = state.stage == dstState.stage and state.access == dstState.access and state.layout == dstState.layout;
-        if (sameState and dstState.access.isReadOnly()) return;
-
-        const layoutTransition = if (state.layout != dstState.layout) true else false;
+    fn stageTextureBarrier(self: *CmdRecorder, img: vk.VkImage, typ: vhE.TexTyp, srcState: TextureState, dstState: TextureState) !void {
+        const layoutTransition = if (srcState.layout != dstState.layout) true else false;
 
         if (rc.USE_MEM_BARRIER_ON_IMAGES == true and layoutTransition == false) {
-            const memBarrier = tex.makeMemoryBarrier(srcState, dstState);
+            const memBarrier = makeMemBarrier(srcState.stage, srcState.access, dstState.stage, dstState.access);
             self.memSrcAccess |= memBarrier.srcAccessMask;
             self.memSrcStage |= memBarrier.srcStageMask;
             self.memDstAccess |= memBarrier.dstAccessMask;
             self.memDstStage |= memBarrier.dstStageMask;
         } else {
-            try self.imgBarriers.append(tex.makeImageBarrier(srcState, dstState, ignoreOld));
+            try self.imgBarriers.append(makeImageBarrier(img, typ, srcState, dstState));
         }
     }
 
-    fn stageBufferBarrier(self: *CmdRecorder, buffer: *const Buffer, srcState: BufferState, dstState: BufferState) !void {
-        const sameState = srcState.stage == dstState.stage and srcState.access == dstState.access;
-        if (sameState and dstState.access.isReadOnly()) return;
+    fn stageBufferBarrier(self: *CmdRecorder, buf: *const Buffer, srcState: BufferState, dstState: BufferState) !void {
+        // const sameState = srcState.stage == dstState.stage and srcState.access == dstState.access;
+        // if (sameState and dstState.access.isReadOnly()) return;
 
         if (rc.USE_MEM_BARRIERS_ON_BUFFERS) {
-            const memBarrier = buffer.makeMemBarrier(srcState, dstState);
+            const memBarrier = makeMemBarrier(srcState.stage, srcState.access, dstState.stage, dstState.access);
             self.memSrcAccess |= memBarrier.srcAccessMask;
             self.memSrcStage |= memBarrier.srcStageMask;
             self.memDstAccess |= memBarrier.dstAccessMask;
             self.memDstStage |= memBarrier.dstStageMask;
         } else {
-            try self.bufBarriers.append(buffer.makeBarrier(srcState, dstState));
+            try self.bufBarriers.append(makeBarrier(buf.handle, srcState, dstState));
         }
     }
 
-    fn recordNodes(self: *CmdRecorder, cmd: *Cmd, renderNodes: []RenderNode, resMan: *ResourceMan, shaderMan: *ShaderManager, swapMan: *SwapchainMan, pushData: []const u8) !void {
-        for (renderNodes) |renderNode| {
+    fn recordNodes(self: *CmdRecorder, cmd: *Cmd, renderNodes: *const RenderNodeRing, resMan: *ResourceMan, shaderMan: *ShaderManager, swapMan: *SwapchainMan, pushData: []const u8) !void {
+        for (0..renderNodes.length()) |nodeIndex| {
+            const renderNode = renderNodes.get(@intCast(nodeIndex));
             switch (renderNode) {
                 .passPrint => {},
                 .compositePrint => {},
@@ -200,11 +196,11 @@ pub const CmdRecorder = struct {
 
                 // Graph Commands
                 .clearBuffer => |clearBufId| {
-                    const buffer: *Buffer = try resMan.get(clearBufId, cmd.flightId);
+                    const buffer: *const Buffer = try resMan.getBuf(clearBufId);
                     cmd.fillBuffer(buffer.handle, 0, vk.VK_WHOLE_SIZE, 0);
                 },
                 .clearTexture => |clearTexId| {
-                    const texture: *Texture = try resMan.get(clearTexId, cmd.flightId);
+                    const texture: *const Texture = try resMan.getTex(clearTexId);
                     switch (texture.typ) {
                         .Color16, .Color8, .Swapchain => cmd.clearColorImage(texture.img, 0.0, 0.0, 0.0, 0.0), // Maybe alpha should be 1 ??
                         .Depth32, .Stencil8 => cmd.clearDepthImage(texture.img, 0.0, 0.0),
@@ -227,12 +223,12 @@ pub const CmdRecorder = struct {
 
                 // Barrier Commands
                 .bufBarrier => |bufBarrier| {
-                    const buf = try resMan.get(bufBarrier.bufId, cmd.flightId); // FLIGHT SHOULD BE UNUSED
+                    const buf = try resMan.getBuf(bufBarrier.bufId);
                     try self.stageBufferBarrier(buf, bufBarrier.oldState, bufBarrier.newState);
                 },
                 .texBarrier => |texBarrier| {
-                    const tex = try resMan.get(texBarrier.texId, cmd.flightId); // FLIGHT SHOULD BE UNUSED
-                    try self.stageTextureBarrier(tex, texBarrier.oldState, texBarrier.newState, texBarrier.ignoreOld);
+                    const tex = try resMan.getTex(texBarrier.texId);
+                    try self.stageTextureBarrier(tex.img, tex.typ, texBarrier.oldState, texBarrier.newState);
                 },
 
                 .swapchainTargetBarrier => |targetBarrier| {
@@ -242,7 +238,7 @@ pub const CmdRecorder = struct {
                     };
                     const swapchain = swapMan.getTargetByIndex(targetIndex);
                     const targetTex = swapchain.getCurTexture();
-                    try self.stageTextureBarrier(targetTex, targetBarrier.oldState, targetBarrier.newState, targetBarrier.ignoreOld);
+                    try self.stageTextureBarrier(targetTex.img, targetTex.typ, targetBarrier.oldState, targetBarrier.newState);
                 },
                 .bakeBarriers => {
                     self.bakeBarriers(cmd, "Bake Barriers");
@@ -270,7 +266,7 @@ pub const CmdRecorder = struct {
                     std.debug.assert(push.size <= 128);
                     std.debug.assert(push.offset + push.size <= 128);
 
-                    const bufDesc = try resMan.getBufferDescriptor(push.bufId, cmd.flightId);
+                    const bufDesc = try resMan.getBufDescriptor(push.bufId);
                     const src = std.mem.asBytes(&bufDesc)[0..push.size]; // desc is u32
 
                     @memcpy(self.state.pushData[push.offset..][0..push.size], src);
@@ -280,7 +276,7 @@ pub const CmdRecorder = struct {
                     std.debug.assert(push.size <= 128);
                     std.debug.assert(push.offset + push.size <= 128);
 
-                    const texDesc = try resMan.getTextureDescriptor(push.texId, cmd.flightId, push.descTyp);
+                    const texDesc = try resMan.getTexDescriptor(push.texId, push.descTyp);
                     const src = std.mem.asBytes(&texDesc)[0..push.size]; // desc is u32
 
                     @memcpy(self.state.pushData[push.offset..][0..push.size], src);
@@ -302,7 +298,7 @@ pub const CmdRecorder = struct {
                     cmd.dispatch(dispatch.groupX, dispatch.groupY, dispatch.groupZ);
                 },
                 .dispatchOutputTex => |dispatchImg| {
-                    const tex = try resMan.get(dispatchImg.texId, cmd.flightId);
+                    const tex = try resMan.getTex(dispatchImg.texId);
                     const extent = tex.extent;
                     cmd.dispatch(
                         (extent.width + dispatchImg.groupX - 1) / dispatchImg.groupX,
@@ -311,7 +307,7 @@ pub const CmdRecorder = struct {
                     );
                 },
                 .dispatchIndirect => |dispatchIndirect| {
-                    const buffer = try resMan.get(dispatchIndirect.indirectBufId, cmd.flightId);
+                    const buffer = try resMan.getBuf(dispatchIndirect.indirectBufId);
                     cmd.dispatchIndirect(buffer.handle, dispatchIndirect.indirectBufOffset);
                 },
 
@@ -322,14 +318,14 @@ pub const CmdRecorder = struct {
                     };
                     const swapchain = swapMan.getTargetByIndex(targetIndex);
                     const targetTex = swapchain.getCurTexture();
-                    self.state.outputWidth = targetTex.extent.width;
-                    self.state.outputHeight = targetTex.extent.height;
+                    if (self.state.outputWidth == null) self.state.outputWidth = targetTex.extent.width else return error.CmdStateOutputWidthAlreadySet;
+                    if (self.state.outputHeight == null) self.state.outputHeight = targetTex.extent.height else return error.CmdStateOutputHeightAlreadySet;
                 },
                 .setOutputExtent => |output| {
                     if (output) |outputTexId| {
-                        const tex = try resMan.get(outputTexId, cmd.flightId);
-                        self.state.outputWidth = tex.extent.width;
-                        self.state.outputHeight = tex.extent.height;
+                        const tex = try resMan.getTex(outputTexId);
+                        if (self.state.outputWidth == null) self.state.outputWidth = tex.extent.width else return error.CmdStateOutputWidthAlreadySet;
+                        if (self.state.outputHeight == null) self.state.outputHeight = tex.extent.height else return error.CmdStateOutputHeightAlreadySet;
                     }
                 },
 
@@ -348,11 +344,11 @@ pub const CmdRecorder = struct {
                     cmd.setScissor(0, 0, @floatFromInt(self.state.outputWidth orelse 0), @floatFromInt(self.state.outputHeight orelse 0));
                 },
                 .setViewportFromTex => |texViewport| {
-                    const tex = try resMan.get(texViewport, cmd.flightId);
+                    const tex = try resMan.getTex(texViewport);
                     cmd.setViewport(0, 0, @floatFromInt(tex.extent.width), @floatFromInt(tex.extent.height));
                 },
                 .setScissorFromTex => |texScissor| {
-                    const tex = try resMan.get(texScissor, cmd.flightId);
+                    const tex = try resMan.getTex(texScissor);
                     cmd.setScissor(0, 0, @floatFromInt(tex.extent.width), @floatFromInt(tex.extent.height));
                 },
                 .setViewport => |viewport| {
@@ -377,35 +373,31 @@ pub const CmdRecorder = struct {
                     };
                     const swapchain = swapMan.getTargetByIndex(targetIndex);
                     const targetTex = swapchain.getCurTexture();
-                    const colorAtt = try targetTex.createAttachment(.Swapchain, if (swapchainAtt.firstUse) .{ .color = rc.INITIAL_SWAPCHAIN_COLOR } else null);
+                    const colorAtt = try createAttachment(targetTex.view, targetTex.typ, if (swapchainAtt.firstUse) .{ .color = rc.INITIAL_SWAPCHAIN_COLOR } else null);
 
                     self.state.colorAtts.append(colorAtt) catch return error.CmdStateColorAttsFull;
                 },
                 .setColorAtt => |setColorAtt| {
-                    const texMeta = try resMan.getMeta(setColorAtt.texId);
-                    const tex = try resMan.get(setColorAtt.texId, cmd.flightId);
-                    const colorAtt = try tex.createAttachment(texMeta.typ, if (setColorAtt.clear) |clear| .{ .color = clear } else null);
+                    const tex = try resMan.getTex(setColorAtt.texId);
+                    const colorAtt = try createAttachment(tex.view, tex.typ, if (setColorAtt.clear) |clear| .{ .color = clear } else null);
 
                     self.state.colorAtts.append(colorAtt) catch return error.CmdStateColorAttsFull;
                 },
                 .setDepthAtt => |depth| {
-                    const texMeta = try resMan.getMeta(depth.texId);
-                    const tex = try resMan.get(depth.texId, cmd.flightId);
-                    const depthAtt = try tex.createAttachment(texMeta.typ, if (depth.clear) |clear| .{ .depth = clear } else null);
+                    const tex = try resMan.getTex(depth.texId);
+                    const depthAtt = try createAttachment(tex.view, tex.typ, if (depth.clear) |clear| .{ .depth = clear } else null);
 
-                    self.state.depthAtt = depthAtt;
+                    if (self.state.depthAtt == null) self.state.depthAtt = depthAtt else return error.CmdStateDepthAttAlreadySet;
                 },
                 .setStencilAtt => |stencil| {
-                    const texMeta = try resMan.getMeta(stencil.texId);
-                    const tex = try resMan.get(stencil.texId, cmd.flightId);
-                    const stencilAtt = try tex.createAttachment(texMeta.typ, if (stencil.clear) |clear| .{ .depth = clear } else null);
+                    const tex = try resMan.getTex(stencil.texId);
+                    const stencilAtt = try createAttachment(tex.view, tex.typ, if (stencil.clear) |clear| .{ .depth = clear } else null);
 
-                    self.state.stencilAtt = stencilAtt;
+                    if (self.state.stencilAtt == null) self.state.stencilAtt = stencilAtt else return error.CmdStateStencilAttAlreadySet;
                 },
 
                 .setIndexBuf => |indexBuf| {
-                    // const buffer = try resMan.get(indexBuf.bufId, cmd.flightId);
-                    self.state.indexBuffer = indexBuf;
+                    if (self.state.indexBuffer == null) self.state.indexBuffer = indexBuf else return error.CmdIndexBufAlreadySet;
                 },
                 .setVertexBuf => |vertBuf| {
                     self.state.vertexBuffers.append(vertBuf) catch return error.CmdStateVertexBuffersFull;
@@ -415,7 +407,7 @@ pub const CmdRecorder = struct {
                 },
                 .bindIndexInput => {
                     if (self.state.indexBuffer) |indexBuffer| {
-                        const buffer = try resMan.get(indexBuffer.bufId, cmd.flightId);
+                        const buffer = try resMan.getBuf(indexBuffer.bufId);
                         cmd.bindIndexBuffer(buffer.handle, 0, indexBuffer.indexType);
                     }
                 },
@@ -449,7 +441,7 @@ pub const CmdRecorder = struct {
                         var bufOffsets: [4]vk.VkDeviceSize = .{0} ** 4;
 
                         for (self.state.vertexBuffers.constSlice(), 0..) |vbUse, i| {
-                            bufHandles[i] = (try resMan.get(vbUse.bufId, cmd.flightId)).handle;
+                            bufHandles[i] = (try resMan.getBuf(vbUse.bufId)).handle;
                         }
                         cmd.bindVertexBuffers(0, bufHandles[0..self.state.vertexBuffers.len], bufOffsets[0..self.state.vertexBuffers.len]);
                     }
@@ -465,7 +457,7 @@ pub const CmdRecorder = struct {
                     cmd.drawMeshTasks(drawTaskOrMesh.groupX, drawTaskOrMesh.groupY, drawTaskOrMesh.groupZ);
                 },
                 .drawTaskOrMeshIndirect => |drawTasksOrMeshIndirect| {
-                    const buffer = try resMan.get(drawTasksOrMeshIndirect.indirectBufId, cmd.flightId);
+                    const buffer = try resMan.getBuf(drawTasksOrMeshIndirect.indirectBufId);
                     cmd.drawMeshTasksIndirect(buffer.handle, drawTasksOrMeshIndirect.bufOffset, drawTasksOrMeshIndirect.drawCount, drawTasksOrMeshIndirect.stride);
                 },
 
@@ -510,3 +502,75 @@ pub const CmdRecorder = struct {
         } else if (rc.BARRIER_DEBUG) std.debug.print("BakeBarriers: Skipped ({s})\n", .{name});
     }
 };
+
+fn createAttachment(view: vk.VkImageView, typ: vhE.TexTyp, clear: ?ClearValue) !vk.VkRenderingAttachmentInfo {
+    var clearValue: vk.VkClearValue = undefined;
+
+    if (clear) |clearColor| {
+        switch (clearColor) {
+            .color => |color| switch (typ) {
+                .Color16, .Color8, .Swapchain => clearValue = vk.VkClearValue{ .color = .{ .float32 = .{ color.R, color.G, color.B, color.A } } },
+                else => return error.ColorFormatHasDepthColor,
+            },
+            .depth => |depthStencil| switch (typ) {
+                .Depth32, .Stencil8 => clearValue = vk.VkClearValue{ .depthStencil = .{ .depth = depthStencil.depthStencil.depth, .stencil = depthStencil.depthStencil.stencil } },
+                else => return error.DepthFormatHasDepthColor,
+            },
+        }
+    }
+
+    return vk.VkRenderingAttachmentInfo{
+        .sType = vk.VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+        .imageView = view,
+        .imageLayout = vk.VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
+        .loadOp = if (clear != null) vk.VK_ATTACHMENT_LOAD_OP_CLEAR else vk.VK_ATTACHMENT_LOAD_OP_LOAD,
+        .storeOp = vk.VK_ATTACHMENT_STORE_OP_STORE,
+        .clearValue = clearValue,
+    };
+}
+
+fn makeImageBarrier(img: vk.VkImage, typ: vhE.TexTyp, oldState: TextureState, newState: TextureState) vk.VkImageMemoryBarrier2 {
+    const subRange = vhF.createSubresourceRange(typ.getImageAspectFlags(), 0, 1, 0, 1);
+
+    const barrier = vk.VkImageMemoryBarrier2{
+        .sType = vk.VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+        .srcStageMask = @intFromEnum(oldState.stage),
+        .srcAccessMask = @intFromEnum(oldState.access),
+        .dstStageMask = @intFromEnum(newState.stage),
+        .dstAccessMask = @intFromEnum(newState.access),
+        .oldLayout = @intFromEnum(oldState.layout),
+        .newLayout = @intFromEnum(newState.layout),
+        .srcQueueFamilyIndex = vk.VK_QUEUE_FAMILY_IGNORED,
+        .dstQueueFamilyIndex = vk.VK_QUEUE_FAMILY_IGNORED,
+        .image = img,
+        .subresourceRange = subRange,
+    };
+    return barrier;
+}
+
+pub fn makeBarrier(buf: vk.VkBuffer, oldState: BufferState, newState: BufferState) vk.VkBufferMemoryBarrier2 {
+    const barrier = vk.VkBufferMemoryBarrier2{
+        .sType = vk.VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2,
+        .srcStageMask = @intFromEnum(oldState.stage),
+        .srcAccessMask = @intFromEnum(oldState.access),
+        .dstStageMask = @intFromEnum(newState.stage),
+        .dstAccessMask = @intFromEnum(newState.access),
+        .srcQueueFamilyIndex = vk.VK_QUEUE_FAMILY_IGNORED,
+        .dstQueueFamilyIndex = vk.VK_QUEUE_FAMILY_IGNORED,
+        .buffer = buf,
+        .offset = 0,
+        .size = vk.VK_WHOLE_SIZE, // whole Buffer
+    };
+    return barrier;
+}
+
+fn makeMemBarrier(oldStage: vhE.PipeStage, oldAccess: vhE.PipeAccess, newStage: vhE.PipeStage, newAccess: vhE.PipeAccess) vk.VkMemoryBarrier2 {
+    const barrier = vk.VkMemoryBarrier2{
+        .sType = vk.VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
+        .srcStageMask = @intFromEnum(oldStage),
+        .srcAccessMask = @intFromEnum(oldAccess),
+        .dstStageMask = @intFromEnum(newStage),
+        .dstAccessMask = @intFromEnum(newAccess),
+    };
+    return barrier;
+}

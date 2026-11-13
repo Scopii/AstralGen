@@ -1,9 +1,8 @@
+const RenderNodeRing = @import("../renderCompiler/RenderCompilerData.zig").RenderCompilerData.RenderNodeRing;
 const RendererOutQueue = @import("RendererOutQueue.zig").RendererOutQueue;
 const MemoryManager = @import("../core/MemoryManager.zig").MemoryManager;
 const LoadedShader = @import("../shader/LoadedShader.zig").LoadedShader;
-const TextureMeta = @import("types/res/TextureMeta.zig").TextureMeta;
 const RenderNode = @import("types/pass/RenderNode.zig").RenderNode;
-const BufferMeta = @import("types/res/BufferMeta.zig").BufferMeta;
 const SwapchainMan = @import("sys/SwapchainMan.zig").SwapchainMan;
 const RendererQueue = @import("RendererQueue.zig").RendererQueue;
 const ResourceMan = @import("sys/ResourceMan.zig").ResourceMan;
@@ -32,7 +31,6 @@ pub const Renderer = struct {
     shaderMan: ShaderMan,
     swapMan: SwapchainMan,
     scheduler: Scheduler,
-    renderNodes: std.array_list.Managed(RenderNode),
 
     pub fn init(memoryMan: *MemoryManager) !Renderer {
         const alloc = memoryMan.getAllocator();
@@ -48,7 +46,6 @@ pub const Renderer = struct {
             .shaderMan = try ShaderMan.init(&context),
             .scheduler = try Scheduler.init(&context, rc.MAX_IN_FLIGHT),
             .swapMan = try SwapchainMan.init(alloc, &context),
-            .renderNodes = std.array_list.Managed(RenderNode).init(alloc),
         };
     }
 
@@ -60,36 +57,23 @@ pub const Renderer = struct {
         self.resMan.deinit();
         self.renderGraph.deinit();
         self.context.deinit();
-        self.renderNodes.deinit();
     }
 
     pub fn update(self: *Renderer, rendererQueue: *RendererQueue) !void {
-        for (rendererQueue.get()) |rendererEvent| {
+        for (0..rendererQueue.length()) |i| {
+            const rendererEvent = rendererQueue.get(@intCast(i));
             // std.debug.print("Renderer Queue Event: {s}\n", .{@tagName(rendererEvent)});
             switch (rendererEvent) {
                 .toggleGpuProfiling => self.renderGraph.toggleGpuProfiling(),
-                .addRenderNode => |node| try self.renderNodes.append(node.*),
-                .addTexture => |inf| try self.addResource(inf.texInf, inf.data),
-                .addBuffer => |inf| try self.addResource(inf.bufInf, inf.data),
-                .updateBuffer => |inf| try self.updateBuffer(inf.bufId, inf.data),
-                .updateBufferSegment => |inf| try self.updateBufferSegment(inf.bufId, inf.data, inf.elementOffset),
-                .updateTexture => |inf| try self.updateTexture(inf.texId, inf.data, inf.newExtent),
-                .addShader => |loadedShader| try self.addShaders(&[_]LoadedShader{loadedShader.*}),
-                .removeTexture => |texId| try self.removeResource(texId),
-                .removeBuffer => |bufId| try self.removeResource(bufId),
-                .updateWindowState,
-                => {},
-            }
-        }
-        // Has to happen after so that new assignments and resource changes are applied correctly
-        for (rendererQueue.get()) |rendererEvent| {
-            // std.debug.print("Renderer Queue Event: {s}\n", .{@tagName(rendererEvent)});
-            switch (rendererEvent) {
-                .updateWindowState => |window| {
-                    // std.debug.print("Renderer Queue Event: {}\n", .{window});
-                    try self.updateWindowStates(&[_]Window{window.*});
-                },
-                else => {},
+                .addTexture => |inf| try self.resMan.addTex(inf.texInf, self.scheduler.totalFrames, self.scheduler.flightId, inf.data),
+                .addBuffer => |inf| try self.resMan.addBuf(inf.bufInf, self.scheduler.totalFrames, self.scheduler.flightId, inf.data),
+                .updateBuffer => |inf| try self.resMan.updateBuf(inf.bufId, self.scheduler.totalFrames, self.scheduler.flightId, inf.data),
+                .updateBufferSegment => |inf| try self.resMan.updateBufSegment(inf.bufId, self.scheduler.flightId, inf.data, inf.elementOffset),
+                .updateTexture => |inf| try self.resMan.updateTex(inf.texId, self.scheduler.totalFrames, self.scheduler.flightId, inf.data),
+                .addShader => |loadedShader| try self.addShaders(&[_]LoadedShader{loadedShader}),
+                .removeTexture => |texId| try self.resMan.removeTex(texId, self.scheduler.totalFrames),
+                .removeBuffer => |bufId| try self.resMan.removeBuf(bufId, self.scheduler.totalFrames),
+                .updateWindowState => |window| try self.updateWindowStates(&[_]Window{window}),
             }
         }
         rendererQueue.clear();
@@ -118,16 +102,13 @@ pub const Renderer = struct {
         try self.scheduler.waitForGPU();
     }
 
-    pub fn draw(self: *Renderer, renderNodes: []const RenderNode, pushData: []const u8, activeWindows: []const WindowId, rendererOutQueue: *RendererOutQueue) !void {
-        self.renderNodes.clearRetainingCapacity();
-        try self.renderNodes.appendSlice(renderNodes);
-
+    pub fn draw(self: *Renderer, renderNodes: RenderNodeRing, pushData: []const u8, activeWindows: []const WindowId, rendererOutQueue: *RendererOutQueue) !void {
         const flightId = try self.scheduler.beginFrame();
         try self.resMan.update(flightId, self.scheduler.totalFrames);
         try self.swapMan.updateTargets(flightId, activeWindows);
 
         const cmd = try self.renderGraph.recordFrame(
-            self.renderNodes.items,
+            &renderNodes,
             flightId,
             self.scheduler.totalFrames,
             &self.swapMan,
@@ -145,7 +126,7 @@ pub const Renderer = struct {
         self.scheduler.endFrame();
     }
 
-    pub fn addShaders(self: *Renderer, loadedShaders: []const LoadedShader) !void {
+    fn addShaders(self: *Renderer, loadedShaders: []const LoadedShader) !void {
         for (loadedShaders) |loadedShader| {
             const shaderTyp = loadedShader.shaderInf.typ;
             const isSpecial = if (shaderTyp == .meshNoTask or shaderTyp == .meshWithTask or shaderTyp == .task) true else false;
@@ -161,25 +142,5 @@ pub const Renderer = struct {
             }
         }
         try self.shaderMan.createShaders(loadedShaders, &self.resMan);
-    }
-
-    pub fn addResource(self: *Renderer, resInf: anytype, data: anytype) !void {
-        try self.resMan.addResource(resInf, self.scheduler.totalFrames, self.scheduler.flightId, data);
-    }
-
-    pub fn updateBuffer(self: *Renderer, bufId: BufId, data: anytype) !void {
-        try self.resMan.updateBufferResource(bufId, self.scheduler.totalFrames, self.scheduler.flightId, data);
-    }
-
-    pub fn removeResource(self: *Renderer, resId: anytype) !void {
-        try self.resMan.removeResource(resId, self.scheduler.totalFrames);
-    }
-
-    pub fn updateTexture(self: *Renderer, texId: TexId, data: anytype, newExtent: ?vk.VkExtent3D) !void {
-        try self.resMan.updateTextureResource(texId, self.scheduler.totalFrames, self.scheduler.flightId, data, newExtent);
-    }
-
-    pub fn updateBufferSegment(self: *Renderer, bufId: BufId, data: anytype, element: u32) !void {
-        try self.resMan.updateBufferResourceSegment(bufId, self.scheduler.flightId, data, element);
     }
 };
