@@ -61,9 +61,10 @@ pub const ShareSys = struct {
         // Building Tex Clears (Based on Lifetimes being Sorted)
         for (lifetime.texLifetimes.constSlice()) |texLifetime| {
             const passId = optimizer.optimizedGraph.getConstItems()[texLifetime.earliest].passId;
-            self.texClearPasses.insert(texLifetime.texPassId, passId); // for pass OP_LOAD clear
 
-            if (texLifetime.firstUseIsAttachment == false) {
+            if (rc.FRAME_GRAPH_ALLOW_TEXTURE_LOAD_OP_CLEAR == true and texLifetime.firstUseIsAttachment == true) {
+                self.texClearPasses.insert(texLifetime.texPassId, passId); // for pass OP_LOAD clear
+            } else {
                 try self.texClearCmds.append(.{ .texPassId = texLifetime.texPassId, .passPosition = texLifetime.earliest });
 
                 if (self.texClearIndices.isKeyUsed(passId) == false) {

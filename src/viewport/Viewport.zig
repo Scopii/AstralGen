@@ -1,4 +1,5 @@
 const EntityId = @import("../.configs/idConfig.zig").EntityId;
+const String = @import("../globalHelper.zig").String; // NOT USED YET
 
 pub const Viewport = struct {
     name: []const u8,

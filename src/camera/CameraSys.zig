@@ -127,7 +127,7 @@ pub const CameraSys = struct {
                 const camDataPtr = try arena.create(CamData);
                 camDataPtr.* = camData;
 
-                try assignerQueue.append(.{ .updateBuffer = .{ .bufName = camComp.bufName, .data = std.mem.asBytes(camDataPtr) } });
+                try assignerQueue.append(.{ .updateBuffer = .{ .bufName = try .string(camComp.bufName), .data = std.mem.asBytes(camDataPtr) } });
 
                 // Reset dirty flag
                 transform.isDirty = false;

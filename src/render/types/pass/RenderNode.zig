@@ -15,14 +15,13 @@ const TextureState = @import("../res/Texture.zig").TextureState;
 const QueryTyp = @import("../base/Cmd.zig").QueryPair.QueryTyp;
 const TexId = @import("../../../.configs/idConfig.zig").TexId;
 const BufId = @import("../../../.configs/idConfig.zig").BufId;
-const BufferState = @import("../res/Buffer.zig").BufferState;
 const ClearColor = @import("AttachmentUse.zig").ClearColor;
 const ClearDepth = @import("AttachmentUse.zig").ClearDepth;
 const String = @import("../../../globalHelper.zig").String;
 const vhE = @import("../../help/Enums.zig");
 
 pub const CompositeNode = struct {
-    name: []const u8, // Should be String
+    name: String(30, "NO_COMPOSITE_NAME"),
     passId: PassId,
     windowId: WindowId,
     srcTexPassId: TexPassId,
@@ -35,7 +34,7 @@ pub const CompositeNode = struct {
 };
 
 pub const CompositeFill = struct {
-    name: []const u8, // Should be String
+    name: String(30, "NO_COMPOSITE_NAME"), 
     pass: PassId,
     windowId: WindowId,
     srcTexId: TexId,
@@ -48,18 +47,18 @@ pub const CompositeFill = struct {
 };
 
 pub const UiNode = struct {
-    name: []const u8, // Should be String
+    name: String(30, "NO_UI_NODE_NAME"),
     windowId: WindowId,
     displayPos: [2]f32,
     displaySize: [2]f32,
-    imguiVB: []const u8,
-    imguiIB: []const u8,
+    imguiVB: String(30, "NO_IMGUI_VB"),
+    imguiIB: String(30, "NO_IMGUI_IB"),
 
     firstDrawIndex: u32,
     lastDrawIndex: u32,
 
     pub const UiDraw = struct {
-        drawTex: []const u8,
+        drawTex: String(30, "NO_UI_DRAW_TEX"),
         clipRect: [4]f32,
         vtxOffset: i32,
         idxOffset: u32,
@@ -68,7 +67,7 @@ pub const UiNode = struct {
 };
 
 pub const UiNodeFill = struct {
-    name: []const u8, // Should be String
+    name: String(30, "NO_UI_NODE_NAME"), 
     windowId: WindowId,
     displayPos: [2]f32,
     displaySize: [2]f32,

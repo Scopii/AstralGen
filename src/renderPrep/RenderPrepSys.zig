@@ -35,7 +35,7 @@ pub const RenderPrepSys = struct {
 
         if (isDirty == false) return;
 
-        // Send the packed, dense array to the Renderer Queue
-        try assignerQueue.append(.{ .updateBuffer = .{ .bufName = "EntitySB" , .data = std.mem.sliceAsBytes(gpuDataArray) } });
+        // Send the packed array to the Renderer Queue
+        try assignerQueue.append(.{ .updateBuffer = .{ .bufName = try .string("EntitySB") , .data = std.mem.sliceAsBytes(gpuDataArray) } });
     }
 };

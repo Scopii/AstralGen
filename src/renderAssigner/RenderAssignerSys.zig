@@ -619,10 +619,10 @@ pub const RenderAssignerSys = struct {
         for (0..assignerQueue.length()) |i| {
             const event = assignerQueue.get(@intCast(i));
             switch (event) {
-                .createManualBuffer => |bufName| try createBufferManuel(self, registry, bufName, rendererQueue, memoryMan),
-                .deleteManualBuffer => |bufName| try deleteBufferManuel(self, registry, bufName, rendererQueue),
-                .createManualTexture => |texName| try createTextureManuel(self, registry, texName, rendererQueue, memoryMan),
-                .deleteManualTexture => |texName| try deleteTextureManuel(self, registry, texName, rendererQueue),
+                .createManualBuffer => |bufName| try createBufferManuel(self, registry, bufName.get(), rendererQueue, memoryMan),
+                .deleteManualBuffer => |bufName| try deleteBufferManuel(self, registry, bufName.get(), rendererQueue),
+                .createManualTexture => |texName| try createTextureManuel(self, registry, texName.get(), rendererQueue, memoryMan),
+                .deleteManualTexture => |texName| try deleteTextureManuel(self, registry, texName.get(), rendererQueue),
 
                 .updateBuffer, .updateBufferSegment, .updateTexture => {},
             }
@@ -654,7 +654,7 @@ pub const RenderAssignerSys = struct {
                 .createManualBuffer, .deleteManualBuffer, .createManualTexture, .deleteManualTexture => {},
 
                 .updateBuffer => |updateBuffer| {
-                    const bufPassId = try registry.getBufferPassId(updateBuffer.bufName);
+                    const bufPassId = try registry.getBufferPassId(updateBuffer.bufName.get());
                     const bufDesc = try registry.getBufferDefinition(bufPassId);
                     if (self.manualBufs.isKeyUsed(bufPassId) == false) return error.BufferUpdateCantFindManual;
 
@@ -673,7 +673,7 @@ pub const RenderAssignerSys = struct {
                     return error.UpdateBufferSegmentIncorrectlyImplemented;
                 },
                 .updateTexture => |updateTexture| {
-                    const texPassId = try registry.getTexturePassId(updateTexture.texName);
+                    const texPassId = try registry.getTexturePassId(updateTexture.texName.get());
                     const texDesc = try registry.getTextureDefinition(texPassId);
                     if (self.manualTexes.isKeyUsed(texPassId) == false) return error.TextureUpdateCantFindManual;
 

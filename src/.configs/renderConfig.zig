@@ -57,6 +57,11 @@ pub const FRAME_GRAPH_AGGRESSIVE_TEXTURE_SHARE = true;
 pub const FRAME_GRAPH_INSERT_MANUAL_DEPENDENCY_PASSES = false;
 pub const FRAME_GRAPH_TRANSIENTS_PER_FRAME_IN_FLIGHT = false;
 pub const FRAME_GRAPH_USE_GRAPH_LEVEL_LIFETIMES = false;
+pub const FRAME_GRAPH_ALLOW_TEXTURE_LOAD_OP_CLEAR = true;
+
+pub const USE_MEM_BARRIERS_ON_BUFFERS = true;
+pub const USE_MEM_BARRIER_ON_IMAGES = true;
+pub const USE_RESOURCE_BARRIER_READ_TRACK = true;
 
 pub const FRAME_GRAPH_TEXTURE_READS_RESIZE_PRODUCERS = true;
 pub const FRAME_BUILDS_TILL_TRANSIENT_DELETION = 0;
@@ -66,14 +71,11 @@ pub const RENDER_COMPILER_DEBUG = false;
 
 // Rendering, Swapchains and Windows
 pub const EARLY_GPU_WAIT = true; // (Reflex Mode)
-pub const MAX_IN_FLIGHT: u8 = 2; // (Frames)
+pub const MAX_IN_FLIGHT: u16 = 2; // (Frames)
 pub const DESIRED_SWAPCHAIN_IMAGES: u8 = 3;
 pub const DISPLAY_MODE = vk.VK_PRESENT_MODE_IMMEDIATE_KHR; //vk.VK_PRESENT_MODE_IMMEDIATE_KHR
 pub const MAX_WINDOWS: u8 = 8;
 pub const COMPOSITE_TEX_STRETCH = false;
-pub const USE_MEM_BARRIERS_ON_BUFFERS = true;
-pub const USE_MEM_BARRIER_ON_IMAGES = true;
-pub const USE_RESOURCE_BARRIER_READ_TRACK = true;
 pub const INITIAL_SWAPCHAIN_COLOR: ClearColor = .{ .R = 0.0, .G = 0.0, .B = 0.1, .A = 1.0 };
 
 // Resource Information

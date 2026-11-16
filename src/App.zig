@@ -241,16 +241,16 @@ pub const App = struct {
 
         try ShaderSys.update(&self.data.shader, &self.shaderQueue, &self.rendererQueue, self.memoryMan);
 
-        try self.assignerQueue.append(.{ .createManualBuffer = "ImguiIB" });
-        try self.assignerQueue.append(.{ .createManualBuffer = "ImguiVB" });
-        try self.assignerQueue.append(.{ .createManualTexture = "ImguiFontTex" });
+        try self.assignerQueue.append(.{ .createManualBuffer = try .string("ImguiIB") });
+        try self.assignerQueue.append(.{ .createManualBuffer = try .string("ImguiVB") });
+        try self.assignerQueue.append(.{ .createManualTexture = try .string("ImguiFontTex") });
 
-        try self.assignerQueue.append(.{ .createManualTexture = "TestTileTex" });
+        try self.assignerQueue.append(.{ .createManualTexture = try .string("TestTileTex") });
 
-        try self.assignerQueue.append(.{ .createManualBuffer = "ReadbackSB" });
-        try self.assignerQueue.append(.{ .createManualBuffer = "MainCamUB" });
-        try self.assignerQueue.append(.{ .createManualBuffer = "DebugCamUB" });
-        try self.assignerQueue.append(.{ .createManualBuffer = "EntitySB" });
+        try self.assignerQueue.append(.{ .createManualBuffer = try .string("ReadbackSB") });
+        try self.assignerQueue.append(.{ .createManualBuffer = try .string("MainCamUB") });
+        try self.assignerQueue.append(.{ .createManualBuffer = try .string("DebugCamUB") });
+        try self.assignerQueue.append(.{ .createManualBuffer = try .string("EntitySB") });
 
         // PROCEDURAL TEXTURE GENERATION
         const arena = self.memoryMan.getGlobalArena();
@@ -265,7 +265,13 @@ pub const App = struct {
                 pixels[y * 256 + x] = .{ val, val, 1.0, 1.0 };
             }
         }
-        try self.assignerQueue.append(.{ .updateTexture = .{ .texName = "TestTileTex", .data = std.mem.sliceAsBytes(pixels), .newExtent = .{ .width = 256, .height = 256, .depth = 1 } } });
+        try self.assignerQueue.append(.{
+            .updateTexture = .{
+                .texName = try .string("TestTileTex"),
+                .data = std.mem.sliceAsBytes(pixels),
+                .newExtent = .{ .width = 256, .height = 256, .depth = 1 },
+            },
+        });
         // TEXTURE GEN END
 
         try UiSys.init(&self.data.ui, self.memoryMan);

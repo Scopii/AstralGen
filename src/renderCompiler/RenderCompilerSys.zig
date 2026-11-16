@@ -146,8 +146,8 @@ pub const RenderCompilerSys = struct {
             .stretch = compositeIR.stretch,
         };
 
-        try compositePrint(self, composite.name);
-        const timerId = try startTimer(self, composite.name, .Composite);
+        try compositePrint(self, composite.name.get());
+        const timerId = try startTimer(self, composite.name.get(), .Composite);
 
         // Barriers
         const swapchainFirstUse = try swapchainBarrier(self, composite.windowId, .ColorAtt, .ColorAttReadWrite, .Attachment);
@@ -215,15 +215,15 @@ pub const RenderCompilerSys = struct {
         for (uiData.uiNodes.constSlice()) |uiNode| {
             if (windowData.windows.isKeyUsed(uiNode.windowId.val()) == false) return error.UiRenderCompileCantFindWindowId;
 
-            const imguiVBPassId = try registry.getBufferPassId(uiNode.imguiVB);
-            const imguiIBPassId = try registry.getBufferPassId(uiNode.imguiIB);
+            const imguiVBPassId = try registry.getBufferPassId(uiNode.imguiVB.get());
+            const imguiIBPassId = try registry.getBufferPassId(uiNode.imguiIB.get());
 
             const imguiVB = assigner.bufAssigns.getByKey(imguiVBPassId);
             const imguiIB = assigner.bufAssigns.getByKey(imguiIBPassId);
 
-            try uiPrint(self, uiNode.name);
+            try uiPrint(self, uiNode.name.get());
 
-            const timerId = try startTimer(self, uiNode.name, .Ui);
+            const timerId = try startTimer(self, uiNode.name.get(), .Ui);
 
             const uiDrawList = uiData.uiDraws.constSlice()[uiNode.firstDrawIndex..uiNode.lastDrawIndex];
 
@@ -235,7 +235,7 @@ pub const RenderCompilerSys = struct {
             try bufBarrier(self, imguiIB, .VertexInput, .IndexRead);
 
             for (uiDrawList) |uiDraw| {
-                const texPassId = try registry.getTexturePassId(uiDraw.drawTex);
+                const texPassId = try registry.getTexturePassId(uiDraw.drawTex.get());
                 const drawTex = assigner.texAssigns.getByKey(texPassId);
                 try texBarrier(self, drawTex, .Fragment, .SampledRead, .General, false);
             }
@@ -300,7 +300,7 @@ pub const RenderCompilerSys = struct {
                 try setPushData(self, @sizeOf(u32), 2 * @sizeOf(u32), std.mem.asBytes(&translateX));
                 try setPushData(self, @sizeOf(u32), 3 * @sizeOf(u32), std.mem.asBytes(&translateY));
 
-                const texPassId = try registry.getTexturePassId(uiDraw.drawTex);
+                const texPassId = try registry.getTexturePassId(uiDraw.drawTex.get());
                 const drawTex = assigner.texAssigns.getByKey(texPassId);
                 try setPushDataTexDesc(self, (4 * @sizeOf(u32)), drawTex, .Sampled);
 

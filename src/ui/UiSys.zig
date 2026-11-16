@@ -68,7 +68,7 @@ pub const UiSys = struct {
                 };
 
                 try assignerQueue.append(.{ .updateTexture = .{
-                    .texName = "ImguiFontTex",
+                    .texName = try .string("ImguiFontTex"),
                     .data = pixelBytes,
                     .newExtent = .{ .width = @intCast(width), .height = @intCast(height), .depth = 1 },
                 } });
@@ -260,7 +260,7 @@ pub const UiSys = struct {
                     // const texPassId: TexPassId = if (rawId == 0) rc.ImguiFontTex else TexPassId.id(@as(u16, @intCast(rawId)));
 
                     const uiDraw = UiNode.UiDraw{
-                        .drawTex = "ImguiFontTex", // texPassId
+                        .drawTex = try .string("ImguiFontTex"), // texPassId
                         .clipRect = pcmd.clip_rect,
                         .vtxOffset = globalVtxOffset + @as(i32, @intCast(pcmd.vtx_offset)),
                         .idxOffset = globalIdxOffset + pcmd.idx_offset,
@@ -278,19 +278,19 @@ pub const UiSys = struct {
             const lastDrawIndex = ui.uiDraws.len;
 
             ui.uiNodes.append(UiNode{
-                .name = window.name,
+                .name = try .string(window.name.get()),
                 .windowId = window.id,
                 .displayPos = drawData.display_pos,
                 .displaySize = drawData.display_size,
-                .imguiVB = "ImguiVB",
-                .imguiIB = "ImguiIB",
+                .imguiVB = try .string("ImguiVB"),
+                .imguiIB = try .string("ImguiIB"),
                 .firstDrawIndex = @intCast(firstDrawIndex),
                 .lastDrawIndex = @intCast(lastDrawIndex),
             }) catch return error.UiNodesFUll;
         }
 
-        try assignerQueue.append(.{ .updateBuffer = .{ .bufName = "ImguiVB", .data = vtxBuffer } });
-        try assignerQueue.append(.{ .updateBuffer = .{ .bufName = "ImguiIB", .data = idxBuffer } });
+        try assignerQueue.append(.{ .updateBuffer = .{ .bufName = try .string("ImguiVB"), .data = vtxBuffer } });
+        try assignerQueue.append(.{ .updateBuffer = .{ .bufName = try .string("ImguiIB"), .data = idxBuffer } });
     }
 
     pub fn deinit(ui: *UiData) void {

@@ -68,7 +68,7 @@ pub const CompositeSys = struct {
                         if (scaledHeightInt > passExtent.height) passExtent.height = scaledHeightInt;
 
                         // Create Composite
-                        const composite = createComposite(&viewport, outPassId, outTexPassId, window.id, window.extent.width, window.extent.height);
+                        const composite = try createComposite(&viewport, outPassId, outTexPassId, window.id, window.extent.width, window.extent.height);
                         self.composites.append(composite) catch std.debug.print("PassDef Could not Append Composite\n", .{});
                     }
                 }
@@ -134,15 +134,15 @@ pub const CompositeSys = struct {
             std.debug.print("\n", .{});
             for (self.composites.constSlice(), 0..) |comp, i| {
                 const passName = try registry.getPassName(comp.passId);
-                std.debug.print("- Composite {}. {s} (Pass {s}) [{}x{} @ {},{}]\n", .{ i, comp.name, passName, comp.viewWidth, comp.viewHeight, comp.viewOffsetX, comp.viewOffsetY });
+                std.debug.print("- Composite {}. {s} (Pass {s}) [{}x{} @ {},{}]\n", .{ i, comp.name.get(), passName, comp.viewWidth, comp.viewHeight, comp.viewOffsetX, comp.viewOffsetY });
             }
             std.debug.print("\n", .{});
         }
     }
 
-    fn createComposite(viewport: *const Viewport, pass: PassId, outputTexPassId: TexPassId, windowId: WindowId, windowWidth: u32, windowHeight: u32) CompositeNode {
+    fn createComposite(viewport: *const Viewport, pass: PassId, outputTexPassId: TexPassId, windowId: WindowId, windowWidth: u32, windowHeight: u32) !CompositeNode {
         return CompositeNode{
-            .name = viewport.name,
+            .name = try .string(viewport.name),
             .passId = pass,
             .srcTexPassId = outputTexPassId,
             .windowId = windowId,

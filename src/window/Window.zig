@@ -1,6 +1,7 @@
 const ViewportId = @import("../.configs/idConfig.zig").ViewportId;
 const TexPassId = @import("../.configs/idConfig.zig").TexPassId;
 const WindowId = @import("../.configs/idConfig.zig").WindowId;
+const String = @import("../globalHelper.zig").String;
 const rc = @import("../.configs/renderConfig.zig");
 const sdl = @import("../.modules/sdl.zig").c;
 const vk = @import("../.modules/vk.zig").c;
@@ -8,7 +9,7 @@ const std = @import("std");
 
 pub const Window = struct {
     pub const WindowState = enum { active, inactive, needCreation, needUpdate, needDelete, needInactive, needActive };
-    name: []const u8,
+    name: String(30, "NO_WINDOW_NAME"),
     handle: *sdl.SDL_Window,
     state: WindowState = .needCreation,
     extent: vk.VkExtent2D,
@@ -25,7 +26,7 @@ pub const Window = struct {
         const windowId = sdl.SDL_GetWindowID(winHandle);
 
         var window = Window{
-            .name = name,
+            .name = try .string(name),
             .handle = winHandle,
             .extent = extent,
             .id = .id(windowId),
