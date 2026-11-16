@@ -24,7 +24,7 @@ pub const GraphData = struct {
 };
 
 pub const GraphSys = struct {
-    pub fn build(self: *GraphData, passLoad: *const PassLoadData, outputLoad: *const OutputLoadData, dependency: *const DependencyData, registry: *const RenderRegistryData) !void {
+    pub fn build(self: *GraphData, passLoad: *const PassLoadData, outputLoad: *const OutputLoadData, dependency: *const DependencyData, registry: *const RenderRegistryData, debug: bool) !void {
         self.passDepCounters.clear();
         self.graph.clear();
         self.readyPasses.clear();
@@ -168,7 +168,7 @@ pub const GraphSys = struct {
         }
 
         // Debug
-        if (rc.FRAME_GRAPH_DEBUG) {
+        if (debug) {
             for (self.graph.getConstItems(), 0..) |pass, i| {
                 const passName = try registry.getPassName(pass.passId);
                 std.debug.print("- Nr. {}: .( .level = {}, .pass = {s})\n", .{ i, pass.level, passName });

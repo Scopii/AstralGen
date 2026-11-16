@@ -26,7 +26,7 @@ pub fn SimpleMap(comptime ItemType: type, comptime capacity: u32, comptime keyTy
         items: [capacity]ItemType = undefined,
 
         pub fn upsert(self: *Self, key: keyType, item: ItemType) void {
-            const castedKey: smallKeyType = @truncate(key - keyMin);
+            const castedKey: smallKeyType = @intCast(key - keyMin);
 
             if (self.keys[castedKey] == sentinel) {
                 // Insert
@@ -44,8 +44,8 @@ pub fn SimpleMap(comptime ItemType: type, comptime capacity: u32, comptime keyTy
         // Slot Map Functions (Changed in LinkedMap):
 
         pub fn swap(self: *Self, key1: keyType, key2: keyType) void {
-            const castedKey1: smallKeyType = @truncate(key1 - keyMin);
-            const castedKey2: smallKeyType = @truncate(key2 - keyMin);
+            const castedKey1: smallKeyType = @intCast(key1 - keyMin);
+            const castedKey2: smallKeyType = @intCast(key2 - keyMin);
 
             const index1 = self.keys[castedKey1];
             self.keys[castedKey1] = self.keys[castedKey2];
@@ -53,18 +53,18 @@ pub fn SimpleMap(comptime ItemType: type, comptime capacity: u32, comptime keyTy
         }
 
         pub fn link(self: *Self, index: u32, key: keyType) void {
-            const castedKey: smallKeyType = @truncate(key - keyMin);
-            self.keys[castedKey] = @truncate(index);
+            const castedKey: smallKeyType = @intCast(key - keyMin);
+            self.keys[castedKey] = @intCast(index);
         }
 
         pub fn unlink(self: *Self, key: keyType) void {
-            self.keys[@as(usize, @truncate(key - keyMin))] = sentinel;
+            self.keys[@as(usize, @intCast(key - keyMin))] = sentinel;
         }
 
         // Slot Map Base Functionality:
 
         pub fn insert(self: *Self, key: keyType, item: ItemType) void {
-            const castedKey: smallKeyType = @truncate(key - keyMin);
+            const castedKey: smallKeyType = @intCast(key - keyMin);
             std.debug.assert(self.keys[castedKey] == sentinel);
             const index = self.len;
 
@@ -86,14 +86,14 @@ pub fn SimpleMap(comptime ItemType: type, comptime capacity: u32, comptime keyTy
         // Direct Function Mappings:
 
         pub fn update(self: *Self, key: keyType, item: ItemType) void {
-            const castedKey: smallKeyType = @truncate(key - keyMin);
+            const castedKey: smallKeyType = @intCast(key - keyMin);
             std.debug.assert(self.keys[castedKey] != sentinel);
             const index = self.keys[castedKey];
             self.items[index] = item;
         }
 
         pub fn isKeyUsed(self: *const Self, key: keyType) bool {
-            const castedKey: smallKeyType = @truncate(key - keyMin);
+            const castedKey: smallKeyType = @intCast(key - keyMin);
             return self.keys[castedKey] != sentinel;
         }
 

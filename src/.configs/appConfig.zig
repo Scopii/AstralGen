@@ -18,6 +18,11 @@ pub const AppEvent = enum {
     closeApp,
     toggleImgui,
     toggleGpuProfiling,
+
+    toggleRenderGraphDebug,
+    toggleRenderAssignerDebug,
+    toggleRenderCompilerDebug,
+
     speedMode,
 };
 
@@ -46,6 +51,10 @@ pub const keyMap = [_]KeyMapping{
     .{ .device = .keyboard, .state = .pressed, .cycle = .oneTime, .key = sdl.SDL_SCANCODE_R, .appEvent = .toggleImgui },
     .{ .device = .keyboard, .state = .pressed, .cycle = .oneBlock, .key = sdl.SDL_SCANCODE_LCTRL, .appEvent = .toggleFullscreen },
     .{ .device = .keyboard, .state = .pressed, .cycle = .oneBlock, .key = sdl.SDL_SCANCODE_P, .appEvent = .toggleGpuProfiling },
+
+    .{ .device = .keyboard, .state = .pressed, .cycle = .oneBlock, .key = sdl.SDL_SCANCODE_J, .appEvent = .toggleRenderGraphDebug },
+    .{ .device = .keyboard, .state = .pressed, .cycle = .oneBlock, .key = sdl.SDL_SCANCODE_K, .appEvent = .toggleRenderAssignerDebug },
+    .{ .device = .keyboard, .state = .pressed, .cycle = .oneBlock, .key = sdl.SDL_SCANCODE_L, .appEvent = .toggleRenderCompilerDebug },
     // Mouse
     .{ .device = .mouse, .state = .pressed, .cycle = .repeat, .key = sdl.SDL_BUTTON_LEFT, .appEvent = .speedMode },
 };

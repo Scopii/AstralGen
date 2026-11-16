@@ -23,7 +23,7 @@ pub const DependencyData = struct {
 };
 
 pub const DependencySys = struct {
-    pub fn build(self: *DependencyData, passLoad: *const PassLoadData, outputLoad: *const OutputLoadData, registry: *const RenderRegistryData) !void {
+    pub fn build(self: *DependencyData, passLoad: *const PassLoadData, outputLoad: *const OutputLoadData, registry: *const RenderRegistryData, debug: bool) !void {
         self.activeBufRefs.clear();
         self.activeTexRefs.clear();
         self.dependencies.clear();
@@ -57,7 +57,7 @@ pub const DependencySys = struct {
 
 
         // Debug Output
-        if (rc.FRAME_GRAPH_DEBUG) {
+        if (debug) {
             std.debug.print("3.5.DependencySys: \n", .{});
             for (self.dependencies.constSlice(), 0..) |dep, index| {
                 const predName = try registry.getPassName(dep.predecessor);

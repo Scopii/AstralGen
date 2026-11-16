@@ -5,11 +5,11 @@ const IndexBufferUse = @import("../types/pass/IndexBufferUse.zig").IndexBufferUs
 const CompositeNode = @import("../types/pass/RenderNode.zig").CompositeNode;
 const ClearValue = @import("../types/pass/AttachmentUse.zig").ClearValue;
 const RenderState = @import("../types/pass/RenderState.zig").RenderState;
+const BarrierMask = @import("../types/pass/RenderNode.zig").BarrierMask;
 const SimpleTexture = @import("../types/res/Texture.zig").SimpleTexture;
 const FixedList = @import("../../.structures/FixedList.zig").FixedList;
 const RenderNode = @import("../types/pass/RenderNode.zig").RenderNode;
 const TextureState = @import("../types/res/Texture.zig").TextureState;
-const BufferState = @import("../types/res/Buffer.zig").BufferState;
 const Swapchain = @import("../types/base/Swapchain.zig").Swapchain;
 const ShaderId = @import("../../.configs/idConfig.zig").ShaderId;
 const UiNode = @import("../types/pass/RenderNode.zig").UiNode;
@@ -152,22 +152,22 @@ pub const CmdRecorder = struct {
         resUpdater.resetUpdates(cmd.flightId);
     }
 
-    fn stageTextureBarrier(self: *CmdRecorder, img: vk.VkImage, typ: vhE.TexTyp, srcState: TextureState, dstState: TextureState) !void {
-        try self.imgBarriers.append(makeImageBarrier(img, typ, srcState, dstState));
+    fn stageTextureBarrier(self: *CmdRecorder, img: vk.VkImage, typ: vhE.TexTyp, mask: BarrierMask, oldLayout: vhE.ImageLayout, newLayout: vhE.ImageLayout) !void {
+        try self.imgBarriers.append(makeImageBarrier(img, typ, mask, oldLayout, newLayout));
     }
 
-    fn stageMemBarrier(self: *CmdRecorder, oldStage: u64, oldAccess: u64, newStage: u64, newAccess: u64) !void {
+    fn stageMemBarrier(self: *CmdRecorder, mask: BarrierMask) !void {
         self.memBarrier = vk.VkMemoryBarrier2{
             .sType = vk.VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
-            .srcStageMask = oldStage,
-            .srcAccessMask = oldAccess,
-            .dstStageMask = newStage,
-            .dstAccessMask = newAccess,
+            .srcStageMask = mask.srcStage,
+            .srcAccessMask = mask.srcAccess,
+            .dstStageMask = mask.dstStage,
+            .dstAccessMask = mask.dstAccess,
         };
     }
 
-    fn stageBufferBarrier(self: *CmdRecorder, buf: *const Buffer, srcState: BufferState, dstState: BufferState) !void {
-        try self.bufBarriers.append(makeBarrier(buf.handle, srcState, dstState));
+    fn stageBufferBarrier(self: *CmdRecorder, buf: *const Buffer, mask: BarrierMask) !void {
+        try self.bufBarriers.append(makeBarrier(buf.handle, mask));
     }
 
     fn recordNodes(self: *CmdRecorder, cmd: *Cmd, renderNodes: *const RenderNodeRing, resMan: *ResourceMan, shaderMan: *ShaderManager, swapMan: *SwapchainMan, pushData: []const u8) !void {
@@ -209,28 +209,28 @@ pub const CmdRecorder = struct {
 
                 // Barrier Commands
                 .memBarrier => |memBarrier| {
-                    try self.stageMemBarrier(memBarrier.oldStage, memBarrier.oldAccess, memBarrier.newStage, memBarrier.newAccess);
+                    try self.stageMemBarrier(memBarrier.mask);
                 },
                 .bufBarrier => |bufBarrier| {
                     const buf = try resMan.getBuf(bufBarrier.bufId);
-                    try self.stageBufferBarrier(buf, bufBarrier.oldState, bufBarrier.newState);
+                    try self.stageBufferBarrier(buf, bufBarrier.mask);
                 },
                 .texBarrier => |texBarrier| {
                     const tex = try resMan.getTex(texBarrier.texId);
-                    try self.stageTextureBarrier(tex.img, tex.typ, texBarrier.oldState, texBarrier.newState);
+                    try self.stageTextureBarrier(tex.img, tex.typ, texBarrier.mask, texBarrier.oldLayout, texBarrier.newLayout);
                 },
 
-                .swapchainTargetBarrier => |targetBarrier| {
-                    const targetIndex = swapMan.getTargetIndex(targetBarrier.windowId) orelse {
-                        std.debug.print("swapchainTargetBarrier: no swapchain target for window {}\n", .{targetBarrier.windowId.val()});
+                .swapchainBarrier => |swapBarrier| {
+                    const targetIndex = swapMan.getTargetIndex(swapBarrier.windowId) orelse {
+                        std.debug.print("swapchainTargetBarrier: no swapchain target for window {}\n", .{swapBarrier.windowId.val()});
                         return error.NoSwapchainTarget;
                     };
                     const swapchain = swapMan.getTargetByIndex(targetIndex);
                     const targetTex = swapchain.getCurTexture();
-                    try self.stageTextureBarrier(targetTex.img, targetTex.typ, targetBarrier.oldState, targetBarrier.newState);
+                    try self.stageTextureBarrier(targetTex.img, targetTex.typ, swapBarrier.mask, swapBarrier.oldLayout, swapBarrier.newLayout);
                 },
                 .bakeBarriers => {
-                    self.bakeBarriers(cmd, "Bake Barriers");
+                    try self.bakeBarriers(cmd, "Bake Barriers");
                 },
 
                 // Pass Commands
@@ -461,7 +461,7 @@ pub const CmdRecorder = struct {
         }
     }
 
-    fn bakeBarriers(self: *CmdRecorder, cmd: *const Cmd, name: []const u8) void {
+    fn bakeBarriers(self: *CmdRecorder, cmd: *Cmd, name: []const u8) !void {
         const imgBarrierCount = self.imgBarriers.items.len;
         const bufBarrierCount = self.bufBarriers.items.len;
         const hasMemBarrier = self.memBarrier != null;
@@ -470,10 +470,10 @@ pub const CmdRecorder = struct {
             if (rc.BARRIER_DEBUG) std.debug.print("BakeBarriers: {} Img, {} Buf, {} Mem {s}\n", .{ imgBarrierCount, bufBarrierCount, self.memBarrier, name });
 
             if (self.memBarrier) |memBarrier| {
-                cmd.bakeBarriers(self.imgBarriers.items, self.bufBarriers.items, &.{memBarrier});
+                try cmd.bakeBarriers(self.imgBarriers.items, self.bufBarriers.items, &.{memBarrier});
                 self.memBarrier = null;
             } else {
-                cmd.bakeBarriers(self.imgBarriers.items, self.bufBarriers.items, &.{});
+                try cmd.bakeBarriers(self.imgBarriers.items, self.bufBarriers.items, &.{});
             }
 
             self.imgBarriers.clearRetainingCapacity();
@@ -508,17 +508,17 @@ fn createAttachment(view: vk.VkImageView, typ: vhE.TexTyp, clear: ?ClearValue) !
     };
 }
 
-fn makeImageBarrier(img: vk.VkImage, typ: vhE.TexTyp, oldState: TextureState, newState: TextureState) vk.VkImageMemoryBarrier2 {
+fn makeImageBarrier(img: vk.VkImage, typ: vhE.TexTyp, mask: BarrierMask, oldLayout: vhE.ImageLayout, newLayout: vhE.ImageLayout) vk.VkImageMemoryBarrier2 {
     const subRange = vhF.createSubresourceRange(typ.getImageAspectFlags(), 0, 1, 0, 1);
 
     const barrier = vk.VkImageMemoryBarrier2{
         .sType = vk.VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-        .srcStageMask = @intFromEnum(oldState.stage),
-        .srcAccessMask = @intFromEnum(oldState.access),
-        .dstStageMask = @intFromEnum(newState.stage),
-        .dstAccessMask = @intFromEnum(newState.access),
-        .oldLayout = @intFromEnum(oldState.layout),
-        .newLayout = @intFromEnum(newState.layout),
+        .srcStageMask = mask.srcStage,
+        .srcAccessMask = mask.srcAccess,
+        .dstStageMask = mask.dstStage,
+        .dstAccessMask = mask.dstAccess,
+        .oldLayout = @intFromEnum(oldLayout),
+        .newLayout = @intFromEnum(newLayout),
         .srcQueueFamilyIndex = vk.VK_QUEUE_FAMILY_IGNORED,
         .dstQueueFamilyIndex = vk.VK_QUEUE_FAMILY_IGNORED,
         .image = img,
@@ -527,13 +527,13 @@ fn makeImageBarrier(img: vk.VkImage, typ: vhE.TexTyp, oldState: TextureState, ne
     return barrier;
 }
 
-pub fn makeBarrier(buf: vk.VkBuffer, oldState: BufferState, newState: BufferState) vk.VkBufferMemoryBarrier2 {
+pub fn makeBarrier(buf: vk.VkBuffer, mask: BarrierMask) vk.VkBufferMemoryBarrier2 {
     const barrier = vk.VkBufferMemoryBarrier2{
         .sType = vk.VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2,
-        .srcStageMask = @intFromEnum(oldState.stage),
-        .srcAccessMask = @intFromEnum(oldState.access),
-        .dstStageMask = @intFromEnum(newState.stage),
-        .dstAccessMask = @intFromEnum(newState.access),
+        .srcStageMask = mask.srcStage,
+        .srcAccessMask = mask.srcAccess,
+        .dstStageMask = mask.dstStage,
+        .dstAccessMask = mask.dstAccess,
         .srcQueueFamilyIndex = vk.VK_QUEUE_FAMILY_IGNORED,
         .dstQueueFamilyIndex = vk.VK_QUEUE_FAMILY_IGNORED,
         .buffer = buf,

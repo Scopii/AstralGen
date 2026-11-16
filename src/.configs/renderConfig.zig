@@ -17,7 +17,7 @@ pub const ROBUST_VALIDATION = false;
 
 // Normal Profiling
 pub const GPU_TIMERS = true;
-pub const GPU_STATS = false;
+pub const GPU_STATS = true;
 
 pub const GPU_QUERY_INTERVAL = 1;
 pub const GPU_TIME_QUERYS = 63;
@@ -56,10 +56,12 @@ pub const FRAME_GRAPH_SKIP_SHARING = false;
 pub const FRAME_GRAPH_AGGRESSIVE_TEXTURE_SHARE = true;
 pub const FRAME_GRAPH_INSERT_MANUAL_DEPENDENCY_PASSES = false;
 pub const FRAME_GRAPH_TRANSIENTS_PER_FRAME_IN_FLIGHT = false;
+pub const FRAME_GRAPH_USE_GRAPH_LEVEL_LIFETIMES = false;
 
 pub const FRAME_GRAPH_TEXTURE_READS_RESIZE_PRODUCERS = true;
 pub const FRAME_BUILDS_TILL_TRANSIENT_DELETION = 0;
 
+pub const RENDER_ASSIGNER_DEBUG = false;
 pub const RENDER_COMPILER_DEBUG = false;
 
 // Rendering, Swapchains and Windows
@@ -71,6 +73,7 @@ pub const MAX_WINDOWS: u8 = 8;
 pub const COMPOSITE_TEX_STRETCH = false;
 pub const USE_MEM_BARRIERS_ON_BUFFERS = true;
 pub const USE_MEM_BARRIER_ON_IMAGES = true;
+pub const USE_RESOURCE_BARRIER_READ_TRACK = true;
 pub const INITIAL_SWAPCHAIN_COLOR: ClearColor = .{ .R = 0.0, .G = 0.0, .B = 0.1, .A = 1.0 };
 
 // Resource Information

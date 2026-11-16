@@ -15,19 +15,23 @@ const RenderGraphData = @import("../renderGraph/RenderGraphData.zig").RenderGrap
 const CompositeFill = @import("../render/types/pass/RenderNode.zig").CompositeFill;
 const CompositeNode = @import("../render/types/pass/RenderNode.zig").CompositeNode;
 const VertexExec = @import("../render/types/pass/PassDefinition.zig").VertexExec;
+const BarrierState = @import("../render/types/pass/RenderNode.zig").BarrierState;
 const RenderCompilerData = @import("RenderCompilerData.zig").RenderCompilerData;
 const ClearColor = @import("../render/types/pass/AttachmentUse.zig").ClearColor;
 const ClearDepth = @import("../render/types/pass/AttachmentUse.zig").ClearDepth;
 const RenderState = @import("../render/types/pass/RenderState.zig").RenderState;
+const BarrierMask = @import("../render/types/pass/RenderNode.zig").BarrierMask;
 const TextureFill = @import("../render/types/pass/TextureUse.zig").TextureFill;
 const TextureState = @import("../render/types/res/Texture.zig").TextureState;
 const RenderNode = @import("../render/types/pass/RenderNode.zig").RenderNode;
 const BufferFill = @import("../render/types/pass/BufferUse.zig").BufferFill;
 const QueryTyp = @import("../render/types/base/Cmd.zig").QueryPair.QueryTyp;
-const BufferState = @import("../render/types/res/Buffer.zig").BufferState;
 const WindowData = @import("../window/WindowData.zig").WindowData;
+const BufPassId = @import("../.configs/idConfig.zig").BufPassId;
+const TexPassId = @import("../.configs/idConfig.zig").TexPassId;
 const WindowId = @import("../.configs/idConfig.zig").WindowId;
 const ShaderId = @import("../.configs/idConfig.zig").ShaderId;
+const InputData = @import("../input/InputData.zig").InputData;
 const PassId = @import("../.configs/idConfig.zig").PassId;
 const BufId = @import("../.configs/idConfig.zig").BufId;
 const TexId = @import("../.configs/idConfig.zig").TexId;
@@ -47,37 +51,44 @@ pub const RenderCompilerSys = struct {
         registry: *const RenderRegistryData,
         uiData: *const UiData,
         windowData: *const WindowData,
+        inputData: *const InputData,
         runTime: f32,
         deltaTime: f32,
     ) !void {
         self.swapchainStates.clear();
         self.renderedSwapchains.clear();
-        self.sortedNodes.clear();
+        self.renderNodes.clear();
         self.pushData.clear();
         self.usedQueries = 0;
 
-        try updateResourceStates(self, assigner);
-
-        try recordTransfers(self);
-
         for (renderGraph.sorter.sortedRenderIR.constSlice()) |IR| {
             switch (IR) {
-                // .uiIR => |uiIR| {},
+                .updateResourceStates => try updateResourceStates(self, assigner),
+
+                .syncPoint => try bakeBarriers(self),
+
                 .compositeIR => |*compositeIR| try fillCompositePassHardwareIdCmds(self, assigner, registry, compositeIR),
+
                 .passIR => |passIR| try fillPassHardwareIdCmds(self, assigner, registry, renderGraph, passIR, runTime, deltaTime),
+
+                .buildUi => try fillUiPassHardwareIdCmds(self, assigner, registry, uiData, windowData),
+
+                .present => try present(self),
+
+                .recordTransfers => try recordTransfers(self),
+
+                .clearBufIR => |bufPassId| try clearBuffer(self, bufPassId, assigner),
+
+                .clearTexIR => |texPassId| try clearTexture(self, texPassId, assigner),
             }
         }
 
-        // Build UI Passes
-        try fillUiPassHardwareIdCmds(self, assigner, registry, uiData, windowData);
-
-        try present(self);
-
         // Debug Prints
-        if (rc.RENDER_COMPILER_DEBUG) {
+        if (inputData.renderCompilerDebug) {
             std.debug.print("Pass Resource Sys:\n", .{});
-            for (self.sortedNodes.constSlice(), 0..) |*renderNode, index| {
-                switch (renderNode.*) {
+            for (0..self.renderNodes.length()) |index| {
+                const renderNode = self.renderNodes.get(@intCast(index));
+                switch (renderNode) {
                     .passPrint => |*printSpacer| std.debug.print("\nPASS: {s}:\n", .{printSpacer.get()}),
                     .compositePrint => |*printSpacer| std.debug.print("\nCOMPOSITE: {s}:\n", .{printSpacer.get()}),
                     .uiPrint => |*printSpacer| std.debug.print("\nUI: {s}:\n", .{printSpacer.get()}),
@@ -106,7 +117,6 @@ pub const RenderCompilerSys = struct {
                 .updateTex => |texId| try texBarrier(self, texId, .Transfer, .TransferWrite, .TransferDst, false),
             }
         }
-        try bakeBarriers(self);
     }
 
     fn present(self: *RenderCompilerData) !void {
@@ -115,9 +125,8 @@ pub const RenderCompilerSys = struct {
         for (0..self.swapchainStates.getLength()) |i| {
             const windowId = self.swapchainStates.getKeyByIndex(@intCast(i));
             try self.renderedSwapchains.append(windowId);
-            _ = try swapchainTargetBarrier(self, windowId, .BotOfPipe, .None, .PresentSrc);
+            _ = try swapchainBarrier(self, windowId, .BotOfPipe, .None, .PresentSrc);
         }
-        try bakeBarriers(self);
         try endTimer(self, timerId);
     }
 
@@ -126,7 +135,7 @@ pub const RenderCompilerSys = struct {
 
         const composite = CompositeFill{
             .name = compositeIR.name,
-            .pass = compositeIR.pass,
+            .pass = compositeIR.passId,
             .windowId = compositeIR.windowId,
             .srcTexId = hardwareTexId,
             .viewWidth = compositeIR.viewWidth,
@@ -141,11 +150,10 @@ pub const RenderCompilerSys = struct {
         const timerId = try startTimer(self, composite.name, .Composite);
 
         // Barriers
-        const swapchainFirstUse = try swapchainTargetBarrier(self, composite.windowId, .ColorAtt, .ColorAttReadWrite, .Attachment);
+        const swapchainFirstUse = try swapchainBarrier(self, composite.windowId, .ColorAtt, .ColorAttReadWrite, .Attachment);
         try setColorAttSwapchain(self, composite.windowId, swapchainFirstUse);
         try setOutputExtentSwapchain(self, composite.windowId);
         try texBarrier(self, composite.srcTexId, .Fragment, .SampledRead, .General, false);
-        try bakeBarriers(self);
 
         // Shaders
         try setShader(self, sc.compositeFrag.id);
@@ -220,7 +228,7 @@ pub const RenderCompilerSys = struct {
             const uiDrawList = uiData.uiDraws.constSlice()[uiNode.firstDrawIndex..uiNode.lastDrawIndex];
 
             // Barriers:
-            const firstUse = try swapchainTargetBarrier(self, uiNode.windowId, .ColorAtt, .ColorAttReadWrite, .Attachment);
+            const firstUse = try swapchainBarrier(self, uiNode.windowId, .ColorAtt, .ColorAttReadWrite, .Attachment);
             try setColorAttSwapchain(self, uiNode.windowId, firstUse);
             try setOutputExtentSwapchain(self, uiNode.windowId);
             try bufBarrier(self, imguiVB, .VertexInput, .VertexAttributeRead);
@@ -231,7 +239,6 @@ pub const RenderCompilerSys = struct {
                 const drawTex = assigner.texAssigns.getByKey(texPassId);
                 try texBarrier(self, drawTex, .Fragment, .SampledRead, .General, false);
             }
-            try bakeBarriers(self);
 
             // Shaders
             try setShader(self, sc.imguiVert.id);
@@ -322,8 +329,8 @@ pub const RenderCompilerSys = struct {
         const mainOutputTexId = pass.outputTex;
         const mainOutputTexHardwareId = if (mainOutputTexId) |outputId| assigner.texAssigns.getByKey(outputId) else null;
 
-        try passPrint(self, passName);
         const timerId = try startTimer(self, passName, .Pass);
+
         try startStats(self, passName);
 
         try setOutputExtent(self, mainOutputTexHardwareId);
@@ -338,54 +345,6 @@ pub const RenderCompilerSys = struct {
 
         try setPushDataOutputExtent(self, pushOffset);
         pushOffset += @sizeOf(f32) + @sizeOf(f32);
-
-        var needsClearBarrier: bool = false;
-
-        for (pass.passProperties.constSlice()) |attribute| {
-            switch (attribute) {
-                .shaderInf, .colorAtt, .depthAtt, .stencilAtt, .vertexBuffer, .indexBuffer, .vertexAttribute, .bufLink, .texLink, .passLink, .renderState => {},
-
-                .bufSlot => |bufSlot| {
-                    const bufPassId = bufSlot.bufLink.in;
-                    if (renderGraph.share.bufClearPasses.isKeyUsed(bufPassId) and renderGraph.share.bufClearPasses.getByKey(bufPassId) == passId) {
-                        const hardwareBufId = assigner.bufAssigns.getByKey(bufPassId);
-                        try bufBarrier(self, hardwareBufId, .Clear, .TransferWrite);
-                        needsClearBarrier = true;
-                    }
-                },
-                .texSlot => |texSlot| {
-                    const texPassId = texSlot.texLink.in;
-                    if (renderGraph.share.texClearPasses.isKeyUsed(texPassId) and renderGraph.share.texClearPasses.getByKey(texPassId) == passId) {
-                        const hardwareTexId = assigner.texAssigns.getByKey(texPassId);
-                        try texBarrier(self, hardwareTexId, .Clear, .TransferWrite, .TransferDst, true); // Undefined Layout?
-                        needsClearBarrier = true;
-                    }
-                },
-            }
-        }
-
-        if (needsClearBarrier) try bakeBarriers(self);
-
-        for (pass.passProperties.constSlice()) |attribute| {
-            switch (attribute) {
-                .shaderInf, .colorAtt, .depthAtt, .stencilAtt, .vertexBuffer, .indexBuffer, .vertexAttribute, .bufLink, .texLink, .passLink, .renderState => {},
-
-                .bufSlot => |bufSlot| {
-                    const bufPassId = bufSlot.bufLink.in;
-                    if (renderGraph.share.bufClearPasses.isKeyUsed(bufPassId) and renderGraph.share.bufClearPasses.getByKey(bufPassId) == passId) {
-                        const hardwareBufId = assigner.bufAssigns.getByKey(bufPassId);
-                        try clearBuffer(self, hardwareBufId);
-                    }
-                },
-                .texSlot => |texSlot| {
-                    const texPassId = texSlot.texLink.in;
-                    if (renderGraph.share.texClearPasses.isKeyUsed(texPassId) and renderGraph.share.texClearPasses.getByKey(texPassId) == passId) {
-                        const hardwareTexId = assigner.texAssigns.getByKey(texPassId);
-                        try clearTexture(self, hardwareTexId);
-                    }
-                },
-            }
-        }
 
         for (pass.passProperties.constSlice()) |attribute| {
             switch (attribute) {
@@ -498,7 +457,6 @@ pub const RenderCompilerSys = struct {
             }
         }
 
-        try bakeBarriers(self);
         try bindShaders(self);
         try bindPushData(self);
 
@@ -564,282 +522,307 @@ pub const RenderCompilerSys = struct {
     // String Spacers
 
     fn uiPrint(self: *RenderCompilerData, name: []const u8) !void {
-        try self.sortedNodes.append(.{ .uiPrint = try .string(name) });
+        try self.tempNodes.append(.{ .uiPrint = try .string(name) });
     }
 
     fn passPrint(self: *RenderCompilerData, name: []const u8) !void {
-        try self.sortedNodes.append(.{ .passPrint = try .string(name) });
+        try self.tempNodes.append(.{ .passPrint = try .string(name) });
     }
 
     fn compositePrint(self: *RenderCompilerData, name: []const u8) !void {
-        try self.sortedNodes.append(.{ .compositePrint = try .string(name) });
+        try self.tempNodes.append(.{ .compositePrint = try .string(name) });
     }
 
     // Graph Commands
 
-    fn clearBuffer(self: *RenderCompilerData, bufId: BufId) !void {
-        try self.sortedNodes.append(.{ .clearBuffer = bufId });
+    fn clearBuffer(self: *RenderCompilerData, bufPassId: BufPassId, assigner: *const RenderAssignerData) !void {
+        const bufId = assigner.bufAssigns.getByKey(bufPassId);
+        try bufBarrier(self, bufId, .Clear, .TransferWrite);
+        try self.tempNodes.append(.{ .clearBuffer = bufId });
     }
 
-    fn clearTexture(self: *RenderCompilerData, texId: TexId) !void {
-        try self.sortedNodes.append(.{ .clearTexture = texId });
+    fn clearTexture(self: *RenderCompilerData, texPassId: TexPassId, assigner: *const RenderAssignerData) !void {
+        const texId = assigner.texAssigns.getByKey(texPassId);
+        try texBarrier(self, texId, .Clear, .TransferWrite, .TransferDst, true);
+        try self.tempNodes.append(.{ .clearTexture = texId });
     }
 
     // Barrier Commands
     fn recordTransfers(self: *RenderCompilerData) !void {
-        try self.sortedNodes.append(.recordTransfers);
+        try self.renderNodes.append(.recordTransfers);
     }
 
     fn bufBarrier(self: *RenderCompilerData, bufId: BufId, newStage: vhE.PipeStage, newAccess: vhE.PipeAccess) !void {
         const state = self.bufStates.getPtrByKey(bufId);
-        const sameState = state.stage == newStage and state.access == newAccess;
-        if (sameState and newAccess.isReadOnly()) return;
+        const dstStage: u64 = @intFromEnum(newStage);
+        const dstAccess: u64 = @intFromEnum(newAccess);
+        const isRead = newAccess.isReadOnly();
 
-        const newState: BufferState = .{ .stage = newStage, .access = newAccess };
+        const alreadyLetIn = isRead and state.readStages & dstStage == dstStage and state.readAccess & dstAccess == dstAccess;
 
-        if (rc.USE_MEM_BARRIERS_ON_BUFFERS) {
-            self.memSrcAccess |= @intFromEnum(state.access);
-            self.memSrcStage |= @intFromEnum(state.stage);
-            self.memDstAccess |= @intFromEnum(newState.access);
-            self.memDstStage |= @intFromEnum(newState.stage);
-            self.memBarrierPending = true;
-        } else {
-            try self.sortedNodes.append(.{ .bufBarrier = .{ .bufId = bufId, .oldState = state.*, .newState = newState } });
+        if (alreadyLetIn == false) {
+            const joinsReaders = isRead and rc.USE_RESOURCE_BARRIER_READ_TRACK;
+            var mask: BarrierMask = .{};
+
+            if (joinsReaders) {
+                state.readStages |= dstStage;
+                state.readAccess |= dstAccess;
+                mask = BarrierMask{ .srcStage = state.writeStage, .srcAccess = state.writeAccess, .dstStage = state.readStages, .dstAccess = state.readAccess };
+            } else {
+                mask = BarrierMask{ .srcStage = state.writeStage | state.readStages, .srcAccess = state.writeAccess | state.readAccess, .dstStage = dstStage, .dstAccess = dstAccess };
+                state.* = BarrierState{ .writeStage = dstStage, .writeAccess = dstAccess, .readStages = if (isRead) dstStage else 0, .readAccess = if (isRead) dstAccess else 0 };
+            }
+
+            if (rc.USE_MEM_BARRIERS_ON_BUFFERS) {
+                self.mask.merge(mask);
+                self.memBarrierUse = true;
+            } else {
+                try self.renderNodes.append(.{ .bufBarrier = .{ .bufId = bufId, .mask = mask } });
+            }
         }
-
-        state.* = newState;
     }
 
     fn texBarrier(self: *RenderCompilerData, texId: TexId, newStage: vhE.PipeStage, newAccess: vhE.PipeAccess, newLayout: vhE.ImageLayout, ignoreOld: bool) !void {
         const state = self.texStates.getPtrByKey(texId);
-        if (ignoreOld == true) state.layout = .Undefined;
-        const sameState = state.stage == newStage and state.access == newAccess and state.layout == newLayout;
-        if (sameState and newAccess.isReadOnly()) return;
 
-        const newState: TextureState = .{ .stage = newStage, .access = newAccess, .layout = newLayout };
+        const dstStage: u64 = @intFromEnum(newStage);
+        const dstAccess: u64 = @intFromEnum(newAccess);
+        const isRead = newAccess.isReadOnly();
+        const oldLayout: vhE.ImageLayout = if (ignoreOld) .Undefined else state.layout;
 
-        const layoutTransition = if (state.layout != newState.layout) true else false;
+        const alreadyLetIn = isRead and oldLayout == newLayout and state.readStages & dstStage == dstStage and state.readAccess & dstAccess == dstAccess;
 
-        if (rc.USE_MEM_BARRIER_ON_IMAGES == true and layoutTransition == false) {
-            self.memSrcAccess |= @intFromEnum(state.access);
-            self.memSrcStage |= @intFromEnum(state.stage);
-            self.memDstAccess |= @intFromEnum(newState.access);
-            self.memDstStage |= @intFromEnum(newState.stage);
-            self.memBarrierPending = true;
-        } else {
-            try self.sortedNodes.append(.{ .texBarrier = .{ .texId = texId, .oldState = state.*, .newState = newState } });
+        if (alreadyLetIn == false) {
+            const joinsReaders = isRead and oldLayout == newLayout and rc.USE_RESOURCE_BARRIER_READ_TRACK;
+            var mask: BarrierMask = .{};
+
+            if (joinsReaders) {
+                state.readStages |= dstStage;
+                state.readAccess |= dstAccess;
+                mask = BarrierMask{ .srcStage = state.writeStage, .srcAccess = state.writeAccess, .dstStage = state.readStages, .dstAccess = state.readAccess };
+            } else {
+                mask = BarrierMask{ .srcStage = state.writeStage | state.readStages, .srcAccess = state.writeAccess | state.readAccess, .dstStage = dstStage, .dstAccess = dstAccess };
+                state.* = TextureState{ .writeStage = dstStage, .writeAccess = dstAccess, .readStages = if (isRead) dstStage else 0, .readAccess = if (isRead) dstAccess else 0, .layout = newLayout };
+            }
+
+            if (rc.USE_MEM_BARRIER_ON_IMAGES and oldLayout == newLayout) {
+                self.mask.merge(mask);
+                self.memBarrierUse = true;
+            } else {
+                try self.renderNodes.append(.{ .texBarrier = .{ .texId = texId, .mask = mask, .oldLayout = oldLayout, .newLayout = newLayout } });
+            }
         }
-
-        state.* = newState;
     }
 
-    fn swapchainTargetBarrier(self: *RenderCompilerData, windowId: WindowId, newStage: vhE.PipeStage, newAccess: vhE.PipeAccess, newLayout: vhE.ImageLayout) !bool {
-        const newState = TextureState{ .stage = newStage, .access = newAccess, .layout = newLayout };
+    fn swapchainBarrier(self: *RenderCompilerData, windowId: WindowId, newStage: vhE.PipeStage, newAccess: vhE.PipeAccess, newLayout: vhE.ImageLayout) !bool {
+        const dstStage: u64 = @intFromEnum(newStage);
+        const dstAccess: u64 = @intFromEnum(newAccess);
 
-        if (self.swapchainStates.isKeyUsed(windowId) == false) {
-            // First Swapchain Barrier this Frame
-            const oldState = TextureState{ .layout = .Undefined, .stage = .ColorAtt, .access = .None };
-            try self.sortedNodes.append(.{ .swapchainTargetBarrier = .{ .windowId = windowId, .oldState = oldState, .newState = newState } });
-            self.swapchainStates.insert(windowId, newState);
-            return true;
-        } else {
-            // New Swapchain Barrier
-            const state = self.swapchainStates.getPtrByKey(windowId);
+        const firstUse = self.swapchainStates.isKeyUsed(windowId) == false;
+        if (firstUse) self.swapchainStates.insert(windowId, TextureState{ .writeStage = @intFromEnum(vhE.PipeStage.ColorAtt) });
+
+        const state = self.swapchainStates.getPtrByKey(windowId);
+
+        if (state.layout != newLayout or state.writeStage != dstStage or state.writeAccess != dstAccess) {
+            const mask = BarrierMask{ .srcStage = state.writeStage, .srcAccess = state.writeAccess, .dstStage = dstStage, .dstAccess = dstAccess };
 
             if (rc.USE_MEM_BARRIER_ON_IMAGES and state.layout == newLayout) {
-                self.memSrcAccess |= @intFromEnum(state.access);
-                self.memSrcStage |= @intFromEnum(state.stage);
-                self.memDstAccess |= @intFromEnum(newAccess);
-                self.memDstStage |= @intFromEnum(newStage);
-                self.memBarrierPending = true;
-            } else try self.sortedNodes.append(.{ .swapchainTargetBarrier = .{ .windowId = windowId, .oldState = state.*, .newState = newState } });
+                self.mask.merge(mask);
+                self.memBarrierUse = true;
+            } else {
+                try self.renderNodes.append(.{ .swapchainBarrier = .{ .windowId = windowId, .mask = mask, .oldLayout = state.layout, .newLayout = newLayout } });
+            }
 
-            state.* = newState;
-            return false;
+            state.writeStage = dstStage;
+            state.writeAccess = dstAccess;
+            state.layout = newLayout;
         }
+
+        return firstUse;
     }
 
     fn bakeBarriers(self: *RenderCompilerData) !void {
-        if (self.memBarrierPending) {
-            try self.sortedNodes.append(.{ .memBarrier = .{ .oldStage = self.memSrcStage, .oldAccess = self.memSrcAccess, .newStage = self.memDstStage, .newAccess = self.memDstAccess } });
+        if (self.memBarrierUse) try self.renderNodes.append(.{ .memBarrier = .{ .mask = self.mask } });
+
+        try self.renderNodes.append(.bakeBarriers);
+
+        for (0..self.tempNodes.length()) |i| {
+            const renderNode = self.tempNodes.get(@intCast(i));
+            try self.renderNodes.append(renderNode);
         }
 
-        try self.sortedNodes.append(.bakeBarriers);
-
-        self.memSrcStage = 0;
-        self.memSrcAccess = 0;
-        self.memDstStage = 0;
-        self.memDstAccess = 0;
-        self.memBarrierPending = false;
+        self.memBarrierUse = false;
+        self.tempNodes.clear();
+        self.mask = .{};
     }
 
     // Profiling Commands
 
     fn startTimer(self: *RenderCompilerData, name: []const u8, typ: QueryTyp) !u8 {
         const timerId = self.usedQueries;
-        try self.sortedNodes.append(.{ .startTimer = .{ .name = try .string(name), .typ = typ, .pipeStage = .AllCmds, .queryId = timerId } });
+        try self.tempNodes.append(.{ .startTimer = .{ .name = try .string(name), .typ = typ, .pipeStage = .AllCmds, .queryId = timerId } });
         self.usedQueries += 1;
         return timerId;
     }
 
     fn endTimer(self: *RenderCompilerData, timerId: u8) !void {
-        try self.sortedNodes.append(.{ .endTimer = .{ .pipeStage = .BotOfPipe, .queryId = timerId } });
+        try self.tempNodes.append(.{ .endTimer = .{ .pipeStage = .BotOfPipe, .queryId = timerId } });
     }
 
     fn startStats(self: *RenderCompilerData, name: []const u8) !void {
-        try self.sortedNodes.append(.{ .startStats = try .string(name) });
+        try self.tempNodes.append(.{ .startStats = try .string(name) });
     }
 
     fn endStats(self: *RenderCompilerData) !void {
-        try self.sortedNodes.append(.endStats);
+        try self.tempNodes.append(.endStats);
     }
 
     // Pass Commands
 
     fn setShader(self: *RenderCompilerData, shaderId: ShaderId) !void {
-        try self.sortedNodes.append(.{ .setShader = shaderId });
+        try self.tempNodes.append(.{ .setShader = shaderId });
     }
 
     fn bindShaders(self: *RenderCompilerData) !void {
-        try self.sortedNodes.append(.bindShaders);
+        try self.tempNodes.append(.bindShaders);
     }
 
     fn setPushData(self: *RenderCompilerData, len: u8, offset: u32, dataBytes: []const u8) !void {
-        try self.sortedNodes.append(.{ .setPushData = .{ .startIndex = self.pushData.len, .len = len, .offset = offset } });
+        try self.tempNodes.append(.{ .setPushData = .{ .startIndex = self.pushData.len, .len = len, .offset = offset } });
         self.pushData.appendSliceAssumeCapacity(dataBytes);
     }
 
     fn setPushDataOutputExtent(self: *RenderCompilerData, offset: u32) !void {
-        try self.sortedNodes.append(.{ .setPushDataOutputExtent = .{ .offset = offset } });
+        try self.tempNodes.append(.{ .setPushDataOutputExtent = .{ .offset = offset } });
     }
 
     fn setPushDataBufDesc(self: *RenderCompilerData, offset: u32, bufId: BufId) !void {
-        try self.sortedNodes.append(.{ .setPushDataBufDesc = .{ .bufId = bufId, .size = @sizeOf(u32), .offset = offset } });
+        try self.tempNodes.append(.{ .setPushDataBufDesc = .{ .bufId = bufId, .size = @sizeOf(u32), .offset = offset } });
     }
 
     fn setPushDataTexDesc(self: *RenderCompilerData, offset: u32, texId: TexId, descTyp: vhE.TexDescriptor) !void {
-        try self.sortedNodes.append(.{ .setPushDataTexDesc = .{ .texId = texId, .size = @sizeOf(u32), .offset = offset, .descTyp = descTyp } });
+        try self.tempNodes.append(.{ .setPushDataTexDesc = .{ .texId = texId, .size = @sizeOf(u32), .offset = offset, .descTyp = descTyp } });
     }
 
     fn bindPushData(self: *RenderCompilerData) !void {
-        try self.sortedNodes.append(.bindPushData);
+        try self.tempNodes.append(.bindPushData);
     }
 
     fn dispatch(self: *RenderCompilerData, groupX: u32, groupY: u32, groupZ: u32) !void {
-        try self.sortedNodes.append(.{ .dispatch = .{ .groupX = groupX, .groupY = groupY, .groupZ = groupZ } });
+        try self.tempNodes.append(.{ .dispatch = .{ .groupX = groupX, .groupY = groupY, .groupZ = groupZ } });
     }
 
     fn dispatchOutputTex(self: *RenderCompilerData, groupX: u32, groupY: u32, groupZ: u32, texId: TexId) !void {
-        try self.sortedNodes.append(.{ .dispatchOutputTex = .{ .groupX = groupX, .groupY = groupY, .groupZ = groupZ, .texId = texId } });
+        try self.tempNodes.append(.{ .dispatchOutputTex = .{ .groupX = groupX, .groupY = groupY, .groupZ = groupZ, .texId = texId } });
     }
 
     fn dispatchIndirect(self: *RenderCompilerData, indirectBufId: BufId, indirectBufOffset: u64) !void {
-        try self.sortedNodes.append(.{ .dispatchIndirect = .{ .indirectBufId = indirectBufId, .indirectBufOffset = indirectBufOffset } });
+        try self.tempNodes.append(.{ .dispatchIndirect = .{ .indirectBufId = indirectBufId, .indirectBufOffset = indirectBufOffset } });
     }
 
     fn setOutputExtentSwapchain(self: *RenderCompilerData, windowId: WindowId) !void {
-        try self.sortedNodes.append(.{ .setOutputExtentSwapchain = windowId });
+        try self.tempNodes.append(.{ .setOutputExtentSwapchain = windowId });
     }
 
     fn setOutputExtent(self: *RenderCompilerData, texId: ?TexId) !void {
-        try self.sortedNodes.append(.{ .setOutputExtent = texId });
+        try self.tempNodes.append(.{ .setOutputExtent = texId });
     }
 
     // Draw Commands
 
     fn beginRendering(self: *RenderCompilerData) !void {
-        try self.sortedNodes.append(.beginRendering);
+        try self.tempNodes.append(.beginRendering);
     }
 
     fn setViewport(self: *RenderCompilerData, x: f32, y: f32, width: f32, height: f32) !void {
-        try self.sortedNodes.append(.{ .setViewport = .{ .x = x, .y = y, .width = width, .height = height } });
+        try self.tempNodes.append(.{ .setViewport = .{ .x = x, .y = y, .width = width, .height = height } });
     }
 
     fn setViewportFromTex(self: *RenderCompilerData, texId: TexId) !void {
-        try self.sortedNodes.append(.{ .setViewportFromTex = texId });
+        try self.tempNodes.append(.{ .setViewportFromTex = texId });
     }
 
     fn setViewportFromOutput(self: *RenderCompilerData) !void {
-        try self.sortedNodes.append(.setViewportFromOutput);
+        try self.tempNodes.append(.setViewportFromOutput);
     }
 
     fn setScissor(self: *RenderCompilerData, x: f32, y: f32, width: f32, height: f32) !void {
-        try self.sortedNodes.append(.{ .setScissor = .{ .x = x, .y = y, .width = width, .height = height } });
+        try self.tempNodes.append(.{ .setScissor = .{ .x = x, .y = y, .width = width, .height = height } });
     }
 
     fn setScissorFromTex(self: *RenderCompilerData, texId: TexId) !void {
-        try self.sortedNodes.append(.{ .setScissorFromTex = texId });
+        try self.tempNodes.append(.{ .setScissorFromTex = texId });
     }
 
     fn setScissorFromOutput(self: *RenderCompilerData) !void {
-        try self.sortedNodes.append(.setScissorFromOutput);
+        try self.tempNodes.append(.setScissorFromOutput);
     }
 
     fn setRenderStateUnion(self: *RenderCompilerData, renderStateUnion: RenderStateUnion) !void {
-        try self.sortedNodes.append(.{ .setRenderStateUnion = renderStateUnion });
+        try self.tempNodes.append(.{ .setRenderStateUnion = renderStateUnion });
     }
 
     fn bindRenderState(self: *RenderCompilerData) !void {
-        try self.sortedNodes.append(.bindRenderState);
+        try self.tempNodes.append(.bindRenderState);
     }
 
     fn setColorAttSwapchain(self: *RenderCompilerData, windowId: WindowId, firstUse: bool) !void {
-        try self.sortedNodes.append(.{ .setColorAttSwapchain = .{ .windowId = windowId, .firstUse = firstUse } });
+        try self.tempNodes.append(.{ .setColorAttSwapchain = .{ .windowId = windowId, .firstUse = firstUse } });
     }
 
     fn setColorAtt(self: *RenderCompilerData, texId: TexId, clear: ?ClearColor) !void {
-        try self.sortedNodes.append(.{ .setColorAtt = .{ .texId = texId, .clear = clear } });
+        try self.tempNodes.append(.{ .setColorAtt = .{ .texId = texId, .clear = clear } });
     }
 
     fn setDepthAtt(self: *RenderCompilerData, texId: TexId, clear: ?ClearDepth) !void {
-        try self.sortedNodes.append(.{ .setDepthAtt = .{ .texId = texId, .clear = clear } });
+        try self.tempNodes.append(.{ .setDepthAtt = .{ .texId = texId, .clear = clear } });
     }
 
     fn setStencilAtt(self: *RenderCompilerData, texId: TexId, clear: ?ClearDepth) !void {
-        try self.sortedNodes.append(.{ .setStencilAtt = .{ .texId = texId, .clear = clear } });
+        try self.tempNodes.append(.{ .setStencilAtt = .{ .texId = texId, .clear = clear } });
     }
 
     fn setIndexBuf(self: *RenderCompilerData, indexBufferUse: IndexBufferUse) !void {
-        try self.sortedNodes.append(.{ .setIndexBuf = indexBufferUse });
+        try self.tempNodes.append(.{ .setIndexBuf = indexBufferUse });
     }
 
     fn bindIndexInput(self: *RenderCompilerData) !void {
-        try self.sortedNodes.append(.bindIndexInput);
+        try self.tempNodes.append(.bindIndexInput);
     }
 
     fn setVertexBuf(self: *RenderCompilerData, vertexBufferUse: VertexBufferUse) !void {
-        try self.sortedNodes.append(.{ .setVertexBuf = vertexBufferUse });
+        try self.tempNodes.append(.{ .setVertexBuf = vertexBufferUse });
     }
 
     fn setVertexAttrib(self: *RenderCompilerData, vertexAttribute: VertexAttribute) !void {
-        try self.sortedNodes.append(.{ .setVertexAttrib = vertexAttribute });
+        try self.tempNodes.append(.{ .setVertexAttrib = vertexAttribute });
     }
 
     fn bindVertexInput(self: *RenderCompilerData) !void {
-        try self.sortedNodes.append(.bindVertexInput);
+        try self.tempNodes.append(.bindVertexInput);
     }
 
     fn drawVertex(self: *RenderCompilerData, vertexExec: VertexExec) !void {
-        try self.sortedNodes.append(.{ .drawVertex = vertexExec });
+        try self.tempNodes.append(.{ .drawVertex = vertexExec });
     }
 
     fn drawVertexIndexed(self: *RenderCompilerData, vertexIndexedExec: VertexIndexedExec) !void {
-        try self.sortedNodes.append(.{ .drawVertexIndexed = vertexIndexedExec });
+        try self.tempNodes.append(.{ .drawVertexIndexed = vertexIndexedExec });
     }
 
     fn drawTaskOrMesh(self: *RenderCompilerData, taskOrMeshExec: TaskOrMeshExec) !void {
-        try self.sortedNodes.append(.{ .drawTaskOrMesh = taskOrMeshExec });
+        try self.tempNodes.append(.{ .drawTaskOrMesh = taskOrMeshExec });
     }
 
     fn drawTaskOrMeshIndirect(self: *RenderCompilerData, taskOrMeshIndirectExec: TaskOrMeshIndirectExec) !void {
-        try self.sortedNodes.append(.{ .drawTaskOrMeshIndirect = taskOrMeshIndirectExec });
+        try self.tempNodes.append(.{ .drawTaskOrMeshIndirect = taskOrMeshIndirectExec });
     }
 
     fn endRendering(self: *RenderCompilerData) !void {
-        try self.sortedNodes.append(.endRendering);
+        try self.tempNodes.append(.endRendering);
     }
 
     fn resetState(self: *RenderCompilerData) !void {
-        try self.sortedNodes.append(.resetState);
+        try self.tempNodes.append(.resetState);
     }
 };

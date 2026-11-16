@@ -34,6 +34,7 @@ pub const Cmd = struct {
     activeStatQuery: ?QueryPair = null,
 
     stateChanges: u32 = 0,
+    barrierCalls: u32 = 0,
 
     pub fn init(cmdPool: vk.VkCommandPool, level: vk.VkCommandBufferLevel, gpi: vk.VkDevice) !Cmd {
         const allocInf = vk.VkCommandBufferAllocateInfo{
@@ -100,6 +101,7 @@ pub const Cmd = struct {
         self.frame = frame;
         self.renderState = null;
         self.stateChanges = 0;
+        self.barrierCalls = 0;
 
         try vhF.check(vk.vkResetCommandBuffer(self.handle, 0), "could not reset Cmd");
         try vhF.check(vk.vkBeginCommandBuffer(self.handle, &beginInf), "could not Begin Cmd");
@@ -363,9 +365,16 @@ pub const Cmd = struct {
             }
         }
         std.debug.print("Graphics State Changes: {}\n", .{self.stateChanges});
+        std.debug.print("Barrier Calls: {}\n", .{self.barrierCalls});
     }
 
-    pub fn bakeBarriers(self: *const Cmd, imgBarriers: []const vk.VkImageMemoryBarrier2, bufBarriers: []const vk.VkBufferMemoryBarrier2, memBarriers: []const vk.VkMemoryBarrier2) void {
+    pub fn bakeBarriers(self: *Cmd, imgBarriers: []const vk.VkImageMemoryBarrier2, bufBarriers: []const vk.VkBufferMemoryBarrier2, memBarriers: []const vk.VkMemoryBarrier2) !void {
+        if (imgBarriers.len == 0 and bufBarriers.len == 0 and memBarriers.len == 0) {
+            return error.BakeBarriersShouldNotBeCalledWithoutAnyBarriers;
+        }
+        
+        self.barrierCalls += 1;
+
         const depInf = vk.VkDependencyInfo{
             //.dependencyFlags =
             .sType = vk.VK_STRUCTURE_TYPE_DEPENDENCY_INFO,

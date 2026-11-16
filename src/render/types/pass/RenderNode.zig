@@ -23,7 +23,7 @@ const vhE = @import("../../help/Enums.zig");
 
 pub const CompositeNode = struct {
     name: []const u8, // Should be String
-    pass: PassId,
+    passId: PassId,
     windowId: WindowId,
     srcTexPassId: TexPassId,
     viewWidth: u32,
@@ -88,8 +88,37 @@ pub const UiNodeFill = struct {
 };
 
 pub const RenderNodeIR = union(enum) {
-    compositeIR: CompositeNode, // Could be improved
+    updateResourceStates: void,
+    recordTransfers: void,
+    clearBufIR: BufPassId,
+    clearTexIR: TexPassId,
     passIR: PassId,
+    compositeIR: CompositeNode,
+    buildUi: void,
+    present: void,
+    syncPoint: void,
+};
+
+pub const BarrierState = struct {
+    writeStage: u64 = 0,
+    writeAccess: u64 = 0,
+    readStages: u64 = 0,
+    readAccess: u64 = 0,
+};
+
+
+pub const BarrierMask = struct {
+    srcStage: u64 = 0,
+    srcAccess: u64 = 0,
+    dstStage: u64 = 0,
+    dstAccess: u64 = 0,
+
+    pub fn merge(self: *BarrierMask, mask: BarrierMask) void {
+        self.srcStage |= mask.srcStage;
+        self.srcAccess |= mask.srcAccess;
+        self.dstStage |= mask.dstStage;
+        self.dstAccess |= mask.dstAccess;
+    }
 };
 
 pub const RenderNode = union(enum) {
@@ -104,10 +133,10 @@ pub const RenderNode = union(enum) {
     clearTexture: TexId,
 
     // Barrier Commands
-    memBarrier: struct { oldStage: u64, oldAccess: u64, newStage: u64, newAccess: u64 },
-    bufBarrier: struct { bufId: BufId, oldState: BufferState, newState: BufferState },
-    texBarrier: struct { texId: TexId, oldState: TextureState, newState: TextureState },
-    swapchainTargetBarrier: struct { windowId: WindowId, oldState: TextureState, newState: TextureState },
+    memBarrier: struct { mask: BarrierMask },
+    bufBarrier: struct { bufId: BufId, mask: BarrierMask },
+    texBarrier: struct { texId: TexId, mask: BarrierMask, oldLayout: vhE.ImageLayout, newLayout: vhE.ImageLayout },
+    swapchainBarrier: struct { windowId: WindowId, mask: BarrierMask, oldLayout: vhE.ImageLayout, newLayout: vhE.ImageLayout },
     bakeBarriers: void,
 
     // Profiling Commands

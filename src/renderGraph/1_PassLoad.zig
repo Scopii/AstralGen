@@ -25,7 +25,7 @@ pub const PassLoadData = struct {
 };
 
 pub const PassLoadSys = struct {
-    pub fn build(self: *PassLoadData, registry: *const RenderRegistryData) !void {
+    pub fn build(self: *PassLoadData, registry: *const RenderRegistryData, debug: bool) !void {
         self.bufRanges.clear();
         self.bufRefs.clear();
 
@@ -80,6 +80,7 @@ pub const PassLoadSys = struct {
                             .passId = passId,
                             .rootPassId = texSlotTypes.texLink.from,
                             .access = if (texSlotTypes.access.isReadOnly()) .read else .write,
+                            .viaAttachment = true,
                         };
                         try self.texRefs.append(texRef);
 
@@ -100,6 +101,7 @@ pub const PassLoadSys = struct {
                             .passId = passId,
                             .rootPassId = texSlotTypes.texLink.from,
                             .access = if (texSlotTypes.access.isReadOnly()) .read else .write,
+                            .viaAttachment = false,
                         };
                         try self.texRefs.append(texRef);
 
@@ -120,6 +122,7 @@ pub const PassLoadSys = struct {
                             .passId = passId,
                             .rootPassId = texSlotTypes.texLink.from,
                             .access = if (texSlotTypes.access.isReadOnly()) .read else .write,
+                            .viaAttachment = true,
                         };
                         try self.texRefs.append(texRef);
 
@@ -141,7 +144,7 @@ pub const PassLoadSys = struct {
         }
 
         // Debug Output
-        if (rc.FRAME_GRAPH_DEBUG) {
+        if (debug) {
             std.debug.print("1.PassLoad: \n", .{});
             for (self.bufRanges.getConstItems(), 0..) |bufRange, index| {
                 const passId = self.bufRanges.getKeyByIndex(@intCast(index));

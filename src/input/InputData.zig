@@ -1,5 +1,6 @@
 const SimpleMap = @import("../.structures/SimpleMap.zig").SimpleMap;
 const KeyState = @import("../input/InputSys.zig").KeyState;
+const rc = @import("../.configs/renderConfig.zig");
 
 pub const SDL_KEY_MAX = 512;
 pub const SDL_MOUSE_MAX = 24;
@@ -21,6 +22,10 @@ pub const InputData = struct {
     closeApp: bool = false,
     toggleImgui: bool = false,
     speedMode: bool = false,
+
+    renderGraphDebug: bool = rc.FRAME_GRAPH_DEBUG,
+    renderAssignerDebug: bool = rc.RENDER_ASSIGNER_DEBUG,
+    renderCompilerDebug: bool = rc.RENDER_COMPILER_DEBUG,
 
     pub fn resetMouseState(self: *InputData) void {
         self.mouseMoveX = 0;

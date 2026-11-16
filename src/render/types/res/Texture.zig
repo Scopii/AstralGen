@@ -1,3 +1,4 @@
+const BarrierState = @import("../pass/RenderNode.zig").BarrierState;
 const TexId = @import("../../../.configs/idConfig.zig").TexId;
 const rc = @import("../../../.configs/renderConfig.zig");
 const vk = @import("../../../.modules/vk.zig").c;
@@ -5,8 +6,10 @@ const vhE = @import("../../help/Enums.zig");
 const std = @import("std");
 
 pub const TextureState = struct {
-    stage: vhE.PipeStage = .TopOfPipe,
-    access: vhE.PipeAccess = .None,
+    writeStage: u64 = 0,
+    writeAccess: u64 = 0,
+    readStages: u64 = 0,
+    readAccess: u64 = 0,
     layout: vhE.ImageLayout = .Undefined,
 };
 
@@ -24,6 +27,25 @@ pub const TexInf = struct {
 
     pub fn create(texInf: TexInf) TexInf {
         return texInf;
+    }
+
+    pub fn guessMemoryCost(self: *const TexInf) u64 {
+        const bytesPerPixel = self.typ.bytesPerPixel();
+        const rawMemory = @as(u64, self.width) * @as(u64, self.height) * @as(u64, self.depth) * bytesPerPixel;
+
+        return switch (self.update) {
+            .Rarely => rawMemory,
+            .Often, .PerFrame => if (self.share == .transient and rc.FRAME_GRAPH_TRANSIENTS_PER_FRAME_IN_FLIGHT) rawMemory * rc.MAX_IN_FLIGHT else rawMemory,
+
+            // .Rarely, .Often, .PerFrame => rawMemory,
+        };
+    }
+
+    pub fn guessNativeMemoryCost(self: *const TexInf) u64 {
+        const bytesPerPixel = self.typ.bytesPerPixel();
+        const rawMemory = @as(u64, self.width) * @as(u64, self.height) * @as(u64, self.depth) * bytesPerPixel;
+
+        return rawMemory;
     }
 };
 
@@ -118,5 +140,12 @@ pub const TexDesc = struct {
 
             // .Rarely, .Often, .PerFrame => rawMemory,
         };
+    }
+
+    pub fn guessNativeMemoryCost(self: *const TexDesc) u64 {
+        const bytesPerPixel = self.typ.bytesPerPixel();
+        const rawMemory = @as(u64, self.width) * @as(u64, self.height) * @as(u64, self.depth) * bytesPerPixel;
+
+        return rawMemory;
     }
 };

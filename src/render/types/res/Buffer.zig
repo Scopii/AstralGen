@@ -4,11 +4,6 @@ const vk = @import("../../../.modules/vk.zig").c;
 const vhE = @import("../../help/Enums.zig");
 const std = @import("std");
 
-pub const BufferState = struct {
-    stage: vhE.PipeStage = .TopOfPipe,
-    access: vhE.PipeAccess = .None,
-};
-
 pub const BufInf = struct {
     id: BufId,
     mem: vhE.MemUsage,
@@ -20,6 +15,19 @@ pub const BufInf = struct {
 
     pub fn create(bufInf: BufInf) BufInf {
         return bufInf;
+    }
+
+    pub fn guessMemoryCost(self: *const BufInf) u64 {
+        const rawMemory = @as(u64, self.elementSize) * @as(u64, self.len);
+
+        return switch (self.update) {
+            .Rarely => rawMemory,
+            .Often, .PerFrame => if (self.share == .transient and rc.FRAME_GRAPH_TRANSIENTS_PER_FRAME_IN_FLIGHT) rawMemory * rc.MAX_IN_FLIGHT else rawMemory,
+        };
+    }
+
+    pub fn guessNativeMemoryCost(self: *const BufInf) u64 {
+        return @as(u64, self.elementSize) * @as(u64, self.len);
     }
 };
 
@@ -38,9 +46,11 @@ pub const BufDesc = struct {
         return switch (self.update) {
             .Rarely => rawMemory,
             .Often, .PerFrame => if (self.share == .transient and rc.FRAME_GRAPH_TRANSIENTS_PER_FRAME_IN_FLIGHT) rawMemory * rc.MAX_IN_FLIGHT else rawMemory,
-
-            // .Rarely, .Often, .PerFrame => rawMemory,
         };
+    }
+
+    pub fn guessNativeMemoryCost(self: *const BufDesc) u64 {
+        return @as(u64, self.elementSize) * @as(u64, self.len);
     }
 };
 

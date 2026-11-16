@@ -53,8 +53,8 @@ pub const PassLifetime = struct {
 };
 
 pub const GraphLifetime = struct {
-    firstLevel: u16,
-    lastLevel: u16,
+    earliest: u16,
+    latest: u16,
 };
 
 pub const ManualBuf = struct {
@@ -112,6 +112,7 @@ pub const TexReference = struct {
     passId: PassId,
     rootPassId: ?PassId,
     access: enum { write, read },
+    viaAttachment: bool, // Could be made Reference Enum
 };
 
 pub const BufReference = struct {
@@ -123,14 +124,15 @@ pub const BufReference = struct {
 
 pub const BufLifetime = struct {
     bufPassId: BufPassId,
-    earliestPass: u16,
-    latestPass: u16,
+    earliest: u16,
+    latest: u16,
 };
 
 pub const TexLifetime = struct {
     texPassId: TexPassId,
-    earliestPass: u16,
-    latestPass: u16,
+    earliest: u16,
+    latest: u16,
+    firstUseIsAttachment: bool,
 };
 
 pub const SharedBuffer = struct {

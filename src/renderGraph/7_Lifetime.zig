@@ -20,7 +20,7 @@ pub const LifetimeData = struct {
 };
 
 pub const LifetimeSys = struct {
-    pub fn build(self: *LifetimeData, dependency: *const DependencyData, resource: *const ResourceData, optimizer: *const OptimizerData, registry: *const RenderRegistryData) !void {
+    pub fn build(self: *LifetimeData, dependency: *const DependencyData, resource: *const ResourceData, optimizer: *const OptimizerData, registry: *const RenderRegistryData, debug: bool) !void {
         self.bufLifetimeMap.clear();
         self.texLifetimeMap.clear();
         self.bufLifetimes.clear();
@@ -32,11 +32,11 @@ pub const LifetimeSys = struct {
             const passPosition = optimizer.optimizedGraph.getIndexByKey(bufRef.passId);
 
             if (self.bufLifetimeMap.isKeyUsed(bufPassId) == false) {
-                self.bufLifetimeMap.upsert(bufPassId, BufLifetime{ .bufPassId = bufPassId, .earliestPass = passPosition, .latestPass = passPosition });
+                self.bufLifetimeMap.upsert(bufPassId, BufLifetime{ .bufPassId = bufPassId, .earliest = passPosition, .latest = passPosition });
             } else {
                 var lifetime = self.bufLifetimeMap.getPtrByKey(bufPassId);
-                if (passPosition < lifetime.earliestPass) lifetime.earliestPass = passPosition;
-                if (passPosition > lifetime.latestPass) lifetime.latestPass = passPosition;
+                if (passPosition < lifetime.earliest) lifetime.earliest = passPosition;
+                if (passPosition > lifetime.latest) lifetime.latest = passPosition;
             }
         }
 
@@ -55,11 +55,15 @@ pub const LifetimeSys = struct {
             const passPosition = optimizer.optimizedGraph.getIndexByKey(texRef.passId);
 
             if (self.texLifetimeMap.isKeyUsed(texPassId) == false) {
-                self.texLifetimeMap.upsert(texPassId, TexLifetime{ .texPassId = texPassId, .earliestPass = passPosition, .latestPass = passPosition });
+                const texLifetime = TexLifetime{ .texPassId = texPassId, .earliest = passPosition, .latest = passPosition, .firstUseIsAttachment = texRef.viaAttachment };
+                self.texLifetimeMap.upsert(texPassId, texLifetime);
             } else {
                 var lifetime = self.texLifetimeMap.getPtrByKey(texPassId);
-                if (passPosition < lifetime.earliestPass) lifetime.earliestPass = passPosition;
-                if (passPosition > lifetime.latestPass) lifetime.latestPass = passPosition;
+                if (passPosition < lifetime.earliest) {
+                    lifetime.earliest = passPosition;
+                    lifetime.firstUseIsAttachment = texRef.viaAttachment; // follows the earliest pass
+                }
+                if (passPosition > lifetime.latest) lifetime.latest = passPosition;
             }
         }
 
@@ -73,27 +77,27 @@ pub const LifetimeSys = struct {
         // self.texLifetimes.defeatingQuicksort(lessThanGroup);
 
         // Debug
-        if (rc.FRAME_GRAPH_DEBUG) {
+        if (debug) {
             std.debug.print("7.Lifetime: \n", .{});
 
             for (self.bufLifetimes.constSlice()) |bufLifetime| {
                 const bufName = try registry.getBufferName(bufLifetime.bufPassId);
 
-                const earliestPass = optimizer.optimizedGraph.getConstItems()[bufLifetime.earliestPass].passId;
-                const latestPass = optimizer.optimizedGraph.getConstItems()[bufLifetime.latestPass].passId;
+                const earliestPass = optimizer.optimizedGraph.getConstItems()[bufLifetime.earliest].passId;
+                const latestPass = optimizer.optimizedGraph.getConstItems()[bufLifetime.latest].passId;
                 const earliestName = try registry.getPassName(earliestPass);
                 const latestName = try registry.getPassName(latestPass);
-                std.debug.print("- Transient Buf Lifetime ({s}): ({} -> {}) ({s} -> {s})\n", .{ bufName, bufLifetime.earliestPass, bufLifetime.latestPass, earliestName, latestName });
+                std.debug.print("- Transient Buf Lifetime ({s}): ({} -> {}) ({s} -> {s})\n", .{ bufName, bufLifetime.earliest, bufLifetime.latest, earliestName, latestName });
             }
 
             for (self.texLifetimes.constSlice()) |texLifetime| {
                 const texName = try registry.getTextureName(texLifetime.texPassId);
 
-                const earliestPass = optimizer.optimizedGraph.getConstItems()[texLifetime.earliestPass].passId;
-                const latestPass = optimizer.optimizedGraph.getConstItems()[texLifetime.latestPass].passId;
+                const earliestPass = optimizer.optimizedGraph.getConstItems()[texLifetime.earliest].passId;
+                const latestPass = optimizer.optimizedGraph.getConstItems()[texLifetime.latest].passId;
                 const earliestName = try registry.getPassName(earliestPass);
                 const latestName = try registry.getPassName(latestPass);
-                std.debug.print("- Transient Tex Lifetime ({s}): ({} -> {}) ({s} -> {s})\n", .{ texName, texLifetime.earliestPass, texLifetime.latestPass, earliestName, latestName });
+                std.debug.print("- Transient Tex Lifetime ({s}): ({} -> {}) ({s} -> {s})\n", .{ texName, texLifetime.earliest, texLifetime.latest, earliestName, latestName });
             }
             std.debug.print("\n", .{});
         }
@@ -101,11 +105,11 @@ pub const LifetimeSys = struct {
 };
 
 fn lessThanGroup(group1: anytype, group2: anytype) bool {
-    if (group1.earliestPass != group2.earliestPass) return group1.earliestPass < group2.earliestPass;
-    return group1.latestPass < group2.latestPass;
+    if (group1.earliest != group2.earliest) return group1.earliest < group2.earliest;
+    return group1.latest < group2.latest;
 }
 
 fn greaterGroup(group1: anytype, group2: anytype) bool {
-    if (group1.earliestPass != group2.earliestPass) return group1.earliestPass > group2.earliestPass;
-    return group1.latestPass > group2.latestPass;
+    if (group1.earliest != group2.earliest) return group1.earliest > group2.earliest;
+    return group1.latest > group2.latest;
 }

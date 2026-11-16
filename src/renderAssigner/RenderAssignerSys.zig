@@ -16,6 +16,7 @@ const TexInf = @import("../render/types/res/Texture.zig").TexInf;
 const BufInf = @import("../render/types/res/Buffer.zig").BufInf;
 const TexPassId = @import("../.configs/idConfig.zig").TexPassId;
 const BufPassId = @import("../.configs/idConfig.zig").BufPassId;
+const InputData = @import("../input/InputData.zig").InputData;
 const TexId = @import("../.configs/idConfig.zig").TexId;
 const BufId = @import("../.configs/idConfig.zig").BufId;
 const rc = @import("../.configs/renderConfig.zig");
@@ -32,6 +33,7 @@ pub const RenderAssignerSys = struct {
         assignerQueue: *RenderAssignerQueue,
         rendererQueue: *RendererQueue,
         memoryMan: *MemoryManager,
+        inputData: *const InputData,
     ) !void {
         // Mark SubResource Updates
         self.requests.clear();
@@ -57,13 +59,13 @@ pub const RenderAssignerSys = struct {
         assignerQueue.clear();
 
         // Debug
-        if (rc.FRAME_GRAPH_DEBUG) {
-            std.debug.print("6.ResourceAssigner (Assigned Frame: {})\n", .{self.assignedFrames});
+        if (inputData.renderAssignerDebug) {
+            std.debug.print("ResourceAssigner (Assigned Frame: {})\n", .{self.assignedFrames});
             for (self.usedTransientBufs.constSlice(), 0..) |buf, i| {
-                std.debug.print(" - Transient Buf {} -> Buf (BufId {}) (in use for {} Builds)\n", .{ i, buf.hardwareBuf.val(), buf.inUseCounter });
+                std.debug.print(" - Transient Buf {} -> Buf (BufId {}) (last used Frame {})\n", .{ i, buf.hardwareBuf.val(), buf.lastUsedFrame });
             }
             for (self.usedTransientTexes.constSlice(), 0..) |tex, i| {
-                std.debug.print(" - Transient Tex {} -> Tex (TexId {}) (in use for {} Builds)\n", .{ i, tex.hardwareTex.val(), tex.inUseCounter });
+                std.debug.print(" - Transient Tex {} -> Tex (TexId {}) (last used Frame {})\n", .{ i, tex.hardwareTex.val(), tex.lastUsedFrame });
             }
             std.debug.print("\n", .{});
             // Buffers
@@ -79,6 +81,54 @@ pub const RenderAssignerSys = struct {
                 const texName = try registry.getTextureName(texPassId);
                 std.debug.print(" - Tex {s} assigned -> TexId {}\n", .{ texName, texId.val() });
             }
+            std.debug.print("\n", .{});
+
+            // Memory Information
+            var transientBufMem: u64 = 0;
+            for (self.usedTransientBufs.constSlice()) |buf| {
+                const memGuess = buf.bufDesc.guessMemoryCost();
+                transientBufMem += memGuess;
+                std.debug.print(" Used Transient Buf ({} Bytes)\n", .{memGuess});
+            }
+            for (self.unusedTransientBufs.constSlice()) |buf| {
+                const memGuess = buf.bufDesc.guessMemoryCost();
+                transientBufMem += memGuess;
+                std.debug.print(" Unused Transient Buf ({} Bytes)\n", .{memGuess});
+            }
+            std.debug.print("Total Transient Buf Mem ({})\n\n", .{transientBufMem});
+
+            var transientTexMem: u64 = 0;
+            for (self.usedTransientTexes.constSlice()) |tex| {
+                const memGuess = tex.texDesc.guessNativeMemoryCost();
+                transientTexMem += memGuess;
+                std.debug.print(" Used Transient Tex ({} Bytes)\n", .{memGuess});
+            }
+            for (self.unusedTransientTexes.constSlice()) |tex| {
+                const memGuess = tex.texDesc.guessNativeMemoryCost();
+                transientTexMem += memGuess;
+                std.debug.print(" Unused Transient Tex ({} Bytes)\n", .{memGuess});
+            }
+            std.debug.print("Total Transient Tex Mem ({} Bytes)\n\n", .{transientTexMem});
+
+            var manualBufMem: u64 = 0;
+            for (self.manualSubBufs.getConstItems()) |buf| {
+                const memGuess = buf.bufInf.guessNativeMemoryCost();
+                manualBufMem += memGuess;
+                std.debug.print(" Used Manual Buf ({} Bytes)\n", .{memGuess});
+            }
+            std.debug.print("Total Manual Buf Mem ({} Bytes)\n\n", .{manualBufMem});
+
+            var manualTexMem: u64 = 0;
+            for (self.manualSubTexes.getConstItems()) |tex| {
+                const memGuess = tex.texInf.guessNativeMemoryCost();
+                manualTexMem += memGuess;
+                std.debug.print(" Used Manual Tex ({} Bytes)\n", .{memGuess});
+            }
+            std.debug.print("Total Manual Tex Mem ({} Bytes)\n\n", .{manualTexMem});
+
+            std.debug.print("All Transient ({} Bytes)\n", .{transientTexMem + transientBufMem});
+            std.debug.print("All Manual ({} Bytes)\n", .{manualTexMem + manualBufMem});
+
             std.debug.print("\n", .{});
         }
 

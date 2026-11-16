@@ -85,6 +85,15 @@ pub const InputSys = struct {
                             try rendererQueue.append(.toggleGpuProfiling);
                         },
                         .speedMode => inputData.speedMode = true,
+                        .toggleRenderGraphDebug => {
+                            if (inputData.renderGraphDebug == true) inputData.renderGraphDebug = false else inputData.renderGraphDebug = true;
+                        },
+                        .toggleRenderAssignerDebug => {
+                            if (inputData.renderAssignerDebug == true) inputData.renderAssignerDebug = false else inputData.renderAssignerDebug = true;
+                        },
+                        .toggleRenderCompilerDebug => {
+                            if (inputData.renderCompilerDebug == true) inputData.renderCompilerDebug = false else inputData.renderCompilerDebug = true;
+                        },
                     }
 
                     if (assignment.cycle == .oneTime) inputData.keyStates.upsert(actualKey, .released);

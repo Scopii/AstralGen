@@ -1,6 +1,7 @@
 const RenderRegistryData = @import("../renderRegistry/RenderRegistryData.zig").RenderRegistryData;
-const PhysBufLifetime = @import("../renderGraph/components.zig").SharedBuffer;
 const PhysTexLifetime = @import("../renderGraph/components.zig").SharedTexture;
+const PhysBufLifetime = @import("../renderGraph/components.zig").SharedBuffer;
+const PassRefRange = @import("../renderGraph/components.zig").PassRefRange;
 const LinkedIdMap = @import("../.structures/LinkedIdMap.zig").LinkedIdMap;
 const SimpleIdMap = @import("../.structures/SimpleIdMap.zig").SimpleIdMap;
 const FixedList = @import("../.structures/FixedList.zig").FixedList;
@@ -22,32 +23,70 @@ pub const ShareData = struct {
     bufShareIndices: LinkedIdMap(u16, rc.BUF_MAX, BufPassId, rc.BUF_MAX, 0) = .{},
     texShareIndices: LinkedIdMap(u16, rc.TEX_MAX, TexPassId, rc.TEX_MAX, 0) = .{},
 
-    bufClearPasses: LinkedIdMap(PassId, rc.BUF_MAX, BufPassId, rc.BUF_MAX, 0) = .{},
+    bufClearIndices: LinkedIdMap(PassRefRange, rc.PASS_MAX, PassId, rc.PASS_MAX, 0) = .{},
+    bufClears: FixedList(struct { bufPassId: BufPassId, passPosition: u16 }, rc.BUF_MAX) = .{},
+
+    texClearIndices: LinkedIdMap(PassRefRange, rc.PASS_MAX, PassId, rc.PASS_MAX, 0) = .{},
+    texClearCmds: FixedList(struct { texPassId: TexPassId, passPosition: u16 }, rc.TEX_MAX) = .{},
     texClearPasses: LinkedIdMap(PassId, rc.TEX_MAX, TexPassId, rc.TEX_MAX, 0) = .{},
 };
 
 pub const ShareSys = struct {
-    pub fn build(self: *ShareData, resource: *const ResourceData, optimizer: *const OptimizerData, lifetime: *const LifetimeData, registry: *const RenderRegistryData) !void {
+    pub fn build(self: *ShareData, resource: *const ResourceData, optimizer: *const OptimizerData, lifetime: *const LifetimeData, registry: *const RenderRegistryData, debug: bool) !void {
         // Cleanup and Prep
         self.sharedTextures.clear();
         self.sharedBuffers.clear();
+
         self.texShareIndices.clear();
         self.bufShareIndices.clear();
-        self.bufClearPasses.clear();
+
+        self.bufClearIndices.clear();
+        self.bufClears.clear();
+
+        self.texClearIndices.clear();
         self.texClearPasses.clear();
+        self.texClearCmds.clear();
+
+        // Building Buf Clears (Based on Lifetimes being Sorted)
+        for (lifetime.bufLifetimes.constSlice()) |bufLifetime| {
+            try self.bufClears.append(.{ .bufPassId = bufLifetime.bufPassId, .passPosition = bufLifetime.earliest });
+
+            const passId = optimizer.optimizedGraph.getConstItems()[bufLifetime.earliest].passId;
+
+            if (self.bufClearIndices.isKeyUsed(passId) == false) {
+                self.bufClearIndices.insert(passId, .{ .first = @intCast(self.bufClears.len - 1), .last = @intCast(self.bufClears.len) });
+            } else self.bufClearIndices.getPtrByKey(passId).last = @intCast(self.bufClears.len);
+        }
+
+        // Building Tex Clears (Based on Lifetimes being Sorted)
+        for (lifetime.texLifetimes.constSlice()) |texLifetime| {
+            const passId = optimizer.optimizedGraph.getConstItems()[texLifetime.earliest].passId;
+            self.texClearPasses.insert(texLifetime.texPassId, passId); // for pass OP_LOAD clear
+
+            if (texLifetime.firstUseIsAttachment == false) {
+                try self.texClearCmds.append(.{ .texPassId = texLifetime.texPassId, .passPosition = texLifetime.earliest });
+
+                if (self.texClearIndices.isKeyUsed(passId) == false) {
+                    self.texClearIndices.insert(passId, .{ .first = @intCast(self.texClearCmds.len - 1), .last = @intCast(self.texClearCmds.len) });
+                } else self.texClearIndices.getPtrByKey(passId).last = @intCast(self.texClearCmds.len);
+            }
+        }
 
         // Buffer Share
-        for (lifetime.bufLifetimes.constSlice()) |bufLifetime| {
+        const bufLifetimes = if (rc.FRAME_GRAPH_USE_GRAPH_LEVEL_LIFETIMES) optimizer.bufGraphLifetimes.getConstItems() else lifetime.bufLifetimes.constSlice();
+
+        for (bufLifetimes, 0..) |bufLifetime, bufIndex| {
             var candidateIndex: ?u16 = null;
-            const newDesc = resource.activeBufDescs.getByKey(bufLifetime.bufPassId);
+            const bufPassId = if (rc.FRAME_GRAPH_USE_GRAPH_LEVEL_LIFETIMES) optimizer.bufGraphLifetimes.getKeyByIndex(@intCast(bufIndex)) else bufLifetime.bufPassId;
+            const newDesc = resource.activeBufDescs.getByKey(bufPassId);
 
             if (rc.FRAME_GRAPH_SKIP_SHARING == false) {
                 for (self.sharedBuffers.slice(), 0..) |*physLifetime, index| {
                     const candidateDesc = physLifetime.bufDesc;
 
-                    if (physLifetime.latest < bufLifetime.earliestPass) {
+                    if (physLifetime.latest < bufLifetime.earliest) {
                         if (bufDescEqual(&newDesc, &candidateDesc)) {
-                            physLifetime.latest = bufLifetime.latestPass;
+                            physLifetime.latest = bufLifetime.latest;
                             candidateIndex = @intCast(index);
                             break;
                         }
@@ -56,28 +95,29 @@ pub const ShareSys = struct {
             }
 
             if (candidateIndex) |candidate| {
-                self.bufShareIndices.upsert(bufLifetime.bufPassId, candidate);
+                self.bufShareIndices.upsert(bufPassId, candidate);
             } else {
                 const newIndex: u16 = @intCast(self.sharedBuffers.len);
-                try self.sharedBuffers.append(.{ .earliest = bufLifetime.earliestPass, .latest = bufLifetime.latestPass, .bufDesc = newDesc });
-                self.bufShareIndices.upsert(bufLifetime.bufPassId, newIndex);
+                try self.sharedBuffers.append(.{ .earliest = bufLifetime.earliest, .latest = bufLifetime.latest, .bufDesc = newDesc });
+                self.bufShareIndices.upsert(bufPassId, newIndex);
             }
-            const passAfterClear = optimizer.optimizedGraph.getConstItems()[bufLifetime.earliestPass].passId;
-            self.bufClearPasses.insert(bufLifetime.bufPassId, passAfterClear);
         }
 
+        const texLifetimes = if (rc.FRAME_GRAPH_USE_GRAPH_LEVEL_LIFETIMES) optimizer.texGraphLifetimes.getConstItems() else lifetime.texLifetimes.constSlice();
+
         // Texture Share
-        for (lifetime.texLifetimes.constSlice()) |texLifetime| {
+        for (texLifetimes, 0..) |texLifetime, texIndex| {
             var candidateIndex: ?u16 = null;
-            const newDesc = resource.activeTexDescs.getByKey(texLifetime.texPassId);
+            const texPassId = if (rc.FRAME_GRAPH_USE_GRAPH_LEVEL_LIFETIMES) optimizer.texGraphLifetimes.getKeyByIndex(@intCast(texIndex)) else texLifetime.texPassId;
+            const newDesc = resource.activeTexDescs.getByKey(texPassId);
 
             if (rc.FRAME_GRAPH_SKIP_SHARING == false) {
                 for (self.sharedTextures.slice(), 0..) |*physLifetime, index| {
                     const candidateDesc = physLifetime.texDesc;
 
-                    if (physLifetime.latest < texLifetime.earliestPass) {
+                    if (physLifetime.latest < texLifetime.earliest) {
                         if (tryCompatibleTexDesc(&newDesc, &candidateDesc)) |compatibleTexDesc| {
-                            physLifetime.latest = texLifetime.latestPass;
+                            physLifetime.latest = texLifetime.latest;
                             physLifetime.texDesc = compatibleTexDesc;
                             candidateIndex = @intCast(index);
                             break;
@@ -87,18 +127,16 @@ pub const ShareSys = struct {
             }
 
             if (candidateIndex) |candidate| {
-                self.texShareIndices.upsert(texLifetime.texPassId, candidate);
+                self.texShareIndices.upsert(texPassId, candidate);
             } else {
                 const newIndex: u16 = @intCast(self.sharedTextures.len);
-                try self.sharedTextures.append(.{ .earliest = texLifetime.earliestPass, .latest = texLifetime.latestPass, .texDesc = newDesc });
-                self.texShareIndices.upsert(texLifetime.texPassId, newIndex);
+                try self.sharedTextures.append(.{ .earliest = texLifetime.earliest, .latest = texLifetime.latest, .texDesc = newDesc });
+                self.texShareIndices.upsert(texPassId, newIndex);
             }
-            const passAfterClear = optimizer.optimizedGraph.getConstItems()[texLifetime.earliestPass].passId;
-            self.texClearPasses.insert(texLifetime.texPassId, passAfterClear);
         }
 
         // Debug
-        if (rc.FRAME_GRAPH_DEBUG) {
+        if (debug) {
             std.debug.print("8.Share: \n", .{});
 
             var totalMemEstimate: u64 = 0;
@@ -127,17 +165,30 @@ pub const ShareSys = struct {
             }
             std.debug.print("\n", .{});
 
-            for (self.bufClearPasses.getConstItems(), 0..) |passId, i| {
-                const bufPassId = self.bufClearPasses.getKeyByIndex(@intCast(i));
-                const bufName = try registry.getBufferName(bufPassId);
-                const passName = try registry.getPassName(passId);
-                std.debug.print("- Pass {s} clears {s} (Buf)\n", .{ passName, bufName });
+            for (self.bufClearIndices.getConstItems()) |bufClearIndices| {
+                for (self.bufClears.constSlice()[bufClearIndices.first..bufClearIndices.last]) |bufClear| {
+                    const bufName = try registry.getBufferName(bufClear.bufPassId);
+                    const passId = optimizer.optimizedGraph.getConstItems()[bufClear.passPosition].passId;
+                    const passName = try registry.getPassName(passId);
+                    std.debug.print("- Pass {s} clears {s} (Buf)\n", .{ passName, bufName });
+                }
             }
-            for (self.texClearPasses.getConstItems(), 0..) |passId, i| {
+
+            for (self.texClearIndices.getConstItems()) |texClearIndices| {
+                for (self.texClearCmds.constSlice()[texClearIndices.first..texClearIndices.last]) |texClear| {
+                    const texName = try registry.getTextureName(texClear.texPassId);
+                    const passId = optimizer.optimizedGraph.getConstItems()[texClear.passPosition].passId;
+                    const passName = try registry.getPassName(passId);
+                    std.debug.print("- Pass {s} clears {s} (Tex)\n", .{ passName, texName });
+                }
+                std.debug.print("\n", .{});
+            }
+
+            for (self.texClearPasses.getConstItems(), 0..) |texClearPass, i| {
                 const texPassId = self.texClearPasses.getKeyByIndex(@intCast(i));
                 const texName = try registry.getTextureName(texPassId);
-                const passName = try registry.getPassName(passId);
-                std.debug.print("- Pass {s} clears {s} (Tex)\n", .{ passName, texName });
+                const passName = try registry.getPassName(texClearPass);
+                std.debug.print("- Pass {s} clears {s} (Tex) with LOAD_OP\n", .{ passName, texName });
             }
             std.debug.print("\n", .{});
         }

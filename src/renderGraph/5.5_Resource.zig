@@ -22,7 +22,7 @@ pub const ResourceData = struct {
 };
 
 pub const ResourceSys = struct {
-    pub fn build(self: *ResourceData, passLoad: *const PassLoadData, composite: *const CompositeData, dependency: *const DependencyData, registry: *const RenderRegistryData) !void {
+    pub fn build(self: *ResourceData, passLoad: *const PassLoadData, composite: *const CompositeData, dependency: *const DependencyData, registry: *const RenderRegistryData, debug: bool) !void {
         self.activeBufDescs.clear();
         self.activeTexDescs.clear();
 
@@ -41,7 +41,7 @@ pub const ResourceSys = struct {
                 const neededUsage = passLoad.texUsages.getByKey(texRef.texPassId);
                 texDef.texUse = neededUsage;
 
-                const needsSampled: bool =  neededUsage.sampled or neededUsage.colorAtt or neededUsage.depthAtt;
+                const needsSampled: bool = neededUsage.sampled or neededUsage.colorAtt or neededUsage.depthAtt;
                 const needsStorage: bool = neededUsage.storage;
 
                 if (needsSampled == true and needsStorage == true) texDef.descriptors = .StorageSampled;
@@ -63,7 +63,7 @@ pub const ResourceSys = struct {
         }
 
         // Debug Output
-        if (rc.FRAME_GRAPH_DEBUG) {
+        if (debug) {
             std.debug.print("5.5.Resource: \n", .{});
             for (self.activeBufDescs.getConstItems(), 0..) |_, index| {
                 const bufPassId = self.activeBufDescs.getKeyByIndex(@intCast(index));

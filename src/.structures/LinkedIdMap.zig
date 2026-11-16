@@ -36,24 +36,24 @@ pub fn LinkedIdMap(comptime ItemType: type, comptime capacity: u32, comptime Key
         // Functions with Changed logic:
 
         pub fn swap(self: *Self, key1: Keytype, key2: Keytype) void {
-            const castedKey1: smallKeyType = @truncate(key1.val() - keyMin);
-            const castedKey2: smallKeyType = @truncate(key2.val() - keyMin);
+            const castedKey1: smallKeyType = @intCast(key1.val() - keyMin);
+            const castedKey2: smallKeyType = @intCast(key2.val() - keyMin);
             std.debug.assert(self.slotMap.keys[castedKey1] != sentinel);
             std.debug.assert(self.slotMap.keys[castedKey2] != sentinel);
             self.swapIndices(@intCast(self.slotMap.keys[castedKey1]), @intCast(self.slotMap.keys[castedKey2]));
         }
 
         pub fn link(self: *Self, index: u32, key: Keytype) void {
-            const castedKey: smallKeyType = @truncate(key.val() - keyMin);
+            const castedKey: smallKeyType = @intCast(key.val() - keyMin);
             const oldKey = self.links[index];
 
             if (oldKey != sentinel) self.slotMap.keys[oldKey] = sentinel;
-            self.slotMap.keys[castedKey] = @truncate(index);
+            self.slotMap.keys[castedKey] = @intCast(index);
             self.links[index] = castedKey;
         }
 
         pub fn unlink(self: *Self, key: Keytype) void {
-            const castedKey: smallKeyType = @truncate(key.val() - keyMin);
+            const castedKey: smallKeyType = @intCast(key.val() - keyMin);
             const index = self.slotMap.keys[castedKey];
             if (index == sentinel) return;
             self.unlinkIndex(@intCast(index));
@@ -72,7 +72,7 @@ pub fn LinkedIdMap(comptime ItemType: type, comptime capacity: u32, comptime Key
         pub fn insert(self: *Self, key: Keytype, item: ItemType) void {
             const index = self.slotMap.len;
             self.slotMap.insert(key, item);
-            self.links[index] = @truncate(key.val() - keyMin);
+            self.links[index] = @intCast(key.val() - keyMin);
         }
 
         pub fn clear(self: *Self) void {
@@ -109,8 +109,8 @@ pub fn LinkedIdMap(comptime ItemType: type, comptime capacity: u32, comptime Key
             self.links[index1] = self.links[index2];
             self.links[index2] = tempLink;
 
-            if (self.links[index1] != sentinel) self.slotMap.keys[self.links[index1]] = @truncate(index1);
-            if (self.links[index2] != sentinel) self.slotMap.keys[self.links[index2]] = @truncate(index2);
+            if (self.links[index1] != sentinel) self.slotMap.keys[self.links[index1]] = @intCast(index1);
+            if (self.links[index2] != sentinel) self.slotMap.keys[self.links[index2]] = @intCast(index2);
         }
 
         pub fn removeIndex(self: *Self, index: u32) void {
@@ -126,7 +126,7 @@ pub fn LinkedIdMap(comptime ItemType: type, comptime capacity: u32, comptime Key
                 self.slotMap.items[index] = self.slotMap.items[lastIndex];
                 self.links[index] = lastKey;
                 // Update key mapping if last item has a key
-                if (lastKey != sentinel) self.slotMap.keys[lastKey] = @truncate(index);
+                if (lastKey != sentinel) self.slotMap.keys[lastKey] = @intCast(index);
             }
             self.links[lastIndex] = sentinel;
         }

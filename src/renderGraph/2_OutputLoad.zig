@@ -14,7 +14,7 @@ pub const OutputLoadData = struct {
 };
 
 pub const OutputLoadSys = struct {
-    pub fn build(self: *OutputLoadData, passLoad: *const PassLoadData, registry: *const RenderRegistryData, viewportData: *const ViewportData, manuelPasses: []const PassId) !void {
+    pub fn build(self: *OutputLoadData, passLoad: *const PassLoadData, registry: *const RenderRegistryData, viewportData: *const ViewportData, manuelPasses: []const PassId, debug: bool) !void {
         self.pendingPasses.clear();
         self.activePasses.clear();
 
@@ -95,7 +95,7 @@ pub const OutputLoadSys = struct {
         }
 
         // Debug Output
-        if (rc.FRAME_GRAPH_DEBUG) {
+        if (debug) {
             std.debug.print("2.Output Load: \n", .{});
             for (self.activePasses.getConstItems()) |passId| {
                 const passName = try registry.getPassName(passId);

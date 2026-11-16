@@ -1,7 +1,10 @@
 const RenderRegistryData = @import("../renderRegistry/RenderRegistryData.zig").RenderRegistryData;
 const CompositeNode = @import("../render/types/pass/RenderNode.zig").CompositeNode;
+const PassRefRange = @import("../renderGraph/components.zig").PassRefRange;
+const ViewportData = @import("../viewport/ViewportData.zig").ViewportData;
 const SimpleIdMap = @import("../.structures/SimpleIdMap.zig").SimpleIdMap;
 const FixedList = @import("../.structures/FixedList.zig").FixedList;
+const WindowData = @import("../window/WindowData.zig").WindowData;
 const OutputLoadData = @import("2_OutputLoad.zig").OutputLoadData;
 const TexPassId = @import("../.configs/idConfig.zig").TexPassId;
 const Viewport = @import("../viewport/Viewport.zig").Viewport;
@@ -12,12 +15,12 @@ const GraphData = @import("5_Graph.zig").GraphData;
 const rc = @import("../.configs/renderConfig.zig");
 const std = @import("std");
 
-const ViewportData = @import("../viewport/ViewportData.zig").ViewportData;
-const WindowData = @import("../window/WindowData.zig").WindowData;
-
 pub const CompositeData = struct {
     passExtents: SimpleIdMap(struct { width: u32, height: u32 }, rc.PASS_MAX, PassId, rc.PASS_MAX, 0) = .{},
     composites: FixedList(CompositeNode, rc.MAX_WINDOWS * 4) = .{},
+
+    compositeRanges: SimpleIdMap(PassRefRange, rc.PASS_MAX, PassId, rc.PASS_MAX, 0) = .{},
+    sortedComposites: FixedList(CompositeNode, rc.MAX_WINDOWS * 4) = .{},
 };
 
 pub const CompositeSys = struct {
@@ -29,9 +32,13 @@ pub const CompositeSys = struct {
         registry: *const RenderRegistryData,
         viewportData: *const ViewportData,
         windowData: *const WindowData,
+        debug: bool,
     ) !void {
         self.composites.clear();
         self.passExtents.clear();
+
+        self.compositeRanges.clear();
+        self.sortedComposites.clear();
 
         // Check every Window
         for (windowData.activeWindows.constSlice()) |window| {
@@ -90,8 +97,32 @@ pub const CompositeSys = struct {
             }
         }
 
+        // Counting composites per Pass
+        for (self.composites.constSlice()) |composite| {
+            if (self.compositeRanges.isKeyUsed(composite.passId) == false) {
+                self.compositeRanges.insert(composite.passId, .{ .first = 0, .last = 1 });
+            } else self.compositeRanges.getPtrByKey(composite.passId).last += 1;
+        }
+
+        // Mapping Counts to First and Last Indices of each Pass
+        var nextStart: u16 = 0;
+        for (self.compositeRanges.getItems()) |*range| {
+            const count = range.last;
+            range.first = nextStart;
+            range.last = nextStart;
+            nextStart += count;
+        }
+
+        // Moving all Composites into their Pass Index Spaces
+        self.sortedComposites.len = @intCast(self.composites.constSlice().len);
+        for (self.composites.constSlice()) |composite| {
+            const range = self.compositeRanges.getPtrByKey(composite.passId);
+            self.sortedComposites.buffer[range.last] = composite;
+            range.last += 1;
+        }
+
         // Debug Output
-        if (rc.FRAME_GRAPH_DEBUG) {
+        if (debug) {
             std.debug.print("5.2.Composite: \n", .{});
             for (outputLoad.activePasses.getConstItems(), 0..) |passId, i| {
                 const passName = try registry.getPassName(passId);
@@ -102,7 +133,7 @@ pub const CompositeSys = struct {
             }
             std.debug.print("\n", .{});
             for (self.composites.constSlice(), 0..) |comp, i| {
-                const passName = try registry.getPassName(comp.pass);
+                const passName = try registry.getPassName(comp.passId);
                 std.debug.print("- Composite {}. {s} (Pass {s}) [{}x{} @ {},{}]\n", .{ i, comp.name, passName, comp.viewWidth, comp.viewHeight, comp.viewOffsetX, comp.viewOffsetY });
             }
             std.debug.print("\n", .{});
@@ -112,7 +143,7 @@ pub const CompositeSys = struct {
     fn createComposite(viewport: *const Viewport, pass: PassId, outputTexPassId: TexPassId, windowId: WindowId, windowWidth: u32, windowHeight: u32) CompositeNode {
         return CompositeNode{
             .name = viewport.name,
-            .pass = pass,
+            .passId = pass,
             .srcTexPassId = outputTexPassId,
             .windowId = windowId,
             .viewWidth = viewport.calcViewWidth(windowWidth),
