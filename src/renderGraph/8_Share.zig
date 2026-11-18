@@ -116,12 +116,25 @@ pub const ShareSys = struct {
                 for (self.sharedTextures.slice(), 0..) |*physLifetime, index| {
                     const candidateDesc = physLifetime.texDesc;
 
-                    if (physLifetime.latest < texLifetime.earliest) {
-                        if (tryCompatibleTexDesc(&newDesc, &candidateDesc)) |compatibleTexDesc| {
+                    // Try Exact Fit
+                    if (rc.FRAME_GRAPH_PREFER_EXACT_TEXTURE_SHARE == false and physLifetime.latest < texLifetime.earliest) {
+                        if (tryExactTexDesc(&newDesc, &candidateDesc)) |compatibleTexDesc| {
                             physLifetime.latest = texLifetime.latest;
                             physLifetime.texDesc = compatibleTexDesc;
                             candidateIndex = @intCast(index);
                             break;
+                        }
+                    }
+
+                    // Try Compatible Fit
+                    if (candidateIndex == null and rc.FRAME_GRAPH_AGGRESSIVE_TEXTURE_SHARE == true) {
+                        if (physLifetime.latest < texLifetime.earliest) {
+                            if (tryCompatibleTexDesc(&newDesc, &candidateDesc)) |compatibleTexDesc| {
+                                physLifetime.latest = texLifetime.latest;
+                                physLifetime.texDesc = compatibleTexDesc;
+                                candidateIndex = @intCast(index);
+                                if (rc.FRAME_GRAPH_PREFER_EXACT_TEXTURE_SHARE == false) break;
+                            }
                         }
                     }
                 }
@@ -200,9 +213,13 @@ fn bufDescEqual(bufDesc1: *const BufDesc, bufDesc2: *const BufDesc) bool {
     return std.meta.eql(bufDesc1.*, bufDesc2.*);
 }
 
-// fn tryCompatibleTexDesc(texDesc1: *const TexDesc, texDesc2: *const TexDesc) ?TexDesc {
-//     return if (std.meta.eql(texDesc1.*, texDesc2.*) == true) texDesc1.* else null;
-// }
+fn tryExactTexDesc(texDesc1: *const TexDesc, texDesc2: *const TexDesc) ?TexDesc {
+    return if (std.meta.eql(texDesc1.*, texDesc2.*) == true) texDesc1.* else null;
+}
+
+fn greaterPosition(clear1: anytype, clear2: anytype) bool {
+    return clear1.passPosition > clear2.passPosition;
+}
 
 fn tryCompatibleTexDesc(texDesc1: *const TexDesc, texDesc2: *const TexDesc) ?TexDesc {
     const compatible =
@@ -216,7 +233,7 @@ fn tryCompatibleTexDesc(texDesc1: *const TexDesc, texDesc2: *const TexDesc) ?Tex
         // texDesc1.fitPass == texDesc2.fitPass
         texDesc1.resize == .Block and texDesc2.resize == .Block) true else false;
 
-    if (rc.FRAME_GRAPH_AGGRESSIVE_TEXTURE_SHARE == true and compatible == true) {
+    if (compatible == true) {
         return TexDesc{
             .share = texDesc1.share, // Only used by graph
             .mem = texDesc1.mem,

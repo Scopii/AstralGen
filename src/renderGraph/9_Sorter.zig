@@ -62,17 +62,13 @@ pub const SorterSys = struct {
                 }
 
                 // Composites
-                var compositeUsed = false;
 
                 for (batch) |batchNode| {
                     if (compositeData.compositeRanges.isKeyUsed(batchNode.passId) == true) {
                         const compRange = compositeData.compositeRanges.getByKey(batchNode.passId);
 
                         for (compositeData.sortedComposites.constSlice()[compRange.first..compRange.last]) |composite| {
-                            if (compositeUsed == false) {
-                                try self.sortedRenderIR.append(.syncPoint);
-                                compositeUsed = true;
-                            }
+                            try self.sortedRenderIR.append(.syncPoint); // Needs Sync points for correct overlaps
                             try self.sortedRenderIR.append(.{ .compositeIR = composite });
                         }
                     }

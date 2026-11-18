@@ -622,21 +622,18 @@ pub const RenderCompilerSys = struct {
         if (firstUse) self.swapchainStates.insert(windowId, TextureState{ .writeStage = @intFromEnum(vhE.PipeStage.ColorAtt) });
 
         const state = self.swapchainStates.getPtrByKey(windowId);
+        const mask = BarrierMask{ .srcStage = state.writeStage, .srcAccess = state.writeAccess, .dstStage = dstStage, .dstAccess = dstAccess };
 
-        if (state.layout != newLayout or state.writeStage != dstStage or state.writeAccess != dstAccess) {
-            const mask = BarrierMask{ .srcStage = state.writeStage, .srcAccess = state.writeAccess, .dstStage = dstStage, .dstAccess = dstAccess };
-
-            if (rc.USE_MEM_BARRIER_ON_IMAGES and state.layout == newLayout) {
-                self.mask.merge(mask);
-                self.memBarrierUse = true;
-            } else {
-                try self.renderNodes.append(.{ .swapchainBarrier = .{ .windowId = windowId, .mask = mask, .oldLayout = state.layout, .newLayout = newLayout } });
-            }
-
-            state.writeStage = dstStage;
-            state.writeAccess = dstAccess;
-            state.layout = newLayout;
+        if (rc.USE_MEM_BARRIER_ON_IMAGES and state.layout == newLayout) {
+            self.mask.merge(mask);
+            self.memBarrierUse = true;
+        } else {
+            try self.renderNodes.append(.{ .swapchainBarrier = .{ .windowId = windowId, .mask = mask, .oldLayout = state.layout, .newLayout = newLayout } });
         }
+
+        state.writeStage = dstStage;
+        state.writeAccess = dstAccess;
+        state.layout = newLayout;
 
         return firstUse;
     }

@@ -134,7 +134,8 @@ pub const CompositeSys = struct {
             std.debug.print("\n", .{});
             for (self.composites.constSlice(), 0..) |comp, i| {
                 const passName = try registry.getPassName(comp.passId);
-                std.debug.print("- Composite {}. {s} (Pass {s}) [{}x{} @ {},{}]\n", .{ i, comp.name.get(), passName, comp.viewWidth, comp.viewHeight, comp.viewOffsetX, comp.viewOffsetY });
+                const texName = try registry.getTextureName(comp.srcTexPassId);
+                std.debug.print("- Composite {}. {s} (Pass {s}) (Tex {s}) [{}x{} @ {},{}]\n", .{ i, comp.name.get(), passName, texName, comp.viewWidth, comp.viewHeight, comp.viewOffsetX, comp.viewOffsetY });
             }
             std.debug.print("\n", .{});
         }
