@@ -112,7 +112,6 @@ pub const TexReference = struct {
     passId: PassId,
     rootPassId: ?PassId,
     access: enum { write, read },
-    viaAttachment: bool, // Could be made Reference Enum
 };
 
 pub const BufReference = struct {
@@ -132,7 +131,6 @@ pub const TexLifetime = struct {
     texPassId: TexPassId,
     earliest: u16,
     latest: u16,
-    firstUseIsAttachment: bool,
 };
 
 pub const SharedBuffer = struct {

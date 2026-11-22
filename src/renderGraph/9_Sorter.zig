@@ -47,7 +47,7 @@ pub const SorterSys = struct {
                     if (share.texClearIndices.isKeyUsed(batchNode.passId) == true) {
                         const texClearRange = share.texClearIndices.getByKey(batchNode.passId);
 
-                        for (share.texClearCmds.constSlice()[texClearRange.first..texClearRange.last]) |texClear| {
+                        for (share.texClear.constSlice()[texClearRange.first..texClearRange.last]) |texClear| {
                             try self.sortedRenderIR.append(.{ .clearTexIR = texClear.texPassId });
                             hasClears = true;
                         }

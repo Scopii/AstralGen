@@ -89,7 +89,7 @@ pub const OptimizerSys = struct {
             for (self.texGraphLifetimes.getConstItems(), 0..) |graphLifetime, index| {
                 const texPassId = self.texGraphLifetimes.getKeyByIndex(@intCast(index));
                 const texName = try registry.getTextureName(texPassId);
-                std.debug.print("- Buffer Graph Lifetime: (Level {} -> {}) {s} \n", .{ graphLifetime.earliest, graphLifetime.latest, texName });
+                std.debug.print("- Texture Graph Lifetime: (Level {} -> {}) {s} \n", .{ graphLifetime.earliest, graphLifetime.latest, texName });
             }
             std.debug.print("\n", .{});
         }

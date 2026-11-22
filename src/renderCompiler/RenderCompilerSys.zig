@@ -69,7 +69,7 @@ pub const RenderCompilerSys = struct {
 
                 .compositeIR => |*compositeIR| try fillCompositePassHardwareIdCmds(self, assigner, registry, compositeIR),
 
-                .passIR => |passIR| try fillPassHardwareIdCmds(self, assigner, registry, renderGraph, passIR, runTime, deltaTime),
+                .passIR => |passIR| try fillPassHardwareIdCmds(self, assigner, registry, passIR, runTime, deltaTime),
 
                 .buildUi => try fillUiPassHardwareIdCmds(self, assigner, registry, uiData, windowData),
 
@@ -319,7 +319,6 @@ pub const RenderCompilerSys = struct {
         self: *RenderCompilerData,
         assigner: *const RenderAssignerData,
         registry: *const RenderRegistryData,
-        renderGraph: *const RenderGraphData,
         passId: PassId,
         runTime: f32,
         deltaTime: f32,
@@ -372,20 +371,14 @@ pub const RenderCompilerSys = struct {
                         // Manually Set Clear
                         switch (clear) {
                             .color => |color| {
-                                try texBarrier(self, texHardwareId, attSlot.stage, attSlot.access, attSlot.layout, true);
+                                try texBarrier(self, texHardwareId, attSlot.stage, attSlot.access, attSlot.layout, false);
                                 try setColorAtt(self, texHardwareId, color);
                             },
                             .depth => return error.ColorAttNeedsColorClear,
                         }
                     } else {
-                        // Graph Clear through Attachment
-                        if (renderGraph.share.texClearPasses.isKeyUsed(texPassId) and renderGraph.share.texClearPasses.getByKey(texPassId) == passId) {
-                            try texBarrier(self, texHardwareId, attSlot.stage, attSlot.access, attSlot.layout, true);
-                            try setColorAtt(self, texHardwareId, ClearColor{ .R = 0, .G = 0, .B = 0, .A = 0 });
-                        } else {
-                            try texBarrier(self, texHardwareId, attSlot.stage, attSlot.access, attSlot.layout, false);
-                            try setColorAtt(self, texHardwareId, null);
-                        }
+                        try texBarrier(self, texHardwareId, attSlot.stage, attSlot.access, attSlot.layout, false);
+                        try setColorAtt(self, texHardwareId, null);
                     }
                 },
                 .depthAtt => |depthSlot| {
@@ -396,20 +389,14 @@ pub const RenderCompilerSys = struct {
                         // Manually Set Clear
                         switch (clear) {
                             .depth => |depth| {
-                                try texBarrier(self, texHardwareId, depthSlot.stage, depthSlot.access, depthSlot.layout, true);
+                                try texBarrier(self, texHardwareId, depthSlot.stage, depthSlot.access, depthSlot.layout, false);
                                 try setDepthAtt(self, texHardwareId, depth);
                             },
                             .color => return error.DepthAttNeedsDepthClear,
                         }
                     } else {
-                        // Graph Clear through Attachment
-                        if (renderGraph.share.texClearPasses.isKeyUsed(texPassId) and renderGraph.share.texClearPasses.getByKey(texPassId) == passId) {
-                            try texBarrier(self, texHardwareId, depthSlot.stage, depthSlot.access, depthSlot.layout, true);
-                            try setDepthAtt(self, texHardwareId, ClearDepth{ .depthStencil = .{ .depth = 0, .stencil = 0 } });
-                        } else {
-                            try texBarrier(self, texHardwareId, depthSlot.stage, depthSlot.access, depthSlot.layout, false);
-                            try setDepthAtt(self, texHardwareId, null);
-                        }
+                        try texBarrier(self, texHardwareId, depthSlot.stage, depthSlot.access, depthSlot.layout, false);
+                        try setDepthAtt(self, texHardwareId, null);
                     }
                 },
                 .stencilAtt => |stencilSlot| {
@@ -420,20 +407,14 @@ pub const RenderCompilerSys = struct {
                         // Manually Set Clear
                         switch (clear) {
                             .depth => |depth| {
-                                try texBarrier(self, texHardwareId, stencilSlot.stage, stencilSlot.access, stencilSlot.layout, true);
+                                try texBarrier(self, texHardwareId, stencilSlot.stage, stencilSlot.access, stencilSlot.layout, false);
                                 try setStencilAtt(self, texHardwareId, depth);
                             },
                             .color => return error.StencilAttNeedsDepthClear,
                         }
                     } else {
-                        // Graph Clear through Attachment
-                        if (renderGraph.share.texClearPasses.isKeyUsed(texPassId) and renderGraph.share.texClearPasses.getByKey(texPassId) == passId) {
-                            try texBarrier(self, texHardwareId, stencilSlot.stage, stencilSlot.access, stencilSlot.layout, true);
-                            try setStencilAtt(self, texHardwareId, ClearDepth{ .depthStencil = .{ .depth = 0, .stencil = 0 } });
-                        } else {
-                            try texBarrier(self, texHardwareId, stencilSlot.stage, stencilSlot.access, stencilSlot.layout, false);
-                            try setStencilAtt(self, texHardwareId, null);
-                        }
+                        try texBarrier(self, texHardwareId, stencilSlot.stage, stencilSlot.access, stencilSlot.layout, false);
+                        try setStencilAtt(self, texHardwareId, null);
                     }
                 },
 

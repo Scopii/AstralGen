@@ -80,7 +80,6 @@ pub const PassLoadSys = struct {
                             .passId = passId,
                             .rootPassId = texSlotTypes.texLink.from,
                             .access = if (texSlotTypes.access.isReadOnly()) .read else .write,
-                            .viaAttachment = true,
                         };
                         try self.texRefs.append(texRef);
 
@@ -101,7 +100,6 @@ pub const PassLoadSys = struct {
                             .passId = passId,
                             .rootPassId = texSlotTypes.texLink.from,
                             .access = if (texSlotTypes.access.isReadOnly()) .read else .write,
-                            .viaAttachment = false,
                         };
                         try self.texRefs.append(texRef);
 
@@ -122,7 +120,6 @@ pub const PassLoadSys = struct {
                             .passId = passId,
                             .rootPassId = texSlotTypes.texLink.from,
                             .access = if (texSlotTypes.access.isReadOnly()) .read else .write,
-                            .viaAttachment = true,
                         };
                         try self.texRefs.append(texRef);
 

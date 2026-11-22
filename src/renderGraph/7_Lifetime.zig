@@ -55,13 +55,12 @@ pub const LifetimeSys = struct {
             const passPosition = optimizer.optimizedGraph.getIndexByKey(texRef.passId);
 
             if (self.texLifetimeMap.isKeyUsed(texPassId) == false) {
-                const texLifetime = TexLifetime{ .texPassId = texPassId, .earliest = passPosition, .latest = passPosition, .firstUseIsAttachment = texRef.viaAttachment };
+                const texLifetime = TexLifetime{ .texPassId = texPassId, .earliest = passPosition, .latest = passPosition };
                 self.texLifetimeMap.upsert(texPassId, texLifetime);
             } else {
                 var lifetime = self.texLifetimeMap.getPtrByKey(texPassId);
                 if (passPosition < lifetime.earliest) {
                     lifetime.earliest = passPosition;
-                    lifetime.firstUseIsAttachment = texRef.viaAttachment; // follows the earliest pass
                 }
                 if (passPosition > lifetime.latest) lifetime.latest = passPosition;
             }
@@ -69,8 +68,8 @@ pub const LifetimeSys = struct {
 
         // Only Append Transient
         for (self.texLifetimeMap.getConstItems(), 0..) |texLifetime, index| {
-            const bufPassId = self.texLifetimeMap.getKeyByIndex(@intCast(index));
-            if (resource.activeTexDescs.getByKey(bufPassId).share == .transient) try self.texLifetimes.append(texLifetime);
+            const texPassId = self.texLifetimeMap.getKeyByIndex(@intCast(index));
+            if (resource.activeTexDescs.getByKey(texPassId).share == .transient) try self.texLifetimes.append(texLifetime);
         }
 
         self.texLifetimes.selectionSort(greaterGroup);
