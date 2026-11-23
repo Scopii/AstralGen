@@ -204,7 +204,11 @@ pub const DescriptorMan = struct {
         self.imgDescs[descUpdate.specificIndex] = vk.VkImageDescriptorInfoEXT{
             .sType = vk.VK_STRUCTURE_TYPE_IMAGE_DESCRIPTOR_INFO_EXT,
             .pView = &self.imgViews[descUpdate.specificIndex],
-            .layout = vk.VK_IMAGE_LAYOUT_GENERAL,
+            .layout = switch (descTyp) {
+                vk.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE => vk.VK_IMAGE_LAYOUT_GENERAL,
+                vk.VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE => vk.VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL,
+                else => return error.DescTypeInvalid,
+            },
         };
 
         self.descInfos[descUpdate.mainIndex] = vk.VkResourceDescriptorInfoEXT{
